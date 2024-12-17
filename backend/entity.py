@@ -1,26 +1,18 @@
+from typing import Optional, List, Literal
+
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
 
-class ResourceBase(BaseModel):
-    name: str
-    type: str  # document | link | file
-    namespace_id: str
-    directory_id: Optional[str] = None
-    tags: Optional[List[str]] = Field(default_factory=list)
-    space: str  # private | teamspace
-    content: Optional[str] = None
+ResourceType = Literal["doc", "link", "file"]
+SpaceType = Literal["private", "teamspace"]
 
-    model_config: ConfigDict = ConfigDict(from_attributes=True)
+class Resource(BaseModel):
+    resource_id: Optional[str] = Field(default=None)
+    name: Optional[str] = Field(default=None)
+    resource_type: Optional[ResourceType] = Field(default=None)  # doc | link | file
+    namespace_id: Optional[str] = Field(default=None)
+    directory_id: Optional[str] = Field(default=None)
+    tags: Optional[List[str]] = Field(default=None)
+    space: Optional[SpaceType] = Field(default=None)
+    content: Optional[str] = Field(default=None)
 
-class ResourceCreate(ResourceBase):
-    pass
-
-class ResourceUpdate(BaseModel):
-    name: Optional[str]
-    directory_id: Optional[str]
-    tags: Optional[List[str]]
-    space: Optional[str]
-
-class ResourceResponse(ResourceBase):
-    id: int
-
+    model_config: ConfigDict = ConfigDict(from_attributes=True)  # noqa

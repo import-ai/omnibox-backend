@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse, Response
 from backend.api.v1 import router_api_v1
 from backend.common.exception import CommonException
 from backend.db import session_context
-from backend.db.models import Base
+from backend.db.entity import Base
 
 
 async def init():

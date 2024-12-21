@@ -6,11 +6,12 @@ import time
 import asyncpg
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from testcontainers.postgres import PostgresContainer
 
+from backend.api.server import app
 from backend.common import project_root
 from backend.common.logger import get_logger
-from backend.db import session_context
 
 logger = get_logger("fixture")
 
@@ -29,22 +30,22 @@ async def check_db(dsn: str, retry_cnt: int = 10):
 
 
 @pytest.fixture(scope="session")
-async def db_url() -> str:
+def db_url() -> str:
     driver = "asyncpg"
     with PostgresContainer("postgres:17-alpine", driver=driver) as postgres:
         url = postgres.get_connection_url()
-        await check_db(postgres.get_connection_url(driver=None))
+        asyncio.run(check_db(postgres.get_connection_url(driver=None)))
 
         os.environ["DB_URL"] = url
         logger.debug({"db_url": url, "env": {"DB_URL": os.getenv("DB_URL")}})
 
-        from backend.db.models import Base
-
-        async with session_context() as session:
-            async with session.bind.begin() as connection:
-                await connection.run_sync(Base.metadata.create_all)
-        logger.debug({"message": "db init success", "env": {"DB_URL": os.getenv("DB_URL")}})
         yield url
+
+
+@pytest.fixture(scope="session")
+def client(db_url: str) -> str:
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture(scope="session")
@@ -78,3 +79,10 @@ async def base_url(db_url: str) -> str:
         api_process.wait()
     else:
         raise RuntimeError("Server already exists")
+
+
+@pytest.fixture(scope="session")
+def namespace(client: httpx.Client) -> str:
+    namespace = "pytest"
+    client.post("/api/v1/namespaces", json={"name": namespace}).raise_for_status()
+    yield namespace

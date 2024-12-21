@@ -1,7 +1,6 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, status
-from pydantic import Field
 from sqlalchemy import select, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,10 +17,8 @@ class NamespaceCreate(BaseAPIModel):
 
 
 class NamespaceResponse(BaseAPIModel):
-    namespace_id: str = Field(alias="id")
     name: str
     owner_id: str
-
 
 
 # CRUD

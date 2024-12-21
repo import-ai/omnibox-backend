@@ -48,26 +48,27 @@ def client(db_url: str) -> str:
         yield client
 
 
+async def health_check(base_url: str) -> bool:
+    try:
+        async with httpx.AsyncClient(base_url=base_url, timeout=3) as client:
+            response: httpx.Response = await client.get("/api/v1/health")
+        response.raise_for_status()
+        return True
+    except httpx.ConnectError:
+        return False
+
+
 @pytest.fixture(scope="session")
 async def base_url(db_url: str) -> str:
-    base_url = "http://127.0.0.1:8000/api/v1"
+    base_url = "http://127.0.0.1:8000"
 
-    def health_check() -> bool:
-        try:
-            with httpx.Client(base_url=base_url, timeout=3) as client:
-                response: httpx.Response = client.get("/health")
-            response.raise_for_status()
-            return True
-        except httpx.ConnectError:
-            return False
-
-    if not health_check():
+    if not await health_check(base_url):
         env: dict = os.environ.copy()
         cwd: str = project_root.path()
 
         api_process = subprocess.Popen(["uvicorn", "backend.api:app"], cwd=cwd, env=env)
 
-        while not health_check():  # 等待服务起来
+        while not await health_check(base_url):  # 等待服务起来
             if api_process.poll() is not None:
                 raise RuntimeError(f"api_process exit with code {api_process.returncode}")
             time.sleep(1)

@@ -6,11 +6,13 @@ from typing import Optional
 
 from backend.common import env
 
+
 class DatetimeEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, datetime):
             return obj.strftime('%Y-%m-%d %H:%M:%S.%f')
         return super().default(obj)
+
 
 class CustomFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:

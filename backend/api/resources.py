@@ -1,7 +1,7 @@
 import asyncio
 from typing import List
 
-from fastapi import Depends, APIRouter
+from fastapi import Depends, APIRouter, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,9 +72,9 @@ async def create_resource(
 
 @router_resources.get("", response_model=List[Resource], tags=["resources"], response_model_exclude_none=True)
 async def get_resources(
-        space_type: SpaceType | None = None,
-        resource_type: ResourceType | None = None,
-        parent_id: str | None = None,
+        space_type: SpaceType | None = Query(alias="spaceType", default=None),
+        resource_type: ResourceType | None = Query(alias="resourceType", default=None),
+        parent_id: str | None = Query(alias="parentId", default=None),
         tag: str | None = None,
         user: BaseUser = Depends(_get_user),
         recursive: bool = False,

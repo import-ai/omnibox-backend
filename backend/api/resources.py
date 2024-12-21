@@ -45,6 +45,8 @@ async def create_resource(
     namespace_id = (await _get_namespace_by_name(resource.namespace, session)).namespace_id
     if parent_id := resource.parent_id:
         parent_resource = await session.get(ResourceDB, parent_id)
+        if parent_resource.namespace_id != namespace_id or parent_resource.space_type != resource.space_type:
+            raise CommonException(code=400, error="Parent resource's namespace & space must be same as resource's")
     else:
         parent_resource = await get_root_resource(
             namespace_id,
@@ -57,7 +59,7 @@ async def create_resource(
         namespace_id=namespace_id,
         user_id=user.user_id,
         parent_id=parent_resource.resource_id,  # noqa
-        **resource.model_dump(exclude_none=True, by_alias=False, exclude={"namespace"})
+        **resource.model_dump(exclude_none=True, by_alias=False, exclude={"namespace", "parent_id"})
     )
     session.add(resource_orm)
 
@@ -121,7 +123,8 @@ async def get_resources(
 
 
 @router_resources.get("/{resource_id}", response_model=Resource, tags=["resources"], response_model_exclude_none=True)
-async def get_resource_by_id(resource_orm: ResourceDB = Depends(_get_resource), session: AsyncSession = Depends(get_session)):
+async def get_resource_by_id(resource_orm: ResourceDB = Depends(_get_resource),
+                             session: AsyncSession = Depends(get_session)):
     namespace_db = await session.get(NamespaceDB, resource_orm.namespace_id)
     resource = Resource.model_validate(resource_orm)
     resource.namespace = namespace_db.name  # noqa

@@ -1,14 +1,10 @@
 from typing import Optional, List, Literal
 
 from pydantic import BaseModel as _BaseModel, Field, ConfigDict
+from pydantic.alias_generators import to_camel
 
 ResourceType = Literal["doc", "link", "file", "folder"]
 SpaceType = Literal["private", "teamspace"]
-
-
-def to_camel(name: str) -> str:
-    components = name.split("_")
-    return components[0] + "".join(x.title() for x in components[1:])
 
 
 class BaseAPIModel(_BaseModel):

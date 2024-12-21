@@ -11,6 +11,6 @@ router_api_v1.include_router(router_resources)
 router_api_v1.include_router(router_namespaces)
 
 
-@router_api_v1.get("/health")
+@router_api_v1.get("/health", tags=["metrics"])
 async def health():
     return {"status": 200, "uptime": str(datetime.now() - start_time)}

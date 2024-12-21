@@ -1,4 +1,3 @@
-import asyncio
 from typing import List
 
 from fastapi import Depends, APIRouter, Query
@@ -10,7 +9,7 @@ from backend.api.entity import Resource, ResourceType, SpaceType, BaseUser, Reso
 from backend.common.exception import CommonException
 from backend.db.entity import ResourceDB as ResourceDB, Namespace as NamespaceDB
 
-router_resources = APIRouter(prefix="/resources")
+router_resources = APIRouter(prefix="/resources", tags=["resources"])
 
 
 async def get_root_resource(namespace_id: str, *, session: AsyncSession, space_type: SpaceType,
@@ -34,7 +33,7 @@ async def get_root_resource(namespace_id: str, *, session: AsyncSession, space_t
         return resource_db
 
 
-@router_resources.post("", response_model=IDResponse, status_code=201, tags=["resources"],
+@router_resources.post("", response_model=IDResponse, status_code=201,
                        response_model_exclude_none=True,
                        response_model_include={"id", "name", "resourceType", "space", "parentId", "childCount"})
 async def create_resource(
@@ -70,50 +69,47 @@ async def create_resource(
     return IDResponse(id=resource_orm.resource_id)
 
 
-@router_resources.get("", response_model=List[Resource], tags=["resources"], response_model_exclude_none=True)
+@router_resources.get("", response_model=List[Resource],
+                      response_model_exclude_none=True, response_model_exclude={"content"})
 async def get_resources(
-        space_type: SpaceType | None = Query(alias="spaceType", default=None),
+        space_type: SpaceType = Query(alias="spaceType"),
         resource_type: ResourceType | None = Query(alias="resourceType", default=None),
         parent_id: str | None = Query(alias="parentId", default=None),
         tag: str | None = None,
         user: BaseUser = Depends(_get_user),
-        recursive: bool = False,
         namespace_orm: NamespaceDB = Depends(_get_namespace_by_name),
         session: AsyncSession = Depends(get_session)
 ):
-    if recursive:
-        raise CommonException(code=400, error="Recursive is not supported")
     query = select(ResourceDB).where(
         ResourceDB.deleted_at.is_(None),
-        ResourceDB.namespace_id == namespace_orm.namespace_id
+        ResourceDB.namespace_id == namespace_orm.namespace_id,
+        ResourceDB.space_type == space_type
     )
-    if space_type:
-        query = query.where(ResourceDB.space_type == space_type)
     if resource_type:
         query = query.where(ResourceDB.resource_type == resource_type)
     if parent_id:
         parent_id_list = parent_id.split(",")
     else:  # 如果没有指定 parent_id，那么默认拉取根目录
-        private_root, teamspace_root = await asyncio.gather(
-            get_root_resource(
+        if space_type == "private":
+            root = await get_root_resource(
                 namespace_orm.namespace_id,
                 space_type="private",
                 session=session,
                 user_id=user.user_id
-            ),
-            get_root_resource(
+            )
+        elif space_type == "teamspace":
+            root = await get_root_resource(
                 namespace_orm.namespace_id,
                 space_type="teamspace",
                 session=session
             )
-        )
-        parent_id_list = [private_root.resource_id, teamspace_root.resource_id]
+        else:
+            raise CommonException(code=400, error="Invalid space type")
+        parent_id_list = [root.resource_id]
     query = query.where(ResourceDB.parent_id.in_(parent_id_list))
     if tag:
         tags = tag.split(",")
         query = query.where(ResourceDB.tags.overlap(tags))
-    if space_type:
-        query = query.where(ResourceDB.space_type == space_type)
 
     result = await session.execute(query)
     resource_list: List[ResourceDB] = []
@@ -122,7 +118,7 @@ async def get_resources(
     return resource_list
 
 
-@router_resources.get("/{resource_id}", response_model=Resource, tags=["resources"], response_model_exclude_none=True)
+@router_resources.get("/{resource_id}", response_model=Resource, response_model_exclude_none=True)
 async def get_resource_by_id(resource_orm: ResourceDB = Depends(_get_resource),
                              session: AsyncSession = Depends(get_session)):
     namespace_db = await session.get(NamespaceDB, resource_orm.namespace_id)
@@ -131,7 +127,7 @@ async def get_resource_by_id(resource_orm: ResourceDB = Depends(_get_resource),
     return resource
 
 
-@router_resources.patch("/{resource_id}", response_model=Resource, tags=["resources"], response_model_exclude_none=True)
+@router_resources.patch("/{resource_id}", response_model=Resource, response_model_exclude_none=True)
 async def update_resource_by_id(
         resource_patch: Resource,
         resource_orm: ResourceDB = Depends(_get_resource),

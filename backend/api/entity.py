@@ -15,7 +15,18 @@ class IDResponse(BaseAPIModel):
     id: str
 
 
-class BaseResource(BaseAPIModel):
+class ResourceCreateRequest(BaseAPIModel):
+    resource_type: ResourceType
+    namespace: str
+    space_type: SpaceType
+
+    name: Optional[str] = Field(default=None)
+    parent_id: Optional[str] = Field(default=None)
+    tags: Optional[List[str]] = Field(default=None)
+    content: Optional[str] = Field(default=None)
+
+
+class Resource(BaseAPIModel):
     name: Optional[str] = Field(default=None)
     resource_type: Optional[ResourceType] = Field(default=None)
     namespace: Optional[str] = Field(default=None)
@@ -24,14 +35,6 @@ class BaseResource(BaseAPIModel):
     tags: Optional[List[str]] = Field(default=None)
     content: Optional[str] = Field(default=None)
 
-
-class ResourceCreateRequest(BaseResource):
-    resource_type: ResourceType
-    namespace: str
-    space_type: SpaceType
-
-
-class Resource(BaseResource):
     resource_id: Optional[str] = Field(default=None, alias="id")
     child_count: Optional[int] = Field(default=None)
 

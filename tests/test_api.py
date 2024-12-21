@@ -50,18 +50,18 @@ def test_resources(namespace: str, client: httpx.Client):
     # Create parent
     create_payload = {
         "name": "foo",
-        "resource_type": "doc",
+        "resourceType": "doc",
         "namespace": namespace,
-        "space_type": "private"
+        "spaceType": "private"
     }
     parent = create(create_payload, client)
 
     # Create child
     create_child_payload = {
         "name": "bar",
-        "resource_type": "doc",
+        "resourceType": "doc",
         "namespace": namespace,
-        "space_type": "private",
+        "spaceType": "private",
         "parent_id": parent["id"]
     }
     child = create(create_child_payload, client)
@@ -71,28 +71,32 @@ def test_resources(namespace: str, client: httpx.Client):
     assert get(parent["id"], client)["childCount"] == 1
 
     # Fetch resource list
-    list_response = client.get(f"/api/v1/resources", params={"namespace": namespace})
+    list_response = client.get(f"/api/v1/resources", params={
+        "namespace": namespace, "spaceType": "private"
+    })
     assert list_response.status_code == 200
     resource_list = list_response.json()
     assert len(resource_list) == 1
     assert resource_list[0]["id"] == parent["id"]
 
     # Fetch resource list
-    list_response = client.get("/api/v1/resources", params={"namespace": namespace, "parent_id": parent["id"]})
+    list_response = client.get("/api/v1/resources", params={
+        "namespace": namespace, "spaceType": "private", "parentId": parent["id"]
+    })
     assert list_response.status_code == 200
     resource_list = list_response.json()
     assert len(resource_list) == 1
     assert resource_list[0]["id"] == child["id"]
 
     # Fetch empty resource list
-    empty_list_response = client.get(f"/api/v1/resources", params={"namespace": namespace, "space_type": "teamspace"})
+    empty_list_response = client.get(f"/api/v1/resources", params={"namespace": namespace, "spaceType": "teamspace"})
     assert empty_list_response.status_code == 200
     assert empty_list_response.json() == []
 
     # Patch
     update_payload = {"name": "updated_name"}
     update_response = client.patch(
-        f"/api/v1/resources/{parent['id']}", json=update_payload | {"space_type": create_payload["space_type"]})
+        f"/api/v1/resources/{parent['id']}", json=update_payload | {"spaceType": create_payload["spaceType"]})
     assert update_response.status_code == 200
     updated_resource = update_response.json()
     assert updated_resource == update_payload
@@ -100,7 +104,7 @@ def test_resources(namespace: str, client: httpx.Client):
     # Validate patch
     fetched_resource = get(parent["id"], client)
     assert fetched_resource["name"] == update_payload["name"]
-    assert fetched_resource["spaceType"] == create_payload["space_type"]
+    assert fetched_resource["spaceType"] == create_payload["spaceType"]
 
     delete(child["id"], client)
     assert get(parent["id"], client)["childCount"] == 0

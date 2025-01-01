@@ -13,12 +13,11 @@ from common.exception import CommonException
 from common.trace_info import TraceInfo
 
 router_resources = APIRouter(prefix="/resources", tags=["resources"])
-wizard_base_url: str = ...
+context: dict = {}
 
 
 def init(config: Config):
-    global wizard_base_url
-    wizard_base_url = config.wizard.base_url
+    context["wizard_base_url"] = config.wizard.base_url
 
 
 async def get_root_resource(namespace_id: str, *, session: AsyncSession, space_type: SpaceType,
@@ -43,7 +42,7 @@ async def get_root_resource(namespace_id: str, *, session: AsyncSession, space_t
 
 
 async def create_index_task(resource: ResourceDB, trace_info: TraceInfo):
-    async with httpx.AsyncClient(base_url=wizard_base_url) as client:
+    async with httpx.AsyncClient(base_url=context["wizard_base_url"]) as client:
         response: httpx.Response = await client.post("/api/v1/tasks", json={
             "function": "create_or_update_index",
             "input": {

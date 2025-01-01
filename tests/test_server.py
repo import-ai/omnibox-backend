@@ -5,7 +5,7 @@ import httpx
 from uvicorn import Config, Server
 
 from backend.api.server import app
-from tests.helper.fixture import postgres_url, health_check, base_url
+from tests.helper.fixture import health_check, config
 from tests.test_api import create
 
 
@@ -15,8 +15,7 @@ def run_server_in_thread(host: str, port: int):
     server.run()
 
 
-async def create_test_data(base_url: str):
-    client = httpx.Client(base_url=base_url)
+def create_test_data(client: httpx.Client):
     client.post("/api/v1/namespaces", json={"name": "test"}).raise_for_status()
 
     private_parent = create(payload={
@@ -72,12 +71,13 @@ async def create_test_data(base_url: str):
     }, client=client)
 
 
-async def test_server(postgres_url: str):
+async def test_server(config: Config):
     base_url = "http://127.0.0.1:8000"
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as executor:
         server_future = loop.run_in_executor(executor, run_server_in_thread, "127.0.0.1", 8000)
         while not await health_check(base_url):
             await asyncio.sleep(1)
-        await create_test_data(base_url)
+        with httpx.Client(base_url=base_url) as client:
+            create_test_data(client)
         await server_future

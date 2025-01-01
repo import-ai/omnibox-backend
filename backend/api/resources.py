@@ -1,15 +1,24 @@
 from typing import List
 
+import httpx
 from fastapi import Depends, APIRouter, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.depends import get_session, _get_user, _get_resource, _get_namespace_by_name
+from backend.api.depends import get_session, _get_user, _get_resource, _get_namespace_by_name, get_trace_info
 from backend.api.entity import Resource, ResourceType, SpaceType, BaseUser, ResourceCreateRequest, IDResponse
-from backend.common.exception import CommonException
+from backend.config import Config
 from backend.db.entity import ResourceDB as ResourceDB, Namespace as NamespaceDB
+from common.exception import CommonException
+from common.trace_info import TraceInfo
 
 router_resources = APIRouter(prefix="/resources", tags=["resources"])
+wizard_base_url: str = ...
+
+
+def init(config: Config):
+    global wizard_base_url
+    wizard_base_url = config.wizard.base_url
 
 
 async def get_root_resource(namespace_id: str, *, session: AsyncSession, space_type: SpaceType,
@@ -33,13 +42,36 @@ async def get_root_resource(namespace_id: str, *, session: AsyncSession, space_t
         return resource_db
 
 
+async def create_index_task(resource: ResourceDB, trace_info: TraceInfo):
+    async with httpx.AsyncClient(base_url=wizard_base_url) as client:
+        response: httpx.Response = await client.post("/api/v1/tasks", json={
+            "function": "create_or_update_index",
+            "input": {
+                "title": resource.name,
+                "content": resource.content,
+                "meta_info": {
+                    "user_id": resource.user_id,
+                    "space_type": resource.space_type,
+                    "resource_id": resource.resource_id,
+                    "parent_id": resource.parent_id,
+                },
+            },
+            "namespace_id": resource.namespace_id,
+            "user_id": resource.user_id
+        })
+        assert response.is_success, response.text
+        task_id = response.json()["task_id"]
+        trace_info.info({"task_id": task_id})
+
+
 @router_resources.post("", response_model=IDResponse, status_code=201,
                        response_model_exclude_none=True,
                        response_model_include={"id", "name", "resourceType", "space", "parentId", "childCount"})
 async def create_resource(
         resource: ResourceCreateRequest,
         user: BaseUser = Depends(_get_user),
-        session: AsyncSession = Depends(get_session)
+        session: AsyncSession = Depends(get_session),
+        trace_info: TraceInfo = Depends(get_trace_info)
 ):
     namespace_id = (await _get_namespace_by_name(resource.namespace, session)).namespace_id
     if parent_id := resource.parent_id:
@@ -66,6 +98,7 @@ async def create_resource(
 
     await session.commit()
     await session.refresh(resource_orm)
+    await create_index_task(resource_orm, trace_info)
     return IDResponse(id=resource_orm.resource_id)
 
 
@@ -131,7 +164,8 @@ async def get_resource_by_id(resource_orm: ResourceDB = Depends(_get_resource),
 async def update_resource_by_id(
         resource_patch: Resource,
         resource_orm: ResourceDB = Depends(_get_resource),
-        session: AsyncSession = Depends(get_session)
+        session: AsyncSession = Depends(get_session),
+        trace_info: TraceInfo = Depends(get_trace_info)
 ):
     raw_resource = Resource.model_validate(resource_orm).model_dump()
     delta_dict: dict = {}
@@ -141,6 +175,8 @@ async def update_resource_by_id(
             delta_dict[key] = value
     delta_resource = Resource.model_validate(delta_dict)
     await session.commit()
+    await session.refresh(resource_orm)
+    await create_index_task(resource_orm, trace_info)
     return delta_resource
 
 

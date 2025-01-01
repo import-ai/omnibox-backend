@@ -3,7 +3,7 @@ from typing import Optional
 
 import shortuuid
 
-from backend.common.logger import get_logger
+from common.logger import get_logger
 
 
 class TraceInfo:

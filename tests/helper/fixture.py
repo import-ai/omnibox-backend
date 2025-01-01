@@ -10,8 +10,10 @@ from fastapi.testclient import TestClient
 from testcontainers.postgres import PostgresContainer
 
 from backend.api.server import app
-from backend.common import project_root
-from backend.common.logger import get_logger
+from backend.config import Config, ENV_PREFIX
+from common import project_root
+from common.config_loader import Loader
+from common.logger import get_logger
 
 logger = get_logger("fixture")
 
@@ -30,20 +32,34 @@ async def check_db(dsn: str, retry_cnt: int = 10):
 
 
 @pytest.fixture(scope="session")
-def db_url() -> str:
+def postgres_url() -> str:
     driver = "asyncpg"
     with PostgresContainer("postgres:17-alpine", driver=driver) as postgres:
         url = postgres.get_connection_url()
         asyncio.run(check_db(postgres.get_connection_url(driver=None)))
 
-        os.environ["DB_URL"] = url
-        logger.debug({"db_url": url, "env": {"DB_URL": os.getenv("DB_URL")}})
+        os.environ[f"{ENV_PREFIX}_DB_URL"] = url
+        logger.debug({"db_url": url, "env": {f"{ENV_PREFIX}_DB_URL": os.getenv(f"{ENV_PREFIX}_DB_URL")}})
 
         yield url
 
 
 @pytest.fixture(scope="session")
-def client(db_url: str) -> str:
+def wizard_base_url() -> str:
+    url = "http://127.0.0.1:8001"
+    os.environ[f"{ENV_PREFIX}_WIZARD_BASE_URL"] = url
+    return url
+
+
+@pytest.fixture(scope="session")
+def config(postgres_url: str, wizard_base_url: str) -> Config:
+    loader = Loader(Config, env_prefix=ENV_PREFIX)
+    config: Config = loader.load()
+    yield config
+
+
+@pytest.fixture(scope="session")
+def client(config: Config) -> str:
     with TestClient(app) as client:
         yield client
 
@@ -59,7 +75,7 @@ async def health_check(base_url: str) -> bool:
 
 
 @pytest.fixture(scope="session")
-async def base_url(db_url: str) -> str:
+async def base_url(config: Config) -> str:
     base_url = "http://127.0.0.1:8000"
 
     if not await health_check(base_url):
@@ -73,7 +89,7 @@ async def base_url(db_url: str) -> str:
                 raise RuntimeError(f"api_process exit with code {api_process.returncode}")
             time.sleep(1)
 
-        logger.debug({"base_url": base_url, "env": {"DB_URL": os.getenv("DB_URL")}})
+        logger.debug({"base_url": base_url, "env": {f"{ENV_PREFIX}_DB_URL": os.getenv(f"{ENV_PREFIX}_DB_URL")}})
         yield base_url
 
         api_process.terminate()

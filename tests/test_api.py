@@ -2,8 +2,8 @@ import httpx
 import pytest
 from pydantic.alias_generators import to_camel
 
-from backend.common.exception import CommonException
-from backend.common.logger import get_logger
+from common.exception import CommonException
+from common.logger import get_logger
 from tests.helper.fixture import client
 
 logger = get_logger("tests")
@@ -50,6 +50,7 @@ def test_resources(namespace: str, client: httpx.Client):
     # Create parent
     create_payload = {
         "name": "foo",
+        "content": "bar",
         "resourceType": "doc",
         "namespace": namespace,
         "spaceType": "private"
@@ -59,6 +60,7 @@ def test_resources(namespace: str, client: httpx.Client):
     # Create child
     create_child_payload = {
         "name": "bar",
+        "content": "foo",
         "resourceType": "doc",
         "namespace": namespace,
         "spaceType": "private",

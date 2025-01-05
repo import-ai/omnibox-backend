@@ -5,8 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.entity import BaseUser
-from backend.common.exception import CommonException
-from backend.common.trace_info import TraceInfo
+from common.exception import CommonException
+from common.trace_info import TraceInfo
 from backend.db import session_context
 from backend.db.entity import ResourceDB as ResourceDB, Namespace as NamespaceDB
 

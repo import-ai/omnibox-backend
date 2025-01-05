@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.depends import get_session, _get_user
 from backend.api.entity import BaseUser, IDResponse, BaseAPIModel
-from backend.common.exception import CommonException
+from common.exception import CommonException
 from backend.db.entity import Namespace as NamespaceDB, ResourceDB
 
 router_namespaces = APIRouter(prefix="/namespaces", tags=["namespaces"])

@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime
 from typing import Optional
 
-from backend.common import env
+from common import env
 
 
 class DatetimeEncoder(json.JSONEncoder):

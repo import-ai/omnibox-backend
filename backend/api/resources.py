@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 import httpx
@@ -63,9 +64,8 @@ async def create_index_task(resource: ResourceDB, trace_info: TraceInfo):
         trace_info.info({"task_id": task_id})
 
 
-@router_resources.post("", response_model=IDResponse, status_code=201,
-                       response_model_exclude_none=True,
-                       response_model_include={"id", "name", "resourceType", "space", "parentId", "childCount"})
+@router_resources.post("", response_model=Resource, status_code=201,
+                       response_model_exclude_none=True)
 async def create_resource(
         resource: ResourceCreateRequest,
         user: BaseUser = Depends(_get_user),
@@ -98,7 +98,9 @@ async def create_resource(
     await session.commit()
     await session.refresh(resource_orm)
     await create_index_task(resource_orm, trace_info)
-    return IDResponse(id=resource_orm.resource_id)
+    created_resource = Resource.model_validate(resource_orm)
+    created_resource.namespace = resource.namespace
+    return created_resource
 
 
 @router_resources.get("", response_model=List[Resource],
@@ -172,11 +174,15 @@ async def update_resource_by_id(
         if raw_resource.get(key, None) != value:
             setattr(resource_orm, key, value)
             delta_dict[key] = value
-    delta_resource = Resource.model_validate(delta_dict)
-    await session.commit()
-    await session.refresh(resource_orm)
-    await create_index_task(resource_orm, trace_info)
-    return delta_resource
+    if delta_dict:
+        resource_orm.updated_at = datetime.now()
+        delta_dict["updated_at"] = resource_orm.updated_at
+        delta_resource = Resource.model_validate(delta_dict)
+        await session.commit()
+        await session.refresh(resource_orm)
+        await create_index_task(resource_orm, trace_info)
+        return delta_resource
+    return Resource.model_validate({})
 
 
 @router_resources.delete("/{resource_id}", response_model=IDResponse)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, List, Literal
 
 from pydantic import BaseModel as _BaseModel, Field, ConfigDict
@@ -26,7 +27,13 @@ class ResourceCreateRequest(BaseAPIModel):
     content: Optional[str] = Field(default=None)
 
 
-class Resource(BaseAPIModel):
+class BaseDBModel(BaseAPIModel):
+    created_at: Optional[datetime] = Field(default=None)
+    updated_at: Optional[datetime] = Field(default=None)
+    deleted_at: Optional[datetime] = Field(default=None)
+
+
+class Resource(BaseDBModel):
     name: Optional[str] = Field(default=None)
     resource_type: Optional[ResourceType] = Field(default=None)
     namespace: Optional[str] = Field(default=None)

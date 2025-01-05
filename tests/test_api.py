@@ -19,13 +19,14 @@ def get(resource_id: str, client: httpx.Client) -> dict:
 def create(payload: dict, client: httpx.Client) -> dict:
     create_response = client.post("/api/v1/resources", json=payload)
     assert create_response.status_code == 201
-    resource = create_response.json()
-    resource_id = resource["id"]
+    created_resource = create_response.json()
+    resource_id = created_resource["id"]
 
     resource = get(resource_id, client)
     check(payload, resource)
     assert resource["id"] == resource_id
     assert resource["childCount"] == 0
+    assert created_resource == resource
     return resource
 
 
@@ -101,7 +102,7 @@ def test_resources(namespace: str, client: httpx.Client):
         f"/api/v1/resources/{parent['id']}", json=update_payload | {"spaceType": create_payload["spaceType"]})
     assert update_response.status_code == 200
     updated_resource = update_response.json()
-    assert updated_resource == update_payload
+    assert {k: v for k, v in updated_resource.items() if k != "updatedAt"} == update_payload
 
     # Validate patch
     fetched_resource = get(parent["id"], client)

@@ -20,8 +20,7 @@ async def get_session() -> AsyncSession:
     async with session_context() as session:
         yield session
 
-
-async def _get_user() -> db.User:
+def _mock_user() -> db.User:
     return db.User(
         user_id="mock_user_id",
         username="mock_username",
@@ -32,18 +31,29 @@ async def _get_user() -> db.User:
         api_keys=[]
     )
 
+async def _get_user() -> db.User:
+    return _mock_user()
+
 
 async def _get_user_by_api_key(authorization: Annotated[str | None, Header()] = None, session: AsyncSession = Depends(get_session)) -> db.User:
     if not authorization:
         raise CommonException(code=401, error="Authorization required")
+    return _mock_user()
     username, api_key = authorization.split(",")
 
     with session.no_autoflush:
-        user: db.User = session.get(db.User, username)
+        query = select(db.User).where(db.User.username == username, db.User.deleted_at.is_(None))
+        result = await session.execute(query)
+        user: db.User = result.scalar()
         if not user:
             raise CommonException(code=401, error="User not found")
-        if api_key not in user.api_keys:
+        
+        api_key_query = select(db.APIKey).where(db.APIKey.api_key == api_key, db.APIKey.user_id == user.user_id)
+        api_key_result = await session.execute(api_key_query)
+        api_key_orm: db.APIKey = api_key_result.scalar()
+        if not api_key_orm:
             raise CommonException(code=401, error="Invalid API key")
+        
         return user
 
 async def _get_namespace_by_name(namespace: str, session: AsyncSession = Depends(get_session)) -> db.Namespace:

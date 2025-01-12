@@ -45,6 +45,17 @@ class User(Base):
         return bcrypt.checkpw(password.encode(), self.password.encode())
 
 
+class APIKey(Base):
+    __tablename__ = "api_keys"
+
+    api_key: Mapped[str] = mapped_column(String(length=22), primary_key=True, index=True, default=shortuuid.uuid)
+    user_id: Mapped[str] = mapped_column(String(length=22), index=True)
+
+    comment: Mapped[str | None] = mapped_column(String(length=32), nullable=True)
+
+    role: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+
 class UserRole(Base):
     __tablename__ = "user_roles"
     user_role_id: Mapped[str] = mapped_column(
@@ -121,6 +132,7 @@ class Resource(Base):
             name: str | None = None,
             content: str | None = None,
             tags: List[str] | None = None,
+            attrs: dict | None = None
     ):
         if parent_id:
             parent_resource = await session.get(cls, parent_id)
@@ -145,6 +157,7 @@ class Resource(Base):
             space_type=space_type,
             tags=tags,
             content=content,
+            attrs=attrs
         )
         session.add(resource_orm)
 

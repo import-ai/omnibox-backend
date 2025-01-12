@@ -58,11 +58,14 @@ async def task_done_callback(
     function: str = task.function
     trace_info.info({"task_id": task.task_id, "function": function})
 
-    if function == "html_to_markdown":
+    if function == "collect":
         # Process the html_to_markdown callback
         result: dict = task.output
-        markdown_content = result["markdown"]
-        title = result["title"]
+        markdown_result: dict = result["markdown"]
+        extracted_markdown: str = markdown_result["extracted"]
+        raw_markdown: str = markdown_result["raw"]
+        title: str = result["title"]
+        url: str = result["url"]
 
         payload: dict = task.payload
         space_type = payload["spaceType"]
@@ -70,7 +73,7 @@ async def task_done_callback(
         # Log the result
         trace_info.info({
             "title": title,
-            "len(markdown_content)": len(markdown_content)
+            "len(extracted_markdown)": len(extracted_markdown)
         })
 
         # Save the markdown content as a resource into the database
@@ -82,8 +85,11 @@ async def task_done_callback(
             session=session,
             trace_info=trace_info,
             name=title,
-            content=markdown_content
+            content=extracted_markdown,
+            attrs={"url": url, "markdown": {"raw": raw_markdown}}
         )
+
+        await get_wizard_client().index(trace_info=trace_info, resource=resource)
 
         # Log the resource creation
         trace_info.info({
@@ -93,3 +99,5 @@ async def task_done_callback(
             "namespace_id": resource.namespace_id,
             "user_id": resource.user_id
         })
+
+    return {"task_id": task.task_id, "function": function}

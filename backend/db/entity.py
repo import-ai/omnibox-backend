@@ -1,11 +1,15 @@
 from datetime import datetime
 from typing import List
 
+import bcrypt
 import shortuuid
-from sqlalchemy import JSON, Text, String, DateTime, Enum
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import JSON, Text, String, DateTime, Enum, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, validates
 
 from backend.api.entity import ResourceType, SpaceType
+from common.exception import CommonException
+from common.trace_info import TraceInfo
 
 
 class Base(DeclarativeBase):
@@ -17,7 +21,10 @@ class Base(DeclarativeBase):
         self.deleted_at = datetime.now()
 
 
-class UserDB(Base):
+ENCODE = "utf-8"
+
+
+class User(Base):
     __tablename__ = "users"
 
     user_id: Mapped[str] = mapped_column(
@@ -28,9 +35,28 @@ class UserDB(Base):
     password: Mapped[str] = mapped_column(String(length=128), nullable=False)
 
     role: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    api_keys: Mapped[List[dict]] = mapped_column(JSON, nullable=True)
+
+    @validates("password")
+    def validate_password(self, key, password):
+        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+    def verify_password(self, password) -> bool:
+        return bcrypt.checkpw(password.encode(), self.password.encode())
 
 
-class UserRoleDB(Base):
+class APIKey(Base):
+    __tablename__ = "api_keys"
+
+    api_key: Mapped[str] = mapped_column(String(length=22), primary_key=True, index=True, default=shortuuid.uuid)
+    user_id: Mapped[str] = mapped_column(String(length=22), index=True)
+
+    comment: Mapped[str | None] = mapped_column(String(length=32), nullable=True)
+
+    role: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class UserRole(Base):
     __tablename__ = "user_roles"
     user_role_id: Mapped[str] = mapped_column(
         String(length=22), primary_key=True, index=True, default=shortuuid.uuid, name="role_id")
@@ -49,7 +75,7 @@ class Namespace(Base):
     collaborators: Mapped[List[str] | None] = mapped_column(JSON, nullable=True)
 
 
-class ResourceDB(Base):
+class Resource(Base):
     __tablename__ = "resources"
 
     resource_id: Mapped[str] = mapped_column(
@@ -63,3 +89,81 @@ class ResourceDB(Base):
     space_type: Mapped[SpaceType] = mapped_column(Enum("private", "teamspace", name="space_type"))
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     child_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    attrs: Mapped[dict] = mapped_column(JSON, nullable=True)
+
+    @classmethod
+    async def get_root_resource(
+            cls,
+            namespace_id: str, *,
+            session: AsyncSession,
+            space_type: SpaceType,
+            user_id: str | None = None
+    ) -> "Resource":
+        with session.no_autoflush:
+            sql = select(cls).where(
+                cls.namespace_id == namespace_id,
+                cls.resource_type == "folder",
+                cls.deleted_at.is_(None),
+                cls.parent_id.is_(None)
+            )
+            if space_type == "private":
+                if user_id is None:
+                    raise CommonException(code=400, error="User ID is required")
+                sql = sql.where(cls.space_type == "private", cls.user_id == user_id)
+            elif space_type == "teamspace":
+                sql = sql.where(cls.space_type == "teamspace")
+            else:
+                raise CommonException(code=400, error="Invalid space type")
+            resource_db = (await session.execute(sql)).scalars().first()
+            return resource_db
+
+    @classmethod
+    async def create(
+            cls,
+            *,
+            resource_type: ResourceType,
+            namespace_id: str,
+            space_type: SpaceType,
+            user_id: str,
+            session: AsyncSession,
+            trace_info: TraceInfo,
+
+            parent_id: str | None = None,
+            name: str | None = None,
+            content: str | None = None,
+            tags: List[str] | None = None,
+            attrs: dict | None = None
+    ):
+        if parent_id:
+            parent_resource = await session.get(cls, parent_id)
+            if parent_resource.namespace_id != namespace_id or parent_resource.space_type != space_type:
+                raise CommonException(code=400, error="Parent resource's namespace & space must be same as resource's")
+        else:
+            parent_resource = await cls.get_root_resource(
+                namespace_id,
+                space_type=space_type,
+                session=session,
+                user_id=user_id
+            )
+
+        trace_info.info({"parent_id": parent_resource.resource_id})
+
+        resource_orm = cls(
+            namespace_id=namespace_id,
+            user_id=user_id,
+            parent_id=parent_resource.resource_id,
+            resource_type=resource_type,
+            name=name,
+            space_type=space_type,
+            tags=tags,
+            content=content,
+            attrs=attrs
+        )
+        session.add(resource_orm)
+
+        parent_resource.child_count += 1
+
+        await session.commit()
+        await session.refresh(resource_orm)
+
+        return resource_orm

@@ -24,7 +24,7 @@ def assert_stream(stream: Iterator[str]):
 
 
 def api_stream(client: httpx.Client, request: dict) -> Iterator[str]:
-    with client.stream("POST", "/api/v1/grimoire/stream", json=request) as response:
+    with client.stream("POST", "/api/v1/wizard/chat/stream", json=request) as response:
         for line in response.iter_lines():
             if line.startswith("data: "):
                 yield line[6:]

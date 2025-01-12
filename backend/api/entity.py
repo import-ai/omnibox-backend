@@ -45,7 +45,35 @@ class Resource(BaseDBModel):
     resource_id: Optional[str] = Field(default=None, alias="id")
     child_count: Optional[int] = Field(default=None)
 
+    attrs: Optional[dict] = Field(default=None)
+
 
 class BaseUser(BaseAPIModel):
     user_id: Optional[str] = Field(default=None, alias="id")
     username: Optional[str] = Field(default=None)
+    api_keys: Optional[List[dict]] = Field(default=None)
+
+
+class Task(BaseAPIModel):
+    task_id: str
+    priority: int
+
+    namespace_id: str
+    user_id: str
+
+    function: str
+    input: dict
+    payload: dict | None = Field(default=None, description="Task payload, would pass through to the webhook")
+
+    output: dict | None = None
+    exception: dict | None = None
+
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    canceled_at: datetime | None = None
+
+    concurrency_threshold: int = Field(description="Concurrency threshold")
+
+    created_at: datetime
+    updated_at: datetime | None = None
+    deleted_at: datetime | None = None

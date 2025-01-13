@@ -43,6 +43,22 @@ async def create_resource(
     return created_resource
 
 
+@router_resources.get("/root", response_model=Resource, response_model_exclude_none=True)
+async def get_root_resource(
+        space_type: SpaceType = Query(alias="spaceType"),
+        user: db.User = Depends(_get_user),
+        namespace_orm: db.Namespace = Depends(_get_namespace_by_name),
+        session: AsyncSession = Depends(get_session)
+):
+    resource_orm = await db.Resource.get_root_resource(
+        namespace_orm.namespace_id,
+        space_type=space_type,
+        session=session,
+        user_id=user.user_id
+    )
+    return Resource.model_validate(resource_orm)
+
+
 @router_resources.get("", response_model=List[Resource],
                       response_model_exclude_none=True, response_model_exclude={"content"})
 async def get_resources(

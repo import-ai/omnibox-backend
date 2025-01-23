@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import List
 
 from fastapi import Depends, APIRouter, Query
@@ -119,23 +118,14 @@ async def get_resource_by_id(resource_orm: db.Resource = Depends(_get_resource),
 
 @router_resources.patch("/{resource_id}", response_model=Resource, response_model_exclude_none=True)
 async def update_resource_by_id(
-        resource_patch: Resource,
+        partial_resource: Resource,
         resource_orm: db.Resource = Depends(_get_resource),
         session: AsyncSession = Depends(get_session),
         trace_info: TraceInfo = Depends(get_trace_info)
 ):
-    raw_resource = Resource.model_validate(resource_orm).model_dump()
-    delta_dict: dict = {}
-    for key, value in resource_patch.model_dump(exclude_none=True).items():
-        if raw_resource.get(key, None) != value:
-            setattr(resource_orm, key, value)
-            delta_dict[key] = value
-    if delta_dict:
-        resource_orm.updated_at = datetime.now()
-        delta_dict["updated_at"] = resource_orm.updated_at
-        delta_resource = Resource.model_validate(delta_dict)
-        await session.commit()
-        await session.refresh(resource_orm)
+    delta = await resource_orm.update(session=session, **partial_resource.model_dump(exclude_none=True))
+    if delta:
+        delta_resource = Resource.model_validate(delta)
         await get_wizard_client().index(trace_info=trace_info, resource=resource_orm)
         return delta_resource
     return Resource.model_validate({})

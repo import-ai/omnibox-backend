@@ -117,6 +117,26 @@ class Resource(Base):
             resource_db = (await session.execute(sql)).scalars().first()
             return resource_db
 
+    async def update(self, *, session: AsyncSession, **kwargs) -> dict:
+        delta: dict = {}
+        for key, value in kwargs.items():
+            if getattr(self, key) != value:
+                delta[key] = value
+                setattr(self, key, value)
+        if delta:
+            self.updated_at = datetime.now()
+            delta["updated_at"] = self.updated_at
+            await session.commit()
+            await session.refresh(self)
+        return delta
+
+    @classmethod
+    async def get(cls, resource_id: str, session: AsyncSession) -> "Resource":
+        resource: Resource | None = await session.get(cls, resource_id)
+        if not resource:
+            raise CommonException(code=404, error="Resource not found")
+        return resource
+
     @classmethod
     async def create(
             cls,

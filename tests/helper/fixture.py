@@ -57,6 +57,14 @@ def config(postgres_url: str, wizard_base_url: str) -> Config:
     config: Config = loader.load()
     yield config
 
+@pytest.fixture(scope="session")
+def remote_config(wizard_base_url: str) -> Config:
+    os.environ[f"{ENV_PREFIX}_DB_URL"] = "postgresql+asyncpg://magic_box:magic_box@postgres:5432/magic_box"
+
+    loader = Loader(Config, env_prefix=ENV_PREFIX)
+    config: Config = loader.load()
+    yield config
+
 
 @pytest.fixture(scope="session")
 def client(config: Config) -> str:

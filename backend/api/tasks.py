@@ -9,10 +9,15 @@ from backend.api.entity import Task
 from backend.db import entity as db
 from backend.db.entity import Namespace
 from backend.wizard.client import get_wizard_client
+from backend.wizard.tasks.base import BaseProcessor
+from backend.wizard.tasks.collect import CollectProcessor
 from common.trace_info import TraceInfo
 
 dumps = partial(lib_dumps, ensure_ascii=False, separators=(",", ":"))
 tasks_router = APIRouter(prefix="/tasks")
+processors: dict[str, BaseProcessor] = {
+    "collect": CollectProcessor()
+}
 
 
 @tasks_router.post("", tags=["Tasks"])
@@ -30,6 +35,11 @@ async def create_task(
     function: str = request.pop("function")
     payload: dict | None = request.pop("payload", None)
 
+    if processor := processors.get(function, None):
+        input_dict, payload = await processor.preprocess(request, payload, user, namespace_orm, session, trace_info)
+    else:
+        input_dict = request
+
     trace_info.info({
         "namespace_id": namespace_orm.namespace_id,
         "user_id": user.user_id,
@@ -38,7 +48,7 @@ async def create_task(
     await get_wizard_client().create_task(
         trace_info=trace_info,
         function=function,
-        input_dict=request,
+        input_dict=input_dict,
         namespace_id=namespace_orm.namespace_id,
         user_id=user.user_id,
         payload=payload
@@ -54,50 +64,17 @@ async def task_done_callback(
     """
     Process the callback request when a task is done.
     """
-    # Log the callback information
     function: str = task.function
-    trace_info.info({"task_id": task.task_id, "function": function})
+    trace_info = trace_info.bind(task_id=task.task_id)
 
-    if function == "collect":
-        # Process the html_to_markdown callback
-        result: dict = task.output
-        markdown_result: dict = result["markdown"]
-        extracted_markdown: str = markdown_result["extracted"]
-        raw_markdown: str = markdown_result["raw"]
-        title: str = result["title"]
-        url: str = result["url"]
+    cost: float = round((task.ended_at - task.started_at).total_seconds(), 3)
+    wait: float = round((task.started_at - task.created_at).total_seconds(), 3)
 
-        payload: dict = task.payload
-        space_type = payload["spaceType"]
+    trace_info.info({"function": function, "cost": cost, "wait": wait})
 
-        # Log the result
-        trace_info.info({
-            "title": title,
-            "len(extracted_markdown)": len(extracted_markdown)
-        })
+    if processor := processors.get(function, None):
+        postprocess_result: dict = await processor.postprocess(task, session, trace_info)
+    else:
+        postprocess_result: dict = {}
 
-        # Save the markdown content as a resource into the database
-        resource = await db.Resource.create(
-            resource_type="doc",
-            namespace_id=task.namespace_id,
-            space_type=space_type,
-            user_id=task.user_id,
-            session=session,
-            trace_info=trace_info,
-            name=title,
-            content=extracted_markdown,
-            attrs={"url": url, "markdown": {"raw": raw_markdown}}
-        )
-
-        await get_wizard_client().index(trace_info=trace_info, resource=resource)
-
-        # Log the resource creation
-        trace_info.info({
-            "resource_id": resource.resource_id,
-            "name": resource.name,
-            "space_type": resource.space_type,
-            "namespace_id": resource.namespace_id,
-            "user_id": resource.user_id
-        })
-
-    return {"task_id": task.task_id, "function": function}
+    return {"task_id": task.task_id, "function": function} | postprocess_result

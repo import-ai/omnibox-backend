@@ -71,13 +71,22 @@ def create_test_data(client: httpx.Client):
     }, client=client)
 
 
-async def test_server(config: Config):
+async def start_server(config: Config, create_test_data_flag: bool = False):
     base_url = "http://127.0.0.1:8000"
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as executor:
-        server_future = loop.run_in_executor(executor, run_server_in_thread, "127.0.0.1", 8000)
+        server_future = loop.run_in_executor(executor, run_server_in_thread, "0.0.0.0", 8000)
         while not await health_check(base_url):
             await asyncio.sleep(1)
-        with httpx.Client(base_url=base_url) as client:
-            create_test_data(client)
+        if create_test_data_flag:
+            with httpx.Client(base_url=base_url) as client:
+                create_test_data(client)
         await server_future
+
+
+async def test_server(config: Config):
+    await start_server(config, create_test_data_flag=True)
+
+
+async def test_server_with_remote_db(remote_config: Config):
+    await start_server(remote_config, create_test_data_flag=False)

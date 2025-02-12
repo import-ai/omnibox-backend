@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse, Response
 
 from backend.wizard.client import init as wizard_init
 from backend.api.v1 import router_api_v1
+from backend.api.internal import router_internal
 from backend.config import ENV_PREFIX, Config
 from backend.db import session_context, set_session_factory
 from backend.db.entity import Base
@@ -47,3 +48,4 @@ async def exception_handler(_: Request, e: Exception) -> Response:
 
 
 app.include_router(router_api_v1)
+app.include_router(router_internal)

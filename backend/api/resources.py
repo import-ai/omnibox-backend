@@ -101,10 +101,10 @@ async def get_resources(
         query = query.where(db.Resource.tags.overlap(tags))
 
     result = await session.execute(query)
-    resource_list: List[db.Resource] = []
+    resource_list: List[Resource] = []
     for resource in result.scalars():
         resource_list.append(Resource.model_validate(resource))
-    return resource_list
+    return sorted(resource_list, key=lambda x: x.created_at, reverse=True)
 
 
 @router_resources.get("/{resource_id}", response_model=Resource, response_model_exclude_none=True)

@@ -40,7 +40,7 @@ class CollectProcessor(BaseProcessor):
 
         resource: db.Resource = await db.Resource.get(resource_id, session)
         delta: dict = await resource.update(session=session, name=title, content=markdown, attrs=result)
-        await get_wizard_client().index(trace_info=trace_info, resource=resource)
+        await get_wizard_client().index(session=session, trace_info=trace_info, resource=resource)
         delta_without_content: dict = {k: v for k, v in delta.items() if k != "content"}
         trace_info.info({"resource_id": resource.resource_id} | delta_without_content)
         return {"resource_id": resource.resource_id} | delta_without_content

@@ -28,7 +28,7 @@ class ResourceCreateRequest(BaseAPIModel):
 
 
 class BaseDBModel(BaseAPIModel):
-    created_at: Optional[datetime]
+    created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
     deleted_at: Optional[datetime] = Field(default=None)
 

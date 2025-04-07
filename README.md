@@ -1,4 +1,4 @@
-# Magic Box Backend
+# OmniBox Backend
 
 ## Thought
 

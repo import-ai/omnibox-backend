@@ -3,6 +3,7 @@ from typing import List
 from fastapi import Depends, APIRouter, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from backend.api.depends import get_session, _get_user, _get_resource, _get_namespace_by_name, get_trace_info
 from backend.api.entity import Resource, ResourceType, SpaceType, ResourceCreateRequest, IDResponse
@@ -65,6 +66,7 @@ async def get_resources(
         resource_type: ResourceType | None = Query(alias="resourceType", default=None),
         parent_id: str | None = Query(alias="parentId", default=None),
         tag: str | None = None,
+        return_content: bool | None = Query(alias="returnContent", default=False),
         user: db.User = Depends(_get_user),
         namespace_orm: db.Namespace = Depends(_get_namespace_by_name),
         session: AsyncSession = Depends(get_session)
@@ -99,12 +101,31 @@ async def get_resources(
     if tag:
         tags = tag.split(",")
         query = query.where(db.Resource.tags.overlap(tags))
+    if not return_content:
+        query = query.options(load_only(
+            db.Resource.resource_id,
+            db.Resource.user_id,
+            db.Resource.name,
+            db.Resource.resource_type,
+            db.Resource.namespace_id,
+            db.Resource.space_type,
+            db.Resource.parent_id,
+            db.Resource.tags,
+            db.Resource.child_count,
+            db.Resource.attrs,
+            db.Resource.created_at,
+            db.Resource.updated_at,
+            db.Resource.deleted_at
+        ))
+    query = query.order_by(db.Resource.created_at.desc())
 
     result = await session.execute(query)
     resource_list: List[Resource] = []
     for resource in result.scalars():
+        if not return_content:
+            resource.content = None  # Set value to prevent lazy load by sqlalchemy
         resource_list.append(Resource.model_validate(resource))
-    return sorted(resource_list, key=lambda x: x.created_at, reverse=True)
+    return resource_list
 
 
 @router_resources.get("/{resource_id}", response_model=Resource, response_model_exclude_none=True)

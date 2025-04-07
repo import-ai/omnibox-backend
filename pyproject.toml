@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "magic-box-backend"
+name = "omnibox-backend"
 version = "0.1.0"
 description = ""
 authors = ["Lucien Shui <lucien@lucien.ink>"]

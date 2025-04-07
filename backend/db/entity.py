@@ -3,7 +3,7 @@ from typing import List
 
 import bcrypt
 import shortuuid
-from sqlalchemy import JSON, Text, String, DateTime, Enum, select
+from sqlalchemy import JSON, Text, String, DateTime, Enum, select, Index
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, validates
 
@@ -187,3 +187,33 @@ class Resource(Base):
         await session.refresh(resource_orm)
 
         return resource_orm
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    task_id: Mapped[str] = mapped_column(String(length=22), primary_key=True, index=True, default=shortuuid.uuid)
+    priority: Mapped[int] = mapped_column(default=0, doc="Bigger with higher priority")
+
+    namespace_id: Mapped[str] = mapped_column(String(length=22))
+    user_id: Mapped[str] = mapped_column(String(length=22))
+
+    function: Mapped[str] = mapped_column(Text, nullable=False)
+    input: Mapped[dict] = mapped_column(JSON, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=True)
+
+    output: Mapped[dict] = mapped_column(JSON, nullable=True)
+    exception: Mapped[dict] = mapped_column(JSON, nullable=True)
+
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    canceled_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+
+    concurrency_threshold: Mapped[int] = mapped_column(default=1, doc="Skip the task when concurrency bigger that it")
+
+    __table_args__ = (
+        Index(
+            "idx_task_ns_pri_s_e_c_time",
+            "namespace_id", "priority", "started_at", "ended_at", "canceled_at", "concurrency_threshold"
+        ),
+    )

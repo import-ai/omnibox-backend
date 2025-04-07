@@ -36,7 +36,7 @@ async def create_resource(
         tags=resource.tags,
     )
 
-    await get_wizard_client().index(trace_info=trace_info, resource=resource_orm)
+    await get_wizard_client().index(session=session, trace_info=trace_info, resource=resource_orm)
     created_resource = Resource.model_validate(resource_orm)
     created_resource.namespace = resource.namespace
     return created_resource
@@ -126,7 +126,7 @@ async def update_resource_by_id(
     delta = await resource_orm.update(session=session, **partial_resource.model_dump(exclude_none=True))
     if delta:
         delta_resource = Resource.model_validate(delta)
-        await get_wizard_client().index(trace_info=trace_info, resource=resource_orm)
+        await get_wizard_client().index(session=session, trace_info=trace_info, resource=resource_orm)
         return delta_resource
     return Resource.model_validate({})
 
@@ -143,5 +143,5 @@ async def delete_resource(
 
     await session.delete(resource_orm)
     await session.commit()
-    await get_wizard_client().delete_index(trace_info=trace_info, resource=resource_orm)
+    await get_wizard_client().delete_index(session=session, trace_info=trace_info, resource=resource_orm)
     return IDResponse(id=resource_id)

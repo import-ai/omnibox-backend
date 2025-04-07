@@ -57,6 +57,7 @@ def config(postgres_url: str, wizard_base_url: str) -> Config:
     config: Config = loader.load()
     yield config
 
+
 @pytest.fixture(scope="session")
 def remote_config(wizard_base_url: str) -> Config:
     os.environ[f"{ENV_PREFIX}_DB_URL"] = "postgresql+asyncpg://magic_box:magic_box@postgres:5432/magic_box"
@@ -72,10 +73,9 @@ def client(config: Config) -> str:
         yield client
 
 
-async def health_check(base_url: str) -> bool:
+def health_check(client: httpx.Client) -> bool:
     try:
-        async with httpx.AsyncClient(base_url=base_url, timeout=3) as client:
-            response: httpx.Response = await client.get("/api/v1/health")
+        response: httpx.Response = client.get("/api/v1/health")
         response.raise_for_status()
         return True
     except httpx.ConnectError:
@@ -85,14 +85,15 @@ async def health_check(base_url: str) -> bool:
 @pytest.fixture(scope="session")
 async def base_url(config: Config) -> str:
     base_url = "http://127.0.0.1:8000"
+    client = httpx.Client(base_url=base_url, timeout=3)
 
-    if not await health_check(base_url):
+    if not health_check(client):
         env: dict = os.environ.copy()
         cwd: str = project_root.path()
 
         api_process = subprocess.Popen(["uvicorn", "backend.api:app"], cwd=cwd, env=env)
 
-        while not await health_check(base_url):  # 等待服务起来
+        while not health_check(client):  # 等待服务起来
             if api_process.poll() is not None:
                 raise RuntimeError(f"api_process exit with code {api_process.returncode}")
             time.sleep(1)

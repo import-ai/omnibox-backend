@@ -2,6 +2,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
+import pytest
 from uvicorn import Config, Server
 
 from backend.api.server import app
@@ -71,22 +72,25 @@ def create_test_data(client: httpx.Client):
     }, client=client)
 
 
-async def start_server(config: Config, create_test_data_flag: bool = False):
-    base_url = "http://127.0.0.1:8000"
+@pytest.fixture(scope="function")
+def client() -> httpx.Client:
+    return httpx.Client(base_url="http://127.0.0.1:8000")
+
+
+async def start_server(config: Config, create_test_data_flag: bool = False, client: httpx.Client = None):
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as executor:
         server_future = loop.run_in_executor(executor, run_server_in_thread, "0.0.0.0", 8000)
-        while not await health_check(base_url):
+        while not health_check(client):
             await asyncio.sleep(1)
         if create_test_data_flag:
-            with httpx.Client(base_url=base_url) as client:
-                create_test_data(client)
+            create_test_data(client)
         await server_future
 
 
-async def test_server(config: Config):
-    await start_server(config, create_test_data_flag=True)
+async def test_server(config: Config, client: httpx.Client):
+    await start_server(config, create_test_data_flag=True, client=client)
 
 
-async def test_server_with_remote_db(remote_config: Config):
-    await start_server(remote_config, create_test_data_flag=False)
+async def test_server_with_remote_db(remote_config: Config, client: httpx.Client):
+    await start_server(remote_config, create_test_data_flag=False, client=client)

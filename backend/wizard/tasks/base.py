@@ -10,7 +10,7 @@ from common.trace_info import TraceInfo
 class BaseProcessor:
 
     @abstractmethod
-    async def preprocess(self, request: dict, payload: dict | None, user: db.User, namespace: db.Namespace,
+    async def preprocess(self, input_dict: dict, payload: dict | None, user: db.User, namespace: db.Namespace,
                          session: AsyncSession, trace_info: TraceInfo) -> tuple[dict, dict]:
         raise NotImplementedError
 

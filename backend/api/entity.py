@@ -9,7 +9,7 @@ SpaceType = Literal["private", "teamspace"]
 
 
 class BaseAPIModel(_BaseModel):
-    model_config: ConfigDict = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)  # noqa
+    model_config = ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)
 
 
 class IDResponse(BaseAPIModel):
@@ -28,7 +28,7 @@ class ResourceCreateRequest(BaseAPIModel):
 
 
 class BaseDBModel(BaseAPIModel):
-    created_at: Optional[datetime] = Field(default=None)
+    created_at: Optional[datetime]
     updated_at: Optional[datetime] = Field(default=None)
     deleted_at: Optional[datetime] = Field(default=None)
 
@@ -54,7 +54,9 @@ class BaseUser(BaseAPIModel):
     api_keys: Optional[List[dict]] = Field(default=None)
 
 
-class Task(BaseAPIModel):
+class Task(_BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     task_id: str
     priority: int
 

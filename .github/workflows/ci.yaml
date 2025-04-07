@@ -18,7 +18,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/import-ai/magic-box-backend
+            ghcr.io/import-ai/omnibox-backend
           tags: |
             type=ref,event=branch
             type=ref,event=pr

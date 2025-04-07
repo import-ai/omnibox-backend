@@ -36,6 +36,18 @@ async def task_done_callback(
     cost: float = round((task.ended_at - task.started_at).total_seconds(), 3)
     wait: float = round((task.started_at - task.created_at).total_seconds(), 3)
 
+    # Update ORM Task
+    orm_task = await session.get(ORMTask, task.task_id)
+    if orm_task:
+        orm_task.updated_at = task.updated_at
+        orm_task.ended_at = task.ended_at
+        orm_task.exception = task.exception
+        orm_task.output = task.output
+        session.add(orm_task)
+        await session.commit()
+    else:
+        await session.rollback()
+
     trace_info.info({"function": function, "cost": cost, "wait": wait})
 
     if processor := processors.get(function, None):

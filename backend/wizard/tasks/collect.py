@@ -9,11 +9,11 @@ from common.trace_info import TraceInfo
 
 class CollectProcessor(BaseProcessor):
 
-    async def preprocess(self, request: dict, payload: dict | None, user: db.User, namespace: db.Namespace,
+    async def preprocess(self, input_dict: dict, payload: dict | None, user: db.User, namespace: db.Namespace,
                          session: AsyncSession, trace_info: TraceInfo) -> tuple[dict, dict]:
         space_type = payload["spaceType"]
-        url: str = request["url"]
-        title: str | None = request.get("title", None) or url
+        url: str = input_dict["url"]
+        title: str | None = input_dict.get("title", None) or url
         resource = await db.Resource.create(
             resource_type="link",
             namespace_id=namespace.namespace_id,
@@ -26,7 +26,7 @@ class CollectProcessor(BaseProcessor):
             attrs={"url": url}
         )
         payload["resourceId"] = resource.resource_id
-        return request, payload
+        return input_dict, payload
 
     async def postprocess(self, task: Task, session: AsyncSession, trace_info: TraceInfo) -> dict:
         result: dict = task.output

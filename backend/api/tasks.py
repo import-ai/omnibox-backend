@@ -1,14 +1,15 @@
 from functools import partial
 from json import dumps as lib_dumps
-from typing import Annotated, List
+from typing import Annotated, List, Literal
 
 from fastapi import APIRouter, Depends, Body
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.depends import _get_user_by_api_key, get_trace_info, _get_namespace_by_name, get_session
-from backend.api.entity import Task
+from backend.api.entity import Task, SpaceType
 from backend.db import entity as db
 from backend.db.entity import Namespace
 from backend.db.entity import Task as ORMTask
@@ -25,9 +26,17 @@ processors: dict[str, BaseProcessor] = {
 }
 
 
-@tasks_router.post("", tags=["Tasks"])
-async def create_task(
-        request: dict = Body(),
+class CollectRequest(BaseModel):
+    html: str
+    url: str
+    title: str
+    namespace: str
+    spaceType: SpaceType
+
+
+@tasks_router.post("/collect", tags=["Tasks"])
+async def collect(
+        request: CollectRequest,
         user: db.User = Depends(_get_user_by_api_key),
         session: AsyncSession = Depends(get_session),
         trace_info: TraceInfo = Depends(get_trace_info)
@@ -35,15 +44,14 @@ async def create_task(
     """
     Passthrough the params and call the wizard's task API.
     """
-    namespace = request["namespace"]
+    namespace = request.namespace
     namespace_orm: Namespace = await _get_namespace_by_name(namespace, session)
-    function: str = request.pop("function")
-    payload: dict | None = request.pop("payload", None)
+    function: str = "collect"
+    payload: dict = {"spaceType": request.spaceType, "namespace": request.namespace}
 
-    if processor := processors.get(function, None):
-        input_dict, payload = await processor.preprocess(request, payload, user, namespace_orm, session, trace_info)
-    else:
-        input_dict = request
+    processor = CollectProcessor()
+    input_dict: dict = request.model_dump(exclude={"namespace", "spaceType"})
+    input_dict, payload = await processor.preprocess(input_dict, payload, user, namespace_orm, session, trace_info)
 
     trace_info.info({
         "namespace_id": namespace_orm.namespace_id,
@@ -59,19 +67,6 @@ async def create_task(
         user_id=user.user_id,
         payload=payload
     )
-
-
-@tasks_router.post("", response_model=Task, response_model_include={"task_id"})
-async def create_task(
-        task: Task,
-        session: Annotated[AsyncSession, Depends(get_session)],
-        trace_info: Annotated[TraceInfo, Depends(get_trace_info)]
-):
-    orm_task = ORMTask(**task.model_dump())
-    session.add(orm_task)
-    await session.commit()
-    trace_info.info({"task_id": orm_task.task_id})
-    return JSONResponse(task.model_dump(include={"task_id"}), 201)
 
 
 @tasks_router.get("", response_model=List[Task], response_model_exclude={"input", "output"},

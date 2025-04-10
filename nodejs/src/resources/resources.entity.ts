@@ -41,8 +41,11 @@ export class Resource {
   @Column({ type: 'json', nullable: true })
   attrs: Record<string, any>;
 
-  @ManyToOne(() => User, (user) => user.resources)
+  @ManyToOne(() => User)
   user: User;
+
+  @Column({ nullable: true })
+  userId: string;
 
   @CreateDateColumn()
   createdAt: Date;

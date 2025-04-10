@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Namespace } from './namespaces.entity';
 import { Resource } from 'src/resources/resources.entity';
 
@@ -16,8 +16,8 @@ export class NamespacesService {
   async getNamespaces(userId: string): Promise<Namespace[]> {
     return this.namespaceRepository.find({
       where: [
-        { ownerId: userId, deletedAt: null },
-        { collaborators: userId, deletedAt: null },
+        { ownerId: userId, deletedAt: IsNull() },
+        { collaborators: userId, deletedAt: IsNull() },
       ],
     });
   }
@@ -28,7 +28,6 @@ export class NamespacesService {
 
     const rootParams = {
       namespaceId: savedNamespace.namespaceId,
-      userId: ownerId,
       resourceType: 'folder',
     };
 
@@ -48,7 +47,7 @@ export class NamespacesService {
 
   async deleteNamespace(namespaceId: string, userId: string): Promise<void> {
     const namespace = await this.namespaceRepository.findOne({
-      where: { namespaceId, deletedAt: null },
+      where: { namespaceId, deletedAt: IsNull() },
     });
 
     if (!namespace) {

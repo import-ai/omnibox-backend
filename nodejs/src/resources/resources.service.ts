@@ -22,8 +22,7 @@ export class ResourcesService {
 
     const resource = this.resourceRepository.create({
       ...data,
-      user,
-      parentId: parentResource?.resourceId || null,
+      parentId: parentResource?.resourceId,
     });
 
     if (parentResource) {
@@ -36,7 +35,7 @@ export class ResourcesService {
 
   async getRootResource(namespaceId: string, spaceType: string, userId: string): Promise<Resource> {
     const rootResource = await this.resourceRepository.findOne({
-      where: { namespaceId, spaceType, parentId: null, user: { userId } },
+      where: { namespaceId, spaceType, parentId: undefined, userId },
     });
 
     if (!rootResource) {
@@ -48,7 +47,7 @@ export class ResourcesService {
 
   async getResources(query: any): Promise<Resource[]> {
     const { namespaceId, spaceType, parentId, tags } = query;
-    const where: any = { namespaceId, spaceType, deletedAt: null };
+    const where: any = { namespaceId, spaceType, deletedAt: undefined };
 
     if (parentId) {
       where.parentId = parentId;

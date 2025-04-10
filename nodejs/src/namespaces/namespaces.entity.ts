@@ -27,6 +27,6 @@ export class Namespace {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @DeleteDateColumn()
+  @DeleteDateColumn({ nullable: true })
   deletedAt: Date;
 }

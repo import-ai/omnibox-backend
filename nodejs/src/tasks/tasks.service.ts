@@ -56,7 +56,7 @@ export class TasksService {
   }
 
   async fetchTask(): Promise<Task | null> {
-    const query = this.taskRepository
+    const query = await this.taskRepository
       .createQueryBuilder('task')
       .leftJoinAndSelect(
         (qb) =>

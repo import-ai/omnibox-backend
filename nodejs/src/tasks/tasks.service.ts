@@ -38,4 +38,53 @@ export class TasksService {
     }
     await this.taskRepository.softRemove(task);
   }
+
+  async handleTaskCallback(taskData: Partial<Task>): Promise<void> {
+    const task = await this.taskRepository.findOne({ where: { taskId: taskData.taskId } });
+    if (!task) {
+      throw new NotFoundException(`Task ${taskData.taskId} not found`);
+    }
+
+    Object.assign(task, {
+      updatedAt: taskData.updatedAt,
+      endedAt: taskData.endedAt,
+      exception: taskData.exception,
+      output: taskData.output,
+    });
+
+    await this.taskRepository.save(task);
+  }
+
+  async fetchTask(): Promise<Task | null> {
+    const query = this.taskRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect(
+        (qb) =>
+          qb
+            .select('task.namespaceId', 'namespaceId')
+            .addSelect('COUNT(task.taskId)', 'runningCount')
+            .from(Task, 'task')
+            .where('task.startedAt IS NOT NULL')
+            .andWhere('task.endedAt IS NULL')
+            .andWhere('task.canceledAt IS NULL')
+            .groupBy('task.namespaceId'),
+        'runningTasks',
+        'task.namespaceId = runningTasks.namespaceId',
+      )
+      .where('task.startedAt IS NULL')
+      .andWhere('task.canceledAt IS NULL')
+      .andWhere('COALESCE(runningTasks.runningCount, 0) < task.concurrencyThreshold')
+      .orderBy('task.priority', 'DESC')
+      .addOrderBy('task.createdAt', 'ASC')
+      .limit(1)
+      .setLock('pessimistic_write')
+      .getOne();
+
+    if (query) {
+      query.startedAt = new Date();
+      await this.taskRepository.save(query);
+    }
+
+    return query;
+  }
 }

@@ -1,18 +1,16 @@
-version: '3.8'
-
 services:
   app:
     build: .
-    container_name: app
     ports:
       - '3000:9005'
+    env_file:
+      - .env
     depends_on:
-      - db
-      # - redis
+      db:
+        condition: service_healthy
 
   db:
-    image: postgres
-    container_name: postgres
+    image: postgres:17-alpine
     ports:
       - "5432:5432"
     environment:
@@ -21,11 +19,15 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-d", "omnibox", "-U", "omnibox" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   pgadmin:
     image: dpage/pgadmin4
-    container_name: pgadmin4
     ports:
       - "8888:80"
     environment:

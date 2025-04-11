@@ -5,12 +5,18 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from 'src/auth/auth.module';
 import { UserModule } from 'src/user/user.module';
 import { AppController } from './app.controller';
+import { NamespacesModule } from 'src/namespaces/namespaces.module';
+import { ResourcesModule } from 'src/resources/resources.module';
+import { TasksModule } from 'src/tasks/tasks.module';
 
 @Module({
   controllers: [AppController],
   imports: [
     AuthModule,
     UserModule,
+    NamespacesModule,
+    ResourcesModule,
+    TasksModule,
     ConfigModule.forRoot({
       cache: true,
       isGlobal: true,

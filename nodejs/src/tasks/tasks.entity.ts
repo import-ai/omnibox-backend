@@ -1,56 +1,63 @@
+import { Base } from 'src/common/base.entity';
+import { User } from 'src/user/user.entity';
+import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
-  Entity,
-  PrimaryGeneratedColumn,
+  Index,
   Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  DeleteDateColumn,
+  Entity,
+  ManyToOne,
+  JoinColumn,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('tasks')
-export class Task {
-  @PrimaryGeneratedColumn('uuid')
-  taskId: string;
+@Index('idx_task_ns_pri_s_e_c_time', [
+  'namespace_id',
+  'priority',
+  'started_at',
+  'ended_at',
+  'canceled_at',
+  'concurrency_threshold',
+])
+export class Task extends Base {
+  @PrimaryGeneratedColumn()
+  task_id: string;
 
-  @Column({ nullable: false })
-  namespaceId: string;
+  @Column({ default: 0 })
+  priority: number;
 
-  @Column({ nullable: false })
-  userId: string;
-
-  @Column({ nullable: false })
+  @Column({ type: 'text' })
   function: string;
 
-  @Column({ type: 'json', nullable: false })
+  @Column('jsonb')
   input: Record<string, any>;
 
-  @Column({ type: 'json', nullable: true })
+  @Column('jsonb', { nullable: true })
   payload: Record<string, any>;
 
-  @Column({ type: 'json', nullable: true })
+  @Column('jsonb', { nullable: true })
   output: Record<string, any>;
 
-  @Column({ type: 'json', nullable: true })
+  @Column('jsonb', { nullable: true })
   exception: Record<string, any>;
 
-  @Column({ type: 'timestamp', nullable: true })
-  startedAt: Date;
+  @Column({ nullable: true })
+  started_at: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
-  endedAt: Date;
+  @Column({ nullable: true })
+  ended_at: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
-  canceledAt: Date;
+  @Column({ nullable: true })
+  canceled_at: Date;
 
   @Column({ default: 1 })
-  concurrencyThreshold: number;
+  concurrency_threshold: number;
 
-  @CreateDateColumn()
-  createdAt: Date;
+  @ManyToOne(() => User, (user) => user.user_id)
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  @DeleteDateColumn()
-  deletedAt: Date;
+  @ManyToOne(() => Namespace, (namespace) => namespace.namespace_id)
+  @JoinColumn({ name: 'namespace_id' })
+  namespace: Namespace;
 }

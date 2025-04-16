@@ -2,6 +2,7 @@ import { ParseIntPipe } from '@nestjs/common';
 import { UserService } from 'src/user/user.service';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 import {
   Get,
   Post,
@@ -13,10 +14,11 @@ import {
   Controller,
 } from '@nestjs/common';
 
-@Controller('api/user')
+@Controller('api/v1/user')
 export class UserController {
   constructor(private userService: UserService) {}
 
+  @Public()
   @Post()
   async create(@Body() account: CreateUserDto) {
     return await this.userService.create(account);

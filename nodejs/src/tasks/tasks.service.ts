@@ -15,16 +15,22 @@ export class TasksService {
     return this.taskRepository.save(task);
   }
 
-  async listTasks(namespaceId: string, offset: number, limit: number): Promise<Task[]> {
+  async listTasks(
+    namespaceId: string,
+    offset: number,
+    limit: number,
+  ): Promise<Task[]> {
     return this.taskRepository.find({
-      where: { namespaceId },
+      where: { namespace_id: namespaceId },
       skip: offset,
       take: limit,
     });
   }
 
   async getTaskById(taskId: string): Promise<Task> {
-    const task = await this.taskRepository.findOne({ where: { taskId } });
+    const task = await this.taskRepository.findOne({
+      where: { task_id: taskId },
+    });
     if (!task) {
       throw new NotFoundException(`Task ${taskId} not found`);
     }
@@ -32,7 +38,9 @@ export class TasksService {
   }
 
   async deleteTask(taskId: string): Promise<void> {
-    const task = await this.taskRepository.findOne({ where: { taskId } });
+    const task = await this.taskRepository.findOne({
+      where: { task_id: taskId },
+    });
     if (!task) {
       throw new NotFoundException(`Task ${taskId} not found`);
     }
@@ -40,14 +48,16 @@ export class TasksService {
   }
 
   async handleTaskCallback(taskData: Partial<Task>): Promise<void> {
-    const task = await this.taskRepository.findOne({ where: { taskId: taskData.taskId } });
+    const task = await this.taskRepository.findOne({
+      where: { task_id: taskData.task_id },
+    });
     if (!task) {
-      throw new NotFoundException(`Task ${taskData.taskId} not found`);
+      throw new NotFoundException(`Task ${taskData.task_id} not found`);
     }
 
     Object.assign(task, {
-      updatedAt: taskData.updatedAt,
-      endedAt: taskData.endedAt,
+      updatedAt: taskData.updated_at,
+      endedAt: taskData.ended_at,
       exception: taskData.exception,
       output: taskData.output,
     });
@@ -61,27 +71,29 @@ export class TasksService {
       .leftJoinAndSelect(
         (qb) =>
           qb
-            .select('task.namespaceId', 'namespaceId')
-            .addSelect('COUNT(task.taskId)', 'runningCount')
+            .select('task.namespace_id', 'namespace_id')
+            .addSelect('COUNT(task.task_id)', 'running_count')
             .from(Task, 'task')
-            .where('task.startedAt IS NOT NULL')
-            .andWhere('task.endedAt IS NULL')
-            .andWhere('task.canceledAt IS NULL')
-            .groupBy('task.namespaceId'),
+            .where('task.started_at IS NOT NULL')
+            .andWhere('task.ended_at IS NULL')
+            .andWhere('task.canceled_at IS NULL')
+            .groupBy('task.namespace_id'),
         'runningTasks',
-        'task.namespaceId = runningTasks.namespaceId',
+        'task.namespace_id = runningTasks.namespace_id',
       )
-      .where('task.startedAt IS NULL')
-      .andWhere('task.canceledAt IS NULL')
-      .andWhere('COALESCE(runningTasks.runningCount, 0) < task.concurrencyThreshold')
+      .where('task.started_at IS NULL')
+      .andWhere('task.canceled_at IS NULL')
+      .andWhere(
+        'COALESCE(runningTasks.running_count, 0) < task.concurrency_threshold',
+      )
       .orderBy('task.priority', 'DESC')
-      .addOrderBy('task.createdAt', 'ASC')
+      .addOrderBy('task.created_at', 'ASC')
       .limit(1)
       .setLock('pessimistic_write')
       .getOne();
 
     if (query) {
-      query.startedAt = new Date();
+      query.started_at = new Date();
       await this.taskRepository.save(query);
     }
 

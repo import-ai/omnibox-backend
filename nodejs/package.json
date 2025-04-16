@@ -28,6 +28,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.7",
+    "@types/nodemailer": "^6.4.17",
     "@types/passport-jwt": "^3.0.8",
     "@types/passport-local": "^1.0.36",
     "@types/supertest": "^6.0.2",
@@ -64,6 +65,7 @@
     "testEnvironment": "node"
   },
   "dependencies": {
+    "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/cache-manager": "^3.0.1",
     "@nestjs/common": "^11.0.13",
     "@nestjs/config": "^4.0.2",
@@ -76,6 +78,7 @@
     "bcrypt": "^5.1.1",
     "cache-manager": "^6.4.2",
     "class-validator": "^0.14.1",
+    "nodemailer": "^6.10.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",

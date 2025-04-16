@@ -1,24 +1,31 @@
 import { Base } from 'src/common/base.entity';
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { APIKey } from 'src/api-key/api-key.entity';
+import { UserRole } from 'src/user-role/user-role.entity';
+import { Resource } from 'src/resources/resources.entity';
+import { Namespace } from 'src/namespaces/namespaces.entity';
+import {
+  Entity,
+  Column,
+  OneToMany,
+  JoinColumn,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
-@Entity()
+@Entity('users')
 export class User extends Base {
-  @PrimaryGeneratedColumn({
-    comment: '用户ID',
-  })
+  @PrimaryGeneratedColumn()
   user_id: number;
 
   @Column({
     length: 32,
     unique: true,
-    comment: '登录用户名',
+    comment: '用户名',
   })
   username: string;
 
   @Column({
     length: 128,
     unique: true,
-    nullable: true,
     comment: '绑定邮箱',
   })
   email: string;
@@ -29,12 +36,17 @@ export class User extends Base {
   })
   password: string;
 
-  // @OneToMany(() => APIKey, (apiKey) => apiKey.user)
-  // apiKeys: APIKey[];
+  @OneToMany(() => APIKey, (apiKeys) => apiKeys.api_key)
+  @JoinColumn({ name: 'api_keys' })
+  apiKeys: APIKey;
 
-  // @OneToMany(() => UserRole, (role) => role.user)
-  // roles: UserRole[];
+  @OneToMany(() => UserRole, (userRole) => userRole.user_role_id)
+  @JoinColumn({ name: 'role' })
+  role: UserRole;
 
-  // @OneToMany(() => Resource, (resource) => resource.owner)
-  // resources: Resource[];
+  @OneToMany(() => Namespace, (namespace) => namespace.namespace_id)
+  namespace: Namespace;
+
+  @OneToMany(() => Resource, (resource) => resource.resource_id)
+  resource: Resource[];
 }

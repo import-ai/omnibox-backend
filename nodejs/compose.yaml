@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - '3000:9005'
+      - '8000:9005'
     env_file:
       - .env
     depends_on:
@@ -12,7 +12,7 @@ services:
   db:
     image: postgres:17-alpine
     ports:
-      - "5432:5432"
+      - '5432:5432'
     environment:
       - POSTGRES_DB=${DB_DATABASE}
       - POSTGRES_USER=${DB_USERNAME}
@@ -21,7 +21,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD", "pg_isready", "-q", "-d", "omnibox", "-U", "omnibox" ]
+      test: ['CMD', 'pg_isready', '-q', '-d', 'omnibox', '-U', 'omnibox']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -29,7 +29,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4
     ports:
-      - "8888:80"
+      - '8888:80'
     environment:
       PGADMIN_DEFAULT_EMAIL: user-name@domain-name.com
       PGADMIN_DEFAULT_PASSWORD: strong-password

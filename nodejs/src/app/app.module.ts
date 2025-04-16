@@ -5,6 +5,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from 'src/auth/auth.module';
 import { UserModule } from 'src/user/user.module';
 import { AppController } from './app.controller';
+import { MailModule } from 'src/mail/mail.module';
+import { APIKeyModule } from 'src/api-key/api-key.module';
+import { UserRoleModule } from 'src/user-role/user-role.module';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 import { ResourcesModule } from 'src/resources/resources.module';
 import { TasksModule } from 'src/tasks/tasks.module';
@@ -12,8 +15,11 @@ import { TasksModule } from 'src/tasks/tasks.module';
 @Module({
   controllers: [AppController],
   imports: [
+    MailModule,
     AuthModule,
     UserModule,
+    APIKeyModule,
+    UserRoleModule,
     NamespacesModule,
     ResourcesModule,
     TasksModule,

@@ -1,32 +1,31 @@
+import { Base } from 'src/common/base.entity';
+import { User } from 'src/user/user.entity';
+import { Resource } from 'src/resources/resources.entity';
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  DeleteDateColumn,
+  Entity,
+  OneToOne,
+  OneToMany,
+  JoinColumn,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 
 @Entity('namespaces')
-export class Namespace {
-  @PrimaryGeneratedColumn('uuid')
-  namespaceId: string;
+export class Namespace extends Base {
+  @PrimaryGeneratedColumn()
+  namespace_id: string;
 
-  @Column({ unique: true, nullable: false })
+  @Column({ length: 32, unique: true })
   name: string;
 
-  @Column({ nullable: false })
-  ownerId: string;
-
-  @Column({ type: 'simple-array', nullable: true })
+  @Column('jsonb', { nullable: true })
   collaborators: string[];
 
-  @CreateDateColumn()
-  createdAt: Date;
+  @OneToMany(() => Resource, (resource) => resource.resource_id)
+  @JoinColumn({ name: 'resource_id' })
+  resource: Resource;
 
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  @DeleteDateColumn({ nullable: true })
-  deletedAt: Date;
+  @OneToOne(() => User, (user) => user.user_id)
+  @JoinColumn({ name: 'owner_id' })
+  User: User;
 }

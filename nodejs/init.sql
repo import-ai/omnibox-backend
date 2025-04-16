@@ -1,5 +1,5 @@
 -- 创建数据库
-CREATE DATABASE knowledge_base;
+CREATE DATABASE omnibox;
 
 -- -- 创建用户表
 -- CREATE TABLE IF NOT EXISTS users (

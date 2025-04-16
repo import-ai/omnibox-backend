@@ -4,7 +4,11 @@ import { User } from 'src/user/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
-import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 @Injectable()
 export class UserService {
@@ -74,8 +78,40 @@ export class UserService {
     return this.userRepository.findOne({ where: { email } });
   }
 
-  async update(id: number, user: UpdateUserDto) {
-    return await this.userRepository.update(id, user);
+  async update(id: number, account: UpdateUserDto) {
+    const existingUser = await this.find(id);
+
+    if (!existingUser) {
+      throw new ConflictException('当前账户不存在');
+    }
+
+    if (account.password && account.password_repeat) {
+      if (account.password !== account.password_repeat) {
+        throw new ConflictException('两次密码不一致');
+      }
+      existingUser.password = await bcrypt.hash(account.password, 10);
+    }
+    if (account.email) {
+      existingUser.email = account.email;
+    }
+    if (account.username) {
+      existingUser.username = account.username;
+    }
+    return await this.userRepository.update(id, existingUser);
+  }
+
+  async updatePassword(id: number, password: string) {
+    const account = await this.find(id);
+
+    if (!account) {
+      throw new ConflictException('当前账户不存在');
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    account.password = hash;
+
+    return await this.userRepository.update(id, account);
   }
 
   async remove(id: number) {

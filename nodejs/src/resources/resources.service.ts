@@ -1,5 +1,6 @@
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { UserService } from 'src/user/user.service';
 import { Resource } from 'src/resources/resources.entity';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import {
@@ -13,6 +14,7 @@ export class ResourcesService {
   constructor(
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
+    private readonly userService: UserService,
     private readonly namespacesService: NamespacesService,
   ) {}
 
@@ -20,7 +22,7 @@ export class ResourcesService {
     const parentResource = data.parent_id
       ? await this.resourceRepository.findOne({
           where: { resource_id: data.parent_id },
-          relations: ['namespace'],
+          relations: ['namespaces'],
         })
       : null;
 
@@ -50,28 +52,34 @@ export class ResourcesService {
     return this.resourceRepository.save(resource);
   }
 
-  async getRoot(
-    namespaceId: string,
-    spaceType: string,
-    userId: string,
-  ): Promise<Resource> {
-    const rootResource = await this.resourceRepository.findOne({
+  async getRoot(namespaceId: string, spaceType: string, userId: string) {
+    const account = await this.userService.find(userId);
+
+    if (!account) {
+      throw new NotFoundException('当前账户不存在');
+    }
+
+    const namespace = await this.namespacesService.get(namespaceId);
+
+    if (!namespace) {
+      throw new NotFoundException('空间不存在');
+    }
+
+    const resource = await this.resourceRepository.findOne({
       where: {
+        user: account,
         space_type: spaceType,
         parent_id: undefined,
-        user: { user_id: +userId },
-        namespace: {
-          namespace_id: namespaceId,
-        },
+        namespace: namespace,
       },
-      relations: ['user', 'namespace'],
+      relations: ['users', 'namespaces'],
     });
 
-    if (!rootResource) {
+    if (!resource) {
       throw new NotFoundException('Root resource not found.');
     }
 
-    return rootResource;
+    return resource;
   }
 
   async get({
@@ -99,7 +107,7 @@ export class ResourcesService {
       where.tags = tags.split(',');
     }
 
-    return this.resourceRepository.find({ where, relations: ['namespace'] });
+    return this.resourceRepository.find({ where, relations: ['namespaces'] });
   }
 
   async update(resourceId: string, data: Partial<Resource>): Promise<Resource> {

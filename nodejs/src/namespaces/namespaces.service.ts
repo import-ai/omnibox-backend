@@ -19,9 +19,13 @@ export class NamespacesService {
   async get(namespaceId: string) {
     const namespace = await this.namespaceRepository.findOne({
       where: {
-        namespace_id: namespaceId,
+        name: namespaceId,
       },
     });
+
+    if (!namespace) {
+      throw new NotFoundException('空间不存在');
+    }
 
     return namespace;
   }

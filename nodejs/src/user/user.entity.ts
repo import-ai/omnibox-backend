@@ -5,6 +5,7 @@ import {
   Entity,
   Column,
   OneToMany,
+  ManyToOne,
   JoinColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -35,10 +36,9 @@ export class User extends Base {
   password: string;
 
   @OneToMany(() => APIKey, (apiKeys) => apiKeys.api_key)
-  @JoinColumn({ name: 'api_keys' })
-  apiKeys: APIKey;
+  api_key: APIKey[];
 
-  @OneToMany(() => UserRole, (userRole) => userRole.user_role_id)
+  @ManyToOne(() => UserRole, (userRole) => userRole.user_role_id)
   @JoinColumn({ name: 'role' })
   role: UserRole;
 }

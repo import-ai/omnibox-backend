@@ -1,8 +1,10 @@
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from 'src/mail/mail.service';
 import { UserService } from 'src/user/user.service';
+import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import {
   Injectable,
+  ForbiddenException,
   BadRequestException,
   UnauthorizedException,
   NotFoundException,
@@ -19,7 +21,7 @@ export class AuthService {
   async verify(email: string, password: string): Promise<any> {
     const user = await this.userService.verify(email, password);
     if (!user) {
-      throw new BadRequestException('User not found');
+      throw new ForbiddenException('未发现邮箱对应的帐户，请先注册');
     }
     return {
       email: user.email,
@@ -33,6 +35,18 @@ export class AuthService {
     if (!account) {
       throw new BadRequestException('User not found');
     }
+    return {
+      user_id: account.user_id,
+      access_token: this.jwtService.sign({
+        sub: account.user_id,
+        email: account.email,
+      }),
+    };
+  }
+
+  async register(createUser: CreateUserDto) {
+    const account = await this.userService.create(createUser);
+
     return {
       user_id: account.user_id,
       access_token: this.jwtService.sign({

@@ -1,6 +1,7 @@
 import { Resource } from 'src/resources/resources.entity';
 import { ResourcesService } from 'src/resources/resources.service';
 import {
+  Req,
   Get,
   Post,
   Body,
@@ -24,9 +25,13 @@ export class ResourcesController {
   async getRootResource(
     @Query('namespace') namespaceId: string,
     @Query('spaceType') spaceType: string,
-    @Query('userId') userId: string,
+    @Req() req,
   ) {
-    return await this.resourcesService.getRoot(namespaceId, spaceType, userId);
+    return await this.resourcesService.getRoot(
+      namespaceId,
+      spaceType,
+      req.user.user_id,
+    );
   }
 
   @Get()

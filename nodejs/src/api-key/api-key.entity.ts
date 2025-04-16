@@ -17,11 +17,11 @@ export class APIKey extends Base {
   @Column({ length: 32, nullable: true })
   comment: string;
 
-  @ManyToOne(() => User, (user) => user.apiKeys)
+  @ManyToOne(() => User, (user) => user.api_key)
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => UserRole)
+  @ManyToOne(() => UserRole, (userRole) => userRole.api_keys)
   @JoinColumn({ name: 'role' })
   role: UserRole;
 }

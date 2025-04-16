@@ -1,15 +1,15 @@
+import { Resource } from 'src/resources/resources.entity';
+import { ResourcesService } from 'src/resources/resources.service';
 import {
-  Controller,
-  Post,
   Get,
-  Patch,
-  Delete,
+  Post,
   Body,
   Query,
   Param,
+  Patch,
+  Delete,
+  Controller,
 } from '@nestjs/common';
-import { ResourcesService } from './resources.service';
-import { Resource } from './resources.entity';
 
 @Controller('api/v1/resources')
 export class ResourcesController {
@@ -17,7 +17,7 @@ export class ResourcesController {
 
   @Post()
   async createResource(@Body() data: Partial<Resource>) {
-    return this.resourcesService.createResource(data);
+    return await this.resourcesService.create(data);
   }
 
   @Get('root')
@@ -26,16 +26,12 @@ export class ResourcesController {
     @Query('spaceType') spaceType: string,
     @Query('userId') userId: string,
   ) {
-    return this.resourcesService.getRootResource(
-      namespaceId,
-      spaceType,
-      userId,
-    );
+    return await this.resourcesService.getRoot(namespaceId, spaceType, userId);
   }
 
   @Get()
   async getResources(@Query() query: any) {
-    return this.resourcesService.getResources(query);
+    return await this.resourcesService.get(query);
   }
 
   @Patch(':resourceId')
@@ -43,11 +39,11 @@ export class ResourcesController {
     @Param('resourceId') resourceId: string,
     @Body() data: Partial<Resource>,
   ) {
-    return this.resourcesService.updateResource(resourceId, data);
+    return await this.resourcesService.update(resourceId, data);
   }
 
   @Delete(':resourceId')
   async deleteResource(@Param('resourceId') resourceId: string) {
-    return this.resourcesService.deleteResource(resourceId);
+    return await this.resourcesService.delete(resourceId);
   }
 }

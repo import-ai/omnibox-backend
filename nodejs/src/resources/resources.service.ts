@@ -1,29 +1,34 @@
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Resource } from 'src/resources/resources.entity';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Resource } from './resources.entity';
 
 @Injectable()
 export class ResourcesService {
   constructor(
     @InjectRepository(Resource)
-    private resourceRepository: Repository<Resource>,
+    private readonly resourceRepository: Repository<Resource>,
+    private readonly namespacesService: NamespacesService,
   ) {}
 
-  async createResource(data: Partial<Resource>): Promise<Resource> {
+  async create(data: Partial<Resource>): Promise<Resource> {
     const parentResource = data.parent_id
       ? await this.resourceRepository.findOne({
           where: { resource_id: data.parent_id },
+          relations: ['namespace'],
         })
       : null;
 
     if (
       parentResource &&
-      (parentResource.namespace_id !== data.namespace_id ||
+      ((data.namespace &&
+        parentResource.namespace.namespace_id !==
+          data.namespace.namespace_id) ||
         parentResource.space_type !== data.space_type)
     ) {
       throw new BadRequestException(
@@ -38,24 +43,28 @@ export class ResourcesService {
 
     if (parentResource) {
       parentResource.child_count += 1;
-      await this.resourceRepository.save(parentResource);
+      const parentResourceRepo = this.resourceRepository.create(parentResource);
+      await this.resourceRepository.save(parentResourceRepo);
     }
 
     return this.resourceRepository.save(resource);
   }
 
-  async getRootResource(
+  async getRoot(
     namespaceId: string,
     spaceType: string,
     userId: string,
   ): Promise<Resource> {
     const rootResource = await this.resourceRepository.findOne({
       where: {
-        namespace_id: namespaceId,
         space_type: spaceType,
         parent_id: undefined,
-        user_id: userId,
+        user: { user_id: +userId },
+        namespace: {
+          namespace_id: namespaceId,
+        },
       },
+      relations: ['user', 'namespace'],
     });
 
     if (!rootResource) {
@@ -65,12 +74,21 @@ export class ResourcesService {
     return rootResource;
   }
 
-  async getResources(query: any): Promise<Resource[]> {
-    const { namespaceId, spaceType, parentId, tags } = query;
+  async get({
+    namespaceId,
+    spaceType,
+    parentId,
+    tags,
+  }: any): Promise<Resource[]> {
+    const namespace = await this.namespacesService.get(namespaceId);
+
+    if (!namespace) {
+      throw new NotFoundException('Namespace not found.');
+    }
+
     const where: any = {
-      namespace_id: namespaceId,
+      namespace: namespace,
       space_type: spaceType,
-      deleted_at: undefined,
     };
 
     if (parentId) {
@@ -81,13 +99,10 @@ export class ResourcesService {
       where.tags = tags.split(',');
     }
 
-    return this.resourceRepository.find({ where });
+    return this.resourceRepository.find({ where, relations: ['namespace'] });
   }
 
-  async updateResource(
-    resourceId: string,
-    data: Partial<Resource>,
-  ): Promise<Resource> {
+  async update(resourceId: string, data: Partial<Resource>): Promise<Resource> {
     const resource = await this.resourceRepository.findOne({
       where: { resource_id: resourceId },
     });
@@ -96,11 +111,14 @@ export class ResourcesService {
       throw new NotFoundException('Resource not found.');
     }
 
-    Object.assign(resource, data);
-    return this.resourceRepository.save(resource);
+    const newResource = this.resourceRepository.create({
+      ...resource,
+      ...data,
+    });
+    return await this.resourceRepository.save(newResource);
   }
 
-  async deleteResource(resourceId: string): Promise<void> {
+  async delete(resourceId: string) {
     const resource = await this.resourceRepository.findOne({
       where: { resource_id: resourceId },
     });
@@ -109,7 +127,6 @@ export class ResourcesService {
       throw new NotFoundException('Resource not found.');
     }
 
-    resource.deleted_at = new Date();
-    await this.resourceRepository.save(resource);
+    await this.resourceRepository.softRemove(resource);
   }
 }

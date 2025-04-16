@@ -35,12 +35,12 @@ export class UserController {
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return await this.userService.find(+id);
+    return await this.userService.find(id);
   }
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() account: UpdateUserDto) {
-    return await this.userService.update(+id, account);
+    return await this.userService.update(id, account);
   }
 
   @Delete(':id')

@@ -1,8 +1,6 @@
 import { Base } from 'src/common/base.entity';
 import { APIKey } from 'src/api-key/api-key.entity';
 import { UserRole } from 'src/user-role/user-role.entity';
-import { Resource } from 'src/resources/resources.entity';
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
   Entity,
   Column,
@@ -43,10 +41,4 @@ export class User extends Base {
   @OneToMany(() => UserRole, (userRole) => userRole.user_role_id)
   @JoinColumn({ name: 'role' })
   role: UserRole;
-
-  @OneToMany(() => Namespace, (namespace) => namespace.namespace_id)
-  namespace: Namespace;
-
-  @OneToMany(() => Resource, (resource) => resource.resource_id)
-  resource: Resource[];
 }

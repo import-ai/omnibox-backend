@@ -1,6 +1,6 @@
+import { UserRole } from 'src/user-role/user-role.entity';
+import { UserRoleService } from 'src/user-role/user-role.service';
 import { Controller, Get, Post, Body, Param } from '@nestjs/common';
-import { UserRoleService } from './user-role.service';
-import { UserRole } from './user-role.entity';
 
 @Controller('api/v1/roles')
 export class UserRoleController {
@@ -8,13 +8,13 @@ export class UserRoleController {
 
   @Post()
   async create(@Body() userRole: Partial<UserRole>): Promise<UserRole> {
-    return this.userRoleService.create(userRole);
+    return await this.userRoleService.create(userRole);
   }
 
   @Get(':id')
   async findOne(
     @Param('user_role_id') user_role_id: string,
   ): Promise<UserRole | null> {
-    return this.userRoleService.findOne(user_role_id);
+    return await this.userRoleService.findOne(user_role_id);
   }
 }

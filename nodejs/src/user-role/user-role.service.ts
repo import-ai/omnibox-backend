@@ -11,10 +11,10 @@ export class UserRoleService {
   ) {}
 
   async create(userRole: Partial<UserRole>): Promise<UserRole> {
-    return this.userRoleRepository.save(userRole);
+    return await this.userRoleRepository.save(userRole);
   }
 
   async findOne(user_role_id: string): Promise<UserRole | null> {
-    return this.userRoleRepository.findOne({ where: { user_role_id } });
+    return await this.userRoleRepository.findOne({ where: { user_role_id } });
   }
 }

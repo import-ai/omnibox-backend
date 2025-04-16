@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { NamespacesService } from './namespaces.service';
-import { NamespacesController } from './namespaces.controller';
-import { Namespace } from './namespaces.entity';
-import { Resource } from 'src/resources/resources.entity';
+import { UserModule } from 'src/user/user.module';
+import { Namespace } from 'src/namespaces/namespaces.entity';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { NamespacesController } from 'src/namespaces/namespaces.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Namespace, Resource])],
+  exports: [NamespacesService],
   providers: [NamespacesService],
   controllers: [NamespacesController],
+  imports: [UserModule, TypeOrmModule.forFeature([Namespace])],
 })
 export class NamespacesModule {}

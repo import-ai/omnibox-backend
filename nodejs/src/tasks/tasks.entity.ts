@@ -1,8 +1,8 @@
-import { Base } from 'src/common/base.entity';
 import { User } from 'src/user/user.entity';
+import { Base } from 'src/common/base.entity';
 import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
-  Index,
+  // Index,
   Column,
   Entity,
   ManyToOne,
@@ -11,14 +11,14 @@ import {
 } from 'typeorm';
 
 @Entity('tasks')
-@Index('idx_task_ns_pri_s_e_c_time', [
-  'namespace_id',
-  'priority',
-  'started_at',
-  'ended_at',
-  'canceled_at',
-  'concurrency_threshold',
-])
+// @Index('idx_task_ns_pri_s_e_c_time', [
+//   'namespace_id',
+//   'priority',
+//   'started_at',
+//   'ended_at',
+//   'canceled_at',
+//   'concurrency_threshold',
+// ])
 export class Task extends Base {
   @PrimaryGeneratedColumn()
   task_id: string;
@@ -53,11 +53,11 @@ export class Task extends Base {
   @Column({ default: 1 })
   concurrency_threshold: number;
 
-  @ManyToOne(() => User, (user) => user.user_id)
+  @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => Namespace, (namespace) => namespace.namespace_id)
+  @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })
   namespace: Namespace;
 }

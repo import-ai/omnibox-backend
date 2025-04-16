@@ -1,14 +1,14 @@
+import { Task } from 'src/tasks/tasks.entity';
+import { TasksService } from 'src/tasks/tasks.service';
 import {
-  Controller,
   Post,
   Get,
-  Delete,
   Body,
   Query,
   Param,
+  Delete,
+  Controller,
 } from '@nestjs/common';
-import { TasksService } from './tasks.service';
-import { Task } from './tasks.entity';
 
 @Controller('api/v1/tasks')
 export class TasksController {
@@ -16,7 +16,7 @@ export class TasksController {
 
   @Post()
   async createTask(@Body() data: Partial<Task>) {
-    return this.tasksService.createTask(data);
+    return await this.tasksService.create(data);
   }
 
   @Get()
@@ -25,17 +25,17 @@ export class TasksController {
     @Query('offset') offset: number = 0,
     @Query('limit') limit: number = 10,
   ) {
-    return this.tasksService.listTasks(namespaceId, offset, limit);
+    return await this.tasksService.list(namespaceId, offset, limit);
   }
 
   @Get(':taskId')
   async getTaskById(@Param('taskId') taskId: string) {
-    return this.tasksService.getTaskById(taskId);
+    return await this.tasksService.get(taskId);
   }
 
   @Delete(':taskId')
   async deleteTask(@Param('taskId') taskId: string) {
-    await this.tasksService.deleteTask(taskId);
+    await this.tasksService.delete(taskId);
     return { detail: 'Task deleted' };
   }
 }

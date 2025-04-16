@@ -1,6 +1,6 @@
+import { Task } from 'src/tasks/tasks.entity';
+import { TasksService } from 'src/tasks/tasks.service';
 import { Controller, Post, Get, Body } from '@nestjs/common';
-import { TasksService } from './tasks.service';
-import { Task } from './tasks.entity';
 
 @Controller('internal/api/v1/tasks')
 export class InternalTasksController {
@@ -8,12 +8,12 @@ export class InternalTasksController {
 
   @Post('/callback')
   async handleTaskCallback(@Body() taskData: Partial<Task>) {
-    await this.tasksService.handleTaskCallback(taskData);
+    await this.tasksService.handleCallback(taskData);
     return { detail: 'Task callback processed' };
   }
 
   @Get('/fetch')
   async fetchTask(): Promise<Task | null> {
-    return this.tasksService.fetchTask();
+    return await this.tasksService.fetch();
   }
 }

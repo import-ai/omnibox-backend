@@ -1,14 +1,14 @@
+import { Namespace } from 'src/namespaces/namespaces.entity';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
 import {
-  Controller,
   Get,
   Post,
-  Delete,
   Body,
   Param,
   Query,
+  Delete,
+  Controller,
 } from '@nestjs/common';
-import { NamespacesService } from './namespaces.service';
-import { Namespace } from './namespaces.entity';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
@@ -16,7 +16,7 @@ export class NamespacesController {
 
   @Get()
   async getNamespaces(@Query('userId') userId: string): Promise<Namespace[]> {
-    return this.namespacesService.getNamespaces(userId);
+    return await this.namespacesService.getByUser(userId);
   }
 
   @Post()
@@ -24,7 +24,7 @@ export class NamespacesController {
     @Body('name') name: string,
     @Body('ownerId') ownerId: string,
   ): Promise<Namespace> {
-    return this.namespacesService.createNamespace(name, ownerId);
+    return await this.namespacesService.create(name, ownerId);
   }
 
   @Delete(':namespaceId')
@@ -32,6 +32,6 @@ export class NamespacesController {
     @Param('namespaceId') namespaceId: string,
     @Query('userId') userId: string,
   ): Promise<void> {
-    return this.namespacesService.deleteNamespace(namespaceId, userId);
+    return await this.namespacesService.delete(namespaceId, userId);
   }
 }

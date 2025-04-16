@@ -39,10 +39,11 @@ export class Resource extends Base {
   @Column('jsonb', { nullable: true })
   attrs: Record<string, any>;
 
-  @ManyToOne(() => User, (user) => user.user_id)
+  @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @OneToOne(() => Namespace, (namespace) => namespace.namespace_id)
+  @OneToOne(() => Namespace)
+  @JoinColumn({ name: 'namespace_id' })
   namespace: Namespace;
 }

@@ -64,7 +64,7 @@ export class AuthService {
       if (!user) {
         throw new NotFoundException('用户不存在');
       }
-      await this.userService.updatePassword(user.user_id, password);
+      await this.userService.updatePassword(`${user.user_id}`, password);
     } catch (e) {
       console.log(e);
       throw new UnauthorizedException('无效或过期的token');

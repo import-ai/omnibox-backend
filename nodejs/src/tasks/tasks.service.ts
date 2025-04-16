@@ -1,33 +1,42 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Task } from './tasks.entity';
+import { Task } from 'src/tasks/tasks.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
 
 @Injectable()
 export class TasksService {
   constructor(
     @InjectRepository(Task)
     private taskRepository: Repository<Task>,
+    private readonly namespacesService: NamespacesService,
   ) {}
 
-  async createTask(data: Partial<Task>): Promise<Task> {
-    const task = this.taskRepository.create(data);
-    return this.taskRepository.save(task);
+  async create(data: Partial<Task>) {
+    const newTask = this.taskRepository.create(data);
+    return await this.taskRepository.save(newTask);
   }
 
-  async listTasks(
+  async list(
     namespaceId: string,
     offset: number,
     limit: number,
   ): Promise<Task[]> {
+    const namespace = await this.namespacesService.get(namespaceId);
+
+    if (!namespace) {
+      throw new NotFoundException('Namespace not found.');
+    }
+
     return this.taskRepository.find({
-      where: { namespace_id: namespaceId },
+      where: { namespace },
+      relations: ['namespace'],
       skip: offset,
       take: limit,
     });
   }
 
-  async getTaskById(taskId: string): Promise<Task> {
+  async get(taskId: string): Promise<Task> {
     const task = await this.taskRepository.findOne({
       where: { task_id: taskId },
     });
@@ -37,7 +46,7 @@ export class TasksService {
     return task;
   }
 
-  async deleteTask(taskId: string): Promise<void> {
+  async delete(taskId: string): Promise<void> {
     const task = await this.taskRepository.findOne({
       where: { task_id: taskId },
     });
@@ -47,25 +56,24 @@ export class TasksService {
     await this.taskRepository.softRemove(task);
   }
 
-  async handleTaskCallback(taskData: Partial<Task>): Promise<void> {
+  async handleCallback(taskData: Partial<Task>): Promise<void> {
     const task = await this.taskRepository.findOne({
       where: { task_id: taskData.task_id },
     });
     if (!task) {
       throw new NotFoundException(`Task ${taskData.task_id} not found`);
     }
-
-    Object.assign(task, {
-      updatedAt: taskData.updated_at,
-      endedAt: taskData.ended_at,
+    const newTask = this.taskRepository.create({
+      ...task,
+      ended_at: taskData.ended_at,
       exception: taskData.exception,
       output: taskData.output,
+      updated_at: taskData.updated_at,
     });
-
-    await this.taskRepository.save(task);
+    await this.taskRepository.save(newTask);
   }
 
-  async fetchTask(): Promise<Task | null> {
+  async fetch(): Promise<Task | null> {
     const query = await this.taskRepository
       .createQueryBuilder('task')
       .leftJoinAndSelect(
@@ -94,7 +102,8 @@ export class TasksService {
 
     if (query) {
       query.started_at = new Date();
-      await this.taskRepository.save(query);
+      const newQuery = this.taskRepository.create(query);
+      await this.taskRepository.save(newQuery);
     }
 
     return query;

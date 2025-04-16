@@ -4,11 +4,7 @@ import { User } from 'src/user/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
-import {
-  Injectable,
-  ConflictException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 
 @Injectable()
 export class UserService {
@@ -48,7 +44,7 @@ export class UserService {
       password: hash,
     });
 
-    return this.userRepository.save(newUser);
+    return await this.userRepository.save(newUser);
   }
 
   async findAll(start: number, limit: number, username?: string) {
@@ -70,15 +66,15 @@ export class UserService {
     };
   }
 
-  async find(id: number) {
-    return this.userRepository.findOne({ where: { user_id: id } });
+  async find(id: string) {
+    return await this.userRepository.findOne({ where: { user_id: +id } });
   }
 
   async findByEmail(email: string) {
-    return this.userRepository.findOne({ where: { email } });
+    return await this.userRepository.findOne({ where: { email } });
   }
 
-  async update(id: number, account: UpdateUserDto) {
+  async update(id: string, account: UpdateUserDto) {
     const existingUser = await this.find(id);
 
     if (!existingUser) {
@@ -100,7 +96,7 @@ export class UserService {
     return await this.userRepository.update(id, existingUser);
   }
 
-  async updatePassword(id: number, password: string) {
+  async updatePassword(id: string, password: string) {
     const account = await this.find(id);
 
     if (!account) {

@@ -17,11 +17,7 @@ export class TasksService {
     return await this.taskRepository.save(newTask);
   }
 
-  async list(
-    namespaceId: string,
-    offset: number,
-    limit: number,
-  ): Promise<Task[]> {
+  async list(namespaceId: number, offset: number, limit: number) {
     const namespace = await this.namespacesService.get(namespaceId);
 
     if (!namespace) {
@@ -36,39 +32,39 @@ export class TasksService {
     });
   }
 
-  async get(taskId: string): Promise<Task> {
+  async get(id: number) {
     const task = await this.taskRepository.findOne({
-      where: { task_id: taskId },
+      where: { id },
     });
     if (!task) {
-      throw new NotFoundException(`Task ${taskId} not found`);
+      throw new NotFoundException(`Task ${id} not found`);
     }
     return task;
   }
 
-  async delete(taskId: string): Promise<void> {
+  async delete(id: number) {
     const task = await this.taskRepository.findOne({
-      where: { task_id: taskId },
+      where: { id },
     });
     if (!task) {
-      throw new NotFoundException(`Task ${taskId} not found`);
+      throw new NotFoundException(`Task ${id} not found`);
     }
     await this.taskRepository.softRemove(task);
   }
 
-  async handleCallback(taskData: Partial<Task>): Promise<void> {
+  async handleCallback(taskData: Partial<Task>) {
     const task = await this.taskRepository.findOne({
-      where: { task_id: taskData.task_id },
+      where: { id: taskData.id },
     });
     if (!task) {
-      throw new NotFoundException(`Task ${taskData.task_id} not found`);
+      throw new NotFoundException(`Task ${taskData.id} not found`);
     }
     const newTask = this.taskRepository.create({
       ...task,
-      ended_at: taskData.ended_at,
+      endedAt: taskData.endedAt,
       exception: taskData.exception,
       output: taskData.output,
-      updated_at: taskData.updated_at,
+      updatedAt: taskData.updatedAt,
     });
     await this.taskRepository.save(newTask);
   }
@@ -101,7 +97,7 @@ export class TasksService {
       .getOne();
 
     if (query) {
-      query.started_at = new Date();
+      query.startedAt = new Date();
       const newQuery = this.taskRepository.create(query);
       await this.taskRepository.save(newQuery);
     }

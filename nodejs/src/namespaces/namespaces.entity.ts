@@ -3,7 +3,7 @@ import { User } from 'src/user/user.entity';
 import {
   Column,
   Entity,
-  OneToOne,
+  ManyToOne,
   JoinColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -11,7 +11,7 @@ import {
 @Entity('namespaces')
 export class Namespace extends Base {
   @PrimaryGeneratedColumn()
-  namespace_id: string;
+  id: number;
 
   @Column({ length: 32, unique: true })
   name: string;
@@ -19,7 +19,7 @@ export class Namespace extends Base {
   @Column('jsonb', { nullable: true })
   collaborators: string[];
 
-  @OneToOne(() => User)
-  @JoinColumn({ name: 'owner_id' })
+  @ManyToOne(() => User, (user) => user.namespace)
+  @JoinColumn({ name: 'user_id' })
   user: User;
 }

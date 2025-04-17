@@ -24,8 +24,8 @@ export class AuthService {
       throw new ForbiddenException('未发现邮箱对应的帐户，请先注册');
     }
     return {
+      id: user.id,
       email: user.email,
-      user_id: user.user_id,
       username: user.username,
     };
   }
@@ -36,9 +36,10 @@ export class AuthService {
       throw new BadRequestException('User not found');
     }
     return {
-      user_id: account.user_id,
+      id: account.id,
+      username: account.username,
       access_token: this.jwtService.sign({
-        sub: account.user_id,
+        sub: account.id,
         email: account.email,
       }),
     };
@@ -48,9 +49,10 @@ export class AuthService {
     const account = await this.userService.create(createUser);
 
     return {
-      user_id: account.user_id,
+      id: account.id,
+      username: account.username,
       access_token: this.jwtService.sign({
-        sub: account.user_id,
+        sub: account.id,
         email: account.email,
       }),
     };
@@ -61,7 +63,7 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('用户不存在');
     }
-    const payload = { email: user.email, sub: user.user_id };
+    const payload = { email: user.email, sub: user.id };
     const token = this.jwtService.sign(payload, {
       expiresIn: '1h',
     });
@@ -78,7 +80,7 @@ export class AuthService {
       if (!user) {
         throw new NotFoundException('用户不存在');
       }
-      await this.userService.updatePassword(`${user.user_id}`, password);
+      await this.userService.updatePassword(user.id, password);
     } catch (e) {
       console.log(e);
       throw new UnauthorizedException('无效或过期的token');

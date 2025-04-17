@@ -56,7 +56,7 @@ export class UserService {
       where,
       take: limit,
       skip: (start - 1) * limit,
-      order: { updated_at: 'DESC' },
+      order: { updatedAt: 'DESC' },
     });
     return {
       start,
@@ -66,15 +66,17 @@ export class UserService {
     };
   }
 
-  async find(id: string) {
-    return await this.userRepository.findOne({ where: { user_id: +id } });
+  async find(id: number) {
+    return await this.userRepository.findOne({
+      where: { id },
+    });
   }
 
   async findByEmail(email: string) {
     return await this.userRepository.findOne({ where: { email } });
   }
 
-  async update(id: string, account: UpdateUserDto) {
+  async update(id: number, account: UpdateUserDto) {
     const existingUser = await this.find(id);
 
     if (!existingUser) {
@@ -96,7 +98,7 @@ export class UserService {
     return await this.userRepository.update(id, existingUser);
   }
 
-  async updatePassword(id: string, password: string) {
+  async updatePassword(id: number, password: string) {
     const account = await this.find(id);
 
     if (!account) {

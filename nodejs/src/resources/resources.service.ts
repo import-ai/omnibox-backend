@@ -1,37 +1,49 @@
-import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { UserService } from 'src/user/user.service';
+import { In, FindOptionsWhere, Repository } from 'typeorm';
 import { Resource } from 'src/resources/resources.entity';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 
+export interface IQuery {
+  namespace: number;
+  spaceType: string;
+  parentId: number;
+  tags?: string;
+  userId: number;
+}
+
 @Injectable()
 export class ResourcesService {
   constructor(
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
-    private readonly userService: UserService,
-    private readonly namespacesService: NamespacesService,
   ) {}
 
-  async create(data: Partial<Resource>): Promise<Resource> {
-    const parentResource = data.parent_id
-      ? await this.resourceRepository.findOne({
-          where: { resource_id: data.parent_id },
-          relations: ['namespaces'],
-        })
-      : null;
+  async create(userId: number, data: CreateResourceDto) {
+    let parentResource: any = null;
+    if (data.parentId) {
+      const where: FindOptionsWhere<Resource> = {
+        id: data.parentId,
+        namespace: { id: data.namespace },
+      };
+      if (data.spaceType === 'private') {
+        where.user = { id: userId };
+      }
+      parentResource = await this.resourceRepository.findOne({
+        where,
+        relations: ['namespace'],
+      });
+    }
 
     if (
       parentResource &&
-      ((data.namespace &&
-        parentResource.namespace.namespace_id !==
-          data.namespace.namespace_id) ||
-        parentResource.space_type !== data.space_type)
+      ((data.namespace && parentResource.namespace.id !== data.namespace) ||
+        parentResource.spaceType !== data.spaceType)
     ) {
       throw new BadRequestException(
         "Parent resource's namespace & space must match the resource's.",
@@ -40,79 +52,90 @@ export class ResourcesService {
 
     const resource = this.resourceRepository.create({
       ...data,
-      parent_id: parentResource?.resource_id,
+      user: { id: userId },
+      namespace: { id: data.namespace },
+      parentId: parentResource ? parentResource.id : 0,
     });
 
     if (parentResource) {
-      parentResource.child_count += 1;
+      parentResource.childCount += 1;
       const parentResourceRepo = this.resourceRepository.create(parentResource);
       await this.resourceRepository.save(parentResourceRepo);
     }
 
-    return this.resourceRepository.save(resource);
+    return await this.resourceRepository.save(resource);
   }
 
-  async getRoot(namespaceId: string, spaceType: string, userId: string) {
-    const account = await this.userService.find(userId);
-
-    if (!account) {
-      throw new NotFoundException('当前账户不存在');
+  async getRoot(namespace: number, spaceType: string, userId: number) {
+    const where: FindOptionsWhere<Resource> = {
+      parentId: 0,
+      spaceType: spaceType,
+      namespace: { id: namespace },
+    };
+    if (spaceType === 'private') {
+      where.user = { id: userId };
     }
-
-    const namespace = await this.namespacesService.get(namespaceId);
-
-    if (!namespace) {
-      throw new NotFoundException('空间不存在');
-    }
-
-    const resource = await this.resourceRepository.findOne({
-      where: {
-        user: account,
-        space_type: spaceType,
-        parent_id: undefined,
-        namespace: namespace,
-      },
-      relations: ['users', 'namespaces'],
+    const data = await this.resourceRepository.findOne({
+      where,
+      relations: ['namespace'],
     });
 
-    if (!resource) {
+    if (!data) {
       throw new NotFoundException('Root resource not found.');
     }
 
-    return resource;
+    const children = await this.query({
+      userId,
+      namespace,
+      spaceType,
+      parentId: data.id,
+    });
+
+    return { ...data, children };
   }
 
-  async get({
-    namespaceId,
-    spaceType,
-    parentId,
-    tags,
-  }: any): Promise<Resource[]> {
-    const namespace = await this.namespacesService.get(namespaceId);
-
-    if (!namespace) {
-      throw new NotFoundException('Namespace not found.');
-    }
-
-    const where: any = {
-      namespace: namespace,
-      space_type: spaceType,
+  async query({ namespace, spaceType, parentId, tags, userId }: IQuery) {
+    const where: FindOptionsWhere<Resource> = {
+      namespace: { id: namespace },
+      spaceType: spaceType,
     };
+    if (spaceType == 'private') {
+      where.user = { id: userId };
+    }
 
     if (parentId) {
       where.parentId = parentId;
+    } else {
+      where.parentId = 0;
     }
 
     if (tags) {
-      where.tags = tags.split(',');
+      const tagsValue = tags.split(',');
+      if (tagsValue.length > 0) {
+        where.tags = In(tagsValue);
+      }
     }
 
-    return this.resourceRepository.find({ where, relations: ['namespaces'] });
+    return this.resourceRepository.find({ where, relations: ['namespace'] });
   }
 
-  async update(resourceId: string, data: Partial<Resource>): Promise<Resource> {
+  async get(id: number) {
     const resource = await this.resourceRepository.findOne({
-      where: { resource_id: resourceId },
+      where: {
+        id,
+      },
+      relations: ['namespace'],
+    });
+    if (!resource) {
+      throw new NotFoundException('资源不存在');
+    }
+    return resource;
+  }
+
+  async update(id: number, data: UpdateResourceDto) {
+    const resource = await this.resourceRepository.findOne({
+      where: { id, namespace: { id: data.namespace } },
+      relations: ['namespace'],
     });
 
     if (!resource) {
@@ -122,19 +145,42 @@ export class ResourcesService {
     const newResource = this.resourceRepository.create({
       ...resource,
       ...data,
+      namespace: { id: data.namespace },
     });
     return await this.resourceRepository.save(newResource);
   }
 
-  async delete(resourceId: string) {
-    const resource = await this.resourceRepository.findOne({
-      where: { resource_id: resourceId },
+  async deleteChildren(id: number) {
+    const resources = await this.resourceRepository.find({
+      where: {
+        parentId: id,
+      },
     });
-
-    if (!resource) {
-      throw new NotFoundException('Resource not found.');
+    if (resources.length <= 0) {
+      return;
     }
+    for (const node of resources) {
+      await this.resourceRepository.softDelete(node.id);
+      await this.deleteChildren(node.id);
+    }
+  }
 
-    await this.resourceRepository.softRemove(resource);
+  async delete(id: number) {
+    // 更新父级 childCount
+    const resource = await this.get(id);
+    const parent = await this.resourceRepository.findOne({
+      where: {
+        id: resource.parentId,
+      },
+    });
+    if (parent) {
+      parent.childCount -= 1;
+      const parentResource = this.resourceRepository.create(parent);
+      await this.resourceRepository.save(parentResource);
+    }
+    // 删除自身
+    await this.resourceRepository.softDelete(id);
+    // 递归删除子级
+    await this.deleteChildren(id);
   }
 }

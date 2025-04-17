@@ -14,7 +14,7 @@ export class APIKeyService {
     return this.apiKeyRepository.save(apiKey);
   }
 
-  async findOne(apiKey: string) {
-    return this.apiKeyRepository.findOne({ where: { api_key: apiKey } });
+  async findOne(id: number) {
+    return this.apiKeyRepository.findOne({ where: { id } });
   }
 }

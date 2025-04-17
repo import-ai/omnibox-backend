@@ -1,6 +1,6 @@
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import {
+  Req,
   Get,
   Post,
   Body,
@@ -8,30 +8,30 @@ import {
   Query,
   Delete,
   Controller,
+  ParseIntPipe,
 } from '@nestjs/common';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
   constructor(private readonly namespacesService: NamespacesService) {}
 
-  @Get()
-  async getNamespaces(@Query('userId') userId: string): Promise<Namespace[]> {
-    return await this.namespacesService.getByUser(userId);
+  @Get('user')
+  async getByUser(@Req() req) {
+    return await this.namespacesService.getByUser(req.user.id);
+  }
+
+  @Get(':id')
+  async get(@Query('id', ParseIntPipe) id: number) {
+    return await this.namespacesService.get(id);
   }
 
   @Post()
-  async createNamespace(
-    @Body('name') name: string,
-    @Body('ownerId') ownerId: string,
-  ): Promise<Namespace> {
-    return await this.namespacesService.create(name, ownerId);
+  async create(@Req() req, @Body('name') name: string) {
+    return await this.namespacesService.create(req.user.id, name);
   }
 
-  @Delete(':namespaceId')
-  async deleteNamespace(
-    @Param('namespaceId') namespaceId: string,
-    @Query('userId') userId: string,
-  ): Promise<void> {
-    return await this.namespacesService.delete(namespaceId, userId);
+  @Delete(':id')
+  async delete(@Param('id', ParseIntPipe) id: number) {
+    return await this.namespacesService.delete(id);
   }
 }

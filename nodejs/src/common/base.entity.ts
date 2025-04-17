@@ -2,22 +2,22 @@ import { CreateDateColumn, UpdateDateColumn, DeleteDateColumn } from 'typeorm';
 
 export abstract class Base {
   @CreateDateColumn({
+    name: 'created_at',
     type: 'timestamptz',
-    comment: '创建时间',
   })
-  created_at: Date;
+  createdAt: Date;
 
   @UpdateDateColumn({
+    name: 'updated_at',
     type: 'timestamptz',
     nullable: true,
-    comment: '最后更新时间',
   })
-  updated_at: Date;
+  updatedAt: Date;
 
   @DeleteDateColumn({
+    name: 'deleted_at',
     type: 'timestamptz',
     nullable: true,
-    comment: '软删除时间',
   })
-  deleted_at: Date;
+  deletedAt: Date;
 }

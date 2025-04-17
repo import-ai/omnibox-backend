@@ -6,10 +6,10 @@ import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 @Entity('user_roles')
 export class UserRole extends Base {
   @PrimaryGeneratedColumn()
-  user_role_id: string;
+  id: number;
 
-  @Column({ length: 22 })
-  target_id: string;
+  @Column({ name: 'target_id', length: 22 })
+  targetId: string;
 
   @Column({ type: 'enum', enum: ['owner', 'admin', 'editor', 'viewer'] })
   role: string;
@@ -18,5 +18,5 @@ export class UserRole extends Base {
   user: User[];
 
   @OneToMany(() => APIKey, (apiKeys) => apiKeys.role)
-  api_keys: APIKey[];
+  apiKey: APIKey[];
 }

@@ -1,6 +1,7 @@
 import { Base } from 'src/common/base.entity';
 import { APIKey } from 'src/api-key/api-key.entity';
 import { UserRole } from 'src/user-role/user-role.entity';
+import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
   Entity,
   Column,
@@ -13,7 +14,7 @@ import {
 @Entity('users')
 export class User extends Base {
   @PrimaryGeneratedColumn()
-  user_id: number;
+  id: number;
 
   @Column({
     length: 32,
@@ -35,10 +36,13 @@ export class User extends Base {
   })
   password: string;
 
-  @OneToMany(() => APIKey, (apiKeys) => apiKeys.api_key)
-  api_key: APIKey[];
+  @OneToMany(() => Namespace, (namespace) => namespace.user)
+  namespace: Namespace;
 
-  @ManyToOne(() => UserRole, (userRole) => userRole.user_role_id)
+  @OneToMany(() => APIKey, (apiKeys) => apiKeys.id)
+  apiKey: APIKey[];
+
+  @ManyToOne(() => UserRole, (userRole) => userRole.id)
   @JoinColumn({ name: 'role' })
   role: UserRole;
 }

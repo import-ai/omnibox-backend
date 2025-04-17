@@ -4,28 +4,39 @@ import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
   Column,
   Entity,
-  OneToOne,
   ManyToOne,
   JoinColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+export enum SpaceType {
+  PRIVATE = 'private',
+  TEAMSPACE = 'teamspace',
+}
+
+export enum ResourceType {
+  DOC = 'doc',
+  LINK = 'link',
+  FILE = 'file',
+  FOLDER = 'folder',
+}
+
 @Entity('resources')
 export class Resource extends Base {
   @PrimaryGeneratedColumn()
-  resource_id: string;
+  id: number;
 
   @Column({ nullable: true })
   name: string;
 
-  @Column({ type: 'enum', enum: ['doc', 'link', 'file', 'folder'] })
-  resource_type: string;
+  @Column({ name: 'resource_type', type: 'enum', enum: ResourceType })
+  resourceType: string;
 
-  @Column({ type: 'enum', enum: ['private', 'teamspace'] })
-  space_type: string;
+  @Column({ name: 'space_type', type: 'enum', enum: SpaceType })
+  spaceType: string;
 
-  @Column({ length: 22, nullable: true })
-  parent_id: string;
+  @Column({ name: 'parent_id', default: 0 })
+  parentId: number;
 
   @Column('jsonb', { nullable: true })
   tags: string[];
@@ -33,8 +44,8 @@ export class Resource extends Base {
   @Column({ type: 'text', nullable: true })
   content: string;
 
-  @Column({ default: 0 })
-  child_count: number;
+  @Column({ name: 'child_count', default: 0 })
+  childCount: number;
 
   @Column('jsonb', { nullable: true })
   attrs: Record<string, any>;
@@ -43,7 +54,7 @@ export class Resource extends Base {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @OneToOne(() => Namespace)
+  @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })
   namespace: Namespace;
 }

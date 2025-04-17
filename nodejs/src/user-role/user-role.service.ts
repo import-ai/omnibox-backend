@@ -14,7 +14,7 @@ export class UserRoleService {
     return await this.userRoleRepository.save(userRole);
   }
 
-  async findOne(user_role_id: string): Promise<UserRole | null> {
-    return await this.userRoleRepository.findOne({ where: { user_role_id } });
+  async findOne(id: number) {
+    return await this.userRoleRepository.findOne({ where: { id } });
   }
 }

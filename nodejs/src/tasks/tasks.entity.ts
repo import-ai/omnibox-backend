@@ -21,7 +21,7 @@ import {
 // ])
 export class Task extends Base {
   @PrimaryGeneratedColumn()
-  task_id: string;
+  id: number;
 
   @Column({ default: 0 })
   priority: number;
@@ -41,17 +41,17 @@ export class Task extends Base {
   @Column('jsonb', { nullable: true })
   exception: Record<string, any>;
 
-  @Column({ nullable: true })
-  started_at: Date;
+  @Column({ name: 'started_at', nullable: true })
+  startedAt: Date;
 
-  @Column({ nullable: true })
-  ended_at: Date;
+  @Column({ name: 'ended_at', nullable: true })
+  endedAt: Date;
 
-  @Column({ nullable: true })
-  canceled_at: Date;
+  @Column({ name: 'canceled_at', nullable: true })
+  canceledAt: Date;
 
-  @Column({ default: 1 })
-  concurrency_threshold: number;
+  @Column({ name: 'concurrency_threshold', default: 1 })
+  concurrencyThreshold: number;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })

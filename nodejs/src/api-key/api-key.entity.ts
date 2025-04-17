@@ -12,16 +12,16 @@ import {
 @Entity('api_keys')
 export class APIKey extends Base {
   @PrimaryGeneratedColumn()
-  api_key: string;
+  id: number;
 
   @Column({ length: 32, nullable: true })
   comment: string;
 
-  @ManyToOne(() => User, (user) => user.api_key)
+  @ManyToOne(() => User, (user) => user.apiKey)
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => UserRole, (userRole) => userRole.api_keys)
+  @ManyToOne(() => UserRole, (userRole) => userRole.apiKey)
   @JoinColumn({ name: 'role' })
   role: UserRole;
 }

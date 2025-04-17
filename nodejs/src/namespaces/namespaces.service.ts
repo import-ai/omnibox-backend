@@ -1,86 +1,52 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-} from '@nestjs/common';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { UserService } from 'src/user/user.service';
 import { Namespace } from 'src/namespaces/namespaces.entity';
+import { Injectable, NotFoundException } from '@nestjs/common';
+// import { CreateNamespaceDto } from 'src/namespaces/dto/create-namespace.dto';
+// import { UpdateNamespaceDto } from 'src/namespaces/dto/update-namespace.dto';
 
 @Injectable()
 export class NamespacesService {
   constructor(
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
-    private readonly userService: UserService,
   ) {}
 
-  async get(namespaceId: string) {
-    const namespace = await this.namespaceRepository.findOne({
+  async getByUser(user_id: string) {
+    const namespace = await this.namespaceRepository.find({
       where: {
-        name: namespaceId,
+        user: { id: +user_id },
       },
+      relations: ['user'],
     });
-
     if (!namespace) {
       throw new NotFoundException('空间不存在');
     }
-
     return namespace;
   }
 
-  async getByUser(userId: string): Promise<Namespace[]> {
-    return this.namespaceRepository.find({
-      relations: ['user'],
-      where: {
-        collaborators: In([userId]),
-        user: { user_id: +userId },
-      },
-    });
-  }
-
-  async create(name: string, ownerId: string): Promise<Namespace> {
-    const account = await this.userService.find(ownerId);
-    if (!account) {
-      throw new NotFoundException('User not found');
-    }
-    const newNamespace = this.namespaceRepository.create({
-      name,
-      user: account,
-    });
-    return await this.namespaceRepository.save(newNamespace);
-
-    // 资源创建不要在空间创建，前端解耦
-    // const rootParams = {
-    //   resource_type: 'folder',
-    //   namespace: savedNamespace,
-    // };
-
-    // await this.resourcesService.create({
-    //   ...rootParams,
-    //   space_type: 'teamspace',
-    // });
-
-    // await this.resourcesService.create({
-    //   ...rootParams,
-    //   space_type: 'private',
-    // });
-  }
-
-  async delete(namespaceId: string, userId: string): Promise<void> {
+  async get(id: number) {
     const namespace = await this.namespaceRepository.findOne({
-      where: { namespace_id: namespaceId },
+      where: {
+        id,
+      },
       relations: ['user'],
     });
     if (!namespace) {
-      throw new NotFoundException('Namespace not found');
+      throw new NotFoundException('空间不存在');
     }
-    if (namespace.user.user_id !== +userId) {
-      throw new ForbiddenException(
-        'You do not have permission to delete this namespace',
-      );
-    }
-    await this.namespaceRepository.softRemove(namespace);
+    return namespace;
+  }
+
+  async create(userId: string, name: string) {
+    const newNamespace = this.namespaceRepository.create({
+      name,
+      user: { id: +userId },
+    });
+    return await this.namespaceRepository.save(newNamespace);
+  }
+
+  async delete(id: number) {
+    await this.namespaceRepository.softDelete(id);
   }
 }

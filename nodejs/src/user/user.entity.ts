@@ -1,7 +1,6 @@
 import { Base } from 'src/common/base.entity';
 import { APIKey } from 'src/api-key/api-key.entity';
 import { UserRole } from 'src/user-role/user-role.entity';
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
   Entity,
   Column,
@@ -35,9 +34,6 @@ export class User extends Base {
     comment: '加密后的密码',
   })
   password: string;
-
-  @OneToMany(() => Namespace, (namespace) => namespace.user)
-  namespace: Namespace;
 
   @OneToMany(() => APIKey, (apiKeys) => apiKeys.id)
   apiKey: APIKey[];

@@ -5,6 +5,22 @@ import { MailerService } from '@nestjs-modules/mailer';
 export class MailService {
   constructor(private readonly mailerService: MailerService) {}
 
+  async sendRegisterEmail(email: string, resetUrl: string): Promise<void> {
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: '继续完成帐户注册',
+        template: './register',
+        context: {
+          resetUrl,
+        },
+      });
+    } catch (error) {
+      console.error('发送邮件失败:', error);
+      throw new Error('无法发送邮件');
+    }
+  }
+
   async sendPasswordResetEmail(email: string, resetUrl: string): Promise<void> {
     try {
       await this.mailerService.sendMail({

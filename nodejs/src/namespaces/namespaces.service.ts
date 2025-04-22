@@ -1,9 +1,11 @@
-import { Repository } from 'typeorm';
+import { ArrayContains, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from 'src/namespaces/namespaces.entity';
-import { Injectable, NotFoundException } from '@nestjs/common';
-// import { CreateNamespaceDto } from 'src/namespaces/dto/create-namespace.dto';
-// import { UpdateNamespaceDto } from 'src/namespaces/dto/update-namespace.dto';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 
 @Injectable()
 export class NamespacesService {
@@ -12,17 +14,16 @@ export class NamespacesService {
     private readonly namespaceRepository: Repository<Namespace>,
   ) {}
 
-  async getByUser(user_id: string) {
-    const namespace = await this.namespaceRepository.find({
+  async getByUser(user_id: number) {
+    const namespaces = await this.namespaceRepository.find({
       where: {
-        user: { id: +user_id },
+        owner_id: ArrayContains([user_id]),
       },
-      relations: ['user'],
     });
-    if (!namespace) {
+    if (namespaces.length <= 0) {
       throw new NotFoundException('空间不存在');
     }
-    return namespace;
+    return namespaces;
   }
 
   async get(id: number) {
@@ -30,7 +31,6 @@ export class NamespacesService {
       where: {
         id,
       },
-      relations: ['user'],
     });
     if (!namespace) {
       throw new NotFoundException('空间不存在');
@@ -38,12 +38,21 @@ export class NamespacesService {
     return namespace;
   }
 
-  async create(userId: string, name: string) {
+  async create(userId: number, name: string) {
     const newNamespace = this.namespaceRepository.create({
       name,
-      user: { id: +userId },
+      owner_id: [userId],
     });
     return await this.namespaceRepository.save(newNamespace);
+  }
+
+  async update(id: number, name: string) {
+    const existNamespace = await this.get(id);
+    if (!existNamespace) {
+      throw new ConflictException('当前空间不存在');
+    }
+    existNamespace.name = name;
+    return await this.namespaceRepository.update(id, existNamespace);
   }
 
   async delete(id: number) {

@@ -5,7 +5,7 @@ import {
   Post,
   Body,
   Param,
-  Query,
+  Patch,
   Delete,
   Controller,
   ParseIntPipe,
@@ -21,13 +21,21 @@ export class NamespacesController {
   }
 
   @Get(':id')
-  async get(@Query('id', ParseIntPipe) id: number) {
+  async get(@Param('id', ParseIntPipe) id: number) {
     return await this.namespacesService.get(id);
   }
 
   @Post()
   async create(@Req() req, @Body('name') name: string) {
     return await this.namespacesService.create(req.user.id, name);
+  }
+
+  @Patch(':id')
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('name') name: string,
+  ) {
+    return await this.namespacesService.update(id, name);
   }
 
   @Delete(':id')

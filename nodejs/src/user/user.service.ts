@@ -14,7 +14,9 @@ export class UserService {
   ) {}
 
   async verify(email: string, password: string) {
-    const account = await this.findByEmail(email);
+    const account = await this.userRepository.findOne({
+      where: { email },
+    });
     if (!account) {
       return;
     }
@@ -44,19 +46,22 @@ export class UserService {
       password: hash,
     });
 
-    return await this.userRepository.save(newUser);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...reset } = await this.userRepository.save(newUser);
+    return reset;
   }
 
-  async findAll(start: number, limit: number, username?: string) {
+  async findAll(start: number, limit: number, search?: string) {
     const where: any = {};
-    if (username) {
-      where.username = Like(`%${username}%`);
+    if (search) {
+      where.username = Like(`%${search}%`);
     }
     const data = await this.userRepository.findAndCount({
       where,
       take: limit,
       skip: (start - 1) * limit,
       order: { updatedAt: 'DESC' },
+      select: ['id', 'username', 'email'],
     });
     return {
       start,
@@ -69,17 +74,21 @@ export class UserService {
   async find(id: number) {
     return await this.userRepository.findOne({
       where: { id },
+      select: ['id', 'username', 'email'],
     });
   }
 
   async findByEmail(email: string) {
-    return await this.userRepository.findOne({ where: { email } });
+    return await this.userRepository.findOne({
+      where: { email },
+      select: ['id', 'username', 'email'],
+    });
   }
 
   async update(id: number, account: UpdateUserDto) {
-    const existingUser = await this.find(id);
+    const existUser = await this.find(id);
 
-    if (!existingUser) {
+    if (!existUser) {
       throw new ConflictException('当前账户不存在');
     }
 
@@ -87,15 +96,14 @@ export class UserService {
       if (account.password !== account.password_repeat) {
         throw new ConflictException('两次密码不一致');
       }
-      existingUser.password = await bcrypt.hash(account.password, 10);
+      existUser.password = await bcrypt.hash(account.password, 10);
     }
-    if (account.email) {
-      existingUser.email = account.email;
-    }
-    if (account.username) {
-      existingUser.username = account.username;
-    }
-    return await this.userRepository.update(id, existingUser);
+    ['email', 'username'].forEach((field) => {
+      if (account[field]) {
+        existUser[field] = account[field];
+      }
+    });
+    return await this.userRepository.update(id, existUser);
   }
 
   async updatePassword(id: number, password: string) {

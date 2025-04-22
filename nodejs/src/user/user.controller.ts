@@ -17,11 +17,11 @@ export class UserController {
 
   @Get()
   async findAll(
-    @Query('start', ParseIntPipe) start,
-    @Query('limit', ParseIntPipe) limit,
-    @Query('username') username,
+    @Query('start', ParseIntPipe) start: number,
+    @Query('limit', ParseIntPipe) limit: number,
+    @Query('search') search?: string,
   ) {
-    return await this.userService.findAll(start, limit, username);
+    return await this.userService.findAll(start, limit, search);
   }
 
   @Get(':id')

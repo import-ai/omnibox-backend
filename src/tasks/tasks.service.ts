@@ -70,38 +70,47 @@ export class TasksService {
   }
 
   async fetch(): Promise<Task | null> {
-    const query = await this.taskRepository
-      .createQueryBuilder('task')
-      .leftJoinAndSelect(
-        (qb) =>
-          qb
-            .select('task.namespace_id', 'namespace_id')
-            .addSelect('COUNT(task.task_id)', 'running_count')
-            .from(Task, 'task')
-            .where('task.started_at IS NOT NULL')
-            .andWhere('task.ended_at IS NULL')
-            .andWhere('task.canceled_at IS NULL')
-            .groupBy('task.namespace_id'),
-        'runningTasks',
-        'task.namespace_id = runningTasks.namespace_id',
+    const rawQuery = `
+      WITH running_tasks_sub_query AS (
+        SELECT namespace_id,
+               COUNT(id) AS running_count
+        FROM tasks
+        WHERE started_at IS NOT NULL
+          AND ended_at IS NULL
+          AND canceled_at IS NULL
+        GROUP BY namespace_id
+      ),
+      id_subquery AS (
+        SELECT tasks.id
+        FROM tasks
+                 LEFT OUTER JOIN running_tasks_sub_query
+                 ON tasks.namespace_id = running_tasks_sub_query.namespace_id
+                 LEFT OUTER JOIN namespaces
+                 ON tasks.namespace_id = namespaces.id
+        WHERE tasks.started_at IS NULL
+          AND tasks.canceled_at IS NULL
+          AND COALESCE(running_tasks_sub_query.running_count, 0) < COALESCE(namespaces.max_running_tasks, 0)
+        ORDER BY priority DESC,
+                 tasks.created_at
+        LIMIT 1
       )
-      .where('task.started_at IS NULL')
-      .andWhere('task.canceled_at IS NULL')
-      .andWhere(
-        'COALESCE(runningTasks.running_count, 0) < task.concurrency_threshold',
-      )
-      .orderBy('task.priority', 'DESC')
-      .addOrderBy('task.created_at', 'ASC')
-      .limit(1)
-      .setLock('pessimistic_write')
-      .getOne();
+      SELECT *
+      FROM tasks
+      WHERE id IN (SELECT id FROM id_subquery)
+      FOR UPDATE SKIP LOCKED;
+    `;
 
-    if (query) {
-      query.startedAt = new Date();
-      const newQuery = this.taskRepository.create(query);
-      await this.taskRepository.save(newQuery);
+    const queryResult = await this.taskRepository.query(rawQuery);
+
+    if (queryResult.length > 0) {
+      const task = this.taskRepository.create({
+        ...(queryResult[0] as Task),
+        startedAt: new Date(),
+      });
+      await this.taskRepository.save(task);
+      return task;
     }
 
-    return query;
+    return null;
   }
 }

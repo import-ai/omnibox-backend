@@ -14,4 +14,7 @@ export class Namespace extends Base {
 
   @Column('int', { array: true, default: [] })
   owner_id: string[];
+
+  @Column({ type: 'int', default: 1 })
+  max_running_tasks: number;
 }

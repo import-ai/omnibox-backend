@@ -127,7 +127,7 @@ export class ResourcesService {
       relations: ['namespace'],
     });
     if (!resource) {
-      throw new NotFoundException('资源不存在');
+      throw new NotFoundException('Resource not found.');
     }
     return resource;
   }

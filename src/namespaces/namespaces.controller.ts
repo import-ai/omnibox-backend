@@ -31,7 +31,7 @@ export class NamespacesController {
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body('name') name: string) {
-    return await this.namespacesService.update(id, name);
+    return await this.namespacesService.update(id, { name });
   }
 
   @Delete(':id')

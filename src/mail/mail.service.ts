@@ -9,31 +9,47 @@ export class MailService {
     try {
       await this.mailerService.sendMail({
         to: email,
-        subject: '继续完成帐户注册',
+        subject: 'Continue completing account registration',
         template: './sign-up',
         context: {
           resetUrl,
         },
       });
     } catch (error) {
-      console.error('发送邮件失败:', error);
-      throw new Error('无法发送邮件');
+      console.error('Failed to send email:', error);
+      throw new Error('Unable to send email');
     }
   }
 
-  async sendPasswordResetEmail(email: string, resetUrl: string): Promise<void> {
+  async sendPasswordEmail(email: string, resetUrl: string): Promise<void> {
     try {
       await this.mailerService.sendMail({
         to: email,
-        subject: '重置密码请求',
-        template: './password-reset',
+        subject: 'Password Reset Request',
+        template: './password',
         context: {
           resetUrl,
         },
       });
     } catch (error) {
-      console.error('发送邮件失败:', error);
-      throw new Error('无法发送重置密码邮件');
+      console.error('Failed to send email:', error);
+      throw new Error('Unable to send email');
+    }
+  }
+
+  async sendInviteEmail(email: string, resetUrl: string): Promise<void> {
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'Invite you to join the space',
+        template: './invite',
+        context: {
+          resetUrl,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      throw new Error('Unable to send email');
     }
   }
 }

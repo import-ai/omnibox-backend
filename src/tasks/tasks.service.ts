@@ -17,7 +17,7 @@ export class TasksService {
     return await this.taskRepository.save(newTask);
   }
 
-  async list(namespaceId: number, offset: number, limit: number) {
+  async list(namespaceId: string, offset: number, limit: number) {
     const namespace = await this.namespacesService.get(namespaceId);
 
     if (!namespace) {
@@ -32,7 +32,7 @@ export class TasksService {
     });
   }
 
-  async get(id: number) {
+  async get(id: string) {
     const task = await this.taskRepository.findOne({
       where: { id },
     });
@@ -42,7 +42,7 @@ export class TasksService {
     return task;
   }
 
-  async delete(id: number) {
+  async delete(id: string) {
     const task = await this.taskRepository.findOne({
       where: { id },
     });

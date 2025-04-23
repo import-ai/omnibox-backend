@@ -12,8 +12,8 @@ import {
 
 @Entity('users')
 export class User extends Base {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({
     length: 32,

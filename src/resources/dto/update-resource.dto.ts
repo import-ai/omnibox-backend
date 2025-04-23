@@ -15,9 +15,9 @@ export class UpdateResourceDto {
   @IsNotEmpty()
   name?: string;
 
-  @IsNumber()
+  @IsString()
   @IsNotEmpty()
-  namespace: number;
+  namespace: string;
 
   @IsEnum(ResourceType)
   @IsOptional()
@@ -27,10 +27,10 @@ export class UpdateResourceDto {
   @IsOptional()
   spaceType?: SpaceType;
 
-  @IsNumber()
+  @IsString()
   @IsOptional()
   @IsNotEmpty()
-  parentId?: number;
+  parentId?: string;
 
   @IsArray()
   @IsOptional()

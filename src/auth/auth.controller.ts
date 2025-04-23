@@ -41,7 +41,7 @@ export class AuthController {
     @Body('url') url: string,
     @Body('email') email: string,
   ): Promise<void> {
-    return this.authService.requestPasswordReset(url, email);
+    return await this.authService.requestPasswordReset(url, email);
   }
 
   @Public()
@@ -51,6 +51,10 @@ export class AuthController {
     @Body('password') password: string,
     @Body('password_repeat') password_repeat: string,
   ): Promise<void> {
-    return this.authService.resetPassword(token, password, password_repeat);
+    return await this.authService.resetPassword(
+      token,
+      password,
+      password_repeat,
+    );
   }
 }

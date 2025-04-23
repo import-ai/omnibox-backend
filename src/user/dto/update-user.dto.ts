@@ -1,6 +1,5 @@
 import {
   IsEmail,
-  IsNumber,
   IsString,
   MinLength,
   MaxLength,
@@ -9,8 +8,8 @@ import {
 } from 'class-validator';
 
 export class UpdateUserDto {
-  @IsNumber()
-  user_id: number;
+  @IsString()
+  user_id: string;
 
   @IsString()
   @MinLength(4)

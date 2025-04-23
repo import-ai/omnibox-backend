@@ -10,11 +10,11 @@ import {
 } from '@nestjs/common';
 
 export interface IQuery {
-  namespace: number;
+  namespace: string;
   spaceType: string;
-  parentId: number;
+  parentId: string;
   tags?: string;
-  userId: number;
+  userId: string;
 }
 
 @Injectable()
@@ -24,7 +24,7 @@ export class ResourcesService {
     private readonly resourceRepository: Repository<Resource>,
   ) {}
 
-  async create(userId: number, data: CreateResourceDto) {
+  async create(userId: string, data: CreateResourceDto) {
     let parentResource: any = null;
     if (data.parentId) {
       const where: FindOptionsWhere<Resource> = {
@@ -66,9 +66,9 @@ export class ResourcesService {
     return await this.resourceRepository.save(resource);
   }
 
-  async getRoot(namespace: number, spaceType: string, userId: number) {
+  async getRoot(namespace: string, spaceType: string, userId: string) {
     const where: FindOptionsWhere<Resource> = {
-      parentId: 0,
+      parentId: '',
       spaceType: spaceType,
       namespace: { id: namespace },
     };
@@ -106,7 +106,7 @@ export class ResourcesService {
     if (parentId) {
       where.parentId = parentId;
     } else {
-      where.parentId = 0;
+      where.parentId = '';
     }
 
     if (tags) {
@@ -119,7 +119,7 @@ export class ResourcesService {
     return this.resourceRepository.find({ where, relations: ['namespace'] });
   }
 
-  async get(id: number) {
+  async get(id: string) {
     const resource = await this.resourceRepository.findOne({
       where: {
         id,
@@ -132,7 +132,7 @@ export class ResourcesService {
     return resource;
   }
 
-  async update(id: number, data: UpdateResourceDto) {
+  async update(id: string, data: UpdateResourceDto) {
     const resource = await this.resourceRepository.findOne({
       where: { id, namespace: { id: data.namespace } },
       relations: ['namespace'],
@@ -150,7 +150,7 @@ export class ResourcesService {
     return await this.resourceRepository.save(newResource);
   }
 
-  async deleteChildren(id: number) {
+  async deleteChildren(id: string) {
     const resources = await this.resourceRepository.find({
       where: {
         parentId: id,
@@ -165,7 +165,7 @@ export class ResourcesService {
     }
   }
 
-  async delete(id: number) {
+  async delete(id: string) {
     // 更新父级 childCount
     const resource = await this.get(id);
     const parent = await this.resourceRepository.findOne({

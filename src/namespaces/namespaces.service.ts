@@ -14,7 +14,7 @@ export class NamespacesService {
     private readonly namespaceRepository: Repository<Namespace>,
   ) {}
 
-  async getByUser(user_id: number) {
+  async getByUser(user_id: string) {
     const namespaces = await this.namespaceRepository.find({
       where: {
         owner_id: ArrayContains([user_id]),
@@ -26,7 +26,7 @@ export class NamespacesService {
     return namespaces;
   }
 
-  async get(id: number) {
+  async get(id: string) {
     const namespace = await this.namespaceRepository.findOne({
       where: {
         id,
@@ -38,7 +38,7 @@ export class NamespacesService {
     return namespace;
   }
 
-  async create(userId: number, name: string) {
+  async create(userId: string, name: string) {
     const newNamespace = this.namespaceRepository.create({
       name,
       owner_id: [userId],
@@ -46,7 +46,7 @@ export class NamespacesService {
     return await this.namespaceRepository.save(newNamespace);
   }
 
-  async update(id: number, name: string) {
+  async update(id: string, name: string) {
     const existNamespace = await this.get(id);
     if (!existNamespace) {
       throw new ConflictException('当前空间不存在');
@@ -55,7 +55,7 @@ export class NamespacesService {
     return await this.namespaceRepository.update(id, existNamespace);
   }
 
-  async delete(id: number) {
+  async delete(id: string) {
     await this.namespaceRepository.softDelete(id);
   }
 }

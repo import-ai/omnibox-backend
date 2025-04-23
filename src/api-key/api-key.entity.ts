@@ -11,8 +11,8 @@ import {
 
 @Entity('api_keys')
 export class APIKey extends Base {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({ length: 32, nullable: true })
   comment: string;

@@ -3,15 +3,15 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('namespaces')
 export class Namespace extends Base {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({ length: 32, unique: true })
   name: string;
 
   @Column('int', { array: true, nullable: true, default: [] })
-  collaborators: number[];
+  collaborators: string[];
 
   @Column('int', { array: true, default: [] })
-  owner_id: number[];
+  owner_id: string[];
 }

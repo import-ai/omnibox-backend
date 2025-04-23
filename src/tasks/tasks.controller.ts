@@ -8,7 +8,6 @@ import {
   Param,
   Delete,
   Controller,
-  ParseIntPipe,
 } from '@nestjs/common';
 
 @Controller('api/v1/tasks')
@@ -22,7 +21,7 @@ export class TasksController {
 
   @Get()
   async listTasks(
-    @Query('namespace', ParseIntPipe) namespace: number,
+    @Query('namespace') namespace: string,
     @Query('offset') offset: number = 0,
     @Query('limit') limit: number = 10,
   ) {
@@ -30,12 +29,12 @@ export class TasksController {
   }
 
   @Get(':id')
-  async getTaskById(@Param('id', ParseIntPipe) id: number) {
+  async getTaskById(@Param('id') id: string) {
     return await this.tasksService.get(id);
   }
 
   @Delete(':id')
-  async deleteTask(@Param('id', ParseIntPipe) id: number) {
+  async deleteTask(@Param('id') id: string) {
     await this.tasksService.delete(id);
     return { detail: 'Task deleted' };
   }

@@ -71,7 +71,7 @@ export class UserService {
     };
   }
 
-  async find(id: number) {
+  async find(id: string) {
     return await this.userRepository.findOne({
       where: { id },
       select: ['id', 'username', 'email'],
@@ -85,7 +85,7 @@ export class UserService {
     });
   }
 
-  async update(id: number, account: UpdateUserDto) {
+  async update(id: string, account: UpdateUserDto) {
     const existUser = await this.find(id);
 
     if (!existUser) {
@@ -106,7 +106,7 @@ export class UserService {
     return await this.userRepository.update(id, existUser);
   }
 
-  async updatePassword(id: number, password: string) {
+  async updatePassword(id: string, password: string) {
     const account = await this.find(id);
 
     if (!account) {
@@ -120,7 +120,7 @@ export class UserService {
     return await this.userRepository.update(id, account);
   }
 
-  async remove(id: number) {
+  async remove(id: string) {
     return await this.userRepository.softDelete(id);
   }
 }

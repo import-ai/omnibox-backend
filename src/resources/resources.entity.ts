@@ -23,8 +23,8 @@ export enum ResourceType {
 
 @Entity('resources')
 export class Resource extends Base {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({ nullable: true })
   name: string;
@@ -35,8 +35,8 @@ export class Resource extends Base {
   @Column({ name: 'space_type', type: 'enum', enum: SpaceType })
   spaceType: string;
 
-  @Column({ name: 'parent_id', default: 0 })
-  parentId: number;
+  @Column({ name: 'parent_id', default: '' })
+  parentId: string;
 
   @Column('jsonb', { nullable: true })
   tags: string[];

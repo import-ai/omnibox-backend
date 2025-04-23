@@ -20,8 +20,8 @@ import {
 //   'concurrency_threshold',
 // ])
 export class Task extends Base {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({ default: 0 })
   priority: number;

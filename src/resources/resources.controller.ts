@@ -1,4 +1,4 @@
-import { ResourcesService, IQuery } from 'src/resources/resources.service';
+import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
@@ -11,7 +11,6 @@ import {
   Patch,
   Delete,
   Controller,
-  ParseIntPipe,
 } from '@nestjs/common';
 
 @Controller('api/v1/resources')
@@ -25,7 +24,7 @@ export class ResourcesController {
 
   @Get('root')
   async getRoot(
-    @Query('namespace', ParseIntPipe) namespace: number,
+    @Query('namespace') namespace: string,
     @Query('spaceType') spaceType: string,
     @Req() req,
   ) {
@@ -38,9 +37,9 @@ export class ResourcesController {
 
   @Get('query')
   async query(
-    @Query('namespace', ParseIntPipe) namespace: number,
+    @Query('namespace') namespace: string,
     @Query('spaceType') spaceType: string,
-    @Query('parentId', ParseIntPipe) parentId: number,
+    @Query('parentId') parentId: string,
     @Query('tags') tags: string,
     @Req() req,
   ) {
@@ -54,20 +53,17 @@ export class ResourcesController {
   }
 
   @Get(':id')
-  async get(@Param('id', ParseIntPipe) id: number) {
+  async get(@Param('id') id: string) {
     return await this.resourcesService.get(id);
   }
 
   @Patch(':id')
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() data: UpdateResourceDto,
-  ) {
+  async update(@Param('id') id: string, @Body() data: UpdateResourceDto) {
     return await this.resourcesService.update(id, data);
   }
 
   @Delete(':id')
-  async delete(@Param('id', ParseIntPipe) id: number) {
+  async delete(@Param('id') id: string) {
     return await this.resourcesService.delete(id);
   }
 }

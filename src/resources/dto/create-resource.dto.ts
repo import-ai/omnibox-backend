@@ -1,7 +1,6 @@
 import {
   IsEnum,
   IsArray,
-  IsNumber,
   IsString,
   IsObject,
   IsOptional,
@@ -14,9 +13,9 @@ export class CreateResourceDto {
   @IsNotEmpty()
   name: string;
 
-  @IsNumber()
+  @IsString()
   @IsNotEmpty()
-  namespace: number;
+  namespace: string;
 
   @IsEnum(ResourceType)
   resourceType: string;
@@ -24,10 +23,10 @@ export class CreateResourceDto {
   @IsEnum(SpaceType)
   spaceType: string;
 
-  @IsNumber()
+  @IsString()
   @IsOptional()
   @IsNotEmpty()
-  parentId?: number;
+  parentId?: string;
 
   @IsArray()
   @IsOptional()

@@ -8,7 +8,6 @@ import {
   Patch,
   Delete,
   Controller,
-  ParseIntPipe,
 } from '@nestjs/common';
 
 @Controller('api/v1/namespaces')
@@ -21,7 +20,7 @@ export class NamespacesController {
   }
 
   @Get(':id')
-  async get(@Param('id', ParseIntPipe) id: number) {
+  async get(@Param('id') id: string) {
     return await this.namespacesService.get(id);
   }
 
@@ -31,15 +30,12 @@ export class NamespacesController {
   }
 
   @Patch(':id')
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('name') name: string,
-  ) {
+  async update(@Param('id') id: string, @Body('name') name: string) {
     return await this.namespacesService.update(id, name);
   }
 
   @Delete(':id')
-  async delete(@Param('id', ParseIntPipe) id: number) {
+  async delete(@Param('id') id: string) {
     return await this.namespacesService.delete(id);
   }
 }

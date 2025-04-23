@@ -1,13 +1,6 @@
 import { APIKey } from 'src/api-key/api-key.entity';
 import { APIKeyService } from 'src/api-key/api-key.service';
-import {
-  Get,
-  Post,
-  Body,
-  Param,
-  Controller,
-  ParseIntPipe,
-} from '@nestjs/common';
+import { Get, Post, Body, Param, Controller } from '@nestjs/common';
 
 @Controller('api/v1/api-keys')
 export class APIKeyController {
@@ -19,7 +12,7 @@ export class APIKeyController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
+  async findOne(@Param('id') id: string) {
     return this.apiKeyService.findOne(id);
   }
 }

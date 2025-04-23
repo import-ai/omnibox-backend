@@ -25,20 +25,17 @@ export class UserController {
   }
 
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
+  async findOne(@Param('id') id: string) {
     return await this.userService.find(id);
   }
 
   @Patch(':id')
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() account: UpdateUserDto,
-  ) {
+  async update(@Param('id') id: string, @Body() account: UpdateUserDto) {
     return await this.userService.update(id, account);
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
+  async remove(@Param('id') id: string) {
     return await this.userService.remove(id);
   }
 }

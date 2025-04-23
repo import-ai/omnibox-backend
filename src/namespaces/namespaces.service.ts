@@ -1,6 +1,8 @@
+import each from 'src/utils/each';
 import { ArrayContains, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from 'src/namespaces/namespaces.entity';
+import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import {
   Injectable,
   ConflictException,
@@ -21,7 +23,7 @@ export class NamespacesService {
       },
     });
     if (namespaces.length <= 0) {
-      throw new NotFoundException('空间不存在');
+      throw new NotFoundException('Workspace not found');
     }
     return namespaces;
   }
@@ -33,7 +35,7 @@ export class NamespacesService {
       },
     });
     if (!namespace) {
-      throw new NotFoundException('空间不存在');
+      throw new NotFoundException('Workspace not found');
     }
     return namespace;
   }
@@ -46,12 +48,14 @@ export class NamespacesService {
     return await this.namespaceRepository.save(newNamespace);
   }
 
-  async update(id: string, name: string) {
+  async update(id: string, updateNamespace: UpdateNamespaceDto) {
     const existNamespace = await this.get(id);
     if (!existNamespace) {
-      throw new ConflictException('当前空间不存在');
+      throw new ConflictException('The current namespace does not exist');
     }
-    existNamespace.name = name;
+    each(updateNamespace, (value, key) => {
+      existNamespace[key] = value;
+    });
     return await this.namespaceRepository.update(id, existNamespace);
   }
 

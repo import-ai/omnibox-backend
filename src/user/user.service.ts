@@ -33,11 +33,11 @@ export class UserService {
     });
 
     if (existingUser) {
-      throw new ConflictException('当前账户已存在');
+      throw new ConflictException('The account already exists');
     }
 
     if (account.password !== account.password_repeat) {
-      throw new ConflictException('两次密码不一致');
+      throw new ConflictException('Passwords do not match');
     }
 
     const hash = await bcrypt.hash(account.password, 10);
@@ -89,12 +89,12 @@ export class UserService {
     const existUser = await this.find(id);
 
     if (!existUser) {
-      throw new ConflictException('当前账户不存在');
+      throw new ConflictException('The account does not exist');
     }
 
     if (account.password && account.password_repeat) {
       if (account.password !== account.password_repeat) {
-        throw new ConflictException('两次密码不一致');
+        throw new ConflictException('Passwords do not match');
       }
       existUser.password = await bcrypt.hash(account.password, 10);
     }
@@ -110,7 +110,7 @@ export class UserService {
     const account = await this.find(id);
 
     if (!account) {
-      throw new ConflictException('当前账户不存在');
+      throw new ConflictException('The account does not exist');
     }
 
     const hash = await bcrypt.hash(password, 10);

@@ -10,6 +10,7 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { LocalStrategy } from 'src/auth/local.strategy';
 import { AuthController } from 'src/auth/auth.controller';
 import { ConfigService, ConfigModule } from '@nestjs/config';
+import { NamespacesModule } from 'src/namespaces/namespaces.module';
 
 @Module({
   exports: [AuthService],
@@ -27,6 +28,7 @@ import { ConfigService, ConfigModule } from '@nestjs/config';
     UserModule,
     MailModule,
     PassportModule,
+    NamespacesModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

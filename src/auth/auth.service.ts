@@ -1,6 +1,7 @@
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from 'src/mail/mail.service';
 import { UserService } from 'src/user/user.service';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
 import {
   Injectable,
   ForbiddenException,
@@ -15,12 +16,15 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly mailService: MailService,
+    private readonly namespaceService: NamespacesService,
   ) {}
 
   async verify(email: string, password: string): Promise<any> {
     const user = await this.userService.verify(email, password);
     if (!user) {
-      throw new ForbiddenException('未发现邮箱对应的帐户，请先注册');
+      throw new ForbiddenException(
+        'No account found for the provided email. Please register first.',
+      );
     }
     return {
       id: user.id,
@@ -47,10 +51,12 @@ export class AuthService {
   async register(url: string, email: string) {
     const account = await this.userService.findByEmail(email);
     if (account) {
-      throw new BadRequestException('当前邮箱已注册，请直接登录');
+      throw new BadRequestException(
+        'The email is already registered. Please log in directly.',
+      );
     }
     const token = this.jwtService.sign(
-      { email, sub: 0 },
+      { email, sub: 'register_user' },
       {
         expiresIn: '1h',
       },
@@ -58,7 +64,7 @@ export class AuthService {
     await this.mailService.sendRegisterEmail(email, `${url}?token=${token}`);
   }
 
-  async registerComfirm(
+  async registerConfirm(
     token: string,
     data: {
       username: string;
@@ -70,7 +76,9 @@ export class AuthService {
       const payload = this.jwtService.verify(token);
       const account = await this.userService.findByEmail(payload.email);
       if (account) {
-        throw new BadRequestException('当前邮箱已注册，请直接登录');
+        throw new BadRequestException(
+          'The email is already registered. Please log in directly.',
+        );
       }
       const user = await this.userService.create({
         email: payload.email,
@@ -78,6 +86,19 @@ export class AuthService {
         password: data.password,
         password_repeat: data.password_repeat,
       });
+
+      // Invited user
+      if (payload.role && payload.namespace) {
+        const namespace = await this.namespaceService.get(payload.namespace);
+        const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
+        if (namespace[field].includes(user.id)) {
+          return;
+        }
+        namespace[field].push(user.id);
+        await this.namespaceService.update(payload.namespace, {
+          [field]: namespace[field],
+        });
+      }
 
       return {
         id: user.id,
@@ -89,14 +110,14 @@ export class AuthService {
       };
     } catch (e) {
       console.log(e);
-      throw new UnauthorizedException('无效或过期的token');
+      throw new UnauthorizedException('Invalid or expired token.');
     }
   }
 
-  async requestPasswordReset(url: string, email: string): Promise<void> {
+  async password(url: string, email: string): Promise<void> {
     const user = await this.userService.findByEmail(email);
     if (!user) {
-      throw new NotFoundException('用户不存在');
+      throw new NotFoundException('User not found.');
     }
     const token = this.jwtService.sign(
       { email: user.email, sub: user.id },
@@ -104,7 +125,7 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
-    await this.mailService.sendPasswordResetEmail(
+    await this.mailService.sendPasswordEmail(
       user.email,
       `${url}?token=${token}`,
     );
@@ -116,18 +137,81 @@ export class AuthService {
     password_repeat: string,
   ): Promise<void> {
     if (password !== password_repeat) {
-      throw new BadRequestException('两次输入的密码不一致');
+      throw new BadRequestException('The passwords entered do not match.');
     }
     try {
       const payload = this.jwtService.verify(token);
       const user = await this.userService.find(payload.sub);
       if (!user) {
-        throw new NotFoundException('用户不存在');
+        throw new NotFoundException('User not found.');
       }
       await this.userService.updatePassword(user.id, password);
     } catch (e) {
       console.log(e);
-      throw new UnauthorizedException('无效或过期的token');
+      throw new UnauthorizedException('Invalid or expired token.');
+    }
+  }
+
+  async invite(
+    user_id: string,
+    email: string,
+    data: {
+      inviteUrl: string;
+      registerUrl: string;
+      namespace: string;
+      role: string;
+    },
+  ): Promise<void> {
+    const account = await this.userService.findByEmail(email);
+    if (account) {
+      const token = this.jwtService.sign(
+        {
+          email,
+          role: data.role,
+          sub: account.id,
+          namespace: data.namespace,
+        },
+        {
+          expiresIn: '1h',
+        },
+      );
+      await this.mailService.sendInviteEmail(
+        email,
+        `${data.inviteUrl}?user=${user_id}&namespace=${data.namespace}&token=${token}`,
+      );
+      return;
+    }
+    const token = this.jwtService.sign(
+      { role: data.role, email, sub: 'invite_user', namespace: data.namespace },
+      {
+        expiresIn: '1h',
+      },
+    );
+    await this.mailService.sendInviteEmail(
+      email,
+      `${data.registerUrl}?user=${user_id}&namespace=${data.namespace}&token=${token}`,
+    );
+  }
+
+  async inviteConfirm(token: string): Promise<void> {
+    try {
+      const payload = this.jwtService.verify(token);
+      const user = await this.userService.find(payload.sub);
+      if (!user) {
+        throw new NotFoundException('User not found.');
+      }
+      const namespace = await this.namespaceService.get(payload.namespace);
+      const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
+      if (namespace[field].includes(user.id)) {
+        return;
+      }
+      namespace[field].push(user.id);
+      await this.namespaceService.update(payload.namespace, {
+        [field]: namespace[field],
+      });
+    } catch (e) {
+      console.log(e);
+      throw new UnauthorizedException('Invalid or expired token.');
     }
   }
 }

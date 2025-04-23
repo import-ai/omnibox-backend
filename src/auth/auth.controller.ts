@@ -1,7 +1,7 @@
 import { AuthService } from 'src/auth/auth.service';
 import { LocalAuthGuard } from 'src/auth/local-auth.guard';
 import { Public } from 'src/auth/decorators/public.decorator';
-import { Controller, Request, Body, Post, UseGuards } from '@nestjs/common';
+import { Body, Post, Request, UseGuards, Controller } from '@nestjs/common';
 
 @Controller('api/v1')
 export class AuthController {
@@ -28,7 +28,7 @@ export class AuthController {
     @Body('password') password: string,
     @Body('password_repeat') password_repeat: string,
   ) {
-    return await this.authService.registerComfirm(token, {
+    return await this.authService.registerConfirm(token, {
       username,
       password,
       password_repeat,
@@ -36,25 +36,43 @@ export class AuthController {
   }
 
   @Public()
-  @Post('forgot-password')
-  async forgotPassword(
+  @Post('password')
+  async password(
     @Body('url') url: string,
     @Body('email') email: string,
   ): Promise<void> {
-    return await this.authService.requestPasswordReset(url, email);
+    return await this.authService.password(url, email);
   }
 
   @Public()
-  @Post('reset-password')
+  @Post('password-confirm')
   async resetPassword(
     @Body('token') token: string,
     @Body('password') password: string,
     @Body('password_repeat') password_repeat: string,
   ): Promise<void> {
-    return await this.authService.resetPassword(
-      token,
-      password,
-      password_repeat,
-    );
+    return this.authService.resetPassword(token, password, password_repeat);
+  }
+
+  @Post('invite')
+  async invite(
+    @Request() req,
+    @Body('inviteUrl') inviteUrl: string,
+    @Body('registerUrl') registerUrl: string,
+    @Body('namespace') namespace: string,
+    @Body('email') email: string,
+    @Body('role') role: string,
+  ) {
+    return await this.authService.invite(req.user.id, email, {
+      role,
+      inviteUrl,
+      registerUrl,
+      namespace,
+    });
+  }
+
+  @Post('invite-confirm')
+  async inviteComFirm(@Body('token') token: string) {
+    return await this.authService.inviteConfirm(token);
   }
 }

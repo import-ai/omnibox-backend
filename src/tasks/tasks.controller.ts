@@ -8,7 +8,10 @@ import {
   Param,
   Delete,
   Controller,
+  ParseIntPipe,
+  Req,
 } from '@nestjs/common';
+import { CollectRequestDto } from 'src/tasks/dto/collect-request.dto';
 
 @Controller('api/v1/tasks')
 export class TasksController {
@@ -17,6 +20,11 @@ export class TasksController {
   @Post()
   async createTask(@Body() data: Partial<Task>) {
     return await this.tasksService.create(data);
+  }
+
+  @Post('collect')
+  async collect(@Req() req, @Body() data: CollectRequestDto) {
+    return await this.tasksService.collect(req.user.id, data);
   }
 
   @Get()

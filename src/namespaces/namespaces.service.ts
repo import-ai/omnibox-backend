@@ -38,6 +38,13 @@ export class NamespacesService {
     return namespace;
   }
 
+  async findByName(name: string) {
+    return await this.namespaceRepository.findOne({
+      where: { name },
+      relations: ['user'],
+    });
+  }
+
   async create(userId: string, name: string) {
     const newNamespace = this.namespaceRepository.create({
       name,

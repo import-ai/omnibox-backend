@@ -7,10 +7,10 @@ import { Public } from 'src/auth/decorators/public.decorator';
 export class InternalTasksController {
   constructor(private readonly tasksService: TasksService) {}
 
+  @Public()
   @Post('/callback')
-  async handleTaskCallback(@Body() taskData: Partial<Task>) {
-    await this.tasksService.handleCallback(taskData);
-    return { detail: 'Task callback processed' };
+  async handleTaskCallback(@Body() task: Task) {
+    await this.tasksService.taskDoneCallback(task);
   }
 
   @Public()

@@ -1,7 +1,11 @@
 import { Repository } from 'typeorm';
 import { Task } from 'src/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
@@ -66,12 +70,19 @@ export class TasksService {
       throw new NotFoundException(`Task ${data.id} not found`);
     }
     // Calculate cost and wait (if timestamps are present)
-    let cost: number | null = null, wait: number | null = null;
+    let cost: number | null = null,
+      wait: number | null = null;
     if (data.endedAt && data.startedAt) {
-      cost = (new Date(data.endedAt).getTime() - new Date(data.startedAt).getTime()) / 1000;
+      cost =
+        (new Date(data.endedAt).getTime() -
+          new Date(data.startedAt).getTime()) /
+        1000;
     }
     if (data.startedAt && data.createdAt) {
-      wait = (new Date(data.startedAt).getTime() - new Date(data.createdAt).getTime()) / 1000;
+      wait =
+        (new Date(data.startedAt).getTime() -
+          new Date(data.createdAt).getTime()) /
+        1000;
     }
     // Update task fields
     task.endedAt = data.endedAt;
@@ -156,33 +167,31 @@ export class TasksService {
 
   async fetch(): Promise<Task | null> {
     const rawQuery = `
-      WITH running_tasks_sub_query AS (
-        SELECT namespace_id,
-               COUNT(id) AS running_count
-        FROM tasks
-        WHERE started_at IS NOT NULL
-          AND ended_at IS NULL
-          AND canceled_at IS NULL
-        GROUP BY namespace_id
-      ),
-      id_subquery AS (
-        SELECT tasks.id
-        FROM tasks
-                 LEFT OUTER JOIN running_tasks_sub_query
-                 ON tasks.namespace_id = running_tasks_sub_query.namespace_id
-                 LEFT OUTER JOIN namespaces
-                 ON tasks.namespace_id = namespaces.id
-        WHERE tasks.started_at IS NULL
-          AND tasks.canceled_at IS NULL
-          AND COALESCE(running_tasks_sub_query.running_count, 0) < COALESCE(namespaces.max_running_tasks, 0)
-        ORDER BY priority DESC,
-                 tasks.created_at
+      WITH running_tasks_sub_query AS (SELECT namespace_id,
+                                              COUNT(id) AS running_count
+                                       FROM tasks
+                                       WHERE started_at IS NOT NULL
+                                         AND ended_at IS NULL
+                                         AND canceled_at IS NULL
+                                       GROUP BY namespace_id),
+           id_subquery AS (SELECT tasks.id
+                           FROM tasks
+                                  LEFT OUTER JOIN running_tasks_sub_query
+                                                  ON tasks.namespace_id = running_tasks_sub_query.namespace_id
+                                  LEFT OUTER JOIN namespaces
+                                                  ON tasks.namespace_id = namespaces.id
+                           WHERE tasks.started_at IS NULL
+                             AND tasks.canceled_at IS NULL
+                             AND COALESCE(running_tasks_sub_query.running_count, 0) <
+                                 COALESCE(namespaces.max_running_tasks, 0)
+                           ORDER BY priority DESC,
+                                    tasks.created_at
         LIMIT 1
-      )
+        )
       SELECT *
       FROM tasks
       WHERE id IN (SELECT id FROM id_subquery)
-      FOR UPDATE SKIP LOCKED;
+        FOR UPDATE SKIP LOCKED;
     `;
 
     const queryResult = await this.taskRepository.query(rawQuery);

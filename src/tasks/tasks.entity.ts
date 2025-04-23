@@ -2,11 +2,10 @@ import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
 import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
-  // Index,
   Column,
   Entity,
-  ManyToOne,
   JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 

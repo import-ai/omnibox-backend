@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsNotEmpty } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
 import { SpaceType } from 'src/resources/resources.entity';
 
 export class CollectRequestDto {

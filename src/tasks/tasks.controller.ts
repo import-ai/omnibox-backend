@@ -1,14 +1,14 @@
 import { Task } from 'src/tasks/tasks.entity';
 import { TasksService } from 'src/tasks/tasks.service';
 import {
-  Post,
-  Get,
   Body,
-  Query,
-  Param,
-  Delete,
   Controller,
+  Delete,
+  Get,
+  Param,
   ParseIntPipe,
+  Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { CollectRequestDto } from 'src/tasks/dto/collect-request.dto';

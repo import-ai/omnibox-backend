@@ -1,4 +1,4 @@
-import { Repository, Like } from 'typeorm';
+import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable } from '@nestjs/common';
 import { Task } from 'src/tasks/tasks.entity';
@@ -11,11 +11,11 @@ export class WizardService {
   ) {}
 
   async index(resource: Resource) {
-    if (!(resource.resourceType !== "folder" && resource.content)) {
+    if (!(resource.resourceType !== 'folder' && resource.content)) {
       return;
     }
     await this.taskRepository.create({
-      function: "create_or_update_index",
+      function: 'create_or_update_index',
       input: {
         title: resource.name,
         content: resource.content,
@@ -33,7 +33,7 @@ export class WizardService {
 
   async deleteIndex(resource: Resource) {
     await this.taskRepository.create({
-      function: "delete_index",
+      function: 'delete_index',
       input: {
         resource_id: resource.id,
       },

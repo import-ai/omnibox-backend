@@ -1,6 +1,6 @@
 import { Task } from 'src/tasks/tasks.entity';
 import { TasksService } from 'src/tasks/tasks.service';
-import { Controller, Post, Get, Body } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('internal/api/v1/tasks')

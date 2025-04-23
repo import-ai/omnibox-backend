@@ -9,7 +9,11 @@ import { ResourcesModule } from 'src/resources/resources.module';
 
 @Module({
   providers: [TasksService],
-  imports: [NamespacesModule, TypeOrmModule.forFeature([Task]), ResourcesModule],
+  imports: [
+    NamespacesModule,
+    TypeOrmModule.forFeature([Task]),
+    ResourcesModule,
+  ],
   controllers: [TasksController, InternalTasksController],
 })
 export class TasksModule {}

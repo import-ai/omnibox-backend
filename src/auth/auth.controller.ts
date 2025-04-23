@@ -28,7 +28,7 @@ export class AuthController {
     @Body('password') password: string,
     @Body('password_repeat') password_repeat: string,
   ) {
-    return await this.authService.signUpComfirm(token, {
+    return await this.authService.signUpConfirm(token, {
       username,
       password,
       password_repeat,
@@ -45,7 +45,7 @@ export class AuthController {
   }
 
   @Public()
-  @Post('password-confirm')
+  @Post('password/confirm')
   async resetPassword(
     @Body('token') token: string,
     @Body('password') password: string,
@@ -71,7 +71,7 @@ export class AuthController {
     });
   }
 
-  @Post('invite-confirm')
+  @Post('invite/confirm')
   async inviteComFirm(@Body('token') token: string) {
     return await this.authService.inviteConfirm(token);
   }

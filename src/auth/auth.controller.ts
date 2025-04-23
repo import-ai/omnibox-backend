@@ -15,13 +15,13 @@ export class AuthController {
   }
 
   @Public()
-  @Post('signup')
+  @Post('sign-up')
   async signUp(@Body('url') url: string, @Body('email') email: string) {
     return await this.authService.signUp(url, email);
   }
 
   @Public()
-  @Post('signup/confirm')
+  @Post('sign-up/confirm')
   async signUpConfirm(
     @Body('token') token: string,
     @Body('username') username: string,

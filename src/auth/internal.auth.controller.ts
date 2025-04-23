@@ -8,7 +8,7 @@ export class InternalAuthController {
   constructor(private authService: AuthService) {}
 
   @Public()
-  @Post('signup')
+  @Post('sign-up')
   async signUp(@Body() createUserDto: CreateUserDto) {
     return await this.authService.signUpWithoutConfirm(createUserDto);
   }

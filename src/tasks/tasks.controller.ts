@@ -6,7 +6,6 @@ import {
   Delete,
   Get,
   Param,
-  ParseIntPipe,
   Post,
   Query,
   Req,
@@ -24,7 +23,7 @@ export class TasksController {
 
   @Post('collect')
   async collect(@Req() req, @Body() data: CollectRequestDto) {
-    return await this.tasksService.collect(req.user.id, data);
+    return await this.tasksService.collect(req.user, data);
   }
 
   @Get()

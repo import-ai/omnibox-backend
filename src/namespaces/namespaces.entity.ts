@@ -12,7 +12,7 @@ export class Namespace extends Base {
   @Column('int', { array: true, nullable: true, default: [] })
   collaborators: string[];
 
-  @Column('int', { array: true, default: [] })
+  @Column('text', { array: true, default: [] })
   owner_id: string[];
 
   @Column({ type: 'int', default: 1 })

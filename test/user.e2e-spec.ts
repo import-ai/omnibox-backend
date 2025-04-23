@@ -21,7 +21,7 @@ describe('UserController (e2e)', () => {
     await app.close();
   });
 
-  it('should register a new user', () => {
+  it('should sign up a new user', () => {
     return request(app.getHttpServer())
       .post('/api/v1/user')
       .send({

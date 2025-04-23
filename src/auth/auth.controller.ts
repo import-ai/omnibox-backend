@@ -15,20 +15,20 @@ export class AuthController {
   }
 
   @Public()
-  @Post('register')
-  async register(@Body('url') url: string, @Body('email') email: string) {
-    return await this.authService.register(url, email);
+  @Post('signup')
+  async signUp(@Body('url') url: string, @Body('email') email: string) {
+    return await this.authService.signUp(url, email);
   }
 
   @Public()
-  @Post('register-confirm')
-  async registerComFirm(
+  @Post('signup/confirm')
+  async signUpComFirm(
     @Body('token') token: string,
     @Body('username') username: string,
     @Body('password') password: string,
     @Body('password_repeat') password_repeat: string,
   ) {
-    return await this.authService.registerComfirm(token, {
+    return await this.authService.signUpComfirm(token, {
       username,
       password,
       password_repeat,
@@ -36,7 +36,7 @@ export class AuthController {
   }
 
   @Public()
-  @Post('forgot-password')
+  @Post('password/forgot')
   async forgotPassword(
     @Body('url') url: string,
     @Body('email') email: string,
@@ -45,7 +45,7 @@ export class AuthController {
   }
 
   @Public()
-  @Post('reset-password')
+  @Post('password/reset')
   async resetPassword(
     @Body('token') token: string,
     @Body('password') password: string,

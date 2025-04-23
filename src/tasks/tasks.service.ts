@@ -10,6 +10,8 @@ import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'src/tasks/dto/collect-request.dto';
+import { User } from 'src/user/user.entity';
+import { TaskCallbackDto } from './dto/task-callback.dto';
 
 @Injectable()
 export class TasksService {
@@ -25,7 +27,7 @@ export class TasksService {
     return await this.taskRepository.save(newTask);
   }
 
-  async collect(userId: number, data: CollectRequestDto) {
+  async collect(user: User, data: CollectRequestDto) {
     const { html, url, title, namespace, spaceType } = data;
     if (!namespace || !spaceType || !url || !html) {
       throw new BadRequestException('Missing required fields');
@@ -41,13 +43,13 @@ export class TasksService {
       namespace: ns.id,
       resourceType: 'link',
       spaceType,
-      parentId: 0,
+      parentId: "",
       tags: [],
       content: 'Processing...',
       attrs: { url },
     };
     // You may need to provide a userId, here assumed as 0 or fetch from context if available
-    const resource = await this.resourcesService.create(userId, resourceDto);
+    const resource = await this.resourcesService.create(user.id, resourceDto);
 
     // Add resourceId to payload
     const payload = { spaceType, namespace, resourceId: resource.id };
@@ -58,38 +60,29 @@ export class TasksService {
       input: { html, url, title },
       namespace: ns,
       payload,
-      // Add other fields as needed (user, etc.)
+      user
     });
     await this.taskRepository.save(task);
     return { taskId: task.id, resourceId: resource.id };
   }
 
-  async taskDoneCallback(data: Task) {
-    const task = await this.taskRepository.findOne({ where: { id: data.id } });
+  async taskDoneCallback(data: TaskCallbackDto) {
+    const task = await this.taskRepository.findOne({ where: { id: data.id }, relations: ['namespace'] });
     if (!task) {
       throw new NotFoundException(`Task ${data.id} not found`);
     }
-    // Calculate cost and wait (if timestamps are present)
-    let cost: number | null = null,
-      wait: number | null = null;
-    if (data.endedAt && data.startedAt) {
-      cost =
-        (new Date(data.endedAt).getTime() -
-          new Date(data.startedAt).getTime()) /
-        1000;
-    }
-    if (data.startedAt && data.createdAt) {
-      wait =
-        (new Date(data.startedAt).getTime() -
-          new Date(data.createdAt).getTime()) /
-        1000;
-    }
-    // Update task fields
-    task.endedAt = data.endedAt;
-    task.updatedAt = data.updatedAt;
+
+    const endedAt: Date = new Date(data.endedAt);
+
+    task.endedAt = endedAt;
     task.exception = data.exception;
     task.output = data.output;
     await this.taskRepository.save(task);
+
+    // Calculate cost and wait (if timestamps are present)
+    let cost: number = task.endedAt.getTime() - task.startedAt.getTime();
+    let wait: number = task.startedAt.getTime() - task.createdAt.getTime();
+    console.debug(`Task ${task.id} cost: ${cost}ms, wait: ${wait}ms`);
 
     // Delegate postprocess logic to a separate method
     const postprocessResult = await this.postprocess(task);
@@ -107,7 +100,9 @@ export class TasksService {
   }
 
   private async postprocessCollect(task: Task): Promise<Record<string, any>> {
-    if (!task.payload?.resourceId) return {};
+    if (!task.payload?.resourceId) {
+      throw new BadRequestException('Invalid task payload');
+    }
     const resourceId = task.payload.resourceId;
     if (task.exception) {
       // If there was an exception, update resource content with error
@@ -125,7 +120,7 @@ export class TasksService {
         content: markdown,
         attrs,
       });
-      return { resource_id: resourceId };
+      return { resourceId };
     }
     return {};
   }
@@ -200,6 +195,8 @@ export class TasksService {
       const task = this.taskRepository.create({
         ...(queryResult[0] as Task),
         startedAt: new Date(),
+        user: { id: queryResult[0].user_id },
+        namespace: { id: queryResult[0].namespace_id },
       });
       await this.taskRepository.save(task);
       return task;

@@ -1,4 +1,3 @@
-import { Task } from 'src/tasks/tasks.entity';
 import { TasksService } from 'src/tasks/tasks.service';
 import { Body, Controller, Get, Post, Res } from '@nestjs/common';
 import { Response } from 'express';
@@ -11,7 +10,9 @@ export class InternalTasksController {
 
   @Public()
   @Post('/callback')
-  async handleTaskCallback(@Body() taskCallback: TaskCallbackDto): Promise<Record<string, any>> {
+  async handleTaskCallback(
+    @Body() taskCallback: TaskCallbackDto,
+  ): Promise<Record<string, any>> {
     return await this.tasksService.taskDoneCallback(taskCallback);
   }
 
@@ -20,6 +21,6 @@ export class InternalTasksController {
   async fetchTask(@Res() res: Response) {
     const task = await this.tasksService.fetch();
     res.status(task ? 200 : 204).json(task);
-    return ;
+    return;
   }
 }

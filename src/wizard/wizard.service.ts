@@ -10,11 +10,11 @@ export class WizardService {
     @InjectRepository(Task) private taskRepository: Repository<Task>,
   ) {}
 
-  async index(resource: Resource) {
+  index(resource: Resource) {
     if (!(resource.resourceType !== 'folder' && resource.content)) {
       return;
     }
-    await this.taskRepository.create({
+    this.taskRepository.create({
       function: 'create_or_update_index',
       input: {
         title: resource.name,
@@ -31,8 +31,8 @@ export class WizardService {
     });
   }
 
-  async deleteIndex(resource: Resource) {
-    await this.taskRepository.create({
+  deleteIndex(resource: Resource) {
+    this.taskRepository.create({
       function: 'delete_index',
       input: {
         resource_id: resource.id,

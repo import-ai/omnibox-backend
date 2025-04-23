@@ -1,6 +1,5 @@
 import {
   IsEnum,
-  IsNumber,
   IsArray,
   IsObject,
   IsString,

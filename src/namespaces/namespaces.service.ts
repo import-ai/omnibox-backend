@@ -42,7 +42,7 @@ export class NamespacesService {
 
   async findByName(name: string) {
     return await this.namespaceRepository.findOne({
-      where: { name }
+      where: { name },
     });
   }
 

@@ -43,7 +43,7 @@ export class TasksService {
       namespace: ns.id,
       resourceType: 'link',
       spaceType,
-      parentId: "",
+      parentId: '',
       tags: [],
       content: 'Processing...',
       attrs: { url },
@@ -60,14 +60,17 @@ export class TasksService {
       input: { html, url, title },
       namespace: ns,
       payload,
-      user
+      user,
     });
     await this.taskRepository.save(task);
     return { taskId: task.id, resourceId: resource.id };
   }
 
   async taskDoneCallback(data: TaskCallbackDto) {
-    const task = await this.taskRepository.findOne({ where: { id: data.id }, relations: ['namespace'] });
+    const task = await this.taskRepository.findOne({
+      where: { id: data.id },
+      relations: ['namespace'],
+    });
     if (!task) {
       throw new NotFoundException(`Task ${data.id} not found`);
     }
@@ -80,8 +83,8 @@ export class TasksService {
     await this.taskRepository.save(task);
 
     // Calculate cost and wait (if timestamps are present)
-    let cost: number = task.endedAt.getTime() - task.startedAt.getTime();
-    let wait: number = task.startedAt.getTime() - task.createdAt.getTime();
+    const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
+    const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
     console.debug(`Task ${task.id} cost: ${cost}ms, wait: ${wait}ms`);
 
     // Delegate postprocess logic to a separate method

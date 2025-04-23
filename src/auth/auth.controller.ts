@@ -22,7 +22,7 @@ export class AuthController {
 
   @Public()
   @Post('signup/confirm')
-  async signUpComFirm(
+  async signUpConfirm(
     @Body('token') token: string,
     @Body('username') username: string,
     @Body('password') password: string,
@@ -72,7 +72,7 @@ export class AuthController {
   }
 
   @Post('invite/confirm')
-  async inviteComFirm(@Body('token') token: string) {
+  async inviteConfirm(@Body('token') token: string) {
     return await this.authService.inviteConfirm(token);
   }
 }

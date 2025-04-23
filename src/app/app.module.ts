@@ -27,7 +27,7 @@ import { TasksModule } from 'src/tasks/tasks.module';
       cache: true,
       isGlobal: true,
     }),
-    // CacheModule.signUpAsync({
+    // CacheModule.registerAsync({
     //   imports: [ConfigModule],
     //   inject: [ConfigService],
     //   useFactory: (config: ConfigService) => ({

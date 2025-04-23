@@ -9,9 +9,9 @@ export class Namespace extends Base {
   @Column({ length: 32, unique: true })
   name: string;
 
-  @Column('int', { array: true, nullable: true, default: [] })
+  @Column('uuid', { array: true, nullable: true, default: [] })
   collaborators: string[];
 
-  @Column('int', { array: true, default: [] })
+  @Column('uuid', { array: true, default: [] })
   owner_id: string[];
 }

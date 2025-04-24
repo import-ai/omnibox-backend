@@ -40,6 +40,12 @@ export class NamespacesService {
     return namespace;
   }
 
+  async findByName(name: string) {
+    return await this.namespaceRepository.findOne({
+      where: { name },
+    });
+  }
+
   async create(userId: string, name: string) {
     const newNamespace = this.namespaceRepository.create({
       name,

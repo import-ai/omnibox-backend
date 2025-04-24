@@ -1,13 +1,14 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, FindOptionsWhere, Repository } from 'typeorm';
+import { FindOptionsWhere, In, Repository } from 'typeorm';
 import { Resource } from 'src/resources/resources.entity';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
+import { Task } from 'src/tasks/tasks.entity';
 
 export interface IQuery {
   namespace: string;
@@ -22,6 +23,8 @@ export class ResourcesService {
   constructor(
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
+    @InjectRepository(Task)
+    private readonly taskRepository: Repository<Task>,
   ) {}
 
   async create(userId: string, data: CreateResourceDto) {
@@ -54,7 +57,7 @@ export class ResourcesService {
       ...data,
       user: { id: userId },
       namespace: { id: data.namespace },
-      parentId: parentResource ? parentResource.id : 0,
+      parentId: parentResource ? parentResource.id : '',
     });
 
     if (parentResource) {
@@ -63,7 +66,43 @@ export class ResourcesService {
       await this.resourceRepository.save(parentResourceRepo);
     }
 
-    return await this.resourceRepository.save(resource);
+    const savedResource = await this.resourceRepository.save(resource);
+    await this.index(savedResource);
+    return savedResource;
+  }
+
+  async index(resource: Resource) {
+    if (resource.resourceType === 'folder' || !resource.content) {
+      return;
+    }
+    const task = this.taskRepository.create({
+      function: 'create_or_update_index',
+      input: {
+        title: resource.name,
+        content: resource.content,
+        meta_info: {
+          user_id: resource.user.id,
+          space_type: resource.spaceType,
+          resource_id: resource.id,
+          parent_id: resource.parentId,
+        },
+      },
+      namespace: resource.namespace,
+      user: resource.user,
+    });
+    return await this.taskRepository.save(task);
+  }
+
+  async deleteIndex(resource: Resource) {
+    const task = this.taskRepository.create({
+      function: 'delete_index',
+      input: {
+        resource_id: resource.id,
+      },
+      namespace: resource.namespace,
+      user: resource.user,
+    });
+    return await this.taskRepository.save(task);
   }
 
   async getRoot(namespace: string, spaceType: string, userId: string) {
@@ -133,9 +172,10 @@ export class ResourcesService {
   }
 
   async update(id: string, data: UpdateResourceDto) {
+    console.debug({ id, data });
     const resource = await this.resourceRepository.findOne({
       where: { id, namespace: { id: data.namespace } },
-      relations: ['namespace'],
+      relations: ['namespace', 'user'],
     });
 
     if (!resource) {
@@ -147,7 +187,9 @@ export class ResourcesService {
       ...data,
       namespace: { id: data.namespace },
     });
-    return await this.resourceRepository.save(newResource);
+    const savedNewResource = await this.resourceRepository.save(newResource);
+    await this.index(savedNewResource);
+    return savedNewResource;
   }
 
   async deleteChildren(id: string) {
@@ -166,7 +208,7 @@ export class ResourcesService {
   }
 
   async delete(id: string) {
-    // 更新父级 childCount
+    // Update parent's childCount
     const resource = await this.get(id);
     const parent = await this.resourceRepository.findOne({
       where: {
@@ -178,9 +220,9 @@ export class ResourcesService {
       const parentResource = this.resourceRepository.create(parent);
       await this.resourceRepository.save(parentResource);
     }
-    // 删除自身
-    await this.resourceRepository.softDelete(id);
-    // 递归删除子级
-    await this.deleteChildren(id);
+    await this.resourceRepository.softDelete(id); // Delete itself
+    await this.deleteChildren(id); // Delete its children
+
+    await this.deleteIndex(resource);
   }
 }

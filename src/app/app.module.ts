@@ -11,6 +11,7 @@ import { UserRoleModule } from 'src/user-role/user-role.module';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 import { ResourcesModule } from 'src/resources/resources.module';
 import { TasksModule } from 'src/tasks/tasks.module';
+import { WizardModule } from 'src/wizard/wizard.module';
 
 @Module({
   controllers: [AppController],
@@ -23,6 +24,7 @@ import { TasksModule } from 'src/tasks/tasks.module';
     NamespacesModule,
     ResourcesModule,
     TasksModule,
+    WizardModule,
     ConfigModule.forRoot({
       cache: true,
       isGlobal: true,

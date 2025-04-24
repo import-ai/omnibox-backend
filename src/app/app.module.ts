@@ -44,7 +44,7 @@ import { NamespacesModule } from 'src/namespaces/namespaces.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         type: 'postgres',
-        host: config.get('OBB_DB_HOST', 'db'),
+        host: config.get('OBB_DB_HOST', 'postgres'),
         port: config.get('OBB_DB_PORT', 5432),
         database: config.get('OBB_DB_DATABASE', 'omnibox'),
         username: config.get('OBB_DB_USERNAME', 'omnibox'),

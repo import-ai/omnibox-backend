@@ -10,7 +10,7 @@ export class MailService {
       await this.mailerService.sendMail({
         to: email,
         subject: 'Continue completing account registration',
-        template: './sign-up',
+        template: 'sign-up',
         context: {
           resetUrl,
         },
@@ -26,7 +26,7 @@ export class MailService {
       await this.mailerService.sendMail({
         to: email,
         subject: 'Password Reset Request',
-        template: './password',
+        template: 'password',
         context: {
           resetUrl,
         },
@@ -42,7 +42,7 @@ export class MailService {
       await this.mailerService.sendMail({
         to: email,
         subject: 'Invite you to join the space',
-        template: './invite',
+        template: 'invite',
         context: {
           resetUrl,
         },

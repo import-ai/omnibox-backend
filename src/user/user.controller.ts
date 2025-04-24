@@ -24,8 +24,20 @@ export class UserController {
     return await this.userService.findAll(start, limit, search);
   }
 
+  @Get('users-by-ids')
+  async usersByIds(@Query('id') id: string) {
+    if (!id) {
+      return [];
+    }
+    const ids = id.split(',');
+    if (ids.length <= 0) {
+      return [];
+    }
+    return await this.userService.usersByIds(ids);
+  }
+
   @Get(':id')
-  async findOne(@Param('id') id: string) {
+  async get(@Param('id') id: string) {
     return await this.userService.find(id);
   }
 

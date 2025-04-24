@@ -1,6 +1,6 @@
 import * as bcrypt from 'bcrypt';
-import { Repository, Like } from 'typeorm';
 import { User } from 'src/user/user.entity';
+import { In, Repository, Like } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
@@ -69,6 +69,16 @@ export class UserService {
       list: data[0],
       total: data[1],
     };
+  }
+
+  async usersByIds(ids: Array<string>) {
+    if (ids.length <= 0) {
+      return [];
+    }
+    return await this.userRepository.find({
+      where: { id: In(ids) },
+      select: ['id', 'username', 'email'],
+    });
   }
 
   async find(id: string) {

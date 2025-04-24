@@ -54,6 +54,26 @@ export class NamespacesService {
     return await this.namespaceRepository.save(newNamespace);
   }
 
+  async disableUser(namespaceId: string, userId: string) {
+    const namespace = await this.get(namespaceId);
+    if (!namespace.collaborators.includes(userId)) {
+      return;
+    }
+    // todo: remove user from collaborators
+    return;
+  }
+
+  async removeUser(namespaceId: string, userId: string) {
+    const namespace = await this.get(namespaceId);
+    if (!namespace.collaborators.includes(userId)) {
+      return;
+    }
+    namespace.collaborators = namespace.collaborators.filter(
+      (collaborator) => collaborator !== userId,
+    );
+    await this.namespaceRepository.save(namespace);
+  }
+
   async update(id: string, updateNamespace: UpdateNamespaceDto) {
     const existNamespace = await this.get(id);
     if (!existNamespace) {

@@ -1,9 +1,33 @@
 # OmniBox Backend
 
-## Thought
+## Dev
 
-In one namespace, there are two types of root_parent_id, one is the root of the namespace, the other is the root of the user.
+### Docker
 
-## API
++ Watch & Debug mode
 
-`GET /api/v1/resources?namespace=<namespace>&space=`
+  ```shell
+  docker compose -f compose.yaml -f dev.yaml up
+  ```
+
++ Build mode
+
+  ```shell
+  docker compose -f compose.yaml -f build.yaml up --build
+  ```
+
+### locally
+
+```bash
+# Setup
+$ pnpm install
+
+# Development
+$ pnpm run start
+
+# Watch mode
+$ pnpm run start:dev
+
+# Production mode
+$ pnpm run start:prod
+```

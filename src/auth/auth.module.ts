@@ -10,11 +10,12 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { LocalStrategy } from 'src/auth/local.strategy';
 import { AuthController } from 'src/auth/auth.controller';
 import { ConfigService, ConfigModule } from '@nestjs/config';
+import { InternalAuthController } from 'src/auth/internal.auth.controller';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 
 @Module({
   exports: [AuthService],
-  controllers: [AuthController],
+  controllers: [AuthController, InternalAuthController],
   providers: [
     AuthService,
     JwtStrategy,

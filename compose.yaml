@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - '8000:9005'
+      - "8000:${PORT}"
     env_file:
       - .env
     depends_on:

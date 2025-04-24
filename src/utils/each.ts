@@ -1,6 +1,6 @@
 export default function each(
   value: any,
-  callback: (value: any, key: any) => void | boolean
+  callback: (value: any, key: any) => void | boolean,
 ) {
   if (!value) {
     return;

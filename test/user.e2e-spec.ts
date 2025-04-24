@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from './../src/app/app.module';
+import { AppModule } from '../src/app/app.module';
 
 describe('UserController (e2e)', () => {
   let token: string;
@@ -21,7 +21,7 @@ describe('UserController (e2e)', () => {
     await app.close();
   });
 
-  it('should register a new user', () => {
+  it('should sign up a new user', () => {
     return request(app.getHttpServer())
       .post('/api/v1/user')
       .send({

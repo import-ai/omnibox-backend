@@ -2,6 +2,7 @@ import { JwtService } from '@nestjs/jwt';
 import { MailService } from 'src/mail/mail.service';
 import { UserService } from 'src/user/user.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import {
   Injectable,
   ForbiddenException,
@@ -48,7 +49,23 @@ export class AuthService {
     };
   }
 
-  async register(url: string, email: string) {
+  async signUpWithoutConfirm(createUser: CreateUserDto) {
+    const account = await this.userService.findByEmail(createUser.email);
+    if (account) {
+      throw new BadRequestException('Email already registered');
+    }
+    const user = await this.userService.create(createUser);
+    return {
+      id: user.id,
+      username: user.username,
+      access_token: this.jwtService.sign({
+        sub: user.id,
+        email: user.email,
+      }),
+    };
+  }
+
+  async signUp(url: string, email: string) {
     const account = await this.userService.findByEmail(email);
     if (account) {
       throw new BadRequestException(
@@ -61,10 +78,10 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
-    await this.mailService.sendRegisterEmail(email, `${url}?token=${token}`);
+    await this.mailService.sendSignUpEmail(email, `${url}?token=${token}`);
   }
 
-  async registerConfirm(
+  async signUpConfirm(
     token: string,
     data: {
       username: string;

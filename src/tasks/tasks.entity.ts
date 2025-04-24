@@ -2,11 +2,10 @@ import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
 import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
-  // Index,
   Column,
   Entity,
-  ManyToOne,
   JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
@@ -23,7 +22,7 @@ export class Task extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ default: 0 })
+  @Column({ default: 5 })
   priority: number;
 
   @Column({ type: 'text' })
@@ -49,9 +48,6 @@ export class Task extends Base {
 
   @Column({ name: 'canceled_at', nullable: true })
   canceledAt: Date;
-
-  @Column({ name: 'concurrency_threshold', default: 1 })
-  concurrencyThreshold: number;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })

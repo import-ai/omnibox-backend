@@ -35,8 +35,8 @@ import { NamespacesModule } from 'src/namespaces/namespaces.module';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         global: true,
-        secret: config.get('JWT_SECRET'),
-        signOptions: { expiresIn: config.get('JWT_EXPIRE') },
+        secret: config.get('OBB_JWT_SECRET'),
+        signOptions: { expiresIn: config.get('OBB_JWT_EXPIRE') },
       }),
     }),
   ],

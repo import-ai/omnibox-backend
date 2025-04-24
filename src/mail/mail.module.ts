@@ -12,9 +12,9 @@ import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handleba
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        transport: config.get('MAIL_TRANSPORT'),
+        transport: config.get('OBB_MAIL_TRANSPORT'),
         defaults: {
-          from: config.get('MAIL_FROM'),
+          from: config.get('OBB_MAIL_FROM'),
         },
         template: {
           dir: __dirname + '/templates',

@@ -3,25 +3,30 @@ name: omnibox-backend-dev
 services:
   app:
     ports:
-      - "${PORT}:${PORT}"
+      - "${OBB_PORT}:${OBB_PORT}"
     env_file:
       - .env
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "-O-", "http://127.0.0.1:${OBB_PORT}/api/v1/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
   db:
     image: postgres:17-alpine
     ports:
-      - '${DB_PORT:-5432}:${DB_PORT:-5432}'
+      - '${OBB_DB_PORT:-5432}:${OBB_DB_PORT:-5432}'
     environment:
-      - POSTGRES_DB=${DB_DATABASE:-omnibox}
-      - POSTGRES_USER=${DB_USERNAME:-omnibox}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-omnibox}
-      - POSTGRES_PORT=${DB_PORT:-5432}
+      - POSTGRES_DB=${OBB_DB_DATABASE:-omnibox}
+      - POSTGRES_USER=${OBB_DB_USERNAME:-omnibox}
+      - POSTGRES_PASSWORD=${OBB_DB_PASSWORD:-omnibox}
+      - POSTGRES_PORT=${OBB_DB_PORT:-5432}
     volumes:
       - ${PWD}/.tmp/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE:-omnibox}", "-U", "${DB_USERNAME:-omnibox}", "-p", "${DB_PORT:-5432}"]
+      test: [ "CMD", "pg_isready", "-q", "-d", "${OBB_DB_DATABASE:-omnibox}", "-U", "${OBB_DB_USERNAME:-omnibox}", "-p", "${OBB_DB_PORT:-5432}" ]
       interval: 5s
       timeout: 3s
       retries: 5

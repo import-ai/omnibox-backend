@@ -4,12 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Task } from '../tasks/tasks.entity';
+import { Task } from 'src/tasks/tasks.entity';
 import { Repository } from 'typeorm';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
-import { CollectRequestDto } from './dto/collect-request.dto';
+import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { User } from 'src/user/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
 
@@ -17,7 +17,6 @@ abstract class Processor {
   abstract process(task: Task): Promise<Record<string, any>>;
 }
 
-@Injectable()
 class CollectProcessor extends Processor {
   constructor(private readonly resourcesService: ResourcesService) {
     super();

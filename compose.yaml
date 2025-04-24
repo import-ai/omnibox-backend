@@ -1,22 +1,14 @@
-# Do not use this file in production.
 name: omnibox-backend-dev
 
 services:
   app:
-    image: node:22
     ports:
       - "${PORT}:${PORT}"
     env_file:
       - .env
-    working_dir: /app
-    volumes:
-      - ${PWD}:/app
-      - ${PWD}/.tmp/node_modules:/app/node_modules
-    command: ["sh", "-c", "npm install && npm run start:debug"]
     depends_on:
       db:
         condition: service_healthy
-
   db:
     image: postgres:17-alpine
     ports:
@@ -33,13 +25,3 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-
-  pgadmin:
-    image: dpage/pgadmin4
-    ports:
-      - '8888:80'
-    environment:
-      PGADMIN_DEFAULT_EMAIL: user-name@domain-name.com
-      PGADMIN_DEFAULT_PASSWORD: strong-password
-    volumes:
-      - ${PWD}/.tmp/pgadmin:/var/lib/pgadmin

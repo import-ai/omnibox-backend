@@ -14,7 +14,7 @@ async function bootstrap() {
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
   const configService = app.get(ConfigService);
-  await app.listen(parseInt(configService.get('OBB_PORT', '3000')));
+  await app.listen(parseInt(configService.get('OBB_PORT', '8000')));
 }
 
 bootstrap().catch(console.error);

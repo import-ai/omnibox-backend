@@ -1,10 +1,18 @@
+# Do not use this file in production.
+name: omnibox-backend-dev
+
 services:
   app:
-    build: .
+    image: node:22
     ports:
-      - "8000:${PORT}"
+      - "${PORT}:${PORT}"
     env_file:
       - .env
+    working_dir: /app
+    volumes:
+      - ${PWD}:/app
+      - ${PWD}/.tmp/node_modules:/app/node_modules
+    command: ["sh", "-c", "npm install && npm run start:debug"]
     depends_on:
       db:
         condition: service_healthy
@@ -12,17 +20,18 @@ services:
   db:
     image: postgres:17-alpine
     ports:
-      - '5432:5432'
+      - '${DB_PORT:-5432}:${DB_PORT:-5432}'
     environment:
-      - POSTGRES_DB=${DB_DATABASE}
-      - POSTGRES_USER=${DB_USERNAME}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_DATABASE:-omnibox}
+      - POSTGRES_USER=${DB_USERNAME:-omnibox}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-omnibox}
+      - POSTGRES_PORT=${DB_PORT:-5432}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${PWD}/.tmp/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE}", "-U", "${DB_USERNAME}"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE:-omnibox}", "-U", "${DB_USERNAME:-omnibox}", "-p", "${DB_PORT:-5432}"]
+      interval: 5s
+      timeout: 3s
       retries: 5
 
   pgadmin:
@@ -33,15 +42,4 @@ services:
       PGADMIN_DEFAULT_EMAIL: user-name@domain-name.com
       PGADMIN_DEFAULT_PASSWORD: strong-password
     volumes:
-      - pgadmin-data:/var/lib/pgadmin
-
-  # redis:
-  #   image: redis:7-alpine
-  #   command: redis-server --save 60 1 --loglevel warning
-  #   volumes:
-  #     - redis_data:/data
-
-volumes:
-  pgadmin-data:
-  postgres_data:
-  # redis_data:
+      - ${PWD}/.tmp/pgadmin:/var/lib/pgadmin

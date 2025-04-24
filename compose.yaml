@@ -3,18 +3,18 @@ name: omnibox-backend-dev
 services:
   app:
     ports:
-      - "${OBB_PORT}:${OBB_PORT}"
+      - "${OBB_PORT:-3000}:${OBB_PORT:-3000}"
     env_file:
       - .env
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "wget", "-q", "-O-", "http://127.0.0.1:${OBB_PORT}/api/v1/health" ]
+      test: [ "CMD", "wget", "-q", "-O-", "http://127.0.0.1:${OBB_PORT:-3000}/api/v1/health" ]
       interval: 5s
       timeout: 3s
       retries: 5
-  db:
+  postgres:
     image: postgres:17-alpine
     ports:
       - '${OBB_DB_PORT:-5432}:${OBB_DB_PORT:-5432}'

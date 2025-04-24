@@ -72,7 +72,7 @@ export class ResourcesService {
   }
 
   async index(resource: Resource) {
-    if (!(resource.resourceType !== 'folder' && resource.content)) {
+    if (resource.resourceType === 'folder' || !resource.content) {
       return;
     }
     const task = this.taskRepository.create({

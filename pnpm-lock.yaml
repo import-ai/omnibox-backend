@@ -3524,8 +3524,8 @@ packages:
   parse5-htmlparser2-tree-adapter@7.1.0:
     resolution: {integrity: sha512-ruw5xyKs6lrpo9x9rCZqZZnIUntICjQAd0Wsmp396Ul9lN/h+ifgVV1x1gZHi8euej6wTfpqX8j+BFQxF0NS/g==}
 
-  parse5@7.3.0:
-    resolution: {integrity: sha512-IInvU7fabl34qmi9gY8XOVxhYyMyuH2xUNpb2q8/Y+7552KlejkRvqvD19nMoUW/uQGGbqNpA6Tufu5FL5BZgw==}
+  parse5@7.2.1:
+    resolution: {integrity: sha512-BuBYQYlv1ckiPdQi/ohiivi9Sagc9JG+Ozs0r7b/0iK3sKmrb0b9FdWdBbOdx6hBCM/F9Ir82ofnBhtZOjCRPQ==}
 
   parseley@0.12.1:
     resolution: {integrity: sha512-e6qHKe3a9HWr0oMRVDTRhKce+bRO8VGQR3NyVwcjwrbhMmFCX9KszEV35+rn4AdilFAq9VPxP/Fe1wC9Qjd2lw==}
@@ -5347,27 +5347,7 @@ snapshots:
       '@napi-rs/nice-win32-x64-msvc': 1.0.1
     optional: true
 
-  '@nestjs-modules/mailer@2.0.2(@nestjs/common@11.0.13(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.13)(nodemailer@6.10.1)':
-    dependencies:
-      '@css-inline/css-inline': 0.14.1
-      '@nestjs/common': 11.0.13(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs/core': 11.0.13(@nestjs/common@11.0.13(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.0.13)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      glob: 10.3.12
-      nodemailer: 6.10.1
-    optionalDependencies:
-      '@types/ejs': 3.1.5
-      '@types/mjml': 4.7.4
-      '@types/pug': 2.0.10
-      ejs: 3.1.10
-      handlebars: 4.7.8
-      liquidjs: 10.21.0
-      mjml: 4.15.3
-      preview-email: 3.1.0
-      pug: 3.0.3
-    transitivePeerDependencies:
-      - encoding
-
-  '@nestjs/cache-manager@3.0.1(@nestjs/common@11.0.13(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.13)(cache-manager@6.4.2)(keyv@5.3.2)(rxjs@7.8.2)':
+  '@nestjs-modules/mailer@2.0.2(@nestjs/common@11.0.13(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.0.13)(nodemailer@6.10.1)':
     dependencies:
       '@css-inline/css-inline': 0.14.1
       '@nestjs/common': 11.0.13(class-transformer@0.5.1)(class-validator@0.14.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)

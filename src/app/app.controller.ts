@@ -1,6 +1,11 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
+import { Public } from 'src/auth/decorators/public.decorator';
 
-@Controller()
+@Controller('api/v1/health')
 export class AppController {
-  constructor() {}
+  @Public()
+  @Get()
+  healthCheck() {
+    return '';
+  }
 }

@@ -7,16 +7,16 @@
 + Watch & Debug mode
 
   ```shell
-  docker compose -f compose.yaml -f dev.yaml up
+  docker compose -f compose.yaml -f dev.yaml up -d
   ```
 
 + Build mode
 
   ```shell
-  docker compose -f compose.yaml -f build.yaml up --build
+  docker compose -f compose.yaml -f build.yaml up -d --build
   ```
 
-### locally
+### Locally
 
 ```bash
 # Setup

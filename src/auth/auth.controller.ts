@@ -37,10 +37,7 @@ export class AuthController {
 
   @Public()
   @Post('password')
-  async password(
-    @Body('url') url: string,
-    @Body('email') email: string,
-  ): Promise<void> {
+  async password(@Body('url') url: string, @Body('email') email: string) {
     return await this.authService.password(url, email);
   }
 
@@ -50,7 +47,7 @@ export class AuthController {
     @Body('token') token: string,
     @Body('password') password: string,
     @Body('password_repeat') password_repeat: string,
-  ): Promise<void> {
+  ) {
     return this.authService.resetPassword(token, password, password_repeat);
   }
 

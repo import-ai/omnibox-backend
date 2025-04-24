@@ -61,7 +61,9 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
-    await this.mailService.sendRegisterEmail(email, `${url}?token=${token}`);
+    const mailSendUri = `${url}?token=${token}`;
+    await this.mailService.sendRegisterEmail(email, mailSendUri);
+    // return { url: mailSendUri };
   }
 
   async registerConfirm(
@@ -114,7 +116,7 @@ export class AuthService {
     }
   }
 
-  async password(url: string, email: string): Promise<void> {
+  async password(url: string, email: string) {
     const user = await this.userService.findByEmail(email);
     if (!user) {
       throw new NotFoundException('User not found.');
@@ -125,10 +127,9 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
-    await this.mailService.sendPasswordEmail(
-      user.email,
-      `${url}?token=${token}`,
-    );
+    const mailSendUri = `${url}?token=${token}`;
+    await this.mailService.sendPasswordEmail(user.email, mailSendUri);
+    // return { url: mailSendUri };
   }
 
   async resetPassword(
@@ -161,7 +162,7 @@ export class AuthService {
       namespace: string;
       role: string;
     },
-  ): Promise<void> {
+  ) {
     const account = await this.userService.findByEmail(email);
     if (account) {
       const token = this.jwtService.sign(
@@ -187,10 +188,9 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
-    await this.mailService.sendInviteEmail(
-      email,
-      `${data.registerUrl}?user=${user_id}&namespace=${data.namespace}&token=${token}`,
-    );
+    const mailSendUri = `${data.registerUrl}?user=${user_id}&namespace=${data.namespace}&token=${token}`;
+    await this.mailService.sendInviteEmail(email, mailSendUri);
+    // return { url: mailSendUri };
   }
 
   async inviteConfirm(token: string): Promise<void> {

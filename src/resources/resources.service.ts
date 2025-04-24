@@ -54,7 +54,7 @@ export class ResourcesService {
       ...data,
       user: { id: userId },
       namespace: { id: data.namespace },
-      parentId: parentResource ? parentResource.id : 0,
+      parentId: parentResource ? parentResource.id : '0',
     });
 
     if (parentResource) {
@@ -68,7 +68,7 @@ export class ResourcesService {
 
   async getRoot(namespace: string, spaceType: string, userId: string) {
     const where: FindOptionsWhere<Resource> = {
-      parentId: '',
+      parentId: '0',
       spaceType: spaceType,
       namespace: { id: namespace },
     };
@@ -106,7 +106,7 @@ export class ResourcesService {
     if (parentId) {
       where.parentId = parentId;
     } else {
-      where.parentId = '';
+      where.parentId = '0';
     }
 
     if (tags) {
@@ -135,7 +135,7 @@ export class ResourcesService {
   async update(id: string, data: UpdateResourceDto) {
     const resource = await this.resourceRepository.findOne({
       where: { id, namespace: { id: data.namespace } },
-      relations: ['namespace'],
+      relations: ['user', 'namespace'],
     });
 
     if (!resource) {

@@ -19,9 +19,8 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ['CMD', 'pg_isready', '-q', '-d', 'omnibox', '-U', 'omnibox']
+      test: ["CMD", "pg_isready", "-q", "-d", "${DB_DATABASE}", "-U", "${DB_USERNAME}"]
       interval: 30s
       timeout: 10s
       retries: 5

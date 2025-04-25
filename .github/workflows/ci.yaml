@@ -54,7 +54,12 @@ jobs:
             linux/amd64
             linux/arm64
 
-      - name: Webhook
+      - name: DEV Webhook
         if: github.event_name == 'push'
         run: |
-          curl "${{ secrets.DEV_WEBHOOK_URL }}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
+          curl "${{ secrets.DEV_WEBHOOK_URL }}/dev" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
+
+      - name: PR Webhook
+        if: github.event_name == 'pull_request'
+        run: |
+          curl "${{ secrets.DEV_WEBHOOK_URL }}/pr?module=backend&pr=pr-${{ github.event.number }}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"

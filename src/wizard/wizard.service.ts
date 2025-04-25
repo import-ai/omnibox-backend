@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  MessageEvent,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +13,9 @@ import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { User } from 'src/user/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
+import { Observable, Subscriber } from 'rxjs';
+
+const wizardBaseUrl: string = 'http://localhost:8001';
 
 abstract class Processor {
   abstract process(task: Task): Promise<Record<string, any>>;
@@ -175,5 +179,50 @@ export class WizardService {
     }
 
     return null;
+  }
+
+  async fetchAndStream(
+    subscriber: Subscriber<MessageEvent>,
+    body: Record<string, any>,
+  ) {
+    const response = await fetch(`${wizardBaseUrl}/api/v1/grimoire/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      throw Error('Failed to fetch');
+    }
+    if (!response.body) {
+      throw Error('No response body');
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer: string = '';
+    let i: number = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const sseResponse = decoder.decode(value);
+      buffer += sseResponse;
+      const chunks = buffer.split('\n\n');
+      while (i < chunks.length - 1) {
+        const chunk = chunks[i];
+        if (chunk.startsWith('data:')) {
+          const output = chunk.slice(5).trim();
+          subscriber.next({ data: output });
+        }
+        i++;
+      }
+    }
+    subscriber.complete();
+  }
+
+  chat(body: Record<string, any>): Observable<MessageEvent> {
+    return new Observable<MessageEvent>((subscriber) => {
+      this.fetchAndStream(subscriber, body).catch((err) =>
+        subscriber.error(err),
+      );
+    });
   }
 }

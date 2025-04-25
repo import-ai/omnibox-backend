@@ -14,7 +14,8 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Docker meta
         id: meta
@@ -46,8 +47,14 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: |
             linux/amd64
             linux/arm64
+
+      - name: Webhook
+        if: github.event_name == 'push'
+        run: |
+          curl "${{ secrets.DEV_WEBHOOK_URL }}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"

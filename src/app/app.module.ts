@@ -16,6 +16,10 @@ import { NamespacesModule } from 'src/namespaces/namespaces.module';
 @Module({
   controllers: [AppController],
   imports: [
+    ConfigModule.forRoot({
+      cache: true,
+      isGlobal: true,
+    }),
     MailModule,
     AuthModule,
     UserModule,
@@ -25,10 +29,6 @@ import { NamespacesModule } from 'src/namespaces/namespaces.module';
     ResourcesModule,
     TasksModule,
     WizardModule,
-    ConfigModule.forRoot({
-      cache: true,
-      isGlobal: true,
-    }),
     // CacheModule.registerAsync({
     //   imports: [ConfigModule],
     //   inject: [ConfigService],

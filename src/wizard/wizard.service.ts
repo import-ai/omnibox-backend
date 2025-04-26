@@ -14,8 +14,7 @@ import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { User } from 'src/user/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
 import { Observable, Subscriber } from 'rxjs';
-
-const wizardBaseUrl: string = 'http://localhost:8001';
+import { ConfigService } from '@nestjs/config';
 
 abstract class Processor {
   abstract process(task: Task): Promise<Record<string, any>>;
@@ -54,15 +53,22 @@ class CollectProcessor extends Processor {
 @Injectable()
 export class WizardService {
   private readonly processors: Record<string, Processor>;
+  private readonly wizardBaseUrl: string;
 
   constructor(
     @InjectRepository(Task) private taskRepository: Repository<Task>,
     private readonly namespacesService: NamespacesService,
     private readonly resourcesService: ResourcesService,
+    private readonly configService: ConfigService,
   ) {
     this.processors = {
       collect: new CollectProcessor(resourcesService),
     };
+    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
+    if (!baseUrl) {
+      throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
+    }
+    this.wizardBaseUrl = baseUrl;
   }
 
   async create(partialTask: Partial<Task>) {
@@ -185,11 +191,14 @@ export class WizardService {
     subscriber: Subscriber<MessageEvent>,
     body: Record<string, any>,
   ) {
-    const response = await fetch(`${wizardBaseUrl}/api/v1/grimoire/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const response = await fetch(
+      `${this.wizardBaseUrl}/api/v1/grimoire/stream`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    );
     if (!response.ok) {
       throw Error('Failed to fetch');
     }

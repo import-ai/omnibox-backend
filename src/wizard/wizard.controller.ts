@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req } from '@nestjs/common';
+import { Body, Controller, Post, Req, Sse } from '@nestjs/common';
 import { WizardService } from 'src/wizard/wizard.service';
 import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 
@@ -9,5 +9,11 @@ export class WizardController {
   @Post('collect')
   async collect(@Req() req, @Body() data: CollectRequestDto) {
     return await this.wizardService.collect(req.user, data);
+  }
+
+  @Post('chat/stream')
+  @Sse()
+  chat(@Body() body: Record<string, any>) {
+    return this.wizardService.chat(body);
   }
 }

@@ -2,15 +2,15 @@ import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
-  Req,
-  Get,
-  Post,
   Body,
-  Query,
+  Controller,
+  Delete,
+  Get,
   Param,
   Patch,
-  Delete,
-  Controller,
+  Post,
+  Query,
+  Req,
 } from '@nestjs/common';
 
 @Controller('api/v1/resources')
@@ -19,7 +19,7 @@ export class ResourcesController {
 
   @Post()
   async create(@Req() req, @Body() data: CreateResourceDto) {
-    return await this.resourcesService.create(req.user.id, data);
+    return await this.resourcesService.create(req.user, data);
   }
 
   @Get('root')
@@ -58,12 +58,16 @@ export class ResourcesController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() data: UpdateResourceDto) {
-    return await this.resourcesService.update(id, data);
+  async update(
+    @Req() req,
+    @Param('id') id: string,
+    @Body() data: UpdateResourceDto,
+  ) {
+    return await this.resourcesService.update(req.user, id, data);
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return await this.resourcesService.delete(id);
+  async delete(@Req() req, @Param('id') id: string) {
+    return await this.resourcesService.delete(req.user, id);
   }
 }

@@ -31,14 +31,14 @@ class CollectProcessor extends Processor {
     }
     const resourceId = task.payload.resourceId;
     if (task.exception) {
-      await this.resourcesService.update(resourceId, {
+      await this.resourcesService.update(task.user, resourceId, {
         namespace: task.namespace.id,
         content: task.exception.error,
       });
       return {};
     } else if (task.output) {
       const { markdown, title, ...attrs } = task.output || {};
-      await this.resourcesService.update(resourceId, {
+      await this.resourcesService.update(task.user, resourceId, {
         namespace: task.namespace.id,
         name: title,
         content: markdown,
@@ -97,7 +97,7 @@ export class WizardService {
       content: 'Processing...',
       attrs: { url },
     };
-    const resource = await this.resourcesService.create(user.id, resourceDto);
+    const resource = await this.resourcesService.create(user, resourceDto);
     console.debug({ resource });
 
     const payload = { spaceType, namespace, resourceId: resource.id };
@@ -115,7 +115,7 @@ export class WizardService {
   async taskDoneCallback(data: TaskCallbackDto) {
     const task = await this.taskRepository.findOne({
       where: { id: data.id },
-      relations: ['namespace'],
+      relations: ['namespace', 'user'],
     });
     if (!task) {
       throw new NotFoundException(`Task ${data.id} not found`);
@@ -145,30 +145,30 @@ export class WizardService {
 
   async fetch(): Promise<Task | null> {
     const rawQuery = `
-        WITH running_tasks_sub_query AS (SELECT namespace_id,
-                                                COUNT(id) AS running_count
-                                         FROM tasks
-                                         WHERE started_at IS NOT NULL
-                                           AND ended_at IS NULL
-                                           AND canceled_at IS NULL
-                                         GROUP BY namespace_id),
-             id_subquery AS (SELECT tasks.id
-                             FROM tasks
-                                      LEFT OUTER JOIN running_tasks_sub_query
-                                                      ON tasks.namespace_id = running_tasks_sub_query.namespace_id
-                                      LEFT OUTER JOIN namespaces
-                                                      ON tasks.namespace_id = namespaces.id
-                             WHERE tasks.started_at IS NULL
-                               AND tasks.canceled_at IS NULL
-                               AND COALESCE(running_tasks_sub_query.running_count, 0) <
-                                   COALESCE(namespaces.max_running_tasks, 0)
-                             ORDER BY priority DESC,
-                                      tasks.created_at
-                             LIMIT 1)
-        SELECT *
-        FROM tasks
-        WHERE id IN (SELECT id FROM id_subquery)
-            FOR UPDATE SKIP LOCKED;
+      WITH running_tasks_sub_query AS (SELECT namespace_id,
+                                              COUNT(id) AS running_count
+                                       FROM tasks
+                                       WHERE started_at IS NOT NULL
+                                         AND ended_at IS NULL
+                                         AND canceled_at IS NULL
+                                       GROUP BY namespace_id),
+           id_subquery AS (SELECT tasks.id
+                           FROM tasks
+                                  LEFT OUTER JOIN running_tasks_sub_query
+                                                  ON tasks.namespace_id = running_tasks_sub_query.namespace_id
+                                  LEFT OUTER JOIN namespaces
+                                                  ON tasks.namespace_id = namespaces.id
+                           WHERE tasks.started_at IS NULL
+                             AND tasks.canceled_at IS NULL
+                             AND COALESCE(running_tasks_sub_query.running_count, 0) <
+                                 COALESCE(namespaces.max_running_tasks, 0)
+                           ORDER BY priority DESC,
+                                    tasks.created_at
+        LIMIT 1)
+      SELECT *
+      FROM tasks
+      WHERE id IN (SELECT id FROM id_subquery)
+        FOR UPDATE SKIP LOCKED;
     `;
 
     const queryResult = await this.taskRepository.query(rawQuery);

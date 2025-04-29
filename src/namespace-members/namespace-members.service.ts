@@ -1,7 +1,9 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { NamespaceMember } from "./namespace-members.entity";
+import { Resource } from "src/resources/resources.entity";
+import { Namespace } from "src/namespaces/namespaces.entity";
 
 @Injectable()
 export class NamespaceMemberService {
@@ -10,21 +12,37 @@ export class NamespaceMemberService {
     private namespaceMemberRepository: Repository<NamespaceMember>,
   ) { }
 
-  async create(member: NamespaceMember) {
-    await this.namespaceMemberRepository.save(member);
+  async addMember(
+    namespaceId: string, userId: string, privateRootId: string, manager?: EntityManager,
+  ) {
+    const repo = manager ? manager.getRepository(NamespaceMember) : this.namespaceMemberRepository;
+    await repo.save(repo.create({
+      namespace: { id: namespaceId },
+      user: { id: userId },
+      rootResource: { id: privateRootId },
+    }))
   }
 
-  async getRootResource(namespace: string, userId: string | null) {
+  async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
     const member = await this.namespaceMemberRepository.findOne({
       where: {
-        namespace: { id: namespace },
-        user: userId === null ? IsNull() : { id: userId },
+        user: { id: userId },
+        namespace: { id: namespaceId },
       },
-      relations: ['rootResource']
+      relations: ['rootResource'],
     });
-    if (!member) {
+    if (member === null) {
       throw new NotFoundException('Root resource not found.');
     }
-    return member.rootResource;
+    return member.rootResource
+  }
+
+  async listNamespaces(userId: string): Promise<NamespaceMember[]> {
+    return await this.namespaceMemberRepository.find({
+      where: {
+        user: { id: userId },
+      },
+      relations: ['namespace'],
+    });
   }
 }

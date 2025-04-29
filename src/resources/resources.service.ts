@@ -11,6 +11,8 @@ import {
 import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
 import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
+import { Namespace } from 'src/namespaces/namespaces.entity';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
 
 export interface IQuery {
   namespace: string;
@@ -25,6 +27,7 @@ export class ResourcesService {
     private readonly resourceRepository: Repository<Resource>,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
+    private readonly namespaceService: NamespacesService,
     private readonly namespaceMemberService: NamespaceMemberService,
     private readonly dataSource: DataSource,
   ) { }
@@ -99,16 +102,17 @@ export class ResourcesService {
   }
 
   async getRoot(namespace: string, spaceType: string, userId: string) {
-    const resource = await this.namespaceMemberService.getRootResource(
-      namespace,
-      spaceType === 'teamspace' ? null : userId,
-    );
+    let resource: Resource | null = null;
+    if (spaceType == 'teamspace') {
+      resource = await this.namespaceService.getTeamspaceRoot(namespace);
+    } else {
+      resource = await this.namespaceMemberService.getPrivateRoot(userId, namespace);
+    }
     const children = await this.query({
       namespace,
       parentId: resource.id,
     });
-
-    return { ...resource, children };
+    return { ...resource, spaceType, children };
   }
 
   async query({ namespace, parentId, tags }: IQuery) {

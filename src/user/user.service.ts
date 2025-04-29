@@ -1,6 +1,6 @@
 import * as bcrypt from 'bcrypt';
 import { User } from 'src/user/user.entity';
-import { In, Repository, Like } from 'typeorm';
+import { In, Repository, Like, EntityManager } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
@@ -11,7 +11,7 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-  ) {}
+  ) { }
 
   async verify(email: string, password: string) {
     const account = await this.userRepository.findOne({
@@ -27,8 +27,9 @@ export class UserService {
     return account;
   }
 
-  async create(account: CreateUserDto) {
-    const existingUser = await this.userRepository.findOne({
+  async create(account: CreateUserDto, manager?: EntityManager) {
+    const repo = manager ? manager.getRepository(User) : this.userRepository;
+    const existingUser = await repo.findOne({
       where: [{ username: account.username }, { email: account.email }],
     });
 
@@ -41,13 +42,13 @@ export class UserService {
     }
 
     const hash = await bcrypt.hash(account.password, 10);
-    const newUser = this.userRepository.create({
+    const newUser = repo.create({
       ...account,
       password: hash,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password, ...reset } = await this.userRepository.save(newUser);
+    const { password, ...reset } = await repo.save(newUser);
     return reset;
   }
 

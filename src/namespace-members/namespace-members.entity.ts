@@ -5,8 +5,7 @@ import { User } from 'src/user/user.entity';
 import { Entity, PrimaryGeneratedColumn, Index, ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('namespace_members')
-@Index(['user', 'namespace'], { unique: true, where: 'user_id IS NOT NULL AND deleted_at IS NULL' })
-@Index(['namespace'], { unique: true, where: 'user_id IS NULL AND deleted_at IS NULL' })
+@Index(['user', 'namespace'], { unique: true, where: 'deleted_at IS NULL' })
 export class NamespaceMember extends Base {
   @PrimaryGeneratedColumn()
   id: number;
@@ -15,9 +14,9 @@ export class NamespaceMember extends Base {
   @JoinColumn({ name: 'namespace_id' })
   namespace: Namespace;
 
-  @ManyToOne(() => User, { nullable: true })
+  @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
-  user: User | null;
+  user: User;
 
   @ManyToOne(() => Resource)
   @JoinColumn({ name: 'root_resource_id' })

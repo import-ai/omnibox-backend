@@ -1,8 +1,9 @@
 import { Base } from 'src/common/base.entity';
-import { Column, Entity, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { Resource } from 'src/resources/resources.entity';
+import { Column, Entity, PrimaryGeneratedColumn, Index, OneToOne, JoinColumn } from 'typeorm';
 
 @Entity('namespaces')
-@Index('uniq_namespace_name', ['name'], { unique: true, where: '"deleted_at" IS NULL' })
+@Index(['name'], { unique: true, where: '"deleted_at" IS NULL' })
 export class Namespace extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -18,4 +19,8 @@ export class Namespace extends Base {
 
   @Column({ type: 'int', default: 1 })
   max_running_tasks: number;
+
+  @OneToOne(() => Resource, { nullable: true })
+  @JoinColumn({ name: 'root_resource' })
+  rootResource: Resource | null;
 }

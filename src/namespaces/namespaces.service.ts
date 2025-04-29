@@ -17,7 +17,34 @@ export class NamespacesService {
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
     private dataSource: DataSource,
-  ) { }
+  ) {}
+
+  async getTeamspaceRoot(namespaceId: string): Promise<Resource> {
+    const namespace = await this.namespaceRepository.findOne({
+      where: {
+        id: namespaceId,
+      },
+      relations: ['rootResource'],
+    });
+    if (namespace === null) {
+      throw new NotFoundException('Workspace not found');
+    }
+    if (namespace.rootResource === null) {
+      throw new NotFoundException('Root resource not found');
+    }
+    return namespace.rootResource;
+  }
+
+  async setTeamspaceRoot(
+    namespaceId: string,
+    rootId: string,
+    manager?: EntityManager,
+  ) {
+    const repo = manager
+      ? manager.getRepository(Namespace)
+      : this.namespaceRepository;
+    await repo.update(namespaceId, { rootResource: { id: rootId } });
+  }
 
   async getByUser(user_id: string) {
     const namespaces = await this.namespaceRepository.find({
@@ -31,8 +58,11 @@ export class NamespacesService {
     return namespaces;
   }
 
-  async get(id: string) {
-    const namespace = await this.namespaceRepository.findOne({
+  async get(id: string, manager?: EntityManager) {
+    const repo = manager
+      ? manager.getRepository(Namespace)
+      : this.namespaceRepository;
+    const namespace = await repo.findOne({
       where: {
         id,
       },
@@ -43,35 +73,26 @@ export class NamespacesService {
     return namespace;
   }
 
-  async create(userId: string, name: string) {
-    return await this.dataSource.transaction(async manager => {
-      const namespace = await manager.save(manager.create(Namespace, {
-        name,
-        owner_id: [userId],
-      }));
-      const privateRoot = await manager.save(manager.create(Resource, {
-        resourceType: 'folder',
-        parent: null,
-        namespace: { id: namespace.id },
-        user: { id: userId },
-      }))
-      const publicRoot = await manager.save(manager.create(Resource, {
-        resourceType: 'folder',
-        parent: null,
-        namespace: { id: namespace.id },
-        user: { id: userId },
-      }))
-      manager.save(manager.create(NamespaceMember, {
-        namespace: { id: namespace.id },
-        user: { id: userId },
-        rootResource: { id: privateRoot.id },
-      }));
-      manager.save(manager.create(NamespaceMember, {
-        namespace: { id: namespace.id },
-        user: null,
-        rootResource: { id: publicRoot.id },
-      }));
+  async findByName(name: string) {
+    return await this.namespaceRepository.findOne({
+      where: { name },
     });
+  }
+
+  async create(
+    ownerId: string,
+    name: string,
+    manager?: EntityManager,
+  ): Promise<Namespace> {
+    const repo = manager
+      ? manager.getRepository(Namespace)
+      : this.namespaceRepository;
+    return await repo.save(
+      repo.create({
+        name,
+        owner_id: [ownerId],
+      }),
+    );
   }
 
   async disableUser(namespaceId: string, userId: string) {
@@ -94,19 +115,25 @@ export class NamespacesService {
     await this.namespaceRepository.save(namespace);
   }
 
-  async update(id: string, updateNamespace: UpdateNamespaceDto) {
-    const existNamespace = await this.get(id);
+  async update(
+    id: string,
+    updateNamespace: UpdateNamespaceDto,
+    manager?: EntityManager,
+  ) {
+    const repo = manager
+      ? manager.getRepository(Namespace)
+      : this.namespaceRepository;
+    const existNamespace = await this.get(id, manager);
     if (!existNamespace) {
       throw new ConflictException('The current namespace does not exist');
     }
     each(updateNamespace, (value, key) => {
       existNamespace[key] = value;
     });
-    return await this.namespaceRepository.update(id, existNamespace);
+    return await repo.update(id, existNamespace);
   }
 
   async delete(id: string) {
     await this.namespaceRepository.softDelete(id);
   }
 }
-

@@ -10,6 +10,12 @@ import {
   UnauthorizedException,
   NotFoundException,
 } from '@nestjs/common';
+import { DataSource, EntityManager } from 'typeorm';
+import { User } from 'src/user/user.entity';
+import { ResourcesService } from 'src/resources/resources.service';
+import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
+import { Resource } from 'src/resources/resources.entity';
+import { NamespaceMember } from 'src/namespace-members/namespace-members.entity';
 
 @Injectable()
 export class AuthService {
@@ -18,7 +24,10 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly mailService: MailService,
     private readonly namespaceService: NamespacesService,
-  ) {}
+    private readonly namespaceMemberService: NamespaceMemberService,
+    private readonly resourceService: ResourcesService,
+    private readonly dataSource: DataSource,
+  ) { }
 
   async verify(email: string, password: string): Promise<any> {
     const user = await this.userService.verify(email, password);
@@ -99,38 +108,61 @@ export class AuthService {
           'The email is already registered. Please log in directly.',
         );
       }
-      const user = await this.userService.create({
-        email: payload.email,
-        username: data.username,
-        password: data.password,
-        password_repeat: data.password_repeat,
-      });
+      return await this.dataSource.transaction(async manager => {
+        const user = await this.userService.create({
+          email: payload.email,
+          username: data.username,
+          password: data.password,
+          password_repeat: data.password_repeat,
+        }, manager);
 
-      // Invited user
-      if (payload.role && payload.namespace) {
-        const namespace = await this.namespaceService.get(payload.namespace);
-        const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
-        if (namespace[field].includes(user.id)) {
-          return;
+        // Invited user
+        if (payload.role && payload.namespace) {
+          const namespace = await this.namespaceService.get(payload.namespace, manager);
+          const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
+          if (namespace[field].includes(user.id)) {
+            return;
+          }
+          namespace[field].push(user.id);
+          await this.namespaceService.update(payload.namespace, {
+            [field]: namespace[field],
+          }, manager);
         }
-        namespace[field].push(user.id);
-        await this.namespaceService.update(payload.namespace, {
-          [field]: namespace[field],
-        });
-      }
 
-      return {
-        id: user.id,
-        username: user.username,
-        access_token: this.jwtService.sign({
-          sub: user.id,
-          email: user.email,
-        }),
-      };
+        await this.createPersonalSpace(user.id, user.username, manager);
+        return {
+          id: user.id,
+          username: user.username,
+          access_token: this.jwtService.sign({
+            sub: user.id,
+            email: user.email,
+          }),
+        };
+      })
     } catch (e) {
       console.log(e);
       throw new UnauthorizedException('Invalid or expired token.');
     }
+  }
+
+  async createPersonalSpace(userId: string, username: string, manager: EntityManager) {
+    const namespace = await this.namespaceService.create(
+      userId, `${username}'s Namespace`, manager,
+    );
+    const privateRoot = await manager.save(manager.create(Resource, {
+      resourceType: 'folder',
+      parent: null,
+      namespace: { id: namespace.id },
+      user: { id: userId },
+    }))
+    const publicRoot = await manager.save(manager.create(Resource, {
+      resourceType: 'folder',
+      parent: null,
+      namespace: { id: namespace.id },
+      user: { id: userId },
+    }))
+    await this.namespaceMemberService.addMember(namespace.id, userId, privateRoot.id, manager);
+    await this.namespaceService.setTeamspaceRoot(namespace.id, publicRoot.id, manager);
   }
 
   async password(url: string, email: string) {

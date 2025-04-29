@@ -8,29 +8,28 @@ import {
   ManyToOne,
   JoinColumn,
   PrimaryGeneratedColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('users')
+@Index('uniq_user_email', ['email'], { unique: true, where: '"deleted_at" IS NULL' })
+@Index('uniq_user_name', ['username'], { unique: true, where: '"deleted_at" IS NULL' })
 export class User extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({
-    length: 32,
-    unique: true,
+    nullable: true,
     comment: '用户名',
   })
   username: string;
 
   @Column({
-    length: 128,
-    unique: true,
     comment: '绑定邮箱',
   })
   email: string;
 
   @Column({
-    length: 128,
     comment: '加密后的密码',
   })
   password: string;

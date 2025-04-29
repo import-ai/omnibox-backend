@@ -1,12 +1,13 @@
 import { Base } from 'src/common/base.entity';
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, Index } from 'typeorm';
 
 @Entity('namespaces')
+@Index('uniq_namespace_name', ['name'], { unique: true, where: '"deleted_at" IS NULL' })
 export class Namespace extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ length: 32, unique: true })
+  @Column()
   name: string;
 
   @Column('uuid', { array: true, nullable: true, default: [] })

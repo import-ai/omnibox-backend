@@ -1,5 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
 import { Resource } from 'src/resources/resources.entity';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
@@ -10,13 +10,12 @@ import {
 } from '@nestjs/common';
 import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
+import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
 
 export interface IQuery {
   namespace: string;
-  spaceType: string;
   parentId: string;
   tags?: string;
-  userId: string;
 }
 
 @Injectable()
@@ -26,29 +25,23 @@ export class ResourcesService {
     private readonly resourceRepository: Repository<Resource>,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
-  ) {}
+    private readonly namespaceMemberService: NamespaceMemberService,
+    private readonly dataSource: DataSource,
+  ) { }
 
   async create(user: User, data: CreateResourceDto) {
-    let parentResource: any = null;
-    if (data.parentId) {
-      const where: FindOptionsWhere<Resource> = {
-        id: data.parentId,
-        namespace: { id: data.namespace },
-      };
-      if (data.spaceType === 'private') {
-        where.user = { id: user.id };
-      }
-      parentResource = await this.resourceRepository.findOne({
-        where,
-        relations: ['namespace'],
-      });
+    const where: FindOptionsWhere<Resource> = {
+      id: data.parentId,
+      namespace: { id: data.namespace },
+    };
+    const parentResource = await this.resourceRepository.findOne({
+      where,
+      relations: ['namespace'],
+    });
+    if (!parentResource) {
+      throw new BadRequestException("Parent resource not exists.")
     }
-
-    if (
-      parentResource &&
-      ((data.namespace && parentResource.namespace.id !== data.namespace) ||
-        parentResource.spaceType !== data.spaceType)
-    ) {
+    if (data.namespace && parentResource.namespace.id !== data.namespace) {
       throw new BadRequestException(
         "Parent resource's namespace & space must match the resource's.",
       );
@@ -58,7 +51,7 @@ export class ResourcesService {
       ...data,
       user: { id: user.id },
       namespace: { id: data.namespace },
-      parentId: parentResource ? parentResource.id : '0',
+      parent: { id: parentResource.id },
     });
 
     if (parentResource) {
@@ -83,9 +76,8 @@ export class ResourcesService {
         content: resource.content,
         meta_info: {
           user_id: resource.user.id,
-          space_type: resource.spaceType,
           resource_id: resource.id,
-          parent_id: resource.parentId,
+          parent_id: resource.parent,
         },
       },
       namespace: resource.namespace,
@@ -94,8 +86,8 @@ export class ResourcesService {
     return await this.taskRepository.save(task);
   }
 
-  async deleteIndex(user: User, resource: Resource) {
-    const task = this.taskRepository.create({
+  async deleteIndex(manager: EntityManager, user: User, resource: Resource) {
+    const task = manager.create(Task, {
       function: 'delete_index',
       input: {
         resource_id: resource.id,
@@ -103,52 +95,27 @@ export class ResourcesService {
       namespace: resource.namespace,
       user,
     });
-    return await this.taskRepository.save(task);
+    return await manager.save(task);
   }
 
   async getRoot(namespace: string, spaceType: string, userId: string) {
-    const where: FindOptionsWhere<Resource> = {
-      parentId: '0',
-      spaceType: spaceType,
-      namespace: { id: namespace },
-    };
-    if (spaceType === 'private') {
-      where.user = { id: userId };
-    }
-    const data = await this.resourceRepository.findOne({
-      where,
-      relations: ['namespace'],
-    });
-
-    if (!data) {
-      throw new NotFoundException('Root resource not found.');
-    }
-
-    const children = await this.query({
-      userId,
+    const resource = await this.namespaceMemberService.getRootResource(
       namespace,
-      spaceType,
-      parentId: data.id,
+      spaceType === 'teamspace' ? null : userId,
+    );
+    const children = await this.query({
+      namespace,
+      parentId: resource.id,
     });
 
-    return { ...data, children };
+    return { ...resource, children };
   }
 
-  async query({ namespace, spaceType, parentId, tags, userId }: IQuery) {
+  async query({ namespace, parentId, tags }: IQuery) {
     const where: FindOptionsWhere<Resource> = {
       namespace: { id: namespace },
-      spaceType: spaceType,
+      parent: { id: parentId },
     };
-    if (spaceType == 'private') {
-      where.user = { id: userId };
-    }
-
-    if (parentId) {
-      where.parentId = parentId;
-    } else {
-      where.parentId = '0';
-    }
-
     if (tags) {
       const tagsValue = tags.split(',');
       if (tagsValue.length > 0) {
@@ -193,39 +160,20 @@ export class ResourcesService {
     return savedNewResource;
   }
 
-  async deleteChildren(id: string) {
-    const resources = await this.resourceRepository.find({
-      where: {
-        parentId: id,
-      },
-    });
-    if (resources.length <= 0) {
-      return;
-    }
-    for (const node of resources) {
-      await this.resourceRepository.softDelete(node.id);
-      await this.deleteChildren(node.id);
-    }
-  }
-
   async delete(user: User, id: string) {
-    // Update parent's childCount
     const resource = await this.get(id);
-    if (resource.parentId !== '0') {
-      const parent = await this.resourceRepository.findOne({
-        where: {
-          id: resource.parentId,
-        },
-      });
-      if (parent) {
-        parent.childCount -= 1;
-        const parentResource = this.resourceRepository.create(parent);
-        await this.resourceRepository.save(parentResource);
-      }
+    if (resource.parent === null) {
+      throw new BadRequestException('Cannot delete root resource.');
     }
+    await this.dataSource.transaction(async manager => {
+      await updateChildCount(manager, resource.parent!.id, -1);
+      await manager.softDelete(Resource, id);
+      await this.deleteIndex(manager, user, resource);
+    });
     await this.resourceRepository.softDelete(id); // Delete itself
-    await this.deleteChildren(id); // Delete its children
-
-    await this.deleteIndex(user, resource);
   }
+}
+
+async function updateChildCount(manager: EntityManager, resourceId: string, delta: number) {
+  await manager.update(Resource, resourceId, { childCount: () => `childCount + ${delta}` });
 }

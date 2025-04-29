@@ -15,7 +15,7 @@ import {
 
 @Controller('api/v1/resources')
 export class ResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) {}
+  constructor(private readonly resourcesService: ResourcesService) { }
 
   @Post()
   async create(@Req() req, @Body() data: CreateResourceDto) {
@@ -38,17 +38,14 @@ export class ResourcesController {
   @Get('query')
   async query(
     @Query('namespace') namespace: string,
-    @Query('spaceType') spaceType: string,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
     @Req() req,
   ) {
     return await this.resourcesService.query({
       namespace,
-      spaceType,
       parentId,
       tags,
-      userId: req.user.id,
     });
   }
 

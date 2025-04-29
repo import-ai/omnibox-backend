@@ -6,7 +6,7 @@ import {
   IsOptional,
   IsNotEmpty,
 } from 'class-validator';
-import { SpaceType, ResourceType } from 'src/resources/resources.entity';
+import { ResourceType } from 'src/resources/resources.entity';
 
 export class CreateResourceDto {
   @IsString()
@@ -20,11 +20,7 @@ export class CreateResourceDto {
   @IsEnum(ResourceType)
   resourceType: string;
 
-  @IsEnum(SpaceType)
-  spaceType: string;
-
   @IsString()
-  @IsOptional()
   @IsNotEmpty()
   parentId?: string;
 

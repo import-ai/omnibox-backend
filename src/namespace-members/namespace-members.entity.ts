@@ -17,7 +17,7 @@ export class NamespaceMember extends Base {
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'user_id' })
-  user: User;
+  user: User | null;
 
   @ManyToOne(() => Resource)
   @JoinColumn({ name: 'root_resource_id' })

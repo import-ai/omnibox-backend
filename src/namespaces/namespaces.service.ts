@@ -1,5 +1,5 @@
 import each from 'src/utils/each';
-import { ArrayContains, Repository } from 'typeorm';
+import { ArrayContains, DataSource, EntityManager, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from 'src/namespaces/namespaces.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
@@ -8,13 +8,16 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
+import { Resource, ResourceType } from 'src/resources/resources.entity';
+import { NamespaceMember } from 'src/namespace-members/namespace-members.entity';
 
 @Injectable()
 export class NamespacesService {
   constructor(
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
-  ) {}
+    private dataSource: DataSource,
+  ) { }
 
   async getByUser(user_id: string) {
     const namespaces = await this.namespaceRepository.find({
@@ -41,11 +44,34 @@ export class NamespacesService {
   }
 
   async create(userId: string, name: string) {
-    const newNamespace = this.namespaceRepository.create({
-      name,
-      owner_id: [userId],
+    return await this.dataSource.transaction(async manager => {
+      const namespace = await manager.save(manager.create(Namespace, {
+        name,
+        owner_id: [userId],
+      }));
+      const privateRoot = await manager.save(manager.create(Resource, {
+        resourceType: 'folder',
+        parent: null,
+        namespace: { id: namespace.id },
+        user: { id: userId },
+      }))
+      const publicRoot = await manager.save(manager.create(Resource, {
+        resourceType: 'folder',
+        parent: null,
+        namespace: { id: namespace.id },
+        user: { id: userId },
+      }))
+      manager.save(manager.create(NamespaceMember, {
+        namespace: { id: namespace.id },
+        user: { id: userId },
+        rootResource: { id: privateRoot.id },
+      }));
+      manager.save(manager.create(NamespaceMember, {
+        namespace: { id: namespace.id },
+        user: null,
+        rootResource: { id: publicRoot.id },
+      }));
     });
-    return await this.namespaceRepository.save(newNamespace);
   }
 
   async disableUser(namespaceId: string, userId: string) {
@@ -83,3 +109,4 @@ export class NamespacesService {
     await this.namespaceRepository.softDelete(id);
   }
 }
+

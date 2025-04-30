@@ -92,8 +92,6 @@ export class WizardService {
       namespace: ns.id,
       resourceType: 'link',
       spaceType,
-      parentId: '',
-      tags: [],
       content: 'Processing...',
       attrs: { url },
     };

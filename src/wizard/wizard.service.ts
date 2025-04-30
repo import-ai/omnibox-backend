@@ -61,8 +61,11 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly configService: ConfigService,
   ) {
+    const collectProcessor = new CollectProcessor(resourcesService);
+
     this.processors = {
-      collect: new CollectProcessor(resourcesService),
+      collect: collectProcessor,
+      file_reader: collectProcessor,
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {

@@ -16,7 +16,7 @@ export class CollectRequestDto {
 
   @IsString()
   @IsNotEmpty()
-  namespace: string;
+  namespaceId: string;
 
   @IsEnum(SpaceType)
   @IsNotEmpty()

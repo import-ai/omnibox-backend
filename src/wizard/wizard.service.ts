@@ -77,35 +77,35 @@ export class WizardService {
   }
 
   async collect(user: User, data: CollectRequestDto) {
-    const { html, url, title, namespace, spaceType } = data;
-    if (!namespace || !spaceType || !url || !html) {
+    const { html, url, title, namespaceId, spaceType } = data;
+    if (!namespaceId || !spaceType || !url || !html) {
       throw new BadRequestException('Missing required fields');
     }
-    const ns = await this.namespacesService.findByName(namespace);
-    if (!ns) {
-      throw new NotFoundException('Namespace not found');
-    }
+    const namespace = await this.namespacesService.get(namespaceId);
 
-    // Actually create a resource using ResourcesService
+    const resourceRoot = await this.resourcesService.getRoot(
+      namespace.id,
+      spaceType,
+      user.id,
+    );
+
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespace: ns.id,
+      namespace: namespace.id,
       resourceType: 'link',
       spaceType,
-      parentId: '',
-      tags: [],
-      content: 'Processing...',
+      parentId: resourceRoot.id,
       attrs: { url },
     };
     const resource = await this.resourcesService.create(user, resourceDto);
     console.debug({ resource });
 
-    const payload = { spaceType, namespace, resourceId: resource.id };
+    const payload = { resourceId: resource.id };
 
     const task = await this.create({
       function: 'collect',
       input: { html, url, title },
-      namespace: ns,
+      namespace: namespace,
       payload,
       user,
     });

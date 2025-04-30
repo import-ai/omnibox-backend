@@ -38,42 +38,42 @@ export class ResourcesService {
       id: data.parentId,
       namespace: { id: data.namespace },
     };
-    const parentResource = await this.resourceRepository.findOne({
-      where,
-      relations: ['namespace'],
+    const savedResource = await this.dataSource.transaction(async manager => {
+      const repo = manager.getRepository(Resource);
+      const parentResource = await repo.findOne({
+        where,
+        relations: ['namespace'],
+      });
+      if (!parentResource) {
+        throw new BadRequestException("Parent resource not exists.")
+      }
+      if (data.namespace && parentResource.namespace.id !== data.namespace) {
+        throw new BadRequestException(
+          "Parent resource's namespace & space must match the resource's.",
+        );
+      }
+
+      const resource = repo.create({
+        ...data,
+        user: { id: user.id },
+        namespace: { id: data.namespace },
+        parentId: parentResource.id,
+      });
+      await updateChildCount(manager, parentResource.id, 1);
+
+      const savedResource = await repo.save(resource);
+      await this.index(user, savedResource, manager);
+      return savedResource;
     });
-    if (!parentResource) {
-      throw new BadRequestException("Parent resource not exists.")
-    }
-    if (data.namespace && parentResource.namespace.id !== data.namespace) {
-      throw new BadRequestException(
-        "Parent resource's namespace & space must match the resource's.",
-      );
-    }
-
-    const resource = this.resourceRepository.create({
-      ...data,
-      user: { id: user.id },
-      namespace: { id: data.namespace },
-      parentId: parentResource.id,
-    });
-
-    if (parentResource) {
-      parentResource.childCount += 1;
-      const parentResourceRepo = this.resourceRepository.create(parentResource);
-      await this.resourceRepository.save(parentResourceRepo);
-    }
-
-    const savedResource = await this.resourceRepository.save(resource);
-    await this.index(user, savedResource);
     return { ...savedResource, spaceType: await this.getSpaceType(savedResource) };
   }
 
-  async index(user: User, resource: Resource) {
+  async index(user: User, resource: Resource, manager?: EntityManager) {
     if (resource.resourceType === 'folder' || !resource.content) {
       return;
     }
-    const task = this.taskRepository.create({
+    const repo = manager ? manager.getRepository(Task) : this.taskRepository;
+    const task = repo.create({
       function: 'create_or_update_index',
       input: {
         title: resource.name,
@@ -87,7 +87,7 @@ export class ResourcesService {
       namespace: resource.namespace,
       user,
     });
-    return await this.taskRepository.save(task);
+    return await repo.save(task);
   }
 
   async deleteIndex(manager: EntityManager, user: User, resource: Resource) {

@@ -21,6 +21,9 @@ export class Namespace extends Base {
   max_running_tasks: number;
 
   @OneToOne(() => Resource, { nullable: true })
-  @JoinColumn({ name: 'root_resource' })
+  @JoinColumn({ name: 'root_resource_id' })
   rootResource: Resource | null;
+
+  @Column('uuid', { name: 'root_resource_id', nullable: true })
+  rootResourceId: string | null
 }

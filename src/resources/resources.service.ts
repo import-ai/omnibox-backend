@@ -1,6 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
-import { Resource } from 'src/resources/resources.entity';
+import { Resource, SpaceType } from 'src/resources/resources.entity';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
@@ -15,7 +15,8 @@ import { Namespace } from 'src/namespaces/namespaces.entity';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 
 export interface IQuery {
-  namespace: string;
+  namespaceId: string;
+  spaceType: SpaceType,
   parentId: string;
   tags?: string;
 }
@@ -54,7 +55,7 @@ export class ResourcesService {
       ...data,
       user: { id: user.id },
       namespace: { id: data.namespace },
-      parent: { id: parentResource.id },
+      parentId: parentResource.id,
     });
 
     if (parentResource) {
@@ -65,7 +66,7 @@ export class ResourcesService {
 
     const savedResource = await this.resourceRepository.save(resource);
     await this.index(user, savedResource);
-    return savedResource;
+    return { ...savedResource, spaceType: await this.getSpaceType(savedResource) };
   }
 
   async index(user: User, resource: Resource) {
@@ -80,7 +81,7 @@ export class ResourcesService {
         meta_info: {
           user_id: resource.user.id,
           resource_id: resource.id,
-          parent_id: resource.parent,
+          parent_id: resource.parentId,
         },
       },
       namespace: resource.namespace,
@@ -101,24 +102,25 @@ export class ResourcesService {
     return await manager.save(task);
   }
 
-  async getRoot(namespace: string, spaceType: string, userId: string) {
+  async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
     let resource: Resource | null = null;
-    if (spaceType == 'teamspace') {
+    if (spaceType === 'teamspace') {
       resource = await this.namespaceService.getTeamspaceRoot(namespace);
     } else {
       resource = await this.namespaceMemberService.getPrivateRoot(userId, namespace);
     }
     const children = await this.query({
-      namespace,
+      namespaceId: namespace,
+      spaceType,
       parentId: resource.id,
     });
-    return { ...resource, spaceType, children };
+    return { ...resource, parentId: '0', spaceType, children };
   }
 
-  async query({ namespace, parentId, tags }: IQuery) {
+  async query({ namespaceId, parentId, spaceType, tags }: IQuery) {
     const where: FindOptionsWhere<Resource> = {
-      namespace: { id: namespace },
-      parent: { id: parentId },
+      namespace: { id: namespaceId },
+      parentId,
     };
     if (tags) {
       const tagsValue = tags.split(',');
@@ -127,7 +129,15 @@ export class ResourcesService {
       }
     }
 
-    return this.resourceRepository.find({ where, relations: ['namespace'] });
+    const resources = await this.resourceRepository.find({ where, relations: ['namespace'] });
+    return resources.map((res) => { return { ...res, spaceType }; });
+  }
+
+  async getSpaceType(resource: Resource): Promise<SpaceType> {
+    while (resource.parentId !== null) {
+      resource = (await this.resourceRepository.findOne({ where: { id: resource.parentId }, relations: ['namespace'] }))!;
+    }
+    return resource.namespace.rootResourceId === resource.id ? SpaceType.TEAMSPACE : SpaceType.PRIVATE;
   }
 
   async get(id: string) {
@@ -140,7 +150,8 @@ export class ResourcesService {
     if (!resource) {
       throw new NotFoundException('Resource not found.');
     }
-    return resource;
+    const spaceType = await this.getSpaceType(resource);
+    return { ...resource, spaceType };
   }
 
   async update(user: User, id: string, data: UpdateResourceDto) {
@@ -161,16 +172,16 @@ export class ResourcesService {
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
     await this.index(user, savedNewResource);
-    return savedNewResource;
+    return { ...savedNewResource, spaceType: await this.getSpaceType(savedNewResource) };
   }
 
   async delete(user: User, id: string) {
     const resource = await this.get(id);
-    if (resource.parent === null) {
+    if (resource.parentId === null) {
       throw new BadRequestException('Cannot delete root resource.');
     }
     await this.dataSource.transaction(async manager => {
-      await updateChildCount(manager, resource.parent!.id, -1);
+      await updateChildCount(manager, resource.parentId!, -1);
       await manager.softDelete(Resource, id);
       await this.deleteIndex(manager, user, resource);
     });

@@ -32,9 +32,8 @@ export class Resource extends Base {
   @Column({ name: 'resource_type', type: 'enum', enum: ResourceType })
   resourceType: string;
 
-  @ManyToOne(() => Resource, { nullable: true })
-  @JoinColumn({ name: 'parent_id' })
-  parent: Resource | null;
+  @Column('uuid', { name: 'parent_id', nullable: true })
+  parentId: string | null;
 
   @Column('jsonb', { nullable: true })
   tags: string[];

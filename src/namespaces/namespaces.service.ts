@@ -4,8 +4,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from 'src/namespaces/namespaces.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import {
-  Injectable,
   ConflictException,
+  Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Resource } from 'src/resources/resources.entity';
@@ -61,12 +61,6 @@ export class NamespacesService {
       throw new NotFoundException('Workspace not found');
     }
     return namespace;
-  }
-
-  async findByName(name: string) {
-    return await this.namespaceRepository.findOne({
-      where: { name },
-    });
   }
 
   async create(ownerId: string, name: string): Promise<Namespace> {

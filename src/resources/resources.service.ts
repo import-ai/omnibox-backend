@@ -17,7 +17,6 @@ import {
 import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
 import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 
 export interface IQuery {
@@ -112,8 +111,8 @@ export class ResourcesService {
   }
 
   async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
-    let resource: Resource | null = null;
-    if (spaceType === 'teamspace') {
+    let resource: Resource | null;
+    if (spaceType === SpaceType.TEAMSPACE) {
       resource = await this.namespaceService.getTeamspaceRoot(namespace);
     } else {
       resource = await this.namespaceMemberService.getPrivateRoot(

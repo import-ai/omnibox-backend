@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
   NotFoundException,
 } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +19,7 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly mailService: MailService,
     private readonly namespaceService: NamespacesService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async verify(email: string, password: string): Promise<any> {
@@ -99,34 +101,51 @@ export class AuthService {
           'The email is already registered. Please log in directly.',
         );
       }
-      const user = await this.userService.create({
-        email: payload.email,
-        username: data.username,
-        password: data.password,
-        password_repeat: data.password_repeat,
-      });
+      return await this.dataSource.transaction(async (manager) => {
+        const user = await this.userService.create(
+          {
+            email: payload.email,
+            username: data.username,
+            password: data.password,
+            password_repeat: data.password_repeat,
+          },
+          manager,
+        );
 
-      // Invited user
-      if (payload.role && payload.namespace) {
-        const namespace = await this.namespaceService.get(payload.namespace);
-        const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
-        if (namespace[field].includes(user.id)) {
-          return;
+        // Invited user
+        if (payload.role && payload.namespace) {
+          const namespace = await this.namespaceService.get(
+            payload.namespace,
+            manager,
+          );
+          const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
+          if (namespace[field].includes(user.id)) {
+            return;
+          }
+          namespace[field].push(user.id);
+          await this.namespaceService.update(
+            payload.namespace,
+            {
+              [field]: namespace[field],
+            },
+            manager,
+          );
         }
-        namespace[field].push(user.id);
-        await this.namespaceService.update(payload.namespace, {
-          [field]: namespace[field],
-        });
-      }
 
-      return {
-        id: user.id,
-        username: user.username,
-        access_token: this.jwtService.sign({
-          sub: user.id,
-          email: user.email,
-        }),
-      };
+        await this.namespaceService.createAndInit(
+          user.id,
+          `${user.username}'s Namespace`,
+          manager,
+        );
+        return {
+          id: user.id,
+          username: user.username,
+          access_token: this.jwtService.sign({
+            sub: user.id,
+            email: user.email,
+          }),
+        };
+      });
     } catch (e) {
       console.log(e);
       throw new UnauthorizedException('Invalid or expired token.');

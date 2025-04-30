@@ -1,6 +1,12 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, In, Repository } from 'typeorm';
-import { Resource } from 'src/resources/resources.entity';
+import {
+  DataSource,
+  EntityManager,
+  FindOptionsWhere,
+  In,
+  Repository,
+} from 'typeorm';
+import { Resource, SpaceType } from 'src/resources/resources.entity';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
@@ -10,13 +16,14 @@ import {
 } from '@nestjs/common';
 import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
+import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
 
 export interface IQuery {
-  namespace: string;
-  spaceType: string;
+  namespaceId: string;
+  spaceType: SpaceType;
   parentId: string;
   tags?: string;
-  userId: string;
 }
 
 @Injectable()
@@ -26,64 +33,61 @@ export class ResourcesService {
     private readonly resourceRepository: Repository<Resource>,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
+    private readonly namespaceService: NamespacesService,
+    private readonly namespaceMemberService: NamespaceMemberService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async create(user: User, data: CreateResourceDto) {
-    let parentResource: any = null;
-    if (data.parentId) {
-      const where: FindOptionsWhere<Resource> = {
-        id: data.parentId,
-        namespace: { id: data.namespace },
-      };
-      if (data.spaceType === 'private') {
-        where.user = { id: user.id };
-      }
-      parentResource = await this.resourceRepository.findOne({
+    const where: FindOptionsWhere<Resource> = {
+      id: data.parentId,
+      namespace: { id: data.namespace },
+    };
+    const savedResource = await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Resource);
+      const parentResource = await repo.findOne({
         where,
         relations: ['namespace'],
       });
-    }
+      if (!parentResource) {
+        throw new BadRequestException('Parent resource not exists.');
+      }
+      if (data.namespace && parentResource.namespace.id !== data.namespace) {
+        throw new BadRequestException(
+          "Parent resource's namespace & space must match the resource's.",
+        );
+      }
 
-    if (
-      parentResource &&
-      ((data.namespace && parentResource.namespace.id !== data.namespace) ||
-        parentResource.spaceType !== data.spaceType)
-    ) {
-      throw new BadRequestException(
-        "Parent resource's namespace & space must match the resource's.",
-      );
-    }
+      const resource = repo.create({
+        ...data,
+        user: { id: user.id },
+        namespace: { id: data.namespace },
+        parentId: parentResource.id,
+      });
+      await updateChildCount(manager, parentResource.id, 1);
 
-    const resource = this.resourceRepository.create({
-      ...data,
-      user: { id: user.id },
-      namespace: { id: data.namespace },
-      parentId: parentResource ? parentResource.id : '0',
+      const savedResource = await repo.save(resource);
+      await this.index(user, savedResource, manager);
+      return savedResource;
     });
-
-    if (parentResource) {
-      parentResource.childCount += 1;
-      const parentResourceRepo = this.resourceRepository.create(parentResource);
-      await this.resourceRepository.save(parentResourceRepo);
-    }
-
-    const savedResource = await this.resourceRepository.save(resource);
-    await this.index(user, savedResource);
-    return savedResource;
+    return {
+      ...savedResource,
+      spaceType: await this.getSpaceType(savedResource),
+    };
   }
 
-  async index(user: User, resource: Resource) {
+  async index(user: User, resource: Resource, manager?: EntityManager) {
     if (resource.resourceType === 'folder' || !resource.content) {
       return;
     }
-    const task = this.taskRepository.create({
+    const repo = manager ? manager.getRepository(Task) : this.taskRepository;
+    const task = repo.create({
       function: 'create_or_update_index',
       input: {
         title: resource.name,
         content: resource.content,
         meta_info: {
           user_id: resource.user.id,
-          space_type: resource.spaceType,
           resource_id: resource.id,
           parent_id: resource.parentId,
         },
@@ -91,11 +95,11 @@ export class ResourcesService {
       namespace: resource.namespace,
       user,
     });
-    return await this.taskRepository.save(task);
+    return await repo.save(task);
   }
 
-  async deleteIndex(user: User, resource: Resource) {
-    const task = this.taskRepository.create({
+  async deleteIndex(manager: EntityManager, user: User, resource: Resource) {
+    const task = manager.create(Task, {
       function: 'delete_index',
       input: {
         resource_id: resource.id,
@@ -103,52 +107,32 @@ export class ResourcesService {
       namespace: resource.namespace,
       user,
     });
-    return await this.taskRepository.save(task);
+    return await manager.save(task);
   }
 
-  async getRoot(namespace: string, spaceType: string, userId: string) {
-    const where: FindOptionsWhere<Resource> = {
-      parentId: '0',
-      spaceType: spaceType,
-      namespace: { id: namespace },
-    };
-    if (spaceType === 'private') {
-      where.user = { id: userId };
-    }
-    const data = await this.resourceRepository.findOne({
-      where,
-      relations: ['namespace'],
-    });
-
-    if (!data) {
-      throw new NotFoundException('Root resource not found.');
-    }
-
-    const children = await this.query({
-      userId,
-      namespace,
-      spaceType,
-      parentId: data.id,
-    });
-
-    return { ...data, children };
-  }
-
-  async query({ namespace, spaceType, parentId, tags, userId }: IQuery) {
-    const where: FindOptionsWhere<Resource> = {
-      namespace: { id: namespace },
-      spaceType: spaceType,
-    };
-    if (spaceType == 'private') {
-      where.user = { id: userId };
-    }
-
-    if (parentId) {
-      where.parentId = parentId;
+  async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
+    let resource: Resource | null;
+    if (spaceType === SpaceType.TEAMSPACE) {
+      resource = await this.namespaceService.getTeamspaceRoot(namespace);
     } else {
-      where.parentId = '0';
+      resource = await this.namespaceMemberService.getPrivateRoot(
+        userId,
+        namespace,
+      );
     }
+    const children = await this.query({
+      namespaceId: namespace,
+      spaceType,
+      parentId: resource.id,
+    });
+    return { ...resource, parentId: '0', spaceType, children };
+  }
 
+  async query({ namespaceId, parentId, spaceType, tags }: IQuery) {
+    const where: FindOptionsWhere<Resource> = {
+      namespace: { id: namespaceId },
+      parentId,
+    };
     if (tags) {
       const tagsValue = tags.split(',');
       if (tagsValue.length > 0) {
@@ -156,7 +140,25 @@ export class ResourcesService {
       }
     }
 
-    return this.resourceRepository.find({ where, relations: ['namespace'] });
+    const resources = await this.resourceRepository.find({
+      where,
+      relations: ['namespace'],
+    });
+    return resources.map((res) => {
+      return { ...res, spaceType };
+    });
+  }
+
+  async getSpaceType(resource: Resource): Promise<SpaceType> {
+    while (resource.parentId !== null) {
+      resource = (await this.resourceRepository.findOne({
+        where: { id: resource.parentId },
+        relations: ['namespace'],
+      }))!;
+    }
+    return resource.namespace.rootResourceId === resource.id
+      ? SpaceType.TEAMSPACE
+      : SpaceType.PRIVATE;
   }
 
   async get(id: string) {
@@ -169,7 +171,8 @@ export class ResourcesService {
     if (!resource) {
       throw new NotFoundException('Resource not found.');
     }
-    return resource;
+    const spaceType = await this.getSpaceType(resource);
+    return { ...resource, spaceType };
   }
 
   async update(user: User, id: string, data: UpdateResourceDto) {
@@ -190,42 +193,32 @@ export class ResourcesService {
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
     await this.index(user, savedNewResource);
-    return savedNewResource;
-  }
-
-  async deleteChildren(id: string) {
-    const resources = await this.resourceRepository.find({
-      where: {
-        parentId: id,
-      },
-    });
-    if (resources.length <= 0) {
-      return;
-    }
-    for (const node of resources) {
-      await this.resourceRepository.softDelete(node.id);
-      await this.deleteChildren(node.id);
-    }
+    return {
+      ...savedNewResource,
+      spaceType: await this.getSpaceType(savedNewResource),
+    };
   }
 
   async delete(user: User, id: string) {
-    // Update parent's childCount
     const resource = await this.get(id);
-    if (resource.parentId !== '0') {
-      const parent = await this.resourceRepository.findOne({
-        where: {
-          id: resource.parentId,
-        },
-      });
-      if (parent) {
-        parent.childCount -= 1;
-        const parentResource = this.resourceRepository.create(parent);
-        await this.resourceRepository.save(parentResource);
-      }
+    if (resource.parentId === null) {
+      throw new BadRequestException('Cannot delete root resource.');
     }
+    await this.dataSource.transaction(async (manager) => {
+      await updateChildCount(manager, resource.parentId!, -1);
+      await manager.softDelete(Resource, id);
+      await this.deleteIndex(manager, user, resource);
+    });
     await this.resourceRepository.softDelete(id); // Delete itself
-    await this.deleteChildren(id); // Delete its children
-
-    await this.deleteIndex(user, resource);
   }
+}
+
+async function updateChildCount(
+  manager: EntityManager,
+  resourceId: string,
+  delta: number,
+) {
+  await manager.update(Resource, resourceId, {
+    childCount: () => `childCount + ${delta}`,
+  });
 }

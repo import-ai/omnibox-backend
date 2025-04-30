@@ -12,6 +12,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { SpaceType } from './resources.entity';
 
 @Controller('api/v1/resources')
 export class ResourcesController {
@@ -25,7 +26,7 @@ export class ResourcesController {
   @Get('root')
   async getRoot(
     @Query('namespace') namespace: string,
-    @Query('spaceType') spaceType: string,
+    @Query('spaceType') spaceType: SpaceType,
     @Req() req,
   ) {
     return await this.resourcesService.getRoot(
@@ -38,17 +39,16 @@ export class ResourcesController {
   @Get('query')
   async query(
     @Query('namespace') namespace: string,
-    @Query('spaceType') spaceType: string,
+    @Query('spaceType') spaceType: SpaceType,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
     @Req() req,
   ) {
     return await this.resourcesService.query({
-      namespace,
+      namespaceId: namespace,
       spaceType,
       parentId,
       tags,
-      userId: req.user.id,
     });
   }
 

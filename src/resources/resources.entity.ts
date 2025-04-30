@@ -32,11 +32,8 @@ export class Resource extends Base {
   @Column({ name: 'resource_type', type: 'enum', enum: ResourceType })
   resourceType: string;
 
-  @Column({ name: 'space_type', type: 'enum', enum: SpaceType })
-  spaceType: string;
-
-  @Column({ name: 'parent_id', default: '' })
-  parentId: string;
+  @Column('uuid', { name: 'parent_id', nullable: true })
+  parentId: string | null;
 
   @Column('jsonb', { nullable: true })
   tags: string[];

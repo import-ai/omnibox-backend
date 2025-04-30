@@ -93,7 +93,6 @@ export class WizardService {
       name: title || url,
       namespace: namespace.id,
       resourceType: 'link',
-      spaceType,
       parentId: resourceRoot.id,
       attrs: { url },
     };

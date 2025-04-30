@@ -6,7 +6,7 @@ import {
   IsOptional,
   IsNotEmpty,
 } from 'class-validator';
-import { ResourceType, SpaceType } from 'src/resources/resources.entity';
+import { ResourceType } from 'src/resources/resources.entity';
 
 export class UpdateResourceDto {
   @IsString()
@@ -21,10 +21,6 @@ export class UpdateResourceDto {
   @IsEnum(ResourceType)
   @IsOptional()
   resourceType?: ResourceType;
-
-  @IsEnum(SpaceType)
-  @IsOptional()
-  spaceType?: SpaceType;
 
   @IsString()
   @IsOptional()

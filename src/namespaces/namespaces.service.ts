@@ -1,20 +1,40 @@
 import each from 'src/utils/each';
-import { ArrayContains, Repository } from 'typeorm';
+import { ArrayContains, DataSource, EntityManager, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from 'src/namespaces/namespaces.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import {
-  Injectable,
   ConflictException,
+  Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Resource } from 'src/resources/resources.entity';
+import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
 
 @Injectable()
 export class NamespacesService {
   constructor(
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
+    private readonly namespaceMemberService: NamespaceMemberService,
+    private readonly dataSource: DataSource,
   ) {}
+
+  async getTeamspaceRoot(namespaceId: string): Promise<Resource> {
+    const namespace = await this.namespaceRepository.findOne({
+      where: {
+        id: namespaceId,
+      },
+      relations: ['rootResource'],
+    });
+    if (namespace === null) {
+      throw new NotFoundException('Workspace not found');
+    }
+    if (namespace.rootResource === null) {
+      throw new NotFoundException('Root resource not found');
+    }
+    return namespace.rootResource;
+  }
 
   async getByUser(user_id: string) {
     const namespaces = await this.namespaceRepository.find({
@@ -28,8 +48,11 @@ export class NamespacesService {
     return namespaces;
   }
 
-  async get(id: string) {
-    const namespace = await this.namespaceRepository.findOne({
+  async get(id: string, manager?: EntityManager) {
+    const repo = manager
+      ? manager.getRepository(Namespace)
+      : this.namespaceRepository;
+    const namespace = await repo.findOne({
       where: {
         id,
       },
@@ -40,12 +63,49 @@ export class NamespacesService {
     return namespace;
   }
 
-  async create(userId: string, name: string) {
-    const newNamespace = this.namespaceRepository.create({
-      name,
-      owner_id: [userId],
+  async create(ownerId: string, name: string): Promise<Namespace> {
+    return await this.dataSource.transaction(async (manager) => {
+      return await this.createAndInit(ownerId, name, manager);
     });
-    return await this.namespaceRepository.save(newNamespace);
+  }
+
+  async createAndInit(
+    ownerId: string,
+    name: string,
+    manager: EntityManager,
+  ): Promise<Namespace> {
+    const namespace = await manager.save(
+      manager.create(Namespace, {
+        name,
+        owner_id: [ownerId],
+      }),
+    );
+    const privateRoot = await manager.save(
+      manager.create(Resource, {
+        resourceType: 'folder',
+        parent: null,
+        namespace: { id: namespace.id },
+        user: { id: ownerId },
+      }),
+    );
+    const publicRoot = await manager.save(
+      manager.create(Resource, {
+        resourceType: 'folder',
+        parent: null,
+        namespace: { id: namespace.id },
+        user: { id: ownerId },
+      }),
+    );
+    await this.namespaceMemberService.addMember(
+      namespace.id,
+      ownerId,
+      privateRoot.id,
+      manager,
+    );
+    await manager.update(Namespace, namespace.id, {
+      rootResource: { id: publicRoot.id },
+    });
+    return namespace;
   }
 
   async disableUser(namespaceId: string, userId: string) {
@@ -68,15 +128,22 @@ export class NamespacesService {
     await this.namespaceRepository.save(namespace);
   }
 
-  async update(id: string, updateNamespace: UpdateNamespaceDto) {
-    const existNamespace = await this.get(id);
+  async update(
+    id: string,
+    updateNamespace: UpdateNamespaceDto,
+    manager?: EntityManager,
+  ) {
+    const repo = manager
+      ? manager.getRepository(Namespace)
+      : this.namespaceRepository;
+    const existNamespace = await this.get(id, manager);
     if (!existNamespace) {
       throw new ConflictException('The current namespace does not exist');
     }
     each(updateNamespace, (value, key) => {
       existNamespace[key] = value;
     });
-    return await this.namespaceRepository.update(id, existNamespace);
+    return await repo.update(id, existNamespace);
   }
 
   async delete(id: string) {

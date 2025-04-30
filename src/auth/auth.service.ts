@@ -20,7 +20,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly namespaceService: NamespacesService,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   async verify(email: string, password: string): Promise<any> {
     const user = await this.userService.verify(email, password);
@@ -101,28 +101,42 @@ export class AuthService {
           'The email is already registered. Please log in directly.',
         );
       }
-      return await this.dataSource.transaction(async manager => {
-        const user = await this.userService.create({
-          email: payload.email,
-          username: data.username,
-          password: data.password,
-          password_repeat: data.password_repeat,
-        }, manager);
+      return await this.dataSource.transaction(async (manager) => {
+        const user = await this.userService.create(
+          {
+            email: payload.email,
+            username: data.username,
+            password: data.password,
+            password_repeat: data.password_repeat,
+          },
+          manager,
+        );
 
         // Invited user
         if (payload.role && payload.namespace) {
-          const namespace = await this.namespaceService.get(payload.namespace, manager);
+          const namespace = await this.namespaceService.get(
+            payload.namespace,
+            manager,
+          );
           const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
           if (namespace[field].includes(user.id)) {
             return;
           }
           namespace[field].push(user.id);
-          await this.namespaceService.update(payload.namespace, {
-            [field]: namespace[field],
-          }, manager);
+          await this.namespaceService.update(
+            payload.namespace,
+            {
+              [field]: namespace[field],
+            },
+            manager,
+          );
         }
 
-        await this.namespaceService.createAndInit(user.id, `${user.username}'s Namespace`, manager);
+        await this.namespaceService.createAndInit(
+          user.id,
+          `${user.username}'s Namespace`,
+          manager,
+        );
         return {
           id: user.id,
           username: user.username,
@@ -131,13 +145,12 @@ export class AuthService {
             email: user.email,
           }),
         };
-      })
+      });
     } catch (e) {
       console.log(e);
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }
-
 
   async password(url: string, email: string) {
     const user = await this.userService.findByEmail(email);

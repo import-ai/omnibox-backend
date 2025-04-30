@@ -1,26 +1,37 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, IsNull, Repository } from 'typeorm';
-import { NamespaceMember } from "./namespace-members.entity";
-import { Resource } from "src/resources/resources.entity";
-import { Namespace } from "src/namespaces/namespaces.entity";
+import { NamespaceMember } from './namespace-members.entity';
+import { Resource } from 'src/resources/resources.entity';
+import { Namespace } from 'src/namespaces/namespaces.entity';
 
 @Injectable()
 export class NamespaceMemberService {
   constructor(
     @InjectRepository(NamespaceMember)
     private namespaceMemberRepository: Repository<NamespaceMember>,
-  ) { }
+  ) {}
 
   async addMember(
-    namespaceId: string, userId: string, privateRootId: string, manager?: EntityManager,
+    namespaceId: string,
+    userId: string,
+    privateRootId: string,
+    manager?: EntityManager,
   ) {
-    const repo = manager ? manager.getRepository(NamespaceMember) : this.namespaceMemberRepository;
-    await repo.save(repo.create({
-      namespace: { id: namespaceId },
-      user: { id: userId },
-      rootResource: { id: privateRootId },
-    }))
+    const repo = manager
+      ? manager.getRepository(NamespaceMember)
+      : this.namespaceMemberRepository;
+    await repo.save(
+      repo.create({
+        namespace: { id: namespaceId },
+        user: { id: userId },
+        rootResource: { id: privateRootId },
+      }),
+    );
   }
 
   async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
@@ -34,7 +45,7 @@ export class NamespaceMemberService {
     if (member === null) {
       throw new NotFoundException('Root resource not found.');
     }
-    return member.rootResource
+    return member.rootResource;
   }
 
   async listNamespaces(userId: string): Promise<NamespaceMember[]> {

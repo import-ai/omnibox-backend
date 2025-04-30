@@ -12,8 +12,14 @@ import {
 } from 'typeorm';
 
 @Entity('users')
-@Index('uniq_user_email', ['email'], { unique: true, where: '"deleted_at" IS NULL' })
-@Index('uniq_user_name', ['username'], { unique: true, where: '"deleted_at" IS NULL' })
+@Index('uniq_user_email', ['email'], {
+  unique: true,
+  where: '"deleted_at" IS NULL',
+})
+@Index('uniq_user_name', ['username'], {
+  unique: true,
+  where: '"deleted_at" IS NULL',
+})
 export class User extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;

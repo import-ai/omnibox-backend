@@ -18,7 +18,7 @@ export class NamespacesService {
     private readonly namespaceRepository: Repository<Namespace>,
     private readonly namespaceMemberService: NamespaceMemberService,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   async getTeamspaceRoot(namespaceId: string): Promise<Resource> {
     const namespace = await this.namespaceRepository.findOne({
@@ -69,31 +69,48 @@ export class NamespacesService {
     });
   }
 
-  async create(ownerId: string, name: string,): Promise<Namespace> {
-    return await this.dataSource.transaction(async manager => {
+  async create(ownerId: string, name: string): Promise<Namespace> {
+    return await this.dataSource.transaction(async (manager) => {
       return await this.createAndInit(ownerId, name, manager);
-    })
+    });
   }
 
-  async createAndInit(ownerId: string, name: string, manager: EntityManager): Promise<Namespace> {
-    const namespace = await manager.save(manager.create(Namespace, {
-      name,
-      owner_id: [ownerId],
-    }));
-    const privateRoot = await manager.save(manager.create(Resource, {
-      resourceType: 'folder',
-      parent: null,
-      namespace: { id: namespace.id },
-      user: { id: ownerId },
-    }));
-    const publicRoot = await manager.save(manager.create(Resource, {
-      resourceType: 'folder',
-      parent: null,
-      namespace: { id: namespace.id },
-      user: { id: ownerId },
-    }));
-    await this.namespaceMemberService.addMember(namespace.id, ownerId, privateRoot.id, manager);
-    await manager.update(Namespace, namespace.id, { rootResource: { id: publicRoot.id } });
+  async createAndInit(
+    ownerId: string,
+    name: string,
+    manager: EntityManager,
+  ): Promise<Namespace> {
+    const namespace = await manager.save(
+      manager.create(Namespace, {
+        name,
+        owner_id: [ownerId],
+      }),
+    );
+    const privateRoot = await manager.save(
+      manager.create(Resource, {
+        resourceType: 'folder',
+        parent: null,
+        namespace: { id: namespace.id },
+        user: { id: ownerId },
+      }),
+    );
+    const publicRoot = await manager.save(
+      manager.create(Resource, {
+        resourceType: 'folder',
+        parent: null,
+        namespace: { id: namespace.id },
+        user: { id: ownerId },
+      }),
+    );
+    await this.namespaceMemberService.addMember(
+      namespace.id,
+      ownerId,
+      privateRoot.id,
+      manager,
+    );
+    await manager.update(Namespace, namespace.id, {
+      rootResource: { id: publicRoot.id },
+    });
     return namespace;
   }
 

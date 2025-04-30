@@ -6,6 +6,6 @@ import { NamespaceMember } from './namespace-members.entity';
 @Module({
   exports: [NamespaceMemberService],
   providers: [NamespaceMemberService],
-  imports: [TypeOrmModule.forFeature([NamespaceMember])]
+  imports: [TypeOrmModule.forFeature([NamespaceMember])],
 })
-export class NamespaceMembersModule { }
+export class NamespaceMembersModule {}

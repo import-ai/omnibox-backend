@@ -11,7 +11,7 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-  ) { }
+  ) {}
 
   async verify(email: string, password: string) {
     const account = await this.userRepository.findOne({

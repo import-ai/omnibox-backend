@@ -18,4 +18,4 @@ import { NamespacesModule } from 'src/namespaces/namespaces.module';
     NamespacesModule,
   ],
 })
-export class ResourcesModule { }
+export class ResourcesModule {}

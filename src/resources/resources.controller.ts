@@ -16,7 +16,7 @@ import { SpaceType } from './resources.entity';
 
 @Controller('api/v1/resources')
 export class ResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) { }
+  constructor(private readonly resourcesService: ResourcesService) {}
 
   @Post()
   async create(@Req() req, @Body() data: CreateResourceDto) {

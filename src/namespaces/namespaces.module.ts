@@ -10,6 +10,10 @@ import { NamespaceMembersModule } from 'src/namespace-members/namespace-members.
   exports: [NamespacesService],
   providers: [NamespacesService],
   controllers: [NamespacesController],
-  imports: [UserModule, TypeOrmModule.forFeature([Namespace]), NamespaceMembersModule],
+  imports: [
+    UserModule,
+    TypeOrmModule.forFeature([Namespace]),
+    NamespaceMembersModule,
+  ],
 })
-export class NamespacesModule { }
+export class NamespacesModule {}

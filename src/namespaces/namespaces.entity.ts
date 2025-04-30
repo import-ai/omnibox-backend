@@ -1,6 +1,13 @@
 import { Base } from 'src/common/base.entity';
 import { Resource } from 'src/resources/resources.entity';
-import { Column, Entity, PrimaryGeneratedColumn, Index, OneToOne, JoinColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  PrimaryGeneratedColumn,
+  Index,
+  OneToOne,
+  JoinColumn,
+} from 'typeorm';
 
 @Entity('namespaces')
 @Index(['name'], { unique: true, where: '"deleted_at" IS NULL' })
@@ -25,5 +32,5 @@ export class Namespace extends Base {
   rootResource: Resource | null;
 
   @Column('uuid', { name: 'root_resource_id', nullable: true })
-  rootResourceId: string | null
+  rootResourceId: string | null;
 }

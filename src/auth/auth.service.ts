@@ -10,12 +10,7 @@ import {
   UnauthorizedException,
   NotFoundException,
 } from '@nestjs/common';
-import { DataSource, EntityManager } from 'typeorm';
-import { User } from 'src/user/user.entity';
-import { ResourcesService } from 'src/resources/resources.service';
-import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
-import { Resource } from 'src/resources/resources.entity';
-import { NamespaceMember } from 'src/namespace-members/namespace-members.entity';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class AuthService {
@@ -24,8 +19,6 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly mailService: MailService,
     private readonly namespaceService: NamespacesService,
-    private readonly namespaceMemberService: NamespaceMemberService,
-    private readonly resourceService: ResourcesService,
     private readonly dataSource: DataSource,
   ) { }
 
@@ -129,7 +122,7 @@ export class AuthService {
           }, manager);
         }
 
-        await this.createPersonalSpace(user.id, user.username, manager);
+        await this.namespaceService.createAndInit(user.id, `${user.username}'s Namespace`, manager);
         return {
           id: user.id,
           username: user.username,
@@ -145,25 +138,6 @@ export class AuthService {
     }
   }
 
-  async createPersonalSpace(userId: string, username: string, manager: EntityManager) {
-    const namespace = await this.namespaceService.create(
-      userId, `${username}'s Namespace`, manager,
-    );
-    const privateRoot = await manager.save(manager.create(Resource, {
-      resourceType: 'folder',
-      parent: null,
-      namespace: { id: namespace.id },
-      user: { id: userId },
-    }))
-    const publicRoot = await manager.save(manager.create(Resource, {
-      resourceType: 'folder',
-      parent: null,
-      namespace: { id: namespace.id },
-      user: { id: userId },
-    }))
-    await this.namespaceMemberService.addMember(namespace.id, userId, privateRoot.id, manager);
-    await this.namespaceService.setTeamspaceRoot(namespace.id, publicRoot.id, manager);
-  }
 
   async password(url: string, email: string) {
     const user = await this.userService.findByEmail(email);

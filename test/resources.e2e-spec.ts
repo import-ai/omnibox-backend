@@ -45,17 +45,15 @@ describe('ResourcesController (e2e)', () => {
     const parentId: string = privateRootResourceIdResponse.body.id;
 
     const uploadRes = await request(app.getHttpServer())
-      .post('/api/v1/resources/upload')
+      .post('/api/v1/resources/files')
       .set('Authorization', `Bearer ${user.token}`)
-      .field('namespaceId', user.namespace.id)
-      .field('spaceType', spaceType)
-      .field('parentId', parentId)
+      .field('namespace_id', user.namespace.id)
+      .field('parent_id', parentId)
       .attach('file', testFilePath);
     expect(uploadRes.status).toBe(201);
     expect(uploadRes.body.name).toBe('test-upload.txt');
     resourceId = uploadRes.body.id;
 
-    // Download the file
     const downloadRes = await request(app.getHttpServer())
       .get(`/api/v1/resources/files/${resourceId}`)
       .set('Authorization', `Bearer ${user.token}`)

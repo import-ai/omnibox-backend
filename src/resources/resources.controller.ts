@@ -75,13 +75,13 @@ export class ResourcesController {
     return await this.resourcesService.delete(req.user, id);
   }
 
-  @Post('upload')
+  @Post('files')
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @Req() req,
     @UploadedFile() file: Express.Multer.File,
-    @Body('namespaceId') namespaceId: string,
-    @Body('parentId') parentId: string,
+    @Body('namespace_id') namespaceId: string,
+    @Body('parent_id') parentId: string,
   ) {
     return this.resourcesService.uploadFile(
       req.user,

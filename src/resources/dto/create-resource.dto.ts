@@ -15,7 +15,7 @@ export class CreateResourceDto {
 
   @IsString()
   @IsNotEmpty()
-  namespace: string;
+  namespaceId: string;
 
   @IsEnum(ResourceType)
   resourceType: string;

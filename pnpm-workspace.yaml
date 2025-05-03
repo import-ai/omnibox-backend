@@ -3,3 +3,6 @@ onlyBuiltDependencies:
   - '@scarf/scarf'
   - '@swc/core'
   - bcrypt
+  - cpu-features
+  - protobufjs
+  - ssh2

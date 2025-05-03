@@ -32,14 +32,14 @@ class CollectProcessor extends Processor {
     const resourceId = task.payload.resourceId;
     if (task.exception) {
       await this.resourcesService.update(task.user, resourceId, {
-        namespace: task.namespace.id,
+        namespaceId: task.namespace.id,
         content: task.exception.error,
       });
       return {};
     } else if (task.output) {
       const { markdown, title, ...attrs } = task.output || {};
       await this.resourcesService.update(task.user, resourceId, {
-        namespace: task.namespace.id,
+        namespaceId: task.namespace.id,
         name: title,
         content: markdown,
         attrs,
@@ -92,7 +92,7 @@ export class WizardService {
     // Actually create a resource using ResourcesService
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespace: ns.id,
+      namespaceId: ns.id,
       resourceType: 'link',
       spaceType,
       parentId: '',

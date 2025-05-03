@@ -11,7 +11,12 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 
 @Controller('api/v1/resources')
 export class ResourcesController {
@@ -69,5 +74,44 @@ export class ResourcesController {
   @Delete(':id')
   async delete(@Req() req, @Param('id') id: string) {
     return await this.resourcesService.delete(req.user, id);
+  }
+
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(
+    @Req() req,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('namespaceId') namespaceId: string,
+    @Body('spaceType') spaceType: string,
+    @Body('parentId') parentId: string,
+  ) {
+    return this.resourcesService.uploadFile(
+      req.user,
+      namespaceId,
+      spaceType,
+      parentId,
+      file,
+    );
+  }
+
+  @Get('download')
+  async downloadFile(
+    @Query('namespace') namespace: string,
+    @Query('resourceId') resourceId: string,
+    @Res() res: Response,
+  ) {
+    const { fileStream, resource } = await this.resourcesService.downloadFile(
+      namespace,
+      resourceId,
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${resource.name}"`,
+    );
+    res.setHeader(
+      'Content-Type',
+      resource.attrs?.mimetype || 'application/octet-stream',
+    );
+    fileStream.pipe(res);
   }
 }

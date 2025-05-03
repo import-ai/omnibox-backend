@@ -54,7 +54,10 @@ export class ResourcesService {
       if (!parentResource) {
         throw new BadRequestException('Parent resource not exists.');
       }
-      if (data.namespaceId && parentResource.namespace.id !== data.namespaceId) {
+      if (
+        data.namespaceId &&
+        parentResource.namespace.id !== data.namespaceId
+      ) {
         throw new BadRequestException(
           "Parent resource's namespace & space must match the resource's.",
         );
@@ -213,15 +216,10 @@ export class ResourcesService {
     });
     await this.resourceRepository.softDelete(id); // Delete itself
   }
-}
-
-    await this.deleteIndex(user, resource);
-  }
 
   async uploadFile(
     user: User,
     namespaceId: string,
-    spaceType: string,
     parentId: string,
     file: Express.Multer.File,
   ) {
@@ -229,7 +227,6 @@ export class ResourcesService {
     const savedResource = await this.create(user, {
       name: file.originalname,
       resourceType: 'file',
-      spaceType,
       namespaceId,
       parentId,
       attrs: {
@@ -262,6 +259,8 @@ export class ResourcesService {
     const fileStream = await this.minioService.getObject(artifactName);
     return { fileStream, resource };
   }
+}
+
 async function updateChildCount(
   manager: EntityManager,
   resourceId: string,

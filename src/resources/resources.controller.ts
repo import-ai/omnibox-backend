@@ -47,7 +47,6 @@ export class ResourcesController {
     @Query('spaceType') spaceType: SpaceType,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
-    @Req() req,
   ) {
     return await this.resourcesService.query({
       namespaceId,
@@ -82,13 +81,11 @@ export class ResourcesController {
     @Req() req,
     @UploadedFile() file: Express.Multer.File,
     @Body('namespaceId') namespaceId: string,
-    @Body('spaceType') spaceType: string,
     @Body('parentId') parentId: string,
   ) {
     return this.resourcesService.uploadFile(
       req.user,
       namespaceId,
-      spaceType,
       parentId,
       file,
     );

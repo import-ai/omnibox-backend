@@ -85,22 +85,6 @@ export class AuthService {
     // return { url: mailSendUri };
   }
 
-  private async addUserToNamespace(
-    userId: string,
-    namespaceId: string,
-    role: string,
-  ) {
-    const namespace = await this.namespaceService.get(namespaceId);
-    const field = role === 'owner' ? 'owner_id' : 'collaborators';
-    if (namespace[field].includes(userId)) {
-      return;
-    }
-    namespace[field].push(userId);
-    await this.namespaceService.update(namespaceId, {
-      [field]: namespace[field],
-    });
-  }
-
   async signUpConfirm(
     token: string,
     data: {

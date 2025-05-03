@@ -91,16 +91,10 @@ export class ResourcesController {
     );
   }
 
-  @Get('download')
-  async downloadFile(
-    @Query('namespace') namespace: string,
-    @Query('resourceId') resourceId: string,
-    @Res() res: Response,
-  ) {
-    const { fileStream, resource } = await this.resourcesService.downloadFile(
-      namespace,
-      resourceId,
-    );
+  @Get('files/:id')
+  async downloadFile(@Param('id') resourceId: string, @Res() res: Response) {
+    const { fileStream, resource } =
+      await this.resourcesService.downloadFile(resourceId);
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="${resource.name}"`,

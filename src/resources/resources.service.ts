@@ -247,9 +247,9 @@ export class ResourcesService {
     return savedResource;
   }
 
-  async downloadFile(namespace: string, resourceId: string) {
+  async downloadFile(resourceId: string) {
     const resource = await this.resourceRepository.findOne({
-      where: { id: resourceId, namespace: { id: namespace } },
+      where: { id: resourceId },
     });
     if (!resource || resource.resourceType !== 'file') {
       throw new NotFoundException('File resource not found.');

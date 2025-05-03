@@ -15,8 +15,13 @@ export class NamespacesController {
   constructor(private readonly namespacesService: NamespacesService) {}
 
   @Get('user')
+  async getByOwner(@Req() req) {
+    return await this.namespacesService.getByOwner(req.user.id);
+  }
+
+  @Get('')
   async getByUser(@Req() req) {
-    return await this.namespacesService.getByUser(req.user.id);
+    return await this.namespacesService.getByUser(req.user);
   }
 
   @Get(':id')

@@ -31,7 +31,6 @@ export const signUp = async (
   const username: string = randomString(10);
   const password: string = randomString(12);
   const email: string = randomString(15) + '@example.com';
-  const namespace: string = randomString(8);
 
   const userCreateResponse = await request(app.getHttpServer())
     .post('/internal/api/v1/sign-up')
@@ -50,16 +49,13 @@ export const signUp = async (
 
   const token = userCreateResponse.body.access_token;
 
-  const namespaceCreateResponse = await request(app.getHttpServer())
-    .post('/api/v1/namespaces')
+  const namespaceGetResponse = await request(app.getHttpServer())
+    .get('/api/v1/namespaces')
     .set('Authorization', `Bearer ${token}`)
-    .send({
-      name: namespace,
-    })
-    .expect(201)
+    .expect(200)
     .expect((res) => {
-      expect(res.body).toHaveProperty('id');
-      expect(res.body.name).toBe(namespace);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].name).toContain(username);
     });
 
   return {
@@ -68,7 +64,7 @@ export const signUp = async (
     username,
     password,
     token,
-    namespace: namespaceCreateResponse.body,
+    namespace: namespaceGetResponse.body[0],
   };
 };
 

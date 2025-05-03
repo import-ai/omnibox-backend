@@ -33,20 +33,23 @@ describe('ResourcesController (e2e)', () => {
     const testFilePath = path.join(__dirname, 'test-upload.txt');
     fs.writeFileSync(testFilePath, 'hello world');
 
+    const spaceType: string = 'private';
+
     const privateRootResourceIdResponse = await request(app.getHttpServer())
       .get(
-        `/api/v1/resources/root?namespace_id=${user.namespace.id}&space_type=private`,
+        `/api/v1/resources/root?namespace_id=${user.namespace.id}&space_type=${spaceType}`,
       )
       .set('Authorization', `Bearer ${user.token}`)
       .expect(200);
 
-    // Upload the file
+    const parentId: string = privateRootResourceIdResponse.body.id;
+
     const uploadRes = await request(app.getHttpServer())
       .post('/api/v1/resources/upload')
       .set('Authorization', `Bearer ${user.token}`)
       .field('namespaceId', user.namespace.id)
-      .field('spaceType', 'private')
-      .field('parentId', '0')
+      .field('spaceType', spaceType)
+      .field('parentId', parentId)
       .attach('file', testFilePath);
     expect(uploadRes.status).toBe(201);
     expect(uploadRes.body.name).toBe('test-upload.txt');
@@ -54,9 +57,8 @@ describe('ResourcesController (e2e)', () => {
 
     // Download the file
     const downloadRes = await request(app.getHttpServer())
-      .get('/api/v1/resources/download')
+      .get(`/api/v1/resources/files/${resourceId}`)
       .set('Authorization', `Bearer ${user.token}`)
-      .query({ namespace: user.namespace.id, resourceId })
       .expect(200);
     expect(downloadRes.header['content-disposition']).toContain(
       'test-upload.txt',

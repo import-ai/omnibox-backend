@@ -14,7 +14,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config test/jest-e2e.json"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -27,6 +27,7 @@
     "@types/bcrypt": "^5.0.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/multer": "^1.4.12",
     "@types/node": "^22.10.7",
     "@types/nodemailer": "^6.4.17",
     "@types/passport-jwt": "^3.0.8",
@@ -47,23 +48,6 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
-  "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
-    },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s"
-    ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
-  },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/cache-manager": "^3.0.1",
@@ -79,6 +63,7 @@
     "cache-manager": "^6.4.2",
     "class-validator": "^0.14.1",
     "handlebars": "^4.7.8",
+    "minio": "^8.0.5",
     "nodemailer": "^6.10.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

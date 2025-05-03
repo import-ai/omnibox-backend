@@ -18,6 +18,7 @@ import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
 import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { MinioService } from 'src/resources/minio/minio.service';
 
 export interface IQuery {
   namespaceId: string;
@@ -36,12 +37,13 @@ export class ResourcesService {
     private readonly namespaceService: NamespacesService,
     private readonly namespaceMemberService: NamespaceMemberService,
     private readonly dataSource: DataSource,
+    private readonly minioService: MinioService,
   ) {}
 
   async create(user: User, data: CreateResourceDto) {
     const where: FindOptionsWhere<Resource> = {
       id: data.parentId,
-      namespace: { id: data.namespace },
+      namespace: { id: data.namespaceId },
     };
     const savedResource = await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(Resource);
@@ -52,7 +54,7 @@ export class ResourcesService {
       if (!parentResource) {
         throw new BadRequestException('Parent resource not exists.');
       }
-      if (data.namespace && parentResource.namespace.id !== data.namespace) {
+      if (data.namespaceId && parentResource.namespace.id !== data.namespaceId) {
         throw new BadRequestException(
           "Parent resource's namespace & space must match the resource's.",
         );
@@ -61,7 +63,7 @@ export class ResourcesService {
       const resource = repo.create({
         ...data,
         user: { id: user.id },
-        namespace: { id: data.namespace },
+        namespace: { id: data.namespaceId },
         parentId: parentResource.id,
       });
       await updateChildCount(manager, parentResource.id, 1);
@@ -178,7 +180,7 @@ export class ResourcesService {
   async update(user: User, id: string, data: UpdateResourceDto) {
     console.debug({ id, data });
     const resource = await this.resourceRepository.findOne({
-      where: { id, namespace: { id: data.namespace } },
+      where: { id, namespace: { id: data.namespaceId } },
       relations: ['namespace', 'user'],
     });
 
@@ -189,7 +191,7 @@ export class ResourcesService {
     const newResource = this.resourceRepository.create({
       ...resource,
       ...data,
-      namespace: { id: data.namespace },
+      namespace: { id: data.namespaceId },
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
     await this.index(user, savedNewResource);
@@ -213,6 +215,53 @@ export class ResourcesService {
   }
 }
 
+    await this.deleteIndex(user, resource);
+  }
+
+  async uploadFile(
+    user: User,
+    namespaceId: string,
+    spaceType: string,
+    parentId: string,
+    file: Express.Multer.File,
+  ) {
+    // Create resource first
+    const savedResource = await this.create(user, {
+      name: file.originalname,
+      resourceType: 'file',
+      spaceType,
+      namespaceId,
+      parentId,
+      attrs: {
+        originalName: file.originalname,
+        filename: file.filename,
+        mimetype: file.mimetype,
+      },
+    });
+
+    const artifactName = savedResource.id;
+
+    await this.minioService.putObject(artifactName, file.buffer, file.mimetype);
+
+    const url = await this.minioService.getObjectUrl(artifactName);
+
+    savedResource.attrs = { ...savedResource.attrs, url };
+    await this.resourceRepository.save(savedResource);
+    return savedResource;
+  }
+
+  async downloadFile(namespace: string, resourceId: string) {
+    const resource = await this.resourceRepository.findOne({
+      where: { id: resourceId, namespace: { id: namespace } },
+    });
+    if (!resource || resource.resourceType !== 'file') {
+      throw new NotFoundException('File resource not found.');
+    }
+    const artifactName = resource.id;
+
+    const fileStream = await this.minioService.getObject(artifactName);
+    return { fileStream, resource };
+  }
 async function updateChildCount(
   manager: EntityManager,
   resourceId: string,

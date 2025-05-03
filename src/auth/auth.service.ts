@@ -4,11 +4,11 @@ import { UserService } from 'src/user/user.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import {
-  Injectable,
-  ForbiddenException,
   BadRequestException,
-  UnauthorizedException,
+  ForbiddenException,
+  Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
@@ -83,6 +83,22 @@ export class AuthService {
     const mailSendUri = `${url}?token=${token}`;
     await this.mailService.sendSignUpEmail(email, mailSendUri);
     // return { url: mailSendUri };
+  }
+
+  private async addUserToNamespace(
+    userId: string,
+    namespaceId: string,
+    role: string,
+  ) {
+    const namespace = await this.namespaceService.get(namespaceId);
+    const field = role === 'owner' ? 'owner_id' : 'collaborators';
+    if (namespace[field].includes(userId)) {
+      return;
+    }
+    namespace[field].push(userId);
+    await this.namespaceService.update(namespaceId, {
+      [field]: namespace[field],
+    });
   }
 
   async signUpConfirm(

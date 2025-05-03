@@ -4,11 +4,11 @@ import { UserService } from 'src/user/user.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import {
-  Injectable,
-  ForbiddenException,
   BadRequestException,
-  UnauthorizedException,
+  ForbiddenException,
+  Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 
 @Injectable()
@@ -83,6 +83,22 @@ export class AuthService {
     // return { url: mailSendUri };
   }
 
+  private async addUserToNamespace(
+    userId: string,
+    namespaceId: string,
+    role: string,
+  ) {
+    const namespace = await this.namespaceService.get(namespaceId);
+    const field = role === 'owner' ? 'owner_id' : 'collaborators';
+    if (namespace[field].includes(userId)) {
+      return;
+    }
+    namespace[field].push(userId);
+    await this.namespaceService.update(namespaceId, {
+      [field]: namespace[field],
+    });
+  }
+
   async signUpConfirm(
     token: string,
     data: {
@@ -108,15 +124,7 @@ export class AuthService {
 
       // Invited user
       if (payload.role && payload.namespace) {
-        const namespace = await this.namespaceService.get(payload.namespace);
-        const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
-        if (namespace[field].includes(user.id)) {
-          return;
-        }
-        namespace[field].push(user.id);
-        await this.namespaceService.update(payload.namespace, {
-          [field]: namespace[field],
-        });
+        await this.addUserToNamespace(user.id, payload.namespace, payload.role);
       }
 
       return {
@@ -217,15 +225,7 @@ export class AuthService {
       if (!user) {
         throw new NotFoundException('User not found.');
       }
-      const namespace = await this.namespaceService.get(payload.namespace);
-      const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
-      if (namespace[field].includes(user.id)) {
-        return;
-      }
-      namespace[field].push(user.id);
-      await this.namespaceService.update(payload.namespace, {
-        [field]: namespace[field],
-      });
+      await this.addUserToNamespace(user.id, payload.namespace, payload.role);
     } catch (e) {
       console.log(e);
       throw new UnauthorizedException('Invalid or expired token.');

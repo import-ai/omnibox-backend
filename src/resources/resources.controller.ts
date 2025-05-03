@@ -29,12 +29,12 @@ export class ResourcesController {
 
   @Get('root')
   async getRoot(
-    @Query('namespace') namespace: string,
-    @Query('spaceType') spaceType: string,
+    @Query('namespace_id') namespaceId: string,
+    @Query('space_type') spaceType: string,
     @Req() req,
   ) {
     return await this.resourcesService.getRoot(
-      namespace,
+      namespaceId,
       spaceType,
       req.user.id,
     );
@@ -42,14 +42,14 @@ export class ResourcesController {
 
   @Get('query')
   async query(
-    @Query('namespace') namespace: string,
+    @Query('namespace') namespaceId: string,
     @Query('spaceType') spaceType: string,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
     @Req() req,
   ) {
     return await this.resourcesService.query({
-      namespace,
+      namespaceId,
       spaceType,
       parentId,
       tags,

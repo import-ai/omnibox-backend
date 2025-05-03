@@ -10,10 +10,10 @@ import {
 } from '@nestjs/common';
 import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
-import { MinioService } from 'src/minio/minio.service';
+import { MinioService } from 'src/resources/minio/minio.service';
 
 export interface IQuery {
-  namespace: string;
+  namespaceId: string;
   spaceType: string;
   parentId: string;
   tags?: string;
@@ -108,11 +108,11 @@ export class ResourcesService {
     return await this.taskRepository.save(task);
   }
 
-  async getRoot(namespace: string, spaceType: string, userId: string) {
+  async getRoot(namespaceId: string, spaceType: string, userId: string) {
     const where: FindOptionsWhere<Resource> = {
       parentId: '0',
       spaceType: spaceType,
-      namespace: { id: namespace },
+      namespace: { id: namespaceId },
     };
     if (spaceType === 'private') {
       where.user = { id: userId };
@@ -128,7 +128,7 @@ export class ResourcesService {
 
     const children = await this.query({
       userId,
-      namespace,
+      namespaceId,
       spaceType,
       parentId: data.id,
     });
@@ -136,9 +136,9 @@ export class ResourcesService {
     return { ...data, children };
   }
 
-  async query({ namespace, spaceType, parentId, tags, userId }: IQuery) {
+  async query({ namespaceId, spaceType, parentId, tags, userId }: IQuery) {
     const where: FindOptionsWhere<Resource> = {
-      namespace: { id: namespace },
+      namespace: { id: namespaceId },
       spaceType: spaceType,
     };
     if (spaceType == 'private') {
@@ -271,7 +271,6 @@ export class ResourcesService {
       throw new NotFoundException('File resource not found.');
     }
     const artifactName = resource.id;
-    const bucket = 'resources';
 
     const fileStream = await this.minioService.getObject(artifactName);
     return { fileStream, resource };

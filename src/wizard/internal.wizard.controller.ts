@@ -10,7 +10,7 @@ export class InternalWizardController {
 
   @Public()
   @Get('/task')
-  async fetchTask(@Res() res: Response) {
+  async fetchTask(@Res() res: Response): Promise<void> {
     const task = await this.wizardService.fetch();
     res.status(task ? 200 : 204).json(task);
     return;

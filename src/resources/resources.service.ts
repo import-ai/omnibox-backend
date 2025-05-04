@@ -19,6 +19,7 @@ import { User } from 'src/user/user.entity';
 import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { MinioService } from 'src/resources/minio/minio.service';
+import { WizardTask } from 'src/resources/wizard.task.service';
 
 export interface IQuery {
   namespaceId: string;
@@ -72,47 +73,17 @@ export class ResourcesService {
       await updateChildCount(manager, parentResource.id, 1);
 
       const savedResource = await repo.save(resource);
-      await this.index(user, savedResource, manager);
+      await WizardTask.index.upsert(
+        user,
+        savedResource,
+        manager.getRepository(Task),
+      );
       return savedResource;
     });
     return {
       ...savedResource,
       spaceType: await this.getSpaceType(savedResource),
     };
-  }
-
-  async index(user: User, resource: Resource, manager?: EntityManager) {
-    if (resource.resourceType === 'folder' || !resource.content) {
-      return;
-    }
-    const repo = manager ? manager.getRepository(Task) : this.taskRepository;
-    const task = repo.create({
-      function: 'create_or_update_index',
-      input: {
-        title: resource.name,
-        content: resource.content,
-        meta_info: {
-          user_id: resource.user.id,
-          resource_id: resource.id,
-          parent_id: resource.parentId,
-        },
-      },
-      namespace: resource.namespace,
-      user,
-    });
-    return await repo.save(task);
-  }
-
-  async deleteIndex(manager: EntityManager, user: User, resource: Resource) {
-    const task = manager.create(Task, {
-      function: 'delete_index',
-      input: {
-        resource_id: resource.id,
-      },
-      namespace: resource.namespace,
-      user,
-    });
-    return await manager.save(task);
   }
 
   async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
@@ -197,7 +168,7 @@ export class ResourcesService {
       namespace: { id: data.namespaceId },
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
-    await this.index(user, savedNewResource);
+    await WizardTask.index.upsert(user, savedNewResource, this.taskRepository);
     return {
       ...savedNewResource,
       spaceType: await this.getSpaceType(savedNewResource),
@@ -212,7 +183,11 @@ export class ResourcesService {
     await this.dataSource.transaction(async (manager) => {
       await updateChildCount(manager, resource.parentId!, -1);
       await manager.softDelete(Resource, id);
-      await this.deleteIndex(manager, user, resource);
+      await WizardTask.index.delete(
+        user,
+        resource,
+        manager.getRepository(Task),
+      );
     });
     await this.resourceRepository.softDelete(id); // Delete itself
   }
@@ -220,31 +195,46 @@ export class ResourcesService {
   async uploadFile(
     user: User,
     namespaceId: string,
-    parentId: string,
     file: Express.Multer.File,
+    parentId?: string,
+    resourceId?: string,
   ) {
-    // Create resource first
-    const savedResource = await this.create(user, {
-      name: file.originalname,
-      resourceType: 'file',
-      namespaceId,
-      parentId,
-      attrs: {
-        originalName: file.originalname,
-        filename: file.filename,
-        mimetype: file.mimetype,
-      },
-    });
+    let resource: Resource;
+    if (resourceId) {
+      resource = await this.get(resourceId);
+      if (resource.resourceType !== 'file') {
+        throw new BadRequestException('Resource is not a file.');
+      }
+    } else if (parentId) {
+      resource = await this.create(user, {
+        name: file.originalname,
+        resourceType: 'file',
+        namespaceId,
+        parentId,
+        attrs: {
+          original_name: file.originalname,
+          filename: file.filename,
+          mimetype: file.mimetype,
+        },
+      });
+    } else {
+      throw new BadRequestException('parent_id or resource_id is required.');
+    }
 
-    const artifactName = savedResource.id;
+    const artifactName = resource.id;
 
     await this.minioService.putObject(artifactName, file.buffer, file.mimetype);
 
     const url = await this.minioService.getObjectUrl(artifactName);
 
-    savedResource.attrs = { ...savedResource.attrs, url };
-    await this.resourceRepository.save(savedResource);
-    return savedResource;
+    resource.attrs = { ...resource.attrs, url };
+    await this.resourceRepository.save(resource);
+
+    if (['text/plain', 'text/markdown'].includes(file.mimetype)) {
+      await WizardTask.reader.upsert(user, resource, this.taskRepository);
+    }
+
+    return resource;
   }
 
   async downloadFile(resourceId: string) {

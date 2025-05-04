@@ -86,8 +86,26 @@ export class ResourcesController {
     return this.resourcesService.uploadFile(
       req.user,
       namespaceId,
-      parentId,
       file,
+      parentId,
+      undefined,
+    );
+  }
+
+  @Patch('files/:id')
+  @UseInterceptors(FileInterceptor('file'))
+  async patchFile(
+    @Req() req,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('namespace_id') namespaceId: string,
+    @Body('resource_id') resourceId: string,
+  ) {
+    return this.resourcesService.uploadFile(
+      req.user,
+      namespaceId,
+      file,
+      undefined,
+      resourceId,
     );
   }
 

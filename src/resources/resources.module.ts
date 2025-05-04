@@ -7,11 +7,12 @@ import { Task } from 'src/tasks/tasks.entity';
 import { NamespaceMembersModule } from 'src/namespace-members/namespace-members.module';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 import { MinioService } from 'src/resources/minio/minio.service';
+import { InternalResourcesController } from 'src/resources/internal.resource.controller';
 
 @Module({
-  exports: [ResourcesService, MinioService],
-  providers: [ResourcesService, MinioService],
-  controllers: [ResourcesController],
+  exports: [ResourcesService, MinioService, InternalResourcesController],
+  providers: [ResourcesService, MinioService, InternalResourcesController],
+  controllers: [ResourcesController, InternalResourcesController],
   imports: [
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Task]),

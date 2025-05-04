@@ -225,9 +225,7 @@ export class ResourcesService {
 
     await this.minioService.putObject(artifactName, file.buffer, file.mimetype);
 
-    const url = await this.minioService.getObjectUrl(artifactName);
-
-    resource.attrs = { ...resource.attrs, url };
+    resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
     if (['text/plain', 'text/markdown'].includes(file.mimetype)) {

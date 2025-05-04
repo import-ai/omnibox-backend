@@ -7,7 +7,7 @@ export class TaskCallbackDto {
 
   @IsString()
   @IsNotEmpty()
-  ended_at: string;
+  endedAt: string;
 
   @IsOptional()
   exception: Record<string, any>;

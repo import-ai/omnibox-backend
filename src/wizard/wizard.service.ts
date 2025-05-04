@@ -127,7 +127,7 @@ export class WizardService {
       throw new NotFoundException(`Task ${data.id} not found`);
     }
 
-    task.endedAt = new Date(data.ended_at);
+    task.endedAt = new Date(data.endedAt);
     task.exception = data.exception;
     task.output = data.output;
     await this.taskRepository.save(task);

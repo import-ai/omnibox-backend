@@ -19,6 +19,24 @@ import { SpaceType } from './resources.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 
+export async function fileResponse(
+  resourceId: string,
+  response: Response,
+  resourcesService: ResourcesService,
+) {
+  const { fileStream, resource } =
+    await resourcesService.downloadFile(resourceId);
+  response.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${resource.name}"`,
+  );
+  response.setHeader(
+    'Content-Type',
+    resource.attrs?.mimetype || 'application/octet-stream',
+  );
+  fileStream.pipe(response);
+}
+
 @Controller('api/v1/resources')
 export class ResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
@@ -111,16 +129,6 @@ export class ResourcesController {
 
   @Get('files/:id')
   async downloadFile(@Param('id') resourceId: string, @Res() res: Response) {
-    const { fileStream, resource } =
-      await this.resourcesService.downloadFile(resourceId);
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${resource.name}"`,
-    );
-    res.setHeader(
-      'Content-Type',
-      resource.attrs?.mimetype || 'application/octet-stream',
-    );
-    fileStream.pipe(res);
+    return await fileResponse(resourceId, res, this.resourcesService);
   }
 }

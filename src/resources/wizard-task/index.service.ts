@@ -4,11 +4,7 @@ import { Repository } from 'typeorm';
 import { Task } from 'src/tasks/tasks.entity';
 
 export class Index {
-  static async upsert(
-    user: User,
-    resource: Resource,
-    repo: Repository<Task>,
-  ) {
+  static async upsert(user: User, resource: Resource, repo: Repository<Task>) {
     if (resource.resourceType === 'folder' || !resource.content) {
       return;
     }
@@ -17,7 +13,11 @@ export class Index {
       input: {
         title: resource.name,
         content: resource.content,
-        meta_info: { resource_id: resource.id },
+        meta_info: {
+          user_id: resource.user.id,
+          resource_id: resource.id,
+          parent_id: resource.parentId,
+        },
       },
       namespace: resource.namespace,
       user,

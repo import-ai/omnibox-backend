@@ -12,11 +12,15 @@ export class Reader {
         original_name: resource.attrs.original_name,
         filename: resource.attrs.filename,
         mimetype: resource.attrs.mimetype,
-        meta_info: { resource_id: resource.id },
+        resource_id: resource.id,
+      },
+      payload: {
+        resourceId: resource.id,
       },
       namespace: resource.namespace,
       user,
     });
+    console.log({ task });
     return await repo.save(task);
   }
 }

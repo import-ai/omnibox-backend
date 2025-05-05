@@ -4,11 +4,11 @@ import { UserService } from 'src/user/user.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import {
-  Injectable,
-  ForbiddenException,
   BadRequestException,
-  UnauthorizedException,
+  ForbiddenException,
+  Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
@@ -51,38 +51,25 @@ export class AuthService {
     };
   }
 
-  async signUpWithoutConfirm(createUser: CreateUserDto) {
-    const account = await this.userService.findByEmail(createUser.email);
-    if (account) {
-      throw new BadRequestException('Email already registered');
-    }
-    const user = await this.userService.create(createUser);
-    return {
-      id: user.id,
-      username: user.username,
-      access_token: this.jwtService.sign({
-        sub: user.id,
-        email: user.email,
-      }),
-    };
-  }
-
-  async signUp(url: string, email: string) {
+  private async getSignUpToken(email: string) {
     const account = await this.userService.findByEmail(email);
     if (account) {
       throw new BadRequestException(
         'The email is already registered. Please log in directly.',
       );
     }
-    const token = this.jwtService.sign(
+    return this.jwtService.sign(
       { email, sub: 'register_user' },
       {
         expiresIn: '1h',
       },
     );
+  }
+
+  async signUp(url: string, email: string) {
+    const token: string = await this.getSignUpToken(email);
     const mailSendUri = `${url}?token=${token}`;
     await this.mailService.sendSignUpEmail(email, mailSendUri);
-    // return { url: mailSendUri };
   }
 
   async signUpConfirm(
@@ -150,6 +137,11 @@ export class AuthService {
       console.log(e);
       throw new UnauthorizedException('Invalid or expired token.');
     }
+  }
+
+  async signUpWithoutConfirm(createUser: CreateUserDto) {
+    const token: string = await this.getSignUpToken(createUser.email);
+    return this.signUpConfirm(token, createUser);
   }
 
   async password(url: string, email: string) {

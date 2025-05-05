@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Resource } from 'src/resources/resources.entity';
 import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
+import { User } from '../user/user.entity';
 
 @Injectable()
 export class NamespacesService {
@@ -36,16 +37,25 @@ export class NamespacesService {
     return namespace.rootResource;
   }
 
-  async getByUser(user_id: string) {
+  async getByOwner(ownerId: string) {
     const namespaces = await this.namespaceRepository.find({
       where: {
-        owner_id: ArrayContains([user_id]),
+        owner_id: ArrayContains([ownerId]),
       },
     });
     if (namespaces.length <= 0) {
       throw new NotFoundException('Workspace not found');
     }
     return namespaces;
+  }
+
+  async getByUser(user: User) {
+    return await this.namespaceRepository.find({
+      where: [
+        { owner_id: ArrayContains([user.id]) },
+        { collaborators: ArrayContains([user.id]) },
+      ],
+    });
   }
 
   async get(id: string, manager?: EntityManager) {

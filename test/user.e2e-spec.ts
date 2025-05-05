@@ -2,11 +2,75 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from '../src/app/app.module';
+import { AppModule } from 'src/app/app.module';
+
+export type SignUpResponse = {
+  id: string;
+  email: string;
+  username: string;
+  password: string;
+  namespace: {
+    id: string;
+    name: string;
+  };
+  token: string;
+};
+
+export const randomString = (length: number): string => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+};
+
+export const signUp = async (
+  app: INestApplication,
+): Promise<SignUpResponse> => {
+  const username: string = randomString(10);
+  const password: string = randomString(12);
+  const email: string = randomString(15) + '@example.com';
+
+  const userCreateResponse = await request(app.getHttpServer())
+    .post('/internal/api/v1/sign-up')
+    .send({
+      username: username,
+      password: password,
+      password_repeat: password,
+      email: email,
+    })
+    .expect(201)
+    .expect((res) => {
+      expect(res.body).toHaveProperty('id');
+      expect(res.body.username).toBe(username);
+      expect(res.body.password).toBeUndefined();
+    });
+
+  const token = userCreateResponse.body.access_token;
+
+  const namespaceGetResponse = await request(app.getHttpServer())
+    .get('/api/v1/namespaces')
+    .set('Authorization', `Bearer ${token}`)
+    .expect(200)
+    .expect((res) => {
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].name).toContain(username);
+    });
+
+  return {
+    id: userCreateResponse.body.id,
+    email,
+    username,
+    password,
+    token,
+    namespace: namespaceGetResponse.body[0],
+  };
+};
 
 describe('UserController (e2e)', () => {
-  let token: string;
   let app: INestApplication<App>;
+  let user: SignUpResponse;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -15,58 +79,40 @@ describe('UserController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
-  });
 
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('should sign up a new user', () => {
-    return request(app.getHttpServer())
-      .post('/api/v1/user')
-      .send({
-        username: 'wenguang',
-        password: 'Admin1234',
-        password_repeat: 'Admin1234',
-        email: '295504163@qq.com',
-      })
-      .expect(201)
-      .expect((res) => {
-        expect(res.body).toHaveProperty('id');
-        expect(res.body.username).toBe('wenguang');
-        expect(res.body.password).toBeUndefined();
-      });
+    user = await signUp(app);
   });
 
   it('should login with valid credentials', async () => {
     const response = await request(app.getHttpServer())
       .post('/api/v1/login')
       .send({
-        email: '295504163@qq.com',
-        password: 'Admin1234',
+        email: user.email,
+        password: user.password,
       })
       .expect(200);
 
-    expect(response.body).toHaveProperty('user_id');
+    expect(response.body).toHaveProperty('id');
     expect(response.body).toHaveProperty('access_token');
-
-    token = response.body.access_token;
   });
 
-  it('should access protected route with valid token', () => {
-    return request(app.getHttpServer())
-      .get('/api/v1/user/1')
-      .set('Authorization', `Bearer ${token}`)
+  it('should access protected route with valid token', async () => {
+    return await request(app.getHttpServer())
+      .get(`/api/v1/user/${user.id}`)
+      .set('Authorization', `Bearer ${user.token}`)
       .expect(200)
       .expect((res) => {
-        expect(res.body.username).toBe('wenguang');
+        expect(res.body.username).toBe(user.username);
       });
   });
 
-  it('should reject invalid token', () => {
-    return request(app.getHttpServer())
-      .get('/api/v1/user/1')
-      .set('Authorization', 'Bearer invalidtoken')
-      .expect(401);
+  it('should reject invalid token', async () => {
+    return await request(app.getHttpServer())
+      .get(`/api/v1/user/${user.id}`)
+      .set('Authorization', 'Bearer invalid_token')
+      .expect(401)
+      .expect((res) => {
+        expect(res.body).toHaveProperty('message');
+      });
   });
 });

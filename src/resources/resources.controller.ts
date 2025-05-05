@@ -11,8 +11,31 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { SpaceType } from './resources.entity';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
+
+export async function fileResponse(
+  resourceId: string,
+  response: Response,
+  resourcesService: ResourcesService,
+) {
+  const { fileStream, resource } =
+    await resourcesService.downloadFile(resourceId);
+  response.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${resource.name}"`,
+  );
+  response.setHeader(
+    'Content-Type',
+    resource.attrs?.mimetype || 'application/octet-stream',
+  );
+  fileStream.pipe(response);
+}
 
 @Controller('api/v1/resources')
 export class ResourcesController {
@@ -25,12 +48,12 @@ export class ResourcesController {
 
   @Get('root')
   async getRoot(
-    @Query('namespace') namespace: string,
-    @Query('spaceType') spaceType: SpaceType,
+    @Query('namespace_id') namespaceId: string,
+    @Query('space_type') spaceType: SpaceType,
     @Req() req,
   ) {
     return await this.resourcesService.getRoot(
-      namespace,
+      namespaceId,
       spaceType,
       req.user.id,
     );
@@ -38,14 +61,13 @@ export class ResourcesController {
 
   @Get('query')
   async query(
-    @Query('namespace') namespace: string,
+    @Query('namespace') namespaceId: string,
     @Query('spaceType') spaceType: SpaceType,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
-    @Req() req,
   ) {
     return await this.resourcesService.query({
-      namespaceId: namespace,
+      namespaceId,
       spaceType,
       parentId,
       tags,
@@ -69,5 +91,44 @@ export class ResourcesController {
   @Delete(':id')
   async delete(@Req() req, @Param('id') id: string) {
     return await this.resourcesService.delete(req.user, id);
+  }
+
+  @Post('files')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(
+    @Req() req,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('namespace_id') namespaceId: string,
+    @Body('parent_id') parentId: string,
+  ) {
+    return this.resourcesService.uploadFile(
+      req.user,
+      namespaceId,
+      file,
+      parentId,
+      undefined,
+    );
+  }
+
+  @Patch('files/:id')
+  @UseInterceptors(FileInterceptor('file'))
+  async patchFile(
+    @Req() req,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('namespace_id') namespaceId: string,
+    @Body('resource_id') resourceId: string,
+  ) {
+    return this.resourcesService.uploadFile(
+      req.user,
+      namespaceId,
+      file,
+      undefined,
+      resourceId,
+    );
+  }
+
+  @Get('files/:id')
+  async downloadFile(@Param('id') resourceId: string, @Res() res: Response) {
+    return await fileResponse(resourceId, res, this.resourcesService);
   }
 }

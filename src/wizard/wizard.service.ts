@@ -11,6 +11,7 @@ import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
+import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
 import { User } from 'src/user/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
 import { Observable, Subscriber } from 'rxjs';
@@ -32,14 +33,14 @@ class CollectProcessor extends Processor {
     const resourceId = task.payload.resourceId;
     if (task.exception) {
       await this.resourcesService.update(task.user, resourceId, {
-        namespace: task.namespace.id,
+        namespaceId: task.namespace.id,
         content: task.exception.error,
       });
       return {};
     } else if (task.output) {
       const { markdown, title, ...attrs } = task.output || {};
       await this.resourcesService.update(task.user, resourceId, {
-        namespace: task.namespace.id,
+        namespaceId: task.namespace.id,
         name: title,
         content: markdown,
         attrs,
@@ -61,8 +62,11 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly configService: ConfigService,
   ) {
+    const collectProcessor = new CollectProcessor(resourcesService);
+
     this.processors = {
-      collect: new CollectProcessor(resourcesService),
+      collect: collectProcessor,
+      file_reader: collectProcessor,
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -76,22 +80,25 @@ export class WizardService {
     return await this.taskRepository.save(task);
   }
 
-  async collect(user: User, data: CollectRequestDto) {
-    const { html, url, title, namespaceId, spaceType } = data;
-    if (!namespaceId || !spaceType || !url || !html) {
+  async collect(
+    user: User,
+    data: CollectRequestDto,
+  ): Promise<CollectResponseDto> {
+    const { html, url, title, namespace_id, space_type } = data;
+    if (!namespace_id || !space_type || !url || !html) {
       throw new BadRequestException('Missing required fields');
     }
-    const namespace = await this.namespacesService.get(namespaceId);
+    const namespace = await this.namespacesService.get(namespace_id);
 
     const resourceRoot = await this.resourcesService.getRoot(
       namespace.id,
-      spaceType,
+      space_type,
       user.id,
     );
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespace: namespace.id,
+      namespaceId: namespace.id,
       resourceType: 'link',
       parentId: resourceRoot.id,
       attrs: { url },
@@ -108,7 +115,7 @@ export class WizardService {
       payload,
       user,
     });
-    return { taskId: task.id, resourceId: resource.id };
+    return { task_id: task.id, resource_id: resource.id };
   }
 
   async taskDoneCallback(data: TaskCallbackDto) {

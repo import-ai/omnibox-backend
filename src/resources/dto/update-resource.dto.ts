@@ -16,7 +16,7 @@ export class UpdateResourceDto {
 
   @IsString()
   @IsNotEmpty()
-  namespace: string;
+  namespaceId: string;
 
   @IsEnum(ResourceType)
   @IsOptional()

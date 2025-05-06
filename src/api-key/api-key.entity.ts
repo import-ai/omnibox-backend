@@ -1,6 +1,5 @@
 import { Base } from 'src/common/base.entity';
 import { User } from 'src/user/user.entity';
-import { UserRole } from 'src/user-role/user-role.entity';
 import {
   Column,
   Entity,
@@ -20,8 +19,4 @@ export class APIKey extends Base {
   @ManyToOne(() => User, (user) => user.apiKey)
   @JoinColumn({ name: 'user_id' })
   user: User;
-
-  @ManyToOne(() => UserRole, (userRole) => userRole.apiKey)
-  @JoinColumn({ name: 'role' })
-  role: UserRole;
 }

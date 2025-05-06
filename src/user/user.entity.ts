@@ -1,12 +1,9 @@
 import { Base } from 'src/common/base.entity';
 import { APIKey } from 'src/api-key/api-key.entity';
-import { UserRole } from 'src/user-role/user-role.entity';
 import {
   Entity,
   Column,
   OneToMany,
-  ManyToOne,
-  JoinColumn,
   PrimaryGeneratedColumn,
   Index,
 } from 'typeorm';
@@ -42,8 +39,4 @@ export class User extends Base {
 
   @OneToMany(() => APIKey, (apiKeys) => apiKeys.id)
   apiKey: APIKey[];
-
-  @ManyToOne(() => UserRole, (userRole) => userRole.id)
-  @JoinColumn({ name: 'role' })
-  role: UserRole;
 }

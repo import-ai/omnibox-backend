@@ -228,9 +228,7 @@ export class ResourcesService {
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
-    if (['text/plain', 'text/markdown'].includes(file.mimetype)) {
-      await WizardTask.reader.upsert(user, resource, this.taskRepository);
-    }
+    await WizardTask.reader.upsert(user, resource, this.taskRepository);
 
     return resource;
   }

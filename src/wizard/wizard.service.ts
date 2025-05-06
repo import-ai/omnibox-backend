@@ -16,40 +16,9 @@ import { User } from 'src/user/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
 import { Observable, Subscriber } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
-
-abstract class Processor {
-  abstract process(task: Task): Promise<Record<string, any>>;
-}
-
-class CollectProcessor extends Processor {
-  constructor(private readonly resourcesService: ResourcesService) {
-    super();
-  }
-
-  async process(task: Task): Promise<Record<string, any>> {
-    if (!task.payload?.resourceId) {
-      throw new BadRequestException('Invalid task payload');
-    }
-    const resourceId = task.payload.resourceId;
-    if (task.exception) {
-      await this.resourcesService.update(task.user, resourceId, {
-        namespaceId: task.namespace.id,
-        content: task.exception.error,
-      });
-      return {};
-    } else if (task.output) {
-      const { markdown, title, ...attrs } = task.output || {};
-      await this.resourcesService.update(task.user, resourceId, {
-        namespaceId: task.namespace.id,
-        name: title,
-        content: markdown,
-        attrs,
-      });
-      return { resourceId };
-    }
-    return {};
-  }
-}
+import { CollectProcessor } from 'src/wizard/processors/collect.processor';
+import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
+import { Processor } from 'src/wizard/processors/processor.abstract';
 
 @Injectable()
 export class WizardService {
@@ -62,11 +31,9 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly configService: ConfigService,
   ) {
-    const collectProcessor = new CollectProcessor(resourcesService);
-
     this.processors = {
-      collect: collectProcessor,
-      file_reader: collectProcessor,
+      collect: new CollectProcessor(resourcesService),
+      file_reader: new ReaderProcessor(resourcesService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {

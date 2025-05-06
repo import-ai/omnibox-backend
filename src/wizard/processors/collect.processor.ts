@@ -21,11 +21,13 @@ export class CollectProcessor extends Processor {
       return {};
     } else if (task.output) {
       const { markdown, title, ...attrs } = task.output || {};
+      const resource = await this.resourcesService.get(resourceId);
+      const mergedAttrs = { ...(resource?.attrs || {}), ...attrs };
       await this.resourcesService.update(task.user, resourceId, {
         namespaceId: task.namespace.id,
         name: title,
         content: markdown,
-        attrs,
+        attrs: mergedAttrs,
       });
       return { resourceId };
     }

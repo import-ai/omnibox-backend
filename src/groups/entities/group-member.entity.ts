@@ -1,7 +1,7 @@
 import { Base } from 'src/common/base.entity';
-import { Group } from 'src/groups/groups.entity';
 import { Namespace } from 'src/namespaces/namespaces.entity';
 import { User } from 'src/user/user.entity';
+import { Group } from './group.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,

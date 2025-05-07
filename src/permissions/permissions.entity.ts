@@ -9,9 +9,22 @@ import {
   ManyToOne,
   JoinColumn,
   Column,
+  Index,
 } from 'typeorm';
 
 @Entity('permissions')
+@Index(['namespaceId', 'resourceId', 'userId'], {
+  unique: true,
+  where: 'user_id IS NOT NULL AND deleted_at IS NULL',
+})
+@Index(['namespaceId', 'resourceId', 'groupId'], {
+  unique: true,
+  where: 'group_id IS NOT NULL AND deleted_at IS NULL',
+})
+@Index(['namespaceId', 'resourceId'], {
+  unique: true,
+  where: 'user_id IS NULL AND group_id IS NULL AND deleted_at IS NULL',
+})
 export class Permission extends Base {
   @PrimaryGeneratedColumn()
   id: number;
@@ -22,11 +35,26 @@ export class Permission extends Base {
   @Column('uuid', { name: 'resource_id' })
   resourceId: string;
 
-  @Column('uuid', { name: 'group_id' })
+  @Column('uuid', { name: 'group_id', nullable: true })
   groupId: string;
 
-  @Column('uuid', { name: 'user_id' })
+  @Column('uuid', { name: 'user_id', nullable: true })
   userId: string;
+
+  @Column()
+  read: boolean;
+
+  @Column()
+  write: boolean;
+
+  @Column()
+  comment: boolean;
+
+  @Column()
+  share: boolean;
+
+  @Column({ name: 'no_access' })
+  noAccess: boolean;
 
   @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })

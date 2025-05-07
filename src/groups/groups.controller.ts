@@ -14,8 +14,8 @@ import { CreateGroupDto } from './dto/create-group.dto';
 import { plainToInstance } from 'class-transformer';
 import { GroupDto } from './dto/group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
-import { MemberDto } from './dto/member.dto';
-import { AddMemberDto } from './dto/add-member.dto';
+import { GroupUserDto } from './dto/group-user.dto';
+import { AddGroupUserDto } from './dto/add-group-user.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/groups')
 export class GroupController {
@@ -54,7 +54,7 @@ export class GroupController {
     if (
       !(await this.groupsService.userInGroup(namespaceId, groupId, req.user.id))
     ) {
-      throw new UnauthorizedException('user is not a member of this group');
+      throw new UnauthorizedException('current user is not in this group');
     }
     const group = await this.groupsService.updateGroup(
       namespaceId,
@@ -73,13 +73,13 @@ export class GroupController {
     if (
       !(await this.groupsService.userInGroup(namespaceId, groupId, req.user.id))
     ) {
-      throw new UnauthorizedException('user is not a member of this group');
+      throw new UnauthorizedException('current user is not in this group');
     }
     await this.groupsService.deleteGroup(namespaceId, groupId);
   }
 
-  @Get(':groupId/members')
-  async listMembers(
+  @Get(':groupId/users')
+  async listGroupUsers(
     @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
@@ -87,33 +87,33 @@ export class GroupController {
     if (
       !(await this.groupsService.userInGroup(namespaceId, groupId, req.user.id))
     ) {
-      throw new UnauthorizedException('user is not a member of this group');
+      throw new UnauthorizedException('current user is not in this group');
     }
-    const members = await this.groupsService.listMembers(namespaceId, groupId);
-    return plainToInstance(MemberDto, members);
+    const users = await this.groupsService.listGroupUsers(namespaceId, groupId);
+    return plainToInstance(GroupUserDto, users);
   }
 
-  @Post(':groupId/members')
-  async addMember(
+  @Post(':groupId/users')
+  async addGroupUser(
     @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
-    @Body() addMemberDto: AddMemberDto,
+    @Body() addGroupUserDto: AddGroupUserDto,
   ) {
     if (
       !(await this.groupsService.userInGroup(namespaceId, groupId, req.user.id))
     ) {
-      throw new UnauthorizedException('user is not a member of this group');
+      throw new UnauthorizedException('current user is not in this group');
     }
-    await this.groupsService.addMember(
+    await this.groupsService.addGroupUser(
       namespaceId,
       groupId,
-      addMemberDto.userId,
+      addGroupUserDto.userId,
     );
   }
 
-  @Delete(':groupId/members/:userId')
-  async deleteMember(
+  @Delete(':groupId/users/:userId')
+  async deleteGroupUser(
     @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
@@ -122,8 +122,8 @@ export class GroupController {
     if (
       !(await this.groupsService.userInGroup(namespaceId, groupId, req.user.id))
     ) {
-      throw new UnauthorizedException('user is not a member of this group');
+      throw new UnauthorizedException('current user is not in this group');
     }
-    await this.groupsService.deleteMember(namespaceId, groupId, userId);
+    await this.groupsService.deleteGroupUser(namespaceId, groupId, userId);
   }
 }

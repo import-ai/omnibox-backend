@@ -19,7 +19,7 @@ import {
 @Index(['namespace_id', 'user_id', 'group_id'], {
   where: 'deleted_at IS NULL',
 })
-export class GroupMember extends Base {
+export class GroupUser extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 

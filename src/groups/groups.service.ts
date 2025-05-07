@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Group } from './entities/group.entity';
-import { GroupMember } from './entities/group-member.entity';
+import { GroupUser } from './entities/group-user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { User } from 'src/user/user.entity';
@@ -12,20 +12,20 @@ export class GroupsService {
   constructor(
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
-    @InjectRepository(GroupMember)
-    private readonly groupMemberRepository: Repository<GroupMember>,
+    @InjectRepository(GroupUser)
+    private readonly groupUserRepository: Repository<GroupUser>,
     private readonly dataSource: DataSource,
   ) {}
 
   async listGroupByUser(namespaceId: string, userId: string): Promise<Group[]> {
-    const groups = await this.groupMemberRepository.find({
+    const groups = await this.groupUserRepository.find({
       where: {
         namespaceId: namespaceId,
         userId: userId,
       },
       relations: ['group'],
     });
-    return groups.map((member) => member.group);
+    return groups.map((user) => user.group);
   }
 
   async createGroup(
@@ -41,7 +41,7 @@ export class GroupsService {
         }),
       );
       await manager.save(
-        manager.create(GroupMember, {
+        manager.create(GroupUser, {
           namespaceId,
           groupId: group.id,
           userId,
@@ -56,14 +56,14 @@ export class GroupsService {
     groupId: string,
     userId: string,
   ): Promise<boolean> {
-    const member = await this.groupMemberRepository.findOne({
+    const user = await this.groupUserRepository.findOne({
       where: {
         namespaceId,
         groupId,
         userId,
       },
     });
-    return member !== null;
+    return user !== null;
   }
 
   async updateGroup(
@@ -82,22 +82,22 @@ export class GroupsService {
     await this.groupRepository.softDelete({ namespaceId, id: groupId });
   }
 
-  async listMembers(namespaceId: string, groupId: string): Promise<User[]> {
-    const members = await this.groupMemberRepository.find({
+  async listGroupUsers(namespaceId: string, groupId: string): Promise<User[]> {
+    const users = await this.groupUserRepository.find({
       where: { namespaceId, groupId },
       relations: ['user'],
     });
-    return members.map((member) => member.user);
+    return users.map((user) => user.user);
   }
 
-  async addMember(namespaceId: string, groupId: string, userId: string) {
-    await this.groupMemberRepository.save(
-      this.groupMemberRepository.create({ namespaceId, groupId, userId }),
+  async addGroupUser(namespaceId: string, groupId: string, userId: string) {
+    await this.groupUserRepository.save(
+      this.groupUserRepository.create({ namespaceId, groupId, userId }),
     );
   }
 
-  async deleteMember(namespaceId: string, groupId: string, userId: string) {
-    await this.groupMemberRepository.softDelete({
+  async deleteGroupUser(namespaceId: string, groupId: string, userId: string) {
+    await this.groupUserRepository.softDelete({
       namespaceId,
       groupId,
       userId,

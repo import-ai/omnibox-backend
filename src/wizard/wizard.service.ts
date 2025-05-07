@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  MessageEvent,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, MessageEvent } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Task } from 'src/tasks/tasks.entity';
 import { Repository } from 'typeorm';
@@ -86,15 +81,12 @@ export class WizardService {
   }
 
   async taskDoneCallback(data: TaskCallbackDto) {
-    const task = await this.taskRepository.findOne({
+    const task = await this.taskRepository.findOneOrFail({
       where: { id: data.id },
       relations: ['namespace', 'user'],
     });
-    if (!task) {
-      throw new NotFoundException(`Task ${data.id} not found`);
-    }
 
-    task.endedAt = new Date(data.endedAt);
+    task.endedAt = new Date();
     task.exception = data.exception;
     task.output = data.output;
     await this.taskRepository.save(task);

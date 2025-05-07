@@ -9,4 +9,4 @@ import { Group } from './groups.entity';
   controllers: [],
   imports: [TypeOrmModule.forFeature([Group])],
 })
-export class GroupsModule { }
+export class GroupsModule {}

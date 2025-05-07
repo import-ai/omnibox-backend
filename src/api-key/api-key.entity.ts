@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid';
 import { Base } from 'src/common/base.entity';
 import { User } from 'src/user/user.entity';
 import { UserRole } from 'src/user-role/user-role.entity';
@@ -6,13 +7,19 @@ import {
   Entity,
   ManyToOne,
   JoinColumn,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
+  BeforeInsert,
 } from 'typeorm';
 
 @Entity('api_keys')
 export class APIKey extends Base {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn()
   id: string;
+
+  @BeforeInsert()
+  generateId() {
+    this.id = nanoid(10);
+  }
 
   @Column({ length: 32, nullable: true })
   comment: string;

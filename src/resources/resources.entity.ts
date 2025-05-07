@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid';
 import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
 import { Namespace } from 'src/namespaces/namespaces.entity';
@@ -6,7 +7,8 @@ import {
   Entity,
   ManyToOne,
   JoinColumn,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
+  BeforeInsert,
 } from 'typeorm';
 
 export enum SpaceType {
@@ -23,8 +25,13 @@ export enum ResourceType {
 
 @Entity('resources')
 export class Resource extends Base {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn()
   id: string;
+
+  @BeforeInsert()
+  generateId() {
+    this.id = nanoid(10);
+  }
 
   @Column({ nullable: true })
   name: string;

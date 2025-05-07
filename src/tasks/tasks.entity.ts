@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid';
 import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
 import { Namespace } from 'src/namespaces/namespaces.entity';
@@ -6,7 +7,8 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
+  BeforeInsert,
 } from 'typeorm';
 
 @Entity('tasks')
@@ -19,8 +21,13 @@ import {
 //   'concurrency_threshold',
 // ])
 export class Task extends Base {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn()
   id: string;
+
+  @BeforeInsert()
+  generateId() {
+    this.id = nanoid(10);
+  }
 
   @Column({ default: 5 })
   priority: number;

@@ -1,19 +1,26 @@
+import { nanoid } from 'nanoid';
 import { Base } from 'src/common/base.entity';
 import { Resource } from 'src/resources/resources.entity';
 import {
   Column,
   Entity,
-  PrimaryGeneratedColumn,
   Index,
   OneToOne,
   JoinColumn,
+  PrimaryColumn,
+  BeforeInsert,
 } from 'typeorm';
 
 @Entity('namespaces')
 @Index(['name'], { unique: true, where: '"deleted_at" IS NULL' })
 export class Namespace extends Base {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn()
   id: string;
+
+  @BeforeInsert()
+  generateId() {
+    this.id = nanoid(10);
+  }
 
   @Column()
   name: string;

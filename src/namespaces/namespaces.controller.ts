@@ -19,7 +19,7 @@ export class NamespacesController {
     return await this.namespacesService.getByOwner(req.user.id);
   }
 
-  @Get('')
+  @Get()
   async getByUser(@Req() req) {
     return await this.namespacesService.getByUser(req.user);
   }

@@ -40,13 +40,13 @@ export class Task extends Base {
   @Column('jsonb', { nullable: true })
   exception: Record<string, any>;
 
-  @Column({ name: 'started_at', nullable: true })
+  @Column({ name: 'started_at', type: 'timestamptz', nullable: true })
   startedAt: Date;
 
-  @Column({ name: 'ended_at', nullable: true })
+  @Column({ name: 'ended_at', type: 'timestamptz', nullable: true })
   endedAt: Date;
 
-  @Column({ name: 'canceled_at', nullable: true })
+  @Column({ name: 'canceled_at', type: 'timestamptz', nullable: true })
   canceledAt: Date;
 
   @ManyToOne(() => User)

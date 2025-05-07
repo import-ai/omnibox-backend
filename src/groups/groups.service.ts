@@ -5,6 +5,7 @@ import { Group } from './entities/group.entity';
 import { GroupMember } from './entities/group-member.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
+import { User } from 'src/user/user.entity';
 
 @Injectable()
 export class GroupsService {
@@ -79,5 +80,27 @@ export class GroupsService {
 
   async deleteGroup(namespaceId: string, groupId: string) {
     await this.groupRepository.softDelete({ namespaceId, id: groupId });
+  }
+
+  async listMembers(namespaceId: string, groupId: string): Promise<User[]> {
+    const members = await this.groupMemberRepository.find({
+      where: { namespaceId, groupId },
+      relations: ['user'],
+    });
+    return members.map((member) => member.user);
+  }
+
+  async addMember(namespaceId: string, groupId: string, userId: string) {
+    await this.groupMemberRepository.save(
+      this.groupMemberRepository.create({ namespaceId, groupId, userId }),
+    );
+  }
+
+  async deleteMember(namespaceId: string, groupId: string, userId: string) {
+    await this.groupMemberRepository.softDelete({
+      namespaceId,
+      groupId,
+      userId,
+    });
   }
 }

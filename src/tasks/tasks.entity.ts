@@ -21,12 +21,15 @@ import {
 //   'concurrency_threshold',
 // ])
 export class Task extends Base {
-  @PrimaryColumn()
+  @PrimaryColumn('varchar', {
+    length: 12,
+    unique: true,
+  })
   id: string;
 
   @BeforeInsert()
-  generateId() {
-    this.id = nanoid(10);
+  generateId?() {
+    this.id = nanoid(12);
   }
 
   @Column({ default: 5 })

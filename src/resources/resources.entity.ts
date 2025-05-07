@@ -25,12 +25,15 @@ export enum ResourceType {
 
 @Entity('resources')
 export class Resource extends Base {
-  @PrimaryColumn()
+  @PrimaryColumn('varchar', {
+    length: 12,
+    unique: true,
+  })
   id: string;
 
   @BeforeInsert()
-  generateId() {
-    this.id = nanoid(10);
+  generateId?() {
+    this.id = nanoid(12);
   }
 
   @Column({ nullable: true })
@@ -39,7 +42,7 @@ export class Resource extends Base {
   @Column({ name: 'resource_type', type: 'enum', enum: ResourceType })
   resourceType: string;
 
-  @Column('uuid', { name: 'parent_id', nullable: true })
+  @Column('varchar', { name: 'parent_id', nullable: true })
   parentId: string | null;
 
   @Column('jsonb', { nullable: true })

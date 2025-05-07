@@ -13,12 +13,15 @@ import {
 
 @Entity('api_keys')
 export class APIKey extends Base {
-  @PrimaryColumn()
+  @PrimaryColumn('varchar', {
+    length: 12,
+    unique: true,
+  })
   id: string;
 
   @BeforeInsert()
-  generateId() {
-    this.id = nanoid(10);
+  generateId?() {
+    this.id = nanoid(12);
   }
 
   @Column({ length: 32, nullable: true })

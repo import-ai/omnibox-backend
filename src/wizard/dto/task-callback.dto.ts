@@ -1,13 +1,9 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class TaskCallbackDto {
   @IsString()
   @IsNotEmpty()
   id: string;
-
-  @IsString()
-  @IsNotEmpty()
-  endedAt: string;
 
   @IsOptional()
   exception: Record<string, any>;

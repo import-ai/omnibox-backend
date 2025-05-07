@@ -8,7 +8,6 @@ import {
   Column,
 } from 'typeorm';
 
-
 @Entity('groups')
 export class Group extends Base {
   @PrimaryGeneratedColumn('uuid')

@@ -6,6 +6,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 @Module({
   providers: [GroupMembersService],
   exports: [GroupMembersService],
-  imports: [TypeOrmModule.forFeature([GroupMember])]
+  imports: [TypeOrmModule.forFeature([GroupMember])],
 })
-export class GroupMemberModule { }
+export class GroupMemberModule {}

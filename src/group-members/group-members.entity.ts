@@ -12,7 +12,10 @@ import {
 } from 'typeorm';
 
 @Entity('group_members')
-@Index(['namespace_id', 'group_id', 'user_id'], { unique: true, where: 'deleted_at IS NULL' })
+@Index(['namespace_id', 'group_id', 'user_id'], {
+  unique: true,
+  where: 'deleted_at IS NULL',
+})
 export class GroupMember extends Base {
   @PrimaryGeneratedColumn()
   id: number;

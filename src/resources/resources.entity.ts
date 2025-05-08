@@ -26,14 +26,13 @@ export enum ResourceType {
 @Entity('resources')
 export class Resource extends Base {
   @PrimaryColumn('varchar', {
-    length: 12,
-    unique: true,
+    length: 16,
   })
   id: string;
 
   @BeforeInsert()
   generateId?() {
-    this.id = nanoid(12);
+    this.id = nanoid(16);
   }
 
   @Column({ nullable: true })

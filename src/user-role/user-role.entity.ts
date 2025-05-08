@@ -1,27 +1,12 @@
-import { nanoid } from 'nanoid';
 import { Base } from 'src/common/base.entity';
 import { User } from 'src/user/user.entity';
 import { APIKey } from 'src/api-key/api-key.entity';
-import {
-  Column,
-  Entity,
-  OneToMany,
-  PrimaryColumn,
-  BeforeInsert,
-} from 'typeorm';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('user_roles')
 export class UserRole extends Base {
-  @PrimaryColumn('varchar', {
-    length: 12,
-    unique: true,
-  })
+  @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @BeforeInsert()
-  generateId?() {
-    this.id = nanoid(12);
-  }
 
   @Column({ name: 'target_id', length: 22 })
   targetId: string;

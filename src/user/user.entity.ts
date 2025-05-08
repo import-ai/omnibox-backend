@@ -1,4 +1,3 @@
-import { nanoid } from 'nanoid';
 import { Base } from 'src/common/base.entity';
 import { APIKey } from 'src/api-key/api-key.entity';
 import { UserRole } from 'src/user-role/user-role.entity';
@@ -8,8 +7,7 @@ import {
   OneToMany,
   ManyToOne,
   JoinColumn,
-  PrimaryColumn,
-  BeforeInsert,
+  PrimaryGeneratedColumn,
   Index,
 } from 'typeorm';
 
@@ -23,16 +21,8 @@ import {
   where: '"deleted_at" IS NULL',
 })
 export class User extends Base {
-  @PrimaryColumn('varchar', {
-    length: 12,
-    unique: true,
-  })
+  @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @BeforeInsert()
-  generateId?() {
-    this.id = nanoid(12);
-  }
 
   @Column({
     nullable: true,

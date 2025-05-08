@@ -17,7 +17,7 @@ export class NamespaceMember extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'enum', enum: ['owner', 'member'] })
+  @Column({ type: 'enum', enum: ['owner', 'member'], default: 'owner' })
   role: string;
 
   @ManyToOne(() => Namespace)

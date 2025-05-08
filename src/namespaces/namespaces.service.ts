@@ -1,7 +1,6 @@
 import each from 'src/utils/each';
 import { ArrayContains, DataSource, EntityManager, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import {
   ConflictException,
@@ -9,15 +8,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Resource } from 'src/resources/resources.entity';
-import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
 import { User } from '../user/user.entity';
+import { Namespace } from './entities/namespace.entity';
+import { NamespaceMember } from './entities/namespace-member.entity';
+import { NamespaceMemberDto } from './dto/namespace-member.dto';
 
 @Injectable()
 export class NamespacesService {
   constructor(
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
-    private readonly namespaceMemberService: NamespaceMemberService,
+
+    @InjectRepository(NamespaceMember)
+    private namespaceMemberRepository: Repository<NamespaceMember>,
+
     private readonly dataSource: DataSource,
   ) {}
 
@@ -106,12 +110,7 @@ export class NamespacesService {
         user: { id: ownerId },
       }),
     );
-    await this.namespaceMemberService.addMember(
-      namespace.id,
-      ownerId,
-      privateRoot.id,
-      manager,
-    );
+    await this.addMember(namespace.id, ownerId, privateRoot.id, manager);
     await manager.update(Namespace, namespace.id, {
       rootResource: { id: publicRoot.id },
     });
@@ -158,5 +157,57 @@ export class NamespacesService {
 
   async delete(id: string) {
     await this.namespaceRepository.softDelete(id);
+  }
+
+  async addMember(
+    namespaceId: string,
+    userId: string,
+    privateRootId: string,
+    manager?: EntityManager,
+  ) {
+    const repo = manager
+      ? manager.getRepository(NamespaceMember)
+      : this.namespaceMemberRepository;
+    await repo.save(
+      repo.create({
+        namespace: { id: namespaceId },
+        user: { id: userId },
+        rootResource: { id: privateRootId },
+      }),
+    );
+  }
+
+  async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
+    const member = await this.namespaceMemberRepository.findOne({
+      where: {
+        user: { id: userId },
+        namespace: { id: namespaceId },
+      },
+      relations: ['rootResource'],
+    });
+    if (member === null) {
+      throw new NotFoundException('Root resource not found.');
+    }
+    return member.rootResource;
+  }
+
+  async listNamespaces(userId: string): Promise<Namespace[]> {
+    const namespaces = await this.namespaceMemberRepository.find({
+      where: {
+        user: { id: userId },
+      },
+      relations: ['namespace'],
+    });
+    return namespaces.map((v) => v.namespace);
+  }
+
+  async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
+    const members = await this.namespaceMemberRepository.find({
+      where: { namespace: { id: namespaceId } },
+      relations: ['user'],
+    });
+    return members.map((member) => {
+      return { email: member.user.email, role: member.role };
+    });
   }
 }

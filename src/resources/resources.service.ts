@@ -16,7 +16,6 @@ import {
 } from '@nestjs/common';
 import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
-import { NamespaceMemberService } from 'src/namespace-members/namespace-members.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
@@ -36,7 +35,6 @@ export class ResourcesService {
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
     private readonly namespaceService: NamespacesService,
-    private readonly namespaceMemberService: NamespaceMemberService,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
   ) {}
@@ -91,10 +89,7 @@ export class ResourcesService {
     if (spaceType === SpaceType.TEAMSPACE) {
       resource = await this.namespaceService.getTeamspaceRoot(namespace);
     } else {
-      resource = await this.namespaceMemberService.getPrivateRoot(
-        userId,
-        namespace,
-      );
+      resource = await this.namespaceService.getPrivateRoot(userId, namespace);
     }
     const children = await this.query({
       namespaceId: namespace,

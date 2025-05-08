@@ -204,6 +204,7 @@ export class NamespacesService {
   async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
       where: { namespace: { id: namespaceId } },
+      relations: ['user'],
     });
     return members.map((member) => {
       return { email: member.user.email, role: member.role };

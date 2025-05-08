@@ -11,6 +11,7 @@ import { Resource } from 'src/resources/resources.entity';
 import { User } from '../user/user.entity';
 import { Namespace } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
+import { NamespaceMemberDto } from './dto/namespace-member.dto';
 
 @Injectable()
 export class NamespacesService {
@@ -198,5 +199,14 @@ export class NamespacesService {
       relations: ['namespace'],
     });
     return namespaces.map((v) => v.namespace);
+  }
+
+  async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
+    const members = await this.namespaceMemberRepository.find({
+      where: { namespace: { id: namespaceId } },
+    });
+    return members.map((member) => {
+      return { email: member.user.email, role: member.role };
+    });
   }
 }

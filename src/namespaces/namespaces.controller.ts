@@ -25,6 +25,11 @@ export class NamespacesController {
     return await this.namespacesService.get(id);
   }
 
+  @Get(':id/members')
+  async listMembers(@Req() req, @Param('id') namespaceId: string) {
+    return await this.namespacesService.listMembers(namespaceId);
+  }
+
   @Post()
   async create(@Req() req, @Body('name') name: string) {
     return await this.namespacesService.create(req.user.id, name);

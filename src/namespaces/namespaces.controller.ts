@@ -14,14 +14,10 @@ import {
 export class NamespacesController {
   constructor(private readonly namespacesService: NamespacesService) {}
 
+  @Get()
   @Get('user')
-  async getByOwner(@Req() req) {
-    return await this.namespacesService.getByOwner(req.user.id);
-  }
-
-  @Get('')
   async getByUser(@Req() req) {
-    return await this.namespacesService.getByUser(req.user);
+    return await this.namespacesService.listNamespaces(req.user.id);
   }
 
   @Get(':id')

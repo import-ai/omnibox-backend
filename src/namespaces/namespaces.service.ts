@@ -190,12 +190,13 @@ export class NamespacesService {
     return member.rootResource;
   }
 
-  async listNamespaces(userId: string): Promise<NamespaceMember[]> {
-    return await this.namespaceMemberRepository.find({
+  async listNamespaces(userId: string): Promise<Namespace[]> {
+    const namespaces = await this.namespaceMemberRepository.find({
       where: {
         user: { id: userId },
       },
       relations: ['namespace'],
     });
+    return namespaces.map((v) => v.namespace);
   }
 }

@@ -1,6 +1,5 @@
 import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
   Column,
   Entity,
@@ -8,6 +7,7 @@ import {
   JoinColumn,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Namespace } from 'src/namespaces/entities/namespace.entity';
 
 export enum SpaceType {
   PRIVATE = 'private',

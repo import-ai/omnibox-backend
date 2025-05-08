@@ -1,6 +1,5 @@
 import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
   Column,
   Entity,
@@ -8,6 +7,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Namespace } from 'src/namespaces/entities/namespace.entity';
 
 @Entity('tasks')
 // @Index('idx_task_ns_pri_s_e_c_time', [

@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from 'src/user/user.module';
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { NamespacesController } from 'src/namespaces/namespaces.controller';
-import { NamespaceMembersModule } from 'src/namespace-members/namespace-members.module';
+import { Namespace } from './entities/namespace.entity';
+import { NamespaceMember } from './entities/namespace-member.entity';
 
 @Module({
   exports: [NamespacesService],
@@ -13,7 +13,7 @@ import { NamespaceMembersModule } from 'src/namespace-members/namespace-members.
   imports: [
     UserModule,
     TypeOrmModule.forFeature([Namespace]),
-    NamespaceMembersModule,
+    TypeOrmModule.forFeature([NamespaceMember]),
   ],
 })
 export class NamespacesModule {}

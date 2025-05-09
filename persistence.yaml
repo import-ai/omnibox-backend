@@ -1,0 +1,8 @@
+services:
+  postgres:
+    volumes:
+      - "${PWD}/.tmp/data/postgres:/var/lib/postgresql/data"
+
+  minio:
+    volumes:
+      - "${PWD}/.tmp/data/minio:/data"

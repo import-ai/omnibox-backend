@@ -26,9 +26,10 @@ export async function fileResponse(
 ) {
   const { fileStream, resource } =
     await resourcesService.downloadFile(resourceId);
+  const encodedName = encodeURIComponent(resource.name);
   response.setHeader(
     'Content-Disposition',
-    `attachment; filename="${resource.name}"`,
+    `attachment; filename="${encodedName}"`,
   );
   response.setHeader(
     'Content-Type',

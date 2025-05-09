@@ -28,7 +28,7 @@ describe('ResourcesController (e2e)', () => {
     await app.close();
   });
 
-  it('/api/v1/resources/upload (POST) and /api/v1/resources/download (GET)', async () => {
+  it('files upload (POST) and files download (GET)', async () => {
     // Prepare a test file
     const testFilePath = path.join(__dirname, 'test-upload.txt');
     fs.writeFileSync(testFilePath, 'hello world');

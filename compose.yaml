@@ -6,6 +6,9 @@ services:
       - "${OBB_PORT:-8000}:${OBB_PORT:-8000}"
     env_file:
       - .env
+    environment:
+      OBB_DB_HOST: postgres
+      OBB_MINIO_ENDPOINT: http://username:password@minio:9000
     depends_on:
       postgres:
         condition: service_healthy
@@ -26,8 +29,6 @@ services:
       - POSTGRES_USER=${OBB_DB_USERNAME:-omnibox}
       - POSTGRES_PASSWORD=${OBB_DB_PASSWORD:-omnibox}
       - POSTGRES_PORT=${OBB_DB_PORT:-5432}
-    volumes:
-      - ${PWD}/.tmp/data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: [ "CMD", "pg_isready", "-q", "-d", "${OBB_DB_DATABASE:-omnibox}", "-U", "${OBB_DB_USERNAME:-omnibox}", "-p", "${OBB_DB_PORT:-5432}" ]
       interval: 5s
@@ -46,8 +47,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    volumes:
-      - '${PWD}/.tmp/data/minio:/data'
     ports:
       - '9001:9001'
       - '9000:9000'

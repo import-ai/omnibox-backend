@@ -1,5 +1,5 @@
-import { nanoid } from 'nanoid';
 import { Base } from 'src/common/base.entity';
+import generateId from 'src/utils/generate_id';
 import { Resource } from 'src/resources/resources.entity';
 import {
   Column,
@@ -21,7 +21,7 @@ export class Namespace extends Base {
 
   @BeforeInsert()
   generateId?() {
-    this.id = nanoid(6);
+    this.id = generateId(6);
   }
 
   @Column()

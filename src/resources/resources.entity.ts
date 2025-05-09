@@ -1,6 +1,6 @@
-import { nanoid } from 'nanoid';
 import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
+import generateId from 'src/utils/generate_id';
 import { Namespace } from 'src/namespaces/namespaces.entity';
 import {
   Column,
@@ -32,7 +32,7 @@ export class Resource extends Base {
 
   @BeforeInsert()
   generateId?() {
-    this.id = nanoid(16);
+    this.id = generateId(16);
   }
 
   @Column({ nullable: true })

@@ -1,3 +1,4 @@
+import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from 'src/mail/mail.service';
 import { UserService } from 'src/user/user.service';
@@ -10,7 +11,6 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { DataSource } from 'typeorm';
 
 @Injectable()
 export class AuthService {

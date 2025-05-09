@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 // import { CacheModule } from '@nestjs/cache-manager';
 import { AuthModule } from 'src/auth/auth.module';
@@ -11,10 +12,17 @@ import { APIKeyModule } from 'src/api-key/api-key.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserRoleModule } from 'src/user-role/user-role.module';
 import { ResourcesModule } from 'src/resources/resources.module';
+import { SnakeCaseInterceptor } from 'src/interceptor/snake-case';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 
 @Module({
   controllers: [AppController],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: SnakeCaseInterceptor,
+    },
+  ],
   imports: [
     ConfigModule.forRoot({
       cache: true,

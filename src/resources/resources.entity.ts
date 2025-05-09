@@ -1,11 +1,13 @@
 import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
+import generateId from 'src/utils/generate_id';
 import {
   Column,
   Entity,
   ManyToOne,
   JoinColumn,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
+  BeforeInsert,
 } from 'typeorm';
 import { Namespace } from 'src/namespaces/entities/namespace.entity';
 
@@ -23,8 +25,15 @@ export enum ResourceType {
 
 @Entity('resources')
 export class Resource extends Base {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('varchar', {
+    length: 16,
+  })
   id: string;
+
+  @BeforeInsert()
+  generateId?() {
+    this.id = generateId(16);
+  }
 
   @Column({ nullable: true })
   name: string;
@@ -32,7 +41,7 @@ export class Resource extends Base {
   @Column({ name: 'resource_type', type: 'enum', enum: ResourceType })
   resourceType: string;
 
-  @Column('uuid', { name: 'parent_id', nullable: true })
+  @Column('varchar', { name: 'parent_id', nullable: true })
   parentId: string | null;
 
   @Column('jsonb', { nullable: true })

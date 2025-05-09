@@ -27,9 +27,6 @@ export class Namespace extends Base {
   @Column()
   name: string;
 
-  @Column('uuid', { array: true, nullable: true, default: [] })
-  collaborators: string[];
-
   @Column('uuid', { array: true, default: [] })
   owner_id: string[];
 

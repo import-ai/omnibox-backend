@@ -14,7 +14,6 @@ import { UserRoleModule } from 'src/user-role/user-role.module';
 import { ResourcesModule } from 'src/resources/resources.module';
 import { SnakeCaseInterceptor } from 'src/interceptor/snake-case';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
-import { NamespaceMembersModule } from 'src/namespace-members/namespace-members.module';
 
 @Module({
   controllers: [AppController],
@@ -35,7 +34,6 @@ import { NamespaceMembersModule } from 'src/namespace-members/namespace-members.
     APIKeyModule,
     UserRoleModule,
     NamespacesModule,
-    NamespaceMembersModule,
     ResourcesModule,
     TasksModule,
     WizardModule,

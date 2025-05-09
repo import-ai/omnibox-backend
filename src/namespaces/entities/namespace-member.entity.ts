@@ -1,5 +1,5 @@
 import { Base } from 'src/common/base.entity';
-import { Namespace } from 'src/namespaces/namespaces.entity';
+import { Namespace } from 'src/namespaces/entities/namespace.entity';
 import { Resource } from 'src/resources/resources.entity';
 import { User } from 'src/user/user.entity';
 import {
@@ -8,6 +8,7 @@ import {
   Index,
   ManyToOne,
   JoinColumn,
+  Column,
 } from 'typeorm';
 
 @Entity('namespace_members')
@@ -15,6 +16,9 @@ import {
 export class NamespaceMember extends Base {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ type: 'enum', enum: ['owner', 'member'], default: 'owner' })
+  role: string;
 
   @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })

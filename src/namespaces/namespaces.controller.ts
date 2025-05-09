@@ -15,18 +15,18 @@ export class NamespacesController {
   constructor(private readonly namespacesService: NamespacesService) {}
 
   @Get('user')
-  async getByOwner(@Req() req) {
-    return await this.namespacesService.getByOwner(req.user.id);
-  }
-
-  @Get()
   async getByUser(@Req() req) {
-    return await this.namespacesService.getByUser(req.user);
+    return await this.namespacesService.listNamespaces(req.user.id);
   }
 
   @Get(':id')
   async get(@Param('id') id: string) {
     return await this.namespacesService.get(id);
+  }
+
+  @Get(':id/members')
+  async listMembers(@Req() req, @Param('id') namespaceId: string) {
+    return await this.namespacesService.listMembers(namespaceId);
   }
 
   @Post()

@@ -12,13 +12,3 @@ services:
       timeout: 3s
       retries: 60
       start_period: 30s
-
-  pgadmin:
-    image: dpage/pgadmin4
-    ports:
-      - '8888:80'
-    environment:
-      PGADMIN_DEFAULT_EMAIL: user-name@domain-name.com
-      PGADMIN_DEFAULT_PASSWORD: strong-password
-    volumes:
-      - ${PWD}/.tmp/data/pgadmin:/var/lib/pgadmin

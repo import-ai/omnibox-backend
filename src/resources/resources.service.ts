@@ -27,6 +27,13 @@ export interface IQuery {
   tags?: string;
 }
 
+function decode(text: string) {
+  if (!text) {
+    return text;
+  }
+  return decodeURIComponent(Buffer.from(text, 'binary').toString('utf-8'));
+}
+
 @Injectable()
 export class ResourcesService {
   constructor(
@@ -194,6 +201,10 @@ export class ResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
+    // TODO name received is not utf-8 string.
+    file.originalname = decode(file.originalname);
+    file.filename = decode(file.filename);
+
     let resource: Resource;
     if (resourceId) {
       resource = await this.get(resourceId);

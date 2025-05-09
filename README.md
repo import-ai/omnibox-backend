@@ -16,6 +16,25 @@
   docker compose -f compose.yaml -f build.yaml up -d --build
   ```
 
++ Run with persistence postgres and minio data
+
+  ```shell
+  docker compose ... -f persistence.yaml ...
+  ```
+
++ Run with pgadmin
+
+  ```shell
+  docker compose ... -f pgadmin.yaml ...
+  ```
+
+Then login with:
+
+| Name     | Value            |
+|----------|------------------|
+| Username | `omnibox@qq.com` |
+| Password | `Passw0rd`       |
+
 ### Locally
 
 ```bash

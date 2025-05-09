@@ -37,7 +37,7 @@ export async function fileResponse(
   fileStream.pipe(response);
 }
 
-@Controller('api/v1/resources')
+@Controller('api/v1/namespaces/:namespaceId/resources')
 export class ResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
 

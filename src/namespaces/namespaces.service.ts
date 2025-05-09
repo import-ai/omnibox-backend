@@ -53,15 +53,6 @@ export class NamespacesService {
     return namespaces;
   }
 
-  async getByUser(user: User) {
-    return await this.namespaceRepository.find({
-      where: [
-        { owner_id: ArrayContains([user.id]) },
-        { collaborators: ArrayContains([user.id]) },
-      ],
-    });
-  }
-
   async get(id: string, manager?: EntityManager) {
     const repo = manager
       ? manager.getRepository(Namespace)
@@ -115,26 +106,6 @@ export class NamespacesService {
       rootResource: { id: publicRoot.id },
     });
     return namespace;
-  }
-
-  async disableUser(namespaceId: string, userId: string) {
-    const namespace = await this.get(namespaceId);
-    if (!namespace.collaborators.includes(userId)) {
-      return;
-    }
-    // todo: remove user from collaborators
-    return;
-  }
-
-  async removeUser(namespaceId: string, userId: string) {
-    const namespace = await this.get(namespaceId);
-    if (!namespace.collaborators.includes(userId)) {
-      return;
-    }
-    namespace.collaborators = namespace.collaborators.filter(
-      (collaborator) => collaborator !== userId,
-    );
-    await this.namespaceRepository.save(namespace);
   }
 
   async update(

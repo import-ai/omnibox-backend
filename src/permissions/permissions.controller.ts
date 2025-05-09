@@ -2,7 +2,6 @@ import { Body, Controller, Get, Param, Patch, Req } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { PermissionDto } from './dto/permission.dto';
 import { plainToInstance } from 'class-transformer';
-import { group } from 'console';
 
 @Controller('api/v1/resources/:resourceId/permissions')
 export class PermissionsController {

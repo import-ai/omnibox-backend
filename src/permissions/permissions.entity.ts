@@ -1,6 +1,6 @@
 import { Base } from 'src/common/base.entity';
 import { Group } from 'src/groups/entities/group.entity';
-import { Namespace } from 'src/namespaces/namespaces.entity';
+import { Namespace } from 'src/namespaces/entities/namespace.entity';
 import { Resource } from 'src/resources/resources.entity';
 import { User } from 'src/user/user.entity';
 import {
@@ -29,16 +29,16 @@ export class Permission extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column('uuid', { name: 'namespace_id' })
+  @Column({ name: 'namespace_id' })
   namespaceId: string;
 
-  @Column('uuid', { name: 'resource_id' })
+  @Column({ name: 'resource_id' })
   resourceId: string;
 
-  @Column('uuid', { name: 'group_id', nullable: true })
+  @Column({ name: 'group_id', nullable: true })
   groupId: string;
 
-  @Column('uuid', { name: 'user_id', nullable: true })
+  @Column({ name: 'user_id', nullable: true })
   userId: string;
 
   @Column()

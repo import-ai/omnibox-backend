@@ -1,5 +1,4 @@
 import { Base } from 'src/common/base.entity';
-import { Namespace } from 'src/namespaces/namespaces.entity';
 import { User } from 'src/user/user.entity';
 import { Group } from './group.entity';
 import {
@@ -10,6 +9,7 @@ import {
   Index,
   Column,
 } from 'typeorm';
+import { Namespace } from 'src/namespaces/entities/namespace.entity';
 
 @Entity('group_members')
 @Index(['namespace_id', 'group_id', 'user_id'], {
@@ -23,13 +23,13 @@ export class GroupUser extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column('uuid', { name: 'namespace_id' })
+  @Column({ name: 'namespace_id' })
   namespaceId: string;
 
-  @Column('uuid', { name: 'group_id' })
+  @Column({ name: 'group_id' })
   groupId: string;
 
-  @Column('uuid', { name: 'user_id' })
+  @Column({ name: 'user_id' })
   userId: string;
 
   @ManyToOne(() => Namespace)

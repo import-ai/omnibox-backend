@@ -2,8 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Permission } from './permissions.entity';
 import { Repository, IsNull } from 'typeorm';
-import { PermissionDto } from './dto/permission.dto';
 import { ResourcesService } from 'src/resources/resources.service';
+import { PermissionDto } from './dto/permission.dto';
+import {
+  GroupPermissionDto,
+  ListRespDto,
+  UserPermissionDto,
+} from './dto/list-resp.dto';
+import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class PermissionsService {
@@ -12,6 +18,37 @@ export class PermissionsService {
     private readonly permissionRepository: Repository<Permission>,
     private readonly resourcesService: ResourcesService,
   ) {}
+
+  async listPermissions(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<ListRespDto> {
+    const permissions = await this.permissionRepository.find({
+      where: { namespaceId, resourceId },
+      relations: ['user', 'group'],
+    });
+    const resp = new ListRespDto();
+    for (const permission of permissions) {
+      if (permission.user) {
+        resp.entries.push(
+          plainToInstance(UserPermissionDto, {
+            user: permission.user,
+            permission: permission.permissionType,
+          }),
+        );
+      } else if (permission.group) {
+        resp.entries.push(
+          plainToInstance(GroupPermissionDto, {
+            group: permission.group,
+            permission: permission.permissionType,
+          }),
+        );
+      } else {
+        resp.globalPermission = permission.permissionType;
+      }
+    }
+    return resp;
+  }
 
   async getNamespacePermission(resourceId: string): Promise<Permission | null> {
     return await this.permissionRepository.findOne({
@@ -28,11 +65,7 @@ export class PermissionsService {
       {
         namespaceId: resource.namespace.id,
         resourceId,
-        read: permission.read,
-        write: permission.write,
-        comment: permission.comment,
-        share: permission.share,
-        noAccess: permission.noAccess,
+        permissionType: permission.permission,
       },
       ['namespaceId', 'resourceId'],
     );
@@ -58,11 +91,7 @@ export class PermissionsService {
         namespaceId: resource.namespace.id,
         resourceId,
         groupId,
-        read: permission.read,
-        write: permission.write,
-        comment: permission.comment,
-        share: permission.share,
-        noAccess: permission.noAccess,
+        permissionType: permission.permission,
       },
       ['namespaceId', 'resourceId', 'groupId'],
     );
@@ -88,11 +117,7 @@ export class PermissionsService {
         namespaceId: resource.namespace.id,
         resourceId,
         userId,
-        read: permission.read,
-        write: permission.write,
-        comment: permission.comment,
-        share: permission.share,
-        noAccess: permission.noAccess,
+        permissionType: permission.permission,
       },
       ['namespaceId', 'resourceId', 'userId'],
     );

@@ -11,6 +11,7 @@ import {
   Column,
   Index,
 } from 'typeorm';
+import { PermissionType } from './permission-type.enum';
 
 @Entity('permissions')
 @Index(['namespaceId', 'resourceId', 'userId'], {
@@ -36,25 +37,13 @@ export class Permission extends Base {
   resourceId: string;
 
   @Column({ name: 'group_id', nullable: true })
-  groupId: string;
+  groupId?: string;
 
   @Column({ name: 'user_id', nullable: true })
-  userId: string;
+  userId?: string;
 
-  @Column()
-  read: boolean;
-
-  @Column()
-  write: boolean;
-
-  @Column()
-  comment: boolean;
-
-  @Column()
-  share: boolean;
-
-  @Column({ name: 'no_access' })
-  noAccess: boolean;
+  @Column({ type: 'enum', enum: PermissionType })
+  permissionType: PermissionType;
 
   @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })

@@ -3,32 +3,26 @@ import { PermissionsService } from './permissions.service';
 import { PermissionDto } from './dto/permission.dto';
 import { plainToInstance } from 'class-transformer';
 
-@Controller('api/v1/resources/:resourceId/permissions')
+@Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')
 export class PermissionsController {
   constructor(private readonly permissionsService: PermissionsService) {}
 
   @Get()
-  async getNamespacePermission(
+  async listPermissions(
     @Req() req,
+    @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    const permission =
-      await this.permissionsService.getNamespacePermission(resourceId);
-    if (permission === null) {
-      return plainToInstance(PermissionDto, {
-        read: false,
-        write: false,
-        comment: false,
-        share: false,
-        noAccess: false,
-      });
-    }
-    return plainToInstance(PermissionDto, permission);
+    return await this.permissionsService.listPermissions(
+      namespaceId,
+      resourceId,
+    );
   }
 
   @Patch()
-  async updateNamespacePermission(
+  async updateGlobalPermission(
     @Req() req,
+    @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Body() permissionDto: PermissionDto,
   ) {
@@ -41,6 +35,7 @@ export class PermissionsController {
   @Get('groups/:groupId')
   async getGroupPermission(
     @Req() req,
+    @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('groupId') groupId: string,
   ) {
@@ -63,6 +58,7 @@ export class PermissionsController {
   @Patch('groups/:groupId')
   async updateGroupPermission(
     @Req() req,
+    @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('groupId') groupId: string,
     @Body() permissionDto: PermissionDto,
@@ -77,6 +73,7 @@ export class PermissionsController {
   @Get('users/:userId')
   async getUserPermission(
     @Req() req,
+    @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
   ) {
@@ -99,6 +96,7 @@ export class PermissionsController {
   @Patch('users/:userId')
   async updateUserPermission(
     @Req() req,
+    @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
     @Body() permissionDto: PermissionDto,

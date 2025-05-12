@@ -47,17 +47,17 @@ export class Permission extends Base {
 
   @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })
-  namespace: Namespace;
+  namespace?: Namespace;
 
   @ManyToOne(() => Resource)
   @JoinColumn({ name: 'resource_id' })
-  resource: Resource;
+  resource?: Resource;
 
   @ManyToOne(() => Group)
   @JoinColumn({ name: 'group_id' })
-  group: Group;
+  group?: Group;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
-  user: User;
+  user?: User;
 }

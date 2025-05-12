@@ -16,7 +16,6 @@ export class PermissionsService {
   constructor(
     @InjectRepository(Permission)
     private readonly permissionRepository: Repository<Permission>,
-    private readonly resourcesService: ResourcesService,
   ) {}
 
   async listPermissions(
@@ -57,13 +56,13 @@ export class PermissionsService {
   }
 
   async updateNamespacePermission(
+    namespaceId: string,
     resourceId: string,
     permission: PermissionDto,
   ) {
-    const resource = await this.resourcesService.get(resourceId);
     await this.permissionRepository.upsert(
       {
-        namespaceId: resource.namespace.id,
+        namespaceId,
         resourceId,
         permissionType: permission.permission,
       },
@@ -72,23 +71,24 @@ export class PermissionsService {
   }
 
   async getGroupPermission(
+    namespaceId: string,
     resourceId: string,
     groupId: string,
   ): Promise<Permission | null> {
     return await this.permissionRepository.findOne({
-      where: { resourceId, groupId, userId: IsNull() },
+      where: { namespaceId, resourceId, groupId, userId: IsNull() },
     });
   }
 
   async updateGroupPermission(
+    namespaceId: string,
     resourceId: string,
     groupId: string,
     permission: PermissionDto,
   ) {
-    const resource = await this.resourcesService.get(resourceId);
     await this.permissionRepository.upsert(
       {
-        namespaceId: resource.namespace.id,
+        namespaceId,
         resourceId,
         groupId,
         permissionType: permission.permission,
@@ -98,23 +98,24 @@ export class PermissionsService {
   }
 
   async getUserPermission(
+    namespaceId: string,
     resourceId: string,
     userId: string,
   ): Promise<Permission | null> {
     return await this.permissionRepository.findOne({
-      where: { resourceId, groupId: IsNull(), userId },
+      where: { namespaceId, resourceId, groupId: IsNull(), userId },
     });
   }
 
   async updateUserPermission(
+    namespaceId: string,
     resourceId: string,
     userId: string,
     permission: PermissionDto,
   ) {
-    const resource = await this.resourcesService.get(resourceId);
     await this.permissionRepository.upsert(
       {
-        namespaceId: resource.namespace.id,
+        namespaceId,
         resourceId,
         userId,
         permissionType: permission.permission,

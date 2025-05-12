@@ -27,6 +27,7 @@ export class PermissionsController {
     @Body() permissionDto: PermissionDto,
   ) {
     await this.permissionsService.updateNamespacePermission(
+      namespaceId,
       resourceId,
       permissionDto,
     );
@@ -40,6 +41,7 @@ export class PermissionsController {
     @Param('groupId') groupId: string,
   ) {
     const permission = await this.permissionsService.getGroupPermission(
+      namespaceId,
       resourceId,
       groupId,
     );
@@ -64,6 +66,7 @@ export class PermissionsController {
     @Body() permissionDto: PermissionDto,
   ) {
     await this.permissionsService.updateGroupPermission(
+      namespaceId,
       resourceId,
       groupId,
       permissionDto,
@@ -78,6 +81,7 @@ export class PermissionsController {
     @Param('userId') userId: string,
   ) {
     const permission = await this.permissionsService.getGroupPermission(
+      namespaceId,
       resourceId,
       userId,
     );
@@ -102,6 +106,7 @@ export class PermissionsController {
     @Body() permissionDto: PermissionDto,
   ) {
     await this.permissionsService.updateGroupPermission(
+      namespaceId,
       resourceId,
       userId,
       permissionDto,

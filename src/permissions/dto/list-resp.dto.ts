@@ -31,8 +31,6 @@ export class UserDto {
 
 @Expose()
 export class UserPermissionDto {
-  type: 'user';
-
   @IsNotEmpty()
   user: UserDto;
 
@@ -43,8 +41,6 @@ export class UserPermissionDto {
 
 @Expose()
 export class GroupPermissionDto {
-  type: 'group';
-
   @IsNotEmpty()
   group: GroupDto;
 
@@ -52,8 +48,6 @@ export class GroupPermissionDto {
   @IsNotEmpty()
   level: PermissionLevel;
 }
-
-export type PermissionEntryDto = UserPermissionDto | GroupPermissionDto;
 
 @Expose()
 export class ListRespDto {
@@ -63,5 +57,9 @@ export class ListRespDto {
 
   @IsArray()
   @ValidateNested({ each: true })
-  entries: PermissionEntryDto[];
+  users: UserPermissionDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  groups: GroupPermissionDto[];
 }

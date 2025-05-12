@@ -1,75 +1,53 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Permission } from './permissions.entity';
-import { Repository, IsNull } from 'typeorm';
+import { Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
-import {
-  GroupPermissionDto,
-  ListRespDto,
-  UserPermissionDto,
-} from './dto/list-resp.dto';
+import { ListRespDto } from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
 import { PermissionLevel } from './permission-level.enum';
+import { UserPermission } from './entities/user-permission.entity';
+import { GroupPermission } from './entities/group-permission.entity';
+import { ResourcesService } from 'src/resources/resources.service';
 
 @Injectable()
 export class PermissionsService {
   constructor(
-    @InjectRepository(Permission)
-    private readonly permissionRepository: Repository<Permission>,
+    @InjectRepository(UserPermission)
+    private readonly userPermiRepo: Repository<UserPermission>,
+    @InjectRepository(GroupPermission)
+    private readonly groupPermiRepo: Repository<GroupPermission>,
+    private readonly resourceService: ResourcesService,
   ) {}
 
   async listPermissions(
     namespaceId: string,
     resourceId: string,
   ): Promise<ListRespDto> {
-    const permissions = await this.permissionRepository.find({
+    const users = await this.userPermiRepo.find({
       where: { namespaceId, resourceId },
-      relations: ['user', 'group'],
+      relations: ['user'],
     });
-    const resp = new ListRespDto();
-    for (const permission of permissions) {
-      if (permission.user) {
-        resp.entries.push(
-          plainToInstance(UserPermissionDto, {
-            user: permission.user,
-            permission: permission.level,
-          }),
-        );
-      } else if (permission.group) {
-        resp.entries.push(
-          plainToInstance(GroupPermissionDto, {
-            group: permission.group,
-            permission: permission.level,
-          }),
-        );
-      } else {
-        resp.globalLevel = permission.level;
-      }
-    }
-    if (!resp.globalLevel) {
-      resp.globalLevel = PermissionLevel.FULL_ACCESS;
-    }
-    return resp;
-  }
-
-  async getNamespacePermission(resourceId: string): Promise<Permission | null> {
-    return await this.permissionRepository.findOne({
-      where: { resourceId, groupId: IsNull(), userId: IsNull() },
+    const groups = await this.groupPermiRepo.find({
+      where: { namespaceId, resourceId },
+      relations: ['group'],
+    });
+    const resource = await this.resourceService.get(resourceId);
+    return plainToInstance(ListRespDto, {
+      users,
+      groups,
+      globalLevel: resource.globalLevel,
     });
   }
 
-  async updateGlobalPermission(
+  async updateglobalPermission(
     namespaceId: string,
     resourceId: string,
     permission: PermissionDto,
   ) {
-    await this.permissionRepository.upsert(
-      {
-        namespaceId,
-        resourceId,
-        level: permission.level,
-      },
-      ['namespaceId', 'resourceId'],
+    await this.resourceService.updateGlobalPermission(
+      namespaceId,
+      resourceId,
+      permission.level,
     );
   }
 
@@ -78,8 +56,8 @@ export class PermissionsService {
     resourceId: string,
     groupId: string,
   ): Promise<PermissionDto> {
-    const permission = await this.permissionRepository.findOne({
-      where: { namespaceId, resourceId, groupId, userId: IsNull() },
+    const permission = await this.groupPermiRepo.findOne({
+      where: { namespaceId, resourceId, groupId },
     });
     const level = permission ? permission.level : PermissionLevel.FULL_ACCESS;
     return plainToInstance(PermissionDto, { level });
@@ -91,7 +69,7 @@ export class PermissionsService {
     groupId: string,
     permission: PermissionDto,
   ) {
-    await this.permissionRepository.upsert(
+    await this.groupPermiRepo.upsert(
       {
         namespaceId,
         resourceId,
@@ -107,8 +85,8 @@ export class PermissionsService {
     resourceId: string,
     userId: string,
   ): Promise<PermissionDto> {
-    const permission = await this.permissionRepository.findOne({
-      where: { namespaceId, resourceId, groupId: IsNull(), userId },
+    const permission = await this.userPermiRepo.findOne({
+      where: { namespaceId, resourceId, userId },
     });
     const level = permission ? permission.level : PermissionLevel.FULL_ACCESS;
     return plainToInstance(PermissionDto, { level });
@@ -120,7 +98,7 @@ export class PermissionsService {
     userId: string,
     permission: PermissionDto,
   ) {
-    await this.permissionRepository.upsert(
+    await this.userPermiRepo.upsert(
       {
         namespaceId,
         resourceId,

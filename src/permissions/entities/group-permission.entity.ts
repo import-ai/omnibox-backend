@@ -2,7 +2,6 @@ import { Base } from 'src/common/base.entity';
 import { Group } from 'src/groups/entities/group.entity';
 import { Namespace } from 'src/namespaces/entities/namespace.entity';
 import { Resource } from 'src/resources/resources.entity';
-import { User } from 'src/user/user.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -11,22 +10,14 @@ import {
   Column,
   Index,
 } from 'typeorm';
-import { PermissionLevel } from './permission-level.enum';
+import { PermissionLevel } from '../permission-level.enum';
 
-@Entity('permissions')
-@Index(['namespaceId', 'resourceId', 'userId'], {
-  unique: true,
-  where: 'user_id IS NOT NULL AND deleted_at IS NULL',
-})
+@Entity('group_permissions')
 @Index(['namespaceId', 'resourceId', 'groupId'], {
   unique: true,
-  where: 'group_id IS NOT NULL AND deleted_at IS NULL',
+  where: 'deleted_at IS NULL',
 })
-@Index(['namespaceId', 'resourceId'], {
-  unique: true,
-  where: 'user_id IS NULL AND group_id IS NULL AND deleted_at IS NULL',
-})
-export class Permission extends Base {
+export class GroupPermission extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -36,11 +27,8 @@ export class Permission extends Base {
   @Column({ name: 'resource_id' })
   resourceId: string;
 
-  @Column({ name: 'group_id', nullable: true })
-  groupId?: string;
-
-  @Column({ name: 'user_id', nullable: true })
-  userId?: string;
+  @Column({ name: 'group_id' })
+  groupId: string;
 
   @Column({ type: 'enum', enum: PermissionLevel })
   level: PermissionLevel;
@@ -56,8 +44,4 @@ export class Permission extends Base {
   @ManyToOne(() => Group)
   @JoinColumn({ name: 'group_id' })
   group?: Group;
-
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'user_id' })
-  user?: User;
 }

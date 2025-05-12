@@ -19,6 +19,7 @@ import { User } from 'src/user/user.entity';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 export interface IQuery {
   namespaceId: string;
@@ -250,6 +251,17 @@ export class ResourcesService {
 
     const fileStream = await this.minioService.getObject(artifactName);
     return { fileStream, resource };
+  }
+
+  async updateGlobalPermission(
+    namespaceId: string,
+    resourceId: string,
+    globalLevel: PermissionLevel,
+  ) {
+    await this.resourceRepository.update(
+      { namespaceId, id: resourceId },
+      { globalLevel },
+    );
   }
 }
 

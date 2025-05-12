@@ -46,6 +46,9 @@ export class PermissionsService {
         resp.globalLevel = permission.level;
       }
     }
+    if (!resp.globalLevel) {
+      resp.globalLevel = PermissionLevel.FULL_ACCESS;
+    }
     return resp;
   }
 

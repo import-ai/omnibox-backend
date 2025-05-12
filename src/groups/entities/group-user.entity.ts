@@ -11,12 +11,9 @@ import {
 } from 'typeorm';
 import { Namespace } from 'src/namespaces/entities/namespace.entity';
 
-@Entity('group_members')
-@Index(['namespace_id', 'group_id', 'user_id'], {
+@Entity('group_users')
+@Index(['namespaceId', 'groupId', 'userId'], {
   unique: true,
-  where: 'deleted_at IS NULL',
-})
-@Index(['namespace_id', 'user_id', 'group_id'], {
   where: 'deleted_at IS NULL',
 })
 export class GroupUser extends Base {

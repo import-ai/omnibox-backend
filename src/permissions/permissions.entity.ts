@@ -11,7 +11,7 @@ import {
   Column,
   Index,
 } from 'typeorm';
-import { PermissionType } from './permission-type.enum';
+import { PermissionLevel } from './permission-level.enum';
 
 @Entity('permissions')
 @Index(['namespaceId', 'resourceId', 'userId'], {
@@ -42,8 +42,8 @@ export class Permission extends Base {
   @Column({ name: 'user_id', nullable: true })
   userId?: string;
 
-  @Column({ type: 'enum', enum: PermissionType })
-  permissionType: PermissionType;
+  @Column({ type: 'enum', enum: PermissionLevel })
+  level: PermissionLevel;
 
   @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })

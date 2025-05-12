@@ -1,4 +1,4 @@
-export enum PermissionType {
+export enum PermissionLevel {
   NO_ACCESS = 'no_access',
   CAN_VIEW = 'can_view',
   CAN_COMMENT = 'can_comment',

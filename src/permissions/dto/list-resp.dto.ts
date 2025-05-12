@@ -6,7 +6,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { PermissionType } from '../permission-type.enum';
+import { PermissionLevel } from '../permission-level.enum';
 
 @Expose()
 export class GroupDto {
@@ -36,9 +36,9 @@ export class UserPermissionDto {
   @IsNotEmpty()
   user: UserDto;
 
-  @IsEnum(PermissionType)
+  @IsEnum(PermissionLevel)
   @IsNotEmpty()
-  permission: PermissionType;
+  level: PermissionLevel;
 }
 
 @Expose()
@@ -48,18 +48,18 @@ export class GroupPermissionDto {
   @IsNotEmpty()
   group: GroupDto;
 
-  @IsEnum(PermissionType)
+  @IsEnum(PermissionLevel)
   @IsNotEmpty()
-  permission: PermissionType;
+  level: PermissionLevel;
 }
 
 export type PermissionEntryDto = UserPermissionDto | GroupPermissionDto;
 
 @Expose()
 export class ListRespDto {
-  @IsEnum(PermissionType)
+  @IsEnum(PermissionLevel)
   @IsNotEmpty()
-  globalPermission: PermissionType;
+  globalLevel: PermissionLevel;
 
   @IsArray()
   @ValidateNested({ each: true })

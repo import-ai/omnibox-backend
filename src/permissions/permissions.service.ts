@@ -9,7 +9,7 @@ import {
   UserPermissionDto,
 } from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
-import { PermissionType } from './permission-type.enum';
+import { PermissionLevel } from './permission-level.enum';
 
 @Injectable()
 export class PermissionsService {
@@ -32,18 +32,18 @@ export class PermissionsService {
         resp.entries.push(
           plainToInstance(UserPermissionDto, {
             user: permission.user,
-            permission: permission.permissionType,
+            permission: permission.level,
           }),
         );
       } else if (permission.group) {
         resp.entries.push(
           plainToInstance(GroupPermissionDto, {
             group: permission.group,
-            permission: permission.permissionType,
+            permission: permission.level,
           }),
         );
       } else {
-        resp.globalPermission = permission.permissionType;
+        resp.globalLevel = permission.level;
       }
     }
     return resp;
@@ -64,7 +64,7 @@ export class PermissionsService {
       {
         namespaceId,
         resourceId,
-        permissionType: permission.permissionType,
+        level: permission.level,
       },
       ['namespaceId', 'resourceId'],
     );
@@ -78,10 +78,8 @@ export class PermissionsService {
     const permission = await this.permissionRepository.findOne({
       where: { namespaceId, resourceId, groupId, userId: IsNull() },
     });
-    const permissionType = permission
-      ? permission.permissionType
-      : PermissionType.FULL_ACCESS;
-    return plainToInstance(PermissionDto, { permissionType });
+    const level = permission ? permission.level : PermissionLevel.FULL_ACCESS;
+    return plainToInstance(PermissionDto, { level });
   }
 
   async updateGroupPermission(
@@ -95,7 +93,7 @@ export class PermissionsService {
         namespaceId,
         resourceId,
         groupId,
-        permissionType: permission.permissionType,
+        level: permission.level,
       },
       ['namespaceId', 'resourceId', 'groupId'],
     );
@@ -109,10 +107,8 @@ export class PermissionsService {
     const permission = await this.permissionRepository.findOne({
       where: { namespaceId, resourceId, groupId: IsNull(), userId },
     });
-    const permissionType = permission
-      ? permission.permissionType
-      : PermissionType.FULL_ACCESS;
-    return plainToInstance(PermissionDto, { permissionType });
+    const level = permission ? permission.level : PermissionLevel.FULL_ACCESS;
+    return plainToInstance(PermissionDto, { level });
   }
 
   async updateUserPermission(
@@ -126,7 +122,7 @@ export class PermissionsService {
         namespaceId,
         resourceId,
         userId,
-        permissionType: permission.permissionType,
+        level: permission.level,
       },
       ['namespaceId', 'resourceId', 'userId'],
     );

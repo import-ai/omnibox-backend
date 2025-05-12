@@ -1,10 +1,10 @@
 import { Expose } from 'class-transformer';
 import { IsEnum, IsNotEmpty } from 'class-validator';
-import { PermissionType } from '../permission-type.enum';
+import { PermissionLevel } from '../permission-level.enum';
 
 @Expose()
 export class PermissionDto {
-  @IsEnum(PermissionType)
+  @IsEnum(PermissionLevel)
   @IsNotEmpty()
-  permissionType: PermissionType;
+  level: PermissionLevel;
 }

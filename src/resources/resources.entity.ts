@@ -57,11 +57,12 @@ export class Resource extends Base {
   @Column('jsonb', { nullable: true })
   attrs: Record<string, any>;
 
-  @Column({ type: 'enum', enum: PermissionLevel })
+  @Column({
+    type: 'enum',
+    enum: PermissionLevel,
+    default: PermissionLevel.FULL_ACCESS,
+  })
   globalLevel: PermissionLevel;
-
-  @Column({ name: 'namespace_id' })
-  namespaceId: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })

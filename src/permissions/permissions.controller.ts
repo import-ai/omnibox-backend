@@ -84,7 +84,7 @@ export class PermissionsController {
     @Param('userId') userId: string,
     @Body() permissionDto: PermissionDto,
   ) {
-    await this.permissionsService.updateGroupPermission(
+    await this.permissionsService.updateUserPermission(
       namespaceId,
       resourceId,
       userId,

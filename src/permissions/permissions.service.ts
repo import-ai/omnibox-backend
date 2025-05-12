@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
 import { ListRespDto } from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
@@ -16,6 +16,7 @@ export class PermissionsService {
     private readonly userPermiRepo: Repository<UserPermission>,
     @InjectRepository(GroupPermission)
     private readonly groupPermiRepo: Repository<GroupPermission>,
+    private readonly dataSource: DataSource,
     private readonly resourceService: ResourcesService,
   ) {}
 
@@ -32,14 +33,18 @@ export class PermissionsService {
       relations: ['group'],
     });
     const resource = await this.resourceService.get(resourceId);
-    return plainToInstance(ListRespDto, {
-      users,
-      groups,
-      globalLevel: resource.globalLevel,
-    });
+    return plainToInstance(
+      ListRespDto,
+      {
+        users,
+        groups,
+        globalLevel: resource.globalLevel,
+      },
+      { excludeExtraneousValues: true },
+    );
   }
 
-  async updateglobalPermission(
+  async updateGlobalPermission(
     namespaceId: string,
     resourceId: string,
     permission: PermissionDto,
@@ -69,15 +74,24 @@ export class PermissionsService {
     groupId: string,
     permission: PermissionDto,
   ) {
-    await this.groupPermiRepo.upsert(
-      {
-        namespaceId,
-        resourceId,
-        groupId,
-        level: permission.level,
-      },
-      ['namespaceId', 'resourceId', 'groupId'],
-    );
+    const level = permission.level;
+    await this.dataSource.transaction(async (manager) => {
+      const result = await manager.update(
+        GroupPermission,
+        { namespaceId, resourceId, groupId },
+        { level },
+      );
+      if (result.affected === 0) {
+        await manager.save(
+          manager.create(GroupPermission, {
+            namespaceId,
+            resourceId,
+            groupId,
+            level,
+          }),
+        );
+      }
+    });
   }
 
   async getUserPermission(
@@ -98,14 +112,23 @@ export class PermissionsService {
     userId: string,
     permission: PermissionDto,
   ) {
-    await this.userPermiRepo.upsert(
-      {
-        namespaceId,
-        resourceId,
-        userId,
-        level: permission.level,
-      },
-      ['namespaceId', 'resourceId', 'userId'],
-    );
+    const level = permission.level;
+    await this.dataSource.transaction(async (manager) => {
+      const result = await manager.update(
+        UserPermission,
+        { namespaceId, resourceId, userId, deletedAt: IsNull() },
+        { level },
+      );
+      if (result.affected === 0) {
+        await manager.save(
+          manager.create(UserPermission, {
+            namespaceId,
+            resourceId,
+            userId,
+            level,
+          }),
+        );
+      }
+    });
   }
 }

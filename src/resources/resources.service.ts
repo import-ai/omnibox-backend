@@ -258,10 +258,7 @@ export class ResourcesService {
     resourceId: string,
     globalLevel: PermissionLevel,
   ) {
-    await this.resourceRepository.update(
-      { namespaceId, id: resourceId },
-      { globalLevel },
-    );
+    await this.resourceRepository.update({ id: resourceId }, { globalLevel });
   }
 }
 

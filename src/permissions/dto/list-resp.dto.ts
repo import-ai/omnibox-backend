@@ -1,4 +1,4 @@
-import { Expose } from 'class-transformer';
+import { Exclude, Expose, Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
@@ -8,58 +8,74 @@ import {
 } from 'class-validator';
 import { PermissionLevel } from '../permission-level.enum';
 
-@Expose()
+@Exclude()
 export class GroupDto {
+  @Expose()
   @IsString()
   @IsNotEmpty()
   id: string;
 
+  @Expose()
   @IsString()
   title: string;
 }
 
-@Expose()
+@Exclude()
 export class UserDto {
+  @Expose()
   @IsString()
   @IsNotEmpty()
   id: string;
 
+  @Expose()
   @IsString()
   @IsNotEmpty()
   email: string;
 }
 
-@Expose()
+@Exclude()
 export class UserPermissionDto {
+  @Expose()
   @IsNotEmpty()
+  @ValidateNested()
+  @Type(() => UserDto)
   user: UserDto;
 
+  @Expose()
   @IsEnum(PermissionLevel)
   @IsNotEmpty()
   level: PermissionLevel;
 }
 
-@Expose()
+@Exclude()
 export class GroupPermissionDto {
+  @Expose()
   @IsNotEmpty()
+  @Type(() => GroupDto)
   group: GroupDto;
 
+  @Expose()
   @IsEnum(PermissionLevel)
   @IsNotEmpty()
   level: PermissionLevel;
 }
 
-@Expose()
+@Exclude()
 export class ListRespDto {
+  @Expose()
   @IsEnum(PermissionLevel)
   @IsNotEmpty()
   globalLevel: PermissionLevel;
 
+  @Expose()
   @IsArray()
   @ValidateNested({ each: true })
+  @Type(() => UserPermissionDto)
   users: UserPermissionDto[];
 
+  @Expose()
   @IsArray()
   @ValidateNested({ each: true })
+  @Type(() => GroupPermissionDto)
   groups: GroupPermissionDto[];
 }

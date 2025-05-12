@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Permission } from './permissions.entity';
 import { Repository, IsNull } from 'typeorm';
-import { ResourcesService } from 'src/resources/resources.service';
 import { PermissionDto } from './dto/permission.dto';
 import {
   GroupPermissionDto,
@@ -10,6 +9,7 @@ import {
   UserPermissionDto,
 } from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
+import { PermissionType } from './permission-type.enum';
 
 @Injectable()
 export class PermissionsService {
@@ -55,7 +55,7 @@ export class PermissionsService {
     });
   }
 
-  async updateNamespacePermission(
+  async updateGlobalPermission(
     namespaceId: string,
     resourceId: string,
     permission: PermissionDto,
@@ -64,7 +64,7 @@ export class PermissionsService {
       {
         namespaceId,
         resourceId,
-        permissionType: permission.permission,
+        permissionType: permission.permissionType,
       },
       ['namespaceId', 'resourceId'],
     );
@@ -74,10 +74,14 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
     groupId: string,
-  ): Promise<Permission | null> {
-    return await this.permissionRepository.findOne({
+  ): Promise<PermissionDto> {
+    const permission = await this.permissionRepository.findOne({
       where: { namespaceId, resourceId, groupId, userId: IsNull() },
     });
+    const permissionType = permission
+      ? permission.permissionType
+      : PermissionType.FULL_ACCESS;
+    return plainToInstance(PermissionDto, { permissionType });
   }
 
   async updateGroupPermission(
@@ -91,7 +95,7 @@ export class PermissionsService {
         namespaceId,
         resourceId,
         groupId,
-        permissionType: permission.permission,
+        permissionType: permission.permissionType,
       },
       ['namespaceId', 'resourceId', 'groupId'],
     );
@@ -101,10 +105,14 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-  ): Promise<Permission | null> {
-    return await this.permissionRepository.findOne({
+  ): Promise<PermissionDto> {
+    const permission = await this.permissionRepository.findOne({
       where: { namespaceId, resourceId, groupId: IsNull(), userId },
     });
+    const permissionType = permission
+      ? permission.permissionType
+      : PermissionType.FULL_ACCESS;
+    return plainToInstance(PermissionDto, { permissionType });
   }
 
   async updateUserPermission(
@@ -118,7 +126,7 @@ export class PermissionsService {
         namespaceId,
         resourceId,
         userId,
-        permissionType: permission.permission,
+        permissionType: permission.permissionType,
       },
       ['namespaceId', 'resourceId', 'userId'],
     );

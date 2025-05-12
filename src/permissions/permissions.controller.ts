@@ -1,7 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Req } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { PermissionDto } from './dto/permission.dto';
-import { plainToInstance } from 'class-transformer';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')
 export class PermissionsController {
@@ -26,7 +25,7 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Body() permissionDto: PermissionDto,
   ) {
-    await this.permissionsService.updateNamespacePermission(
+    await this.permissionsService.updateGlobalPermission(
       namespaceId,
       resourceId,
       permissionDto,
@@ -40,21 +39,11 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('groupId') groupId: string,
   ) {
-    const permission = await this.permissionsService.getGroupPermission(
+    return await this.permissionsService.getGroupPermission(
       namespaceId,
       resourceId,
       groupId,
     );
-    if (permission === null) {
-      return plainToInstance(PermissionDto, {
-        read: false,
-        write: false,
-        comment: false,
-        share: false,
-        noAccess: false,
-      });
-    }
-    return plainToInstance(PermissionDto, permission);
   }
 
   @Patch('groups/:groupId')
@@ -80,21 +69,11 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
   ) {
-    const permission = await this.permissionsService.getGroupPermission(
+    return await this.permissionsService.getGroupPermission(
       namespaceId,
       resourceId,
       userId,
     );
-    if (permission === null) {
-      return plainToInstance(PermissionDto, {
-        read: false,
-        write: false,
-        comment: false,
-        share: false,
-        noAccess: false,
-      });
-    }
-    return plainToInstance(PermissionDto, permission);
   }
 
   @Patch('users/:userId')

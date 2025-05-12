@@ -6,5 +6,5 @@ import { PermissionType } from '../permission-type.enum';
 export class PermissionDto {
   @IsEnum(PermissionType)
   @IsNotEmpty()
-  permission: PermissionType;
+  permissionType: PermissionType;
 }

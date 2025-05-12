@@ -78,7 +78,7 @@ export class PermissionsService {
     await this.dataSource.transaction(async (manager) => {
       const result = await manager.update(
         GroupPermission,
-        { namespaceId, resourceId, groupId },
+        { namespaceId, resourceId, groupId, deletedAt: IsNull() },
         { level },
       );
       if (result.affected === 0) {
@@ -92,6 +92,14 @@ export class PermissionsService {
         );
       }
     });
+  }
+
+  async deleteGroupPermission(
+    namespaceId: string,
+    resourceId: string,
+    groupId: string,
+  ) {
+    await this.groupPermiRepo.delete({ namespaceId, resourceId, groupId });
   }
 
   async getUserPermission(
@@ -130,5 +138,13 @@ export class PermissionsService {
         );
       }
     });
+  }
+
+  async deleteUserPermission(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ) {
+    await this.userPermiRepo.delete({ namespaceId, resourceId, userId });
   }
 }

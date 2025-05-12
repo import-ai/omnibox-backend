@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Req,
+} from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { PermissionDto } from './dto/permission.dto';
 
@@ -62,6 +70,20 @@ export class PermissionsController {
     );
   }
 
+  @Delete('groups/:groupId')
+  async deleteGroupPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('groupId') groupId: string,
+  ) {
+    await this.permissionsService.deleteGroupPermission(
+      namespaceId,
+      resourceId,
+      groupId,
+    );
+  }
+
   @Get('users/:userId')
   async getUserPermission(
     @Req() req,
@@ -89,6 +111,20 @@ export class PermissionsController {
       resourceId,
       userId,
       permissionDto,
+    );
+  }
+
+  @Delete('users/:userId')
+  async deleteUserPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('userId') userId: string,
+  ) {
+    await this.permissionsService.deleteUserPermission(
+      namespaceId,
+      resourceId,
+      userId,
     );
   }
 }

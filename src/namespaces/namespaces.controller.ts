@@ -14,7 +14,7 @@ import {
 export class NamespacesController {
   constructor(private readonly namespacesService: NamespacesService) {}
 
-  @Get('user')
+  @Get()
   async getByUser(@Req() req) {
     return await this.namespacesService.listNamespaces(req.user.id);
   }

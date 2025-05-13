@@ -52,7 +52,7 @@ export class WizardService {
     }
     const namespace = await this.namespacesService.get(namespace_id);
 
-    const resourceRoot = await this.resourcesService.getRoot(
+    const resourceRoot = await this.namespacesService.getRoot(
       namespace.id,
       space_type,
       user.id,

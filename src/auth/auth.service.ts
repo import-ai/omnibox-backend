@@ -80,63 +80,47 @@ export class AuthService {
       password_repeat: string;
     },
   ) {
+    let payload: any;
     try {
-      const payload = this.jwtService.verify(token);
-      const account = await this.userService.findByEmail(payload.email);
-      if (account) {
-        throw new BadRequestException(
-          'The email is already registered. Please log in directly.',
-        );
-      }
-      return await this.dataSource.transaction(async (manager) => {
-        const user = await this.userService.create(
-          {
-            email: payload.email,
-            username: data.username,
-            password: data.password,
-            password_repeat: data.password_repeat,
-          },
-          manager,
-        );
-
-        // Invited user
-        if (payload.role && payload.namespace) {
-          const namespace = await this.namespaceService.get(
-            payload.namespace,
-            manager,
-          );
-          const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
-          if (namespace[field].includes(user.id)) {
-            return;
-          }
-          namespace[field].push(user.id);
-          await this.namespaceService.update(
-            payload.namespace,
-            {
-              [field]: namespace[field],
-            },
-            manager,
-          );
-        }
-
-        await this.namespaceService.createAndInit(
-          user.id,
-          `${user.username}'s Namespace`,
-          manager,
-        );
-        return {
-          id: user.id,
-          username: user.username,
-          access_token: this.jwtService.sign({
-            sub: user.id,
-            email: user.email,
-          }),
-        };
-      });
+      payload = this.jwtService.verify(token);
     } catch (e) {
       console.log(e);
       throw new UnauthorizedException('Invalid or expired token.');
     }
+    const account = await this.userService.findByEmail(payload.email);
+    if (account) {
+      throw new BadRequestException(
+        'The email is already registered. Please log in directly.',
+      );
+    }
+    return await this.dataSource.transaction(async (manager) => {
+      const user = await this.userService.create(
+        {
+          email: payload.email,
+          username: data.username,
+          password: data.password,
+          password_repeat: data.password_repeat,
+        },
+        manager,
+      );
+      let namespaceId = payload.namespace;
+      if (!namespaceId) {
+        const namespace = await this.namespaceService.createNamespace(
+          `${user.username}'s Namespace`,
+          manager,
+        );
+        namespaceId = namespace.id;
+      }
+      await this.namespaceService.addMember(namespaceId, user.id, manager);
+      return {
+        id: user.id,
+        username: user.username,
+        access_token: this.jwtService.sign({
+          sub: user.id,
+          email: user.email,
+        }),
+      };
+    });
   }
 
   async signUpWithoutConfirm(createUser: CreateUserDto) {

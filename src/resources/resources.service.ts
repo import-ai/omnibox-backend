@@ -6,7 +6,7 @@ import {
   In,
   Repository,
 } from 'typeorm';
-import { Resource, SpaceType } from 'src/resources/resources.entity';
+import { Resource } from 'src/resources/resources.entity';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
@@ -16,10 +16,10 @@ import {
 } from '@nestjs/common';
 import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 
 export interface IQuery {
   namespaceId: string;
@@ -42,7 +42,6 @@ export class ResourcesService {
     private readonly resourceRepository: Repository<Resource>,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
-    private readonly namespaceService: NamespacesService,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
   ) {}
@@ -90,21 +89,6 @@ export class ResourcesService {
       ...savedResource,
       spaceType: await this.getSpaceType(savedResource),
     };
-  }
-
-  async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
-    let resource: Resource | null;
-    if (spaceType === SpaceType.TEAMSPACE) {
-      resource = await this.namespaceService.getTeamspaceRoot(namespace);
-    } else {
-      resource = await this.namespaceService.getPrivateRoot(userId, namespace);
-    }
-    const children = await this.query({
-      namespaceId: namespace,
-      spaceType,
-      parentId: resource.id,
-    });
-    return { ...resource, parentId: '0', spaceType, children };
   }
 
   async query({ namespaceId, parentId, spaceType, tags }: IQuery) {
@@ -259,6 +243,22 @@ export class ResourcesService {
     globalLevel: PermissionLevel,
   ) {
     await this.resourceRepository.update({ id: resourceId }, { globalLevel });
+  }
+
+  async createFolder(
+    namespaceId: string,
+    parentId: string | null,
+    userId: string | null,
+    manager: EntityManager,
+  ) {
+    return await manager.save(
+      manager.create(Resource, {
+        resourceType: 'folder',
+        namespace: { id: namespaceId },
+        parentId,
+        ...(userId && { user: { id: userId } }),
+      }),
+    );
   }
 }
 

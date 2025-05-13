@@ -11,6 +11,11 @@ import {
   BeforeInsert,
 } from 'typeorm';
 
+export enum SpaceType {
+  PRIVATE = 'private',
+  TEAMSPACE = 'teamspace',
+}
+
 @Entity('namespaces')
 @Index(['name'], { unique: true, where: '"deleted_at" IS NULL' })
 export class Namespace extends Base {

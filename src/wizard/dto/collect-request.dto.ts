@@ -1,5 +1,5 @@
 import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
-import { SpaceType } from 'src/resources/resources.entity';
+import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 
 export class CollectRequestDto {
   @IsString()

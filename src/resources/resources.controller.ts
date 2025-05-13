@@ -15,9 +15,9 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { SpaceType } from './resources.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
+import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 
 export async function fileResponse(
   resourceId: string,
@@ -45,19 +45,6 @@ export class ResourcesController {
   @Post()
   async create(@Req() req, @Body() data: CreateResourceDto) {
     return await this.resourcesService.create(req.user, data);
-  }
-
-  @Get('root')
-  async getRoot(
-    @Query('namespace_id') namespaceId: string,
-    @Query('space_type') spaceType: SpaceType,
-    @Req() req,
-  ) {
-    return await this.resourcesService.getRoot(
-      namespaceId,
-      spaceType,
-      req.user.id,
-    );
   }
 
   @Get('query')

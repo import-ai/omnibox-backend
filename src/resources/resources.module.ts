@@ -4,7 +4,6 @@ import { Resource } from 'src/resources/resources.entity';
 import { ResourcesService } from 'src/resources/resources.service';
 import { ResourcesController } from 'src/resources/resources.controller';
 import { Task } from 'src/tasks/tasks.entity';
-import { NamespacesModule } from 'src/namespaces/namespaces.module';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { InternalResourcesController } from 'src/resources/internal.resource.controller';
 
@@ -15,7 +14,6 @@ import { InternalResourcesController } from 'src/resources/internal.resource.con
   imports: [
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Task]),
-    NamespacesModule,
   ],
 })
 export class ResourcesModule {}

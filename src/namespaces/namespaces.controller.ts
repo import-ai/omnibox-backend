@@ -8,7 +8,9 @@ import {
   Patch,
   Delete,
   Controller,
+  Query,
 } from '@nestjs/common';
+import { SpaceType } from './entities/namespace.entity';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
@@ -19,28 +21,47 @@ export class NamespacesController {
     return await this.namespacesService.listNamespaces(req.user.id);
   }
 
-  @Get(':id')
-  async get(@Param('id') id: string) {
-    return await this.namespacesService.get(id);
+  @Get(':namespaceId')
+  async get(@Param('namespaceId') namespaceId: string) {
+    return await this.namespacesService.get(namespaceId);
   }
 
-  @Get(':id/members')
-  async listMembers(@Req() req, @Param('id') namespaceId: string) {
+  @Get(':namespaceId/members')
+  async listMembers(@Req() req, @Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.listMembers(namespaceId);
+  }
+
+  @Get(':namespaceId/root')
+  async getRoot(
+    @Param('namespaceId') namespaceId: string,
+    @Query('space_type') spaceType: SpaceType,
+    @Req() req,
+  ) {
+    return await this.namespacesService.getRoot(
+      namespaceId,
+      spaceType,
+      req.user.id,
+    );
   }
 
   @Post()
   async create(@Req() req, @Body('name') name: string) {
-    return await this.namespacesService.create(req.user.id, name);
+    return await this.namespacesService.createNamespaceAndMember(
+      req.user.id,
+      name,
+    );
   }
 
-  @Patch(':id')
-  async update(@Param('id') id: string, @Body('name') name: string) {
-    return await this.namespacesService.update(id, { name });
+  @Patch(':namespaceId')
+  async update(
+    @Param('namespaceId') namespaceId: string,
+    @Body('name') name: string,
+  ) {
+    return await this.namespacesService.update(namespaceId, { name });
   }
 
-  @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return await this.namespacesService.delete(id);
+  @Delete(':namespaceId')
+  async delete(@Param('namespaceId') namespaceId: string) {
+    return await this.namespacesService.delete(namespaceId);
   }
 }

@@ -12,11 +12,6 @@ import {
 import { Namespace } from 'src/namespaces/entities/namespace.entity';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
-export enum SpaceType {
-  PRIVATE = 'private',
-  TEAMSPACE = 'teamspace',
-}
-
 export enum ResourceType {
   DOC = 'doc',
   LINK = 'link',

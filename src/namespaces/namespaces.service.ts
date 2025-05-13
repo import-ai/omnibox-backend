@@ -1,5 +1,5 @@
 import each from 'src/utils/each';
-import { ArrayContains, DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import {
@@ -8,9 +8,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Resource } from 'src/resources/resources.entity';
-import { Namespace } from './entities/namespace.entity';
+import { Namespace, SpaceType } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
+import { ResourcesService } from 'src/resources/resources.service';
 
 @Injectable()
 export class NamespacesService {
@@ -22,6 +23,8 @@ export class NamespacesService {
     private namespaceMemberRepository: Repository<NamespaceMember>,
 
     private readonly dataSource: DataSource,
+
+    private readonly resourceService: ResourcesService,
   ) {}
 
   async getTeamspaceRoot(namespaceId: string): Promise<Resource> {
@@ -55,9 +58,14 @@ export class NamespacesService {
     return namespace;
   }
 
-  async create(ownerId: string, name: string): Promise<Namespace> {
+  async createNamespaceAndMember(
+    ownerId: string,
+    name: string,
+  ): Promise<Namespace> {
     return await this.dataSource.transaction(async (manager) => {
-      return await this.createAndInit(ownerId, name, manager);
+      const namespace = await this.createNamespace(name, manager);
+      await this.addMember(namespace.id, ownerId, manager);
+      return namespace;
     });
   }
 
@@ -66,28 +74,22 @@ export class NamespacesService {
     name: string,
     manager: EntityManager,
   ): Promise<Namespace> {
-    const namespace = await manager.save(
-      manager.create(Namespace, {
-        name,
-      }),
+    const namespace = await this.createNamespace(name, manager);
+    await this.addMember(namespace.id, ownerId, manager);
+    return namespace;
+  }
+
+  async createNamespace(
+    name: string,
+    manager: EntityManager,
+  ): Promise<Namespace> {
+    const namespace = await manager.save(manager.create(Namespace, { name }));
+    const publicRoot = await this.resourceService.createFolder(
+      namespace.id,
+      null,
+      null,
+      manager,
     );
-    const privateRoot = await manager.save(
-      manager.create(Resource, {
-        resourceType: 'folder',
-        parent: null,
-        namespace: { id: namespace.id },
-        user: { id: ownerId },
-      }),
-    );
-    const publicRoot = await manager.save(
-      manager.create(Resource, {
-        resourceType: 'folder',
-        parent: null,
-        namespace: { id: namespace.id },
-        user: { id: ownerId },
-      }),
-    );
-    await this.addMember(namespace.id, ownerId, privateRoot.id, manager);
     await manager.update(Namespace, namespace.id, {
       rootResource: { id: publicRoot.id },
     });
@@ -116,20 +118,28 @@ export class NamespacesService {
     await this.namespaceRepository.softDelete(id);
   }
 
-  async addMember(
-    namespaceId: string,
-    userId: string,
-    privateRootId: string,
-    manager?: EntityManager,
-  ) {
-    const repo = manager
-      ? manager.getRepository(NamespaceMember)
-      : this.namespaceMemberRepository;
-    await repo.save(
-      repo.create({
+  async addMember(namespaceId: string, userId: string, manager: EntityManager) {
+    const count = await manager.count(NamespaceMember, {
+      where: {
         namespace: { id: namespaceId },
         user: { id: userId },
-        rootResource: { id: privateRootId },
+        deletedAt: IsNull(),
+      },
+    });
+    if (count > 0) {
+      return;
+    }
+    const privateRoot = await this.resourceService.createFolder(
+      namespaceId,
+      null,
+      userId,
+      manager,
+    );
+    await manager.save(
+      manager.create(NamespaceMember, {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+        rootResource: { id: privateRoot.id },
       }),
     );
   }
@@ -166,5 +176,20 @@ export class NamespacesService {
     return members.map((member) => {
       return { email: member.user.email, role: member.role };
     });
+  }
+
+  async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
+    let resource: Resource | null;
+    if (spaceType === SpaceType.TEAMSPACE) {
+      resource = await this.getTeamspaceRoot(namespace);
+    } else {
+      resource = await this.getPrivateRoot(userId, namespace);
+    }
+    const children = await this.resourceService.query({
+      namespaceId: namespace,
+      spaceType,
+      parentId: resource.id,
+    });
+    return { ...resource, parentId: '0', spaceType, children };
   }
 }

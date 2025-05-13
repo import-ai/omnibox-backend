@@ -1,0 +1,130 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Req,
+} from '@nestjs/common';
+import { PermissionsService } from './permissions.service';
+import { PermissionDto } from './dto/permission.dto';
+
+@Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')
+export class PermissionsController {
+  constructor(private readonly permissionsService: PermissionsService) {}
+
+  @Get()
+  async listPermissions(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return await this.permissionsService.listPermissions(
+      namespaceId,
+      resourceId,
+    );
+  }
+
+  @Patch()
+  async updateGlobalPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Body() permissionDto: PermissionDto,
+  ) {
+    await this.permissionsService.updateGlobalPermission(
+      namespaceId,
+      resourceId,
+      permissionDto,
+    );
+  }
+
+  @Get('groups/:groupId')
+  async getGroupPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('groupId') groupId: string,
+  ) {
+    return await this.permissionsService.getGroupPermission(
+      namespaceId,
+      resourceId,
+      groupId,
+    );
+  }
+
+  @Patch('groups/:groupId')
+  async updateGroupPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('groupId') groupId: string,
+    @Body() permissionDto: PermissionDto,
+  ) {
+    await this.permissionsService.updateGroupPermission(
+      namespaceId,
+      resourceId,
+      groupId,
+      permissionDto,
+    );
+  }
+
+  @Delete('groups/:groupId')
+  async deleteGroupPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('groupId') groupId: string,
+  ) {
+    await this.permissionsService.deleteGroupPermission(
+      namespaceId,
+      resourceId,
+      groupId,
+    );
+  }
+
+  @Get('users/:userId')
+  async getUserPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('userId') userId: string,
+  ) {
+    return await this.permissionsService.getGroupPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+  }
+
+  @Patch('users/:userId')
+  async updateUserPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('userId') userId: string,
+    @Body() permissionDto: PermissionDto,
+  ) {
+    await this.permissionsService.updateUserPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      permissionDto,
+    );
+  }
+
+  @Delete('users/:userId')
+  async deleteUserPermission(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('userId') userId: string,
+  ) {
+    await this.permissionsService.deleteUserPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+  }
+}

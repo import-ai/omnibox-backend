@@ -10,10 +10,11 @@ import { TasksModule } from 'src/tasks/tasks.module';
 import { WizardModule } from 'src/wizard/wizard.module';
 import { APIKeyModule } from 'src/api-key/api-key.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { UserRoleModule } from 'src/user-role/user-role.module';
 import { ResourcesModule } from 'src/resources/resources.module';
 import { SnakeCaseInterceptor } from 'src/interceptor/snake-case';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
+import { PermissionsModule } from 'src/permissions/permissions.module';
+import { GroupsModule } from 'src/groups/groups.module';
 
 @Module({
   controllers: [AppController],
@@ -32,11 +33,12 @@ import { NamespacesModule } from 'src/namespaces/namespaces.module';
     AuthModule,
     UserModule,
     APIKeyModule,
-    UserRoleModule,
     NamespacesModule,
     ResourcesModule,
     TasksModule,
     WizardModule,
+    GroupsModule,
+    PermissionsModule,
     // CacheModule.registerAsync({
     //   imports: [ConfigModule],
     //   inject: [ConfigService],

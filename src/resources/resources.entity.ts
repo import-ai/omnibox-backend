@@ -10,6 +10,7 @@ import {
   BeforeInsert,
 } from 'typeorm';
 import { Namespace } from 'src/namespaces/entities/namespace.entity';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 export enum SpaceType {
   PRIVATE = 'private',
@@ -55,6 +56,13 @@ export class Resource extends Base {
 
   @Column('jsonb', { nullable: true })
   attrs: Record<string, any>;
+
+  @Column({
+    type: 'enum',
+    enum: PermissionLevel,
+    default: PermissionLevel.FULL_ACCESS,
+  })
+  globalLevel: PermissionLevel;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })

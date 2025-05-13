@@ -34,22 +34,6 @@ export class NamespacesController {
     return await this.namespacesService.create(req.user.id, name);
   }
 
-  @Post('disable-user')
-  async disableUser(
-    @Body('namespace') namespaceId: string,
-    @Body('id') userId: string,
-  ) {
-    return await this.namespacesService.disableUser(namespaceId, userId);
-  }
-
-  @Post('remove-user')
-  async removeUser(
-    @Body('namespace') namespaceId: string,
-    @Body('id') userId: string,
-  ) {
-    return await this.namespacesService.removeUser(namespaceId, userId);
-  }
-
   @Patch(':id')
   async update(@Param('id') id: string, @Body('name') name: string) {
     return await this.namespacesService.update(id, { name });

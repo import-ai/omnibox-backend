@@ -13,7 +13,7 @@ import {
 import { PermissionLevel } from '../permission-level.enum';
 
 @Entity('group_permissions')
-@Index(['namespaceId', 'resourceId', 'groupId'], {
+@Index(['namespace', 'resource', 'group'], {
   unique: true,
   where: 'deleted_at IS NULL',
 })
@@ -21,27 +21,18 @@ export class GroupPermission extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'namespace_id' })
-  namespaceId: string;
-
-  @Column({ name: 'resource_id' })
-  resourceId: string;
-
-  @Column({ name: 'group_id' })
-  groupId: string;
-
   @Column({ type: 'enum', enum: PermissionLevel })
   level: PermissionLevel;
 
-  @ManyToOne(() => Namespace)
+  @ManyToOne(() => Namespace, { nullable: false })
   @JoinColumn({ name: 'namespace_id' })
   namespace?: Namespace;
 
-  @ManyToOne(() => Resource)
+  @ManyToOne(() => Resource, { nullable: false })
   @JoinColumn({ name: 'resource_id' })
   resource?: Resource;
 
-  @ManyToOne(() => Group)
+  @ManyToOne(() => Group, { nullable: false })
   @JoinColumn({ name: 'group_id' })
   group?: Group;
 }

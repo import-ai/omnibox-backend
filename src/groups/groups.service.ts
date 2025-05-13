@@ -20,8 +20,8 @@ export class GroupsService {
   async listGroupByUser(namespaceId: string, userId: string): Promise<Group[]> {
     const groups = await this.groupUserRepository.find({
       where: {
-        namespaceId: namespaceId,
-        userId: userId,
+        namespace: { id: namespaceId },
+        user: { id: userId },
       },
       relations: ['group'],
     });
@@ -36,15 +36,15 @@ export class GroupsService {
     return await this.dataSource.transaction(async (manager) => {
       const group = await manager.save(
         manager.create(Group, {
-          namespaceId,
+          namespace: { id: namespaceId },
           title: createGroupDto.title,
         }),
       );
       await manager.save(
         manager.create(GroupUser, {
-          namespaceId,
-          groupId: group.id,
-          userId,
+          namespace: { id: namespaceId },
+          group: { id: group.id },
+          user: { id: userId },
         }),
       );
       return group;
@@ -58,9 +58,9 @@ export class GroupsService {
   ): Promise<boolean> {
     const user = await this.groupUserRepository.findOne({
       where: {
-        namespaceId,
-        groupId,
-        userId,
+        namespace: { id: namespaceId },
+        group: { id: groupId },
+        user: { id: userId },
       },
     });
     return user !== null;
@@ -72,19 +72,25 @@ export class GroupsService {
     updateGroupDto: UpdateGroupDto,
   ): Promise<Group> {
     const group = await this.groupRepository.findOneOrFail({
-      where: { namespaceId, id: groupId },
+      where: { namespace: { id: namespaceId }, id: groupId },
     });
     group.title = updateGroupDto.title;
     return await this.groupRepository.save(group);
   }
 
   async deleteGroup(namespaceId: string, groupId: string) {
-    await this.groupRepository.softDelete({ namespaceId, id: groupId });
+    await this.groupRepository.softDelete({
+      namespace: { id: namespaceId },
+      id: groupId,
+    });
   }
 
   async listGroupUsers(namespaceId: string, groupId: string): Promise<User[]> {
     const users = await this.groupUserRepository.find({
-      where: { namespaceId, groupId },
+      where: {
+        namespace: { id: namespaceId },
+        group: { id: groupId },
+      },
       relations: ['user'],
     });
     return users.map((user) => user.user);
@@ -92,15 +98,19 @@ export class GroupsService {
 
   async addGroupUser(namespaceId: string, groupId: string, userId: string) {
     await this.groupUserRepository.save(
-      this.groupUserRepository.create({ namespaceId, groupId, userId }),
+      this.groupUserRepository.create({
+        namespace: { id: namespaceId },
+        group: { id: groupId },
+        user: { id: userId },
+      }),
     );
   }
 
   async deleteGroupUser(namespaceId: string, groupId: string, userId: string) {
     await this.groupUserRepository.softDelete({
-      namespaceId,
-      groupId,
-      userId,
+      namespace: { id: namespaceId },
+      group: { id: groupId },
+      user: { id: userId },
     });
   }
 }

@@ -12,7 +12,7 @@ import {
 import { Namespace } from 'src/namespaces/entities/namespace.entity';
 
 @Entity('group_users')
-@Index(['namespaceId', 'groupId', 'userId'], {
+@Index(['namespace', 'group', 'user'], {
   unique: true,
   where: 'deleted_at IS NULL',
 })
@@ -20,24 +20,15 @@ export class GroupUser extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'namespace_id' })
-  namespaceId: string;
-
-  @Column({ name: 'group_id' })
-  groupId: string;
-
-  @Column({ name: 'user_id' })
-  userId: string;
-
-  @ManyToOne(() => Namespace)
+  @ManyToOne(() => Namespace, { nullable: false })
   @JoinColumn({ name: 'namespace_id' })
   namespace: Namespace;
 
-  @ManyToOne(() => Group)
+  @ManyToOne(() => Group, { nullable: false })
   @JoinColumn({ name: 'group_id' })
   group: Group;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { nullable: false })
   @JoinColumn({ name: 'user_id' })
   user: User;
 }

@@ -25,11 +25,11 @@ export class PermissionsService {
     resourceId: string,
   ): Promise<ListRespDto> {
     const users = await this.userPermiRepo.find({
-      where: { namespaceId, resourceId },
+      where: { namespace: { id: namespaceId }, resource: { id: resourceId } },
       relations: ['user'],
     });
     const groups = await this.groupPermiRepo.find({
-      where: { namespaceId, resourceId },
+      where: { namespace: { id: namespaceId }, resource: { id: resourceId } },
       relations: ['group'],
     });
     const resource = await this.resourceService.get(resourceId);
@@ -62,7 +62,11 @@ export class PermissionsService {
     groupId: string,
   ): Promise<PermissionDto> {
     const permission = await this.groupPermiRepo.findOne({
-      where: { namespaceId, resourceId, groupId },
+      where: {
+        namespace: { id: namespaceId },
+        resource: { id: resourceId },
+        group: { id: groupId },
+      },
     });
     const level = permission ? permission.level : PermissionLevel.FULL_ACCESS;
     return plainToInstance(PermissionDto, { level });
@@ -78,15 +82,20 @@ export class PermissionsService {
     await this.dataSource.transaction(async (manager) => {
       const result = await manager.update(
         GroupPermission,
-        { namespaceId, resourceId, groupId, deletedAt: IsNull() },
+        {
+          namespace: { id: namespaceId },
+          resource: { id: resourceId },
+          group: { id: groupId },
+          deletedAt: IsNull(),
+        },
         { level },
       );
       if (result.affected === 0) {
         await manager.save(
           manager.create(GroupPermission, {
-            namespaceId,
-            resourceId,
-            groupId,
+            namespace: { id: namespaceId },
+            resource: { id: resourceId },
+            group: { id: groupId },
             level,
           }),
         );
@@ -99,7 +108,11 @@ export class PermissionsService {
     resourceId: string,
     groupId: string,
   ) {
-    await this.groupPermiRepo.delete({ namespaceId, resourceId, groupId });
+    await this.groupPermiRepo.delete({
+      namespace: { id: namespaceId },
+      resource: { id: resourceId },
+      group: { id: groupId },
+    });
   }
 
   async getUserPermission(
@@ -108,7 +121,11 @@ export class PermissionsService {
     userId: string,
   ): Promise<PermissionDto> {
     const permission = await this.userPermiRepo.findOne({
-      where: { namespaceId, resourceId, userId },
+      where: {
+        namespace: { id: namespaceId },
+        resource: { id: resourceId },
+        user: { id: userId },
+      },
     });
     const level = permission ? permission.level : PermissionLevel.FULL_ACCESS;
     return plainToInstance(PermissionDto, { level });
@@ -124,15 +141,20 @@ export class PermissionsService {
     await this.dataSource.transaction(async (manager) => {
       const result = await manager.update(
         UserPermission,
-        { namespaceId, resourceId, userId, deletedAt: IsNull() },
+        {
+          namespace: { id: namespaceId },
+          resource: { id: resourceId },
+          user: { id: userId },
+          deletedAt: IsNull(),
+        },
         { level },
       );
       if (result.affected === 0) {
         await manager.save(
           manager.create(UserPermission, {
-            namespaceId,
-            resourceId,
-            userId,
+            namespace: { id: namespaceId },
+            resource: { id: resourceId },
+            user: { id: userId },
             level,
           }),
         );
@@ -145,6 +167,10 @@ export class PermissionsService {
     resourceId: string,
     userId: string,
   ) {
-    await this.userPermiRepo.delete({ namespaceId, resourceId, userId });
+    await this.userPermiRepo.delete({
+      namespace: { id: namespaceId },
+      resource: { id: resourceId },
+      user: { id: userId },
+    });
   }
 }

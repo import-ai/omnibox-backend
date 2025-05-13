@@ -22,13 +22,10 @@ export class Group extends Base {
     this.id = generateId(6);
   }
 
-  @Column({ name: 'namespace_id' })
-  namespaceId: string;
-
   @Column()
   title: string;
 
-  @ManyToOne(() => Namespace)
+  @ManyToOne(() => Namespace, { nullable: false })
   @JoinColumn({ name: 'namespace_id' })
   namespace: Namespace;
 }

@@ -8,7 +8,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Resource } from 'src/resources/resources.entity';
-import { User } from '../user/user.entity';
 import { Namespace } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
@@ -41,18 +40,6 @@ export class NamespacesService {
     return namespace.rootResource;
   }
 
-  async getByOwner(ownerId: string) {
-    const namespaces = await this.namespaceRepository.find({
-      where: {
-        owner_id: ArrayContains([ownerId]),
-      },
-    });
-    if (namespaces.length <= 0) {
-      throw new NotFoundException('Workspace not found');
-    }
-    return namespaces;
-  }
-
   async get(id: string, manager?: EntityManager) {
     const repo = manager
       ? manager.getRepository(Namespace)
@@ -82,7 +69,6 @@ export class NamespacesService {
     const namespace = await manager.save(
       manager.create(Namespace, {
         name,
-        owner_id: [ownerId],
       }),
     );
     const privateRoot = await manager.save(

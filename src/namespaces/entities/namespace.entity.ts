@@ -27,11 +27,8 @@ export class Namespace extends Base {
   @Column()
   name: string;
 
-  @Column('uuid', { array: true, default: [] })
-  owner_id: string[];
-
-  @Column({ type: 'int', default: 1 })
-  max_running_tasks: number;
+  @Column({ name: 'max_running_tasks', type: 'int', default: 1 })
+  maxRunningTasks: number;
 
   @OneToOne(() => Resource, { nullable: true })
   @JoinColumn({ name: 'root_resource_id' })

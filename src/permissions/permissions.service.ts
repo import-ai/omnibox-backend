@@ -261,4 +261,24 @@ export class PermissionsService {
       user: { id: userId },
     });
   }
+
+  async userHasPermission(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ) {
+    const globalLevel = await this.getGlobalPermissionLevel(
+      namespaceId,
+      resourceId,
+    );
+    if (globalLevel != PermissionLevel.NO_ACCESS) {
+      return true;
+    }
+    const userLevel = await this.getUserPermissionLevel(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    return userLevel != PermissionLevel.NO_ACCESS;
+  }
 }

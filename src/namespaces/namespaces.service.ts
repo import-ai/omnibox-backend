@@ -189,6 +189,7 @@ export class NamespacesService {
       namespaceId: namespace,
       spaceType,
       parentId: resource.id,
+      userId,
     });
     return { ...resource, parentId: '0', spaceType, children };
   }

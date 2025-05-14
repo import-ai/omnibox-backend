@@ -20,11 +20,13 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
+import { PermissionsService } from 'src/permissions/permissions.service';
 
 export interface IQuery {
   namespaceId: string;
   spaceType: SpaceType;
   parentId: string;
+  userId: string;
   tags?: string;
 }
 
@@ -44,6 +46,7 @@ export class ResourcesService {
     private readonly taskRepository: Repository<Task>,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   async create(user: User, data: CreateResourceDto) {
@@ -91,7 +94,7 @@ export class ResourcesService {
     };
   }
 
-  async query({ namespaceId, parentId, spaceType, tags }: IQuery) {
+  async query({ namespaceId, parentId, spaceType, tags, userId }: IQuery) {
     const where: FindOptionsWhere<Resource> = {
       namespace: { id: namespaceId },
       parentId,
@@ -103,9 +106,16 @@ export class ResourcesService {
       }
     }
 
-    const resources = await this.resourceRepository.find({
+    let resources = await this.resourceRepository.find({
       where,
       relations: ['namespace'],
+    });
+    resources = resources.filter(async (resource) => {
+      return await this.permissionsService.userHasPermission(
+        namespaceId,
+        resource.id,
+        userId,
+      );
     });
     return resources.map((res) => {
       return { ...res, spaceType };

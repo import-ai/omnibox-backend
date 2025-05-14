@@ -12,12 +12,15 @@ import {
   Query,
   Req,
   Res,
+  UnauthorizedException,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
+import { PermissionsService } from 'src/permissions/permissions.service';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 export async function fileResponse(
   resourceId: string,
@@ -40,7 +43,10 @@ export async function fileResponse(
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class ResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) {}
+  constructor(
+    private readonly resourcesService: ResourcesService,
+    private readonly permissionsService: PermissionsService,
+  ) {}
 
   @Post()
   async create(@Req() req, @Body() data: CreateResourceDto) {
@@ -49,6 +55,7 @@ export class ResourcesController {
 
   @Get('query')
   async query(
+    @Req() req,
     @Query('namespace') namespaceId: string,
     @Query('spaceType') spaceType: SpaceType,
     @Query('parentId') parentId: string,
@@ -58,27 +65,61 @@ export class ResourcesController {
       namespaceId,
       spaceType,
       parentId,
+      userId: req.user.id,
       tags,
     });
   }
 
-  @Get(':id')
-  async get(@Param('id') id: string) {
-    return await this.resourcesService.get(id);
+  @Get(':resourceId')
+  async get(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new UnauthorizedException('not authorized');
+    }
+    return await this.resourcesService.get(resourceId);
   }
 
-  @Patch(':id')
+  @Patch(':resourceId')
   async update(
     @Req() req,
-    @Param('id') id: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @Body() data: UpdateResourceDto,
   ) {
-    return await this.resourcesService.update(req.user, id, data);
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new UnauthorizedException('not authorized');
+    }
+    return await this.resourcesService.update(req.user, resourceId, data);
   }
 
-  @Delete(':id')
-  async delete(@Req() req, @Param('id') id: string) {
-    return await this.resourcesService.delete(req.user, id);
+  @Delete(':resourceId')
+  async delete(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new UnauthorizedException('not authorized');
+    }
+    return await this.resourcesService.delete(req.user, resourceId);
   }
 
   @Post('files')
@@ -98,7 +139,7 @@ export class ResourcesController {
     );
   }
 
-  @Patch('files/:id')
+  @Patch('files/:resourceId')
   @UseInterceptors(FileInterceptor('file'))
   async patchFile(
     @Req() req,
@@ -115,8 +156,11 @@ export class ResourcesController {
     );
   }
 
-  @Get('files/:id')
-  async downloadFile(@Param('id') resourceId: string, @Res() res: Response) {
+  @Get('files/:resourceId')
+  async downloadFile(
+    @Param('resourceId') resourceId: string,
+    @Res() res: Response,
+  ) {
     return await fileResponse(resourceId, res, this.resourcesService);
   }
 }

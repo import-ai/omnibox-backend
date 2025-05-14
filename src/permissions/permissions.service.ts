@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
 import { ListRespDto } from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
@@ -213,29 +213,44 @@ export class PermissionsService {
     userId: string,
     permission: PermissionDto,
   ) {
-    const level = permission.level;
     await this.dataSource.transaction(async (manager) => {
-      const result = await manager.update(
-        UserPermission,
-        {
+      await this.updateUserLevel(
+        namespaceId,
+        resourceId,
+        userId,
+        permission.level,
+        manager,
+      );
+    });
+  }
+
+  async updateUserLevel(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    level: PermissionLevel,
+    manager: EntityManager,
+  ) {
+    const result = await manager.update(
+      UserPermission,
+      {
+        namespace: { id: namespaceId },
+        resource: { id: resourceId },
+        user: { id: userId },
+        deletedAt: IsNull(),
+      },
+      { level },
+    );
+    if (result.affected === 0) {
+      await manager.save(
+        manager.create(UserPermission, {
           namespace: { id: namespaceId },
           resource: { id: resourceId },
           user: { id: userId },
-          deletedAt: IsNull(),
-        },
-        { level },
+          level,
+        }),
       );
-      if (result.affected === 0) {
-        await manager.save(
-          manager.create(UserPermission, {
-            namespace: { id: namespaceId },
-            resource: { id: resourceId },
-            user: { id: userId },
-            level,
-          }),
-        );
-      }
-    });
+    }
   }
 
   async deleteUserPermission(

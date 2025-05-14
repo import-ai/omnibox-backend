@@ -32,13 +32,16 @@ export class PermissionsService {
       where: { namespace: { id: namespaceId }, resource: { id: resourceId } },
       relations: ['group'],
     });
-    const resource = await this.resourceService.get(resourceId);
+    const globalLevel = await this.getGlobalPermissionLevel(
+      namespaceId,
+      resourceId,
+    );
     return plainToInstance(
       ListRespDto,
       {
         users,
         groups,
-        globalLevel: resource.globalLevel,
+        globalLevel,
       },
       { excludeExtraneousValues: true },
     );
@@ -49,27 +52,11 @@ export class PermissionsService {
     resourceId: string,
     permission: PermissionDto,
   ) {
-    await this.resourceService.updateGlobalPermission(
+    await this.resourceService.updateGlobalPermissionLevel(
       namespaceId,
       resourceId,
       permission.level,
     );
-  }
-
-  async getGroupPermission(
-    namespaceId: string,
-    resourceId: string,
-    groupId: string,
-  ): Promise<PermissionDto> {
-    const permission = await this.groupPermiRepo.findOne({
-      where: {
-        namespace: { id: namespaceId },
-        resource: { id: resourceId },
-        group: { id: groupId },
-      },
-    });
-    const level = permission ? permission.level : PermissionLevel.FULL_ACCESS;
-    return plainToInstance(PermissionDto, { level });
   }
 
   async updateGroupPermission(
@@ -115,20 +102,90 @@ export class PermissionsService {
     });
   }
 
-  async getUserPermission(
+  async getUserPermissionLevel(
     namespaceId: string,
     resourceId: string,
     userId: string,
-  ): Promise<PermissionDto> {
-    const permission = await this.userPermiRepo.findOne({
-      where: {
-        namespace: { id: namespaceId },
-        resource: { id: resourceId },
-        user: { id: userId },
-      },
-    });
-    const level = permission ? permission.level : PermissionLevel.FULL_ACCESS;
-    return plainToInstance(PermissionDto, { level });
+  ): Promise<PermissionLevel> {
+    let permission: UserPermission | null = null;
+    while (true) {
+      permission = await this.userPermiRepo.findOne({
+        where: {
+          namespace: { id: namespaceId },
+          resource: { id: resourceId },
+          user: { id: userId },
+        },
+      });
+      if (permission) {
+        break;
+      }
+      const parentId = await this.resourceService.getParentId(
+        namespaceId,
+        resourceId,
+      );
+      if (!parentId) {
+        break;
+      }
+      resourceId = parentId;
+    }
+    const level = permission ? permission.level : PermissionLevel.NO_ACCESS;
+    return level;
+  }
+
+  async getGroupPermissionLevel(
+    namespaceId: string,
+    resourceId: string,
+    groupId: string,
+  ): Promise<PermissionLevel> {
+    let permission: GroupPermission | null = null;
+    while (true) {
+      permission = await this.groupPermiRepo.findOne({
+        where: {
+          namespace: { id: namespaceId },
+          resource: { id: resourceId },
+          group: { id: groupId },
+        },
+      });
+      if (permission) {
+        break;
+      }
+      const parentId = await this.resourceService.getParentId(
+        namespaceId,
+        resourceId,
+      );
+      if (!parentId) {
+        break;
+      }
+      resourceId = parentId;
+    }
+    const level = permission ? permission.level : PermissionLevel.NO_ACCESS;
+    return level;
+  }
+
+  async getGlobalPermissionLevel(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<PermissionLevel> {
+    let level: PermissionLevel | null = null;
+    while (true) {
+      level = await this.resourceService.getGlobalPermissionLevel(
+        namespaceId,
+        resourceId,
+      );
+      if (level) {
+        break;
+      }
+      const parentId = await this.resourceService.getParentId(
+        namespaceId,
+        resourceId,
+      );
+      if (!parentId) {
+        break;
+      }
+      resourceId = parentId;
+    }
+    level = level || PermissionLevel.NO_ACCESS;
+    return level;
   }
 
   async updateUserPermission(

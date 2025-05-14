@@ -56,8 +56,9 @@ export class Resource extends Base {
     type: 'enum',
     enum: PermissionLevel,
     default: PermissionLevel.FULL_ACCESS,
+    nullable: true,
   })
-  globalLevel: PermissionLevel;
+  globalLevel: PermissionLevel | null;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })

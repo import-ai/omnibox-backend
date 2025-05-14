@@ -24,10 +24,7 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
   ): Promise<ListRespDto> {
-    const users = await this.userPermiRepo.find({
-      where: { namespace: { id: namespaceId }, resource: { id: resourceId } },
-      relations: ['user'],
-    });
+    const users = await this.listUserPermissions(namespaceId, resourceId);
     const groups = await this.groupPermiRepo.find({
       where: { namespace: { id: namespaceId }, resource: { id: resourceId } },
       relations: ['group'],
@@ -45,6 +42,40 @@ export class PermissionsService {
       },
       { excludeExtraneousValues: true },
     );
+  }
+
+  async listUserPermissions(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<UserPermission[]> {
+    const userIds = new Set<string>();
+    const userPermissions: UserPermission[] = [];
+    while (true) {
+      const permissions = await this.userPermiRepo.find({
+        where: {
+          namespace: { id: namespaceId },
+          resource: { id: resourceId },
+          deletedAt: IsNull(),
+        },
+        relations: ['user'],
+      });
+      for (const permission of permissions) {
+        const userId = permission.user!.id;
+        if (!userIds.has(userId)) {
+          userIds.add(userId);
+          userPermissions.push(permission);
+        }
+      }
+      const parentId = await this.resourceService.getParentId(
+        namespaceId,
+        resourceId,
+      );
+      if (!parentId) {
+        break;
+      }
+      resourceId = parentId;
+    }
+    return userPermissions;
   }
 
   async updateGlobalPermission(

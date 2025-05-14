@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { PermissionDto } from './dto/permission.dto';
+import { plainToInstance } from 'class-transformer';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')
 export class PermissionsController {
@@ -47,11 +48,12 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('groupId') groupId: string,
   ) {
-    return await this.permissionsService.getGroupPermission(
+    const level = await this.permissionsService.getGroupPermissionLevel(
       namespaceId,
       resourceId,
       groupId,
     );
+    return plainToInstance(PermissionDto, { level });
   }
 
   @Patch('groups/:groupId')
@@ -91,11 +93,12 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
   ) {
-    return await this.permissionsService.getGroupPermission(
+    const level = await this.permissionsService.getUserPermissionLevel(
       namespaceId,
       resourceId,
       userId,
     );
+    return plainToInstance(PermissionDto, { level });
   }
 
   @Patch('users/:userId')

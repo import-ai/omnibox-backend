@@ -106,18 +106,22 @@ export class ResourcesService {
       }
     }
 
-    let resources = await this.resourceRepository.find({
+    const resources = await this.resourceRepository.find({
       where,
       relations: ['namespace'],
     });
-    resources = resources.filter(async (resource) => {
-      return await this.permissionsService.userHasPermission(
+    const filteredResources: Resource[] = [];
+    for (const resource of resources) {
+      const hasPermission = await this.permissionsService.userHasPermission(
         namespaceId,
         resource.id,
         userId,
       );
-    });
-    return resources.map((res) => {
+      if (hasPermission) {
+        filteredResources.push(resource);
+      }
+    }
+    return filteredResources.map((res) => {
       return { ...res, spaceType };
     });
   }

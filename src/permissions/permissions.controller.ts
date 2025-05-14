@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Req,
@@ -21,6 +22,14 @@ export class PermissionsController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new NotFoundException('Resource not found.');
+    }
     return await this.permissionsService.listPermissions(
       namespaceId,
       resourceId,
@@ -34,6 +43,14 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Body() permissionDto: PermissionDto,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new NotFoundException('Resource not found.');
+    }
     await this.permissionsService.updateGlobalPermission(
       namespaceId,
       resourceId,
@@ -48,6 +65,14 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('groupId') groupId: string,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new NotFoundException('Resource not found.');
+    }
     const level = await this.permissionsService.getGroupPermissionLevel(
       namespaceId,
       resourceId,
@@ -64,6 +89,14 @@ export class PermissionsController {
     @Param('groupId') groupId: string,
     @Body() permissionDto: PermissionDto,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new NotFoundException('Resource not found.');
+    }
     await this.permissionsService.updateGroupPermission(
       namespaceId,
       resourceId,
@@ -79,6 +112,14 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('groupId') groupId: string,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new NotFoundException('Resource not found.');
+    }
     await this.permissionsService.deleteGroupPermission(
       namespaceId,
       resourceId,
@@ -93,6 +134,14 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new NotFoundException('Resource not found.');
+    }
     const level = await this.permissionsService.getUserPermissionLevel(
       namespaceId,
       resourceId,
@@ -109,6 +158,14 @@ export class PermissionsController {
     @Param('userId') userId: string,
     @Body() permissionDto: PermissionDto,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new NotFoundException('Resource not found.');
+    }
     await this.permissionsService.updateUserPermission(
       namespaceId,
       resourceId,
@@ -124,6 +181,14 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new NotFoundException('Resource not found.');
+    }
     await this.permissionsService.deleteUserPermission(
       namespaceId,
       resourceId,

@@ -31,8 +31,14 @@ export class NamespacesService {
     private readonly permissionsService: PermissionsService,
   ) {}
 
-  async getTeamspaceRoot(namespaceId: string): Promise<Resource> {
-    const namespace = await this.namespaceRepository.findOne({
+  async getTeamspaceRoot(
+    namespaceId: string,
+    manager?: EntityManager,
+  ): Promise<Resource> {
+    const repo = manager
+      ? manager.getRepository(Namespace)
+      : this.namespaceRepository;
+    const namespace = await repo.findOne({
       where: {
         id: namespaceId,
       },
@@ -136,7 +142,7 @@ export class NamespacesService {
         rootResource: { id: privateRoot.id },
       }),
     );
-    const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
+    const teamspaceRoot = await this.getTeamspaceRoot(namespaceId, manager);
     await this.permissionsService.updateUserLevel(
       namespaceId,
       teamspaceRoot.id,

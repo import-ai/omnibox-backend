@@ -54,8 +54,8 @@ export class Resource extends Base {
 
   @Column({
     type: 'enum',
+    name: 'global_level',
     enum: PermissionLevel,
-    default: PermissionLevel.FULL_ACCESS,
     nullable: true,
   })
   globalLevel: PermissionLevel | null;

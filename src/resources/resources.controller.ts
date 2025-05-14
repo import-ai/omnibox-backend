@@ -6,13 +6,13 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
   Query,
   Req,
   Res,
-  UnauthorizedException,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -82,7 +82,7 @@ export class ResourcesController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new UnauthorizedException('not authorized');
+      throw new NotFoundException('Resource not found.');
     }
     return await this.resourcesService.get(resourceId);
   }
@@ -100,7 +100,7 @@ export class ResourcesController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new UnauthorizedException('not authorized');
+      throw new NotFoundException('Resource not found.');
     }
     return await this.resourcesService.update(req.user, resourceId, data);
   }
@@ -117,7 +117,7 @@ export class ResourcesController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new UnauthorizedException('not authorized');
+      throw new NotFoundException('Resource not found.');
     }
     return await this.resourcesService.delete(req.user, resourceId);
   }

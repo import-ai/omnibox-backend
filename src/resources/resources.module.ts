@@ -6,6 +6,7 @@ import { ResourcesController } from 'src/resources/resources.controller';
 import { Task } from 'src/tasks/tasks.entity';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { InternalResourcesController } from 'src/resources/internal.resource.controller';
+import { PermissionsModule } from 'src/permissions/permissions.module';
 
 @Module({
   exports: [ResourcesService, MinioService, InternalResourcesController],
@@ -14,6 +15,7 @@ import { InternalResourcesController } from 'src/resources/internal.resource.con
   imports: [
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Task]),
+    PermissionsModule,
   ],
 })
 export class ResourcesModule {}

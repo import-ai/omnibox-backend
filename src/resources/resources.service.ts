@@ -247,27 +247,6 @@ export class ResourcesService {
     return { fileStream, resource };
   }
 
-  async updateGlobalPermissionLevel(
-    namespaceId: string,
-    resourceId: string,
-    globalLevel: PermissionLevel | null,
-  ) {
-    await this.resourceRepository.update(
-      { namespace: { id: namespaceId }, id: resourceId },
-      { globalLevel },
-    );
-  }
-
-  async getGlobalPermissionLevel(
-    namespaceId: string,
-    resourceId: string,
-  ): Promise<PermissionLevel | null> {
-    const resource = await this.resourceRepository.findOneOrFail({
-      where: { namespace: { id: namespaceId }, id: resourceId },
-    });
-    return resource.globalLevel;
-  }
-
   async createFolder(
     namespaceId: string,
     parentId: string | null,
@@ -282,16 +261,6 @@ export class ResourcesService {
         ...(userId && { user: { id: userId } }),
       }),
     );
-  }
-
-  async getParentId(
-    namespaceId: string,
-    resourceId: string,
-  ): Promise<string | null> {
-    const resource = await this.resourceRepository.findOneOrFail({
-      where: { namespace: { id: namespaceId }, id: resourceId },
-    });
-    return resource.parentId;
   }
 }
 

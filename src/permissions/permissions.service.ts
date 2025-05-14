@@ -7,7 +7,7 @@ import { plainToInstance } from 'class-transformer';
 import { PermissionLevel } from './permission-level.enum';
 import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
-import { ResourcesService } from 'src/resources/resources.service';
+import { Resource } from 'src/resources/resources.entity';
 
 @Injectable()
 export class PermissionsService {
@@ -16,8 +16,9 @@ export class PermissionsService {
     private readonly userPermiRepo: Repository<UserPermission>,
     @InjectRepository(GroupPermission)
     private readonly groupPermiRepo: Repository<GroupPermission>,
+    @InjectRepository(Resource)
+    private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
-    private readonly resourceService: ResourcesService,
   ) {}
 
   async listPermissions(
@@ -66,10 +67,7 @@ export class PermissionsService {
           userPermissions.push(permission);
         }
       }
-      const parentId = await this.resourceService.getParentId(
-        namespaceId,
-        resourceId,
-      );
+      const parentId = await this.getParentId(namespaceId, resourceId);
       if (!parentId) {
         break;
       }
@@ -83,10 +81,9 @@ export class PermissionsService {
     resourceId: string,
     permission: PermissionDto,
   ) {
-    await this.resourceService.updateGlobalPermissionLevel(
-      namespaceId,
-      resourceId,
-      permission.level,
+    await this.resourceRepository.update(
+      { namespace: { id: namespaceId }, id: resourceId },
+      { globalLevel: permission.level },
     );
   }
 
@@ -150,10 +147,7 @@ export class PermissionsService {
       if (permission) {
         break;
       }
-      const parentId = await this.resourceService.getParentId(
-        namespaceId,
-        resourceId,
-      );
+      const parentId = await this.getParentId(namespaceId, resourceId);
       if (!parentId) {
         break;
       }
@@ -180,10 +174,7 @@ export class PermissionsService {
       if (permission) {
         break;
       }
-      const parentId = await this.resourceService.getParentId(
-        namespaceId,
-        resourceId,
-      );
+      const parentId = await this.getParentId(namespaceId, resourceId);
       if (!parentId) {
         break;
       }
@@ -199,17 +190,14 @@ export class PermissionsService {
   ): Promise<PermissionLevel> {
     let level: PermissionLevel | null = null;
     while (true) {
-      level = await this.resourceService.getGlobalPermissionLevel(
-        namespaceId,
-        resourceId,
-      );
+      const resource = await this.resourceRepository.findOneOrFail({
+        where: { namespace: { id: namespaceId }, id: resourceId },
+      });
+      level = resource.globalLevel;
       if (level) {
         break;
       }
-      const parentId = await this.resourceService.getParentId(
-        namespaceId,
-        resourceId,
-      );
+      const parentId = await this.getParentId(namespaceId, resourceId);
       if (!parentId) {
         break;
       }
@@ -280,5 +268,15 @@ export class PermissionsService {
       userId,
     );
     return userLevel != PermissionLevel.NO_ACCESS;
+  }
+
+  async getParentId(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<string | null> {
+    const resource = await this.resourceRepository.findOneOrFail({
+      where: { namespace: { id: namespaceId }, id: resourceId },
+    });
+    return resource.parentId;
   }
 }

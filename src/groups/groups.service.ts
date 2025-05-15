@@ -17,6 +17,14 @@ export class GroupsService {
     private readonly dataSource: DataSource,
   ) {}
 
+  async listGroups(namespaceId: string): Promise<Group[]> {
+    return await this.groupRepository.find({
+      where: {
+        namespace: { id: namespaceId },
+      },
+    });
+  }
+
   async listGroupByUser(namespaceId: string, userId: string): Promise<Group[]> {
     const groups = await this.groupUserRepository.find({
       where: {
@@ -30,25 +38,14 @@ export class GroupsService {
 
   async createGroup(
     namespaceId: string,
-    userId: string,
     createGroupDto: CreateGroupDto,
   ): Promise<Group> {
-    return await this.dataSource.transaction(async (manager) => {
-      const group = await manager.save(
-        manager.create(Group, {
-          namespace: { id: namespaceId },
-          title: createGroupDto.title,
-        }),
-      );
-      await manager.save(
-        manager.create(GroupUser, {
-          namespace: { id: namespaceId },
-          group: { id: group.id },
-          user: { id: userId },
-        }),
-      );
-      return group;
-    });
+    return await this.groupRepository.save(
+      this.groupRepository.create({
+        namespace: { id: namespaceId },
+        title: createGroupDto.title,
+      }),
+    );
   }
 
   async userInGroup(
@@ -97,13 +94,17 @@ export class GroupsService {
   }
 
   async addGroupUser(namespaceId: string, groupId: string, userId: string) {
-    await this.groupUserRepository.save(
-      this.groupUserRepository.create({
+    await this.dataSource
+      .createQueryBuilder()
+      .insert()
+      .into(GroupUser)
+      .values({
         namespace: { id: namespaceId },
         group: { id: groupId },
         user: { id: userId },
-      }),
-    );
+      })
+      .orIgnore()
+      .execute();
   }
 
   async deleteGroupUser(namespaceId: string, groupId: string, userId: string) {

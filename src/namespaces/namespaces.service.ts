@@ -208,4 +208,18 @@ export class NamespacesService {
     });
     return { ...resource, parentId: '0', spaceType, children };
   }
+
+  async userIsOwner(namespaceId: string, userId: string): Promise<boolean> {
+    const user = await this.namespaceMemberRepository.findOne({
+      where: {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+        deletedAt: IsNull(),
+      },
+    });
+    if (!user) {
+      return false;
+    }
+    return user.role === 'owner';
+  }
 }

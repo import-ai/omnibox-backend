@@ -2,8 +2,8 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Req,
@@ -28,7 +28,7 @@ export class PermissionsController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     return await this.permissionsService.listPermissions(
       namespaceId,
@@ -49,7 +49,7 @@ export class PermissionsController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     await this.permissionsService.updateGlobalPermission(
       namespaceId,
@@ -71,7 +71,7 @@ export class PermissionsController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     const level = await this.permissionsService.getGroupPermissionLevel(
       namespaceId,
@@ -95,7 +95,7 @@ export class PermissionsController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     await this.permissionsService.updateGroupPermission(
       namespaceId,
@@ -118,7 +118,7 @@ export class PermissionsController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     await this.permissionsService.deleteGroupPermission(
       namespaceId,
@@ -140,7 +140,7 @@ export class PermissionsController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     const level = await this.permissionsService.getUserPermissionLevel(
       namespaceId,
@@ -164,7 +164,7 @@ export class PermissionsController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     await this.permissionsService.updateUserPermission(
       namespaceId,
@@ -187,7 +187,7 @@ export class PermissionsController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     await this.permissionsService.deleteUserPermission(
       namespaceId,

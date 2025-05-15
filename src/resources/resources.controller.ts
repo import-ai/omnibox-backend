@@ -5,8 +5,8 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Post,
@@ -82,7 +82,7 @@ export class ResourcesController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     return await this.resourcesService.get(resourceId);
   }
@@ -100,7 +100,7 @@ export class ResourcesController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     return await this.resourcesService.update(req.user, resourceId, data);
   }
@@ -117,7 +117,7 @@ export class ResourcesController {
       req.user.id,
     );
     if (!hasPermission) {
-      throw new NotFoundException('Resource not found.');
+      throw new ForbiddenException('Not authorized');
     }
     return await this.resourcesService.delete(req.user, resourceId);
   }

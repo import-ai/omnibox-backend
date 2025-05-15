@@ -6,6 +6,7 @@ import { NamespacesController } from 'src/namespaces/namespaces.controller';
 import { Namespace } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
 import { ResourcesModule } from 'src/resources/resources.module';
+import { PermissionsModule } from 'src/permissions/permissions.module';
 
 @Module({
   exports: [NamespacesService],
@@ -14,6 +15,7 @@ import { ResourcesModule } from 'src/resources/resources.module';
   imports: [
     UserModule,
     ResourcesModule,
+    PermissionsModule,
     TypeOrmModule.forFeature([Namespace]),
     TypeOrmModule.forFeature([NamespaceMember]),
   ],

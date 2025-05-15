@@ -12,6 +12,8 @@ import { Namespace, SpaceType } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { ResourcesService } from 'src/resources/resources.service';
+import { PermissionsService } from 'src/permissions/permissions.service';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 @Injectable()
 export class NamespacesService {
@@ -25,10 +27,18 @@ export class NamespacesService {
     private readonly dataSource: DataSource,
 
     private readonly resourceService: ResourcesService,
+
+    private readonly permissionsService: PermissionsService,
   ) {}
 
-  async getTeamspaceRoot(namespaceId: string): Promise<Resource> {
-    const namespace = await this.namespaceRepository.findOne({
+  async getTeamspaceRoot(
+    namespaceId: string,
+    manager?: EntityManager,
+  ): Promise<Resource> {
+    const repo = manager
+      ? manager.getRepository(Namespace)
+      : this.namespaceRepository;
+    const namespace = await repo.findOne({
       where: {
         id: namespaceId,
       },
@@ -58,7 +68,7 @@ export class NamespacesService {
     return namespace;
   }
 
-  async createNamespaceAndMember(
+  async createAndJoinNamespace(
     ownerId: string,
     name: string,
   ): Promise<Namespace> {
@@ -67,16 +77,6 @@ export class NamespacesService {
       await this.addMember(namespace.id, ownerId, manager);
       return namespace;
     });
-  }
-
-  async createAndInit(
-    ownerId: string,
-    name: string,
-    manager: EntityManager,
-  ): Promise<Namespace> {
-    const namespace = await this.createNamespace(name, manager);
-    await this.addMember(namespace.id, ownerId, manager);
-    return namespace;
   }
 
   async createNamespace(
@@ -142,6 +142,21 @@ export class NamespacesService {
         rootResource: { id: privateRoot.id },
       }),
     );
+    const teamspaceRoot = await this.getTeamspaceRoot(namespaceId, manager);
+    await this.permissionsService.updateUserLevel(
+      namespaceId,
+      teamspaceRoot.id,
+      userId,
+      PermissionLevel.FULL_ACCESS,
+      manager,
+    );
+    await this.permissionsService.updateUserLevel(
+      namespaceId,
+      privateRoot.id,
+      userId,
+      PermissionLevel.FULL_ACCESS,
+      manager,
+    );
   }
 
   async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
@@ -189,6 +204,7 @@ export class NamespacesService {
       namespaceId: namespace,
       spaceType,
       parentId: resource.id,
+      userId,
     });
     return { ...resource, parentId: '0', spaceType, children };
   }

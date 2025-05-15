@@ -20,11 +20,13 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
+import { PermissionsService } from 'src/permissions/permissions.service';
 
 export interface IQuery {
   namespaceId: string;
   spaceType: SpaceType;
   parentId: string;
+  userId: string;
   tags?: string;
 }
 
@@ -44,6 +46,7 @@ export class ResourcesService {
     private readonly taskRepository: Repository<Task>,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   async create(user: User, data: CreateResourceDto) {
@@ -91,7 +94,7 @@ export class ResourcesService {
     };
   }
 
-  async query({ namespaceId, parentId, spaceType, tags }: IQuery) {
+  async query({ namespaceId, parentId, spaceType, tags, userId }: IQuery) {
     const where: FindOptionsWhere<Resource> = {
       namespace: { id: namespaceId },
       parentId,
@@ -107,7 +110,18 @@ export class ResourcesService {
       where,
       relations: ['namespace'],
     });
-    return resources.map((res) => {
+    const filteredResources: Resource[] = [];
+    for (const resource of resources) {
+      const hasPermission = await this.permissionsService.userHasPermission(
+        namespaceId,
+        resource.id,
+        userId,
+      );
+      if (hasPermission) {
+        filteredResources.push(resource);
+      }
+    }
+    return filteredResources.map((res) => {
       return { ...res, spaceType };
     });
   }
@@ -235,14 +249,6 @@ export class ResourcesService {
 
     const fileStream = await this.minioService.getObject(artifactName);
     return { fileStream, resource };
-  }
-
-  async updateGlobalPermission(
-    namespaceId: string,
-    resourceId: string,
-    globalLevel: PermissionLevel,
-  ) {
-    await this.resourceRepository.update({ id: resourceId }, { globalLevel });
   }
 
   async createFolder(

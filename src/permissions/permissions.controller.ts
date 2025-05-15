@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -9,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { PermissionDto } from './dto/permission.dto';
+import { plainToInstance } from 'class-transformer';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')
 export class PermissionsController {
@@ -20,6 +22,14 @@ export class PermissionsController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
     return await this.permissionsService.listPermissions(
       namespaceId,
       resourceId,
@@ -33,6 +43,14 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Body() permissionDto: PermissionDto,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
     await this.permissionsService.updateGlobalPermission(
       namespaceId,
       resourceId,
@@ -47,11 +65,20 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('groupId') groupId: string,
   ) {
-    return await this.permissionsService.getGroupPermission(
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const level = await this.permissionsService.getGroupPermissionLevel(
       namespaceId,
       resourceId,
       groupId,
     );
+    return plainToInstance(PermissionDto, { level });
   }
 
   @Patch('groups/:groupId')
@@ -62,6 +89,14 @@ export class PermissionsController {
     @Param('groupId') groupId: string,
     @Body() permissionDto: PermissionDto,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
     await this.permissionsService.updateGroupPermission(
       namespaceId,
       resourceId,
@@ -77,6 +112,14 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('groupId') groupId: string,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
     await this.permissionsService.deleteGroupPermission(
       namespaceId,
       resourceId,
@@ -91,11 +134,20 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
   ) {
-    return await this.permissionsService.getGroupPermission(
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const level = await this.permissionsService.getUserPermissionLevel(
       namespaceId,
       resourceId,
       userId,
     );
+    return plainToInstance(PermissionDto, { level });
   }
 
   @Patch('users/:userId')
@@ -106,6 +158,14 @@ export class PermissionsController {
     @Param('userId') userId: string,
     @Body() permissionDto: PermissionDto,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
     await this.permissionsService.updateUserPermission(
       namespaceId,
       resourceId,
@@ -121,6 +181,14 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
   ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
     await this.permissionsService.deleteUserPermission(
       namespaceId,
       resourceId,

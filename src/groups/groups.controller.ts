@@ -33,7 +33,7 @@ export class GroupsController {
       );
     }
     const groups = await this.groupsService.listGroups(namespaceId);
-    return plainToInstance(GroupDto, groups);
+    return plainToInstance(GroupDto, groups, { excludeExtraneousValues: true });
   }
 
   @Post()
@@ -100,7 +100,9 @@ export class GroupsController {
       );
     }
     const users = await this.groupsService.listGroupUsers(namespaceId, groupId);
-    return plainToInstance(GroupUserDto, users);
+    return plainToInstance(GroupUserDto, users, {
+      excludeExtraneousValues: true,
+    });
   }
 
   @Post(':groupId/users')

@@ -9,6 +9,7 @@ import {
   Controller,
   HttpCode,
 } from '@nestjs/common';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 @Controller('api/v1')
 export class AuthController {
@@ -64,15 +65,21 @@ export class AuthController {
     @Request() req,
     @Body('inviteUrl') inviteUrl: string,
     @Body('registerUrl') registerUrl: string,
-    @Body('namespace') namespace: string,
+    @Body('namespace') namespaceId: string,
     @Body('email') email: string,
     @Body('role') role: string,
+    @Body('resourceId') resourceId: string,
+    @Body('permissionLevel') permissionLevel: PermissionLevel,
+    @Body('groupId') groupId: string,
   ) {
     return await this.authService.invite(req.user.id, email, {
       role,
       inviteUrl,
       registerUrl,
-      namespace,
+      namespaceId,
+      resourceId,
+      permissionLevel,
+      groupId,
     });
   }
 

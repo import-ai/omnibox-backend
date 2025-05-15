@@ -212,8 +212,6 @@ export class AuthService {
         expiresIn: '1h',
       },
     );
-    console.log('email: ', email);
-    console.log('invitation: ', invitation);
     const mailSendUri = `${data.registerUrl}?user=${user_id}&namespace=${data.namespaceId}&token=${token}`;
     await this.mailService.sendInviteEmail(email, mailSendUri);
     // return { url: mailSendUri };
@@ -235,7 +233,6 @@ export class AuthService {
     invitation: InvitationDto,
     manager: EntityManager,
   ) {
-    console.log('invitation: ', invitation);
     await this.namespaceService.addMember(
       invitation.namespaceId,
       userId,

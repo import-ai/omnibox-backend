@@ -18,6 +18,12 @@ export class WizardController {
   @Post('chat/stream')
   @Sse()
   chat(@Body() body: Record<string, any>) {
-    return this.wizardService.chat(body);
+    return this.wizardService.stream('/api/v1/grimoire/stream', body);
+  }
+
+  @Post('ask')
+  @Sse()
+  ask(@Body() body: Record<string, any>) {
+    return this.wizardService.stream('/api/v1/grimoire/ask', body);
   }
 }

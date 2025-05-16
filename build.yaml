@@ -1,4 +1,4 @@
-# docker compose -f compose.yaml -f build.yaml up --build
+# docker compose -f base.yaml -f build.yaml up --build
 services:
   backend:
     build: .

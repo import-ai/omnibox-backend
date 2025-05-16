@@ -9,7 +9,7 @@ import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
 import { User } from 'src/user/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
-import { Observable, Subscriber } from 'rxjs';
+import { Observable } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'src/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
@@ -152,51 +152,53 @@ export class WizardService {
     return null;
   }
 
-  async fetchAndStream(
-    subscriber: Subscriber<MessageEvent>,
+  async callbackStream(
+    url: string,
     body: Record<string, any>,
-  ) {
-    const response = await fetch(
-      `${this.wizardBaseUrl}/api/v1/grimoire/stream`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      },
-    );
-    if (!response.ok) {
-      throw Error('Failed to fetch');
+    callback: (data: string) => void,
+  ): Promise<void> {
+    const response = await fetch(`${this.wizardBaseUrl}${url}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Response body is not readable');
     }
-    if (!response.body) {
-      throw Error('No response body');
-    }
-    const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer: string = '';
-    let i: number = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const sseResponse = decoder.decode(value);
-      buffer += sseResponse;
-      const chunks = buffer.split('\n\n');
-      while (i < chunks.length - 1) {
-        const chunk = chunks[i];
-        if (chunk.startsWith('data:')) {
-          const output = chunk.slice(5).trim();
-          subscriber.next({ data: output });
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        while (true) {
+          const lineEnd = buffer.indexOf('\n');
+          if (lineEnd == -1) break;
+
+          const line = buffer.slice(0, lineEnd).trim();
+          buffer = buffer.slice(lineEnd + 1);
+
+          if (line.startsWith('data:')) {
+            const data = line.slice(5).trim();
+            callback(data);
+          }
         }
-        i++;
       }
+    } finally {
+      await reader.cancel();
     }
-    subscriber.complete();
   }
 
-  chat(body: Record<string, any>): Observable<MessageEvent> {
+  stream(url: string, body: Record<string, any>): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      this.fetchAndStream(subscriber, body).catch((err) =>
-        subscriber.error(err),
-      );
+      this.callbackStream(url, body, (data) => subscriber.next({ data }))
+        .then(() => subscriber.complete())
+        .catch((err) => subscriber.error(err));
     });
   }
 }

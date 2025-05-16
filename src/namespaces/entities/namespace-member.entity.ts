@@ -11,14 +11,19 @@ import {
   Column,
 } from 'typeorm';
 
+export enum NamespaceRole {
+  OWNER = 'owner',
+  MEMBER = 'member',
+}
+
 @Entity('namespace_members')
 @Index(['user', 'namespace'], { unique: true, where: 'deleted_at IS NULL' })
 export class NamespaceMember extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'enum', enum: ['owner', 'member'], default: 'owner' })
-  role: string;
+  @Column({ type: 'enum', enum: NamespaceRole, default: NamespaceRole.OWNER })
+  role: NamespaceRole;
 
   @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })

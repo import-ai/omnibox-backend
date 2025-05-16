@@ -9,7 +9,10 @@ import {
 } from '@nestjs/common';
 import { Resource } from 'src/resources/resources.entity';
 import { Namespace, SpaceType } from './entities/namespace.entity';
-import { NamespaceMember } from './entities/namespace-member.entity';
+import {
+  NamespaceMember,
+  NamespaceRole,
+} from './entities/namespace-member.entity';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
@@ -71,12 +74,22 @@ export class NamespacesService {
   async createAndJoinNamespace(
     ownerId: string,
     name: string,
+    manager?: EntityManager,
   ): Promise<Namespace> {
-    return await this.dataSource.transaction(async (manager) => {
+    const transaction = async (manager: EntityManager) => {
       const namespace = await this.createNamespace(name, manager);
-      await this.addMember(namespace.id, ownerId, manager);
+      await this.addMember(
+        namespace.id,
+        ownerId,
+        NamespaceRole.OWNER,
+        PermissionLevel.FULL_ACCESS,
+        manager,
+      );
       return namespace;
-    });
+    };
+    return manager
+      ? await transaction(manager)
+      : await this.dataSource.transaction(transaction);
   }
 
   async createNamespace(
@@ -118,7 +131,13 @@ export class NamespacesService {
     await this.namespaceRepository.softDelete(id);
   }
 
-  async addMember(namespaceId: string, userId: string, manager: EntityManager) {
+  async addMember(
+    namespaceId: string,
+    userId: string,
+    role: NamespaceRole,
+    level: PermissionLevel,
+    manager: EntityManager,
+  ) {
     const count = await manager.count(NamespaceMember, {
       where: {
         namespace: { id: namespaceId },
@@ -139,6 +158,7 @@ export class NamespacesService {
       manager.create(NamespaceMember, {
         namespace: { id: namespaceId },
         user: { id: userId },
+        role,
         rootResource: { id: privateRoot.id },
       }),
     );
@@ -147,7 +167,7 @@ export class NamespacesService {
       namespaceId,
       teamspaceRoot.id,
       userId,
-      PermissionLevel.FULL_ACCESS,
+      level,
       manager,
     );
     await this.permissionsService.updateUserLevel(

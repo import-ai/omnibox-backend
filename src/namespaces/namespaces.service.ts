@@ -189,7 +189,12 @@ export class NamespacesService {
       relations: ['user'],
     });
     return members.map((member) => {
-      return { email: member.user.email, role: member.role };
+      return {
+        role: member.role,
+        id: member.user.id,
+        email: member.user.email,
+        username: member.user.username,
+      };
     });
   }
 

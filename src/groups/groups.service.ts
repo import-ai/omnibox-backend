@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Group } from './entities/group.entity';
 import { GroupUser } from './entities/group-user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -93,9 +93,16 @@ export class GroupsService {
     return users.map((user) => user.user);
   }
 
-  async addGroupUser(namespaceId: string, groupId: string, userId: string) {
-    await this.dataSource
-      .createQueryBuilder()
+  async addGroupUser(
+    namespaceId: string,
+    groupId: string,
+    userId: string,
+    manager?: EntityManager,
+  ) {
+    const queryBuilder = manager
+      ? manager.createQueryBuilder()
+      : this.dataSource.createQueryBuilder();
+    await queryBuilder
       .insert()
       .into(GroupUser)
       .values({

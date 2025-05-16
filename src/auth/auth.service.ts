@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from 'src/mail/mail.service';
 import { UserService } from 'src/user/user.service';
@@ -11,6 +11,12 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { GroupsService } from 'src/groups/groups.service';
+import { PermissionsService } from 'src/permissions/permissions.service';
+import { InvitePayloadDto } from './dto/invite-payload.dto';
+import { InvitationDto } from './dto/invitation.dto';
+import { SignUpPayloadDto } from './dto/signup-payload.dto';
 
 @Injectable()
 export class AuthService {
@@ -19,6 +25,8 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly mailService: MailService,
     private readonly namespaceService: NamespacesService,
+    private readonly groupsService: GroupsService,
+    private readonly permissionsService: PermissionsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -59,7 +67,7 @@ export class AuthService {
       );
     }
     return this.jwtService.sign(
-      { email, sub: 'register_user' },
+      { email },
       {
         expiresIn: '1h',
       },
@@ -80,13 +88,7 @@ export class AuthService {
       password_repeat: string;
     },
   ) {
-    let payload: any;
-    try {
-      payload = this.jwtService.verify(token);
-    } catch (e) {
-      console.log(e);
-      throw new UnauthorizedException('Invalid or expired token.');
-    }
+    const payload: SignUpPayloadDto = await this.jwtVerify(token);
     const account = await this.userService.findByEmail(payload.email);
     if (account) {
       throw new BadRequestException(
@@ -103,15 +105,14 @@ export class AuthService {
         },
         manager,
       );
-      let namespaceId = payload.namespace;
-      if (!namespaceId) {
-        const namespace = await this.namespaceService.createNamespace(
-          `${user.username}'s Namespace`,
-          manager,
-        );
-        namespaceId = namespace.id;
+      await this.namespaceService.createAndJoinNamespace(
+        user.id,
+        `${user.username}'s Namespace`,
+        manager,
+      );
+      if (payload.invitation) {
+        await this.handleInvitation(user.id, payload.invitation, manager);
       }
-      await this.namespaceService.addMember(namespaceId, user.id, manager);
       return {
         id: user.id,
         username: user.username,
@@ -171,18 +172,26 @@ export class AuthService {
     data: {
       inviteUrl: string;
       registerUrl: string;
-      namespace: string;
+      namespaceId: string;
       role: string;
+      resourceId?: string;
+      permissionLevel?: PermissionLevel;
+      groupId?: string;
     },
   ) {
+    const invitation = {
+      namespaceId: data.namespaceId,
+      namespaceRole: data.role,
+      resourceId: data.resourceId,
+      permissionLevel: data.permissionLevel,
+      groupId: data.groupId,
+    };
     const account = await this.userService.findByEmail(email);
     if (account) {
       const token = this.jwtService.sign(
         {
-          email,
-          role: data.role,
-          sub: account.id,
-          namespace: data.namespace,
+          userId: account.id,
+          invitation,
         },
         {
           expiresIn: '1h',
@@ -190,37 +199,71 @@ export class AuthService {
       );
       await this.mailService.sendInviteEmail(
         email,
-        `${data.inviteUrl}?user=${user_id}&namespace=${data.namespace}&token=${token}`,
+        `${data.inviteUrl}?user=${user_id}&namespace=${data.namespaceId}&token=${token}`,
       );
       return;
     }
     const token = this.jwtService.sign(
-      { role: data.role, email, sub: 'invite_user', namespace: data.namespace },
+      {
+        email,
+        invitation,
+      },
       {
         expiresIn: '1h',
       },
     );
-    const mailSendUri = `${data.registerUrl}?user=${user_id}&namespace=${data.namespace}&token=${token}`;
+    const mailSendUri = `${data.registerUrl}?user=${user_id}&namespace=${data.namespaceId}&token=${token}`;
     await this.mailService.sendInviteEmail(email, mailSendUri);
     // return { url: mailSendUri };
   }
 
   async inviteConfirm(token: string): Promise<void> {
+    const payload: InvitePayloadDto = await this.jwtVerify(token);
+    const user = await this.userService.find(payload.userId);
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+    await this.dataSource.transaction(async (manager) => {
+      await this.handleInvitation(user.id, payload.invitation, manager);
+    });
+  }
+
+  async handleInvitation(
+    userId: string,
+    invitation: InvitationDto,
+    manager: EntityManager,
+  ) {
+    await this.namespaceService.addMember(
+      invitation.namespaceId,
+      userId,
+      invitation.namespaceRole,
+      invitation.groupId
+        ? PermissionLevel.NO_ACCESS
+        : PermissionLevel.FULL_ACCESS,
+      manager,
+    );
+    if (invitation.groupId) {
+      await this.groupsService.addGroupUser(
+        invitation.namespaceId,
+        invitation.groupId,
+        userId,
+        manager,
+      );
+    }
+    if (invitation.resourceId && invitation.permissionLevel) {
+      await this.permissionsService.updateUserLevel(
+        invitation.namespaceId,
+        invitation.resourceId,
+        userId,
+        invitation.permissionLevel,
+        manager,
+      );
+    }
+  }
+
+  async jwtVerify(token: string) {
     try {
-      const payload = this.jwtService.verify(token);
-      const user = await this.userService.find(payload.sub);
-      if (!user) {
-        throw new NotFoundException('User not found.');
-      }
-      const namespace = await this.namespaceService.get(payload.namespace);
-      const field = payload.role === 'owner' ? 'owner_id' : 'collaborators';
-      if (namespace[field].includes(user.id)) {
-        return;
-      }
-      namespace[field].push(user.id);
-      await this.namespaceService.update(payload.namespace, {
-        [field]: namespace[field],
-      });
+      return this.jwtService.verify(token);
     } catch (e) {
       console.log(e);
       throw new UnauthorizedException('Invalid or expired token.');

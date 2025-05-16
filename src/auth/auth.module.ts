@@ -12,6 +12,8 @@ import { AuthController } from 'src/auth/auth.controller';
 import { ConfigService, ConfigModule } from '@nestjs/config';
 import { InternalAuthController } from 'src/auth/internal.auth.controller';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
+import { GroupsModule } from 'src/groups/groups.module';
+import { PermissionsModule } from 'src/permissions/permissions.module';
 
 @Module({
   exports: [AuthService],
@@ -30,6 +32,8 @@ import { NamespacesModule } from 'src/namespaces/namespaces.module';
     MailModule,
     PassportModule,
     NamespacesModule,
+    GroupsModule,
+    PermissionsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

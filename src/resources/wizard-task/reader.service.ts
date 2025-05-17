@@ -20,7 +20,6 @@ export class Reader {
       namespace: resource.namespace,
       user,
     });
-    console.log({ task });
     return await repo.save(task);
   }
 }

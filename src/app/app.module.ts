@@ -4,7 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 // import { CacheModule } from '@nestjs/cache-manager';
 import { AuthModule } from 'src/auth/auth.module';
 import { UserModule } from 'src/user/user.module';
-import { AppController } from './app.controller';
+import { AppController } from 'src/app/app.controller';
 import { MailModule } from 'src/mail/mail.module';
 import { TasksModule } from 'src/tasks/tasks.module';
 import { WizardModule } from 'src/wizard/wizard.module';
@@ -15,6 +15,8 @@ import { SnakeCaseInterceptor } from 'src/interceptor/snake-case';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 import { PermissionsModule } from 'src/permissions/permissions.module';
 import { GroupsModule } from 'src/groups/groups.module';
+import { ConversationsModule } from 'src/conversations/conversations.module';
+import { MessagesModule } from 'src/messages/messages.module';
 
 @Module({
   controllers: [AppController],
@@ -39,6 +41,8 @@ import { GroupsModule } from 'src/groups/groups.module';
     WizardModule,
     GroupsModule,
     PermissionsModule,
+    ConversationsModule,
+    MessagesModule,
     // CacheModule.registerAsync({
     //   imports: [ConfigModule],
     //   inject: [ConfigService],

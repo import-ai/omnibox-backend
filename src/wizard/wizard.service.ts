@@ -9,11 +9,14 @@ import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
 import { User } from 'src/user/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
-import { Observable } from 'rxjs';
+import { Observable, Subscriber } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'src/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
 import { Processor } from 'src/wizard/processors/processor.abstract';
+import { MessagesService } from 'src/messages/messages.service';
+import { Message } from 'src/messages/entities/message.entity';
+import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
 
 @Injectable()
 export class WizardService {
@@ -24,6 +27,7 @@ export class WizardService {
     @InjectRepository(Task) private taskRepository: Repository<Task>,
     private readonly namespacesService: NamespacesService,
     private readonly resourcesService: ResourcesService,
+    private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
   ) {
     this.processors = {
@@ -108,7 +112,7 @@ export class WizardService {
     return {};
   }
 
-  async fetch(): Promise<Task | null> {
+  async fetchTask(): Promise<Task | null> {
     const rawQuery = `
       WITH running_tasks_sub_query AS (SELECT namespace_id,
                                               COUNT(id) AS running_count
@@ -155,13 +159,16 @@ export class WizardService {
   async callbackStream(
     url: string,
     body: Record<string, any>,
-    callback: (data: string) => void,
+    callback: (data: string) => Promise<void>,
   ): Promise<void> {
     const response = await fetch(`${this.wizardBaseUrl}${url}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+    if (!response.ok) {
+      throw new Error('Failed to fetch from wizard');
+    }
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error('Response body is not readable');
@@ -185,7 +192,7 @@ export class WizardService {
 
           if (line.startsWith('data:')) {
             const data = line.slice(5).trim();
-            callback(data);
+            await callback(data);
           }
         }
       }
@@ -194,9 +201,96 @@ export class WizardService {
     }
   }
 
-  stream(url: string, body: Record<string, any>): Observable<MessageEvent> {
+  agentHandler(
+    conversationId: string,
+    user: User,
+    subscriber: Subscriber<MessageEvent>,
+  ): (data: string, parentId?: string) => Promise<string | undefined> {
+    return async (
+      data: string,
+      parentId?: string,
+    ): Promise<string | undefined> => {
+      const chunk = JSON.parse(data) as {
+        response_type: string;
+        message: Record<string, any>;
+      };
+
+      if (chunk.response_type === 'openai_message') {
+        const message: Message = await this.messagesService.create(
+          conversationId,
+          user,
+          { message: chunk.message, parentId },
+        );
+        return message.id;
+      }
+      subscriber.next({ data });
+      return undefined;
+    };
+  }
+
+  stream(body: Record<string, any>): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      this.callbackStream(url, body, (data) => subscriber.next({ data }))
+      this.callbackStream('/api/v1/grimoire/stream', body, (data) => {
+        subscriber.next({ data });
+        return Promise.resolve();
+      })
+        .then(() => subscriber.complete())
+        .catch((err) => subscriber.error(err));
+    });
+  }
+
+  findOneOrFail(messages: Message[], messageId: string): Message {
+    const message = messages.find((m) => m.id === messageId);
+    if (!message) {
+      throw new Error('Message not found');
+    }
+    return message;
+  }
+
+  getMessages(
+    allMessages: Message[],
+    parentMessageId: string,
+  ): Record<string, any>[] {
+    const messages: Message[] = [];
+    let parentId: string | undefined = parentMessageId;
+    while (parentId) {
+      const message = this.findOneOrFail(allMessages, parentId);
+      messages.unshift(message);
+      parentId = message.parentId;
+    }
+    return messages.map((m) => m.message);
+  }
+
+  async agentStream(
+    user: User,
+    body: AgentRequestDto,
+  ): Promise<Observable<MessageEvent>> {
+    let parentId: string | undefined = undefined;
+    let messages: Record<string, any> = [];
+    if (body.parent_message_id) {
+      parentId = body.parent_message_id;
+      const allMessages = await this.messagesService.findAll(
+        user,
+        body.conversation_id,
+      );
+      messages = this.getMessages(allMessages, parentId);
+    }
+
+    return new Observable<MessageEvent>((subscriber) => {
+      const handler = this.agentHandler(body.conversation_id, user, subscriber);
+      this.callbackStream(
+        '/api/v1/grimoire/ask',
+        {
+          conversation_id: body.conversation_id,
+          query: body.query,
+          messages,
+          tools: body.tools,
+          enable_thinking: body.enable_thinking,
+        },
+        async (data) => {
+          parentId = (await handler(data, parentId)) || parentId;
+        },
+      )
         .then(() => subscriber.complete())
         .catch((err) => subscriber.error(err));
     });

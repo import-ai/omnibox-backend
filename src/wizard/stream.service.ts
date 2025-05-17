@@ -67,7 +67,7 @@ export class StreamService {
     ): Promise<string | undefined> => {
       const chunk = JSON.parse(data) as {
         response_type: string;
-        message: Record<string, any>;
+        message: { role: string };
         attrs?: Record<string, any>;
       };
 
@@ -77,7 +77,7 @@ export class StreamService {
           user,
           { message: chunk.message, parentId, attrs: chunk?.attrs },
         );
-        if (chunk.message?.role === 'tool' && chunk?.attrs) {
+        if (chunk.message.role === 'tool' && chunk?.attrs) {
           const attrs = chunk.attrs;
           if (attrs?.citations) {
             subscriber.next({
@@ -88,12 +88,15 @@ export class StreamService {
             });
           }
         }
-        subscriber.next({
-          data: JSON.stringify({
-            response_type: 'end_of_message',
-            messageId: message.id,
-          }),
-        });
+        if (chunk.message.role !== 'system') {
+          subscriber.next({
+            data: JSON.stringify({
+              response_type: 'end_of_message',
+              role: chunk.message.role,
+              messageId: message.id,
+            }),
+          });
+        }
         return message.id;
       }
       subscriber.next({ data });

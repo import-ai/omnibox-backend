@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, MessageEvent } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Task } from 'src/tasks/tasks.entity';
 import { Repository } from 'typeorm';
@@ -9,21 +9,23 @@ import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
 import { User } from 'src/user/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
-import { Observable, Subscriber } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'src/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
 import { Processor } from 'src/wizard/processors/processor.abstract';
+import { MessagesService } from 'src/messages/messages.service';
+import { StreamService } from 'src/wizard/stream.service';
 
 @Injectable()
 export class WizardService {
   private readonly processors: Record<string, Processor>;
-  private readonly wizardBaseUrl: string;
+  readonly streamService: StreamService;
 
   constructor(
     @InjectRepository(Task) private taskRepository: Repository<Task>,
     private readonly namespacesService: NamespacesService,
     private readonly resourcesService: ResourcesService,
+    private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
   ) {
     this.processors = {
@@ -34,7 +36,7 @@ export class WizardService {
     if (!baseUrl) {
       throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
     }
-    this.wizardBaseUrl = baseUrl;
+    this.streamService = new StreamService(baseUrl, this.messagesService);
   }
 
   async create(partialTask: Partial<Task>) {
@@ -108,7 +110,7 @@ export class WizardService {
     return {};
   }
 
-  async fetch(): Promise<Task | null> {
+  async fetchTask(): Promise<Task | null> {
     const rawQuery = `
       WITH running_tasks_sub_query AS (SELECT namespace_id,
                                               COUNT(id) AS running_count
@@ -150,53 +152,5 @@ export class WizardService {
     }
 
     return null;
-  }
-
-  async fetchAndStream(
-    subscriber: Subscriber<MessageEvent>,
-    body: Record<string, any>,
-  ) {
-    const response = await fetch(
-      `${this.wizardBaseUrl}/api/v1/grimoire/stream`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      },
-    );
-    if (!response.ok) {
-      throw Error('Failed to fetch');
-    }
-    if (!response.body) {
-      throw Error('No response body');
-    }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer: string = '';
-    let i: number = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const sseResponse = decoder.decode(value);
-      buffer += sseResponse;
-      const chunks = buffer.split('\n\n');
-      while (i < chunks.length - 1) {
-        const chunk = chunks[i];
-        if (chunk.startsWith('data:')) {
-          const output = chunk.slice(5).trim();
-          subscriber.next({ data: output });
-        }
-        i++;
-      }
-    }
-    subscriber.complete();
-  }
-
-  chat(body: Record<string, any>): Observable<MessageEvent> {
-    return new Observable<MessageEvent>((subscriber) => {
-      this.fetchAndStream(subscriber, body).catch((err) =>
-        subscriber.error(err),
-      );
-    });
   }
 }

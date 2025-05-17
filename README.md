@@ -7,13 +7,13 @@
 + Watch & Debug mode
 
   ```shell
-  docker compose -f compose.yaml -f dev.yaml up -d
+  docker compose -f base.yaml -f dev.yaml up -d
   ```
 
 + Build mode
 
   ```shell
-  docker compose -f compose.yaml -f build.yaml up -d --build
+  docker compose -f base.yaml -f build.yaml up -d --build
   ```
 
 + Run with persistence postgres and minio data

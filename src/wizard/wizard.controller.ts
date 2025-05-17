@@ -2,7 +2,7 @@ import { Body, Controller, Post, Req, Sse } from '@nestjs/common';
 import { WizardService } from 'src/wizard/wizard.service';
 import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
-import { AgentRequestDto } from './dto/agent-request.dto';
+import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
 
 @Controller('api/v1/wizard')
 export class WizardController {
@@ -19,12 +19,12 @@ export class WizardController {
   @Post('chat/stream')
   @Sse()
   chat(@Body() body: Record<string, any>) {
-    return this.wizardService.stream(body);
+    return this.wizardService.streamService.chatStream(body);
   }
 
   @Post('ask')
   @Sse()
   async ask(@Req() req, @Body() body: AgentRequestDto) {
-    return await this.wizardService.agentStream(req.user, body);
+    return await this.wizardService.streamService.agentStream(req.user, body);
   }
 }

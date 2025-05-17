@@ -68,14 +68,32 @@ export class StreamService {
       const chunk = JSON.parse(data) as {
         response_type: string;
         message: Record<string, any>;
+        attrs?: Record<string, any>;
       };
 
       if (chunk.response_type === 'openai_message') {
         const message: Message = await this.messagesService.create(
           conversationId,
           user,
-          { message: chunk.message, parentId },
+          { message: chunk.message, parentId, attrs: chunk?.attrs },
         );
+        if (chunk.message?.role === 'tool' && chunk?.attrs) {
+          const attrs = chunk.attrs;
+          if (attrs?.citations) {
+            subscriber.next({
+              data: JSON.stringify({
+                response_type: 'citations',
+                citations: attrs.citations,
+              }),
+            });
+          }
+        }
+        subscriber.next({
+          data: JSON.stringify({
+            response_type: 'end_of_message',
+            messageId: message.id,
+          }),
+        });
         return message.id;
       }
       subscriber.next({ data });
@@ -105,15 +123,20 @@ export class StreamService {
   getMessages(
     allMessages: Message[],
     parentMessageId: string,
-  ): Record<string, any>[] {
+  ): { messages: Record<string, any>[]; currentCiteCnt: number } {
     const messages: Message[] = [];
+    let currentCiteCnt: number = 0;
     let parentId: string | undefined = parentMessageId;
     while (parentId) {
       const message = this.findOneOrFail(allMessages, parentId);
+      const attrs = message.attrs as { citations: Record<string, any>[] };
+      if (attrs?.citations) {
+        currentCiteCnt += attrs.citations.length;
+      }
       messages.unshift(message);
       parentId = message.parentId;
     }
-    return messages.map((m) => m.message);
+    return { messages: messages.map((m) => m.message), currentCiteCnt };
   }
 
   async agentStream(
@@ -122,13 +145,16 @@ export class StreamService {
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Record<string, any> = [];
+    let currentCiteCnt: number = 0;
     if (body.parent_message_id) {
       parentId = body.parent_message_id;
       const allMessages = await this.messagesService.findAll(
         user,
         body.conversation_id,
       );
-      messages = this.getMessages(allMessages, parentId);
+      const buf = this.getMessages(allMessages, parentId);
+      messages = buf.messages;
+      currentCiteCnt = buf.currentCiteCnt;
     }
 
     return new Observable<MessageEvent>((subscriber) => {
@@ -141,6 +167,7 @@ export class StreamService {
           messages,
           tools: body.tools,
           enable_thinking: body.enable_thinking,
+          current_cite_cnt: currentCiteCnt,
         },
         async (data) => {
           parentId = (await handler(data, parentId)) || parentId;

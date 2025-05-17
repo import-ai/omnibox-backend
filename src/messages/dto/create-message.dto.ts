@@ -6,4 +6,7 @@ export class CreateMessageDto {
   @IsOptional()
   @IsString()
   parentId?: string;
+
+  @IsOptional()
+  attrs?: Record<string, any>;
 }

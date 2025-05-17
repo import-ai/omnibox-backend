@@ -27,4 +27,7 @@ export class Message extends Base {
 
   @Column('jsonb', { nullable: false })
   message: Record<string, any>;
+
+  @Column('jsonb', { nullable: true })
+  attrs?: Record<string, any>;
 }

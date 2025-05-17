@@ -18,6 +18,7 @@ export class MessagesService {
       conversation: { id: conversationId },
       user: { id: user.id },
       parentId: dto.parentId,
+      attrs: dto.attrs,
     });
     return await this.messageRepository.save(message);
   }

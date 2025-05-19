@@ -2,12 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
-import { ListRespDto } from './dto/list-resp.dto';
+import { ListRespDto, UserPermissionDto } from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
 import { PermissionLevel } from './permission-level.enum';
 import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
 import { Resource } from 'src/resources/resources.entity';
+import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class PermissionsService {
@@ -19,6 +20,7 @@ export class PermissionsService {
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
+    private readonly userService: UserService,
   ) {}
 
   async listPermissions(
@@ -26,10 +28,21 @@ export class PermissionsService {
     resourceId: string,
     userId: string,
   ): Promise<ListRespDto> {
-    let users = await this.listUserPermissions(namespaceId, resourceId);
-    users = [
-      (await this.getUserPermission(namespaceId, resourceId, userId))!,
-      ...users.filter((permission) => permission.user?.id !== userId),
+    const curPermi = await this.getUserPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    let userPermissions = await this.listUserPermissions(
+      namespaceId,
+      resourceId,
+    );
+    userPermissions = userPermissions.filter(
+      (permission) => permission.user?.id !== userId,
+    );
+    const users = [
+      curPermi,
+      ...plainToInstance(UserPermissionDto, userPermissions),
     ];
     const groups = await this.groupPermiRepo.find({
       where: { namespace: { id: namespaceId }, resource: { id: resourceId } },
@@ -139,10 +152,9 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-  ): Promise<UserPermission | null> {
-    let permission: UserPermission | null = null;
+  ): Promise<UserPermissionDto> {
     while (true) {
-      permission = await this.userPermiRepo.findOne({
+      const permission = await this.userPermiRepo.findOne({
         where: {
           namespace: { id: namespaceId },
           resource: { id: resourceId },
@@ -151,29 +163,18 @@ export class PermissionsService {
         relations: ['user'],
       });
       if (permission) {
-        break;
+        return plainToInstance(UserPermissionDto, permission);
       }
       const parentId = await this.getParentId(namespaceId, resourceId);
       if (!parentId) {
-        break;
+        const user = await this.userService.find(userId);
+        return plainToInstance(UserPermissionDto, {
+          user,
+          level: PermissionLevel.NO_ACCESS,
+        });
       }
       resourceId = parentId;
     }
-    return permission;
-  }
-
-  async getUserPermissionLevel(
-    namespaceId: string,
-    resourceId: string,
-    userId: string,
-  ): Promise<PermissionLevel> {
-    const permission = await this.getUserPermission(
-      namespaceId,
-      resourceId,
-      userId,
-    );
-    const level = permission ? permission.level : PermissionLevel.NO_ACCESS;
-    return level;
   }
 
   async getGroupPermissionLevel(
@@ -296,12 +297,12 @@ export class PermissionsService {
     if (globalLevel != PermissionLevel.NO_ACCESS) {
       return true;
     }
-    const userLevel = await this.getUserPermissionLevel(
+    const userPermi = await this.getUserPermission(
       namespaceId,
       resourceId,
       userId,
     );
-    return userLevel != PermissionLevel.NO_ACCESS;
+    return userPermi.level != PermissionLevel.NO_ACCESS;
   }
 
   async getParentId(

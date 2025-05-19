@@ -9,7 +9,7 @@ export class Index {
       return;
     }
     const task = repo.create({
-      function: 'create_or_update_index',
+      function: 'upsert_index',
       input: {
         title: resource.name,
         content: resource.content,

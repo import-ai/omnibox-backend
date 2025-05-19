@@ -261,7 +261,7 @@ export class AuthService {
     }
   }
 
-  async jwtVerify(token: string) {
+  jwtVerify(token: string) {
     try {
       return this.jwtService.verify(token);
     } catch (e) {

@@ -33,6 +33,7 @@ export class PermissionsController {
     return await this.permissionsService.listPermissions(
       namespaceId,
       resourceId,
+      req.user.id,
     );
   }
 
@@ -142,12 +143,12 @@ export class PermissionsController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    const level = await this.permissionsService.getUserPermissionLevel(
+    const userPermi = await this.permissionsService.getUserPermission(
       namespaceId,
       resourceId,
       userId,
     );
-    return plainToInstance(PermissionDto, { level });
+    return plainToInstance(PermissionDto, { level: userPermi.level });
   }
 
   @Patch('users/:userId')

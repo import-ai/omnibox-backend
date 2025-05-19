@@ -5,6 +5,7 @@ import { PermissionsController } from './permissions.controller';
 import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
 import { Resource } from 'src/resources/resources.entity';
+import { UserModule } from 'src/user/user.module';
 
 @Module({
   providers: [PermissionsService],
@@ -12,6 +13,7 @@ import { Resource } from 'src/resources/resources.entity';
   exports: [PermissionsService],
   imports: [
     TypeOrmModule.forFeature([UserPermission, GroupPermission, Resource]),
+    UserModule,
   ],
 })
 export class PermissionsModule {}

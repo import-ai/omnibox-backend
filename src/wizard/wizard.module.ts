@@ -5,13 +5,15 @@ import { InternalWizardController } from 'src/wizard/internal.wizard.controller'
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 import { ResourcesModule } from 'src/resources/resources.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Task } from '../tasks/tasks.entity';
+import { Task } from 'src/tasks/tasks.entity';
+import { MessagesModule } from 'src/messages/messages.module';
 
 @Module({
   providers: [WizardService],
   imports: [
     NamespacesModule,
     ResourcesModule,
+    MessagesModule,
     TypeOrmModule.forFeature([Task]),
   ],
   controllers: [WizardController, InternalWizardController],

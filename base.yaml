@@ -1,4 +1,4 @@
-name: omnibox-backend-dev
+name: omnibox-local
 
 services:
   backend:
@@ -9,6 +9,7 @@ services:
     environment:
       OBB_DB_HOST: postgres
       OBB_MINIO_ENDPOINT: http://username:password@minio:9000
+      OBB_WIZARD_BASE_URL: http://wizard:8000
     depends_on:
       postgres:
         condition: service_healthy

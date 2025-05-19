@@ -10,6 +10,10 @@ on:
     branches:
       - 'main'
 
+concurrency:
+  group: registry-push-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -23,7 +27,6 @@ jobs:
         with:
           images: |
             ghcr.io/import-ai/omnibox-backend
-            registry.cn-hangzhou.aliyuncs.com/import-ai/omnibox-backend
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -43,13 +46,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to AliYun Registry
-        uses: docker/login-action@v3
-        with:
-          registry: registry.cn-hangzhou.aliyuncs.com
-          username: ${{ secrets.ALIYUN_DOCKER_REGISTRY_USERNAME }}
-          password: ${{ secrets.ALIYUN_DOCKER_REGISTRY_PASSWORD }}
 
       - name: Build and push
         uses: docker/build-push-action@v6

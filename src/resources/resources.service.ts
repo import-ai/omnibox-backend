@@ -78,8 +78,6 @@ export class ResourcesService {
         namespace: { id: data.namespaceId },
         parentId: parentResource.id,
       });
-      await updateChildCount(manager, parentResource.id, 1);
-
       const savedResource = await repo.save(resource);
       await WizardTask.index.upsert(
         user,
@@ -182,7 +180,6 @@ export class ResourcesService {
       throw new BadRequestException('Cannot delete root resource.');
     }
     await this.dataSource.transaction(async (manager) => {
-      await updateChildCount(manager, resource.parentId!, -1);
       await manager.softDelete(Resource, id);
       await WizardTask.index.delete(
         user,
@@ -266,14 +263,4 @@ export class ResourcesService {
       }),
     );
   }
-}
-
-async function updateChildCount(
-  manager: EntityManager,
-  resourceId: string,
-  delta: number,
-) {
-  await manager.update(Resource, resourceId, {
-    childCount: () => `childCount + ${delta}`,
-  });
 }

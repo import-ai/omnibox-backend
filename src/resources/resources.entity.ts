@@ -46,9 +46,6 @@ export class Resource extends Base {
   @Column({ type: 'text', nullable: true })
   content: string;
 
-  @Column({ name: 'child_count', default: 0 })
-  childCount: number;
-
   @Column('jsonb', { nullable: true })
   attrs: Record<string, any>;
 

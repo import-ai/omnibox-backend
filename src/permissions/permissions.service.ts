@@ -26,7 +26,11 @@ export class PermissionsService {
     resourceId: string,
     userId: string,
   ): Promise<ListRespDto> {
-    const users = await this.listUserPermissions(namespaceId, resourceId);
+    let users = await this.listUserPermissions(namespaceId, resourceId);
+    users = [
+      (await this.getUserPermission(namespaceId, resourceId, userId))!,
+      ...users.filter((permission) => permission.user?.id !== userId),
+    ];
     const groups = await this.groupPermiRepo.find({
       where: { namespace: { id: namespaceId }, resource: { id: resourceId } },
       relations: ['group'],
@@ -35,18 +39,12 @@ export class PermissionsService {
       namespaceId,
       resourceId,
     );
-    const currentUserLevel = await this.getUserPermissionLevel(
-      namespaceId,
-      resourceId,
-      userId,
-    );
     return plainToInstance(
       ListRespDto,
       {
-        users: users.filter((permission) => permission.user?.id !== userId),
+        users,
         groups,
         globalLevel,
-        currentUserLevel,
       },
       { excludeExtraneousValues: true },
     );
@@ -137,11 +135,11 @@ export class PermissionsService {
     });
   }
 
-  async getUserPermissionLevel(
+  async getUserPermission(
     namespaceId: string,
     resourceId: string,
     userId: string,
-  ): Promise<PermissionLevel> {
+  ): Promise<UserPermission | null> {
     let permission: UserPermission | null = null;
     while (true) {
       permission = await this.userPermiRepo.findOne({
@@ -150,6 +148,7 @@ export class PermissionsService {
           resource: { id: resourceId },
           user: { id: userId },
         },
+        relations: ['user'],
       });
       if (permission) {
         break;
@@ -160,6 +159,19 @@ export class PermissionsService {
       }
       resourceId = parentId;
     }
+    return permission;
+  }
+
+  async getUserPermissionLevel(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<PermissionLevel> {
+    const permission = await this.getUserPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
     const level = permission ? permission.level : PermissionLevel.NO_ACCESS;
     return level;
   }

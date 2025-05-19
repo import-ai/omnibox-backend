@@ -68,11 +68,6 @@ export class ListRespDto {
   globalLevel: PermissionLevel;
 
   @Expose()
-  @IsEnum(PermissionLevel)
-  @IsNotEmpty()
-  currentUserLevel: PermissionLevel;
-
-  @Expose()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => UserPermissionDto)

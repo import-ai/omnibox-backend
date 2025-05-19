@@ -33,6 +33,7 @@ export class PermissionsController {
     return await this.permissionsService.listPermissions(
       namespaceId,
       resourceId,
+      req.user.id,
     );
   }
 

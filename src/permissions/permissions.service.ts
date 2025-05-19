@@ -24,6 +24,7 @@ export class PermissionsService {
   async listPermissions(
     namespaceId: string,
     resourceId: string,
+    userId: string,
   ): Promise<ListRespDto> {
     const users = await this.listUserPermissions(namespaceId, resourceId);
     const groups = await this.groupPermiRepo.find({
@@ -34,12 +35,18 @@ export class PermissionsService {
       namespaceId,
       resourceId,
     );
+    const currentUserLevel = await this.getUserPermissionLevel(
+      namespaceId,
+      resourceId,
+      userId,
+    );
     return plainToInstance(
       ListRespDto,
       {
-        users,
+        users: users.filter((permission) => permission.user?.id !== userId),
         groups,
         globalLevel,
+        currentUserLevel,
       },
       { excludeExtraneousValues: true },
     );

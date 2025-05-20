@@ -118,8 +118,7 @@ export class GroupsController {
       );
     }
     const actions: Array<Promise<any>> = [];
-    const userIds = addGroupUserDto.userId.split(',');
-    userIds.forEach((userId) => {
+    addGroupUserDto.userIds.forEach((userId) => {
       if (userId) {
         actions.push(
           this.groupsService.addGroupUser(namespaceId, groupId, userId),

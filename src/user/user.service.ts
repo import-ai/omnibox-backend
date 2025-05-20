@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
 import { Injectable, ConflictException } from '@nestjs/common';
+import { isEmail } from 'class-validator';
 
 @Injectable()
 export class UserService {
@@ -14,9 +15,16 @@ export class UserService {
   ) {}
 
   async verify(email: string, password: string) {
-    const account = await this.userRepository.findOne({
-      where: { email },
-    });
+    let account: User | null = null;
+    if (isEmail(email)) {
+      account = await this.userRepository.findOne({
+        where: { email },
+      });
+    } else {
+      account = await this.userRepository.findOne({
+        where: { username: email },
+      });
+    }
     if (!account) {
       return;
     }

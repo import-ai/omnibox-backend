@@ -73,15 +73,24 @@ export class AuthController {
     @Body('permissionLevel') permissionLevel: PermissionLevel,
     @Body('groupId') groupId: string,
   ) {
-    return await this.authService.invite(req.user.id, email, {
-      role,
-      inviteUrl,
-      registerUrl,
-      namespaceId,
-      resourceId,
-      permissionLevel,
-      groupId,
+    const actions: Array<Promise<any>> = [];
+    const userEmails = email.split(',');
+    userEmails.forEach((userEmail) => {
+      if (userEmail) {
+        actions.push(
+          this.authService.invite(req.user.id, userEmail, {
+            role,
+            inviteUrl,
+            registerUrl,
+            namespaceId,
+            resourceId,
+            permissionLevel,
+            groupId,
+          }),
+        );
+      }
     });
+    return await Promise.all(actions);
   }
 
   @Post('invite/confirm')

@@ -17,6 +17,8 @@ import { PermissionsService } from 'src/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
 import { InvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
+import { LoginPayloadDto } from './dto/login-payload.dto';
+import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 
 @Injectable()
 export class AuthService {
@@ -49,13 +51,14 @@ export class AuthService {
     if (!account) {
       throw new BadRequestException('User not found');
     }
+    const payload: LoginPayloadDto = {
+      email: account.email,
+      sub: account.id,
+    };
     return {
       id: account.id,
       username: account.username,
-      access_token: this.jwtService.sign({
-        sub: account.id,
-        email: account.email,
-      }),
+      access_token: this.jwtService.sign(payload),
     };
   }
 
@@ -66,12 +69,8 @@ export class AuthService {
         'The email is already registered. Please log in directly.',
       );
     }
-    return this.jwtService.sign(
-      { email },
-      {
-        expiresIn: '1h',
-      },
-    );
+    const payload: SignUpPayloadDto = { email };
+    return this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
   async signUp(url: string, email: string) {
@@ -134,12 +133,10 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found.');
     }
-    const token = this.jwtService.sign(
-      { email: user.email, sub: user.id },
-      {
-        expiresIn: '1h',
-      },
-    );
+    const payload: LoginPayloadDto = { email: user.email, sub: user.id };
+    const token = this.jwtService.sign(payload, {
+      expiresIn: '1h',
+    });
     const mailSendUri = `${url}?token=${token}`;
     await this.mailService.sendPasswordEmail(user.email, mailSendUri);
     // return { url: mailSendUri };
@@ -173,13 +170,13 @@ export class AuthService {
       inviteUrl: string;
       registerUrl: string;
       namespaceId: string;
-      role: string;
+      role: NamespaceRole;
       resourceId?: string;
       permissionLevel?: PermissionLevel;
       groupId?: string;
     },
   ) {
-    const invitation = {
+    const invitation: InvitationDto = {
       namespaceId: data.namespaceId,
       namespaceRole: data.role,
       resourceId: data.resourceId,
@@ -188,30 +185,26 @@ export class AuthService {
     };
     const account = await this.userService.findByEmail(email);
     if (account) {
-      const token = this.jwtService.sign(
-        {
-          userId: account.id,
-          invitation,
-        },
-        {
-          expiresIn: '1h',
-        },
-      );
+      const payload: InvitePayloadDto = {
+        userId: account.id,
+        invitation,
+      };
+      const token = this.jwtService.sign(payload, {
+        expiresIn: '1h',
+      });
       await this.mailService.sendInviteEmail(
         email,
         `${data.inviteUrl}?user=${user_id}&namespace=${data.namespaceId}&token=${token}`,
       );
       return;
     }
-    const token = this.jwtService.sign(
-      {
-        email,
-        invitation,
-      },
-      {
-        expiresIn: '1h',
-      },
-    );
+    const payload: SignUpPayloadDto = {
+      email,
+      invitation,
+    };
+    const token = this.jwtService.sign(payload, {
+      expiresIn: '1h',
+    });
     const mailSendUri = `${data.registerUrl}?user=${user_id}&namespace=${data.namespaceId}&token=${token}`;
     await this.mailService.sendInviteEmail(email, mailSendUri);
     // return { url: mailSendUri };

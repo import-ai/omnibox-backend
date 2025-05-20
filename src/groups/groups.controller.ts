@@ -117,11 +117,16 @@ export class GroupsController {
         'current user is not owner of this namespace',
       );
     }
-    await this.groupsService.addGroupUser(
-      namespaceId,
-      groupId,
-      addGroupUserDto.userId,
-    );
+    const actions: Array<Promise<any>> = [];
+    const userIds = addGroupUserDto.userId.split(',');
+    userIds.forEach((userId) => {
+      if (userId) {
+        actions.push(
+          this.groupsService.addGroupUser(namespaceId, groupId, userId),
+        );
+      }
+    });
+    await Promise.all(actions);
   }
 
   @Delete(':groupId/users/:userId')

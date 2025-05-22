@@ -1,4 +1,5 @@
 import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { NamespaceRole } from './entities/namespace-member.entity';
 import {
   Req,
   Get,
@@ -30,6 +31,19 @@ export class NamespacesController {
   @Get(':namespaceId/members')
   async listMembers(@Req() req, @Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.listMembers(namespaceId);
+  }
+
+  @Patch(':namespaceId/members/:memberId')
+  async UpdateMemberRole(
+    @Param('namespaceId') namespaceId: string,
+    @Param('memberId', ParseIntPipe) memberId: number,
+    @Body('role') role: NamespaceRole,
+  ) {
+    return await this.namespacesService.updateMemberRole(
+      namespaceId,
+      memberId,
+      role,
+    );
   }
 
   @Delete(':namespaceId/members/:memberId')

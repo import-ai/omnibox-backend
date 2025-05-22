@@ -179,6 +179,17 @@ export class NamespacesService {
     );
   }
 
+  async updateMemberRole(
+    namespaceId: string,
+    memberId: number,
+    role: NamespaceRole,
+  ) {
+    await this.namespaceMemberRepository.update(memberId, {
+      role,
+      namespace: { id: namespaceId },
+    });
+  }
+
   async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
     const member = await this.namespaceMemberRepository.findOne({
       where: {
@@ -226,9 +237,10 @@ export class NamespacesService {
           )
           .then((userLevel) =>
             Promise.resolve({
+              id: member.id,
               level: userLevel,
               role: member.role,
-              id: member.user.id,
+              userId: member.user.id,
               email: member.user.email,
               username: member.user.username,
             }),

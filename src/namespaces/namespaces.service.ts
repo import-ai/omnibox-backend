@@ -265,6 +265,7 @@ export class NamespacesService {
     await this.dataSource.transaction(async (manager) => {
       const member = await manager.findOne(NamespaceMember, {
         where: { namespace: { id: namespaceId }, user: { id: userId } },
+        relations: ['rootResource'],
       });
       if (!member) {
         return;

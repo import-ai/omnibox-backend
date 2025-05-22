@@ -277,11 +277,12 @@ export class AuthService {
     invitation: InvitationDto,
     manager: EntityManager,
   ) {
+    const hasResource = invitation.resourceId && invitation.permissionLevel;
     await this.namespaceService.addMember(
       invitation.namespaceId,
       userId,
       invitation.namespaceRole,
-      invitation.groupId
+      invitation.groupId || hasResource
         ? PermissionLevel.NO_ACCESS
         : PermissionLevel.FULL_ACCESS,
       manager,
@@ -294,12 +295,12 @@ export class AuthService {
         manager,
       );
     }
-    if (invitation.resourceId && invitation.permissionLevel) {
+    if (hasResource) {
       await this.permissionsService.updateUserLevel(
         invitation.namespaceId,
-        invitation.resourceId,
+        invitation.resourceId!,
         userId,
-        invitation.permissionLevel,
+        invitation.permissionLevel!,
         manager,
       );
     }

@@ -9,6 +9,7 @@ import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
 import { Resource } from 'src/resources/resources.entity';
 import { UserService } from 'src/user/user.service';
+import { GroupUser } from 'src/groups/entities/group-user.entity';
 
 @Injectable()
 export class PermissionsService {
@@ -17,6 +18,8 @@ export class PermissionsService {
     private readonly userPermiRepo: Repository<UserPermission>,
     @InjectRepository(GroupPermission)
     private readonly groupPermiRepo: Repository<GroupPermission>,
+    @InjectRepository(GroupUser)
+    private readonly groupUserRepository: Repository<GroupUser>,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
@@ -302,7 +305,27 @@ export class PermissionsService {
       resourceId,
       userId,
     );
-    return userPermi.level != PermissionLevel.NO_ACCESS;
+    if (userPermi.level != PermissionLevel.NO_ACCESS) {
+      return true;
+    }
+    const groups = await this.groupUserRepository.find({
+      where: {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+      },
+      relations: ['group'],
+    });
+    for (const group of groups) {
+      const groupLevel = await this.getGroupPermissionLevel(
+        namespaceId,
+        resourceId,
+        group.group.id,
+      );
+      if (groupLevel != PermissionLevel.NO_ACCESS) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async getParentId(

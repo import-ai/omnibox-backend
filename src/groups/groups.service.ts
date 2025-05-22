@@ -48,6 +48,14 @@ export class GroupsService {
     );
   }
 
+  async getGroupsByTitle(namespaceId: string, title: string): Promise<Group[]> {
+    const groups = await this.groupRepository.findBy({
+      namespace: { id: namespaceId },
+      title,
+    });
+    return groups;
+  }
+
   async userInGroup(
     namespaceId: string,
     groupId: string,

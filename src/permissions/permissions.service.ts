@@ -105,6 +105,37 @@ export class PermissionsService {
     );
   }
 
+  async getGroupPermission(
+    namespaceId: string,
+    resourceId: string,
+    groupId: string,
+    permissionLevel: PermissionLevel,
+  ) {
+    return await this.groupPermiRepo.findOne({
+      where: {
+        level: permissionLevel,
+        namespace: { id: namespaceId },
+        resource: { id: resourceId },
+        group: { id: groupId },
+      },
+    });
+  }
+
+  async createGroupPermission(
+    namespaceId: string,
+    resourceId: string,
+    groupId: string,
+    permissionLevel: PermissionLevel,
+  ) {
+    const groupPermission = this.groupPermiRepo.create({
+      level: permissionLevel,
+      namespace: { id: namespaceId },
+      resource: { id: resourceId },
+      group: { id: groupId },
+    });
+    await this.groupPermiRepo.save(groupPermission);
+  }
+
   async updateGroupPermission(
     namespaceId: string,
     resourceId: string,
@@ -242,6 +273,17 @@ export class PermissionsService {
         manager,
       );
     });
+  }
+
+  async getUserLevel(namespaceId: string, resourceId: string, userId: string) {
+    const userPermission = await this.userPermiRepo.findOne({
+      where: {
+        namespace: { id: namespaceId },
+        resource: { id: resourceId },
+        user: { id: userId },
+      },
+    });
+    return userPermission ? userPermission.level : PermissionLevel.NO_ACCESS;
   }
 
   async updateUserLevel(

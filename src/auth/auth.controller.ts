@@ -67,18 +67,25 @@ export class AuthController {
     @Body('inviteUrl') inviteUrl: string,
     @Body('registerUrl') registerUrl: string,
     @Body('namespace') namespaceId: string,
-    @Body('email') email: string,
     @Body('role') role: NamespaceRole,
     @Body('resourceId') resourceId: string,
     @Body('permissionLevel') permissionLevel: PermissionLevel,
     @Body('groupId') groupId: string,
+    @Body('emails') emails: Array<string>,
+    @Body('groupTitles') groupTitles: Array<string>,
   ) {
-    const actions: Array<Promise<any>> = [];
-    const userEmails = email.split(',');
-    userEmails.forEach((userEmail) => {
-      if (userEmail) {
-        actions.push(
-          this.authService.invite(req.user.id, userEmail, {
+    if (groupTitles && groupTitles.length > 0) {
+      await this.authService.inviteGroup(
+        namespaceId,
+        resourceId,
+        groupTitles,
+        permissionLevel,
+      );
+    }
+    if (emails && emails.length > 0) {
+      await Promise.all(
+        emails.map((email) =>
+          this.authService.invite(req.user.id, email, {
             role,
             inviteUrl,
             registerUrl,
@@ -87,10 +94,9 @@ export class AuthController {
             permissionLevel,
             groupId,
           }),
-        );
-      }
-    });
-    return await Promise.all(actions);
+        ),
+      );
+    }
   }
 
   @Post('invite/confirm')

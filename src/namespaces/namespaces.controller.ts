@@ -9,6 +9,7 @@ import {
   Delete,
   Controller,
   Query,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { SpaceType } from './entities/namespace.entity';
 
@@ -29,6 +30,11 @@ export class NamespacesController {
   @Get(':namespaceId/members')
   async listMembers(@Req() req, @Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.listMembers(namespaceId);
+  }
+
+  @Delete(':namespaceId/members/:memberId')
+  async deleteMember(@Param('memberId', ParseIntPipe) memberId: number) {
+    return await this.namespacesService.deleteMember(memberId);
   }
 
   @Get(':namespaceId/root')

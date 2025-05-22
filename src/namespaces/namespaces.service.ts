@@ -203,19 +203,42 @@ export class NamespacesService {
     return namespaces.map((v) => v.namespace);
   }
 
-  async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
+  async listMembers(
+    namespaceId: string,
+    manager?: EntityManager,
+  ): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
       where: { namespace: { id: namespaceId } },
       relations: ['user'],
     });
-    return members.map((member) => {
-      return {
-        role: member.role,
-        id: member.user.id,
-        email: member.user.email,
-        username: member.user.username,
-      };
-    });
+    if (members.length <= 0) {
+      return [];
+    }
+    return await Promise.all(
+      members.map((member) =>
+        this.getTeamspaceRoot(namespaceId, manager)
+          .then((teamspaceRoot) =>
+            this.permissionsService.getUserLevel(
+              namespaceId,
+              teamspaceRoot.id,
+              member.user.id,
+            ),
+          )
+          .then((userLevel) =>
+            Promise.resolve({
+              level: userLevel,
+              role: member.role,
+              id: member.user.id,
+              email: member.user.email,
+              username: member.user.username,
+            }),
+          ),
+      ),
+    );
+  }
+
+  async deleteMember(memberId: number) {
+    await this.namespaceMemberRepository.delete(memberId);
   }
 
   async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
@@ -245,6 +268,6 @@ export class NamespacesService {
     if (!user) {
       return false;
     }
-    return user.role === 'owner';
+    return user.role === NamespaceRole.OWNER;
   }
 }

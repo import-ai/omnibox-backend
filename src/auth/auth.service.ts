@@ -185,6 +185,16 @@ export class AuthService {
     };
     const account = await this.userService.findByEmail(email);
     if (account) {
+      const namespaceMembers = await this.namespaceService.listMembers(
+        data.namespaceId,
+      );
+      const userInNamespace = namespaceMembers.find(
+        (member) => member.id === account.id,
+      );
+      if (userInNamespace) {
+        // User already in namespace
+        return;
+      }
       const payload: InvitePayloadDto = {
         userId: account.id,
         invitation,
@@ -219,6 +229,47 @@ export class AuthService {
     await this.dataSource.transaction(async (manager) => {
       await this.handleInvitation(user.id, payload.invitation, manager);
     });
+  }
+
+  async inviteGroup(
+    namespaceId: string,
+    resourceId: string,
+    groupTitles: string[],
+    permissionLevel: PermissionLevel,
+  ) {
+    await Promise.all(
+      groupTitles.map((title) =>
+        this.groupsService
+          .getGroupsByTitle(namespaceId, title)
+          .then((groups) => {
+            if (groups.length <= 0) {
+              return Promise.resolve([]);
+            }
+            return Promise.all(
+              groups.map((group) =>
+                this.permissionsService
+                  .getGroupPermission(
+                    namespaceId,
+                    resourceId,
+                    group.id,
+                    permissionLevel,
+                  )
+                  .then((groupPermissionExists) => {
+                    if (groupPermissionExists) {
+                      return Promise.resolve();
+                    }
+                    return this.permissionsService.createGroupPermission(
+                      namespaceId,
+                      resourceId,
+                      group.id,
+                      permissionLevel,
+                    );
+                  }),
+              ),
+            );
+          }),
+      ),
+    );
   }
 
   async handleInvitation(

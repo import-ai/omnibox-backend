@@ -374,6 +374,47 @@ export class PermissionsService {
     return false;
   }
 
+  async getCurrentLevel(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<PermissionLevel> {
+    let level = PermissionLevel.NO_ACCESS;
+    const globalLevel = await this.getGlobalPermissionLevel(
+      namespaceId,
+      resourceId,
+    );
+    if (comparePermissionLevel(globalLevel, level) >= 0) {
+      level = globalLevel;
+    }
+    const userPermi = await this.getUserPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    if (comparePermissionLevel(userPermi.level, level) >= 0) {
+      level = userPermi.level;
+    }
+    const groups = await this.groupUserRepository.find({
+      where: {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+      },
+      relations: ['group'],
+    });
+    for (const group of groups) {
+      const groupLevel = await this.getGroupPermissionLevel(
+        namespaceId,
+        resourceId,
+        group.group.id,
+      );
+      if (comparePermissionLevel(groupLevel, level) >= 0) {
+        level = groupLevel;
+      }
+    }
+    return level;
+  }
+
   async getParentId(
     namespaceId: string,
     resourceId: string,

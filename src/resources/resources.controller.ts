@@ -84,14 +84,13 @@ export class ResourcesController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    const canEdit = await this.permissionsService.userHasPermission(
+    const currentLevel = await this.permissionsService.getCurrentLevel(
       namespaceId,
       resourceId,
       req.user.id,
-      PermissionLevel.CAN_EDIT,
     );
     const resource = await this.resourcesService.get(resourceId);
-    return { ...resource, canEdit };
+    return { ...resource, currentLevel };
   }
 
   @Patch(':resourceId')

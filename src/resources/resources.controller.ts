@@ -84,7 +84,14 @@ export class ResourcesController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    return await this.resourcesService.get(resourceId);
+    const canEdit = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+      PermissionLevel.CAN_EDIT,
+    );
+    const resource = await this.resourcesService.get(resourceId);
+    return { ...resource, canEdit };
   }
 
   @Patch(':resourceId')
@@ -98,6 +105,7 @@ export class ResourcesController {
       namespaceId,
       resourceId,
       req.user.id,
+      PermissionLevel.CAN_EDIT,
     );
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
@@ -115,6 +123,7 @@ export class ResourcesController {
       namespaceId,
       resourceId,
       req.user.id,
+      PermissionLevel.CAN_EDIT,
     );
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');

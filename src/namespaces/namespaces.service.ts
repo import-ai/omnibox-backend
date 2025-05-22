@@ -17,6 +17,8 @@ import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { UserPermission } from 'src/permissions/entities/user-permission.entity';
+import { GroupUser } from 'src/groups/entities/group-user.entity';
 
 @Injectable()
 export class NamespacesService {
@@ -181,13 +183,13 @@ export class NamespacesService {
 
   async updateMemberRole(
     namespaceId: string,
-    memberId: number,
+    userId: string,
     role: NamespaceRole,
   ) {
-    await this.namespaceMemberRepository.update(memberId, {
-      role,
-      namespace: { id: namespaceId },
-    });
+    await this.namespaceMemberRepository.update(
+      { namespace: { id: namespaceId }, user: { id: userId } },
+      { role },
+    );
   }
 
   async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
@@ -259,8 +261,32 @@ export class NamespacesService {
     });
   }
 
-  async deleteMember(memberId: number) {
-    await this.namespaceMemberRepository.delete(memberId);
+  async deleteMember(namespaceId: string, userId: string) {
+    await this.dataSource.transaction(async (manager) => {
+      const member = await manager.findOne(NamespaceMember, {
+        where: { namespace: { id: namespaceId }, user: { id: userId } },
+      });
+      if (!member) {
+        return;
+      }
+      // Delete private root
+      await manager.softDelete(Resource, {
+        namespace: { id: namespaceId },
+        id: member.rootResource.id,
+      });
+      // Clear user permissions
+      await manager.softDelete(UserPermission, {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+      });
+      // Remove user from all groups
+      await manager.softDelete(GroupUser, {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+      });
+      // Delete namespace member record
+      await manager.softDelete(NamespaceMember, { id: member.id });
+    });
   }
 
   async getRoot(namespace: string, spaceType: SpaceType, userId: string) {

@@ -33,7 +33,7 @@ export class NamespacesController {
     return await this.namespacesService.listMembers(namespaceId);
   }
 
-  @Get(':namespaceId/members/user/:userId')
+  @Get(':namespaceId/members/userId')
   async getMemberByUserId(
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
@@ -41,22 +41,25 @@ export class NamespacesController {
     return await this.namespacesService.getMemberByUserId(namespaceId, userId);
   }
 
-  @Patch(':namespaceId/members/:memberId')
+  @Patch(':namespaceId/members/:userId')
   async UpdateMemberRole(
     @Param('namespaceId') namespaceId: string,
-    @Param('memberId', ParseIntPipe) memberId: number,
+    @Param('userId') userId: string,
     @Body('role') role: NamespaceRole,
   ) {
     return await this.namespacesService.updateMemberRole(
       namespaceId,
-      memberId,
+      userId,
       role,
     );
   }
 
-  @Delete(':namespaceId/members/:memberId')
-  async deleteMember(@Param('memberId', ParseIntPipe) memberId: number) {
-    return await this.namespacesService.deleteMember(memberId);
+  @Delete(':namespaceId/members/:userId')
+  async deleteMember(
+    @Param('namespaceId') namespaceId: string,
+    @Param('userId') userId: string,
+  ) {
+    return await this.namespacesService.deleteMember(namespaceId, userId);
   }
 
   @Get(':namespaceId/root')

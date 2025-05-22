@@ -13,6 +13,7 @@ import { GroupPermission } from './entities/group-permission.entity';
 import { Resource } from 'src/resources/resources.entity';
 import { UserService } from 'src/user/user.service';
 import { GroupUser } from 'src/groups/entities/group-user.entity';
+import { NamespaceMember } from 'src/namespaces/entities/namespace-member.entity';
 
 @Injectable()
 export class PermissionsService {
@@ -25,6 +26,8 @@ export class PermissionsService {
     private readonly groupUserRepository: Repository<GroupUser>,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
+    @InjectRepository(NamespaceMember)
+    private readonly namespaceMembersRepository: Repository<NamespaceMember>,
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
   ) {}
@@ -339,6 +342,13 @@ export class PermissionsService {
     userId: string,
     level: PermissionLevel = PermissionLevel.CAN_VIEW,
   ) {
+    // Check if the user is a member of the namespace
+    const count = await this.namespaceMembersRepository.count({
+      where: { namespace: { id: namespaceId }, user: { id: userId } },
+    });
+    if (count == 0) {
+      return false;
+    }
     const globalLevel = await this.getGlobalPermissionLevel(
       namespaceId,
       resourceId,

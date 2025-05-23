@@ -33,6 +33,14 @@ export class NamespacesController {
     return await this.namespacesService.listMembers(namespaceId);
   }
 
+  @Get(':namespaceId/members/user/:userId')
+  async getMemberByUserId(
+    @Param('namespaceId') namespaceId: string,
+    @Param('userId') userId: string,
+  ) {
+    return await this.namespacesService.getMemberByUserId(namespaceId, userId);
+  }
+
   @Patch(':namespaceId/members/:memberId')
   async UpdateMemberRole(
     @Param('namespaceId') namespaceId: string,

@@ -249,6 +249,16 @@ export class NamespacesService {
     );
   }
 
+  async getMemberByUserId(namespaceId: string, userId: string) {
+    return await this.namespaceMemberRepository.findOne({
+      where: {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+        deletedAt: IsNull(),
+      },
+    });
+  }
+
   async deleteMember(memberId: number) {
     await this.namespaceMemberRepository.delete(memberId);
   }

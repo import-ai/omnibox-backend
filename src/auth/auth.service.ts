@@ -189,7 +189,7 @@ export class AuthService {
         data.namespaceId,
       );
       const userInNamespace = namespaceMembers.find(
-        (member) => member.id === account.id,
+        (member) => `${member.id}` === account.id,
       );
       if (userInNamespace) {
         // User already in namespace

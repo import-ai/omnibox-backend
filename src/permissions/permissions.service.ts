@@ -4,7 +4,10 @@ import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
 import { ListRespDto, UserPermissionDto } from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
-import { PermissionLevel } from './permission-level.enum';
+import {
+  comparePermissionLevel,
+  PermissionLevel,
+} from './permission-level.enum';
 import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
 import { Resource } from 'src/resources/resources.entity';
@@ -334,12 +337,13 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
     userId: string,
+    level: PermissionLevel = PermissionLevel.CAN_VIEW,
   ) {
     const globalLevel = await this.getGlobalPermissionLevel(
       namespaceId,
       resourceId,
     );
-    if (globalLevel != PermissionLevel.NO_ACCESS) {
+    if (comparePermissionLevel(globalLevel, level) >= 0) {
       return true;
     }
     const userPermi = await this.getUserPermission(
@@ -347,7 +351,7 @@ export class PermissionsService {
       resourceId,
       userId,
     );
-    if (userPermi.level != PermissionLevel.NO_ACCESS) {
+    if (comparePermissionLevel(userPermi.level, level) >= 0) {
       return true;
     }
     const groups = await this.groupUserRepository.find({
@@ -363,11 +367,52 @@ export class PermissionsService {
         resourceId,
         group.group.id,
       );
-      if (groupLevel != PermissionLevel.NO_ACCESS) {
+      if (comparePermissionLevel(groupLevel, level) >= 0) {
         return true;
       }
     }
     return false;
+  }
+
+  async getCurrentLevel(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<PermissionLevel> {
+    let level = PermissionLevel.NO_ACCESS;
+    const globalLevel = await this.getGlobalPermissionLevel(
+      namespaceId,
+      resourceId,
+    );
+    if (comparePermissionLevel(globalLevel, level) >= 0) {
+      level = globalLevel;
+    }
+    const userPermi = await this.getUserPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    if (comparePermissionLevel(userPermi.level, level) >= 0) {
+      level = userPermi.level;
+    }
+    const groups = await this.groupUserRepository.find({
+      where: {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+      },
+      relations: ['group'],
+    });
+    for (const group of groups) {
+      const groupLevel = await this.getGroupPermissionLevel(
+        namespaceId,
+        resourceId,
+        group.group.id,
+      );
+      if (comparePermissionLevel(groupLevel, level) >= 0) {
+        level = groupLevel;
+      }
+    }
+    return level;
   }
 
   async getParentId(

@@ -179,6 +179,17 @@ export class NamespacesService {
     );
   }
 
+  async updateMemberRole(
+    namespaceId: string,
+    memberId: number,
+    role: NamespaceRole,
+  ) {
+    await this.namespaceMemberRepository.update(memberId, {
+      role,
+      namespace: { id: namespaceId },
+    });
+  }
+
   async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
     const member = await this.namespaceMemberRepository.findOne({
       where: {
@@ -203,19 +214,53 @@ export class NamespacesService {
     return namespaces.map((v) => v.namespace);
   }
 
-  async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
+  async listMembers(
+    namespaceId: string,
+    manager?: EntityManager,
+  ): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
       where: { namespace: { id: namespaceId } },
       relations: ['user'],
     });
-    return members.map((member) => {
-      return {
-        role: member.role,
-        id: member.user.id,
-        email: member.user.email,
-        username: member.user.username,
-      };
+    if (members.length <= 0) {
+      return [];
+    }
+    return await Promise.all(
+      members.map((member) =>
+        this.getTeamspaceRoot(namespaceId, manager)
+          .then((teamspaceRoot) =>
+            this.permissionsService.getUserLevel(
+              namespaceId,
+              teamspaceRoot.id,
+              member.user.id,
+            ),
+          )
+          .then((userLevel) =>
+            Promise.resolve({
+              id: member.id,
+              level: userLevel,
+              role: member.role,
+              userId: member.user.id,
+              email: member.user.email,
+              username: member.user.username,
+            }),
+          ),
+      ),
+    );
+  }
+
+  async getMemberByUserId(namespaceId: string, userId: string) {
+    return await this.namespaceMemberRepository.findOne({
+      where: {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+        deletedAt: IsNull(),
+      },
     });
+  }
+
+  async deleteMember(memberId: number) {
+    await this.namespaceMemberRepository.delete(memberId);
   }
 
   async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
@@ -245,6 +290,6 @@ export class NamespacesService {
     if (!user) {
       return false;
     }
-    return user.role === 'owner';
+    return user.role === NamespaceRole.OWNER;
   }
 }

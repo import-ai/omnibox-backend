@@ -1,4 +1,5 @@
 import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { NamespaceRole } from './entities/namespace-member.entity';
 import {
   Req,
   Get,
@@ -9,6 +10,7 @@ import {
   Delete,
   Controller,
   Query,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { SpaceType } from './entities/namespace.entity';
 
@@ -29,6 +31,32 @@ export class NamespacesController {
   @Get(':namespaceId/members')
   async listMembers(@Req() req, @Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.listMembers(namespaceId);
+  }
+
+  @Get(':namespaceId/members/user/:userId')
+  async getMemberByUserId(
+    @Param('namespaceId') namespaceId: string,
+    @Param('userId') userId: string,
+  ) {
+    return await this.namespacesService.getMemberByUserId(namespaceId, userId);
+  }
+
+  @Patch(':namespaceId/members/:memberId')
+  async UpdateMemberRole(
+    @Param('namespaceId') namespaceId: string,
+    @Param('memberId', ParseIntPipe) memberId: number,
+    @Body('role') role: NamespaceRole,
+  ) {
+    return await this.namespacesService.updateMemberRole(
+      namespaceId,
+      memberId,
+      role,
+    );
+  }
+
+  @Delete(':namespaceId/members/:memberId')
+  async deleteMember(@Param('memberId', ParseIntPipe) memberId: number) {
+    return await this.namespacesService.deleteMember(memberId);
   }
 
   @Get(':namespaceId/root')

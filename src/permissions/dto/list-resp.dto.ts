@@ -31,6 +31,11 @@ export class UserDto {
   @IsString()
   @IsNotEmpty()
   email: string;
+
+  @Expose()
+  @IsString()
+  @IsNotEmpty()
+  username: string;
 }
 
 @Exclude()

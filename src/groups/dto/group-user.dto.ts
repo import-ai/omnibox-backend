@@ -15,4 +15,9 @@ export class GroupUserDto {
   @IsString()
   @IsNotEmpty()
   email: string;
+
+  @Expose()
+  @IsString()
+  @IsNotEmpty()
+  role: string;
 }

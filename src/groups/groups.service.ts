@@ -6,6 +6,7 @@ import { GroupUser } from './entities/group-user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { User } from 'src/user/user.entity';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
 
 @Injectable()
 export class GroupsService {
@@ -15,6 +16,7 @@ export class GroupsService {
     @InjectRepository(GroupUser)
     private readonly groupUserRepository: Repository<GroupUser>,
     private readonly dataSource: DataSource,
+    private readonly namespaceService: NamespacesService,
   ) {}
 
   async listGroups(namespaceId: string): Promise<Group[]> {
@@ -91,14 +93,25 @@ export class GroupsService {
   }
 
   async listGroupUsers(namespaceId: string, groupId: string): Promise<User[]> {
-    const users = await this.groupUserRepository.find({
+    const groupUsers = await this.groupUserRepository.find({
       where: {
         namespace: { id: namespaceId },
         group: { id: groupId },
       },
       relations: ['user'],
     });
-    return users.map((user) => user.user);
+    return await Promise.all(
+      groupUsers.map((groupUser) =>
+        this.namespaceService
+          .getMemberByUserId(namespaceId, groupUser.user.id)
+          .then((member) =>
+            Promise.resolve({
+              role: member ? member.role : 'member',
+              ...groupUser.user,
+            }),
+          ),
+      ),
+    );
   }
 
   async addGroupUser(

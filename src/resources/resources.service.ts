@@ -4,6 +4,7 @@ import {
   EntityManager,
   FindOptionsWhere,
   In,
+  IsNull,
   Repository,
 } from 'typeorm';
 import { Resource } from 'src/resources/resources.entity';
@@ -262,5 +263,23 @@ export class ResourcesService {
         ...(userId && { user: { id: userId } }),
       }),
     );
+  }
+
+  async listUserResources(namespaceId: string, userId: string) {
+    const resources = await this.resourceRepository.find({
+      where: { namespace: { id: namespaceId }, deletedAt: IsNull() },
+    });
+    const filtered: Resource[] = [];
+    for (const resource of resources) {
+      const hasPermission = await this.permissionsService.userHasPermission(
+        namespaceId,
+        resource.id,
+        userId,
+      );
+      if (hasPermission) {
+        filtered.push(resource);
+      }
+    }
+    return filtered;
   }
 }

@@ -4,11 +4,14 @@ import { Observable, Subscriber } from 'rxjs';
 import { MessageEvent } from '@nestjs/common';
 import { Message } from 'src/messages/entities/message.entity';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
+import { ResourcesService } from 'src/resources/resources.service';
+import { Resource } from '../resources/resources.entity';
 
 export class StreamService {
   constructor(
     private readonly wizardBaseUrl: string,
     private readonly messagesService: MessagesService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   async stream(
@@ -158,6 +161,23 @@ export class StreamService {
       const buf = this.getMessages(allMessages, parentId);
       messages = buf.messages;
       currentCiteCnt = buf.currentCiteCnt;
+    }
+
+    if (body.tools) {
+      for (const tool of body.tools) {
+        if (
+          tool.name === 'knowledge_search' &&
+          tool.resource_ids === undefined &&
+          tool.parent_ids === undefined
+        ) {
+          const resources: Resource[] =
+            await this.resourcesService.listUserResources(
+              tool.namespace_id,
+              user.id,
+            );
+          tool.resource_ids = resources.map((r) => r.id);
+        }
+      }
     }
 
     return new Observable<MessageEvent>((subscriber) => {

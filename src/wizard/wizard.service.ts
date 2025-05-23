@@ -36,7 +36,11 @@ export class WizardService {
     if (!baseUrl) {
       throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
     }
-    this.streamService = new StreamService(baseUrl, this.messagesService);
+    this.streamService = new StreamService(
+      baseUrl,
+      this.messagesService,
+      this.resourcesService,
+    );
   }
 
   async create(partialTask: Partial<Task>) {

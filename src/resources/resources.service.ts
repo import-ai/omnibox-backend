@@ -19,7 +19,6 @@ import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/user.entity';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
 
@@ -265,7 +264,11 @@ export class ResourcesService {
     );
   }
 
-  async listUserResources(namespaceId: string, userId: string) {
+  async listUserResources(
+    namespaceId: string,
+    userId: string,
+    includeRoot?: boolean,
+  ) {
     const resources = await this.resourceRepository.find({
       where: { namespace: { id: namespaceId }, deletedAt: IsNull() },
     });
@@ -276,7 +279,7 @@ export class ResourcesService {
         resource.id,
         userId,
       );
-      if (hasPermission) {
+      if (hasPermission && (resource.parentId !== null || includeRoot)) {
         filtered.push(resource);
       }
     }

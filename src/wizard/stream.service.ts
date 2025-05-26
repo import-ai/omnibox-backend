@@ -5,7 +5,7 @@ import { MessageEvent } from '@nestjs/common';
 import { Message } from 'src/messages/entities/message.entity';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
-import { Resource } from '../resources/resources.entity';
+import { Resource } from 'src/resources/resources.entity';
 
 export class StreamService {
   constructor(
@@ -109,7 +109,7 @@ export class StreamService {
 
   chatStream(body: Record<string, any>): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      this.stream('/api/v1/grimoire/stream', body, (data) => {
+      this.stream('/api/v1/wizard/stream', body, (data) => {
         subscriber.next({ data });
         return Promise.resolve();
       })
@@ -170,8 +170,9 @@ export class StreamService {
           tool.resource_ids === undefined &&
           tool.parent_ids === undefined
         ) {
+          // for knowledge_search, pass the resource with permission
           const resources: Resource[] =
-            await this.resourcesService.listUserResources(
+            await this.resourcesService.listUserAccessibleResources(
               tool.namespace_id,
               user.id,
             );
@@ -183,7 +184,7 @@ export class StreamService {
     return new Observable<MessageEvent>((subscriber) => {
       const handler = this.agentHandler(body.conversation_id, user, subscriber);
       this.stream(
-        '/api/v1/grimoire/ask',
+        '/api/v1/wizard/ask',
         {
           conversation_id: body.conversation_id,
           query: body.query,

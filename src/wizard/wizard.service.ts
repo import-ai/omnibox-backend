@@ -15,11 +15,13 @@ import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
 import { Processor } from 'src/wizard/processors/processor.abstract';
 import { MessagesService } from 'src/messages/messages.service';
 import { StreamService } from 'src/wizard/stream.service';
+import { WizardAPIService } from './api.wizard.service';
 
 @Injectable()
 export class WizardService {
   private readonly processors: Record<string, Processor>;
   readonly streamService: StreamService;
+  readonly wizardApiService: WizardAPIService;
 
   constructor(
     @InjectRepository(Task) private taskRepository: Repository<Task>,
@@ -41,6 +43,7 @@ export class WizardService {
       this.messagesService,
       this.resourcesService,
     );
+    this.wizardApiService = new WizardAPIService(baseUrl);
   }
 
   async create(partialTask: Partial<Task>) {

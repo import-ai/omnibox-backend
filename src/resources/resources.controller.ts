@@ -53,6 +53,11 @@ export class ResourcesController {
     return await this.resourcesService.create(req.user, data);
   }
 
+  @Post('duplicate/:resourceId')
+  async duplicate(@Req() req, @Param('resourceId') resourceId: string) {
+    return await this.resourcesService.duplicate(req.user, resourceId);
+  }
+
   @Get('query')
   async query(
     @Req() req,

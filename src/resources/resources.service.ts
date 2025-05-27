@@ -1,4 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
+import duplicateName from 'src/utils/duplicate_name';
 import {
   DataSource,
   EntityManager,
@@ -90,6 +91,21 @@ export class ResourcesService {
       ...savedResource,
       spaceType: await this.getSpaceType(savedResource),
     };
+  }
+
+  async duplicate(user: User, resourceId: string) {
+    const resource = await this.get(resourceId);
+    const newResource = {
+      name: duplicateName(resource.name),
+      namespaceId: resource.namespace.id,
+      resourceType: resource.resourceType,
+    };
+    ['parentId', 'tags', 'content', 'attrs'].forEach((key) => {
+      if (resource[key]) {
+        (newResource as any)[key] = resource[key];
+      }
+    });
+    return await this.create(user, newResource);
   }
 
   async query({ namespaceId, parentId, spaceType, tags, userId }: IQuery) {

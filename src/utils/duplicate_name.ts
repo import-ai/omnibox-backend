@@ -1,4 +1,8 @@
-export default function duplicateName(name: string) {
+export default function duplicateName(name: string | null) {
+  if (!name) {
+    return '';
+  }
+
   if (!/\((\d+)\)$/.test(name)) {
     return `${name}(1)`;
   }

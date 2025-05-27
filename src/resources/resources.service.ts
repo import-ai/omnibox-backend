@@ -264,7 +264,7 @@ export class ResourcesService {
     );
   }
 
-  async listUserResources(
+  async listUserAccessibleResources(
     namespaceId: string,
     userId: string,
     includeRoot?: boolean,

@@ -1,4 +1,4 @@
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { Base } from 'src/common/base.entity';
 import generateId from 'src/utils/generate_id';
 import {

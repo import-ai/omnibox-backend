@@ -1,4 +1,4 @@
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { Resource } from 'src/resources/resources.entity';
 import { Repository } from 'typeorm';
 import { Task } from 'src/tasks/tasks.entity';

@@ -1,12 +1,16 @@
 import { UserService } from 'src/user/user.service';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
+import { CreateUserOptionDto } from 'src/user/dto/create-user-option.dto';
+import { UpdateUserOptionDto } from 'src/user/dto/update-user-option.dto';
 import {
+  Req,
   Get,
   Body,
   Patch,
   Query,
   Param,
   Delete,
+  Post,
   Controller,
   ParseIntPipe,
 } from '@nestjs/common';
@@ -49,5 +53,33 @@ export class UserController {
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return await this.userService.remove(id);
+  }
+
+  @Post('option')
+  createOption(@Req() req, @Body() createOptionDto: CreateUserOptionDto) {
+    return this.userService.createOption(req.user.id, createOptionDto);
+  }
+
+  @Get('option')
+  getAllOption(@Req() req) {
+    return this.userService.getAllOption(req.user.id);
+  }
+
+  @Patch('option/:name')
+  updateOption(
+    @Req() req,
+    @Param('name') name: string,
+    @Body() updateOptionDto: UpdateUserOptionDto,
+  ) {
+    return this.userService.updateOption(
+      req.user.id,
+      name,
+      updateOptionDto.value,
+    );
+  }
+
+  @Delete('option/:name')
+  removeOption(@Req() req, @Param('name') name: string) {
+    return this.userService.removeOption(req.user.id, name);
   }
 }

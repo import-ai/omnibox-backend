@@ -5,7 +5,7 @@ import { Index, MeiliSearch, MeiliSearchApiError } from 'meilisearch';
 import { Resource } from 'src/resources/resources.entity';
 import { Message } from 'src/messages/entities/message.entity';
 
-const indexUid = 'resources_and_messages';
+const indexUid = 'idx';
 
 enum DocType {
   RESOURCE = 'resource',

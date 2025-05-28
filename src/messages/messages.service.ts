@@ -23,7 +23,9 @@ export class MessagesService {
       attrs: dto.attrs,
     });
     const savedMsg = await this.messageRepository.save(message);
-    await this.searchService.addMessage(savedMsg);
+    this.searchService.addMessage(savedMsg).catch((err) => {
+      console.error('Failed to index message:', err);
+    });
     return savedMsg;
   }
 

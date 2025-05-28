@@ -201,6 +201,7 @@ export class StreamService {
                     tool.namespace_id,
                     parentId,
                     user.id,
+                    true,
                   );
                 resourceIds.push(...resources.map((res) => res.id));
               }

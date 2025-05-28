@@ -118,8 +118,8 @@ export class ResourcesService {
       const hasPermission: boolean =
         await this.permissionsService.userHasPermission(
           namespaceId,
-          userId,
           res.id,
+          userId,
         );
       if (hasPermission) {
         filteredResources.push(res);

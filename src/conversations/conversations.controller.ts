@@ -1,13 +1,16 @@
+import { ConversationsService } from './conversations.service';
+import { UpdateConversationDto } from './dto/update-conversation.dto';
 import {
-  Controller,
-  Delete,
   Get,
+  Req,
   Param,
   Post,
+  Body,
   Query,
-  Req,
+  Patch,
+  Delete,
+  Controller,
 } from '@nestjs/common';
-import { ConversationsService } from './conversations.service';
 
 @Controller('api/v1/namespaces/:namespaceId/conversations')
 export class ConversationsController {
@@ -33,21 +36,21 @@ export class ConversationsController {
     return await this.conversationsService.create(namespaceId, req.user);
   }
 
-  @Get(':id')
-  async get(
-    @Req() req,
-    @Param('namespaceId') namespaceId: string,
+  @Patch(':id')
+  async update(
     @Param('id') id: string,
+    @Body() updateConversationDto: UpdateConversationDto,
   ) {
-    return await this.conversationsService.findOne(namespaceId, id, req.user);
+    await this.conversationsService.update(id, updateConversationDto.title);
+  }
+
+  @Get(':id')
+  async get(@Param('id') id: string) {
+    return await this.conversationsService.findOne(id);
   }
 
   @Delete(':id')
-  async remove(
-    @Req() req,
-    @Param('namespaceId') namespaceId: string,
-    @Param('id') id: string,
-  ) {
-    return await this.conversationsService.remove(namespaceId, id, req.user);
+  async remove(@Param('id') id: string) {
+    return await this.conversationsService.remove(id);
   }
 }

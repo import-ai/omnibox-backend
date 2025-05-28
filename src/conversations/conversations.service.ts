@@ -19,6 +19,12 @@ export class ConversationsService {
     return await this.conversationRepository.save(conversation);
   }
 
+  async update(id: string, title: string) {
+    const conversation = await this.findOne(id);
+    conversation.title = title;
+    await this.conversationRepository.save(conversation);
+  }
+
   async findAll(
     namespaceId: string,
     user: User,
@@ -35,17 +41,13 @@ export class ConversationsService {
     return await this.conversationRepository.find(query);
   }
 
-  async findOne(namespaceId: string, id: string, user: User) {
+  async findOne(id: string) {
     return await this.conversationRepository.findOneOrFail({
-      where: { id, namespace: { id: namespaceId }, user: { id: user.id } },
+      where: { id },
     });
   }
 
-  async remove(namespaceId: string, id: string, user: User) {
-    return await this.conversationRepository.softDelete({
-      id,
-      namespace: { id: namespaceId },
-      user: { id: user.id },
-    });
+  async remove(id: string) {
+    return await this.conversationRepository.softDelete(id);
   }
 }

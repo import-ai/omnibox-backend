@@ -3,12 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { Index, MeiliSearch, MeiliSearchApiError } from 'meilisearch';
 import { Resource } from 'src/resources/resources.entity';
+import { Message } from 'src/messages/entities/message.entity';
 
-const indexUid = 'resources_and_chats';
+const indexUid = 'resources_and_messages';
 
 enum DocType {
   RESOURCE = 'resource',
-  CHAT_HISTORY = 'chat_history',
+  MESSAGE = 'message',
 }
 
 @Injectable()
@@ -70,13 +71,32 @@ export class SearchService implements OnModuleInit {
     await index.addDocuments([
       {
         type: DocType.RESOURCE,
-        namespaceId: resource.namespace.id,
         id: resource.id,
+        namespaceId: resource.namespace.id,
         name: resource.name,
         content: resource.content,
         _vectors: {
           default: {
             embeddings: await this.getEmbedding(resource.content),
+            regenerate: false,
+          },
+        },
+      },
+    ]);
+  }
+
+  async addMessage(message: Message) {
+    const content = message.message.content as string;
+    const index = await this.meili.getIndex(indexUid);
+    await index.addDocuments([
+      {
+        type: DocType.MESSAGE,
+        id: message.id,
+        userId: message.user.id,
+        content,
+        _vectors: {
+          default: {
+            embeddings: await this.getEmbedding(content),
             regenerate: false,
           },
         },

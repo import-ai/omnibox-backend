@@ -7,6 +7,7 @@ import { ResourcesModule } from 'src/resources/resources.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Task } from 'src/tasks/tasks.entity';
 import { MessagesModule } from 'src/messages/messages.module';
+import { PermissionsModule } from '../permissions/permissions.module';
 
 @Module({
   providers: [WizardService],
@@ -14,6 +15,7 @@ import { MessagesModule } from 'src/messages/messages.module';
     NamespacesModule,
     ResourcesModule,
     MessagesModule,
+    PermissionsModule,
     TypeOrmModule.forFeature([Task]),
   ],
   controllers: [WizardController, InternalWizardController],

@@ -10,6 +10,7 @@ import {
 import { Resource } from 'src/resources/resources.entity';
 import { Message } from 'src/messages/entities/message.entity';
 import { DocType } from './doc-type.enum';
+import { ConversationsService } from 'src/conversations/conversations.service';
 
 const indexUid = 'idx';
 
@@ -17,7 +18,10 @@ const indexUid = 'idx';
 export class SearchService implements OnModuleInit {
   private readonly openai: OpenAI;
   private readonly meili: MeiliSearch;
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly conversationsService: ConversationsService,
+  ) {
     this.openai = new OpenAI({
       baseURL: configService.get('OBB_OPENAI_URL'),
       apiKey: configService.get('OBB_OPENAI_KEY'),
@@ -48,7 +52,7 @@ export class SearchService implements OnModuleInit {
 
     const filters = await index.getFilterableAttributes();
     if (!filters || filters.length === 0) {
-      await index.updateFilterableAttributes(['type']);
+      await index.updateFilterableAttributes(['namespaceId', 'type']);
     }
 
     const embedders = await index.getEmbedders();
@@ -78,7 +82,7 @@ export class SearchService implements OnModuleInit {
     await index.addDocuments([
       {
         type: DocType.RESOURCE,
-        id: resource.id,
+        id: `resource:${resource.id}`,
         namespaceId: resource.namespace.id,
         name: resource.name,
         content: resource.content,
@@ -93,12 +97,16 @@ export class SearchService implements OnModuleInit {
   }
 
   async addMessage(message: Message) {
+    const conversation = await this.conversationsService.get(
+      message.conversation.id,
+    );
     const content = message.message.content as string;
     const index = await this.meili.getIndex(indexUid);
     await index.addDocuments([
       {
         type: DocType.MESSAGE,
-        id: message.id,
+        id: `message:${message.id}`,
+        namespaceId: conversation!.namespace.id,
         userId: message.user.id,
         content,
         _vectors: {
@@ -112,19 +120,20 @@ export class SearchService implements OnModuleInit {
   }
 
   async search(namespaceId: string, query: string, type?: DocType) {
-    const vector = await this.getEmbedding(query);
+    const filter = [`namespaceId = "${namespaceId}"`];
+    if (type) {
+      filter.push(`type = "${type}"`);
+    }
     const searchParams: SearchParams = {
-      vector,
+      vector: await this.getEmbedding(query),
       hybrid: {
         embedder: 'default',
       },
+      filter,
       showRankingScore: true,
     };
-    if (type) {
-      searchParams.filter = [`type = "${type}"`];
-    }
     const index = await this.meili.getIndex(indexUid);
     const result = await index.search(query, searchParams);
-    return result;
+    return result.hits;
   }
 }

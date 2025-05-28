@@ -1,16 +1,17 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
-import { Index, MeiliSearch, MeiliSearchApiError } from 'meilisearch';
+import {
+  Index,
+  MeiliSearch,
+  MeiliSearchApiError,
+  SearchParams,
+} from 'meilisearch';
 import { Resource } from 'src/resources/resources.entity';
 import { Message } from 'src/messages/entities/message.entity';
+import { DocType } from './doc-type.enum';
 
 const indexUid = 'idx';
-
-enum DocType {
-  RESOURCE = 'resource',
-  MESSAGE = 'message',
-}
 
 @Injectable()
 export class SearchService implements OnModuleInit {
@@ -44,6 +45,12 @@ export class SearchService implements OnModuleInit {
         throw e;
       }
     }
+
+    const filters = await index.getFilterableAttributes();
+    if (!filters || filters.length === 0) {
+      await index.updateFilterableAttributes(['type']);
+    }
+
     const embedders = await index.getEmbedders();
     if (!embedders || !embedders.default) {
       await index.updateEmbedders({
@@ -104,16 +111,20 @@ export class SearchService implements OnModuleInit {
     ]);
   }
 
-  async search(namespaceId: string, query: string) {
+  async search(namespaceId: string, query: string, type?: DocType) {
     const vector = await this.getEmbedding(query);
-    const index = await this.meili.getIndex(indexUid);
-    const result = await index.search(query, {
+    const searchParams: SearchParams = {
       vector,
       hybrid: {
         embedder: 'default',
       },
       showRankingScore: true,
-    });
+    };
+    if (type) {
+      searchParams.filter = [`type = "${type}"`];
+    }
+    const index = await this.meili.getIndex(indexUid);
+    const result = await index.search(query, searchParams);
     return result;
   }
 }

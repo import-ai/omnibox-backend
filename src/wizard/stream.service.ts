@@ -6,12 +6,14 @@ import { Message } from 'src/messages/entities/message.entity';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Resource } from 'src/resources/resources.entity';
+import { PermissionsService } from 'src/permissions/permissions.service';
 
 export class StreamService {
   constructor(
     private readonly wizardBaseUrl: string,
     private readonly messagesService: MessagesService,
     private readonly resourcesService: ResourcesService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   async stream(
@@ -165,18 +167,48 @@ export class StreamService {
 
     if (body.tools) {
       for (const tool of body.tools) {
-        if (
-          tool.name === 'knowledge_search' &&
-          tool.resource_ids === undefined &&
-          tool.parent_ids === undefined
-        ) {
+        if (tool.name === 'knowledge_search') {
           // for knowledge_search, pass the resource with permission
-          const resources: Resource[] =
-            await this.resourcesService.listUserAccessibleResources(
-              tool.namespace_id,
-              user.id,
-            );
-          tool.resource_ids = resources.map((r) => r.id);
+          if (
+            tool.resource_ids === undefined &&
+            tool.parent_ids === undefined
+          ) {
+            const resources: Resource[] =
+              await this.resourcesService.listAllUserAccessibleResources(
+                tool.namespace_id,
+                user.id,
+              );
+            tool.resource_ids = resources.map((r) => r.id);
+          } else {
+            const resourceIds: string[] = [];
+            if (tool.resource_ids) {
+              for (const resourceId of tool.resource_ids) {
+                const hasPermission: boolean =
+                  await this.permissionsService.userHasPermission(
+                    tool.namespace_id,
+                    resourceId,
+                    user.id,
+                  );
+                if (hasPermission) {
+                  resourceIds.push(resourceId);
+                }
+              }
+            }
+            if (tool.parent_ids) {
+              for (const parentId of tool.parent_ids) {
+                const resources: Resource[] =
+                  await this.resourcesService.getAllSubResources(
+                    tool.namespace_id,
+                    parentId,
+                    user.id,
+                    true,
+                  );
+                resourceIds.push(...resources.map((res) => res.id));
+              }
+              tool.parent_ids = undefined;
+            }
+            tool.resource_ids = resourceIds;
+          }
         }
       }
     }

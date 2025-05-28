@@ -15,7 +15,8 @@ import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
 import { Processor } from 'src/wizard/processors/processor.abstract';
 import { MessagesService } from 'src/messages/messages.service';
 import { StreamService } from 'src/wizard/stream.service';
-import { WizardAPIService } from './api.wizard.service';
+import { WizardAPIService } from 'src/wizard/api.wizard.service';
+import { PermissionsService } from 'src/permissions/permissions.service';
 
 @Injectable()
 export class WizardService {
@@ -29,6 +30,7 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
+    private readonly permissionsService: PermissionsService,
   ) {
     this.processors = {
       collect: new CollectProcessor(resourcesService),
@@ -42,6 +44,7 @@ export class WizardService {
       baseUrl,
       this.messagesService,
       this.resourcesService,
+      this.permissionsService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
   }

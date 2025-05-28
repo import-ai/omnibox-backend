@@ -108,7 +108,33 @@ export class ResourcesService {
     return await this.create(user, newResource);
   }
 
-  async query({ namespaceId, parentId, spaceType, tags, userId }: IQuery) {
+  async permissionFilter(
+    namespaceId: string,
+    userId: string,
+    resources: Resource[],
+  ): Promise<Resource[]> {
+    const filteredResources: Resource[] = [];
+    for (const res of resources) {
+      const hasPermission: boolean =
+        await this.permissionsService.userHasPermission(
+          namespaceId,
+          res.id,
+          userId,
+        );
+      if (hasPermission) {
+        filteredResources.push(res);
+      }
+    }
+    return filteredResources;
+  }
+
+  // get resources under parentId
+  async queryV2(
+    namespaceId: string,
+    parentId: string,
+    userId?: string, // if is undefined, would skip the permission filter
+    tags?: string, // separated by `,`
+  ): Promise<Resource[]> {
     const where: FindOptionsWhere<Resource> = {
       namespace: { id: namespaceId },
       parentId,
@@ -124,20 +150,38 @@ export class ResourcesService {
       where,
       relations: ['namespace'],
     });
-    const filteredResources: Resource[] = [];
-    for (const resource of resources) {
-      const hasPermission = await this.permissionsService.userHasPermission(
-        namespaceId,
-        resource.id,
-        userId,
-      );
-      if (hasPermission) {
-        filteredResources.push(resource);
-      }
-    }
+    return userId
+      ? await this.permissionFilter(namespaceId, userId, resources)
+      : resources;
+  }
+
+  async query({ namespaceId, parentId, spaceType, tags, userId }: IQuery) {
+    const filteredResources: Resource[] = await this.queryV2(
+      namespaceId,
+      parentId,
+      userId,
+      tags,
+    );
     return filteredResources.map((res) => {
       return { ...res, spaceType };
     });
+  }
+
+  async getAllSubResources(
+    namespaceId: string,
+    parentId: string,
+    userId?: string,
+    includeRoot: boolean = false,
+  ): Promise<Resource[]> {
+    let resources: Resource[] = [await this.get(parentId)];
+    for (const res of resources) {
+      const subResources: Resource[] = await this.queryV2(namespaceId, res.id);
+      resources.push(...subResources);
+    }
+    resources = includeRoot ? resources : resources.slice(1);
+    return userId
+      ? await this.permissionFilter(namespaceId, userId, resources)
+      : resources;
   }
 
   async getSpaceType(resource: Resource): Promise<SpaceType> {
@@ -280,25 +324,18 @@ export class ResourcesService {
     );
   }
 
-  async listUserAccessibleResources(
+  async listAllUserAccessibleResources(
     namespaceId: string,
     userId: string,
-    includeRoot?: boolean,
+    includeRoot: boolean = false,
   ) {
     const resources = await this.resourceRepository.find({
       where: { namespace: { id: namespaceId }, deletedAt: IsNull() },
     });
-    const filtered: Resource[] = [];
-    for (const resource of resources) {
-      const hasPermission = await this.permissionsService.userHasPermission(
-        namespaceId,
-        resource.id,
-        userId,
-      );
-      if (hasPermission && (resource.parentId !== null || includeRoot)) {
-        filtered.push(resource);
-      }
-    }
-    return filtered;
+    return await this.permissionFilter(
+      namespaceId,
+      userId,
+      resources.filter((res) => res.parentId !== null || includeRoot),
+    );
   }
 }

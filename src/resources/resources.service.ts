@@ -108,24 +108,25 @@ export class ResourcesService {
     return await this.create(user, newResource);
   }
 
-  async permissionFilter(
+  async permissionFilter<T extends string | Resource>(
     namespaceId: string,
     userId: string,
-    resources: Resource[],
-  ): Promise<Resource[]> {
-    const filteredResources: Resource[] = [];
+    resources: T[],
+  ): Promise<T[]> {
+    const filtered: T[] = [];
     for (const res of resources) {
+      const resourceId: string = typeof res === 'string' ? res : res.id;
       const hasPermission: boolean =
         await this.permissionsService.userHasPermission(
           namespaceId,
-          res.id,
+          resourceId,
           userId,
         );
       if (hasPermission) {
-        filteredResources.push(res);
+        filtered.push(res);
       }
     }
-    return filteredResources;
+    return filtered;
   }
 
   // get resources under parentId

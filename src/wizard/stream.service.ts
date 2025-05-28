@@ -6,14 +6,12 @@ import { Message } from 'src/messages/entities/message.entity';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Resource } from 'src/resources/resources.entity';
-import { PermissionsService } from 'src/permissions/permissions.service';
 
 export class StreamService {
   constructor(
     private readonly wizardBaseUrl: string,
     private readonly messagesService: MessagesService,
     private readonly resourcesService: ResourcesService,
-    private readonly permissionsService: PermissionsService,
   ) {}
 
   async stream(
@@ -182,17 +180,13 @@ export class StreamService {
           } else {
             const resourceIds: string[] = [];
             if (tool.resource_ids) {
-              for (const resourceId of tool.resource_ids) {
-                const hasPermission: boolean =
-                  await this.permissionsService.userHasPermission(
-                    tool.namespace_id,
-                    resourceId,
-                    user.id,
-                  );
-                if (hasPermission) {
-                  resourceIds.push(resourceId);
-                }
-              }
+              resourceIds.push(
+                ...(await this.resourcesService.permissionFilter<string>(
+                  tool.namespace_id,
+                  user.id,
+                  resourceIds,
+                )),
+              );
             }
             if (tool.parent_ids) {
               for (const parentId of tool.parent_ids) {

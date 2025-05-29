@@ -15,7 +15,7 @@ import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
 import { Processor } from 'src/wizard/processors/processor.abstract';
 import { MessagesService } from 'src/messages/messages.service';
 import { StreamService } from 'src/wizard/stream.service';
-import { WizardAPIService } from './api.wizard.service';
+import { WizardAPIService } from 'src/wizard/api.wizard.service';
 
 @Injectable()
 export class WizardService {

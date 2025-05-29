@@ -165,18 +165,44 @@ export class StreamService {
 
     if (body.tools) {
       for (const tool of body.tools) {
-        if (
-          tool.name === 'knowledge_search' &&
-          tool.resource_ids === undefined &&
-          tool.parent_ids === undefined
-        ) {
+        if (tool.name === 'knowledge_search') {
           // for knowledge_search, pass the resource with permission
-          const resources: Resource[] =
-            await this.resourcesService.listUserAccessibleResources(
-              tool.namespace_id,
-              user.id,
-            );
-          tool.resource_ids = resources.map((r) => r.id);
+          if (
+            tool.resource_ids === undefined &&
+            tool.parent_ids === undefined
+          ) {
+            const resources: Resource[] =
+              await this.resourcesService.listAllUserAccessibleResources(
+                tool.namespace_id,
+                user.id,
+              );
+            tool.resource_ids = resources.map((r) => r.id);
+          } else {
+            const resourceIds: string[] = [];
+            if (tool.resource_ids) {
+              resourceIds.push(
+                ...(await this.resourcesService.permissionFilter<string>(
+                  tool.namespace_id,
+                  user.id,
+                  resourceIds,
+                )),
+              );
+            }
+            if (tool.parent_ids) {
+              for (const parentId of tool.parent_ids) {
+                const resources: Resource[] =
+                  await this.resourcesService.getAllSubResources(
+                    tool.namespace_id,
+                    parentId,
+                    user.id,
+                    true,
+                  );
+                resourceIds.push(...resources.map((res) => res.id));
+              }
+              tool.parent_ids = undefined;
+            }
+            tool.resource_ids = resourceIds;
+          }
         }
       }
     }

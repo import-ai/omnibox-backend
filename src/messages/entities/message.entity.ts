@@ -9,6 +9,15 @@ import { Conversation } from 'src/conversations/entities/conversation.entity';
 import { User } from 'src/user/user.entity';
 import { Base } from 'src/common/base.entity';
 
+/**
+ * Every message has a `parentId` that points to its preceding message.
+ * This structure supports two main scenarios:
+ *
+ * 1. **Regenerating the LLM’s response**
+ *     - Retrying a failed or incomplete response
+ *     - Replacing a response that was inaccurate or irrelevant
+ * 2. **Editing the user’s query message**
+ */
 @Entity('messages')
 export class Message extends Base {
   @PrimaryGeneratedColumn('uuid')

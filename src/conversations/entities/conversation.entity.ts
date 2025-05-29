@@ -17,7 +17,7 @@ export class Conversation extends Base {
   id: string;
 
   @Column({ nullable: true })
-  title: string;
+  title?: string;
 
   @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })

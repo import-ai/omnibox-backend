@@ -18,7 +18,7 @@ export class MessagesController {
 
   @Get()
   async list(@Req() req, @Param('conversationId') conversationId: string) {
-    return await this.messagesService.findAll(req.user, conversationId);
+    return await this.messagesService.findAll(req.user.id, conversationId);
   }
 
   @Post()

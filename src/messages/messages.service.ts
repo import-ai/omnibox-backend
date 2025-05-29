@@ -23,9 +23,9 @@ export class MessagesService {
     return await this.messageRepository.save(message);
   }
 
-  async findAll(user: User, conversationId: string) {
+  async findAll(userId: string, conversationId: string) {
     return await this.messageRepository.find({
-      where: { conversation: { id: conversationId }, user },
+      where: { conversation: { id: conversationId }, user: { id: userId } },
       order: { createdAt: 'ASC' },
     });
   }

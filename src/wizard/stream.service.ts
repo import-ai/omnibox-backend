@@ -155,7 +155,7 @@ export class StreamService {
     if (body.parent_message_id) {
       parentId = body.parent_message_id;
       const allMessages = await this.messagesService.findAll(
-        user,
+        user.id,
         body.conversation_id,
       );
       const buf = this.getMessages(allMessages, parentId);

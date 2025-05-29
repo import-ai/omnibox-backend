@@ -18,6 +18,27 @@ import { Base } from 'src/common/base.entity';
  *     - Replacing a response that was inaccurate or irrelevant
  * 2. **Editing the user’s query message**
  */
+
+export enum MessageStatus {
+  PENDING = 'pending',
+  SUCCESS = 'success',
+  STOPPED = 'stopped',
+  FAIL = 'fail',
+}
+
+export enum OpenAIMessageRole {
+  SYSTEM = 'system',
+  USER = 'user',
+  ASSISTANT = 'assistant',
+  TOOL = 'tool',
+}
+
+export class OpenAIMessage {
+  role: OpenAIMessageRole;
+  content?: string;
+  tool_calls?: Record<string, any>[];
+}
+
 @Entity('messages')
 export class Message extends Base {
   @PrimaryGeneratedColumn('uuid')
@@ -34,8 +55,18 @@ export class Message extends Base {
   @Column('uuid', { name: 'parent_id', nullable: true })
   parentId?: string;
 
+  /**
+   * OpenAI format message
+   */
   @Column('jsonb', { nullable: false })
-  message: Record<string, any>;
+  message: OpenAIMessage;
+
+  @Column({
+    type: 'enum',
+    enum: MessageStatus,
+    default: MessageStatus.PENDING,
+  })
+  status: MessageStatus;
 
   @Column('jsonb', { nullable: true })
   attrs?: Record<string, any>;

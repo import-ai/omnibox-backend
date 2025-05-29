@@ -18,8 +18,9 @@ const indexUid = 'idx';
 export class SearchService implements OnModuleInit {
   private readonly openai: OpenAI;
   private readonly meili: MeiliSearch;
+  private readonly embeddingModel: string;
   constructor(
-    private readonly configService: ConfigService,
+    configService: ConfigService,
     private readonly conversationsService: ConversationsService,
   ) {
     this.openai = new OpenAI({
@@ -30,6 +31,7 @@ export class SearchService implements OnModuleInit {
       host: configService.get('OBB_MEILI_HOST')!,
       apiKey: configService.get('OBB_MEILI_KEY')!,
     });
+    this.embeddingModel = configService.get('OBB_OPENAI_EMBEDDING_MODEL')!;
   }
 
   async onModuleInit() {
@@ -41,9 +43,10 @@ export class SearchService implements OnModuleInit {
         e instanceof MeiliSearchApiError &&
         e.cause?.code === 'index_not_found'
       ) {
-        await this.meili.createIndex(indexUid, {
+        const task = await this.meili.createIndex(indexUid, {
           primaryKey: 'id',
         });
+        await this.meili.tasks.waitForTask(task);
         index = await this.meili.getIndex(indexUid);
       } else {
         throw e;
@@ -71,7 +74,7 @@ export class SearchService implements OnModuleInit {
       return new Array(1024).fill(0);
     }
     const resp = await this.openai.embeddings.create({
-      model: this.configService.get('OBB_OPENAI_EMBEDDING_MODEL')!,
+      model: this.embeddingModel,
       input,
     });
     return resp.data[0].embedding;
@@ -82,7 +85,7 @@ export class SearchService implements OnModuleInit {
     await index.addDocuments([
       {
         type: DocType.RESOURCE,
-        id: `resource:${resource.id}`,
+        id: `resource_${resource.id}`,
         namespaceId: resource.namespace.id,
         name: resource.name,
         content: resource.content,
@@ -105,7 +108,7 @@ export class SearchService implements OnModuleInit {
     await index.addDocuments([
       {
         type: DocType.MESSAGE,
-        id: `message:${message.id}`,
+        id: `message_${message.id}`,
         namespaceId: conversation!.namespace.id,
         userId: message.user.id,
         content,

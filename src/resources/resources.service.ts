@@ -22,6 +22,8 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
+import { SearchService } from 'src/search/search.service';
+import { promises } from 'stream';
 
 export interface IQuery {
   namespaceId: string;
@@ -48,6 +50,7 @@ export class ResourcesService {
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
+    private readonly searchService: SearchService,
   ) {}
 
   async create(user: User, data: CreateResourceDto) {
@@ -86,6 +89,9 @@ export class ResourcesService {
         manager.getRepository(Task),
       );
       return savedResource;
+    });
+    this.searchService.addResource(savedResource).catch((err) => {
+      console.log('Failed to index resource:', err);
     });
     return {
       ...savedResource,
@@ -229,6 +235,9 @@ export class ResourcesService {
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
     await WizardTask.index.upsert(user, savedNewResource, this.taskRepository);
+    this.searchService.addResource(savedNewResource).catch((err) => {
+      console.log('Failed to index resource:', err);
+    });
     return {
       ...savedNewResource,
       spaceType: await this.getSpaceType(savedNewResource),

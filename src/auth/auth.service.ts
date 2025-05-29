@@ -158,7 +158,7 @@ export class AuthService {
       }
       await this.userService.updatePassword(user.id, password);
     } catch (e) {
-      console.log(e);
+      console.error(e);
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }
@@ -310,7 +310,7 @@ export class AuthService {
     try {
       return this.jwtService.verify(token);
     } catch (e) {
-      console.log(e);
+      console.error(e);
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }

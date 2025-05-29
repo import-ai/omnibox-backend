@@ -1,9 +1,8 @@
-import { Body, Controller, Post, Req, Res, Sse } from '@nestjs/common';
+import { Body, Controller, Post, Req, Sse } from '@nestjs/common';
 import { WizardService } from 'src/wizard/wizard.service';
 import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
-import { Response } from 'express';
 
 @Controller('api/v1/wizard')
 export class WizardController {
@@ -26,7 +25,12 @@ export class WizardController {
   @Post('ask')
   @Sse()
   async ask(@Req() req, @Body() body: AgentRequestDto) {
-    return await this.wizardService.streamService.agentStream(req.user, body);
+    try {
+      return await this.wizardService.streamService.agentStream(req.user, body);
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
   }
 
   @Post('*')

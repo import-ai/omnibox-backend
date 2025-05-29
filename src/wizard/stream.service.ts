@@ -224,14 +224,15 @@ export class StreamService {
         },
       )
         .then(() => subscriber.complete())
-        .catch((err: Error) =>
+        .catch((err: Error) => {
+          console.error(err);
           subscriber.error(
             JSON.stringify({
               response_type: 'error',
               message: err.message,
             }),
-          ),
-        );
+          );
+        });
     });
   }
 }

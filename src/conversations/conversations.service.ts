@@ -8,7 +8,7 @@ import {
   ConversationDetailDto,
   ConversationMessageMappingDto,
 } from 'src/conversations/dto/conversation-detail.dto';
-import { ConversationSummaryDto } from './dto/conversation-summary.dto';
+import { ConversationSummaryDto } from 'src/conversations/dto/conversation-summary.dto';
 import {
   Message,
   OpenAIMessageRole,
@@ -101,19 +101,23 @@ export class ConversationsService {
   ): Promise<ConversationSummaryDto[]> {
     const conversations = await this.findAll(namespaceId, userId, options);
     const summaries: ConversationSummaryDto[] = [];
+
+    const check = (m: Message, role: OpenAIMessageRole) => {
+      return m.message.role === role && m.message.content;
+    };
+
     for (const c of conversations) {
+      const messages: Message[] = await this.compose(userId, c.id);
       summaries.push({
         id: c.id,
-        title:
-          c.title ||
-          (await this.getFirstContent(userId, c.id, OpenAIMessageRole.USER)),
+        title: c.title,
         created_at: c.createdAt.toISOString(),
         updated_at: c.updatedAt?.toISOString(),
-        snippet: await this.getFirstContent(
-          userId,
-          c.id,
-          OpenAIMessageRole.ASSISTANT,
-        ),
+        user_content: messages.find((m) => check(m, OpenAIMessageRole.USER))
+          ?.message?.content,
+        assistant_content: messages.find((m) =>
+          check(m, OpenAIMessageRole.ASSISTANT),
+        )?.message?.content,
       } as ConversationSummaryDto);
     }
     return summaries;
@@ -123,14 +127,34 @@ export class ConversationsService {
     const conversation = await this.conversationRepository.findOneOrFail({
       where: { id, user: { id: user.id } },
     });
+
+    const detail: ConversationDetailDto = {
+      id: conversation.id,
+      title: conversation.title,
+      created_at: conversation.createdAt.toISOString(),
+      updated_at: conversation.updatedAt?.toISOString(),
+      mapping: {},
+    };
     const messages = await this.messagesService.findAll(
       user.id,
       conversation.id,
     );
-    const mapping: Record<string, ConversationMessageMappingDto> = {};
+    if (messages.length === 0) {
+      return detail;
+    }
+
+    const system_message: Message = messages[0];
+    if (system_message.message.role !== OpenAIMessageRole.SYSTEM) {
+      throw new Error('first message is not system message');
+    }
     const childrenMap: Record<string, string[]> = {};
-    let currentNode: string | undefined = undefined;
     for (const msg of messages) {
+      if (msg.id === system_message.id) {
+        continue;
+      }
+      if (msg.parentId === system_message.id) {
+        msg.parentId = undefined;
+      }
       if (msg.parentId) {
         if (!childrenMap[msg.parentId]) {
           childrenMap[msg.parentId] = [];
@@ -139,7 +163,7 @@ export class ConversationsService {
       }
     }
     for (const msg of messages) {
-      mapping[msg.id] = {
+      detail.mapping[msg.id] = {
         id: msg.id,
         message: msg.message,
         parent: msg.parentId,
@@ -150,16 +174,9 @@ export class ConversationsService {
       } as ConversationMessageMappingDto;
     }
     if (messages.length > 0) {
-      currentNode = messages[messages.length - 1].id;
+      detail.current_node = messages[messages.length - 1].id;
     }
-    return {
-      id: conversation.id,
-      title: conversation.title,
-      created_at: conversation.createdAt.toISOString(),
-      updated_at: conversation.updatedAt?.toISOString(),
-      mapping: mapping,
-      current_node: currentNode,
-    } as ConversationDetailDto;
+    return detail;
   }
 
   async findOne(id: string) {

@@ -12,7 +12,7 @@ export interface ConversationMessageMappingDto extends BaseDto {
 
 export interface ConversationDetailDto extends BaseDto {
   id: string;
-  title: string;
+  title?: string;
   mapping: Record<string, ConversationMessageMappingDto>;
   current_node?: string;
 }

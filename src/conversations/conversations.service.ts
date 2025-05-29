@@ -188,4 +188,11 @@ export class ConversationsService {
   async remove(id: string) {
     return await this.conversationRepository.softDelete(id);
   }
+
+  async get(id: string) {
+    return await this.conversationRepository.findOne({
+      where: { id },
+      relations: ['namespace'],
+    });
+  }
 }

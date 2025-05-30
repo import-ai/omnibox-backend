@@ -6,3 +6,7 @@ services:
   minio:
     volumes:
       - "${PWD}/.tmp/data/minio:/data"
+
+  meilisearch:
+    volumes:
+      - '${PWD}/.tmp/data/meili_data:/meili_data'

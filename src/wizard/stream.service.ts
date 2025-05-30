@@ -60,6 +60,7 @@ export class StreamService {
   }
 
   agentHandler(
+    namespaceId: string,
     conversationId: string,
     user: User,
     subscriber: Subscriber<MessageEvent>,
@@ -76,6 +77,7 @@ export class StreamService {
 
       if (chunk.response_type === 'openai_message') {
         const message: Message = await this.messagesService.create(
+          namespaceId,
           conversationId,
           user,
           { message: chunk.message, parentId, attrs: chunk?.attrs },
@@ -145,6 +147,16 @@ export class StreamService {
     return { messages: messages.map((m) => m.message), currentCiteCnt };
   }
 
+  streamError(subscriber: Subscriber<MessageEvent>, err: Error) {
+    console.error(err);
+    subscriber.error(
+      JSON.stringify({
+        response_type: 'error',
+        error: err.name,
+      }),
+    );
+  }
+
   async agentStream(
     user: User,
     body: AgentRequestDto,
@@ -208,7 +220,12 @@ export class StreamService {
     }
 
     return new Observable<MessageEvent>((subscriber) => {
-      const handler = this.agentHandler(body.conversation_id, user, subscriber);
+      const handler = this.agentHandler(
+        body.namespace_id,
+        body.conversation_id,
+        user,
+        subscriber,
+      );
       this.stream(
         '/api/v1/wizard/ask',
         {
@@ -224,15 +241,20 @@ export class StreamService {
         },
       )
         .then(() => subscriber.complete())
-        .catch((err: Error) => {
-          console.error(err);
-          subscriber.error(
-            JSON.stringify({
-              response_type: 'error',
-              message: err.message,
-            }),
-          );
-        });
+        .catch((err: Error) => this.streamError(subscriber, err));
     });
+  }
+
+  async agentStreamWrapper(
+    user: User,
+    body: AgentRequestDto,
+  ): Promise<Observable<MessageEvent>> {
+    try {
+      return await this.agentStream(user, body);
+    } catch (e) {
+      return new Observable<MessageEvent>((subscriber) =>
+        this.streamError(subscriber, e),
+      );
+    }
   }
 }

@@ -10,7 +10,6 @@ import {
 import { Resource } from 'src/resources/resources.entity';
 import { Message } from 'src/messages/entities/message.entity';
 import { DocType } from './doc-type.enum';
-import { ConversationsService } from 'src/conversations/conversations.service';
 
 const indexUid = 'idx';
 
@@ -19,10 +18,8 @@ export class SearchService implements OnModuleInit {
   private readonly openai: OpenAI;
   private readonly meili: MeiliSearch;
   private readonly embeddingModel: string;
-  constructor(
-    configService: ConfigService,
-    private readonly conversationsService: ConversationsService,
-  ) {
+
+  constructor(configService: ConfigService) {
     this.openai = new OpenAI({
       baseURL: configService.get('OBB_OPENAI_URL'),
       apiKey: configService.get('OBB_OPENAI_KEY'),
@@ -99,17 +96,14 @@ export class SearchService implements OnModuleInit {
     ]);
   }
 
-  async addMessage(message: Message) {
-    const conversation = await this.conversationsService.get(
-      message.conversation.id,
-    );
+  async addMessage(namespaceId: string, message: Message) {
     const content = message.message.content as string;
     const index = await this.meili.getIndex(indexUid);
     await index.addDocuments([
       {
         type: DocType.MESSAGE,
         id: `message_${message.id}`,
-        namespaceId: conversation!.namespace.id,
+        namespaceId: namespaceId,
         userId: message.user.id,
         content,
         _vectors: {

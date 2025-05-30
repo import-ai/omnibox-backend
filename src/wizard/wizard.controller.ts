@@ -25,12 +25,10 @@ export class WizardController {
   @Post('ask')
   @Sse()
   async ask(@Req() req, @Body() body: AgentRequestDto) {
-    try {
-      return await this.wizardService.streamService.agentStream(req.user, body);
-    } catch (e) {
-      console.error(e);
-      throw e;
-    }
+    return await this.wizardService.streamService.agentStreamWrapper(
+      req.user,
+      body,
+    );
   }
 
   @Post('*')

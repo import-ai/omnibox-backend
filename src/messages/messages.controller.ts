@@ -24,10 +24,16 @@ export class MessagesController {
   @Post()
   async create(
     @Req() req,
+    @Param('namespaceId') namespaceId: string,
     @Param('conversationId') conversationId: string,
     @Body() dto: CreateMessageDto,
   ) {
-    return await this.messagesService.create(conversationId, req.user, dto);
+    return await this.messagesService.create(
+      namespaceId,
+      conversationId,
+      req.user,
+      dto,
+    );
   }
 
   @Delete(':messageId')

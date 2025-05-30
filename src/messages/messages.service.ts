@@ -14,7 +14,12 @@ export class MessagesService {
     private readonly searchService: SearchService,
   ) {}
 
-  async create(conversationId: string, user: User, dto: CreateMessageDto) {
+  async create(
+    namespaceId: string,
+    conversationId: string,
+    user: User,
+    dto: CreateMessageDto,
+  ) {
     const message = this.messageRepository.create({
       message: dto.message,
       conversation: { id: conversationId },
@@ -23,7 +28,7 @@ export class MessagesService {
       attrs: dto.attrs,
     });
     const savedMsg = await this.messageRepository.save(message);
-    this.searchService.addMessage(savedMsg).catch((err) => {
+    this.searchService.addMessage(namespaceId, savedMsg).catch((err) => {
       console.error('Failed to index message:', err);
     });
     return savedMsg;

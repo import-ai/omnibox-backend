@@ -10,6 +10,7 @@ services:
       OBB_DB_HOST: postgres
       OBB_MINIO_ENDPOINT: http://username:password@minio:9000
       OBB_WIZARD_BASE_URL: http://wizard:8000
+      OBB_MEILI_HOST: http://meilisearch:7700
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,6 +52,13 @@ services:
     ports:
       - '9001:9001'
       - '9000:9000'
+
+  meilisearch:
+    image: getmeili/meilisearch
+    container_name: meilisearch
+    restart: always
+    environment:
+      - MEILI_MASTER_KEY=${OBB_MEILI_KEY}
 
   init:
     image: alpine/curl:8.10.0

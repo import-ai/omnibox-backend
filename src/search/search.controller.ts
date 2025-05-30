@@ -13,6 +13,11 @@ export class SearchController {
     @Query('query') query: string,
     @Query('type') type?: DocType,
   ) {
-    return await this.searchService.search(namespaceId, query, type);
+    return await this.searchService.search(
+      req.user.id,
+      namespaceId,
+      query,
+      type,
+    );
   }
 }

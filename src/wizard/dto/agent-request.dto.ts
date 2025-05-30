@@ -19,6 +19,7 @@ export class WebSearchToolDto extends ToolDto {
 }
 
 export class AgentRequestDto {
+  namespace_id: string;
   conversation_id: string;
   query: string;
   parent_message_id?: string;

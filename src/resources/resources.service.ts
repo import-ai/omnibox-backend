@@ -122,14 +122,18 @@ export class ResourcesService {
     const filtered: T[] = [];
     for (const res of resources) {
       const resourceId: string = typeof res === 'string' ? res : res.id;
-      const hasPermission: boolean =
-        await this.permissionsService.userHasPermission(
-          namespaceId,
-          resourceId,
-          userId,
-        );
-      if (hasPermission) {
-        filtered.push(res);
+      try {
+        const hasPermission: boolean =
+          await this.permissionsService.userHasPermission(
+            namespaceId,
+            resourceId,
+            userId,
+          );
+        if (hasPermission) {
+          filtered.push(res);
+        }
+      } catch {
+        /* ignore error */
       }
     }
     return filtered;

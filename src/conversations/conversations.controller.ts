@@ -1,16 +1,18 @@
 import { ConversationsService } from './conversations.service';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
+import { ConversationDetailDto } from './dto/conversation-detail.dto';
 import {
-  Get,
-  Req,
-  Param,
-  Post,
   Body,
-  Query,
-  Patch,
-  Delete,
   Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
 } from '@nestjs/common';
+import { ConversationSummaryDto } from './dto/conversation-summary.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/conversations')
 export class ConversationsController {
@@ -23,12 +25,16 @@ export class ConversationsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('order') order?: string,
-  ) {
-    return await this.conversationsService.findAll(namespaceId, req.user, {
-      limit: limit ? Number(limit) : undefined,
-      offset: offset ? Number(offset) : undefined,
-      order,
-    });
+  ): Promise<ConversationSummaryDto[]> {
+    return await this.conversationsService.listSummary(
+      namespaceId,
+      req.user.id,
+      {
+        limit: limit ? Number(limit) : undefined,
+        offset: offset ? Number(offset) : undefined,
+        order,
+      },
+    );
   }
 
   @Post()
@@ -45,8 +51,11 @@ export class ConversationsController {
   }
 
   @Get(':id')
-  async get(@Param('id') id: string) {
-    return await this.conversationsService.findOne(id);
+  async get(
+    @Param('id') id: string,
+    @Req() req,
+  ): Promise<ConversationDetailDto> {
+    return await this.conversationsService.getDetail(id, req.user);
   }
 
   @Delete(':id')

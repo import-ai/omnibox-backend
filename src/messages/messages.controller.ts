@@ -18,16 +18,22 @@ export class MessagesController {
 
   @Get()
   async list(@Req() req, @Param('conversationId') conversationId: string) {
-    return await this.messagesService.findAll(req.user, conversationId);
+    return await this.messagesService.findAll(req.user.id, conversationId);
   }
 
   @Post()
   async create(
     @Req() req,
+    @Param('namespaceId') namespaceId: string,
     @Param('conversationId') conversationId: string,
     @Body() dto: CreateMessageDto,
   ) {
-    return await this.messagesService.create(conversationId, req.user, dto);
+    return await this.messagesService.create(
+      namespaceId,
+      conversationId,
+      req.user,
+      dto,
+    );
   }
 
   @Delete(':messageId')

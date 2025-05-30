@@ -10,6 +10,13 @@ import {
 import { Resource } from 'src/resources/resources.entity';
 import { Message } from 'src/messages/entities/message.entity';
 import { DocType } from './doc-type.enum';
+import {
+  IndexedDocDto,
+  IndexedMessageDto,
+  IndexedResourceDto,
+} from './dto/indexed-doc.dto';
+import { PermissionsService } from 'src/permissions/permissions.service';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 const indexUid = 'idx';
 
@@ -19,7 +26,10 @@ export class SearchService implements OnModuleInit {
   private readonly meili: MeiliSearch;
   private readonly embeddingModel: string;
 
-  constructor(configService: ConfigService) {
+  constructor(
+    configService: ConfigService,
+    private readonly permissionsService: PermissionsService,
+  ) {
     this.openai = new OpenAI({
       baseURL: configService.get('OBB_OPENAI_URL'),
       apiKey: configService.get('OBB_OPENAI_KEY'),
@@ -50,9 +60,14 @@ export class SearchService implements OnModuleInit {
       }
     }
 
-    const filters = await index.getFilterableAttributes();
-    if (!filters || filters.length === 0) {
-      await index.updateFilterableAttributes(['namespaceId', 'type']);
+    const expectedFilters = ['namespaceId', 'userId', 'type'];
+    const curFilters = (await index.getFilterableAttributes()) || [];
+    const missingFilters = expectedFilters.filter(
+      (f) => !curFilters.includes(f),
+    );
+    if (missingFilters.length > 0) {
+      const newFilters = [...curFilters, ...missingFilters];
+      await index.updateFilterableAttributes(newFilters);
     }
 
     const embedders = await index.getEmbedders();
@@ -79,45 +94,51 @@ export class SearchService implements OnModuleInit {
 
   async addResource(resource: Resource) {
     const index = await this.meili.getIndex(indexUid);
-    await index.addDocuments([
-      {
-        type: DocType.RESOURCE,
-        id: `resource_${resource.id}`,
-        namespaceId: resource.namespace.id,
-        name: resource.name,
-        content: resource.content,
-        _vectors: {
-          default: {
-            embeddings: await this.getEmbedding(resource.content),
-            regenerate: false,
-          },
+    const doc: IndexedResourceDto = {
+      type: DocType.RESOURCE,
+      id: `resource_${resource.id}`,
+      namespaceId: resource.namespace.id,
+      name: resource.name,
+      content: resource.content,
+      _vectors: {
+        default: {
+          embeddings: await this.getEmbedding(resource.content),
+          regenerate: false,
         },
       },
-    ]);
+    };
+    await index.addDocuments([doc]);
   }
 
   async addMessage(namespaceId: string, message: Message) {
     const content = message.message.content as string;
     const index = await this.meili.getIndex(indexUid);
-    await index.addDocuments([
-      {
-        type: DocType.MESSAGE,
-        id: `message_${message.id}`,
-        namespaceId: namespaceId,
-        userId: message.user.id,
-        content,
-        _vectors: {
-          default: {
-            embeddings: await this.getEmbedding(content),
-            regenerate: false,
-          },
+    const doc: IndexedMessageDto = {
+      type: DocType.MESSAGE,
+      id: `message_${message.id}`,
+      namespaceId: namespaceId,
+      userId: message.user.id,
+      content,
+      _vectors: {
+        default: {
+          embeddings: await this.getEmbedding(content),
+          regenerate: false,
         },
       },
-    ]);
+    };
+    await index.addDocuments([doc]);
   }
 
-  async search(namespaceId: string, query: string, type?: DocType) {
-    const filter = [`namespaceId = "${namespaceId}"`];
+  async search(
+    userId: string,
+    namespaceId: string,
+    query: string,
+    type?: DocType,
+  ) {
+    const filter = [
+      `namespaceId = "${namespaceId}"`,
+      `userId NOT EXISTS OR userId = "${userId}"`,
+    ];
     if (type) {
       filter.push(`type = "${type}"`);
     }
@@ -131,6 +152,23 @@ export class SearchService implements OnModuleInit {
     };
     const index = await this.meili.getIndex(indexUid);
     const result = await index.search(query, searchParams);
-    return result.hits;
+    const items: IndexedDocDto[] = [];
+    for (const hit of result.hits) {
+      hit.id = hit.id.replace(/^(message_|resource_)/, '');
+      if (hit.type === DocType.RESOURCE) {
+        const resource = hit as IndexedResourceDto;
+        const hasPermission = await this.permissionsService.userHasPermission(
+          namespaceId,
+          resource.id,
+          userId,
+          PermissionLevel.CAN_VIEW,
+        );
+        if (!hasPermission) {
+          continue;
+        }
+      }
+      items.push(hit as IndexedDocDto);
+    }
+    return items;
   }
 }

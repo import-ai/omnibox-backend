@@ -250,9 +250,12 @@ export class PermissionsService {
   ): Promise<PermissionLevel> {
     let level: PermissionLevel | null = null;
     while (true) {
-      const resource = await this.resourceRepository.findOneOrFail({
+      const resource = await this.resourceRepository.findOne({
         where: { namespace: { id: namespaceId }, id: resourceId },
       });
+      if (!resource) {
+        break;
+      }
       level = resource.globalLevel;
       if (level) {
         break;

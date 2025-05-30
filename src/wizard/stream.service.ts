@@ -2,7 +2,7 @@ import { MessagesService } from 'src/messages/messages.service';
 import { User } from 'src/user/user.entity';
 import { Observable, Subscriber } from 'rxjs';
 import { MessageEvent } from '@nestjs/common';
-import { Message } from 'src/messages/entities/message.entity';
+import { Message, MessageStatus } from 'src/messages/entities/message.entity';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Resource } from 'src/resources/resources.entity';
@@ -71,11 +71,30 @@ export class StreamService {
     ): Promise<string | undefined> => {
       const chunk = JSON.parse(data) as {
         response_type: string;
+        role?: string;
         message: { role: string };
         attrs?: Record<string, any>;
       };
 
-      if (chunk.response_type === 'openai_message') {
+      if (chunk.response_type === 'bos') {
+        const message: Message = await this.messagesService.create(
+          namespaceId,
+          conversationId,
+          user,
+          {
+            message: {
+              role: chunk.role,
+              parentId,
+            },
+          },
+        );
+        subscriber.next({
+          data: JSON.stringify({
+            response_type: 'bos',
+            message: message,
+          }),
+        });
+      } else if (chunk.response_type === 'openai_message') {
         const message: Message = await this.messagesService.create(
           namespaceId,
           conversationId,

@@ -23,7 +23,6 @@ import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { SearchService } from 'src/search/search.service';
-import { promises } from 'stream';
 
 export interface IQuery {
   namespaceId: string;

@@ -21,9 +21,11 @@ import { Base } from 'src/common/base.entity';
 
 export enum MessageStatus {
   PENDING = 'pending',
+  STREAMING = 'streaming',
   SUCCESS = 'success',
   STOPPED = 'stopped',
-  FAIL = 'fail',
+  INTERRUPTED = 'interrupted',
+  FAILED = 'failed',
 }
 
 export enum OpenAIMessageRole {
@@ -36,7 +38,9 @@ export enum OpenAIMessageRole {
 export class OpenAIMessage {
   role: OpenAIMessageRole;
   content?: string;
+  reasoning_content?: string;
   tool_calls?: Record<string, any>[];
+  tool_call_id?: string;
 }
 
 @Entity('messages')

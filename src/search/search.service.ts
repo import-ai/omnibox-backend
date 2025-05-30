@@ -111,7 +111,10 @@ export class SearchService implements OnModuleInit {
   }
 
   async addMessage(namespaceId: string, message: Message) {
-    const content = message.message.content as string;
+    if (!message.message.content) {
+      return;
+    }
+    const content = message.message.content;
     const index = await this.meili.getIndex(indexUid);
     const doc: IndexedMessageDto = {
       type: DocType.MESSAGE,

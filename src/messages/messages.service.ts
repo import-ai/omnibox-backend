@@ -32,7 +32,7 @@ export class MessagesService {
     user: User,
     dto: CreateMessageDto,
     index: boolean = true,
-  ) {
+  ): Promise<Message> {
     const message = this.messageRepository.create({
       message: dto.message,
       conversation: { id: conversationId },
@@ -50,10 +50,12 @@ export class MessagesService {
     namespaceId: string,
     dto: Partial<CreateMessageDto>,
     index: boolean = true,
-  ) {
-    const message = await this.messageRepository.findOneOrFail({
-      where: { id },
-    });
+  ): Promise<Message> {
+    const condition: Record<string, any> = { where: { id } };
+    if (index) {
+      condition.relations = ['user'];
+    }
+    const message = await this.messageRepository.findOneOrFail(condition);
     Object.assign(message, dto);
     const updatedMsg = await this.messageRepository.save(message);
     this.index(index, namespaceId, message);
@@ -82,7 +84,7 @@ export class MessagesService {
       message.message.reasoning_content,
       deltaMessage.reasoning_content,
     );
-    if (deltaMessage.tool_calls) {
+    if (deltaMessage.tool_calls && deltaMessage.tool_calls.length > 0) {
       message.message.tool_calls = deltaMessage.tool_calls;
     }
     if (deltaMessage.tool_call_id) {

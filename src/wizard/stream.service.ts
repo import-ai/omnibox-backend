@@ -220,7 +220,7 @@ export class StreamService {
                 ...(await this.resourcesService.permissionFilter<string>(
                   tool.namespace_id,
                   user.id,
-                  resourceIds,
+                  tool.resource_ids,
                 )),
               );
             }

@@ -169,7 +169,7 @@ export class ConversationsService {
       detail.mapping[msg.id] = {
         id: msg.id,
         message: msg.message,
-        parent: msg.parentId,
+        parent_id: msg.parentId,
         children: childrenMap[msg.id] || [],
         created_at: msg.createdAt.toISOString(),
         status: msg.status,

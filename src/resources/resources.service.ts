@@ -90,7 +90,7 @@ export class ResourcesService {
       return savedResource;
     });
     this.searchService.addResource(savedResource).catch((err) => {
-      console.log('Failed to index resource:', err);
+      console.error('Failed to index resource:', err);
     });
     return {
       ...savedResource,
@@ -239,7 +239,7 @@ export class ResourcesService {
     const savedNewResource = await this.resourceRepository.save(newResource);
     await WizardTask.index.upsert(user, savedNewResource, this.taskRepository);
     this.searchService.addResource(savedNewResource).catch((err) => {
-      console.log('Failed to index resource:', err);
+      console.error('Failed to index resource:', err);
     });
     return {
       ...savedNewResource,

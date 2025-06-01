@@ -103,7 +103,7 @@ export class ConversationsService {
     const summaries: ConversationSummaryDto[] = [];
 
     const check = (m: Message, role: OpenAIMessageRole) => {
-      return m.message.role === role && m.message.content;
+      return m.message.role === role && m.message.content?.trim();
     };
 
     for (const c of conversations) {
@@ -163,6 +163,9 @@ export class ConversationsService {
       }
     }
     for (const msg of messages) {
+      if (msg.id === system_message.id) {
+        continue;
+      }
       detail.mapping[msg.id] = {
         id: msg.id,
         message: msg.message,

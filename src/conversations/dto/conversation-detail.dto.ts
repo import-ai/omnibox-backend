@@ -5,7 +5,7 @@ export interface ConversationMessageMappingDto extends BaseDto {
   id: string;
   message: Record<string, any>;
   status: MessageStatus;
-  parent?: string;
+  parent_id?: string;
   children: string[];
   attrs?: Record<string, any>;
 }

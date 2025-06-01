@@ -21,9 +21,11 @@ import { Base } from 'src/common/base.entity';
 
 export enum MessageStatus {
   PENDING = 'pending',
+  STREAMING = 'streaming',
   SUCCESS = 'success',
   STOPPED = 'stopped',
-  FAIL = 'fail',
+  INTERRUPTED = 'interrupted',
+  FAILED = 'failed',
 }
 
 export enum OpenAIMessageRole {
@@ -33,10 +35,16 @@ export enum OpenAIMessageRole {
   TOOL = 'tool',
 }
 
-export class OpenAIMessage {
+export interface OpenAIMessage {
   role: OpenAIMessageRole;
   content?: string;
+  reasoning_content?: string;
   tool_calls?: Record<string, any>[];
+  tool_call_id?: string;
+}
+
+export interface MessageAttrs {
+  citations?: Record<string, any>[];
 }
 
 @Entity('messages')
@@ -69,5 +77,5 @@ export class Message extends Base {
   status: MessageStatus;
 
   @Column('jsonb', { nullable: true })
-  attrs?: Record<string, any>;
+  attrs?: MessageAttrs;
 }

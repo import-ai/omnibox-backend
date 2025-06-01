@@ -2,10 +2,17 @@ import { MessagesService } from 'src/messages/messages.service';
 import { User } from 'src/user/user.entity';
 import { Observable, Subscriber } from 'rxjs';
 import { MessageEvent } from '@nestjs/common';
-import { Message } from 'src/messages/entities/message.entity';
+import { Message, MessageStatus, OpenAIMessage, OpenAIMessageRole } from 'src/messages/entities/message.entity';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Resource } from 'src/resources/resources.entity';
+import { ChatResponse } from 'src/wizard/dto/chat-response.dto';
+
+interface HandlerContext {
+  parentId?: string;
+  messageId?: string;
+  message?: OpenAIMessage;
+}
 
 export class StreamService {
   constructor(
@@ -64,48 +71,65 @@ export class StreamService {
     conversationId: string,
     user: User,
     subscriber: Subscriber<MessageEvent>,
-  ): (data: string, parentId?: string) => Promise<string | undefined> {
+  ): (data: string, context: HandlerContext) => Promise<void> {
     return async (
       data: string,
-      parentId?: string,
-    ): Promise<string | undefined> => {
-      const chunk = JSON.parse(data) as {
-        response_type: string;
-        message: { role: string };
-        attrs?: Record<string, any>;
-      };
+      context: HandlerContext,
+    ): Promise<void> => {
+      const chunk: ChatResponse = JSON.parse(data);
 
-      if (chunk.response_type === 'openai_message') {
+      if (chunk.response_type === 'bos') {
         const message: Message = await this.messagesService.create(
           namespaceId,
           conversationId,
           user,
-          { message: chunk.message, parentId, attrs: chunk?.attrs },
+          {
+            message: {
+              role: chunk.role,
+            },
+            parentId: context.parentId,
+          },
+          false,
         );
-        if (chunk.message.role === 'tool' && chunk?.attrs) {
-          const attrs = chunk.attrs;
-          if (attrs?.citations) {
-            subscriber.next({
-              data: JSON.stringify({
-                response_type: 'citations',
-                citations: attrs.citations,
-              }),
-            });
-          }
+        chunk.id = message.id;
+        chunk.parentId = message.parentId || undefined;
+
+        if (context.message?.role === OpenAIMessageRole.SYSTEM) {
+          chunk.parentId = undefined;
         }
-        if (chunk.message.role !== 'system') {
-          subscriber.next({
-            data: JSON.stringify({
-              response_type: 'end_of_message',
-              role: chunk.message.role,
-              messageId: message.id,
-            }),
-          });
+
+        context.messageId = message.id;
+        context.message = message.message;
+      } else if (chunk.response_type === 'delta') {
+        if (!context.messageId) {
+          throw new Error('Message ID is not set in context');
         }
-        return message.id;
+        const message: Message = await this.messagesService.updateOpenAIMessage(
+          context.messageId!,
+          chunk.message,
+          chunk.attrs,
+        );
+
+        context.message = message.message;
+      } else if (chunk.response_type === 'eos') {
+        const message: Message = await this.messagesService.update(context.messageId!, namespaceId, {
+          status: MessageStatus.SUCCESS,
+        }, true);
+
+        context.message = message.message;
+        context.parentId = message.id;
+        context.messageId = undefined;
+      } else if (chunk.response_type === 'done') {
+      } else if (chunk.response_type === 'error') {
+        const err = new Error(chunk.message || 'Unknown error');
+        err.name = 'AgentError';
+        throw err;
+      } else {
+        throw new Error(`Unknown response type: ${data}`);
       }
-      subscriber.next({ data });
-      return undefined;
+      if (context?.message?.role !== OpenAIMessageRole.SYSTEM) {
+        subscriber.next({ data: JSON.stringify(chunk) });
+      }
     };
   }
 
@@ -196,7 +220,7 @@ export class StreamService {
                 ...(await this.resourcesService.permissionFilter<string>(
                   tool.namespace_id,
                   user.id,
-                  resourceIds,
+                  tool.resource_ids,
                 )),
               );
             }
@@ -219,6 +243,11 @@ export class StreamService {
       }
     }
 
+    const handlerContext: HandlerContext = {
+      parentId,
+      messageId: undefined,
+    };
+
     return new Observable<MessageEvent>((subscriber) => {
       const handler = this.agentHandler(
         body.namespace_id,
@@ -237,7 +266,7 @@ export class StreamService {
           current_cite_cnt: currentCiteCnt,
         },
         async (data) => {
-          parentId = (await handler(data, parentId)) || parentId;
+          await handler(data, handlerContext);
         },
       )
         .then(() => subscriber.complete())

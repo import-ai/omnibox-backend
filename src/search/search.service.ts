@@ -109,7 +109,11 @@ export class SearchService implements OnModuleInit {
     await index.addDocuments([doc]);
   }
 
-  async addMessage(namespaceId: string, message: Message) {
+  async addMessage(
+    namespaceId: string,
+    conversationId: string,
+    message: Message,
+  ) {
     if (!message.message.content) {
       return;
     }
@@ -120,7 +124,7 @@ export class SearchService implements OnModuleInit {
       id: `message_${message.id}`,
       namespaceId: namespaceId,
       userId: message.user.id,
-      conversationId: message.conversation.id,
+      conversationId,
       content,
       _vectors: {
         omniboxEmbed: {

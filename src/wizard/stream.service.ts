@@ -117,6 +117,7 @@ export class StreamService {
         const message: Message = await this.messagesService.update(
           context.messageId!,
           namespaceId,
+          conversationId,
           {
             status: MessageStatus.SUCCESS,
           },

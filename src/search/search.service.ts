@@ -99,7 +99,9 @@ export class SearchService implements OnModuleInit {
       content: resource.content,
       _vectors: {
         omniboxEmbed: {
-          embeddings: await this.getEmbedding(`A resource named ${resource.name} with content: ${resource.content}`),
+          embeddings: await this.getEmbedding(
+            `A resource named ${resource.name} with content: ${resource.content}`,
+          ),
           regenerate: false,
         },
       },
@@ -122,7 +124,9 @@ export class SearchService implements OnModuleInit {
       content,
       _vectors: {
         omniboxEmbed: {
-          embeddings: await this.getEmbedding(`A message with content: ${content}`),
+          embeddings: await this.getEmbedding(
+            `A message with content: ${content}`,
+          ),
           regenerate: false,
         },
       },

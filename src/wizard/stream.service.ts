@@ -2,7 +2,12 @@ import { MessagesService } from 'src/messages/messages.service';
 import { User } from 'src/user/user.entity';
 import { Observable, Subscriber } from 'rxjs';
 import { MessageEvent } from '@nestjs/common';
-import { Message, MessageStatus, OpenAIMessage, OpenAIMessageRole } from 'src/messages/entities/message.entity';
+import {
+  Message,
+  MessageStatus,
+  OpenAIMessage,
+  OpenAIMessageRole,
+} from 'src/messages/entities/message.entity';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Resource } from 'src/resources/resources.entity';
@@ -72,10 +77,7 @@ export class StreamService {
     user: User,
     subscriber: Subscriber<MessageEvent>,
   ): (data: string, context: HandlerContext) => Promise<void> {
-    return async (
-      data: string,
-      context: HandlerContext,
-    ): Promise<void> => {
+    return async (data: string, context: HandlerContext): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
 
       if (chunk.response_type === 'bos') {
@@ -112,9 +114,14 @@ export class StreamService {
 
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
-        const message: Message = await this.messagesService.update(context.messageId!, namespaceId, {
-          status: MessageStatus.SUCCESS,
-        }, true);
+        const message: Message = await this.messagesService.update(
+          context.messageId!,
+          namespaceId,
+          {
+            status: MessageStatus.SUCCESS,
+          },
+          true,
+        );
 
         context.message = message.message;
         context.parentId = message.id;

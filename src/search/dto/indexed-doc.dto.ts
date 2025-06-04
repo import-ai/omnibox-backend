@@ -7,7 +7,7 @@ export class IndexedResourceDto {
   name: string;
   content: string;
   _vectors?: {
-    default: {
+    omniboxEmbed: {
       embeddings: number[];
       regenerate: boolean;
     };
@@ -19,9 +19,10 @@ export class IndexedMessageDto {
   id: string;
   namespaceId: string;
   userId: string;
+  conversationId: string;
   content: string;
   _vectors?: {
-    default: {
+    omniboxEmbed: {
       embeddings: number[];
       regenerate: boolean;
     };

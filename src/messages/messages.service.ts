@@ -18,11 +18,18 @@ export class MessagesService {
     private readonly searchService: SearchService,
   ) {}
 
-  index(index: boolean, namespaceId: string, message: Message) {
+  index(
+    index: boolean,
+    namespaceId: string,
+    conversationId: string,
+    message: Message,
+  ) {
     if (index) {
-      this.searchService.addMessage(namespaceId, message).catch((err) => {
-        console.error('Failed to index message:', err);
-      });
+      this.searchService
+        .addMessage(namespaceId, conversationId, message)
+        .catch((err) => {
+          console.error('Failed to index message:', err);
+        });
     }
   }
 
@@ -41,13 +48,14 @@ export class MessagesService {
       attrs: dto.attrs,
     });
     const savedMsg = await this.messageRepository.save(message);
-    this.index(index, namespaceId, savedMsg);
+    this.index(index, namespaceId, conversationId, savedMsg);
     return savedMsg;
   }
 
   async update(
     id: string,
     namespaceId: string,
+    conversationId: string,
     dto: Partial<CreateMessageDto>,
     index: boolean = true,
   ): Promise<Message> {
@@ -58,7 +66,7 @@ export class MessagesService {
     const message = await this.messageRepository.findOneOrFail(condition);
     Object.assign(message, dto);
     const updatedMsg = await this.messageRepository.save(message);
-    this.index(index, namespaceId, message);
+    this.index(index, namespaceId, conversationId, message);
     return updatedMsg;
   }
 

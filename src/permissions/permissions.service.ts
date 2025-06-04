@@ -432,9 +432,12 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
   ): Promise<string | null> {
-    const resource = await this.resourceRepository.findOneOrFail({
+    const resource = await this.resourceRepository.findOne({
       where: { namespace: { id: namespaceId }, id: resourceId },
     });
+    if (!resource) {
+      return null;
+    }
     return resource.parentId;
   }
 }

@@ -18,7 +18,7 @@ import {
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
-const indexUid = 'idx';
+const indexUid = 'omniboxIdx';
 
 @Injectable()
 export class SearchService implements OnModuleInit {
@@ -71,9 +71,9 @@ export class SearchService implements OnModuleInit {
     }
 
     const embedders = await index.getEmbedders();
-    if (!embedders || !embedders.default) {
+    if (!embedders || !embedders.omniboxEmbed) {
       await index.updateEmbedders({
-        default: {
+        omniboxEmbed: {
           source: 'userProvided',
           dimensions: 1024,
         },
@@ -82,9 +82,6 @@ export class SearchService implements OnModuleInit {
   }
 
   async getEmbedding(input: string): Promise<number[]> {
-    if (!input) {
-      return new Array(1024).fill(0);
-    }
     const resp = await this.openai.embeddings.create({
       model: this.embeddingModel,
       input,
@@ -101,8 +98,8 @@ export class SearchService implements OnModuleInit {
       name: resource.name,
       content: resource.content,
       _vectors: {
-        default: {
-          embeddings: await this.getEmbedding(resource.content),
+        omniboxEmbed: {
+          embeddings: await this.getEmbedding(`A resource named ${resource.name} with content: ${resource.content}`),
           regenerate: false,
         },
       },
@@ -121,10 +118,11 @@ export class SearchService implements OnModuleInit {
       id: `message_${message.id}`,
       namespaceId: namespaceId,
       userId: message.user.id,
+      conversationId: message.conversation.id,
       content,
       _vectors: {
-        default: {
-          embeddings: await this.getEmbedding(content),
+        omniboxEmbed: {
+          embeddings: await this.getEmbedding(`A message with content: ${content}`),
           regenerate: false,
         },
       },
@@ -146,13 +144,15 @@ export class SearchService implements OnModuleInit {
       filter.push(`type = "${type}"`);
     }
     const searchParams: SearchParams = {
-      vector: await this.getEmbedding(query),
-      hybrid: {
-        embedder: 'default',
-      },
       filter,
       showRankingScore: true,
     };
+    if (query) {
+      searchParams.vector = await this.getEmbedding(query);
+      searchParams.hybrid = {
+        embedder: 'omniboxEmbed',
+      };
+    }
     const index = await this.meili.getIndex(indexUid);
     const result = await index.search(query, searchParams);
     const items: IndexedDocDto[] = [];

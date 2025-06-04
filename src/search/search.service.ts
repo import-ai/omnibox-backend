@@ -139,15 +139,15 @@ export class SearchService implements OnModuleInit {
   }
 
   async search(
-    userId: string,
     namespaceId: string,
     query: string,
     type?: DocType,
+    userId?: string,
   ) {
-    const filter = [
-      `namespaceId = "${namespaceId}"`,
-      `userId NOT EXISTS OR userId = "${userId}"`,
-    ];
+    const filter = [`namespaceId = "${namespaceId}"`];
+    if (userId) {
+      filter.push(`userId NOT EXISTS OR userId = "${userId}"`);
+    }
     if (type) {
       filter.push(`type = "${type}"`);
     }
@@ -164,21 +164,23 @@ export class SearchService implements OnModuleInit {
     const index = await this.meili.getIndex(indexUid);
     const result = await index.search(query, searchParams);
     const items: IndexedDocDto[] = [];
-    for (const hit of result.hits) {
-      hit.id = hit.id.replace(/^(message_|resource_)/, '');
-      if (hit.type === DocType.RESOURCE) {
-        const resource = hit as IndexedResourceDto;
-        const hasPermission = await this.permissionsService.userHasPermission(
-          namespaceId,
-          resource.id,
-          userId,
-          PermissionLevel.CAN_VIEW,
-        );
-        if (!hasPermission) {
-          continue;
+    if (userId) {
+      for (const hit of result.hits) {
+        hit.id = hit.id.replace(/^(message_|resource_)/, '');
+        if (hit.type === DocType.RESOURCE) {
+          const resource = hit as IndexedResourceDto;
+          const hasPermission = await this.permissionsService.userHasPermission(
+            namespaceId,
+            resource.id,
+            userId,
+            PermissionLevel.CAN_VIEW,
+          );
+          if (!hasPermission) {
+            continue;
+          }
         }
+        items.push(hit as IndexedDocDto);
       }
-      items.push(hit as IndexedDocDto);
     }
     return items;
   }

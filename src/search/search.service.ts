@@ -8,7 +8,10 @@ import {
   SearchParams,
 } from 'meilisearch';
 import { Resource } from 'src/resources/resources.entity';
-import { Message } from 'src/messages/entities/message.entity';
+import {
+  Message,
+  OpenAIMessageRole,
+} from 'src/messages/entities/message.entity';
 import { DocType } from './doc-type.enum';
 import {
   IndexedDocDto,
@@ -114,7 +117,14 @@ export class SearchService implements OnModuleInit {
     conversationId: string,
     message: Message,
   ) {
-    if (!message.message.content) {
+    if (!message.message.content?.trim()) {
+      return;
+    }
+    if (
+      [OpenAIMessageRole.TOOL, OpenAIMessageRole.SYSTEM].includes(
+        message.message.role,
+      )
+    ) {
       return;
     }
     const content = message.message.content;

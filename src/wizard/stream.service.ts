@@ -107,7 +107,7 @@ export class StreamService {
           throw new Error('Message ID is not set in context');
         }
         const message: Message = await this.messagesService.updateOpenAIMessage(
-          context.messageId!,
+          context.messageId,
           chunk.message,
           chunk.attrs,
         );
@@ -128,6 +128,7 @@ export class StreamService {
         context.parentId = message.id;
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
+        // Do nothing, this is the end of the stream
       } else if (chunk.response_type === 'error') {
         const err = new Error(chunk.message || 'Unknown error');
         err.name = 'AgentError';

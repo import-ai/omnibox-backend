@@ -7,10 +7,6 @@ export class WizardAPIService {
     body: Record<string, any>,
     headers: Record<string, string> = {},
   ): Promise<Record<string, any>> {
-    console.log(
-      `Making ${method} request to ${this.wizardBaseUrl}${url}`,
-      body,
-    );
     const response = await fetch(`${this.wizardBaseUrl}${url}`, {
       method,
       headers: {

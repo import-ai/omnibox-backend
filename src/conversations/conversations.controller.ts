@@ -61,6 +61,11 @@ export class ConversationsController {
     return await this.conversationsService.getDetail(id, req.user);
   }
 
+  @Post(':id/title')
+  async createTitle(@Param('id') id: string, @Req() req) {
+    return await this.conversationsService.createTitle(id, req.user.id);
+  }
+
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return await this.conversationsService.remove(id);

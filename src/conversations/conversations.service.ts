@@ -3,7 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Conversation } from 'src/conversations/entities/conversation.entity';
 import { User } from 'src/user/user.entity';
+import { ConfigService } from '@nestjs/config';
 import { MessagesService } from 'src/messages/messages.service';
+import { WizardAPIService } from 'src/wizard/api.wizard.service';
 import {
   ConversationDetailDto,
   ConversationMessageMappingDto,
@@ -16,11 +18,20 @@ import {
 
 @Injectable()
 export class ConversationsService {
+  private readonly wizardApiService: WizardAPIService;
+
   constructor(
     @InjectRepository(Conversation)
     private readonly conversationRepository: Repository<Conversation>,
     private readonly messagesService: MessagesService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
+    if (!baseUrl) {
+      throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
+    }
+    this.wizardApiService = new WizardAPIService(baseUrl);
+  }
 
   async create(namespaceId: string, user: User) {
     const conversation = this.conversationRepository.create({
@@ -87,18 +98,51 @@ export class ConversationsService {
     return composed;
   }
 
-  async getFirstContent(
-    userId: string,
-    conversationId: string,
-    targetRole: OpenAIMessageRole = OpenAIMessageRole.ASSISTANT,
-  ): Promise<string | undefined> {
-    const messages: Message[] = await this.compose(userId, conversationId);
-    for (const m of messages) {
-      if (m.message.role === targetRole && m.message.content) {
-        return m.message.content;
+  async createTitle(id: string, userId: string): Promise<{ title: string }> {
+    const conversation = await this.conversationRepository.findOneOrFail({
+      where: { id, user: { id: userId } },
+    });
+    if (conversation.title) {
+      return { title: conversation.title };
+    }
+    const summary = await this.getSummary(userId, conversation);
+    if (summary.user_content) {
+      const content = summary.user_content.trim();
+      if (content.length > 0) {
+        const titleCreateResponse = await this.wizardApiService.request(
+          'POST',
+          '/internal/api/v1/wizard/title',
+          {
+            text: content,
+          },
+        );
+        conversation.title = titleCreateResponse.title!;
+        await this.conversationRepository.save(conversation);
+        return titleCreateResponse as { title: string };
       }
     }
-    return undefined;
+    throw new Error('No query content found to create title');
+  }
+
+  async getSummary(
+    userId: string,
+    c: Conversation,
+  ): Promise<ConversationSummaryDto> {
+    const messages: Message[] = await this.compose(userId, c.id);
+    const check = (m: Message, role: OpenAIMessageRole) => {
+      return m.message.role === role && m.message.content?.trim();
+    };
+    return {
+      id: c.id,
+      title: c.title,
+      created_at: c.createdAt.toISOString(),
+      updated_at: c.updatedAt?.toISOString(),
+      user_content: messages.find((m) => check(m, OpenAIMessageRole.USER))
+        ?.message?.content,
+      assistant_content: messages.find((m) =>
+        check(m, OpenAIMessageRole.ASSISTANT),
+      )?.message?.content,
+    };
   }
 
   async listSummary(
@@ -110,26 +154,9 @@ export class ConversationsService {
     data: ConversationSummaryDto[];
   }> {
     const conversations = await this.findAll(namespaceId, userId, options);
-    const summaries: ConversationSummaryDto[] = [];
-
-    const check = (m: Message, role: OpenAIMessageRole) => {
-      return m.message.role === role && m.message.content?.trim();
-    };
-
-    for (const c of conversations) {
-      const messages: Message[] = await this.compose(userId, c.id);
-      summaries.push({
-        id: c.id,
-        title: c.title,
-        created_at: c.createdAt.toISOString(),
-        updated_at: c.updatedAt?.toISOString(),
-        user_content: messages.find((m) => check(m, OpenAIMessageRole.USER))
-          ?.message?.content,
-        assistant_content: messages.find((m) =>
-          check(m, OpenAIMessageRole.ASSISTANT),
-        )?.message?.content,
-      } as ConversationSummaryDto);
-    }
+    const summaries: ConversationSummaryDto[] = await Promise.all(
+      conversations.map((c) => this.getSummary(userId, c)),
+    );
     const summariesTotal = await this.countAll(namespaceId, userId);
     return {
       data: summaries,

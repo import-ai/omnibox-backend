@@ -33,6 +33,6 @@ export class WizardController {
 
   @Post('*')
   async proxy(@Req() req: Request): Promise<Record<string, any>> {
-    return await this.wizardService.wizardApiService.request(req);
+    return await this.wizardService.wizardApiService.proxy(req);
   }
 }

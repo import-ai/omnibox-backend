@@ -25,7 +25,10 @@ export class ConversationsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('order') order?: string,
-  ): Promise<ConversationSummaryDto[]> {
+  ): Promise<{
+    total: number;
+    data: ConversationSummaryDto[];
+  }> {
     return await this.conversationsService.listSummary(
       namespaceId,
       req.user.id,

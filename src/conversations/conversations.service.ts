@@ -52,6 +52,13 @@ export class ConversationsService {
     return await this.conversationRepository.find(query);
   }
 
+  async countAll(namespaceId: string, userId: string) {
+    return await this.conversationRepository.countBy({
+      namespace: { id: namespaceId },
+      user: { id: userId },
+    });
+  }
+
   async compose(
     userId: string,
     conversationId: string,
@@ -98,7 +105,10 @@ export class ConversationsService {
     namespaceId: string,
     userId: string,
     options?: { limit?: number; offset?: number; order?: string },
-  ): Promise<ConversationSummaryDto[]> {
+  ): Promise<{
+    total: number;
+    data: ConversationSummaryDto[];
+  }> {
     const conversations = await this.findAll(namespaceId, userId, options);
     const summaries: ConversationSummaryDto[] = [];
 
@@ -120,7 +130,11 @@ export class ConversationsService {
         )?.message?.content,
       } as ConversationSummaryDto);
     }
-    return summaries;
+    const summariesTotal = await this.countAll(namespaceId, userId);
+    return {
+      data: summaries,
+      total: summariesTotal,
+    };
   }
 
   async getDetail(id: string, user: User): Promise<ConversationDetailDto> {

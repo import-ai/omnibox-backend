@@ -28,6 +28,17 @@ export class WizardController {
     return await this.wizardService.streamService.agentStreamWrapper(
       req.user,
       body,
+      'ask',
+    );
+  }
+
+  @Post('write')
+  @Sse()
+  async write(@Req() req, @Body() body: AgentRequestDto) {
+    return await this.wizardService.streamService.agentStreamWrapper(
+      req.user,
+      body,
+      'write',
     );
   }
 

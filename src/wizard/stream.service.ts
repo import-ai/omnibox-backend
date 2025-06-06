@@ -193,6 +193,7 @@ export class StreamService {
   async agentStream(
     user: User,
     body: AgentRequestDto,
+    mode: 'ask' | 'write' = 'ask',
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Record<string, any> = [];
@@ -265,7 +266,7 @@ export class StreamService {
         subscriber,
       );
       this.stream(
-        '/api/v1/wizard/ask',
+        `/api/v1/wizard/${mode}`,
         {
           conversation_id: body.conversation_id,
           query: body.query,
@@ -286,9 +287,10 @@ export class StreamService {
   async agentStreamWrapper(
     user: User,
     body: AgentRequestDto,
+    mode: 'ask' | 'write' = 'ask',
   ): Promise<Observable<MessageEvent>> {
     try {
-      return await this.agentStream(user, body);
+      return await this.agentStream(user, body, mode);
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>
         this.streamError(subscriber, e),

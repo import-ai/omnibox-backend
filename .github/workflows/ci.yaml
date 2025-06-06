@@ -26,13 +26,11 @@ jobs:
       - name: Check if dependencies changed
         id: depcheck
         run: |
-          echo "changed=true" >> $GITHUB_OUTPUT
-#        run: |
-#          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E 'package.json|pnpm-lock.yaml'; then
-#            echo "changed=true" >> $GITHUB_OUTPUT
-#          else
-#            echo "changed=false" >> $GITHUB_OUTPUT
-#          fi
+          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E 'package.json|pnpm-lock.yaml|pnpm-workspace.yaml'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Docker meta (runtime)
         if: steps.depcheck.outputs.changed == 'true'

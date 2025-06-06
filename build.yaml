@@ -1,4 +1,5 @@
 # docker compose -f base.yaml -f build.yaml up --build
 services:
   backend:
+    image: omnibox-backend-local:latest
     build: .

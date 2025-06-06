@@ -1,6 +1,9 @@
 FROM node:22
 
 WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@10 --activate
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod && pnpm add -g pm2@latest
+ENV PNPM_HOME="/usr/local/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm add -g pm2@6
+RUN pnpm install --prod

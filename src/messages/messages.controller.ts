@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Param, Post, Req } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 
@@ -15,11 +7,6 @@ import { CreateMessageDto } from './dto/create-message.dto';
 )
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
-
-  @Get()
-  async list(@Req() req, @Param('conversationId') conversationId: string) {
-    return await this.messagesService.findAll(req.user.id, conversationId);
-  }
 
   @Post()
   async create(

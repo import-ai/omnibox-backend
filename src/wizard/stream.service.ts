@@ -8,7 +8,10 @@ import {
   OpenAIMessage,
   OpenAIMessageRole,
 } from 'src/messages/entities/message.entity';
-import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
+import {
+  AgentRequestDto,
+  WizardAgentRequestDto,
+} from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Resource } from 'src/resources/resources.entity';
 import { ChatResponse } from 'src/wizard/dto/chat-response.dto';
@@ -196,7 +199,7 @@ export class StreamService {
     mode: 'ask' | 'write' = 'ask',
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
-    let messages: Record<string, any> = [];
+    let messages: Record<string, any>[] = [];
     let currentCiteCnt: number = 0;
     if (body.parent_message_id) {
       parentId = body.parent_message_id;
@@ -211,43 +214,37 @@ export class StreamService {
 
     if (body.tools) {
       for (const tool of body.tools) {
-        if (tool.name === 'knowledge_search') {
-          // for knowledge_search, pass the resource with permission
-          if (
-            tool.resource_ids === undefined &&
-            tool.parent_ids === undefined
-          ) {
+        if (tool.name === 'private_search') {
+          // for private_search, pass the resource with permission
+          if (!tool.resources || tool.resources.length === 0) {
             const resources: Resource[] =
               await this.resourcesService.listAllUserAccessibleResources(
                 tool.namespace_id,
                 user.id,
               );
-            tool.resource_ids = resources.map((r) => r.id);
+            tool.visible_resource_ids = resources.map((r) => r.id);
           } else {
-            const resourceIds: string[] = [];
-            if (tool.resource_ids) {
-              resourceIds.push(
-                ...(await this.resourcesService.permissionFilter<string>(
-                  tool.namespace_id,
-                  user.id,
-                  tool.resource_ids,
-                )),
-              );
-            }
-            if (tool.parent_ids) {
-              for (const parentId of tool.parent_ids) {
+            tool.visible_resource_ids = [];
+            tool.visible_resource_ids.push(
+              ...(await this.resourcesService.permissionFilter<string>(
+                tool.namespace_id,
+                user.id,
+                tool.resources.map((r) => r.id),
+              )),
+            );
+            for (const resource of tool.resources) {
+              if (resource.type === 'folder') {
                 const resources: Resource[] =
                   await this.resourcesService.getAllSubResources(
                     tool.namespace_id,
-                    parentId,
+                    resource.id,
                     user.id,
-                    true,
+                    false,
                   );
-                resourceIds.push(...resources.map((res) => res.id));
+                resource.child_ids = resources.map((r) => r.id);
+                tool.visible_resource_ids.push(...resource.child_ids);
               }
-              tool.parent_ids = undefined;
             }
-            tool.resource_ids = resourceIds;
           }
         }
       }
@@ -265,20 +262,19 @@ export class StreamService {
         user,
         subscriber,
       );
-      this.stream(
-        `/api/v1/wizard/${mode}`,
-        {
-          conversation_id: body.conversation_id,
-          query: body.query,
-          messages,
-          tools: body.tools,
-          enable_thinking: body.enable_thinking,
-          current_cite_cnt: currentCiteCnt,
-        },
-        async (data) => {
-          await handler(data, handlerContext);
-        },
-      )
+
+      const wizardRequestBody: WizardAgentRequestDto = {
+        conversation_id: body.conversation_id,
+        query: body.query,
+        messages,
+        tools: body.tools,
+        enable_thinking: body.enable_thinking,
+        current_cite_cnt: currentCiteCnt,
+      };
+
+      this.stream(`/api/v1/wizard/${mode}`, wizardRequestBody, async (data) => {
+        await handler(data, handlerContext);
+      })
         .then(() => subscriber.complete())
         .catch((err: Error) => this.streamError(subscriber, err));
     });

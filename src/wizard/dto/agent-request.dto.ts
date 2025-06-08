@@ -1,5 +1,3 @@
-import { ResourceType } from 'src/resources/resources.entity';
-
 export type FloatPair = [number, number];
 
 export interface ToolDto {
@@ -9,7 +7,7 @@ export interface ToolDto {
 export interface PrivateSearchResourceDto {
   name: string;
   id: string;
-  resource_type: ResourceType;
+  type: 'resource' | 'folder';
   child_ids?: string[];
 }
 

@@ -13,7 +13,7 @@ import {
   WizardAgentRequestDto,
 } from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
-import { Resource, ResourceType } from 'src/resources/resources.entity';
+import { Resource } from 'src/resources/resources.entity';
 import { ChatResponse } from 'src/wizard/dto/chat-response.dto';
 
 interface HandlerContext {
@@ -233,7 +233,7 @@ export class StreamService {
               )),
             );
             for (const resource of tool.resources) {
-              if (resource.resource_type === ResourceType.FOLDER) {
+              if (resource.type === 'folder') {
                 const resources: Resource[] =
                   await this.resourcesService.getAllSubResources(
                     tool.namespace_id,

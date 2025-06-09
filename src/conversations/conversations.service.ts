@@ -233,6 +233,10 @@ export class ConversationsService {
     return await this.conversationRepository.softDelete(id);
   }
 
+  async deleteRecovery(id: string) {
+    return await this.conversationRepository.restore(id);
+  }
+
   async get(id: string) {
     return await this.conversationRepository.findOne({
       where: { id },

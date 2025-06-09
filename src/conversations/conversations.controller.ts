@@ -67,12 +67,12 @@ export class ConversationsController {
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
+  async remove(@Param('id') id: string) {
     return await this.conversationsService.remove(id);
   }
 
   @Post(':id/recovery')
-  async deleteRecovery(@Param('id') id: string) {
-    return await this.conversationsService.deleteRecovery(id);
+  async recovery(@Param('id') id: string) {
+    return await this.conversationsService.recovery(id);
   }
 }

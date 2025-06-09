@@ -109,10 +109,9 @@ export class StreamService {
         if (!context.messageId) {
           throw new Error('Message ID is not set in context');
         }
-        const message: Message = await this.messagesService.updateOpenAIMessage(
+        const message: Message = await this.messagesService.updateDelta(
           context.messageId,
-          chunk.message,
-          chunk.attrs,
+          chunk,
         );
 
         context.message = message.message;
@@ -133,6 +132,18 @@ export class StreamService {
       } else if (chunk.response_type === 'done') {
         // Do nothing, this is the end of the stream
       } else if (chunk.response_type === 'error') {
+        if (context.messageId) {
+          await this.messagesService.update(
+            context.messageId,
+            namespaceId,
+            conversationId,
+            {
+              status: MessageStatus.FAILED,
+            },
+            true,
+          );
+        }
+
         const err = new Error(chunk.message || 'Unknown error');
         err.name = 'AgentError';
         throw err;
@@ -143,17 +154,6 @@ export class StreamService {
         subscriber.next({ data: JSON.stringify(chunk) });
       }
     };
-  }
-
-  chatStream(body: Record<string, any>): Observable<MessageEvent> {
-    return new Observable<MessageEvent>((subscriber) => {
-      this.stream('/api/v1/wizard/stream', body, (data) => {
-        subscriber.next({ data });
-        return Promise.resolve();
-      })
-        .then(() => subscriber.complete())
-        .catch((err) => subscriber.error(err));
-    });
   }
 
   findOneOrFail(messages: Message[], messageId: string): Message {

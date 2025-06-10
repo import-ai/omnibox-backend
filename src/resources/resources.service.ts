@@ -263,16 +263,13 @@ export class ResourcesService {
   }
 
   async restore(user: User, id: string) {
-    const resource = await this.resourceRepository.findOne({
+    const resource = await this.resourceRepository.findOneOrFail({
       withDeleted: true,
       relations: ['namespace'],
       where: {
         id,
       },
     });
-    if (!resource) {
-      throw new NotFoundException('Resource not found.');
-    }
     if (resource.parentId === null) {
       throw new BadRequestException('Cannot restore root resource.');
     }

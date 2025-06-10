@@ -164,23 +164,15 @@ export class StreamService {
     return message;
   }
 
-  getMessages(
-    allMessages: Message[],
-    parentMessageId: string,
-  ): { messages: Record<string, any>[]; currentCiteCnt: number } {
+  getMessages(allMessages: Message[], parentMessageId: string): Message[] {
     const messages: Message[] = [];
-    let currentCiteCnt: number = 0;
     let parentId: string | undefined = parentMessageId;
     while (parentId) {
       const message = this.findOneOrFail(allMessages, parentId);
-      const attrs = message.attrs as { citations: Record<string, any>[] };
-      if (attrs?.citations) {
-        currentCiteCnt += attrs.citations.length;
-      }
       messages.unshift(message);
       parentId = message.parentId;
     }
-    return { messages: messages.map((m) => m.message), currentCiteCnt };
+    return messages;
   }
 
   streamError(subscriber: Subscriber<MessageEvent>, err: Error) {
@@ -199,17 +191,14 @@ export class StreamService {
     mode: 'ask' | 'write' = 'ask',
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
-    let messages: Record<string, any>[] = [];
-    let currentCiteCnt: number = 0;
+    let messages: Message[] = [];
     if (body.parent_message_id) {
       parentId = body.parent_message_id;
       const allMessages = await this.messagesService.findAll(
         user.id,
         body.conversation_id,
       );
-      const buf = this.getMessages(allMessages, parentId);
-      messages = buf.messages;
-      currentCiteCnt = buf.currentCiteCnt;
+      messages = this.getMessages(allMessages, parentId);
     }
 
     if (body.tools) {
@@ -269,7 +258,6 @@ export class StreamService {
         messages,
         tools: body.tools,
         enable_thinking: body.enable_thinking,
-        current_cite_cnt: currentCiteCnt,
       };
 
       this.stream(`/api/v1/wizard/${mode}`, wizardRequestBody, async (data) => {

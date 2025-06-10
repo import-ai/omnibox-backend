@@ -16,12 +16,6 @@ export class WizardController {
     return await this.wizardService.collect(req.user, data);
   }
 
-  @Post('chat/stream')
-  @Sse()
-  chat(@Body() body: Record<string, any>) {
-    return this.wizardService.streamService.chatStream(body);
-  }
-
   @Post('ask')
   @Sse()
   async ask(@Req() req, @Body() body: AgentRequestDto) {

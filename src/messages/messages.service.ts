@@ -9,6 +9,7 @@ import {
 import { CreateMessageDto } from 'src/messages/dto/create-message.dto';
 import { User } from 'src/user/user.entity';
 import { SearchService } from 'src/search/search.service';
+import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
 
 @Injectable()
 export class MessagesService {
@@ -74,11 +75,9 @@ export class MessagesService {
     return delta ? (source || '') + delta : source;
   }
 
-  async updateOpenAIMessage(
-    id: string,
-    deltaMessage: Partial<OpenAIMessage>,
-    attrs?: Record<string, any>,
-  ) {
+  async updateDelta(id: string, delta: ChatDeltaResponse) {
+    const deltaMessage: Partial<OpenAIMessage> = delta.message;
+
     const message = await this.messageRepository.findOneOrFail({
       where: { id },
     });
@@ -100,9 +99,9 @@ export class MessagesService {
     }
     // <<< OpenAI Message
     message.status = MessageStatus.STREAMING;
-    if (attrs) {
+    if (delta.attrs) {
       message.attrs = message.attrs || {};
-      Object.assign(message.attrs, attrs);
+      Object.assign(message.attrs, delta.attrs);
     }
     return await this.messageRepository.save(message);
   }

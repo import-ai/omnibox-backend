@@ -1,3 +1,4 @@
+import { Message } from 'src/messages/entities/message.entity';
 export type FloatPair = [number, number];
 
 export interface ToolDto {
@@ -36,6 +37,5 @@ export interface AgentRequestDto extends BaseAgentRequestDto {
 }
 
 export interface WizardAgentRequestDto extends BaseAgentRequestDto {
-  messages: Record<string, any>[];
-  current_cite_cnt: number;
+  messages: Message[];
 }

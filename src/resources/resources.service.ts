@@ -260,11 +260,19 @@ export class ResourcesService {
         manager.getRepository(Task),
       );
     });
-    await this.resourceRepository.softDelete(id); // Delete itself
   }
 
   async restore(user: User, id: string) {
-    const resource = await this.get(id);
+    const resource = await this.resourceRepository.findOne({
+      withDeleted: true,
+      relations: ['namespace'],
+      where: {
+        id,
+      },
+    });
+    if (!resource) {
+      throw new NotFoundException('Resource not found.');
+    }
     if (resource.parentId === null) {
       throw new BadRequestException('Cannot restore root resource.');
     }
@@ -276,7 +284,7 @@ export class ResourcesService {
         manager.getRepository(Task),
       );
     });
-    await this.resourceRepository.restore(id);
+    return await this.get(id);
   }
 
   async uploadFile(

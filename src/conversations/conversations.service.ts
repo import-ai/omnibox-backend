@@ -234,7 +234,8 @@ export class ConversationsService {
   }
 
   async restore(id: string) {
-    return await this.conversationRepository.restore(id);
+    await this.conversationRepository.restore(id);
+    return await this.get(id);
   }
 
   async get(id: string) {

@@ -71,8 +71,8 @@ export class ConversationsController {
     return await this.conversationsService.remove(id);
   }
 
-  @Post(':id/recovery')
-  async recovery(@Param('id') id: string) {
-    return await this.conversationsService.recovery(id);
+  @Post(':id/restore')
+  async restore(@Param('id') id: string) {
+    return await this.conversationsService.restore(id);
   }
 }

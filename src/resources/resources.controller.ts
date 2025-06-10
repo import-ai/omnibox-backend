@@ -135,9 +135,9 @@ export class ResourcesController {
     return await this.resourcesService.delete(req.user, resourceId);
   }
 
-  @Post(':resourceId/recovery')
-  async recovery(@Req() req, @Param('resourceId') resourceId: string) {
-    return await this.resourcesService.recovery(req.user, resourceId);
+  @Post(':resourceId/restore')
+  async restore(@Req() req, @Param('resourceId') resourceId: string) {
+    return await this.resourcesService.restore(req.user, resourceId);
   }
 
   @Post('files')

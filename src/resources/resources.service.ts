@@ -263,10 +263,10 @@ export class ResourcesService {
     await this.resourceRepository.softDelete(id); // Delete itself
   }
 
-  async recovery(user: User, id: string) {
+  async restore(user: User, id: string) {
     const resource = await this.get(id);
     if (resource.parentId === null) {
-      throw new BadRequestException('Cannot recovery root resource.');
+      throw new BadRequestException('Cannot restore root resource.');
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.restore(Resource, id);

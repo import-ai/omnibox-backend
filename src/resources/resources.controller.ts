@@ -135,6 +135,11 @@ export class ResourcesController {
     return await this.resourcesService.delete(req.user, resourceId);
   }
 
+  @Post(':resourceId/restore')
+  async restore(@Req() req, @Param('resourceId') resourceId: string) {
+    return await this.resourcesService.restore(req.user, resourceId);
+  }
+
   @Post('files')
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(

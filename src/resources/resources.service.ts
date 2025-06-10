@@ -260,7 +260,28 @@ export class ResourcesService {
         manager.getRepository(Task),
       );
     });
-    await this.resourceRepository.softDelete(id); // Delete itself
+  }
+
+  async restore(user: User, id: string) {
+    const resource = await this.resourceRepository.findOneOrFail({
+      withDeleted: true,
+      relations: ['namespace'],
+      where: {
+        id,
+      },
+    });
+    if (resource.parentId === null) {
+      throw new BadRequestException('Cannot restore root resource.');
+    }
+    await this.dataSource.transaction(async (manager) => {
+      await manager.restore(Resource, id);
+      await WizardTask.index.upsert(
+        user,
+        resource,
+        manager.getRepository(Task),
+      );
+    });
+    return await this.get(id);
   }
 
   async uploadFile(

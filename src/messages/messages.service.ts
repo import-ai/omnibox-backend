@@ -30,7 +30,7 @@ export class MessagesService {
   ) {
     if (index) {
       WizardTask.index
-        .upsertMessage(
+        .upsertMessageIndex(
           namespaceId,
           conversationId,
           message,

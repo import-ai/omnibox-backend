@@ -38,7 +38,7 @@ export class Index {
     return await repo.save(task);
   }
 
-  static async upsertMessage(
+  static async upsertMessageIndex(
     namespaceId: string,
     conversationId: string,
     message: Message,

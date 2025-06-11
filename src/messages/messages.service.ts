@@ -8,15 +8,18 @@ import {
 } from 'src/messages/entities/message.entity';
 import { CreateMessageDto } from 'src/messages/dto/create-message.dto';
 import { User } from 'src/user/user.entity';
-import { SearchService } from 'src/search/search.service';
 import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
+import { Task } from 'src/tasks/tasks.entity';
+import { WizardTask } from 'src/resources/wizard.task.service';
 
 @Injectable()
 export class MessagesService {
   constructor(
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
-    private readonly searchService: SearchService,
+
+    @InjectRepository(Task)
+    private readonly taskRepository: Repository<Task>,
   ) {}
 
   index(
@@ -26,8 +29,13 @@ export class MessagesService {
     message: Message,
   ) {
     if (index) {
-      this.searchService
-        .addMessage(namespaceId, conversationId, message)
+      WizardTask.index
+        .upsertMessage(
+          namespaceId,
+          conversationId,
+          message,
+          this.taskRepository,
+        )
         .catch((err) => {
           console.error('Failed to index message:', err);
         });

@@ -39,13 +39,11 @@ export class WizardAPIService {
 
   async search(req: SearchRequestDto): Promise<SearchResponseDto> {
     const resp = await this.request(
-      'GET',
+      'POST',
       '/internal/api/v1/wizard/search',
       instanceToPlain(req),
       {},
     );
-    return plainToInstance(SearchResponseDto, resp, {
-      enableImplicitConversion: true,
-    });
+    return plainToInstance(SearchResponseDto, resp);
   }
 }

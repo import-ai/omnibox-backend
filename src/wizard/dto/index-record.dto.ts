@@ -30,9 +30,11 @@ export class ChunkDto {
   chunkId: string;
 
   @Expose({ name: 'created_at' })
+  @Type(() => Date)
   createdAt: Date;
 
   @Expose({ name: 'updated_at' })
+  @Type(() => Date)
   updatedAt: Date;
 
   @Expose({ name: 'start_index' })

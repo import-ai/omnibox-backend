@@ -33,12 +33,11 @@ export class SearchService {
     type?: DocType,
     userId?: string,
   ) {
-    const searchRequest: SearchRequestDto = {
-      query,
-      namespaceId,
-      userId,
-      limit: 100,
-    };
+    const searchRequest = new SearchRequestDto();
+    searchRequest.query = query;
+    searchRequest.namespaceId = namespaceId;
+    searchRequest.userId = userId;
+    searchRequest.limit = 100;
     if (type === DocType.RESOURCE) {
       searchRequest.type = IndexRecordType.CHUNK;
     }

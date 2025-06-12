@@ -1,3 +1,7 @@
+import { instanceToPlain, plainToInstance } from 'class-transformer';
+import { SearchRequestDto } from './dto/search-request.dto';
+import { SearchResponseDto } from './dto/search-response.dto';
+
 export class WizardAPIService {
   constructor(private readonly wizardBaseUrl: string) {}
 
@@ -31,5 +35,15 @@ export class WizardAPIService {
       body: JSON.stringify(req.body),
     });
     return response.json();
+  }
+
+  async search(req: SearchRequestDto): Promise<SearchResponseDto> {
+    const resp = await this.request(
+      'POST',
+      '/internal/api/v1/wizard/search',
+      instanceToPlain(req),
+      {},
+    );
+    return plainToInstance(SearchResponseDto, resp);
   }
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
   Message,
   MessageStatus,
@@ -17,28 +17,23 @@ export class MessagesService {
   constructor(
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
-
-    @InjectRepository(Task)
-    private readonly taskRepository: Repository<Task>,
+    private readonly dataSource: DataSource,
   ) {}
 
-  index(
+  async index(
     index: boolean,
     namespaceId: string,
     conversationId: string,
     message: Message,
+    manager: EntityManager,
   ) {
     if (index) {
-      WizardTask.index
-        .upsertMessageIndex(
-          namespaceId,
-          conversationId,
-          message,
-          this.taskRepository,
-        )
-        .catch((err) => {
-          console.error('Failed to index message:', err);
-        });
+      await WizardTask.index.upsertMessageIndex(
+        namespaceId,
+        conversationId,
+        message,
+        manager.getRepository(Task),
+      );
     }
   }
 
@@ -56,9 +51,11 @@ export class MessagesService {
       parentId: dto.parentId,
       attrs: dto.attrs,
     });
-    const savedMsg = await this.messageRepository.save(message);
-    this.index(index, namespaceId, conversationId, savedMsg);
-    return savedMsg;
+    return await this.dataSource.transaction(async (manager) => {
+      const savedMsg = await manager.save(message);
+      await this.index(index, namespaceId, conversationId, savedMsg, manager);
+      return savedMsg;
+    });
   }
 
   async update(
@@ -74,9 +71,11 @@ export class MessagesService {
     }
     const message = await this.messageRepository.findOneOrFail(condition);
     Object.assign(message, dto);
-    const updatedMsg = await this.messageRepository.save(message);
-    this.index(index, namespaceId, conversationId, message);
-    return updatedMsg;
+    return await this.dataSource.transaction(async (manager) => {
+      const updatedMsg = await manager.save(message);
+      await this.index(index, namespaceId, conversationId, message, manager);
+      return updatedMsg;
+    });
   }
 
   add(source?: string, delta?: string): string | undefined {

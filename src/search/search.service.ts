@@ -10,13 +10,22 @@ import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { WizardAPIService } from 'src/wizard/api.wizard.service';
 import { SearchRequestDto } from 'src/wizard/dto/search-request.dto';
 import { IndexRecordType } from 'src/wizard/dto/index-record.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SearchService {
+  private readonly wizardApiService: WizardAPIService;
+
   constructor(
     private readonly permissionsService: PermissionsService,
-    private readonly wizardService: WizardAPIService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
+    if (!baseUrl) {
+      throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
+    }
+    this.wizardApiService = new WizardAPIService(baseUrl);
+  }
 
   async search(
     namespaceId: string,
@@ -36,7 +45,7 @@ export class SearchService {
     if (type === DocType.MESSAGE) {
       searchRequest.type = IndexRecordType.MESSAGE;
     }
-    const result = await this.wizardService.search(searchRequest);
+    const result = await this.wizardApiService.search(searchRequest);
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
     const seenConversationIds = new Set<string>();

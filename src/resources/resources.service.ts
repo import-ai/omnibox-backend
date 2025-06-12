@@ -89,9 +89,6 @@ export class ResourcesService {
       );
       return savedResource;
     });
-    this.searchService.addResource(savedResource).catch((err) => {
-      console.error('Failed to index resource:', err);
-    });
     return {
       ...savedResource,
       spaceType: await this.getSpaceType(savedResource),
@@ -238,9 +235,6 @@ export class ResourcesService {
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
     await WizardTask.index.upsert(user, savedNewResource, this.taskRepository);
-    this.searchService.addResource(savedNewResource).catch((err) => {
-      console.error('Failed to index resource:', err);
-    });
     return {
       ...savedNewResource,
       spaceType: await this.getSpaceType(savedNewResource),

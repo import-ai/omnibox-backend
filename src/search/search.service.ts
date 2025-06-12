@@ -1,14 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
-import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
+import {
+  IndexedDocDto,
+  IndexedMessageDto,
+  IndexedResourceDto,
+} from './dto/indexed-doc.dto';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
-
-const indexUid = 'omniboxIdx';
+import { WizardAPIService } from 'src/wizard/api.wizard.service';
+import { SearchRequestDto } from 'src/wizard/dto/search-request.dto';
+import { IndexRecordType } from 'src/wizard/dto/index-record.dto';
 
 @Injectable()
 export class SearchService {
-  constructor(private readonly permissionsService: PermissionsService) {}
+  constructor(
+    private readonly permissionsService: PermissionsService,
+    private readonly wizardService: WizardAPIService,
+  ) {}
 
   async search(
     namespaceId: string,
@@ -16,34 +24,33 @@ export class SearchService {
     type?: DocType,
     userId?: string,
   ) {
-    const filter = [`namespaceId = "${namespaceId}"`];
-    if (userId) {
-      filter.push(`userId NOT EXISTS OR userId = "${userId}"`);
-    }
-    if (type) {
-      filter.push(`type = "${type}"`);
-    }
-    const searchParams: SearchParams = {
-      filter,
-      showRankingScore: true,
+    const searchRequest: SearchRequestDto = {
+      query,
+      namespaceId,
+      userId,
+      limit: 100,
     };
-    if (query) {
-      searchParams.vector = await this.getEmbedding(query);
-      searchParams.hybrid = {
-        embedder: 'omniboxEmbed',
-      };
+    if (type === DocType.RESOURCE) {
+      searchRequest.type = IndexRecordType.CHUNK;
     }
-    const index = await this.meili.getIndex(indexUid);
-    const result = await index.search(query, searchParams);
+    if (type === DocType.MESSAGE) {
+      searchRequest.type = IndexRecordType.MESSAGE;
+    }
+    const result = await this.wizardService.search(searchRequest);
     const items: IndexedDocDto[] = [];
-    if (userId) {
-      for (const hit of result.hits) {
-        hit.id = hit.id.replace(/^(message_|resource_)/, '');
-        if (hit.type === DocType.RESOURCE) {
-          const resource = hit as IndexedResourceDto;
+    const seenResourceIds = new Set<string>();
+    const seenConversationIds = new Set<string>();
+    for (const record of result.records) {
+      if (record.type === IndexRecordType.CHUNK) {
+        const chunk = record.chunk!;
+        if (seenResourceIds.has(chunk.resourceId)) {
+          continue;
+        }
+        seenResourceIds.add(chunk.resourceId);
+        if (userId) {
           const hasPermission = await this.permissionsService.userHasPermission(
             namespaceId,
-            resource.id,
+            chunk.resourceId,
             userId,
             PermissionLevel.CAN_VIEW,
           );
@@ -51,11 +58,29 @@ export class SearchService {
             continue;
           }
         }
-        items.push(hit as IndexedDocDto);
+        const resourceDto: IndexedResourceDto = {
+          type: DocType.RESOURCE,
+          id: record.id,
+          resourceId: chunk.resourceId,
+          title: chunk.title || 'Untitled',
+          content: chunk.text || '',
+        };
+        items.push(resourceDto);
+      } else if (record.type === IndexRecordType.MESSAGE) {
+        const message = record.message!;
+        if (seenConversationIds.has(message.conversationId)) {
+          continue;
+        }
+        seenConversationIds.add(message.conversationId);
+        const messageDto: IndexedMessageDto = {
+          type: DocType.MESSAGE,
+          id: record.id,
+          conversationId: message.conversationId,
+          content: message.message.content,
+        };
+        items.push(messageDto);
       }
     }
     return items;
   }
-
-  async wizardSearch() {}
 }

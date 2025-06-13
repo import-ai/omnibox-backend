@@ -244,4 +244,12 @@ export class ConversationsService {
       relations: ['namespace'],
     });
   }
+
+  async listAll(offset: number, limit: number) {
+    return await this.conversationRepository.find({
+      skip: offset,
+      take: limit,
+      relations: ['user', 'namespace'],
+    });
+  }
 }

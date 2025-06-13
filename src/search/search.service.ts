@@ -11,6 +11,15 @@ import { WizardAPIService } from 'src/wizard/api.wizard.service';
 import { SearchRequestDto } from 'src/wizard/dto/search-request.dto';
 import { IndexRecordType } from 'src/wizard/dto/index-record.dto';
 import { ConfigService } from '@nestjs/config';
+import { ResourcesService } from 'src/resources/resources.service';
+import { Repository } from 'typeorm';
+import { Task } from 'src/tasks/tasks.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Index } from 'src/resources/wizard-task/index.service';
+import { MessagesService } from 'src/messages/messages.service';
+import { ConversationsService } from 'src/conversations/conversations.service';
+
+const TASK_PRIORITY = 4;
 
 @Injectable()
 export class SearchService {
@@ -18,7 +27,13 @@ export class SearchService {
 
   constructor(
     private readonly permissionsService: PermissionsService,
+    private readonly resourcesService: ResourcesService,
+    private readonly messagesService: MessagesService,
+    private readonly conversationsService: ConversationsService,
     private readonly configService: ConfigService,
+
+    @InjectRepository(Task)
+    private readonly taskRepository: Repository<Task>,
   ) {
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -90,5 +105,59 @@ export class SearchService {
       }
     }
     return items;
+  }
+
+  async refreshResourceIndex() {
+    const limit = 100;
+    let offset = 0;
+    while (true) {
+      const resources = await this.resourcesService.listAllResources(
+        offset,
+        limit,
+      );
+      if (resources.length === 0) {
+        break;
+      }
+      offset += resources.length;
+      for (const resource of resources) {
+        await Index.upsert(
+          TASK_PRIORITY,
+          resource.user,
+          resource,
+          this.taskRepository,
+        );
+      }
+    }
+  }
+
+  async refreshMessageIndex() {
+    const limit = 100;
+    let offset = 0;
+    while (true) {
+      const conversations = await this.conversationsService.listAll(
+        offset,
+        limit,
+      );
+      if (conversations.length === 0) {
+        break;
+      }
+      offset += conversations.length;
+      for (const conversation of conversations) {
+        const messages = await this.messagesService.findAll(
+          conversation.user.id,
+          conversation.id,
+        );
+        for (const message of messages) {
+          await Index.upsertMessageIndex(
+            TASK_PRIORITY,
+            conversation.user.id,
+            conversation.namespace.id,
+            conversation.id,
+            message,
+            this.taskRepository,
+          );
+        }
+      }
+    }
   }
 }

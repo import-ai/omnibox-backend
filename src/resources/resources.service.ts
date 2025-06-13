@@ -22,7 +22,6 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
-import { SearchService } from 'src/search/search.service';
 
 export interface IQuery {
   namespaceId: string;
@@ -39,6 +38,8 @@ function decode(text: string) {
   return decodeURIComponent(Buffer.from(text, 'binary').toString('utf-8'));
 }
 
+const TASK_PRIORITY = 5;
+
 @Injectable()
 export class ResourcesService {
   constructor(
@@ -49,7 +50,6 @@ export class ResourcesService {
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
-    private readonly searchService: SearchService,
   ) {}
 
   async create(user: User, data: CreateResourceDto) {
@@ -83,6 +83,7 @@ export class ResourcesService {
       });
       const savedResource = await repo.save(resource);
       await WizardTask.index.upsert(
+        TASK_PRIORITY,
         user,
         savedResource,
         manager.getRepository(Task),
@@ -234,7 +235,12 @@ export class ResourcesService {
       namespace: { id: data.namespaceId },
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
-    await WizardTask.index.upsert(user, savedNewResource, this.taskRepository);
+    await WizardTask.index.upsert(
+      TASK_PRIORITY,
+      user,
+      savedNewResource,
+      this.taskRepository,
+    );
     return {
       ...savedNewResource,
       spaceType: await this.getSpaceType(savedNewResource),
@@ -270,6 +276,7 @@ export class ResourcesService {
     await this.dataSource.transaction(async (manager) => {
       await manager.restore(Resource, id);
       await WizardTask.index.upsert(
+        TASK_PRIORITY,
         user,
         resource,
         manager.getRepository(Task),
@@ -365,5 +372,13 @@ export class ResourcesService {
       userId,
       resources.filter((res) => res.parentId !== null || includeRoot),
     );
+  }
+
+  async listAllResources(offset: number, limit: number) {
+    return await this.resourceRepository.find({
+      skip: offset,
+      take: limit,
+      relations: ['namespace', 'user'],
+    });
   }
 }

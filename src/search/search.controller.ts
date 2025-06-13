@@ -5,7 +5,7 @@ import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/search')
 export class SearchController {
-  constructor(private readonly searchService: SearchService) { }
+  constructor(private readonly searchService: SearchService) {}
 
   @Get()
   async search(
@@ -25,12 +25,11 @@ export class SearchController {
 
 @Controller('internal/api/v1')
 export class InternalSearchController {
-  constructor(private readonly searchService: SearchService) { }
+  constructor(private readonly searchService: SearchService) {}
 
   @Public()
   @Post('refresh_index')
-  async search(
-  ) {
+  async search() {
     await this.searchService.refreshResourceIndex();
     await this.searchService.refreshMessageIndex();
   }

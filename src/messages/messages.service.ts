@@ -12,6 +12,8 @@ import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
 import { Task } from 'src/tasks/tasks.entity';
 import { WizardTask } from 'src/resources/wizard.task.service';
 
+const TASK_PRIORITY = 5;
+
 @Injectable()
 export class MessagesService {
   constructor(
@@ -30,6 +32,7 @@ export class MessagesService {
   ) {
     if (index) {
       await WizardTask.index.upsertMessageIndex(
+        TASK_PRIORITY,
         userId,
         namespaceId,
         conversationId,

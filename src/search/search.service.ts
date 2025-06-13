@@ -19,6 +19,8 @@ import { Index } from 'src/resources/wizard-task/index.service';
 import { MessagesService } from 'src/messages/messages.service';
 import { ConversationsService } from 'src/conversations/conversations.service';
 
+const TASK_PRIORITY = 4;
+
 @Injectable()
 export class SearchService {
   private readonly wizardApiService: WizardAPIService;
@@ -118,7 +120,12 @@ export class SearchService {
       }
       offset += resources.length;
       for (const resource of resources) {
-        await Index.upsert(resource.user, resource, this.taskRepository);
+        await Index.upsert(
+          TASK_PRIORITY,
+          resource.user,
+          resource,
+          this.taskRepository,
+        );
       }
     }
   }
@@ -142,6 +149,7 @@ export class SearchService {
         );
         for (const message of messages) {
           await Index.upsertMessageIndex(
+            TASK_PRIORITY,
             conversation.user.id,
             conversation.namespace.id,
             conversation.id,

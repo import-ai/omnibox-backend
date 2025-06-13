@@ -29,7 +29,7 @@ export class InternalSearchController {
 
   @Public()
   @Post('refresh_index')
-  async search() {
+  async refreshIndex() {
     await this.searchService.refreshResourceIndex();
     await this.searchService.refreshMessageIndex();
   }

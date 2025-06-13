@@ -364,4 +364,12 @@ export class ResourcesService {
       resources.filter((res) => res.parentId !== null || includeRoot),
     );
   }
+
+  async listAllResources(offset: number, limit: number) {
+    return await this.resourceRepository.find({
+      skip: offset,
+      take: limit,
+      relations: ['namespace', 'user'],
+    });
+  }
 }

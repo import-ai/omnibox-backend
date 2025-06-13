@@ -22,6 +22,7 @@ export class MessagesService {
 
   async index(
     index: boolean,
+    userId: string,
     namespaceId: string,
     conversationId: string,
     message: Message,
@@ -29,6 +30,7 @@ export class MessagesService {
   ) {
     if (index) {
       await WizardTask.index.upsertMessageIndex(
+        userId,
         namespaceId,
         conversationId,
         message,
@@ -53,7 +55,14 @@ export class MessagesService {
     });
     return await this.dataSource.transaction(async (manager) => {
       const savedMsg = await manager.save(message);
-      await this.index(index, namespaceId, conversationId, savedMsg, manager);
+      await this.index(
+        index,
+        user.id,
+        namespaceId,
+        conversationId,
+        savedMsg,
+        manager,
+      );
       return savedMsg;
     });
   }
@@ -73,7 +82,14 @@ export class MessagesService {
     Object.assign(message, dto);
     return await this.dataSource.transaction(async (manager) => {
       const updatedMsg = await manager.save(message);
-      await this.index(index, namespaceId, conversationId, message, manager);
+      await this.index(
+        index,
+        message.user.id,
+        namespaceId,
+        conversationId,
+        message,
+        manager,
+      );
       return updatedMsg;
     });
   }

@@ -39,6 +39,7 @@ export class Index {
   }
 
   static async upsertMessageIndex(
+    userId: string,
     namespaceId: string,
     conversationId: string,
     message: Message,
@@ -52,7 +53,7 @@ export class Index {
         message: message.message,
       },
       namespace: { id: namespaceId },
-      user: { id: message.user.id },
+      user: { id: userId },
     });
     return await repo.save(task);
   }

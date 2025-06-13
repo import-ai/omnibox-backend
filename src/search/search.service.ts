@@ -91,4 +91,6 @@ export class SearchService {
     }
     return items;
   }
+
+  async refreshIndex() {}
 }

@@ -22,7 +22,6 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
-import { SearchService } from 'src/search/search.service';
 
 export interface IQuery {
   namespaceId: string;
@@ -49,7 +48,6 @@ export class ResourcesService {
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
-    private readonly searchService: SearchService,
   ) {}
 
   async create(user: User, data: CreateResourceDto) {

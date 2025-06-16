@@ -94,4 +94,9 @@ export class NamespacesController {
   async delete(@Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.delete(namespaceId);
   }
+
+  @Post(':namespaceId/invite_link')
+  async createInviteLink(@Req() req, @Param('namespaceId') namespaceId: string) {
+    // todo
+  }
 }

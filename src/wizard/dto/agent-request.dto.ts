@@ -16,7 +16,7 @@ export interface PrivateSearchToolDto extends ToolDto {
   name: 'private_search';
   namespace_id: string;
   resources?: PrivateSearchResourceDto[];
-  visible_resource_ids?: string[];
+  visible_resources?: PrivateSearchResourceDto[];
 }
 
 export interface WebSearchToolDto extends ToolDto {

@@ -22,6 +22,7 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
+import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
 
 export interface IQuery {
   namespaceId: string;
@@ -111,11 +112,9 @@ export class ResourcesService {
     return await this.create(user, newResource);
   }
 
-  async permissionFilter<T extends string | Resource>(
-    namespaceId: string,
-    userId: string,
-    resources: T[],
-  ): Promise<T[]> {
+  async permissionFilter<
+    T extends string | Resource | PrivateSearchResourceDto,
+  >(namespaceId: string, userId: string, resources: T[]): Promise<T[]> {
     const filtered: T[] = [];
     for (const res of resources) {
       const resourceId: string = typeof res === 'string' ? res : res.id;

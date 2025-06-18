@@ -10,6 +10,7 @@ import {
 } from 'src/messages/entities/message.entity';
 import {
   AgentRequestDto,
+  PrivateSearchResourceDto,
   WizardAgentRequestDto,
 } from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
@@ -211,14 +212,20 @@ export class StreamService {
                 tool.namespace_id,
                 user.id,
               );
-            tool.visible_resource_ids = resources.map((r) => r.id);
+            tool.visible_resources = resources.map((r) => {
+              return {
+                id: r.id,
+                name: r.name || '',
+                type: r.resourceType === 'folder' ? 'folder' : 'resource',
+              } as PrivateSearchResourceDto;
+            });
           } else {
-            tool.visible_resource_ids = [];
-            tool.visible_resource_ids.push(
-              ...(await this.resourcesService.permissionFilter<string>(
+            tool.visible_resources = [];
+            tool.visible_resources.push(
+              ...(await this.resourcesService.permissionFilter<PrivateSearchResourceDto>(
                 tool.namespace_id,
                 user.id,
-                tool.resources.map((r) => r.id),
+                tool.resources,
               )),
             );
             for (const resource of tool.resources) {
@@ -231,7 +238,15 @@ export class StreamService {
                     false,
                   );
                 resource.child_ids = resources.map((r) => r.id);
-                tool.visible_resource_ids.push(...resource.child_ids);
+                tool.visible_resources.push(
+                  ...resources.map((r) => {
+                    return {
+                      id: r.id,
+                      name: r.name || '',
+                      type: r.resourceType === 'folder' ? 'folder' : 'resource',
+                    } as PrivateSearchResourceDto;
+                  }),
+                );
               }
             }
           }

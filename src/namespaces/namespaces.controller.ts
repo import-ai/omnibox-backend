@@ -96,7 +96,10 @@ export class NamespacesController {
   }
 
   @Post(':namespaceId/invite_link')
-  async createInviteLink(@Req() req, @Param('namespaceId') namespaceId: string) {
+  async createInviteLink(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+  ) {
     // todo
   }
 }

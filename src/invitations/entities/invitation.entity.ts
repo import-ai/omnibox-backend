@@ -15,7 +15,10 @@ import {
 } from 'typeorm';
 
 @Entity('invitations')
-@Index(['namespace'], { unique: true, where: 'deleted_at IS NULL AND group_id IS NULL' })
+@Index(['namespace'], {
+  unique: true,
+  where: 'deleted_at IS NULL AND group_id IS NULL',
+})
 @Index(['namespace', 'group'], { unique: true, where: 'deleted_at IS NULL' })
 export class Invitation extends Base {
   @PrimaryColumn()

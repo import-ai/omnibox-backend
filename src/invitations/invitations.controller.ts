@@ -1,13 +1,32 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { InvitationsService } from './invitations.service';
+import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
 
 @Controller('api/v1/namespaces/:namespaceId')
 export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
-  @Get('invitation_links')
-  async listInvitationLinks() {}
+  @Get('invitations')
+  async listInvitations(@Param('namespaceId') namespaceId: string) {
+    return await this.invitationsService.listInvitations(namespaceId);
+  }
 
-  @Post('invitation_links')
-  async createInvitationLink() {}
+  @Post('invitations')
+  async createInvitation(
+    @Param('namespaceId') namespaceId: string,
+    @Body() req: CreateInvitationReqDto,
+  ) {
+    return await this.invitationsService.createInvitation(namespaceId, req);
+  }
+
+  @Delete('invitations/:invitationId')
+  async deleteInvitation(
+    @Param('namespaceId') namespaceId: string,
+    @Param('invitationId') invitationId: string,
+  ) {
+    return await this.invitationsService.deleteInvitation(
+      namespaceId,
+      invitationId,
+    );
+  }
 }

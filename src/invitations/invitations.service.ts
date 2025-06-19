@@ -90,7 +90,13 @@ export class InvitationsService {
     return invitationDto;
   }
 
-  async deleteInvitation(invitationId: string): Promise<void> {
-    await this.invitationsRepository.delete(invitationId);
+  async deleteInvitation(
+    namespaceId: string,
+    invitationId: string,
+  ): Promise<void> {
+    await this.invitationsRepository.delete({
+      id: invitationId,
+      namespace: { id: namespaceId },
+    });
   }
 }

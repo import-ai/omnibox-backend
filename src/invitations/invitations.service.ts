@@ -1,9 +1,11 @@
 import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Invitation } from './entities/invitation.entity';
-import { Repository } from 'typeorm';
-import { InvitationDto, ListRespDto } from './dto/list-resp.dto';
+import { FindOptionsWhere, IsNull, Not, Repository } from 'typeorm';
+import { InvitationDto } from './dto/invitation.dto';
 import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
+import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 @Injectable()
 export class InvitationsService {
@@ -12,15 +14,23 @@ export class InvitationsService {
     private readonly invitationsRepository: Repository<Invitation>,
   ) {}
 
-  async listInvitations(namespaceId: string): Promise<ListRespDto> {
+  async listInvitations(
+    namespaceId: string,
+    type?: string,
+  ): Promise<InvitationDto[]> {
+    const where: FindOptionsWhere<Invitation> = {
+      namespace: { id: namespaceId },
+    };
+    if (type === 'group') {
+      where.group = Not(IsNull());
+    } else if (type === 'namespace') {
+      where.group = IsNull();
+    }
     const invitations = await this.invitationsRepository.find({
-      where: {
-        namespace: { id: namespaceId },
-      },
+      where,
       relations: ['group'],
     });
-    const resp = new ListRespDto();
-    for (const invitation of invitations) {
+    return invitations.map((invitation) => {
       const invitationDto: InvitationDto = {
         id: invitation.id,
         namespaceRole: invitation.namespaceRole,
@@ -33,9 +43,8 @@ export class InvitationsService {
           title: invitation.group.title,
         };
       }
-      resp.invitations.push(invitationDto);
-    }
-    return resp;
+      return invitationDto;
+    });
   }
 
   async getInvitation(
@@ -73,6 +82,15 @@ export class InvitationsService {
   ): Promise<InvitationDto> {
     if (await this.getInvitation(namespaceId, req.groupId)) {
       throw new UnprocessableEntityException('Invitation already exists');
+    }
+    if (req.groupId) {
+      req.namespaceRole = NamespaceRole.MEMBER;
+      req.rootPermissionLevel = PermissionLevel.NO_ACCESS;
+    }
+    if (!req.namespaceRole || !req.rootPermissionLevel) {
+      throw new UnprocessableEntityException(
+        'Namespace role and root permission level are required',
+      );
     }
     const invitation = await this.invitationsRepository.save(
       this.invitationsRepository.create({

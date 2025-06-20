@@ -1,4 +1,12 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { InvitationsService } from './invitations.service';
 import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
 
@@ -7,7 +15,10 @@ export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
   @Get('invitations')
-  async listInvitations(@Param('namespaceId') namespaceId: string) {
+  async listInvitations(
+    @Param('namespaceId') namespaceId: string,
+    @Query('type') type: string,
+  ) {
     return await this.invitationsService.listInvitations(namespaceId);
   }
 

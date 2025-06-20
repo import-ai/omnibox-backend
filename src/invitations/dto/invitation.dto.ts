@@ -8,7 +8,3 @@ export class InvitationDto {
   rootPermissionLevel: PermissionLevel;
   group?: GroupDto;
 }
-
-export class ListRespDto {
-  invitations: InvitationDto[];
-}

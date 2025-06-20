@@ -1,3 +1,4 @@
+import { Resource } from 'src/resources/resources.entity';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
@@ -73,6 +74,57 @@ export class ResourcesController {
       userId: req.user.id,
       tags,
     });
+  }
+
+  @Post(':resourceId/move/:targetId')
+  async move(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return await this.resourcesService.move({
+      userId: req.user.id,
+      namespaceId,
+      resourceId,
+      targetId,
+    });
+  }
+
+  @Get(':resourceId/search')
+  async search(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Query('name') name: string,
+  ) {
+    return await this.resourcesService.search({
+      namespaceId,
+      resourceId,
+      name,
+      userId: req.user.id,
+    });
+  }
+
+  @Get(':resourceId/path')
+  async path(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    const resources: Array<Resource> = [];
+    let currentResource = await this.resourcesService.get(resourceId);
+    while (currentResource && currentResource.parentId) {
+      resources.push(currentResource);
+      currentResource = await this.resourcesService.get(
+        currentResource.parentId,
+      );
+    }
+    return await this.resourcesService.permissionFilter(
+      namespaceId,
+      req.user.id,
+      resources,
+    );
   }
 
   @Get(':resourceId')

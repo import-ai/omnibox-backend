@@ -5,6 +5,8 @@ import {
   EntityManager,
   FindOptionsWhere,
   In,
+  Like,
+  Not,
   IsNull,
   Repository,
 } from 'typeorm';
@@ -13,6 +15,7 @@ import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -116,6 +119,9 @@ export class ResourcesService {
     T extends string | Resource | PrivateSearchResourceDto,
   >(namespaceId: string, userId: string, resources: T[]): Promise<T[]> {
     const filtered: T[] = [];
+    if (resources.length <= 0) {
+      return filtered;
+    }
     for (const res of resources) {
       const resourceId: string = typeof res === 'string' ? res : res.id;
       try {
@@ -172,6 +178,53 @@ export class ResourcesService {
     return filteredResources.map((res) => {
       return { ...res, spaceType };
     });
+  }
+
+  async move({ namespaceId, resourceId, targetId, userId }) {
+    const resourceHasPermission =
+      await this.permissionsService.userHasPermission(
+        namespaceId,
+        resourceId,
+        userId,
+      );
+    if (!resourceHasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const resource = await this.resourceRepository.findOneByOrFail({
+      id: resourceId,
+    });
+    const newResource = this.resourceRepository.create({
+      ...resource,
+      parentId: targetId,
+    });
+    await this.resourceRepository.save(newResource);
+  }
+
+  async search({ namespaceId, resourceId, name, userId }) {
+    // Self and child exclusions
+    const resourceChildren = await this.getAllSubResources(
+      namespaceId,
+      resourceId,
+      '',
+      true,
+    );
+    const where: any = {
+      user: { id: userId },
+      // Cannot move to root directory
+      parentId: Not(IsNull()),
+      namespace: { id: namespaceId },
+      id: Not(In(resourceChildren.map((children) => children.id))),
+    };
+    if (name) {
+      where.name = Like(`%${name}%`);
+    }
+    const resources = await this.resourceRepository.find({
+      where,
+      skip: 0,
+      take: 10,
+      order: { updatedAt: 'DESC' },
+    });
+    return await this.permissionFilter(namespaceId, userId, resources);
   }
 
   async getAllSubResources(

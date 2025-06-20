@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { InvitationsService } from './invitations.service';
 import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
@@ -17,9 +18,9 @@ export class InvitationsController {
   @Get('invitations')
   async listInvitations(
     @Param('namespaceId') namespaceId: string,
-    @Query('type') type: string,
+    @Query('type') type?: string,
   ) {
-    return await this.invitationsService.listInvitations(namespaceId);
+    return await this.invitationsService.listInvitations(namespaceId, type);
   }
 
   @Post('invitations')
@@ -36,6 +37,19 @@ export class InvitationsController {
     @Param('invitationId') invitationId: string,
   ) {
     return await this.invitationsService.deleteInvitation(
+      namespaceId,
+      invitationId,
+    );
+  }
+
+  @Post('invitations/:invitationId/accept')
+  async acceptInvitation(
+    @Req() req: any,
+    @Param('namespaceId') namespaceId: string,
+    @Param('invitationId') invitationId: string,
+  ) {
+    return await this.invitationsService.acceptInvitation(
+      req.user.id,
       namespaceId,
       invitationId,
     );

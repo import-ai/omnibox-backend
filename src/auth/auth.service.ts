@@ -275,16 +275,16 @@ export class AuthService {
   async handleInvitation(
     userId: string,
     invitation: InvitationDto,
-    manager: EntityManager,
+    manager?: EntityManager,
   ) {
-    const hasResource = invitation.resourceId && invitation.permissionLevel;
+    if (!manager) {
+      manager = this.dataSource.manager;
+    }
     await this.namespaceService.addMember(
       invitation.namespaceId,
       userId,
       invitation.namespaceRole,
-      invitation.groupId || hasResource
-        ? PermissionLevel.NO_ACCESS
-        : PermissionLevel.FULL_ACCESS,
+      getRootPermissionLevel(invitation),
       manager,
     );
     if (invitation.groupId) {
@@ -295,12 +295,12 @@ export class AuthService {
         manager,
       );
     }
-    if (hasResource) {
+    if (invitation.resourceId && invitation.permissionLevel) {
       await this.permissionsService.updateUserLevel(
         invitation.namespaceId,
-        invitation.resourceId!,
+        invitation.resourceId,
         userId,
-        invitation.permissionLevel!,
+        invitation.permissionLevel,
         manager,
       );
     }
@@ -314,4 +314,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }
+}
+
+function getRootPermissionLevel(invitation: InvitationDto): PermissionLevel {
+  if (invitation.groupId || invitation.resourceId) {
+    return PermissionLevel.NO_ACCESS;
+  }
+  return invitation.permissionLevel || PermissionLevel.FULL_ACCESS;
 }

@@ -6,12 +6,16 @@ import { InvitationDto } from './dto/invitation.dto';
 import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { AuthService } from 'src/auth/auth.service';
+import { InvitationDto as AuthInvitationDto } from 'src/auth/dto/invitation.dto';
 
 @Injectable()
 export class InvitationsService {
   constructor(
     @InjectRepository(Invitation)
     private readonly invitationsRepository: Repository<Invitation>,
+
+    private readonly authService: AuthService,
   ) {}
 
   async listInvitations(
@@ -54,7 +58,7 @@ export class InvitationsService {
     const invitation = await this.invitationsRepository.findOne({
       where: {
         namespace: { id: namespaceId },
-        group: groupId ? { id: groupId } : undefined,
+        group: groupId ? { id: groupId } : IsNull(),
       },
       relations: ['group'],
     });
@@ -116,5 +120,29 @@ export class InvitationsService {
       id: invitationId,
       namespace: { id: namespaceId },
     });
+  }
+
+  async acceptInvitation(
+    userId: string,
+    namespaceId: string,
+    invitationId: string,
+  ) {
+    const invitation = await this.invitationsRepository.findOne({
+      where: {
+        id: invitationId,
+        namespace: { id: namespaceId },
+      },
+      relations: ['group'],
+    });
+    if (!invitation) {
+      throw new UnprocessableEntityException('Invitation not found');
+    }
+    const invitationDto: AuthInvitationDto = {
+      namespaceId,
+      namespaceRole: invitation.namespaceRole,
+      permissionLevel: invitation.rootPermissionLevel,
+      groupId: invitation.group?.id,
+    };
+    await this.authService.handleInvitation(userId, invitationDto);
   }
 }

@@ -16,4 +16,8 @@ export class GroupDto {
   @Expose()
   @IsString()
   title: string;
+
+  @Expose()
+  @IsString()
+  invitationId?: string;
 }

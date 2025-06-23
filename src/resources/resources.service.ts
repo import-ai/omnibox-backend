@@ -1,5 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import duplicateName from 'src/utils/duplicate_name';
+import duplicateName from 'src/utils/duplicate-name';
+import encodeFileName from 'src/utils/encode-filename';
 import {
   DataSource,
   EntityManager,
@@ -33,13 +34,6 @@ export interface IQuery {
   parentId: string;
   userId: string;
   tags?: string;
-}
-
-function decode(text: string) {
-  if (!text) {
-    return text;
-  }
-  return decodeURIComponent(Buffer.from(text, 'binary').toString('utf-8'));
 }
 
 const TASK_PRIORITY = 5;
@@ -337,6 +331,85 @@ export class ResourcesService {
     return await this.get(id);
   }
 
+  async uploadFileChunk(
+    namespaceId: string,
+    chunk: Express.Multer.File,
+    chunkNumber: string,
+    fileHash: string,
+  ) {
+    const chunkObjectName = `${namespaceId}/chunks/${fileHash}/${chunkNumber}`;
+    await this.minioService.putChunkObject(
+      chunkObjectName,
+      chunk.buffer,
+      chunk.size,
+    );
+  }
+
+  async cleanFileChunks(
+    namespaceId: string,
+    chunksNumber: string,
+    fileHash: string,
+  ) {
+    const chunksName = chunksNumber
+      .split(',')
+      .map((chunkNumber) => `${namespaceId}/chunks/${fileHash}/${chunkNumber}`);
+    await Promise.all(
+      chunksName.map((name) => this.minioService.removeObject(name)),
+    );
+  }
+
+  async mergeFileChunks(
+    user: User,
+    namespaceId: string,
+    totalChunks: number,
+    fileHash: string,
+    fileName: string,
+    mimetype: string,
+    parentId?: string,
+    resourceId?: string,
+  ) {
+    const originalname = encodeFileName(fileName);
+    let resource: Resource;
+    if (resourceId) {
+      resource = await this.get(resourceId);
+      if (resource.resourceType !== 'file') {
+        throw new BadRequestException('Resource is not a file.');
+      }
+    } else if (parentId) {
+      resource = await this.create(user, {
+        name: originalname,
+        resourceType: 'file',
+        namespaceId,
+        parentId,
+        attrs: {
+          original_name: originalname,
+          mimetype: mimetype,
+        },
+      });
+    } else {
+      throw new BadRequestException('parent_id or resource_id is required.');
+    }
+
+    const artifactName = resource.id;
+
+    const chunksName = Array.from(
+      { length: totalChunks },
+      (_, i) => `${namespaceId}/chunks/${fileHash}/${i}`,
+    );
+
+    await this.minioService.composeObject(artifactName, chunksName);
+    await Promise.all(
+      chunksName.map((name) => this.minioService.removeObject(name)),
+    );
+
+    resource.attrs = { ...resource.attrs, url: artifactName };
+    await this.resourceRepository.save(resource);
+
+    await WizardTask.reader.upsert(user, resource, this.taskRepository);
+
+    return resource;
+  }
+
   async uploadFile(
     user: User,
     namespaceId: string,
@@ -344,9 +417,7 @@ export class ResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    // TODO name received is not utf-8 string.
-    file.originalname = decode(file.originalname);
-    file.filename = decode(file.filename);
+    file.originalname = encodeFileName(file.originalname);
 
     let resource: Resource;
     if (resourceId) {
@@ -362,7 +433,6 @@ export class ResourcesService {
         parentId,
         attrs: {
           original_name: file.originalname,
-          filename: file.filename,
           mimetype: file.mimetype,
         },
       });

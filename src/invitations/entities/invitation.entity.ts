@@ -3,7 +3,7 @@ import { Group } from 'src/groups/entities/group.entity';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 import { Namespace } from 'src/namespaces/entities/namespace.entity';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
-import generateId from 'src/utils/generate_id';
+import generateId from 'src/utils/generate-id';
 import {
   BeforeInsert,
   Column,

@@ -28,6 +28,7 @@ export class GroupsService {
         namespace: { id: namespaceId },
         group: Not(IsNull()),
       },
+      relations: ['group'],
     });
   }
 

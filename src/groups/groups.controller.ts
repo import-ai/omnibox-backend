@@ -32,8 +32,21 @@ export class GroupsController {
         'current user is not owner of this namespace',
       );
     }
+
     const groups = await this.groupsService.listGroups(namespaceId);
-    return plainToInstance(GroupDto, groups, { excludeExtraneousValues: true });
+    const invitations =
+      await this.groupsService.listGroupInvitations(namespaceId);
+    const invitationMap = new Map(
+      invitations.map((invitation) => [invitation.group!.id, invitation]),
+    );
+    return groups.map((group) => {
+      const groupDto = plainToInstance(GroupDto, group, {
+        excludeExtraneousValues: true,
+      });
+      const invitation = invitationMap.get(group.id);
+      groupDto.invitationId = invitation?.id;
+      return groupDto;
+    });
   }
 
   @Post()

@@ -1,5 +1,5 @@
 import { Base } from 'src/common/base.entity';
-import generateId from 'src/utils/generate_id';
+import generateId from 'src/utils/generate-id';
 import { Resource } from 'src/resources/resources.entity';
 import {
   Column,

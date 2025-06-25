@@ -9,6 +9,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -206,6 +207,56 @@ export class ResourcesController {
       file,
       parentId,
       undefined,
+    );
+  }
+
+  @Post('files/chunk')
+  @UseInterceptors(FileInterceptor('chunk'))
+  async uploadFileChunk(
+    @UploadedFile() chunk: Express.Multer.File,
+    @Body('chunk_number') chunkNumber: string,
+    @Body('file_hash') fileHash: string,
+    @Body('namespace_id') namespaceId: string,
+  ) {
+    return this.resourcesService.uploadFileChunk(
+      namespaceId,
+      chunk,
+      chunkNumber,
+      fileHash,
+    );
+  }
+
+  @Post('files/chunk/clean')
+  async cleanFileChunks(
+    @Body('namespace_id') namespaceId: string,
+    @Body('chunks_number') chunksNumber: string,
+    @Body('file_hash') fileHash: string,
+  ) {
+    return this.resourcesService.cleanFileChunks(
+      namespaceId,
+      chunksNumber,
+      fileHash,
+    );
+  }
+
+  @Post('files/merge')
+  async mergeFileChunks(
+    @Req() req,
+    @Body('namespace_id') namespaceId: string,
+    @Body('total_chunks', ParseIntPipe) totalChunks: number,
+    @Body('file_hash') fileHash: string,
+    @Body('file_name') fileName: string,
+    @Body('mimetype') mimetype: string,
+    @Body('parent_id') parentId: string,
+  ) {
+    return this.resourcesService.mergeFileChunks(
+      req.user,
+      namespaceId,
+      totalChunks,
+      fileHash,
+      fileName,
+      mimetype,
+      parentId,
     );
   }
 

@@ -1,6 +1,6 @@
 import { Base } from 'src/common/base.entity';
 import { Namespace } from 'src/namespaces/entities/namespace.entity';
-import generateId from 'src/utils/generate_id';
+import generateId from 'src/utils/generate-id';
 import {
   Entity,
   ManyToOne,

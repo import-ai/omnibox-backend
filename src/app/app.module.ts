@@ -17,6 +17,8 @@ import { PermissionsModule } from 'src/permissions/permissions.module';
 import { GroupsModule } from 'src/groups/groups.module';
 import { ConversationsModule } from 'src/conversations/conversations.module';
 import { MessagesModule } from 'src/messages/messages.module';
+import { SearchModule } from 'src/search/search.module';
+import { InvitationsModule } from 'src/invitations/invitations.module';
 
 @Module({
   controllers: [AppController],
@@ -43,6 +45,8 @@ import { MessagesModule } from 'src/messages/messages.module';
     PermissionsModule,
     ConversationsModule,
     MessagesModule,
+    SearchModule,
+    InvitationsModule,
     // CacheModule.registerAsync({
     //   imports: [ConfigModule],
     //   inject: [ConfigService],

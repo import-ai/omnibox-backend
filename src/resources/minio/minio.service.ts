@@ -65,6 +65,37 @@ export class MinioService {
     );
   }
 
+  async putChunkObject(
+    objectName: string,
+    chunk: Buffer,
+    size: number,
+    bucket: string = this.bucket,
+  ) {
+    return await this.minioClient.putObject(bucket, objectName, chunk, size);
+  }
+
+  async composeObject(
+    objectName: string,
+    chunksName: Array<string>,
+    bucket: string = this.bucket,
+  ) {
+    const destOption = new Minio.CopyDestinationOptions({
+      Bucket: bucket,
+      Object: objectName,
+      Headers: {
+        'Content-Type': 'application/octet-stream',
+      },
+    });
+    const sourceList = chunksName.map(
+      (name) =>
+        new Minio.CopySourceOptions({
+          Bucket: bucket,
+          Object: name,
+        }),
+    );
+    return this.minioClient.composeObject(destOption, sourceList);
+  }
+
   async getObject(
     objectName: string,
     bucket: string = this.bucket,
@@ -82,5 +113,9 @@ export class MinioService {
       objectName,
       24 * 60 * 60,
     );
+  }
+
+  async removeObject(objectName: string, bucket: string = this.bucket) {
+    return this.minioClient.removeObject(bucket, objectName);
   }
 }

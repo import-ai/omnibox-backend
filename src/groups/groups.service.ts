@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Not, Repository } from 'typeorm';
 import { Group } from './entities/group.entity';
 import { GroupUser } from './entities/group-user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { User } from 'src/user/entities/user.entity';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { Invitation } from 'src/invitations/entities/invitation.entity';
 
 @Injectable()
 export class GroupsService {
@@ -15,9 +16,21 @@ export class GroupsService {
     private readonly groupRepository: Repository<Group>,
     @InjectRepository(GroupUser)
     private readonly groupUserRepository: Repository<GroupUser>,
+    @InjectRepository(Invitation)
+    private readonly invitationsRepository: Repository<Invitation>,
     private readonly dataSource: DataSource,
     private readonly namespaceService: NamespacesService,
   ) {}
+
+  async listGroupInvitations(namespaceId: string): Promise<Invitation[]> {
+    return await this.invitationsRepository.find({
+      where: {
+        namespace: { id: namespaceId },
+        group: Not(IsNull()),
+      },
+      relations: ['group'],
+    });
+  }
 
   async listGroups(namespaceId: string): Promise<Group[]> {
     return await this.groupRepository.find({

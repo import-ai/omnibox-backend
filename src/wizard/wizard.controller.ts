@@ -1,9 +1,8 @@
-import { Body, Controller, Post, Req, Res, Sse } from '@nestjs/common';
+import { Body, Controller, Post, Req, Sse } from '@nestjs/common';
 import { WizardService } from 'src/wizard/wizard.service';
 import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
 import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
-import { Response } from 'express';
 
 @Controller('api/v1/wizard')
 export class WizardController {
@@ -17,20 +16,28 @@ export class WizardController {
     return await this.wizardService.collect(req.user, data);
   }
 
-  @Post('chat/stream')
-  @Sse()
-  chat(@Body() body: Record<string, any>) {
-    return this.wizardService.streamService.chatStream(body);
-  }
-
   @Post('ask')
   @Sse()
   async ask(@Req() req, @Body() body: AgentRequestDto) {
-    return await this.wizardService.streamService.agentStream(req.user, body);
+    return await this.wizardService.streamService.agentStreamWrapper(
+      req.user,
+      body,
+      'ask',
+    );
+  }
+
+  @Post('write')
+  @Sse()
+  async write(@Req() req, @Body() body: AgentRequestDto) {
+    return await this.wizardService.streamService.agentStreamWrapper(
+      req.user,
+      body,
+      'write',
+    );
   }
 
   @Post('*')
   async proxy(@Req() req: Request): Promise<Record<string, any>> {
-    return await this.wizardService.wizardApiService.request(req);
+    return await this.wizardService.wizardApiService.proxy(req);
   }
 }

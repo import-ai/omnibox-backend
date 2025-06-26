@@ -2,14 +2,21 @@ import { User } from 'src/user/entities/user.entity';
 import { Resource } from 'src/resources/resources.entity';
 import { Repository } from 'typeorm';
 import { Task } from 'src/tasks/tasks.entity';
+import { Message } from 'src/messages/entities/message.entity';
 
 export class Index {
-  static async upsert(user: User, resource: Resource, repo: Repository<Task>) {
+  static async upsert(
+    priority: number,
+    user: User,
+    resource: Resource,
+    repo: Repository<Task>,
+  ) {
     if (resource.resourceType === 'folder' || !resource.content) {
       return;
     }
     const task = repo.create({
       function: 'upsert_index',
+      priority,
       input: {
         title: resource.name,
         content: resource.content,
@@ -33,6 +40,28 @@ export class Index {
       },
       namespace: resource.namespace,
       user,
+    });
+    return await repo.save(task);
+  }
+
+  static async upsertMessageIndex(
+    priority: number,
+    userId: string,
+    namespaceId: string,
+    conversationId: string,
+    message: Message,
+    repo: Repository<Task>,
+  ) {
+    const task = repo.create({
+      function: 'upsert_message_index',
+      priority,
+      input: {
+        conversation_id: conversationId,
+        message_id: message.id,
+        message: message.message,
+      },
+      namespace: { id: namespaceId },
+      user: { id: userId },
     });
     return await repo.save(task);
   }

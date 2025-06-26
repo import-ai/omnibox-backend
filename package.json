@@ -63,11 +63,14 @@
     "cache-manager": "^6.4.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "express": "^5.1.0",
     "handlebars": "^4.7.8",
     "lodash-es": "^4.17.21",
+    "meilisearch": "^0.50.0",
     "minio": "^8.0.5",
     "nanoid": "^5.1.5",
     "nodemailer": "^6.10.1",
+    "openai": "^4.103.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
@@ -76,5 +79,6 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "typeorm": "^0.3.22"
-  }
+  },
+  "packageManager": "pnpm@10.11.1"
 }

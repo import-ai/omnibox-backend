@@ -1,3 +1,4 @@
+import { Resource } from 'src/resources/resources.entity';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
@@ -8,6 +9,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -53,6 +55,11 @@ export class ResourcesController {
     return await this.resourcesService.create(req.user, data);
   }
 
+  @Post('duplicate/:resourceId')
+  async duplicate(@Req() req, @Param('resourceId') resourceId: string) {
+    return await this.resourcesService.duplicate(req.user, resourceId);
+  }
+
   @Get('query')
   async query(
     @Req() req,
@@ -68,6 +75,57 @@ export class ResourcesController {
       userId: req.user.id,
       tags,
     });
+  }
+
+  @Post(':resourceId/move/:targetId')
+  async move(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return await this.resourcesService.move({
+      userId: req.user.id,
+      namespaceId,
+      resourceId,
+      targetId,
+    });
+  }
+
+  @Get(':resourceId/search')
+  async search(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Query('name') name: string,
+  ) {
+    return await this.resourcesService.search({
+      namespaceId,
+      resourceId,
+      name,
+      userId: req.user.id,
+    });
+  }
+
+  @Get(':resourceId/path')
+  async path(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    const resources: Array<Resource> = [];
+    let currentResource = await this.resourcesService.get(resourceId);
+    while (currentResource && currentResource.parentId) {
+      resources.push(currentResource);
+      currentResource = await this.resourcesService.get(
+        currentResource.parentId,
+      );
+    }
+    return await this.resourcesService.permissionFilter(
+      namespaceId,
+      req.user.id,
+      resources,
+    );
   }
 
   @Get(':resourceId')
@@ -130,6 +188,11 @@ export class ResourcesController {
     return await this.resourcesService.delete(req.user, resourceId);
   }
 
+  @Post(':resourceId/restore')
+  async restore(@Req() req, @Param('resourceId') resourceId: string) {
+    return await this.resourcesService.restore(req.user, resourceId);
+  }
+
   @Post('files')
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
@@ -144,6 +207,56 @@ export class ResourcesController {
       file,
       parentId,
       undefined,
+    );
+  }
+
+  @Post('files/chunk')
+  @UseInterceptors(FileInterceptor('chunk'))
+  async uploadFileChunk(
+    @UploadedFile() chunk: Express.Multer.File,
+    @Body('chunk_number') chunkNumber: string,
+    @Body('file_hash') fileHash: string,
+    @Body('namespace_id') namespaceId: string,
+  ) {
+    return this.resourcesService.uploadFileChunk(
+      namespaceId,
+      chunk,
+      chunkNumber,
+      fileHash,
+    );
+  }
+
+  @Post('files/chunk/clean')
+  async cleanFileChunks(
+    @Body('namespace_id') namespaceId: string,
+    @Body('chunks_number') chunksNumber: string,
+    @Body('file_hash') fileHash: string,
+  ) {
+    return this.resourcesService.cleanFileChunks(
+      namespaceId,
+      chunksNumber,
+      fileHash,
+    );
+  }
+
+  @Post('files/merge')
+  async mergeFileChunks(
+    @Req() req,
+    @Body('namespace_id') namespaceId: string,
+    @Body('total_chunks', ParseIntPipe) totalChunks: number,
+    @Body('file_hash') fileHash: string,
+    @Body('file_name') fileName: string,
+    @Body('mimetype') mimetype: string,
+    @Body('parent_id') parentId: string,
+  ) {
+    return this.resourcesService.mergeFileChunks(
+      req.user,
+      namespaceId,
+      totalChunks,
+      fileHash,
+      fileName,
+      mimetype,
+      parentId,
     );
   }
 

@@ -1,9 +1,13 @@
 import { InjectRepository } from '@nestjs/typeorm';
+import duplicateName from 'src/utils/duplicate-name';
+import encodeFileName from 'src/utils/encode-filename';
 import {
   DataSource,
   EntityManager,
   FindOptionsWhere,
   In,
+  Like,
+  Not,
   IsNull,
   Repository,
 } from 'typeorm';
@@ -12,6 +16,7 @@ import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -21,6 +26,7 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
+import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
 
 export interface IQuery {
   namespaceId: string;
@@ -30,12 +36,7 @@ export interface IQuery {
   tags?: string;
 }
 
-function decode(text: string) {
-  if (!text) {
-    return text;
-  }
-  return decodeURIComponent(Buffer.from(text, 'binary').toString('utf-8'));
-}
+const TASK_PRIORITY = 5;
 
 @Injectable()
 export class ResourcesService {
@@ -80,6 +81,7 @@ export class ResourcesService {
       });
       const savedResource = await repo.save(resource);
       await WizardTask.index.upsert(
+        TASK_PRIORITY,
         user,
         savedResource,
         manager.getRepository(Task),
@@ -92,7 +94,54 @@ export class ResourcesService {
     };
   }
 
-  async query({ namespaceId, parentId, spaceType, tags, userId }: IQuery) {
+  async duplicate(user: User, resourceId: string) {
+    const resource = await this.get(resourceId);
+    const newResource = {
+      name: duplicateName(resource.name),
+      namespaceId: resource.namespace.id,
+      resourceType: resource.resourceType,
+    };
+    ['parentId', 'tags', 'content', 'attrs'].forEach((key) => {
+      if (resource[key]) {
+        (newResource as any)[key] = resource[key];
+      }
+    });
+    return await this.create(user, newResource);
+  }
+
+  async permissionFilter<
+    T extends string | Resource | PrivateSearchResourceDto,
+  >(namespaceId: string, userId: string, resources: T[]): Promise<T[]> {
+    const filtered: T[] = [];
+    if (resources.length <= 0) {
+      return filtered;
+    }
+    for (const res of resources) {
+      const resourceId: string = typeof res === 'string' ? res : res.id;
+      try {
+        const hasPermission: boolean =
+          await this.permissionsService.userHasPermission(
+            namespaceId,
+            resourceId,
+            userId,
+          );
+        if (hasPermission) {
+          filtered.push(res);
+        }
+      } catch {
+        /* ignore error */
+      }
+    }
+    return filtered;
+  }
+
+  // get resources under parentId
+  async queryV2(
+    namespaceId: string,
+    parentId: string,
+    userId?: string, // if is undefined, would skip the permission filter
+    tags?: string, // separated by `,`
+  ): Promise<Resource[]> {
     const where: FindOptionsWhere<Resource> = {
       namespace: { id: namespaceId },
       parentId,
@@ -108,20 +157,85 @@ export class ResourcesService {
       where,
       relations: ['namespace'],
     });
-    const filteredResources: Resource[] = [];
-    for (const resource of resources) {
-      const hasPermission = await this.permissionsService.userHasPermission(
-        namespaceId,
-        resource.id,
-        userId,
-      );
-      if (hasPermission) {
-        filteredResources.push(resource);
-      }
-    }
+    return userId
+      ? await this.permissionFilter(namespaceId, userId, resources)
+      : resources;
+  }
+
+  async query({ namespaceId, parentId, spaceType, tags, userId }: IQuery) {
+    const filteredResources: Resource[] = await this.queryV2(
+      namespaceId,
+      parentId,
+      userId,
+      tags,
+    );
     return filteredResources.map((res) => {
       return { ...res, spaceType };
     });
+  }
+
+  async move({ namespaceId, resourceId, targetId, userId }) {
+    const resourceHasPermission =
+      await this.permissionsService.userHasPermission(
+        namespaceId,
+        resourceId,
+        userId,
+      );
+    if (!resourceHasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const resource = await this.resourceRepository.findOneByOrFail({
+      id: resourceId,
+    });
+    const newResource = this.resourceRepository.create({
+      ...resource,
+      parentId: targetId,
+    });
+    await this.resourceRepository.save(newResource);
+  }
+
+  async search({ namespaceId, resourceId, name, userId }) {
+    // Self and child exclusions
+    const resourceChildren = await this.getAllSubResources(
+      namespaceId,
+      resourceId,
+      '',
+      true,
+    );
+    const where: any = {
+      user: { id: userId },
+      // Cannot move to root directory
+      parentId: Not(IsNull()),
+      namespace: { id: namespaceId },
+      id: Not(In(resourceChildren.map((children) => children.id))),
+    };
+    if (name) {
+      where.name = Like(`%${name}%`);
+    }
+    const resources = await this.resourceRepository.find({
+      where,
+      skip: 0,
+      take: 10,
+      order: { updatedAt: 'DESC' },
+    });
+    return await this.permissionFilter(namespaceId, userId, resources);
+  }
+
+  async getAllSubResources(
+    namespaceId: string,
+    parentId: string,
+    userId?: string,
+    includeRoot: boolean = false,
+  ): Promise<Resource[]> {
+    let resources: Resource[] = [await this.get(parentId)];
+    for (const res of resources) {
+      const subResources: Resource[] = await this.queryV2(namespaceId, res.id);
+      resources.push(...subResources);
+    }
+    resources = includeRoot ? resources : resources.slice(1);
+    return userId
+      ? await this.permissionFilter(namespaceId, userId, resources)
+      : resources;
   }
 
   async getSpaceType(resource: Resource): Promise<SpaceType> {
@@ -167,7 +281,12 @@ export class ResourcesService {
       namespace: { id: data.namespaceId },
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
-    await WizardTask.index.upsert(user, savedNewResource, this.taskRepository);
+    await WizardTask.index.upsert(
+      TASK_PRIORITY,
+      user,
+      savedNewResource,
+      this.taskRepository,
+    );
     return {
       ...savedNewResource,
       spaceType: await this.getSpaceType(savedNewResource),
@@ -187,7 +306,108 @@ export class ResourcesService {
         manager.getRepository(Task),
       );
     });
-    await this.resourceRepository.softDelete(id); // Delete itself
+  }
+
+  async restore(user: User, id: string) {
+    const resource = await this.resourceRepository.findOneOrFail({
+      withDeleted: true,
+      relations: ['namespace'],
+      where: {
+        id,
+      },
+    });
+    if (resource.parentId === null) {
+      throw new BadRequestException('Cannot restore root resource.');
+    }
+    await this.dataSource.transaction(async (manager) => {
+      await manager.restore(Resource, id);
+      await WizardTask.index.upsert(
+        TASK_PRIORITY,
+        user,
+        resource,
+        manager.getRepository(Task),
+      );
+    });
+    return await this.get(id);
+  }
+
+  async uploadFileChunk(
+    namespaceId: string,
+    chunk: Express.Multer.File,
+    chunkNumber: string,
+    fileHash: string,
+  ) {
+    const chunkObjectName = `${namespaceId}/chunks/${fileHash}/${chunkNumber}`;
+    await this.minioService.putChunkObject(
+      chunkObjectName,
+      chunk.buffer,
+      chunk.size,
+    );
+  }
+
+  async cleanFileChunks(
+    namespaceId: string,
+    chunksNumber: string,
+    fileHash: string,
+  ) {
+    const chunksName = chunksNumber
+      .split(',')
+      .map((chunkNumber) => `${namespaceId}/chunks/${fileHash}/${chunkNumber}`);
+    await Promise.all(
+      chunksName.map((name) => this.minioService.removeObject(name)),
+    );
+  }
+
+  async mergeFileChunks(
+    user: User,
+    namespaceId: string,
+    totalChunks: number,
+    fileHash: string,
+    fileName: string,
+    mimetype: string,
+    parentId?: string,
+    resourceId?: string,
+  ) {
+    const originalname = encodeFileName(fileName);
+    let resource: Resource;
+    if (resourceId) {
+      resource = await this.get(resourceId);
+      if (resource.resourceType !== 'file') {
+        throw new BadRequestException('Resource is not a file.');
+      }
+    } else if (parentId) {
+      resource = await this.create(user, {
+        name: originalname,
+        resourceType: 'file',
+        namespaceId,
+        parentId,
+        attrs: {
+          original_name: originalname,
+          mimetype: mimetype,
+        },
+      });
+    } else {
+      throw new BadRequestException('parent_id or resource_id is required.');
+    }
+
+    const artifactName = resource.id;
+
+    const chunksName = Array.from(
+      { length: totalChunks },
+      (_, i) => `${namespaceId}/chunks/${fileHash}/${i}`,
+    );
+
+    await this.minioService.composeObject(artifactName, chunksName);
+    await Promise.all(
+      chunksName.map((name) => this.minioService.removeObject(name)),
+    );
+
+    resource.attrs = { ...resource.attrs, url: artifactName };
+    await this.resourceRepository.save(resource);
+
+    await WizardTask.reader.upsert(user, resource, this.taskRepository);
+
+    return resource;
   }
 
   async uploadFile(
@@ -197,9 +417,7 @@ export class ResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    // TODO name received is not utf-8 string.
-    file.originalname = decode(file.originalname);
-    file.filename = decode(file.filename);
+    file.originalname = encodeFileName(file.originalname);
 
     let resource: Resource;
     if (resourceId) {
@@ -215,7 +433,6 @@ export class ResourcesService {
         parentId,
         attrs: {
           original_name: file.originalname,
-          filename: file.filename,
           mimetype: file.mimetype,
         },
       });
@@ -264,25 +481,26 @@ export class ResourcesService {
     );
   }
 
-  async listUserAccessibleResources(
+  async listAllUserAccessibleResources(
     namespaceId: string,
     userId: string,
-    includeRoot?: boolean,
+    includeRoot: boolean = false,
   ) {
     const resources = await this.resourceRepository.find({
       where: { namespace: { id: namespaceId }, deletedAt: IsNull() },
     });
-    const filtered: Resource[] = [];
-    for (const resource of resources) {
-      const hasPermission = await this.permissionsService.userHasPermission(
-        namespaceId,
-        resource.id,
-        userId,
-      );
-      if (hasPermission && (resource.parentId !== null || includeRoot)) {
-        filtered.push(resource);
-      }
-    }
-    return filtered;
+    return await this.permissionFilter(
+      namespaceId,
+      userId,
+      resources.filter((res) => res.parentId !== null || includeRoot),
+    );
+  }
+
+  async listAllResources(offset: number, limit: number) {
+    return await this.resourceRepository.find({
+      skip: offset,
+      take: limit,
+      relations: ['namespace', 'user'],
+    });
   }
 }

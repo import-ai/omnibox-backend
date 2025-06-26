@@ -2,10 +2,26 @@ import { MessagesService } from 'src/messages/messages.service';
 import { User } from 'src/user/entities/user.entity';
 import { Observable, Subscriber } from 'rxjs';
 import { MessageEvent } from '@nestjs/common';
-import { Message } from 'src/messages/entities/message.entity';
-import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
+import {
+  Message,
+  MessageStatus,
+  OpenAIMessage,
+  OpenAIMessageRole,
+} from 'src/messages/entities/message.entity';
+import {
+  AgentRequestDto,
+  PrivateSearchResourceDto,
+  WizardAgentRequestDto,
+} from 'src/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Resource } from 'src/resources/resources.entity';
+import { ChatResponse } from 'src/wizard/dto/chat-response.dto';
+
+interface HandlerContext {
+  parentId?: string;
+  messageId?: string;
+  message?: OpenAIMessage;
+}
 
 export class StreamService {
   constructor(
@@ -60,62 +76,85 @@ export class StreamService {
   }
 
   agentHandler(
+    namespaceId: string,
     conversationId: string,
     user: User,
     subscriber: Subscriber<MessageEvent>,
-  ): (data: string, parentId?: string) => Promise<string | undefined> {
-    return async (
-      data: string,
-      parentId?: string,
-    ): Promise<string | undefined> => {
-      const chunk = JSON.parse(data) as {
-        response_type: string;
-        message: { role: string };
-        attrs?: Record<string, any>;
-      };
+  ): (data: string, context: HandlerContext) => Promise<void> {
+    return async (data: string, context: HandlerContext): Promise<void> => {
+      const chunk: ChatResponse = JSON.parse(data);
 
-      if (chunk.response_type === 'openai_message') {
+      if (chunk.response_type === 'bos') {
         const message: Message = await this.messagesService.create(
+          namespaceId,
           conversationId,
           user,
-          { message: chunk.message, parentId, attrs: chunk?.attrs },
+          {
+            message: {
+              role: chunk.role,
+            },
+            parentId: context.parentId,
+          },
+          false,
         );
-        if (chunk.message.role === 'tool' && chunk?.attrs) {
-          const attrs = chunk.attrs;
-          if (attrs?.citations) {
-            subscriber.next({
-              data: JSON.stringify({
-                response_type: 'citations',
-                citations: attrs.citations,
-              }),
-            });
-          }
-        }
-        if (chunk.message.role !== 'system') {
-          subscriber.next({
-            data: JSON.stringify({
-              response_type: 'end_of_message',
-              role: chunk.message.role,
-              messageId: message.id,
-            }),
-          });
-        }
-        return message.id;
-      }
-      subscriber.next({ data });
-      return undefined;
-    };
-  }
+        chunk.id = message.id;
+        chunk.parentId = message.parentId || undefined;
 
-  chatStream(body: Record<string, any>): Observable<MessageEvent> {
-    return new Observable<MessageEvent>((subscriber) => {
-      this.stream('/api/v1/wizard/stream', body, (data) => {
-        subscriber.next({ data });
-        return Promise.resolve();
-      })
-        .then(() => subscriber.complete())
-        .catch((err) => subscriber.error(err));
-    });
+        if (context.message?.role === OpenAIMessageRole.SYSTEM) {
+          chunk.parentId = undefined;
+        }
+
+        context.messageId = message.id;
+        context.message = message.message;
+      } else if (chunk.response_type === 'delta') {
+        if (!context.messageId) {
+          throw new Error('Message ID is not set in context');
+        }
+        const message: Message = await this.messagesService.updateDelta(
+          context.messageId,
+          chunk,
+        );
+
+        context.message = message.message;
+      } else if (chunk.response_type === 'eos') {
+        const message: Message = await this.messagesService.update(
+          context.messageId!,
+          namespaceId,
+          conversationId,
+          {
+            status: MessageStatus.SUCCESS,
+          },
+          true,
+        );
+
+        context.message = message.message;
+        context.parentId = message.id;
+        context.messageId = undefined;
+      } else if (chunk.response_type === 'done') {
+        // Do nothing, this is the end of the stream
+      } else if (chunk.response_type === 'error') {
+        if (context.messageId) {
+          await this.messagesService.update(
+            context.messageId,
+            namespaceId,
+            conversationId,
+            {
+              status: MessageStatus.FAILED,
+            },
+            true,
+          );
+        }
+
+        const err = new Error(chunk.message || 'Unknown error');
+        err.name = 'AgentError';
+        throw err;
+      } else {
+        throw new Error(`Unknown response type: ${data}`);
+      }
+      if (context?.message?.role !== OpenAIMessageRole.SYSTEM) {
+        subscriber.next({ data: JSON.stringify(chunk) });
+      }
+    };
   }
 
   findOneOrFail(messages: Message[], messageId: string): Message {
@@ -126,86 +165,135 @@ export class StreamService {
     return message;
   }
 
-  getMessages(
-    allMessages: Message[],
-    parentMessageId: string,
-  ): { messages: Record<string, any>[]; currentCiteCnt: number } {
+  getMessages(allMessages: Message[], parentMessageId: string): Message[] {
     const messages: Message[] = [];
-    let currentCiteCnt: number = 0;
     let parentId: string | undefined = parentMessageId;
     while (parentId) {
       const message = this.findOneOrFail(allMessages, parentId);
-      const attrs = message.attrs as { citations: Record<string, any>[] };
-      if (attrs?.citations) {
-        currentCiteCnt += attrs.citations.length;
-      }
       messages.unshift(message);
       parentId = message.parentId;
     }
-    return { messages: messages.map((m) => m.message), currentCiteCnt };
+    return messages;
+  }
+
+  streamError(subscriber: Subscriber<MessageEvent>, err: Error) {
+    console.error(err);
+    subscriber.error(
+      JSON.stringify({
+        response_type: 'error',
+        error: err.name,
+      }),
+    );
   }
 
   async agentStream(
     user: User,
     body: AgentRequestDto,
+    mode: 'ask' | 'write' = 'ask',
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
-    let messages: Record<string, any> = [];
-    let currentCiteCnt: number = 0;
+    let messages: Message[] = [];
     if (body.parent_message_id) {
       parentId = body.parent_message_id;
       const allMessages = await this.messagesService.findAll(
-        user,
+        user.id,
         body.conversation_id,
       );
-      const buf = this.getMessages(allMessages, parentId);
-      messages = buf.messages;
-      currentCiteCnt = buf.currentCiteCnt;
+      messages = this.getMessages(allMessages, parentId);
     }
 
     if (body.tools) {
       for (const tool of body.tools) {
-        if (
-          tool.name === 'knowledge_search' &&
-          tool.resource_ids === undefined &&
-          tool.parent_ids === undefined
-        ) {
-          // for knowledge_search, pass the resource with permission
-          const resources: Resource[] =
-            await this.resourcesService.listUserAccessibleResources(
-              tool.namespace_id,
-              user.id,
+        if (tool.name === 'private_search') {
+          // for private_search, pass the resource with permission
+          if (!tool.resources || tool.resources.length === 0) {
+            const resources: Resource[] =
+              await this.resourcesService.listAllUserAccessibleResources(
+                tool.namespace_id,
+                user.id,
+              );
+            tool.visible_resources = resources.map((r) => {
+              return {
+                id: r.id,
+                name: r.name || '',
+                type: r.resourceType === 'folder' ? 'folder' : 'resource',
+              } as PrivateSearchResourceDto;
+            });
+          } else {
+            tool.visible_resources = [];
+            tool.visible_resources.push(
+              ...(await this.resourcesService.permissionFilter<PrivateSearchResourceDto>(
+                tool.namespace_id,
+                user.id,
+                tool.resources,
+              )),
             );
-          tool.resource_ids = resources.map((r) => r.id);
+            for (const resource of tool.resources) {
+              if (resource.type === 'folder') {
+                const resources: Resource[] =
+                  await this.resourcesService.getAllSubResources(
+                    tool.namespace_id,
+                    resource.id,
+                    user.id,
+                    false,
+                  );
+                resource.child_ids = resources.map((r) => r.id);
+                tool.visible_resources.push(
+                  ...resources.map((r) => {
+                    return {
+                      id: r.id,
+                      name: r.name || '',
+                      type: r.resourceType === 'folder' ? 'folder' : 'resource',
+                    } as PrivateSearchResourceDto;
+                  }),
+                );
+              }
+            }
+          }
         }
       }
     }
 
+    const handlerContext: HandlerContext = {
+      parentId,
+      messageId: undefined,
+    };
+
     return new Observable<MessageEvent>((subscriber) => {
-      const handler = this.agentHandler(body.conversation_id, user, subscriber);
-      this.stream(
-        '/api/v1/wizard/ask',
-        {
-          conversation_id: body.conversation_id,
-          query: body.query,
-          messages,
-          tools: body.tools,
-          enable_thinking: body.enable_thinking,
-          current_cite_cnt: currentCiteCnt,
-        },
-        async (data) => {
-          parentId = (await handler(data, parentId)) || parentId;
-        },
-      )
+      const handler = this.agentHandler(
+        body.namespace_id,
+        body.conversation_id,
+        user,
+        subscriber,
+      );
+
+      const wizardRequestBody: WizardAgentRequestDto = {
+        conversation_id: body.conversation_id,
+        query: body.query,
+        messages,
+        tools: body.tools,
+        enable_thinking: body.enable_thinking,
+      };
+
+      this.stream(`/api/v1/wizard/${mode}`, wizardRequestBody, async (data) => {
+        await handler(data, handlerContext);
+      })
         .then(() => subscriber.complete())
-        .catch((err: Error) =>
-          subscriber.error(
-            JSON.stringify({
-              response_type: 'error',
-              message: err.message,
-            }),
-          ),
-        );
+        .catch((err: Error) => this.streamError(subscriber, err));
     });
+  }
+
+  async agentStreamWrapper(
+    user: User,
+    body: AgentRequestDto,
+    mode: 'ask' | 'write' = 'ask',
+  ): Promise<Observable<MessageEvent>> {
+    try {
+      return await this.agentStream(user, body, mode);
+    } catch (e) {
+      return new Observable<MessageEvent>((subscriber) =>
+        this.streamError(subscriber, e),
+      );
+    }
   }
 }

@@ -1,7 +1,6 @@
 import { UserService } from 'src/user/user.service';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
 import { CreateUserOptionDto } from 'src/user/dto/create-user-option.dto';
-import { UpdateUserOptionDto } from 'src/user/dto/update-user-option.dto';
 import {
   Req,
   Get,

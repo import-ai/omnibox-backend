@@ -2,7 +2,10 @@ import { User } from 'src/user/entities/user.entity';
 import { Resource } from 'src/resources/resources.entity';
 import { Repository } from 'typeorm';
 import { Task } from 'src/tasks/tasks.entity';
-import { Message } from 'src/messages/entities/message.entity';
+import {
+  Message,
+  OpenAIMessageRole,
+} from 'src/messages/entities/message.entity';
 
 export class Index {
   static async upsert(
@@ -52,6 +55,16 @@ export class Index {
     message: Message,
     repo: Repository<Task>,
   ) {
+    if (!message.message.content?.trim()) {
+      return;
+    }
+    if (
+      [OpenAIMessageRole.TOOL, OpenAIMessageRole.SYSTEM].includes(
+        message.message.role,
+      )
+    ) {
+      return;
+    }
     const task = repo.create({
       function: 'upsert_message_index',
       priority,

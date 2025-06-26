@@ -255,7 +255,7 @@ export class ResourcesService {
       where: {
         id,
       },
-      relations: ['namespace'],
+      relations: ['namespace', 'user'],
     });
     if (!resource) {
       throw new NotFoundException('Resource not found.');

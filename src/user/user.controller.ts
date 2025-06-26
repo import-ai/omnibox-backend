@@ -56,30 +56,23 @@ export class UserController {
   }
 
   @Post('option')
-  createOption(@Req() req, @Body() createOptionDto: CreateUserOptionDto) {
-    return this.userService.createOption(req.user.id, createOptionDto);
-  }
-
-  @Get('option')
-  getAllOption(@Req() req) {
-    return this.userService.getAllOption(req.user.id);
-  }
-
-  @Patch('option/:name')
-  updateOption(
-    @Req() req,
-    @Param('name') name: string,
-    @Body() updateOptionDto: UpdateUserOptionDto,
-  ) {
-    return this.userService.updateOption(
+  async createOption(@Req() req, @Body() createOptionDto: CreateUserOptionDto) {
+    const option = await this.userService.getOption(
       req.user.id,
-      name,
-      updateOptionDto.value,
+      createOptionDto.name,
     );
+    if (option && option.name) {
+      return await this.userService.updateOption(
+        req.user.id,
+        option.name,
+        createOptionDto.value,
+      );
+    }
+    return await this.userService.createOption(req.user.id, createOptionDto);
   }
 
-  @Delete('option/:name')
-  removeOption(@Req() req, @Param('name') name: string) {
-    return this.userService.removeOption(req.user.id, name);
+  @Get('option/:name')
+  async getOption(@Req() req, @Param('name') name: string) {
+    return await this.userService.getOption(req.user.id, name);
   }
 }

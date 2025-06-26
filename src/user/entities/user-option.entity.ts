@@ -1,21 +1,10 @@
 import { Base } from 'src/common/base.entity';
 import { User } from 'src/user/entities/user.entity';
-import {
-  Index,
-  Entity,
-  Column,
-  ManyToOne,
-  JoinColumn,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, PrimaryColumn } from 'typeorm';
 
 @Entity('user_option')
-@Index(['user', 'name'], { unique: true, where: 'deleted_at IS NULL' })
 export class UserOption extends Base {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({
+  @PrimaryColumn({
     type: 'varchar',
     length: 20,
   })

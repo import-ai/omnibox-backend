@@ -155,29 +155,19 @@ export class UserService {
     await this.userOptionRepository.save(option);
   }
 
-  async getAllOption(userId: string) {
-    return await this.userOptionRepository.findBy({
+  async getOption(userId: string, name: string) {
+    const option = await this.userOptionRepository.findOneBy({
+      name,
       user: { id: userId },
     });
+    return option;
   }
 
   async updateOption(userId: string, name: string, value: string) {
-    const option = await this.userOptionRepository.findOne({
+    const option = await this.userOptionRepository.findOneOrFail({
       where: { user: { id: userId }, name },
     });
-    if (!option) {
-      throw new ConflictException('Option does not exist');
-    }
     option.value = value;
     return await this.userOptionRepository.save(option);
-  }
-
-  async removeOption(userId: string, name: string) {
-    const option = await this.userOptionRepository.findOne({
-      where: { user: { id: userId }, name },
-    });
-    if (option) {
-      return await this.userOptionRepository.delete(option.id);
-    }
   }
 }

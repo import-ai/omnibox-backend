@@ -88,10 +88,11 @@ export class ResourcesService {
       );
       return savedResource;
     });
-    return {
-      ...savedResource,
-      spaceType: await this.getSpaceType(savedResource),
-    };
+    // return {
+    //   ...savedResource,
+    //   spaceType: await this.getSpaceType(savedResource),
+    // };
+    return savedResource;
   }
 
   async duplicate(user: User, resourceId: string) {
@@ -263,8 +264,9 @@ export class ResourcesService {
     if (!resource) {
       throw new NotFoundException('Resource not found.');
     }
-    const spaceType = await this.getSpaceType(resource);
-    return { ...resource, spaceType };
+    // const spaceType = await this.getSpaceType(resource);
+    // return { ...resource, spaceType };
+    return resource;
   }
 
   async update(user: User, id: string, data: UpdateResourceDto) {

@@ -155,6 +155,7 @@ export class ResourcesService {
 
     const resources = await this.resourceRepository.find({
       where,
+      select: ['id', 'name', 'resourceType', 'parentId', 'tags', 'attrs', 'namespace'],
       relations: ['namespace'],
     });
     return userId

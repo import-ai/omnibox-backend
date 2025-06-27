@@ -5,7 +5,7 @@ import { Group } from './entities/group.entity';
 import { GroupUser } from './entities/group-user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { Invitation } from 'src/invitations/entities/invitation.entity';
 

@@ -1,5 +1,5 @@
 import { MessagesService } from 'src/messages/messages.service';
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { Observable, Subscriber } from 'rxjs';
 import { MessageEvent } from '@nestjs/common';
 import {

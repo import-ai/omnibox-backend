@@ -1,5 +1,5 @@
 import { Base } from 'src/common/base.entity';
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { Group } from './group.entity';
 import {
   Entity,

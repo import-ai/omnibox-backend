@@ -77,6 +77,38 @@ export class ResourcesController {
     });
   }
 
+  @Get(':resourceId/children')
+  async listChildren(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+    if (!hasPermission) {
+      throw new ForbiddenException('Not authorized');
+    }
+    const children = await this.resourcesService.listChildren(
+      namespaceId,
+      resourceId,
+    );
+    const filteredChildren: Resource[] = [];
+    for (const child of children) {
+      const permissionLevel = await this.permissionsService.getCurrentLevel(
+        namespaceId,
+        child.id,
+        req.user.id,
+      );
+      if (permissionLevel !== PermissionLevel.NO_ACCESS) {
+        filteredChildren.push(child);
+      }
+    }
+    return filteredChildren;
+  }
+
   @Post(':resourceId/move/:targetId')
   async move(
     @Req() req,

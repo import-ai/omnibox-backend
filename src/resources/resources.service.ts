@@ -262,6 +262,17 @@ export class ResourcesService {
       : SpaceType.PRIVATE;
   }
 
+  async listChildren(namespaceId: string, resourceId: string) {
+    const resources = await this.resourceRepository.find({
+      select: ['id', 'name', 'resourceType', 'parentId', 'tags', 'attrs'],
+      where: {
+        namespace: { id: namespaceId },
+        parentId: resourceId,
+      },
+    });
+    return resources;
+  }
+
   async get(id: string) {
     const resource = await this.resourceRepository.findOne({
       where: {

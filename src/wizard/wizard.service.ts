@@ -55,23 +55,17 @@ export class WizardService {
     user: User,
     data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
-    const { html, url, title, namespace_id, space_type } = data;
-    if (!namespace_id || !space_type || !url || !html) {
+    const { html, url, title, namespace_id, parentId } = data;
+    if (!namespace_id || !parentId || !url || !html) {
       throw new BadRequestException('Missing required fields');
     }
     const namespace = await this.namespacesService.get(namespace_id);
-
-    const resourceRoot = await this.namespacesService.getRoot(
-      namespace.id,
-      space_type,
-      user.id,
-    );
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
       namespaceId: namespace.id,
       resourceType: 'link',
-      parentId: resourceRoot.id,
+      parentId: parentId,
       attrs: { url },
     };
     const resource = await this.resourcesService.create(user, resourceDto);

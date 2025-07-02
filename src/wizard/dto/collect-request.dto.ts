@@ -1,5 +1,4 @@
-import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
-import { SpaceType } from 'src/namespaces/entities/namespace.entity';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class CollectRequestDto {
   @IsString()
@@ -18,7 +17,7 @@ export class CollectRequestDto {
   @IsNotEmpty()
   namespace_id: string;
 
-  @IsEnum(SpaceType)
+  @IsString()
   @IsNotEmpty()
-  space_type: SpaceType;
+  parentId: string;
 }

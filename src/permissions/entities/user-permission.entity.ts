@@ -32,6 +32,9 @@ export class UserPermission extends Base {
   @JoinColumn({ name: 'resource_id' })
   resource?: Resource;
 
+  @Column({ name: 'resource_id', nullable: false })
+  resourceId: string;
+
   @ManyToOne(() => User, { nullable: false })
   @JoinColumn({ name: 'user_id' })
   user?: User;

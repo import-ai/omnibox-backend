@@ -451,11 +451,11 @@ export class PermissionsService {
       where: {
         namespace: { id: namespaceId },
         user: { id: userId },
-        resource: { id: In(parentResourceIds) },
+        resourceId: In(parentResourceIds),
       },
     });
     const userPermiMap: Map<string, UserPermission> = new Map(
-      userPermissions.map((permi) => [permi.resource!.id, permi]),
+      userPermissions.map((permi) => [permi.resourceId, permi]),
     );
     for (const resourceId of parentResourceIds) {
       const permission = userPermiMap.get(resourceId);

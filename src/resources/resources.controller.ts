@@ -83,12 +83,18 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
+    const userId: string = req.user.id;
+    const parentResources = await this.resourcesService.getParentResources(
       namespaceId,
       resourceId,
-      req.user.id,
     );
-    if (!hasPermission) {
+    const permission =
+      await this.permissionsService.getCurrentPermissionFromParents(
+        namespaceId,
+        parentResources,
+        userId,
+      );
+    if (permission === PermissionLevel.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');
     }
     const children = await this.resourcesService.listChildren(
@@ -97,12 +103,13 @@ export class ResourcesController {
     );
     const filteredChildren: Resource[] = [];
     for (const child of children) {
-      const permissionLevel = await this.permissionsService.getCurrentLevel(
-        namespaceId,
-        child.id,
-        req.user.id,
-      );
-      if (permissionLevel !== PermissionLevel.NO_ACCESS) {
+      const permission =
+        await this.permissionsService.getCurrentPermissionFromParents(
+          namespaceId,
+          [child, ...parentResources],
+          userId,
+        );
+      if (permission !== PermissionLevel.NO_ACCESS) {
         filteredChildren.push(child);
       }
     }

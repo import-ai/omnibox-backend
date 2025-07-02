@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
 import { ListRespDto, UserPermissionDto } from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
 import {
   comparePermissionLevel,
+  maxPermission,
+  maxPermissions,
   PermissionLevel,
 } from './permission-level.enum';
 import { UserPermission } from './entities/user-permission.entity';
@@ -14,6 +16,7 @@ import { Resource } from 'src/resources/resources.entity';
 import { UserService } from 'src/user/user.service';
 import { GroupUser } from 'src/groups/entities/group-user.entity';
 import { NamespaceMember } from 'src/namespaces/entities/namespace-member.entity';
+import { Record } from 'openai/core';
 
 @Injectable()
 export class PermissionsService {
@@ -426,6 +429,103 @@ export class PermissionsService {
       }
     }
     return level;
+  }
+
+  getGlobalPermissionFromParents(
+    parentResources: Resource[],
+  ): PermissionLevel | null {
+    for (const resource of parentResources) {
+      if (resource.globalLevel) {
+        return resource.globalLevel;
+      }
+    }
+    return null;
+  }
+
+  async getUserPermissionFromParents(
+    namespaceId: string,
+    parentResourceIds: string[],
+    userId: string,
+  ): Promise<PermissionLevel | null> {
+    const userPermissions = await this.userPermiRepo.find({
+      where: {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+        resource: { id: In(parentResourceIds) },
+      },
+    });
+    const userPermiMap: Map<string, UserPermission> = new Map(
+      userPermissions.map((permi) => [permi.resource!.id, permi]),
+    );
+    for (const resourceId of parentResourceIds) {
+      const permission = userPermiMap.get(resourceId);
+      if (permission) {
+        return permission.level;
+      }
+    }
+    return null;
+  }
+
+  async getGroupPermissionFromParents(
+    namespaceId: string,
+    parentResourceIds: string[],
+    groupIds: string[],
+  ): Promise<PermissionLevel | null> {
+    const groupPermissions = await this.groupPermiRepo.find({
+      where: {
+        namespace: { id: namespaceId },
+        resource: { id: In(parentResourceIds) },
+        group: { id: In(groupIds) },
+      },
+    });
+    const permiMap: Map<string, PermissionLevel | null> = new Map();
+    for (const groupPermi of groupPermissions) {
+      const resourceId = groupPermi.resource!.id;
+      const curPermi = permiMap.get(resourceId) || null;
+      permiMap.set(resourceId, maxPermission(curPermi, groupPermi.level));
+    }
+    for (const resourceId of parentResourceIds) {
+      const permission = permiMap.get(resourceId);
+      if (permission) {
+        return permission;
+      }
+    }
+    return null;
+  }
+
+  async getCurrentPermissionFromParents(
+    namespaceId: string,
+    parentResources: Resource[],
+    userId: string,
+  ): Promise<PermissionLevel> {
+    const groups = await this.groupUserRepository.find({
+      where: {
+        namespace: { id: namespaceId },
+        user: { id: userId },
+      },
+      relations: ['group'],
+    });
+    const groupIds = groups.map((group) => group.group.id);
+    const parentResourceIds = parentResources.map((resource) => resource.id);
+
+    const globalPermission =
+      this.getGlobalPermissionFromParents(parentResources);
+    const userPermission = await this.getUserPermissionFromParents(
+      namespaceId,
+      parentResourceIds,
+      userId,
+    );
+    const groupPermission = await this.getGroupPermissionFromParents(
+      namespaceId,
+      parentResourceIds,
+      groupIds,
+    );
+    const curPermission = maxPermissions([
+      globalPermission,
+      userPermission,
+      groupPermission,
+    ]);
+    return curPermission || PermissionLevel.NO_ACCESS;
   }
 
   async getParentId(

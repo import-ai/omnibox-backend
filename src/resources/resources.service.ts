@@ -88,10 +88,6 @@ export class ResourcesService {
       );
       return savedResource;
     });
-    // return {
-    //   ...savedResource,
-    //   spaceType: await this.getSpaceType(savedResource),
-    // };
     return savedResource;
   }
 
@@ -250,18 +246,6 @@ export class ResourcesService {
       : resources;
   }
 
-  async getSpaceType(resource: Resource): Promise<SpaceType> {
-    while (resource.parentId !== null) {
-      resource = (await this.resourceRepository.findOne({
-        where: { id: resource.parentId },
-        relations: ['namespace'],
-      }))!;
-    }
-    return resource.namespace.rootResourceId === resource.id
-      ? SpaceType.TEAMSPACE
-      : SpaceType.PRIVATE;
-  }
-
   async listChildren(namespaceId: string, resourceId: string) {
     const resources = await this.resourceRepository.find({
       select: ['id', 'name', 'resourceType', 'parentId', 'tags', 'attrs'],
@@ -283,9 +267,26 @@ export class ResourcesService {
     if (!resource) {
       throw new NotFoundException('Resource not found.');
     }
-    // const spaceType = await this.getSpaceType(resource);
-    // return { ...resource, spaceType };
     return resource;
+  }
+
+  async getParentResources(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Resource[]> {
+    const resources: Resource[] = [];
+    while (true) {
+      const resource = await this.resourceRepository.findOneOrFail({
+        where: { namespace: { id: namespaceId }, id: resourceId },
+        select: ['id', 'name', 'resourceType', 'parentId', 'globalLevel'],
+      });
+      resources.push(resource);
+      if (!resource.parentId) {
+        break;
+      }
+      resourceId = resource.parentId;
+    }
+    return resources;
   }
 
   async update(user: User, id: string, data: UpdateResourceDto) {
@@ -311,10 +312,7 @@ export class ResourcesService {
       savedNewResource,
       this.taskRepository,
     );
-    return {
-      ...savedNewResource,
-      spaceType: await this.getSpaceType(savedNewResource),
-    };
+    return savedNewResource;
   }
 
   async delete(user: User, id: string) {

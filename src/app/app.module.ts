@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'src/tag/tag.module';
@@ -20,6 +20,7 @@ import { ConversationsModule } from 'src/conversations/conversations.module';
 import { MessagesModule } from 'src/messages/messages.module';
 import { SearchModule } from 'src/search/search.module';
 import { InvitationsModule } from 'src/invitations/invitations.module';
+import { LoggerMiddleware } from './logger.middleware';
 
 @Module({
   controllers: [AppController],
@@ -72,8 +73,15 @@ import { InvitationsModule } from 'src/invitations/invitations.module';
         logging: config.get('OBB_DB_LOGGING') === 'true',
         synchronize: config.get('OBB_DB_SYNC') === 'true',
         autoLoadEntities: true,
+        maxQueryExecutionTime: 1,
       }),
     }),
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(LoggerMiddleware)
+      .forRoutes('*');
+  }
+}

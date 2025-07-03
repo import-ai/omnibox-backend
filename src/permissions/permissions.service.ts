@@ -503,9 +503,8 @@ export class PermissionsService {
         namespace: { id: namespaceId },
         user: { id: userId },
       },
-      relations: ['group'],
     });
-    const groupIds = groups.map((group) => group.group.id);
+    const groupIds = groups.map((group) => group.groupId);
     const parentResourceIds = parentResources.map((resource) => resource.id);
 
     const globalPermission =

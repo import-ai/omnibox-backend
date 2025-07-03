@@ -84,37 +84,11 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    const userId: string = req.user.id;
-    const parentResources = await this.resourcesService.getParentResources(
+    return this.resourcesService.listChildren(
       namespaceId,
       resourceId,
+      req.user.id,
     );
-    const permission =
-      await this.permissionsService.getCurrentPermissionFromParents(
-        namespaceId,
-        parentResources,
-        userId,
-      );
-    if (permission === PermissionLevel.NO_ACCESS) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const children = await this.resourcesService.listChildren(
-      namespaceId,
-      resourceId,
-    );
-    const filteredChildren: Resource[] = [];
-    for (const child of children) {
-      const permission =
-        await this.permissionsService.getCurrentPermissionFromParents(
-          namespaceId,
-          [child, ...parentResources],
-          userId,
-        );
-      if (permission !== PermissionLevel.NO_ACCESS) {
-        filteredChildren.push(child);
-      }
-    }
-    return filteredChildren;
   }
 
   @Post(':resourceId/move/:targetId')

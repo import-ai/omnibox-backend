@@ -27,6 +27,7 @@ import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 export interface IQuery {
   namespaceId: string;
@@ -243,15 +244,42 @@ export class ResourcesService {
       : resources;
   }
 
-  async listChildren(namespaceId: string, resourceId: string) {
-    const resources = await this.resourceRepository.find({
+  async listChildren(namespaceId: string, resourceId: string, userId: string) {
+    const parentResources = await this.getParentResources(
+      namespaceId,
+      resourceId,
+    );
+    const permission =
+      await this.permissionsService.getCurrentPermissionFromParents(
+        namespaceId,
+        parentResources,
+        userId,
+      );
+    if (permission === PermissionLevel.NO_ACCESS) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    const children = await this.resourceRepository.find({
       select: ['id', 'name', 'resourceType', 'parentId', 'tags', 'attrs'],
       where: {
         namespace: { id: namespaceId },
         parentId: resourceId,
       },
     });
-    return resources;
+
+    const filteredChildren: Resource[] = [];
+    for (const child of children) {
+      const permission =
+        await this.permissionsService.getCurrentPermissionFromParents(
+          namespaceId,
+          [child, ...parentResources],
+          userId,
+        );
+      if (permission !== PermissionLevel.NO_ACCESS) {
+        filteredChildren.push(child);
+      }
+    }
+    return filteredChildren;
   }
 
   async get(id: string) {

@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { TagModule } from 'src/tag/tag.module';
 // import { CacheModule } from '@nestjs/cache-manager';
 import { AuthModule } from 'src/auth/auth.module';
 import { UserModule } from 'src/user/user.module';
@@ -34,6 +35,7 @@ import { LoggerMiddleware } from './logger.middleware';
       cache: true,
       isGlobal: true,
     }),
+    TagModule,
     MailModule,
     AuthModule,
     UserModule,

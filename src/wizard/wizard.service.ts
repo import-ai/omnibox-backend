@@ -7,7 +7,7 @@ import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'src/wizard/processors/collect.processor';
@@ -55,23 +55,17 @@ export class WizardService {
     user: User,
     data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
-    const { html, url, title, namespace_id, space_type } = data;
-    if (!namespace_id || !space_type || !url || !html) {
+    const { html, url, title, namespace_id, parentId } = data;
+    if (!namespace_id || !parentId || !url || !html) {
       throw new BadRequestException('Missing required fields');
     }
     const namespace = await this.namespacesService.get(namespace_id);
-
-    const resourceRoot = await this.namespacesService.getRoot(
-      namespace.id,
-      space_type,
-      user.id,
-    );
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
       namespaceId: namespace.id,
       resourceType: 'link',
-      parentId: resourceRoot.id,
+      parentId: parentId,
       attrs: { url },
     };
     const resource = await this.resourcesService.create(user, resourceDto);

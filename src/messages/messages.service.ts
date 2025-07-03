@@ -7,7 +7,7 @@ import {
   OpenAIMessage,
 } from 'src/messages/entities/message.entity';
 import { CreateMessageDto } from 'src/messages/dto/create-message.dto';
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
 import { Task } from 'src/tasks/tasks.entity';
 import { WizardTask } from 'src/resources/wizard.task.service';

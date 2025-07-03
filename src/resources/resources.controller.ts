@@ -92,11 +92,11 @@ export class ResourcesController {
     });
   }
 
-  @Get(':resourceId/search')
+  @Get('search')
   async search(
     @Req() req,
     @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
+    @Query('resourceId') resourceId: string,
     @Query('name') name: string,
   ) {
     return await this.resourcesService.search({

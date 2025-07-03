@@ -1,17 +1,21 @@
 import * as bcrypt from 'bcrypt';
-import { User } from 'src/user/user.entity';
-import { In, Repository, Like, EntityManager } from 'typeorm';
+import { isEmail } from 'class-validator';
 import { InjectRepository } from '@nestjs/typeorm';
+import { User } from 'src/user/entities/user.entity';
+import { In, Repository, Like, EntityManager } from 'typeorm';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
 import { Injectable, ConflictException } from '@nestjs/common';
-import { isEmail } from 'class-validator';
+import { UserOption } from 'src/user/entities/user-option.entity';
+import { CreateUserOptionDto } from 'src/user/dto/create-user-option.dto';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(UserOption)
+    private userOptionRepository: Repository<UserOption>,
   ) {}
 
   async verify(email: string, password: string) {
@@ -141,5 +145,29 @@ export class UserService {
 
   async remove(id: string) {
     return await this.userRepository.softDelete(id);
+  }
+
+  async createOption(userId: string, createOptionDto: CreateUserOptionDto) {
+    const option = this.userOptionRepository.create({
+      user: { id: userId },
+      ...createOptionDto,
+    });
+    await this.userOptionRepository.save(option);
+  }
+
+  async getOption(userId: string, name: string) {
+    const option = await this.userOptionRepository.findOneBy({
+      name,
+      user: { id: userId },
+    });
+    return option;
+  }
+
+  async updateOption(userId: string, name: string, value: string) {
+    const option = await this.userOptionRepository.findOneOrFail({
+      where: { user: { id: userId }, name },
+    });
+    option.value = value;
+    return await this.userOptionRepository.save(option);
   }
 }

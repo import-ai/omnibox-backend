@@ -21,7 +21,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Task } from 'src/tasks/tasks.entity';
-import { User } from 'src/user/user.entity';
+import { User } from 'src/user/entities/user.entity';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
@@ -195,20 +195,22 @@ export class ResourcesService {
   }
 
   async search({ namespaceId, resourceId, name, userId }) {
-    // Self and child exclusions
-    const resourceChildren = await this.getAllSubResources(
-      namespaceId,
-      resourceId,
-      '',
-      true,
-    );
     const where: any = {
       user: { id: userId },
       // Cannot move to root directory
       parentId: Not(IsNull()),
       namespace: { id: namespaceId },
-      id: Not(In(resourceChildren.map((children) => children.id))),
     };
+    // Self and child exclusions
+    if (resourceId) {
+      const resourceChildren = await this.getAllSubResources(
+        namespaceId,
+        resourceId,
+        '',
+        true,
+      );
+      where.id = Not(In(resourceChildren.map((children) => children.id)));
+    }
     if (name) {
       where.name = Like(`%${name}%`);
     }

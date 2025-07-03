@@ -268,8 +268,11 @@ export class ResourcesService {
 
   async getParentResources(
     namespaceId: string,
-    resourceId: string,
+    resourceId: string | null,
   ): Promise<Resource[]> {
+    if (!resourceId) {
+      return [];
+    }
     const resources: Resource[] = [];
     while (true) {
       const resource = await this.resourceRepository.findOneOrFail({

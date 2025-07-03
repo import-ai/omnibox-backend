@@ -64,10 +64,7 @@ export class ResourcesService {
       if (!parentResource) {
         throw new BadRequestException('Parent resource not exists.');
       }
-      if (
-        data.namespaceId &&
-        parentResource.namespace.id !== data.namespaceId
-      ) {
+      if (data.namespaceId && parentResource.namespaceId !== data.namespaceId) {
         throw new BadRequestException(
           "Parent resource's namespace & space must match the resource's.",
         );
@@ -95,7 +92,7 @@ export class ResourcesService {
     const resource = await this.get(resourceId);
     const newResource = {
       name: duplicateName(resource.name),
-      namespaceId: resource.namespace.id,
+      namespaceId: resource.namespaceId,
       resourceType: resource.resourceType,
     };
     ['parentId', 'tags', 'content', 'attrs'].forEach((key) => {
@@ -262,7 +259,6 @@ export class ResourcesService {
       where: {
         id,
       },
-      relations: ['namespace'],
     });
     if (!resource) {
       throw new NotFoundException('Resource not found.');

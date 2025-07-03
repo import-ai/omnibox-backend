@@ -64,4 +64,7 @@ export class Resource extends Base {
   @ManyToOne(() => Namespace)
   @JoinColumn({ name: 'namespace_id' })
   namespace: Namespace;
+
+  @Column({ name: 'namespace_id' })
+  namespaceId: string;
 }

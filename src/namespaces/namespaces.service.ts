@@ -290,20 +290,19 @@ export class NamespacesService {
     });
   }
 
-  async getRoot(namespace: string, spaceType: SpaceType, userId: string) {
+  async getRoot(namespaceId: string, spaceType: SpaceType, userId: string) {
     let resource: Resource | null;
     if (spaceType === SpaceType.TEAMSPACE) {
-      resource = await this.getTeamspaceRoot(namespace);
+      resource = await this.getTeamspaceRoot(namespaceId);
     } else {
-      resource = await this.getPrivateRoot(userId, namespace);
+      resource = await this.getPrivateRoot(userId, namespaceId);
     }
-    const children = await this.resourceService.query({
-      namespaceId: namespace,
-      spaceType,
-      parentId: resource.id,
+    const children = await this.resourceService.listChildren(
+      namespaceId,
+      resource.id,
       userId,
-    });
-    return { ...resource, parentId: '0', spaceType, children };
+    );
+    return { ...resource, parentId: '0', children };
   }
 
   async userIsOwner(namespaceId: string, userId: string): Promise<boolean> {

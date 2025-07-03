@@ -27,6 +27,7 @@ import { WizardTask } from 'src/resources/wizard.task.service';
 import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 export interface IQuery {
   namespaceId: string;
@@ -64,10 +65,7 @@ export class ResourcesService {
       if (!parentResource) {
         throw new BadRequestException('Parent resource not exists.');
       }
-      if (
-        data.namespaceId &&
-        parentResource.namespace.id !== data.namespaceId
-      ) {
+      if (data.namespaceId && parentResource.namespaceId !== data.namespaceId) {
         throw new BadRequestException(
           "Parent resource's namespace & space must match the resource's.",
         );
@@ -88,17 +86,14 @@ export class ResourcesService {
       );
       return savedResource;
     });
-    return {
-      ...savedResource,
-      spaceType: await this.getSpaceType(savedResource),
-    };
+    return savedResource;
   }
 
   async duplicate(user: User, resourceId: string) {
     const resource = await this.get(resourceId);
     const newResource = {
       name: duplicateName(resource.name),
-      namespaceId: resource.namespace.id,
+      namespaceId: resource.namespaceId,
       resourceType: resource.resourceType,
     };
     ['parentId', 'tags', 'content', 'attrs'].forEach((key) => {
@@ -155,6 +150,15 @@ export class ResourcesService {
 
     const resources = await this.resourceRepository.find({
       where,
+      select: [
+        'id',
+        'name',
+        'resourceType',
+        'parentId',
+        'tags',
+        'attrs',
+        'namespace',
+      ],
       relations: ['namespace'],
     });
     return userId
@@ -240,16 +244,42 @@ export class ResourcesService {
       : resources;
   }
 
-  async getSpaceType(resource: Resource): Promise<SpaceType> {
-    while (resource.parentId !== null) {
-      resource = (await this.resourceRepository.findOne({
-        where: { id: resource.parentId },
-        relations: ['namespace'],
-      }))!;
+  async listChildren(namespaceId: string, resourceId: string, userId: string) {
+    const parentResources = await this.getParentResources(
+      namespaceId,
+      resourceId,
+    );
+    const permission =
+      await this.permissionsService.getCurrentPermissionFromParents(
+        namespaceId,
+        parentResources,
+        userId,
+      );
+    if (permission === PermissionLevel.NO_ACCESS) {
+      throw new ForbiddenException('Not authorized');
     }
-    return resource.namespace.rootResourceId === resource.id
-      ? SpaceType.TEAMSPACE
-      : SpaceType.PRIVATE;
+
+    const children = await this.resourceRepository.find({
+      select: ['id', 'name', 'resourceType', 'parentId', 'tags', 'attrs', 'namespaceId'],
+      where: {
+        namespace: { id: namespaceId },
+        parentId: resourceId,
+      },
+    });
+
+    const filteredChildren: Resource[] = [];
+    for (const child of children) {
+      const permission =
+        await this.permissionsService.getCurrentPermissionFromParents(
+          namespaceId,
+          [child, ...parentResources],
+          userId,
+        );
+      if (permission !== PermissionLevel.NO_ACCESS) {
+        filteredChildren.push(child);
+      }
+    }
+    return filteredChildren;
   }
 
   async get(id: string) {
@@ -257,13 +287,33 @@ export class ResourcesService {
       where: {
         id,
       },
-      relations: ['namespace'],
     });
     if (!resource) {
       throw new NotFoundException('Resource not found.');
     }
-    const spaceType = await this.getSpaceType(resource);
-    return { ...resource, spaceType };
+    return resource;
+  }
+
+  async getParentResources(
+    namespaceId: string,
+    resourceId: string | null,
+  ): Promise<Resource[]> {
+    if (!resourceId) {
+      return [];
+    }
+    const resources: Resource[] = [];
+    while (true) {
+      const resource = await this.resourceRepository.findOneOrFail({
+        where: { namespace: { id: namespaceId }, id: resourceId },
+        select: ['id', 'name', 'resourceType', 'parentId', 'globalLevel'],
+      });
+      resources.push(resource);
+      if (!resource.parentId) {
+        break;
+      }
+      resourceId = resource.parentId;
+    }
+    return resources;
   }
 
   async update(user: User, id: string, data: UpdateResourceDto) {
@@ -289,10 +339,7 @@ export class ResourcesService {
       savedNewResource,
       this.taskRepository,
     );
-    return {
-      ...savedNewResource,
-      spaceType: await this.getSpaceType(savedNewResource),
-    };
+    return savedNewResource;
   }
 
   async delete(user: User, id: string) {

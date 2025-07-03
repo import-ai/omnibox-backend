@@ -28,6 +28,9 @@ export class GroupUser extends Base {
   @JoinColumn({ name: 'group_id' })
   group: Group;
 
+  @Column({ name: 'group_id', nullable: false })
+  groupId: string;
+
   @ManyToOne(() => User, { nullable: false })
   @JoinColumn({ name: 'user_id' })
   user: User;

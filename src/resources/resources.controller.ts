@@ -8,6 +8,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
@@ -77,6 +78,19 @@ export class ResourcesController {
     });
   }
 
+  @Get(':resourceId/children')
+  async listChildren(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return this.resourcesService.listChildren(
+      namespaceId,
+      resourceId,
+      req.user.id,
+    );
+  }
+
   @Post(':resourceId/move/:targetId')
   async move(
     @Req() req,
@@ -107,26 +121,26 @@ export class ResourcesController {
     });
   }
 
-  @Get(':resourceId/path')
-  async path(
-    @Req() req,
-    @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
-  ) {
-    const resources: Array<Resource> = [];
-    let currentResource = await this.resourcesService.get(resourceId);
-    while (currentResource && currentResource.parentId) {
-      resources.push(currentResource);
-      currentResource = await this.resourcesService.get(
-        currentResource.parentId,
-      );
-    }
-    return await this.resourcesService.permissionFilter(
-      namespaceId,
-      req.user.id,
-      resources,
-    );
-  }
+  // @Get(':resourceId/path')
+  // async path(
+  //   @Req() req,
+  //   @Param('namespaceId') namespaceId: string,
+  //   @Param('resourceId') resourceId: string,
+  // ) {
+  //   const resources: Array<Resource> = [];
+  //   let currentResource = await this.resourcesService.get(resourceId);
+  //   while (currentResource && currentResource.parentId) {
+  //     resources.push(currentResource);
+  //     currentResource = await this.resourcesService.get(
+  //       currentResource.parentId,
+  //     );
+  //   }
+  //   return await this.resourcesService.permissionFilter(
+  //     namespaceId,
+  //     req.user.id,
+  //     resources,
+  //   );
+  // }
 
   @Get(':resourceId')
   async get(
@@ -134,21 +148,35 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
+    const userId: string = req.user.id;
+
+    const resource = await this.resourcesService.get(resourceId);
+    if (resource.namespaceId !== namespaceId) {
+      throw new NotFoundException('Not found');
+    }
+    const parentResources = await this.resourcesService.getParentResources(
       namespaceId,
-      resourceId,
-      req.user.id,
+      resource.parentId,
     );
-    if (!hasPermission) {
+
+    const permission =
+      await this.permissionsService.getCurrentPermissionFromParents(
+        namespaceId,
+        [resource, ...parentResources],
+        userId,
+      );
+    if (permission === PermissionLevel.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');
     }
-    const currentLevel = await this.permissionsService.getCurrentLevel(
-      namespaceId,
-      resourceId,
-      req.user.id,
-    );
-    const resource = await this.resourcesService.get(resourceId);
-    return { ...resource, currentLevel };
+
+    const path = [resource, ...parentResources]
+      .filter((r) => r.parentId) // remove root resource
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+      }))
+      .reverse();
+    return { ...resource, currentLevel: permission, path };
   }
 
   @Patch(':resourceId')

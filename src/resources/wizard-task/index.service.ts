@@ -29,7 +29,7 @@ export class Index {
           parent_id: resource.parentId,
         },
       },
-      namespace: resource.namespace,
+      namespace: { id: resource.namespaceId },
       user,
     });
     return await repo.save(task);
@@ -41,7 +41,7 @@ export class Index {
       input: {
         resource_id: resource.id,
       },
-      namespace: resource.namespace,
+      namespace: { id: resource.namespaceId },
       user,
     });
     return await repo.save(task);

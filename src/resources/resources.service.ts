@@ -260,7 +260,7 @@ export class ResourcesService {
     }
 
     const children = await this.resourceRepository.find({
-      select: ['id', 'name', 'resourceType', 'parentId', 'tags', 'attrs'],
+      select: ['id', 'name', 'resourceType', 'parentId', 'tags', 'attrs', 'namespaceId'],
       where: {
         namespace: { id: namespaceId },
         parentId: resourceId,

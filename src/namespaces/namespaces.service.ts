@@ -302,7 +302,7 @@ export class NamespacesService {
       resource.id,
       userId,
     );
-    return { ...resource, parentId: '0', spaceType, children };
+    return { ...resource, parentId: '0', children };
   }
 
   async userIsOwner(namespaceId: string, userId: string): Promise<boolean> {

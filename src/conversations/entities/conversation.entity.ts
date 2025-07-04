@@ -19,13 +19,11 @@ export class Conversation extends Base {
   @Column({ nullable: true })
   title?: string;
 
-  @ManyToOne(() => Namespace)
-  @JoinColumn({ name: 'namespace_id' })
-  namespace: Namespace;
+  @Column({ name: 'namespace_id' })
+  namespaceId: string;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+  @Column({ name: 'user_id' })
+  userId: string;
 
   @OneToMany(() => Message, (message) => message.conversation)
   messages: Message[];

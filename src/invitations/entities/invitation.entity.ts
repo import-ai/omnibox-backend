@@ -1,18 +1,8 @@
 import { Base } from 'src/common/base.entity';
-import { Group } from 'src/groups/entities/group.entity';
-import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
-import { Namespace } from 'src/namespaces/entities/namespace.entity';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import generateId from 'src/utils/generate-id';
-import {
-  BeforeInsert,
-  Column,
-  Entity,
-  Index,
-  JoinColumn,
-  ManyToOne,
-  PrimaryColumn,
-} from 'typeorm';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
+import { Index, Column, Entity, BeforeInsert, PrimaryColumn } from 'typeorm';
 
 @Entity('invitations')
 @Index(['namespace'], {
@@ -29,9 +19,8 @@ export class Invitation extends Base {
     this.id = generateId(6);
   }
 
-  @ManyToOne(() => Namespace, { nullable: false })
-  @JoinColumn({ name: 'namespace_id' })
-  namespace: Namespace;
+  @Column({ name: 'namespace_id' })
+  namespaceId: string;
 
   @Column({ type: 'enum', enum: NamespaceRole, nullable: false })
   namespaceRole: NamespaceRole;
@@ -39,7 +28,6 @@ export class Invitation extends Base {
   @Column({ type: 'enum', enum: PermissionLevel, nullable: false })
   rootPermissionLevel: PermissionLevel;
 
-  @ManyToOne(() => Group, { nullable: true })
-  @JoinColumn({ name: 'group_id' })
-  group: Group | null;
+  @Column({ name: 'group_id' })
+  groupId: string | null;
 }

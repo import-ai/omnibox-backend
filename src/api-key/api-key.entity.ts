@@ -17,6 +17,6 @@ export class APIKey extends Base {
   comment: string;
 
   @ManyToOne(() => User, (user) => user.apiKey)
-  @JoinColumn({ name: 'user_id' })
+  @Column({ name: 'user_id' })
   user: User;
 }

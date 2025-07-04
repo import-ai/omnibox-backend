@@ -1,15 +1,6 @@
-import { User } from 'src/user/entities/user.entity';
 import { Base } from 'src/common/base.entity';
 import generateId from 'src/utils/generate-id';
-import {
-  Column,
-  Entity,
-  ManyToOne,
-  JoinColumn,
-  PrimaryColumn,
-  BeforeInsert,
-} from 'typeorm';
-import { Namespace } from 'src/namespaces/entities/namespace.entity';
+import { Column, Entity, PrimaryColumn, BeforeInsert } from 'typeorm';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 export enum ResourceType {
@@ -57,13 +48,8 @@ export class Resource extends Base {
   })
   globalLevel: PermissionLevel | null;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'user_id' })
-  user: User;
-
-  @ManyToOne(() => Namespace)
-  @JoinColumn({ name: 'namespace_id' })
-  namespace: Namespace;
+  @Column({ name: 'user_id' })
+  userId: string;
 
   @Column({ name: 'namespace_id' })
   namespaceId: string;

@@ -1,13 +1,5 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
-import { Conversation } from 'src/conversations/entities/conversation.entity';
-import { User } from 'src/user/entities/user.entity';
 import { Base } from 'src/common/base.entity';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
  * Every message has a `parentId` that points to its preceding message.
@@ -52,13 +44,11 @@ export class Message extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Conversation, (conversation) => conversation.messages)
-  @JoinColumn({ name: 'conversation_id' })
-  conversation: Conversation;
+  @Column({ name: 'conversation_id' })
+  conversationId: string;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+  @Column({ name: 'user_id' })
+  userId: string;
 
   @Column('uuid', { name: 'parent_id', nullable: true })
   parentId?: string;

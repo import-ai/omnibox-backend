@@ -1,8 +1,8 @@
 import { Base } from 'src/common/base.entity';
 import generateId from 'src/utils/generate-id';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { Column, Entity, Index, PrimaryColumn, BeforeInsert } from 'typeorm';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
-import { Index, Column, Entity, BeforeInsert, PrimaryColumn } from 'typeorm';
 
 @Entity('invitations')
 @Index(['namespace'], {

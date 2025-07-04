@@ -1,15 +1,6 @@
 import { Base } from 'src/common/base.entity';
 import generateId from 'src/utils/generate-id';
-import { Resource } from 'src/resources/resources.entity';
-import {
-  Column,
-  Entity,
-  Index,
-  OneToOne,
-  JoinColumn,
-  PrimaryColumn,
-  BeforeInsert,
-} from 'typeorm';
+import { Column, Entity, Index, PrimaryColumn, BeforeInsert } from 'typeorm';
 
 @Entity('namespaces')
 @Index(['name'], { unique: true, where: '"deleted_at" IS NULL' })
@@ -29,10 +20,6 @@ export class Namespace extends Base {
 
   @Column({ name: 'max_running_tasks', type: 'int', default: 1 })
   maxRunningTasks: number;
-
-  @OneToOne(() => Resource, { nullable: true })
-  @JoinColumn({ name: 'root_resource_id' })
-  rootResource: Resource | null;
 
   @Column('varchar', { name: 'root_resource_id', nullable: true })
   rootResourceId: string | null;

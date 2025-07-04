@@ -3,12 +3,12 @@ import { Namespace } from 'src/namespaces/entities/namespace.entity';
 import { Resource } from 'src/resources/resources.entity';
 import { User } from 'src/user/entities/user.entity';
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Index,
+  Column,
+  Entity,
   ManyToOne,
   JoinColumn,
-  Column,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 
 export enum NamespaceRole {

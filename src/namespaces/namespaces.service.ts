@@ -1,24 +1,24 @@
 import each from 'src/utils/each';
-import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Namespace } from './entities/namespace.entity';
+import { Resource } from 'src/resources/resources.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
+import { NamespaceMemberDto } from './dto/namespace-member.dto';
+import { GroupUser } from 'src/groups/entities/group-user.entity';
+import { ResourcesService } from 'src/resources/resources.service';
+import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
+import { PermissionsService } from 'src/permissions/permissions.service';
+import { UserPermission } from 'src/permissions/entities/user-permission.entity';
 import {
-  ConflictException,
   Injectable,
+  ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { Resource } from 'src/resources/resources.entity';
-import { Namespace, SpaceType } from './entities/namespace.entity';
 import {
-  NamespaceMember,
   NamespaceRole,
+  NamespaceMember,
 } from './entities/namespace-member.entity';
-import { NamespaceMemberDto } from './dto/namespace-member.dto';
-import { ResourcesService } from 'src/resources/resources.service';
-import { PermissionsService } from 'src/permissions/permissions.service';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
-import { UserPermission } from 'src/permissions/entities/user-permission.entity';
-import { GroupUser } from 'src/groups/entities/group-user.entity';
 
 @Injectable()
 export class NamespacesService {
@@ -35,6 +35,20 @@ export class NamespacesService {
 
     private readonly permissionsService: PermissionsService,
   ) {}
+
+  async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
+    const member = await this.namespaceMemberRepository.findOne({
+      where: {
+        user: { id: userId },
+        namespace: { id: namespaceId },
+      },
+      relations: ['rootResource'],
+    });
+    if (member === null) {
+      throw new NotFoundException('Root resource not found.');
+    }
+    return member.rootResource;
+  }
 
   async getTeamspaceRoot(
     namespaceId: string,
@@ -192,20 +206,6 @@ export class NamespacesService {
     );
   }
 
-  async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
-    const member = await this.namespaceMemberRepository.findOne({
-      where: {
-        user: { id: userId },
-        namespace: { id: namespaceId },
-      },
-      relations: ['rootResource'],
-    });
-    if (member === null) {
-      throw new NotFoundException('Root resource not found.');
-    }
-    return member.rootResource;
-  }
-
   async listNamespaces(userId: string): Promise<Namespace[]> {
     const namespaces = await this.namespaceMemberRepository.find({
       where: {
@@ -290,19 +290,27 @@ export class NamespacesService {
     });
   }
 
-  async getRoot(namespaceId: string, spaceType: SpaceType, userId: string) {
-    let resource: Resource | null;
-    if (spaceType === SpaceType.TEAMSPACE) {
-      resource = await this.getTeamspaceRoot(namespaceId);
-    } else {
-      resource = await this.getPrivateRoot(userId, namespaceId);
-    }
-    const children = await this.resourceService.listChildren(
+  async getRoot(namespaceId: string, userId: string) {
+    const privateRoot = await this.getPrivateRoot(userId, namespaceId);
+    const privateChildren = await this.resourceService.listChildren(
       namespaceId,
-      resource.id,
+      privateRoot.id,
       userId,
     );
-    return { ...resource, parentId: '0', children };
+    const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
+    const teamspaceChildren = await this.resourceService.listChildren(
+      namespaceId,
+      teamspaceRoot.id,
+      userId,
+    );
+    return {
+      private: { ...privateRoot, parentId: '0', children: privateChildren },
+      teamspace: {
+        ...teamspaceRoot,
+        parentId: '0',
+        children: teamspaceChildren,
+      },
+    };
   }
 
   async userIsOwner(namespaceId: string, userId: string): Promise<boolean> {

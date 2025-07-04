@@ -24,14 +24,12 @@ import { Task } from 'src/tasks/tasks.entity';
 import { User } from 'src/user/entities/user.entity';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
-import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
 export interface IQuery {
   namespaceId: string;
-  spaceType: SpaceType;
   parentId: string;
   userId: string;
   tags?: string;
@@ -130,8 +128,7 @@ export class ResourcesService {
     return filtered;
   }
 
-  // get resources under parentId
-  async queryV2(
+  async query(
     namespaceId: string,
     parentId: string,
     userId?: string, // if is undefined, would skip the permission filter
@@ -152,30 +149,18 @@ export class ResourcesService {
       where,
       select: [
         'id',
-        'name',
-        'resourceType',
-        'parentId',
         'tags',
+        'name',
         'attrs',
+        'parentId',
         'namespace',
+        'resourceType',
       ],
       relations: ['namespace'],
     });
     return userId
       ? await this.permissionFilter(namespaceId, userId, resources)
       : resources;
-  }
-
-  async query({ namespaceId, parentId, spaceType, tags, userId }: IQuery) {
-    const filteredResources: Resource[] = await this.queryV2(
-      namespaceId,
-      parentId,
-      userId,
-      tags,
-    );
-    return filteredResources.map((res) => {
-      return { ...res, spaceType };
-    });
   }
 
   async move({ namespaceId, resourceId, targetId, userId }) {
@@ -235,7 +220,7 @@ export class ResourcesService {
   ): Promise<Resource[]> {
     let resources: Resource[] = [await this.get(parentId)];
     for (const res of resources) {
-      const subResources: Resource[] = await this.queryV2(namespaceId, res.id);
+      const subResources: Resource[] = await this.query(namespaceId, res.id);
       resources.push(...subResources);
     }
     resources = includeRoot ? resources : resources.slice(1);
@@ -260,7 +245,15 @@ export class ResourcesService {
     }
 
     const children = await this.resourceRepository.find({
-      select: ['id', 'name', 'resourceType', 'parentId', 'tags', 'attrs', 'namespaceId'],
+      select: [
+        'id',
+        'tags',
+        'name',
+        'attrs',
+        'parentId',
+        'namespaceId',
+        'resourceType',
+      ],
       where: {
         namespace: { id: namespaceId },
         parentId: resourceId,

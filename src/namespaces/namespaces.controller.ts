@@ -1,17 +1,16 @@
-import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { NamespaceRole } from './entities/namespace-member.entity';
+import { NamespacesService } from 'src/namespaces/namespaces.service';
 import {
   Req,
   Get,
   Post,
   Body,
+  Query,
   Param,
   Patch,
   Delete,
   Controller,
-  Query,
 } from '@nestjs/common';
-import { SpaceType } from './entities/namespace.entity';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
@@ -62,16 +61,8 @@ export class NamespacesController {
   }
 
   @Get(':namespaceId/root')
-  async getRoot(
-    @Param('namespaceId') namespaceId: string,
-    @Query('space_type') spaceType: SpaceType,
-    @Req() req,
-  ) {
-    return await this.namespacesService.getRoot(
-      namespaceId,
-      spaceType,
-      req.user.id,
-    );
+  async getRoot(@Param('namespaceId') namespaceId: string, @Req() req) {
+    return await this.namespacesService.getRoot(namespaceId, req.user.id);
   }
 
   @Post()

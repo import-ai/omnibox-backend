@@ -127,7 +127,6 @@ export class ResourcesController {
     }
 
     const path = [resource, ...parentResources]
-      .filter((r) => r.parentId) // remove root resource
       .map((r) => ({
         id: r.id,
         name: r.name,

@@ -33,12 +33,8 @@ describe('ResourcesController (e2e)', () => {
     const testFilePath = path.join(__dirname, 'test-upload.txt');
     fs.writeFileSync(testFilePath, 'hello world');
 
-    const spaceType: string = 'private';
-
     const privateRootResourceIdResponse = await request(app.getHttpServer())
-      .get(
-        `/api/v1/resources/root?namespace_id=${user.namespace.id}&space_type=${spaceType}`,
-      )
+      .get(`/api/v1/resources/root?namespace_id=${user.namespace.id}`)
       .set('Authorization', `Bearer ${user.token}`)
       .expect(200);
 

@@ -1,48 +1,28 @@
-import { Resource } from 'src/resources/resources.entity';
+import { Response } from 'express';
+import { fileResponse } from './utils';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
-import {
-  Body,
-  Controller,
-  Delete,
-  ForbiddenException,
-  Get,
-  NotFoundException,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  Query,
-  Req,
-  Res,
-  UploadedFile,
-  UseInterceptors,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { Response } from 'express';
-import { SpaceType } from 'src/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
-
-export async function fileResponse(
-  resourceId: string,
-  response: Response,
-  resourcesService: ResourcesService,
-) {
-  const { fileStream, resource } =
-    await resourcesService.downloadFile(resourceId);
-  const encodedName = encodeURIComponent(resource.name);
-  response.setHeader(
-    'Content-Disposition',
-    `attachment; filename="${encodedName}"`,
-  );
-  response.setHeader(
-    'Content-Type',
-    resource.attrs?.mimetype || 'application/octet-stream',
-  );
-  fileStream.pipe(response);
-}
+import {
+  Req,
+  Res,
+  Get,
+  Post,
+  Body,
+  Param,
+  Patch,
+  Query,
+  Delete,
+  Controller,
+  ParseIntPipe,
+  UploadedFile,
+  UseInterceptors,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class ResourcesController {
@@ -65,17 +45,15 @@ export class ResourcesController {
   async query(
     @Req() req,
     @Query('namespace') namespaceId: string,
-    @Query('spaceType') spaceType: SpaceType,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
   ) {
-    return await this.resourcesService.query({
+    return await this.resourcesService.query(
       namespaceId,
-      spaceType,
       parentId,
-      userId: req.user.id,
+      req.user.id,
       tags,
-    });
+    );
   }
 
   @Get(':resourceId/children')
@@ -121,27 +99,6 @@ export class ResourcesController {
     });
   }
 
-  // @Get(':resourceId/path')
-  // async path(
-  //   @Req() req,
-  //   @Param('namespaceId') namespaceId: string,
-  //   @Param('resourceId') resourceId: string,
-  // ) {
-  //   const resources: Array<Resource> = [];
-  //   let currentResource = await this.resourcesService.get(resourceId);
-  //   while (currentResource && currentResource.parentId) {
-  //     resources.push(currentResource);
-  //     currentResource = await this.resourcesService.get(
-  //       currentResource.parentId,
-  //     );
-  //   }
-  //   return await this.resourcesService.permissionFilter(
-  //     namespaceId,
-  //     req.user.id,
-  //     resources,
-  //   );
-  // }
-
   @Get(':resourceId')
   async get(
     @Req() req,
@@ -170,7 +127,6 @@ export class ResourcesController {
     }
 
     const path = [resource, ...parentResources]
-      .filter((r) => r.parentId) // remove root resource
       .map((r) => ({
         id: r.id,
         name: r.name,

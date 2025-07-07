@@ -24,13 +24,13 @@ export class Index {
         title: resource.name,
         content: resource.content,
         meta_info: {
-          user_id: resource.user.id,
+          user_id: resource.userId,
           resource_id: resource.id,
           parent_id: resource.parentId,
         },
       },
-      namespace: { id: resource.namespaceId },
-      user,
+      namespaceId: resource.namespaceId,
+      userId: user.id,
     });
     return await repo.save(task);
   }
@@ -41,8 +41,8 @@ export class Index {
       input: {
         resource_id: resource.id,
       },
-      namespace: { id: resource.namespaceId },
-      user,
+      namespaceId: resource.namespaceId,
+      userId: user.id,
     });
     return await repo.save(task);
   }
@@ -73,8 +73,8 @@ export class Index {
         message_id: message.id,
         message: message.message,
       },
-      namespace: { id: namespaceId },
-      user: { id: userId },
+      namespaceId,
+      userId,
     });
     return await repo.save(task);
   }

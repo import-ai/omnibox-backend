@@ -1,14 +1,6 @@
 import { Base } from 'src/common/base.entity';
-import { Namespace } from 'src/namespaces/entities/namespace.entity';
 import generateId from 'src/utils/generate-id';
-import {
-  Entity,
-  ManyToOne,
-  JoinColumn,
-  Column,
-  PrimaryColumn,
-  BeforeInsert,
-} from 'typeorm';
+import { Entity, Column, PrimaryColumn, BeforeInsert } from 'typeorm';
 
 @Entity('groups')
 export class Group extends Base {
@@ -25,7 +17,6 @@ export class Group extends Base {
   @Column()
   title: string;
 
-  @ManyToOne(() => Namespace, { nullable: false })
-  @JoinColumn({ name: 'namespace_id' })
-  namespace: Namespace;
+  @Column({ name: 'namespace_id' })
+  namespaceId: string;
 }

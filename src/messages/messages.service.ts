@@ -51,8 +51,8 @@ export class MessagesService {
   ): Promise<Message> {
     const message = this.messageRepository.create({
       message: dto.message,
-      conversation: { id: conversationId },
-      user: { id: user.id },
+      conversationId,
+      userId: user.id,
       parentId: dto.parentId,
       attrs: dto.attrs,
     });
@@ -87,7 +87,7 @@ export class MessagesService {
       const updatedMsg = await manager.save(message);
       await this.index(
         index,
-        message.user.id,
+        message.userId,
         namespaceId,
         conversationId,
         message,
@@ -134,7 +134,7 @@ export class MessagesService {
 
   async findAll(userId: string, conversationId: string) {
     return await this.messageRepository.find({
-      where: { conversation: { id: conversationId }, user: { id: userId } },
+      where: { conversationId, userId },
       order: { createdAt: 'ASC' },
     });
   }
@@ -142,8 +142,8 @@ export class MessagesService {
   async remove(conversationId: string, messageId: string, user: User) {
     return await this.messageRepository.softDelete({
       id: messageId,
-      conversation: { id: conversationId },
-      user: { id: user.id },
+      conversationId,
+      userId: user.id,
     });
   }
 }

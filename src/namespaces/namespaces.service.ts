@@ -10,6 +10,7 @@ import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { UserPermission } from 'src/permissions/entities/user-permission.entity';
+import { UserService } from 'src/user/user.service';
 import {
   Injectable,
   ConflictException,
@@ -29,7 +30,11 @@ export class NamespacesService {
     @InjectRepository(NamespaceMember)
     private namespaceMemberRepository: Repository<NamespaceMember>,
 
+    @InjectRepository(Resource)
+    private resourceRepository: Repository<Resource>,
+
     private readonly dataSource: DataSource,
+    private readonly userService: UserService,
 
     private readonly resourceService: ResourcesService,
 
@@ -39,15 +44,14 @@ export class NamespacesService {
   async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
     const member = await this.namespaceMemberRepository.findOne({
       where: {
-        user: { id: userId },
-        namespace: { id: namespaceId },
+        userId,
+        namespaceId,
       },
-      relations: ['rootResource'],
     });
     if (member === null) {
       throw new NotFoundException('Root resource not found.');
     }
-    return member.rootResource;
+    return await this.resourceService.get(member.rootResourceId);
   }
 
   async getTeamspaceRoot(
@@ -61,15 +65,21 @@ export class NamespacesService {
       where: {
         id: namespaceId,
       },
-      relations: ['rootResource'],
     });
     if (namespace === null) {
       throw new NotFoundException('Workspace not found');
     }
-    if (namespace.rootResource === null) {
+    if (namespace.rootResourceId === null) {
       throw new NotFoundException('Root resource not found');
     }
-    return namespace.rootResource;
+    const resourceRepo = manager
+      ? manager.getRepository(Resource)
+      : this.resourceRepository;
+    return await resourceRepo.findOneOrFail({
+      where: {
+        id: namespace.rootResourceId,
+      },
+    });
   }
 
   async get(id: string, manager?: EntityManager) {
@@ -115,12 +125,12 @@ export class NamespacesService {
     const namespace = await manager.save(manager.create(Namespace, { name }));
     const publicRoot = await this.resourceService.createFolder(
       namespace.id,
-      null,
-      null,
+      '',
+      '',
       manager,
     );
     await manager.update(Namespace, namespace.id, {
-      rootResource: { id: publicRoot.id },
+      rootResourceId: publicRoot.id,
     });
     return namespace;
   }
@@ -156,8 +166,8 @@ export class NamespacesService {
   ) {
     const count = await manager.count(NamespaceMember, {
       where: {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
         deletedAt: IsNull(),
       },
     });
@@ -166,16 +176,16 @@ export class NamespacesService {
     }
     const privateRoot = await this.resourceService.createFolder(
       namespaceId,
-      null,
+      '',
       userId,
       manager,
     );
     await manager.save(
       manager.create(NamespaceMember, {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
         role,
-        rootResource: { id: privateRoot.id },
+        rootResourceId: privateRoot.id,
       }),
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId, manager);
@@ -201,7 +211,7 @@ export class NamespacesService {
     role: NamespaceRole,
   ) {
     await this.namespaceMemberRepository.update(
-      { namespace: { id: namespaceId }, user: { id: userId } },
+      { namespaceId, userId },
       { role },
     );
   }
@@ -209,11 +219,11 @@ export class NamespacesService {
   async listNamespaces(userId: string): Promise<Namespace[]> {
     const namespaces = await this.namespaceMemberRepository.find({
       where: {
-        user: { id: userId },
+        userId,
       },
-      relations: ['namespace'],
+      select: ['namespaceId'],
     });
-    return namespaces.map((v) => v.namespace);
+    return await Promise.all(namespaces.map((v) => this.get(v.namespaceId)));
   }
 
   async listMembers(
@@ -221,8 +231,7 @@ export class NamespacesService {
     manager?: EntityManager,
   ): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
-      where: { namespace: { id: namespaceId } },
-      relations: ['user'],
+      where: { namespaceId },
     });
     if (members.length <= 0) {
       return [];
@@ -234,17 +243,23 @@ export class NamespacesService {
             this.permissionsService.getUserLevel(
               namespaceId,
               teamspaceRoot.id,
-              member.user.id,
+              member.userId,
             ),
           )
           .then((userLevel) =>
-            Promise.resolve({
-              id: member.id,
-              level: userLevel,
-              role: member.role,
-              userId: member.user.id,
-              email: member.user.email,
-              username: member.user.username,
+            this.userService.find(member.userId).then((user) => {
+              if (user) {
+                return Promise.resolve({
+                  id: member.id,
+                  level: userLevel,
+                  role: member.role,
+                  userId: user.id,
+                  email: user.email,
+                  username: user.username,
+                });
+              } else {
+                throw new NotFoundException('User not found.');
+              }
             }),
           ),
       ),
@@ -254,8 +269,8 @@ export class NamespacesService {
   async getMemberByUserId(namespaceId: string, userId: string) {
     return await this.namespaceMemberRepository.findOne({
       where: {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
         deletedAt: IsNull(),
       },
     });
@@ -264,26 +279,25 @@ export class NamespacesService {
   async deleteMember(namespaceId: string, userId: string) {
     await this.dataSource.transaction(async (manager) => {
       const member = await manager.findOne(NamespaceMember, {
-        where: { namespace: { id: namespaceId }, user: { id: userId } },
-        relations: ['rootResource'],
+        where: { namespaceId, userId },
       });
       if (!member) {
         return;
       }
       // Delete private root
       await manager.softDelete(Resource, {
-        namespace: { id: namespaceId },
-        id: member.rootResource.id,
+        namespaceId,
+        id: member.rootResourceId,
       });
       // Clear user permissions
       await manager.softDelete(UserPermission, {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
       });
       // Remove user from all groups
       await manager.softDelete(GroupUser, {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
       });
       // Delete namespace member record
       await manager.softDelete(NamespaceMember, { id: member.id });
@@ -316,8 +330,8 @@ export class NamespacesService {
   async userIsOwner(namespaceId: string, userId: string): Promise<boolean> {
     const user = await this.namespaceMemberRepository.findOne({
       where: {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
         deletedAt: IsNull(),
       },
     });

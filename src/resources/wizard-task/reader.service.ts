@@ -17,8 +17,8 @@ export class Reader {
       payload: {
         resourceId: resource.id,
       },
-      namespace: { id: resource.namespaceId },
-      user,
+      namespaceId: resource.namespaceId,
+      userId: user.id,
     });
     return await repo.save(task);
   }

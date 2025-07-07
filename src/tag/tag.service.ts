@@ -17,7 +17,7 @@ export class TagService {
       return oldTag;
     }
     const newTag = this.tagRepository.create({
-      namespace: { id: namespaceId },
+      namespaceId,
       name: createTagDto.name,
     });
     return await this.tagRepository.save(newTag);
@@ -26,7 +26,7 @@ export class TagService {
   async findByName(namespaceId: string, name: string) {
     return await this.tagRepository.findOneBy({
       name,
-      namespace: { id: namespaceId },
+      namespaceId,
     });
   }
 
@@ -35,13 +35,13 @@ export class TagService {
       return [];
     }
     return await this.tagRepository.find({
-      where: { namespace: { id: namespaceId }, id: In(ids) },
+      where: { namespaceId, id: In(ids) },
     });
   }
 
   async findAll(namespaceId: string, name: string) {
     const where: any = {
-      namespace: { id: namespaceId },
+      namespaceId,
     };
     if (name) {
       where.name = Like(`%${name}%`);

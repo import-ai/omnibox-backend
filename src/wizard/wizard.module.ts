@@ -7,10 +7,12 @@ import { ResourcesModule } from 'src/resources/resources.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Task } from 'src/tasks/tasks.entity';
 import { MessagesModule } from 'src/messages/messages.module';
+import { UserModule } from 'src/user/user.module';
 
 @Module({
   providers: [WizardService],
   imports: [
+    UserModule,
     NamespacesModule,
     ResourcesModule,
     MessagesModule,

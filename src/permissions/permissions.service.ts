@@ -16,7 +16,6 @@ import { Resource } from 'src/resources/resources.entity';
 import { UserService } from 'src/user/user.service';
 import { GroupUser } from 'src/groups/entities/group-user.entity';
 import { NamespaceMember } from 'src/namespaces/entities/namespace-member.entity';
-import { Record } from 'openai/core';
 
 @Injectable()
 export class PermissionsService {
@@ -50,15 +49,14 @@ export class PermissionsService {
       resourceId,
     );
     userPermissions = userPermissions.filter(
-      (permission) => permission.user?.id !== userId,
+      (permission) => permission.userId !== userId,
     );
     const users = [
       curPermi,
       ...plainToInstance(UserPermissionDto, userPermissions),
     ];
     const groups = await this.groupPermiRepo.find({
-      where: { namespace: { id: namespaceId }, resource: { id: resourceId } },
-      relations: ['group'],
+      where: { namespaceId, resourceId },
     });
     const globalLevel = await this.getGlobalPermissionLevel(
       namespaceId,
@@ -84,15 +82,14 @@ export class PermissionsService {
     while (true) {
       const permissions = await this.userPermiRepo.find({
         where: {
-          namespace: { id: namespaceId },
-          resource: { id: resourceId },
+          namespaceId,
+          resourceId,
           deletedAt: IsNull(),
         },
-        relations: ['user'],
       });
       for (const permission of permissions) {
-        const userId = permission.user!.id;
-        if (!userIds.has(userId)) {
+        const userId = permission.userId;
+        if (userId && !userIds.has(userId)) {
           userIds.add(userId);
           userPermissions.push(permission);
         }
@@ -112,7 +109,7 @@ export class PermissionsService {
     permission: PermissionDto,
   ) {
     await this.resourceRepository.update(
-      { namespace: { id: namespaceId }, id: resourceId },
+      { namespaceId, id: resourceId },
       { globalLevel: permission.level },
     );
   }
@@ -126,9 +123,9 @@ export class PermissionsService {
     return await this.groupPermiRepo.findOne({
       where: {
         level: permissionLevel,
-        namespace: { id: namespaceId },
-        resource: { id: resourceId },
-        group: { id: groupId },
+        namespaceId,
+        resourceId,
+        groupId,
       },
     });
   }
@@ -141,9 +138,9 @@ export class PermissionsService {
   ) {
     const groupPermission = this.groupPermiRepo.create({
       level: permissionLevel,
-      namespace: { id: namespaceId },
-      resource: { id: resourceId },
-      group: { id: groupId },
+      namespaceId,
+      resourceId,
+      groupId,
     });
     await this.groupPermiRepo.save(groupPermission);
   }
@@ -159,9 +156,9 @@ export class PermissionsService {
       const result = await manager.update(
         GroupPermission,
         {
-          namespace: { id: namespaceId },
-          resource: { id: resourceId },
-          group: { id: groupId },
+          namespaceId,
+          resourceId,
+          groupId,
           deletedAt: IsNull(),
         },
         { level },
@@ -169,9 +166,9 @@ export class PermissionsService {
       if (result.affected === 0) {
         await manager.save(
           manager.create(GroupPermission, {
-            namespace: { id: namespaceId },
-            resource: { id: resourceId },
-            group: { id: groupId },
+            namespaceId,
+            resourceId,
+            groupId,
             level,
           }),
         );
@@ -185,9 +182,9 @@ export class PermissionsService {
     groupId: string,
   ) {
     await this.groupPermiRepo.delete({
-      namespace: { id: namespaceId },
-      resource: { id: resourceId },
-      group: { id: groupId },
+      namespaceId,
+      resourceId,
+      groupId,
     });
   }
 
@@ -199,11 +196,10 @@ export class PermissionsService {
     while (true) {
       const permission = await this.userPermiRepo.findOne({
         where: {
-          namespace: { id: namespaceId },
-          resource: { id: resourceId },
-          user: { id: userId },
+          namespaceId,
+          resourceId,
+          userId,
         },
-        relations: ['user'],
       });
       if (permission) {
         return plainToInstance(UserPermissionDto, permission);
@@ -229,9 +225,9 @@ export class PermissionsService {
     while (true) {
       permission = await this.groupPermiRepo.findOne({
         where: {
-          namespace: { id: namespaceId },
-          resource: { id: resourceId },
-          group: { id: groupId },
+          namespaceId,
+          resourceId,
+          groupId,
         },
       });
       if (permission) {
@@ -254,7 +250,7 @@ export class PermissionsService {
     let level: PermissionLevel | null = null;
     while (true) {
       const resource = await this.resourceRepository.findOne({
-        where: { namespace: { id: namespaceId }, id: resourceId },
+        where: { namespaceId, id: resourceId },
       });
       if (!resource) {
         break;
@@ -293,9 +289,9 @@ export class PermissionsService {
   async getUserLevel(namespaceId: string, resourceId: string, userId: string) {
     const userPermission = await this.userPermiRepo.findOne({
       where: {
-        namespace: { id: namespaceId },
-        resource: { id: resourceId },
-        user: { id: userId },
+        namespaceId,
+        resourceId,
+        userId,
       },
     });
     return userPermission ? userPermission.level : PermissionLevel.NO_ACCESS;
@@ -311,9 +307,9 @@ export class PermissionsService {
     const result = await manager.update(
       UserPermission,
       {
-        namespace: { id: namespaceId },
-        resource: { id: resourceId },
-        user: { id: userId },
+        namespaceId,
+        resourceId,
+        userId,
         deletedAt: IsNull(),
       },
       { level },
@@ -321,9 +317,9 @@ export class PermissionsService {
     if (result.affected === 0) {
       await manager.save(
         manager.create(UserPermission, {
-          namespace: { id: namespaceId },
-          resource: { id: resourceId },
-          user: { id: userId },
+          namespaceId,
+          resourceId,
+          userId,
           level,
         }),
       );
@@ -336,9 +332,9 @@ export class PermissionsService {
     userId: string,
   ) {
     await this.userPermiRepo.delete({
-      namespace: { id: namespaceId },
-      resource: { id: resourceId },
-      user: { id: userId },
+      namespaceId,
+      resourceId,
+      userId,
     });
   }
 
@@ -350,7 +346,7 @@ export class PermissionsService {
   ) {
     // Check if the user is a member of the namespace
     const count = await this.namespaceMembersRepository.count({
-      where: { namespace: { id: namespaceId }, user: { id: userId } },
+      where: { namespaceId, userId },
     });
     if (count == 0) {
       return false;
@@ -372,16 +368,15 @@ export class PermissionsService {
     }
     const groups = await this.groupUserRepository.find({
       where: {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
       },
-      relations: ['group'],
     });
     for (const group of groups) {
       const groupLevel = await this.getGroupPermissionLevel(
         namespaceId,
         resourceId,
-        group.group.id,
+        group.groupId,
       );
       if (comparePermissionLevel(groupLevel, level) >= 0) {
         return true;
@@ -413,16 +408,15 @@ export class PermissionsService {
     }
     const groups = await this.groupUserRepository.find({
       where: {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
       },
-      relations: ['group'],
     });
     for (const group of groups) {
       const groupLevel = await this.getGroupPermissionLevel(
         namespaceId,
         resourceId,
-        group.group.id,
+        group.groupId,
       );
       if (comparePermissionLevel(groupLevel, level) >= 0) {
         level = groupLevel;
@@ -449,8 +443,8 @@ export class PermissionsService {
   ): Promise<PermissionLevel | null> {
     const userPermissions = await this.userPermiRepo.find({
       where: {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
         resourceId: In(parentResourceIds),
       },
     });
@@ -473,16 +467,18 @@ export class PermissionsService {
   ): Promise<PermissionLevel | null> {
     const groupPermissions = await this.groupPermiRepo.find({
       where: {
-        namespace: { id: namespaceId },
-        resource: { id: In(parentResourceIds) },
-        group: { id: In(groupIds) },
+        namespaceId,
+        resourceId: In(parentResourceIds),
+        groupId: In(groupIds),
       },
     });
     const permiMap: Map<string, PermissionLevel | null> = new Map();
     for (const groupPermi of groupPermissions) {
-      const resourceId = groupPermi.resource!.id;
-      const curPermi = permiMap.get(resourceId) || null;
-      permiMap.set(resourceId, maxPermission(curPermi, groupPermi.level));
+      const resourceId = groupPermi.resourceId;
+      if (resourceId) {
+        const curPermi = permiMap.get(resourceId) || null;
+        permiMap.set(resourceId, maxPermission(curPermi, groupPermi.level));
+      }
     }
     for (const resourceId of parentResourceIds) {
       const permission = permiMap.get(resourceId);
@@ -500,8 +496,8 @@ export class PermissionsService {
   ): Promise<PermissionLevel> {
     const groups = await this.groupUserRepository.find({
       where: {
-        namespace: { id: namespaceId },
-        user: { id: userId },
+        namespaceId,
+        userId,
       },
     });
     const groupIds = groups.map((group) => group.groupId);
@@ -532,7 +528,7 @@ export class PermissionsService {
     resourceId: string,
   ): Promise<string | null> {
     const resource = await this.resourceRepository.findOne({
-      where: { namespace: { id: namespaceId }, id: resourceId },
+      where: { namespaceId, id: resourceId },
     });
     if (!resource) {
       return null;

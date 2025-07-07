@@ -2,9 +2,13 @@ import { ResourcesService } from 'src/resources/resources.service';
 import { Task } from 'src/tasks/tasks.entity';
 import { BadRequestException } from '@nestjs/common';
 import { Processor } from 'src/wizard/processors/processor.abstract';
+import { UserService } from 'src/user/user.service';
 
 export class CollectProcessor extends Processor {
-  constructor(private readonly resourcesService: ResourcesService) {
+  constructor(
+    private readonly userService: UserService,
+    private readonly resourcesService: ResourcesService,
+  ) {
     super();
   }
 
@@ -14,21 +18,27 @@ export class CollectProcessor extends Processor {
     }
     const resourceId = task.payload.resourceId;
     if (task.exception) {
-      await this.resourcesService.update(task.user, resourceId, {
-        namespaceId: task.namespace.id,
-        content: task.exception.error,
-      });
+      const user = await this.userService.find(task.userId);
+      if (user) {
+        await this.resourcesService.update(user, resourceId, {
+          namespaceId: task.namespaceId,
+          content: task.exception.error,
+        });
+      }
       return {};
     } else if (task.output) {
       const { markdown, title, ...attrs } = task.output || {};
       const resource = await this.resourcesService.get(resourceId);
       const mergedAttrs = { ...(resource?.attrs || {}), ...attrs };
-      await this.resourcesService.update(task.user, resourceId, {
-        namespaceId: task.namespace.id,
-        name: title,
-        content: markdown,
-        attrs: mergedAttrs,
-      });
+      const user = await this.userService.find(task.userId);
+      if (user) {
+        await this.resourcesService.update(user, resourceId, {
+          namespaceId: task.namespaceId,
+          name: title,
+          content: markdown,
+          attrs: mergedAttrs,
+        });
+      }
       return { resourceId };
     }
     return {};

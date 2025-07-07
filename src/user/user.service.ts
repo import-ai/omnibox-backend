@@ -149,7 +149,7 @@ export class UserService {
 
   async createOption(userId: string, createOptionDto: CreateUserOptionDto) {
     const option = this.userOptionRepository.create({
-      user: { id: userId },
+      userId,
       ...createOptionDto,
     });
     await this.userOptionRepository.save(option);
@@ -158,14 +158,14 @@ export class UserService {
   async getOption(userId: string, name: string) {
     const option = await this.userOptionRepository.findOneBy({
       name,
-      user: { id: userId },
+      userId,
     });
     return option;
   }
 
   async updateOption(userId: string, name: string, value: string) {
     const option = await this.userOptionRepository.findOneOrFail({
-      where: { user: { id: userId }, name },
+      where: { userId, name },
     });
     option.value = value;
     return await this.userOptionRepository.save(option);

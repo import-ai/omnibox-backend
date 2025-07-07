@@ -16,6 +16,7 @@ import { Processor } from 'src/wizard/processors/processor.abstract';
 import { MessagesService } from 'src/messages/messages.service';
 import { StreamService } from 'src/wizard/stream.service';
 import { WizardAPIService } from 'src/wizard/api.wizard.service';
+import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class WizardService {
@@ -29,10 +30,11 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
+    private readonly userService: UserService,
   ) {
     this.processors = {
-      collect: new CollectProcessor(resourcesService),
-      file_reader: new ReaderProcessor(resourcesService),
+      collect: new CollectProcessor(userService, resourcesService),
+      file_reader: new ReaderProcessor(userService, resourcesService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -59,11 +61,10 @@ export class WizardService {
     if (!namespace_id || !parentId || !url || !html) {
       throw new BadRequestException('Missing required fields');
     }
-    const namespace = await this.namespacesService.get(namespace_id);
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace.id,
+      namespaceId: namespace_id,
       resourceType: 'link',
       parentId: parentId,
       attrs: { url },
@@ -76,9 +77,9 @@ export class WizardService {
     const task = await this.create({
       function: 'collect',
       input: { html, url, title },
-      namespace: namespace,
+      namespaceId: namespace_id,
       payload,
-      user,
+      userId: user.id,
     });
     return { task_id: task.id, resource_id: resource.id };
   }
@@ -86,7 +87,6 @@ export class WizardService {
   async taskDoneCallback(data: TaskCallbackDto) {
     const task = await this.taskRepository.findOneOrFail({
       where: { id: data.id },
-      relations: ['namespace', 'user'],
     });
 
     task.endedAt = new Date();
@@ -145,8 +145,8 @@ export class WizardService {
       const task = this.taskRepository.create({
         ...(queryResult[0] as Task),
         startedAt: new Date(),
-        user: { id: queryResult[0].user_id },
-        namespace: { id: queryResult[0].namespace_id },
+        userId: queryResult[0].user_id,
+        namespaceId: queryResult[0].namespace_id,
       });
       await this.taskRepository.save(task);
       return task;

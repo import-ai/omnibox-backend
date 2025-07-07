@@ -1,12 +1,5 @@
 import { Base } from 'src/common/base.entity';
-import { User } from 'src/user/entities/user.entity';
-import {
-  Column,
-  Entity,
-  ManyToOne,
-  JoinColumn,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('api_keys')
 export class APIKey extends Base {
@@ -16,7 +9,6 @@ export class APIKey extends Base {
   @Column({ length: 32, nullable: true })
   comment: string;
 
-  @ManyToOne(() => User, (user) => user.apiKey)
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+  @Column({ name: 'user_id' })
+  userId: string;
 }

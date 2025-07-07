@@ -1,13 +1,5 @@
-import { User } from 'src/user/entities/user.entity';
 import { Base } from 'src/common/base.entity';
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
-import { Namespace } from 'src/namespaces/entities/namespace.entity';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('tasks')
 // @Index('idx_task_ns_pri_s_e_c_time', [
@@ -49,11 +41,9 @@ export class Task extends Base {
   @Column({ name: 'canceled_at', type: 'timestamptz', nullable: true })
   canceledAt: Date;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'user_id' })
-  user: User;
+  @Column({ name: 'user_id' })
+  userId: string;
 
-  @ManyToOne(() => Namespace)
-  @JoinColumn({ name: 'namespace_id' })
-  namespace: Namespace;
+  @Column({ name: 'namespace_id' })
+  namespaceId: string;
 }

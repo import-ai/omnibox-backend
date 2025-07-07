@@ -37,7 +37,7 @@ export class GroupsController {
     const invitations =
       await this.groupsService.listGroupInvitations(namespaceId);
     const invitationMap = new Map(
-      invitations.map((invitation) => [invitation.group!.id, invitation]),
+      invitations.map((invitation) => [invitation.groupId, invitation]),
     );
     return groups.map((group) => {
       const groupDto = plainToInstance(GroupDto, group, {

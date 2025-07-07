@@ -6,6 +6,7 @@ import { GroupUser } from './entities/group-user.entity';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 import { GroupsController } from './groups.controller';
 import { Invitation } from 'src/invitations/entities/invitation.entity';
+import { UserModule } from 'src/user/user.module';
 
 @Module({
   providers: [GroupsService],
@@ -16,6 +17,7 @@ import { Invitation } from 'src/invitations/entities/invitation.entity';
     TypeOrmModule.forFeature([GroupUser]),
     TypeOrmModule.forFeature([Invitation]),
     NamespacesModule,
+    UserModule,
   ],
 })
 export class GroupsModule {}

@@ -35,8 +35,8 @@ export class ConversationsService {
 
   async create(namespaceId: string, user: User) {
     const conversation = this.conversationRepository.create({
-      namespace: { id: namespaceId },
-      user: { id: user.id },
+      namespaceId,
+      userId: user.id,
     });
     return await this.conversationRepository.save(conversation);
   }
@@ -53,7 +53,7 @@ export class ConversationsService {
     options?: { limit?: number; offset?: number; order?: string },
   ) {
     const query: any = {
-      where: { namespace: { id: namespaceId }, user: { id: userId } },
+      where: { namespaceId, userId },
       order: {
         updatedAt: options?.order?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC',
       },
@@ -65,8 +65,8 @@ export class ConversationsService {
 
   async countAll(namespaceId: string, userId: string) {
     return await this.conversationRepository.countBy({
-      namespace: { id: namespaceId },
-      user: { id: userId },
+      namespaceId,
+      userId,
     });
   }
 
@@ -100,7 +100,7 @@ export class ConversationsService {
 
   async createTitle(id: string, userId: string): Promise<{ title: string }> {
     const conversation = await this.conversationRepository.findOneOrFail({
-      where: { id, user: { id: userId } },
+      where: { id, userId },
     });
     if (conversation.title) {
       return { title: conversation.title };
@@ -166,7 +166,7 @@ export class ConversationsService {
 
   async getDetail(id: string, user: User): Promise<ConversationDetailDto> {
     const conversation = await this.conversationRepository.findOneOrFail({
-      where: { id, user: { id: user.id } },
+      where: { id, userId: user.id },
     });
 
     const detail: ConversationDetailDto = {
@@ -241,7 +241,6 @@ export class ConversationsService {
   async get(id: string) {
     return await this.conversationRepository.findOne({
       where: { id },
-      relations: ['namespace'],
     });
   }
 
@@ -249,7 +248,6 @@ export class ConversationsService {
     return await this.conversationRepository.find({
       skip: offset,
       take: limit,
-      relations: ['user', 'namespace'],
     });
   }
 }

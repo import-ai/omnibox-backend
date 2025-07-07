@@ -1,12 +1,5 @@
 import { Base } from 'src/common/base.entity';
-import { APIKey } from 'src/api-key/api-key.entity';
-import {
-  Entity,
-  Column,
-  OneToMany,
-  PrimaryGeneratedColumn,
-  Index,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
 
 @Entity('users')
 @Index('uniq_user_email', ['email'], {
@@ -36,7 +29,4 @@ export class User extends Base {
     comment: '加密后的密码',
   })
   password: string;
-
-  @OneToMany(() => APIKey, (apiKeys) => apiKeys.id)
-  apiKey: APIKey[];
 }

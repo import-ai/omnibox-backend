@@ -52,13 +52,12 @@ export class ResourcesService {
   async create(user: User, data: CreateResourceDto) {
     const where: FindOptionsWhere<Resource> = {
       id: data.parentId,
-      namespace: { id: data.namespaceId },
+      namespaceId: data.namespaceId,
     };
     const savedResource = await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(Resource);
       const parentResource = await repo.findOne({
         where,
-        relations: ['namespace'],
       });
       if (!parentResource) {
         throw new BadRequestException('Parent resource not exists.');
@@ -71,8 +70,8 @@ export class ResourcesService {
 
       const resource = repo.create({
         ...data,
-        user: { id: user.id },
-        namespace: { id: data.namespaceId },
+        userId: user.id,
+        namespaceId: data.namespaceId,
         parentId: parentResource.id,
       });
       const savedResource = await repo.save(resource);
@@ -135,7 +134,7 @@ export class ResourcesService {
     tags?: string, // separated by `,`
   ): Promise<Resource[]> {
     const where: FindOptionsWhere<Resource> = {
-      namespace: { id: namespaceId },
+      namespaceId,
       parentId,
     };
     if (tags) {
@@ -153,10 +152,9 @@ export class ResourcesService {
         'name',
         'attrs',
         'parentId',
-        'namespace',
+        'namespaceId',
         'resourceType',
       ],
-      relations: ['namespace'],
     });
     return userId
       ? await this.permissionFilter(namespaceId, userId, resources)
@@ -185,10 +183,10 @@ export class ResourcesService {
 
   async search({ namespaceId, resourceId, name, userId }) {
     const where: any = {
-      user: { id: userId },
+      userId,
       // Cannot move to root directory
       parentId: Not(IsNull()),
-      namespace: { id: namespaceId },
+      namespaceId,
     };
     // Self and child exclusions
     if (resourceId) {
@@ -255,7 +253,7 @@ export class ResourcesService {
         'resourceType',
       ],
       where: {
-        namespace: { id: namespaceId },
+        namespaceId,
         parentId: resourceId,
       },
     });
@@ -338,7 +336,7 @@ export class ResourcesService {
     const resources: Resource[] = [];
     while (true) {
       const resource = await this.resourceRepository.findOneOrFail({
-        where: { namespace: { id: namespaceId }, id: resourceId },
+        where: { namespaceId, id: resourceId },
         select: ['id', 'name', 'resourceType', 'parentId', 'globalLevel'],
       });
       resources.push(resource);
@@ -353,8 +351,7 @@ export class ResourcesService {
   async update(user: User, id: string, data: UpdateResourceDto) {
     console.debug({ id, data });
     const resource = await this.resourceRepository.findOne({
-      where: { id, namespace: { id: data.namespaceId } },
-      relations: ['namespace', 'user'],
+      where: { id, namespaceId: data.namespaceId },
     });
 
     if (!resource) {
@@ -364,7 +361,7 @@ export class ResourcesService {
     const newResource = this.resourceRepository.create({
       ...resource,
       ...data,
-      namespace: { id: data.namespaceId },
+      namespaceId: data.namespaceId,
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
     await WizardTask.index.upsert(
@@ -394,7 +391,6 @@ export class ResourcesService {
   async restore(user: User, id: string) {
     const resource = await this.resourceRepository.findOneOrFail({
       withDeleted: true,
-      relations: ['namespace'],
       where: {
         id,
       },
@@ -549,16 +545,16 @@ export class ResourcesService {
 
   async createFolder(
     namespaceId: string,
-    parentId: string | null,
-    userId: string | null,
+    parentId: string,
+    userId: string,
     manager: EntityManager,
   ) {
     return await manager.save(
       manager.create(Resource, {
         resourceType: 'folder',
-        namespace: { id: namespaceId },
+        namespaceId,
         parentId,
-        ...(userId && { user: { id: userId } }),
+        userId,
       }),
     );
   }
@@ -569,7 +565,7 @@ export class ResourcesService {
     includeRoot: boolean = false,
   ) {
     const resources = await this.resourceRepository.find({
-      where: { namespace: { id: namespaceId }, deletedAt: IsNull() },
+      where: { namespaceId, deletedAt: IsNull() },
     });
     return await this.permissionFilter(
       namespaceId,
@@ -582,7 +578,6 @@ export class ResourcesService {
     return await this.resourceRepository.find({
       skip: offset,
       take: limit,
-      relations: ['namespace', 'user'],
     });
   }
 }

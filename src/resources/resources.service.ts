@@ -275,6 +275,47 @@ export class ResourcesService {
     return filteredChildren;
   }
 
+  async getPath({
+    userId,
+    namespaceId,
+    resourceId,
+  }: {
+    userId: string;
+    namespaceId: string;
+    resourceId: string;
+  }) {
+    const resource = await this.get(resourceId);
+    if (resource.namespaceId !== namespaceId) {
+      throw new NotFoundException('Not found');
+    }
+    const parentResources = await this.getParentResources(
+      namespaceId,
+      resource.parentId,
+    );
+
+    const permission =
+      await this.permissionsService.getCurrentPermissionFromParents(
+        namespaceId,
+        [resource, ...parentResources],
+        userId,
+      );
+
+    if (permission === PermissionLevel.NO_ACCESS) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    return {
+      resource,
+      permission,
+      path: [resource, ...parentResources]
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+        }))
+        .reverse(),
+    };
+  }
+
   async get(id: string) {
     const resource = await this.resourceRepository.findOne({
       where: {
@@ -370,7 +411,6 @@ export class ResourcesService {
         manager.getRepository(Task),
       );
     });
-    return await this.get(id);
   }
 
   async uploadFileChunk(

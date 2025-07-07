@@ -20,7 +20,6 @@ import {
   ParseIntPipe,
   UploadedFile,
   UseInterceptors,
-  NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
 
@@ -37,14 +36,27 @@ export class ResourcesController {
   }
 
   @Post('duplicate/:resourceId')
-  async duplicate(@Req() req, @Param('resourceId') resourceId: string) {
-    return await this.resourcesService.duplicate(req.user, resourceId);
+  async duplicate(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    const newResource = await this.resourcesService.duplicate(
+      req.user,
+      resourceId,
+    );
+    const { resource, permission, path } = await this.resourcesService.getPath({
+      namespaceId,
+      userId: req.user.id,
+      resourceId: newResource.id,
+    });
+    return { ...resource, currentLevel: permission, path };
   }
 
   @Get('query')
   async query(
     @Req() req,
-    @Query('namespace') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
   ) {
@@ -105,33 +117,11 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    const userId: string = req.user.id;
-
-    const resource = await this.resourcesService.get(resourceId);
-    if (resource.namespaceId !== namespaceId) {
-      throw new NotFoundException('Not found');
-    }
-    const parentResources = await this.resourcesService.getParentResources(
+    const { resource, permission, path } = await this.resourcesService.getPath({
       namespaceId,
-      resource.parentId,
-    );
-
-    const permission =
-      await this.permissionsService.getCurrentPermissionFromParents(
-        namespaceId,
-        [resource, ...parentResources],
-        userId,
-      );
-    if (permission === PermissionLevel.NO_ACCESS) {
-      throw new ForbiddenException('Not authorized');
-    }
-
-    const path = [resource, ...parentResources]
-      .map((r) => ({
-        id: r.id,
-        name: r.name,
-      }))
-      .reverse();
+      resourceId,
+      userId: req.user.id,
+    });
     return { ...resource, currentLevel: permission, path };
   }
 
@@ -173,8 +163,18 @@ export class ResourcesController {
   }
 
   @Post(':resourceId/restore')
-  async restore(@Req() req, @Param('resourceId') resourceId: string) {
-    return await this.resourcesService.restore(req.user, resourceId);
+  async restore(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    await this.resourcesService.restore(req.user, resourceId);
+    const { resource, permission, path } = await this.resourcesService.getPath({
+      namespaceId,
+      resourceId,
+      userId: req.user.id,
+    });
+    return { ...resource, currentLevel: permission, path };
   }
 
   @Post('files')

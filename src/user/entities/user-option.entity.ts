@@ -9,9 +9,9 @@ export class UserOption extends Base {
   })
   name: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', nullable: false })
   value: string;
 
-  @Column({ name: 'user_id' })
+  @Column({ name: 'user_id', nullable: false })
   userId: string;
 }

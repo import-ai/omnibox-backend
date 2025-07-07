@@ -76,10 +76,7 @@ import { Tags1751905414493 } from 'src/migrations/1751905414493-tags';
         synchronize: config.get('OBB_DB_SYNC') === 'true',
         autoLoadEntities: true,
         maxQueryExecutionTime: 1,
-        migrations: [
-          UserOptions1751904560034,
-          Tags1751905414493,
-        ],
+        migrations: [UserOptions1751904560034, Tags1751905414493],
         migrationsRun: true,
       }),
     }),

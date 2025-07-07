@@ -17,9 +17,10 @@ export class Tag extends Base {
   @Column({
     type: 'varchar',
     length: 20,
+    nullable: false,
   })
   name: string;
 
-  @Column({ name: 'namespace_id' })
+  @Column({ name: 'namespace_id', nullable: false })
   namespaceId: string;
 }

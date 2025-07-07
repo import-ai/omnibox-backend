@@ -2,7 +2,7 @@ import { Base } from 'src/common/base.entity';
 import { Index, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('group_users')
-@Index(['namespace', 'group', 'user'], {
+@Index(['namespaceId', 'groupId', 'userId'], {
   unique: true,
   where: 'deleted_at IS NULL',
 })

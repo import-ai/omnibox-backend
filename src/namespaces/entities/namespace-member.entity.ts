@@ -7,7 +7,7 @@ export enum NamespaceRole {
 }
 
 @Entity('namespace_members')
-@Index(['user', 'namespace'], { unique: true, where: 'deleted_at IS NULL' })
+@Index(['userId', 'namespaceId'], { unique: true, where: 'deleted_at IS NULL' })
 export class NamespaceMember extends Base {
   @PrimaryGeneratedColumn()
   id: number;

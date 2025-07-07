@@ -27,5 +27,5 @@ export class InvitationDto {
   @Expose()
   @IsString()
   @IsOptional()
-  groupId?: string;
+  groupId?: string | null;
 }

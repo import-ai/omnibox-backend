@@ -8,14 +8,15 @@ import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { AuthService } from 'src/auth/auth.service';
 import { InvitationDto as AuthInvitationDto } from 'src/auth/dto/invitation.dto';
+import { GroupsService } from '../groups/groups.service';
 
 @Injectable()
 export class InvitationsService {
   constructor(
     @InjectRepository(Invitation)
     private readonly invitationsRepository: Repository<Invitation>,
-
     private readonly authService: AuthService,
+    private readonly groupsService: GroupsService,
   ) {}
 
   async listInvitations(
@@ -23,32 +24,36 @@ export class InvitationsService {
     type?: string,
   ): Promise<InvitationDto[]> {
     const where: FindOptionsWhere<Invitation> = {
-      namespace: { id: namespaceId },
+      namespaceId,
     };
     if (type === 'group') {
-      where.group = Not(IsNull());
+      where.groupId = Not(IsNull());
     } else if (type === 'namespace') {
-      where.group = IsNull();
+      where.groupId = IsNull();
     }
     const invitations = await this.invitationsRepository.find({
       where,
-      relations: ['group'],
     });
-    return invitations.map((invitation) => {
-      const invitationDto: InvitationDto = {
-        id: invitation.id,
-        namespaceRole: invitation.namespaceRole,
-        rootPermissionLevel: invitation.rootPermissionLevel,
-      };
-      if (invitation.group) {
-        invitationDto.group = {
-          id: invitation.group.id,
-          namespaceId,
-          title: invitation.group.title,
+    return Promise.all(
+      invitations.map(async (invitation) => {
+        const invitationDto: InvitationDto = {
+          id: invitation.id,
+          namespaceRole: invitation.namespaceRole,
+          rootPermissionLevel: invitation.rootPermissionLevel,
         };
-      }
-      return invitationDto;
-    });
+        if (invitation.groupId) {
+          const group = await this.groupsService.get(invitation.groupId);
+          if (group) {
+            invitationDto.group = {
+              id: group.id,
+              namespaceId,
+              title: group.title,
+            };
+          }
+        }
+        return invitationDto;
+      }),
+    );
   }
 
   async getInvitation(
@@ -57,10 +62,9 @@ export class InvitationsService {
   ): Promise<InvitationDto | null> {
     const invitation = await this.invitationsRepository.findOne({
       where: {
-        namespace: { id: namespaceId },
-        group: groupId ? { id: groupId } : IsNull(),
+        namespaceId,
+        groupId: groupId || IsNull(),
       },
-      relations: ['group'],
     });
     if (!invitation) {
       return null;
@@ -70,12 +74,15 @@ export class InvitationsService {
       namespaceRole: invitation.namespaceRole,
       rootPermissionLevel: invitation.rootPermissionLevel,
     };
-    if (invitation.group) {
-      invitationDto.group = {
-        id: invitation.group.id,
-        namespaceId,
-        title: invitation.group.title,
-      };
+    if (invitation.groupId) {
+      const group = await this.groupsService.get(invitation.groupId);
+      if (group) {
+        invitationDto.group = {
+          id: group.id,
+          namespaceId,
+          title: group.title,
+        };
+      }
     }
     return invitationDto;
   }
@@ -98,10 +105,10 @@ export class InvitationsService {
     }
     const invitation = await this.invitationsRepository.save(
       this.invitationsRepository.create({
-        namespace: { id: namespaceId },
+        namespaceId,
         namespaceRole: req.namespaceRole,
         rootPermissionLevel: req.rootPermissionLevel,
-        group: req.groupId ? { id: req.groupId } : null,
+        groupId: req.groupId,
       }),
     );
     const invitationDto: InvitationDto = {
@@ -118,7 +125,7 @@ export class InvitationsService {
   ): Promise<void> {
     await this.invitationsRepository.delete({
       id: invitationId,
-      namespace: { id: namespaceId },
+      namespaceId,
     });
   }
 
@@ -130,9 +137,8 @@ export class InvitationsService {
     const invitation = await this.invitationsRepository.findOne({
       where: {
         id: invitationId,
-        namespace: { id: namespaceId },
+        namespaceId,
       },
-      relations: ['group'],
     });
     if (!invitation) {
       throw new UnprocessableEntityException('Invitation not found');
@@ -141,7 +147,7 @@ export class InvitationsService {
       namespaceId,
       namespaceRole: invitation.namespaceRole,
       permissionLevel: invitation.rootPermissionLevel,
-      groupId: invitation.group?.id,
+      groupId: invitation.groupId,
     };
     await this.authService.handleInvitation(userId, invitationDto);
   }

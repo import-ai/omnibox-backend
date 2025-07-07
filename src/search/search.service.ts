@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Repository } from 'typeorm';
 import { Task } from 'src/tasks/tasks.entity';
+import { UserService } from 'src/user/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Index } from 'src/resources/wizard-task/index.service';
 import { MessagesService } from 'src/messages/messages.service';
@@ -31,6 +32,7 @@ export class SearchService {
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
     private readonly configService: ConfigService,
+    private readonly userService: UserService,
 
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
@@ -120,12 +122,15 @@ export class SearchService {
       }
       offset += resources.length;
       for (const resource of resources) {
-        await Index.upsert(
-          TASK_PRIORITY,
-          resource.user,
-          resource,
-          this.taskRepository,
-        );
+        const user = await this.userService.find(resource.userId);
+        if (user) {
+          await Index.upsert(
+            TASK_PRIORITY,
+            user,
+            resource,
+            this.taskRepository,
+          );
+        }
       }
     }
   }
@@ -144,14 +149,14 @@ export class SearchService {
       offset += conversations.length;
       for (const conversation of conversations) {
         const messages = await this.messagesService.findAll(
-          conversation.user.id,
+          conversation.userId,
           conversation.id,
         );
         for (const message of messages) {
           await Index.upsertMessageIndex(
             TASK_PRIORITY,
-            conversation.user.id,
-            conversation.namespace.id,
+            conversation.userId,
+            conversation.namespaceId,
             conversation.id,
             message,
             this.taskRepository,

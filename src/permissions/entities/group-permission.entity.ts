@@ -3,7 +3,7 @@ import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
 import { PermissionLevel } from '../permission-level.enum';
 
 @Entity('group_permissions')
-@Index(['namespace', 'resource', 'group'], {
+@Index(['namespaceId', 'resourceId', 'groupId'], {
   unique: true,
   where: 'deleted_at IS NULL',
 })

@@ -1,7 +1,7 @@
 import { Base } from 'src/common/base.entity';
 import { Entity, Column, PrimaryColumn } from 'typeorm';
 
-@Entity('user_option')
+@Entity('user_options')
 export class UserOption extends Base {
   @PrimaryColumn({
     type: 'varchar',

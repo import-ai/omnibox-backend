@@ -2,7 +2,7 @@ import { Base } from 'src/common/base.entity';
 import generateId from 'src/utils/generate-id';
 import { Column, Entity, BeforeInsert, PrimaryColumn } from 'typeorm';
 
-@Entity('tag')
+@Entity('tags')
 export class Tag extends Base {
   @PrimaryColumn('varchar', {
     length: 6,

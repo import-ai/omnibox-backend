@@ -185,13 +185,19 @@ export class ResourcesController {
     @Body('namespace_id') namespaceId: string,
     @Body('parent_id') parentId: string,
   ) {
-    return this.resourcesService.uploadFile(
+    const newResource = await this.resourcesService.uploadFile(
       req.user,
       namespaceId,
       file,
       parentId,
       undefined,
     );
+    const { resource, permission, path } = await this.resourcesService.getPath({
+      namespaceId,
+      userId: req.user.id,
+      resourceId: newResource.id,
+    });
+    return { ...resource, currentLevel: permission, path };
   }
 
   @Post('files/chunk')
@@ -233,7 +239,7 @@ export class ResourcesController {
     @Body('mimetype') mimetype: string,
     @Body('parent_id') parentId: string,
   ) {
-    return this.resourcesService.mergeFileChunks(
+    const newResource = await this.resourcesService.mergeFileChunks(
       req.user,
       namespaceId,
       totalChunks,
@@ -242,6 +248,12 @@ export class ResourcesController {
       mimetype,
       parentId,
     );
+    const { resource, permission, path } = await this.resourcesService.getPath({
+      namespaceId,
+      userId: req.user.id,
+      resourceId: newResource.id,
+    });
+    return { ...resource, currentLevel: permission, path };
   }
 
   @Patch('files/:resourceId')

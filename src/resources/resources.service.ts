@@ -49,6 +49,28 @@ export class ResourcesService {
     private readonly permissionsService: PermissionsService,
   ) {}
 
+  async findByIds(namespaceId: string, ids: Array<string>) {
+    if (ids.length <= 0) {
+      return [];
+    }
+    return await this.resourceRepository.find({
+      where: {
+        namespaceId,
+        id: In(ids),
+      },
+      select: [
+        'id',
+        'tags',
+        'name',
+        'attrs',
+        'parentId',
+        'updatedAt',
+        'namespaceId',
+        'resourceType',
+      ],
+    });
+  }
+
   async create(user: User, data: CreateResourceDto) {
     const where: FindOptionsWhere<Resource> = {
       id: data.parentId,
@@ -152,6 +174,7 @@ export class ResourcesService {
         'name',
         'attrs',
         'parentId',
+        'updatedAt',
         'namespaceId',
         'resourceType',
       ],
@@ -249,6 +272,7 @@ export class ResourcesService {
         'name',
         'attrs',
         'parentId',
+        'updatedAt',
         'namespaceId',
         'resourceType',
       ],

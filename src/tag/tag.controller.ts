@@ -18,22 +18,15 @@ export class TagController {
   async findAll(
     @Param('namespaceId') namespaceId: string,
     @Query('name') name: string,
-  ) {
-    return await this.tagService.findAll(namespaceId, name);
-  }
-
-  @Get('tags-by-ids')
-  async tagsByIds(
-    @Param('namespaceId') namespaceId: string,
     @Query('id') id: string,
   ) {
-    if (!id) {
-      return [];
+    if (id) {
+      const ids = id.split(',');
+      if (ids.length <= 0) {
+        return [];
+      }
+      return await this.tagService.findByIds(namespaceId, ids);
     }
-    const ids = id.split(',');
-    if (ids.length <= 0) {
-      return [];
-    }
-    return await this.tagService.tagsByIds(namespaceId, ids);
+    return await this.tagService.findAll(namespaceId, name);
   }
 }

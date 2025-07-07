@@ -30,6 +30,21 @@ export class ResourcesController {
     private readonly permissionsService: PermissionsService,
   ) {}
 
+  @Get()
+  async findById(
+    @Param('namespaceId') namespaceId: string,
+    @Query('id') id: string,
+  ) {
+    if (!id) {
+      return [];
+    }
+    const ids = id.split(',');
+    if (ids.length <= 0) {
+      return [];
+    }
+    return await this.resourcesService.findByIds(namespaceId, ids);
+  }
+
   @Post()
   async create(@Req() req, @Body() data: CreateResourceDto) {
     return await this.resourcesService.create(req.user, data);

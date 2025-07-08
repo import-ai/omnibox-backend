@@ -77,11 +77,9 @@ export class MessagesService {
     dto: Partial<CreateMessageDto>,
     index: boolean = true,
   ): Promise<Message> {
-    const condition: Record<string, any> = { where: { id } };
-    if (index) {
-      condition.relations = ['user'];
-    }
-    const message = await this.messageRepository.findOneOrFail(condition);
+    const message = await this.messageRepository.findOneOrFail({
+      where: { id },
+    });
     Object.assign(message, dto);
     return await this.dataSource.transaction(async (manager) => {
       const updatedMsg = await manager.save(message);

@@ -48,8 +48,8 @@ export class Resource extends Base {
   })
   globalLevel: PermissionLevel | null;
 
-  @Column({ name: 'user_id' })
-  userId: string;
+  @Column('uuid', { name: 'user_id', nullable: true })
+  userId: string | null;
 
   @Column({ name: 'namespace_id' })
   namespaceId: string;

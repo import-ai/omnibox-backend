@@ -122,15 +122,14 @@ export class SearchService {
       }
       offset += resources.length;
       for (const resource of resources) {
-        const user = await this.userService.find(resource.userId);
-        if (user) {
-          await Index.upsert(
-            TASK_PRIORITY,
-            user,
-            resource,
-            this.taskRepository,
-          );
+        if (!resource.userId) {
+          continue;
         }
+        const user = await this.userService.find(resource.userId);
+        if (!user) {
+          continue;
+        }
+        await Index.upsert(TASK_PRIORITY, user, resource, this.taskRepository);
       }
     }
   }

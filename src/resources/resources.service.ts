@@ -569,8 +569,8 @@ export class ResourcesService {
 
   async createFolder(
     namespaceId: string,
-    parentId: string,
-    userId: string,
+    parentId: string | null,
+    userId: string | null,
     manager: EntityManager,
   ) {
     return await manager.save(

@@ -125,8 +125,8 @@ export class NamespacesService {
     const namespace = await manager.save(manager.create(Namespace, { name }));
     const publicRoot = await this.resourceService.createFolder(
       namespace.id,
-      '',
-      '',
+      null,
+      null,
       manager,
     );
     await manager.update(Namespace, namespace.id, {
@@ -176,7 +176,7 @@ export class NamespacesService {
     }
     const privateRoot = await this.resourceService.createFolder(
       namespaceId,
-      '',
+      null,
       userId,
       manager,
     );

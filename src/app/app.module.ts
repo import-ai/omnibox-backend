@@ -21,6 +21,8 @@ import { MessagesModule } from 'src/messages/messages.module';
 import { SearchModule } from 'src/search/search.module';
 import { InvitationsModule } from 'src/invitations/invitations.module';
 import { LoggerMiddleware } from './logger.middleware';
+import { UserOptions1751904560034 } from 'src/migrations/1751904560034-user-options';
+import { Tags1751905414493 } from 'src/migrations/1751905414493-tags';
 
 @Module({
   controllers: [AppController],
@@ -74,6 +76,8 @@ import { LoggerMiddleware } from './logger.middleware';
         synchronize: config.get('OBB_DB_SYNC') === 'true',
         autoLoadEntities: true,
         maxQueryExecutionTime: 1,
+        migrations: [UserOptions1751904560034, Tags1751905414493],
+        migrationsRun: true,
       }),
     }),
   ],

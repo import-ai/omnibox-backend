@@ -84,16 +84,6 @@ export class UserService {
     };
   }
 
-  async usersByIds(ids: Array<string>) {
-    if (ids.length <= 0) {
-      return [];
-    }
-    return await this.userRepository.find({
-      where: { id: In(ids) },
-      select: ['id', 'username', 'email'],
-    });
-  }
-
   async find(id: string) {
     return await this.userRepository.findOne({
       where: { id },

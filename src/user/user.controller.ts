@@ -22,21 +22,9 @@ export class UserController {
   async findAll(
     @Query('start', ParseIntPipe) start: number,
     @Query('limit', ParseIntPipe) limit: number,
-    @Query('search') search?: string,
+    @Query('search') search: string,
   ) {
     return await this.userService.findAll(start, limit, search);
-  }
-
-  @Get('users-by-ids')
-  async usersByIds(@Query('id') id: string) {
-    if (!id) {
-      return [];
-    }
-    const ids = id.split(',');
-    if (ids.length <= 0) {
-      return [];
-    }
-    return await this.userService.usersByIds(ids);
   }
 
   @Get(':id')

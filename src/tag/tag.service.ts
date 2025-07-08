@@ -30,7 +30,7 @@ export class TagService {
     });
   }
 
-  async tagsByIds(namespaceId: string, ids: Array<string>) {
+  async findByIds(namespaceId: string, ids: Array<string>) {
     if (ids.length <= 0) {
       return [];
     }

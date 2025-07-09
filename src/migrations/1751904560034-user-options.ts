@@ -13,5 +13,7 @@ export class UserOptions1751904560034 implements MigrationInterface {
 )`);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {}
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    throw new Error('Not supported.');
+  }
 }

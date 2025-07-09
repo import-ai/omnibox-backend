@@ -34,7 +34,7 @@ export class Users1751900000001 implements MigrationInterface {
     queryRunner.createTable(table, true);
   }
 
-  down(queryRunner: QueryRunner): Promise<void> {
+  public async down(queryRunner: QueryRunner): Promise<void> {
     throw new Error('Not supported.');
   }
 }

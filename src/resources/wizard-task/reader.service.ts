@@ -15,7 +15,7 @@ export class Reader {
         resource_id: resource.id,
       },
       payload: {
-        resourceId: resource.id,
+        resource_id: resource.id,
       },
       namespaceId: resource.namespaceId,
       userId: user.id,

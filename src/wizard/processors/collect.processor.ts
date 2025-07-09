@@ -13,10 +13,10 @@ export class CollectProcessor extends Processor {
   }
 
   async process(task: Task): Promise<Record<string, any>> {
-    if (!task.payload?.resourceId) {
+    const resourceId = task.payload?.resource_id || task.payload?.resourceId;
+    if (!resourceId) {
       throw new BadRequestException('Invalid task payload');
     }
-    const resourceId = task.payload.resourceId;
     if (task.exception) {
       const user = await this.userService.find(task.userId);
       if (user) {

@@ -1,13 +1,20 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 import { BaseColumns } from './base-columns';
 
-export class UserPermissions1751900000001 implements MigrationInterface {
+export class UserPermissions1751900000003 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     const table = new Table({
       name: 'user_permissions',
-      columns: [...BaseColumns()],
+      columns: [
+        {
+          name: 'id',
+          type: 'bigserial',
+          isPrimary: true,
+        },
+        ...BaseColumns(),
+      ],
     });
-    queryRunner.createTable(table, true);
+    await queryRunner.createTable(table, true);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

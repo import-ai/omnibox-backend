@@ -31,7 +31,7 @@ export class Users1751900000001 implements MigrationInterface {
         ...BaseColumns(),
       ],
     });
-    queryRunner.createTable(table, true);
+    await queryRunner.createTable(table, true);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

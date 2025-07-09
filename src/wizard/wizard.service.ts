@@ -72,7 +72,7 @@ export class WizardService {
     const resource = await this.resourcesService.create(user, resourceDto);
     console.debug({ resource });
 
-    const payload = { resourceId: resource.id };
+    const payload = { resource_id: resource.id };
 
     const task = await this.create({
       function: 'collect',

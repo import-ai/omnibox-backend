@@ -1,7 +1,7 @@
 import { Response } from 'express';
-import { Task } from 'src/tasks/tasks.entity';
 import { WizardService } from 'src/wizard/wizard.service';
 import { Public } from 'src/auth/decorators/public.decorator';
+import { transformKeysToSnakeCase } from 'src/interceptor/utils';
 import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
 import { Body, Controller, Get, Post, Res } from '@nestjs/common';
 
@@ -11,10 +11,9 @@ export class InternalWizardController {
 
   @Public()
   @Get('/task')
-  async fetchTask(@Res() res: Response): Promise<Task | null> {
+  async fetchTask(@Res() res: Response): Promise<void> {
     const task = await this.wizardService.fetchTask();
-    res.status(task ? 200 : 204);
-    return task;
+    res.status(task ? 200 : 204).json(transformKeysToSnakeCase(task));
   }
 
   @Public()

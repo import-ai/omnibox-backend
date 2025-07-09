@@ -13,5 +13,7 @@ export class Tags1751905414493 implements MigrationInterface {
 )`);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {}
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    throw new Error('Not supported.');
+  }
 }

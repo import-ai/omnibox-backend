@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Group } from 'src/groups/entities/group.entity';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
 import { ListRespDto, UserPermissionDto } from './dto/list-resp.dto';
@@ -28,6 +29,8 @@ export class PermissionsService {
     private readonly groupUserRepository: Repository<GroupUser>,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
+    @InjectRepository(Group)
+    private readonly GroupRepository: Repository<Group>,
     @InjectRepository(NamespaceMember)
     private readonly namespaceMembersRepository: Repository<NamespaceMember>,
     private readonly dataSource: DataSource,
@@ -55,9 +58,21 @@ export class PermissionsService {
       curPermi,
       ...plainToInstance(UserPermissionDto, userPermissions),
     ];
-    const groups = await this.groupPermiRepo.find({
+    let groups: GroupPermission[] = [];
+    const groupsPermi = await this.groupPermiRepo.find({
       where: { namespaceId, resourceId },
     });
+    if (groupsPermi.length > 0) {
+      groups = await Promise.all(
+        groupsPermi.map((groupPermi) =>
+          groupPermi.groupId
+            ? this.GroupRepository.findOneBy({ id: groupPermi.groupId }).then(
+                (group) => Promise.resolve({ ...groupPermi, group }),
+              )
+            : Promise.resolve(groupPermi),
+        ),
+      );
+    }
     const globalLevel = await this.getGlobalPermissionLevel(
       namespaceId,
       resourceId,
@@ -194,6 +209,7 @@ export class PermissionsService {
     userId: string,
   ): Promise<UserPermissionDto> {
     while (true) {
+      const user = await this.userService.find(userId);
       const permission = await this.userPermiRepo.findOne({
         where: {
           namespaceId,
@@ -201,8 +217,7 @@ export class PermissionsService {
           userId,
         },
       });
-      if (permission && permission.userId) {
-        const user = await this.userService.find(permission.userId);
+      if (permission) {
         return plainToInstance(UserPermissionDto, {
           user,
           ...permission,
@@ -210,7 +225,6 @@ export class PermissionsService {
       }
       const parentId = await this.getParentId(namespaceId, resourceId);
       if (!parentId) {
-        const user = await this.userService.find(userId);
         return plainToInstance(UserPermissionDto, {
           user,
           level: PermissionLevel.NO_ACCESS,

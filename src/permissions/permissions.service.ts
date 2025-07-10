@@ -201,8 +201,12 @@ export class PermissionsService {
           userId,
         },
       });
-      if (permission) {
-        return plainToInstance(UserPermissionDto, permission);
+      if (permission && permission.userId) {
+        const user = await this.userService.find(permission.userId);
+        return plainToInstance(UserPermissionDto, {
+          user,
+          ...permission,
+        });
       }
       const parentId = await this.getParentId(namespaceId, resourceId);
       if (!parentId) {

@@ -10,8 +10,7 @@ export class Users1751900000001 implements MigrationInterface {
           name: 'id',
           type: 'uuid',
           isPrimary: true,
-          isGenerated: true,
-          generationStrategy: 'uuid',
+          default: 'uuid_generate_v4()',
         },
         {
           name: 'username',
@@ -30,8 +29,20 @@ export class Users1751900000001 implements MigrationInterface {
         },
         ...BaseColumns(),
       ],
+      indices: [
+        {
+          columnNames: ['username'],
+          isUnique: true,
+          where: 'deleted_at IS NULL',
+        },
+        {
+          columnNames: ['email'],
+          isUnique: true,
+          where: 'deleted_at IS NULL',
+        }
+      ],
     });
-    await queryRunner.createTable(table, true);
+    await queryRunner.createTable(table, true, true, true);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

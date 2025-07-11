@@ -17,6 +17,7 @@ import { Resource } from 'src/resources/resources.entity';
 import { UserService } from 'src/user/user.service';
 import { GroupUser } from 'src/groups/entities/group-user.entity';
 import { NamespaceMember } from 'src/namespaces/entities/namespace-member.entity';
+import { User } from 'src/user/entities/user.entity';
 
 @Injectable()
 export class PermissionsService {
@@ -35,29 +36,35 @@ export class PermissionsService {
     private readonly namespaceMembersRepository: Repository<NamespaceMember>,
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
-  ) {}
+  ) { }
 
   async listPermissions(
     namespaceId: string,
     resourceId: string,
     userId: string,
   ): Promise<ListRespDto> {
-    const curPermi = await this.getUserPermission(
-      namespaceId,
-      resourceId,
-      userId,
-    );
-    let userPermissions = await this.listUserPermissions(
+    const parentResources = await this.getParentResources(
       namespaceId,
       resourceId,
     );
-    userPermissions = userPermissions.filter(
-      (permission) => permission.userId !== userId,
+    const parentResourceIds = parentResources.map((resource) => resource.id);
+
+    const userPermissionMap = await this.listUserPermissions(
+      namespaceId,
+      parentResourceIds,
     );
-    const users = [
-      curPermi,
-      ...plainToInstance(UserPermissionDto, userPermissions),
-    ];
+    const userIds = Array.from(userPermissionMap.keys());
+    const users = await this.userService.findByIds(userIds);
+    const userMap = new Map<string, User>(users.map((user) => [user.id, user]));
+    const userPermissions: UserPermissionDto[] = [];
+    for (const [userId, level] of userPermissionMap) {
+      const user = userMap.get(userId);
+      if (!user) {
+        continue;
+      }
+      userPermissions.push(UserPermissionDto.new(user, level));
+    }
+
     let groups: GroupPermission[] = [];
     const groupsPermi = await this.groupPermiRepo.find({
       where: { namespaceId, resourceId },
@@ -67,8 +74,8 @@ export class PermissionsService {
         groupsPermi.map((groupPermi) =>
           groupPermi.groupId
             ? this.GroupRepository.findOneBy({ id: groupPermi.groupId }).then(
-                (group) => Promise.resolve({ ...groupPermi, group }),
-              )
+              (group) => Promise.resolve({ ...groupPermi, group }),
+            )
             : Promise.resolve(groupPermi),
         ),
       );
@@ -90,32 +97,38 @@ export class PermissionsService {
 
   async listUserPermissions(
     namespaceId: string,
-    resourceId: string,
-  ): Promise<UserPermission[]> {
-    const userIds = new Set<string>();
-    const userPermissions: UserPermission[] = [];
-    while (true) {
-      const permissions = await this.userPermiRepo.find({
-        where: {
-          namespaceId,
-          resourceId,
-          deletedAt: IsNull(),
-        },
-      });
-      for (const permission of permissions) {
+    parentResourceIds: string[],
+    userId?: string,
+  ): Promise<Map<string, PermissionLevel>> {
+    const permissions = await this.userPermiRepo.find({
+      where: {
+        namespaceId,
+        resourceId: In(parentResourceIds),
+        userId,
+      },
+    });
+
+    // resourceId -> UserPermission[]
+    const permissionMap: Map<string, UserPermission[]> = new Map();
+    for (const permission of permissions) {
+      const resourceId = permission.resourceId;
+      if (!permissionMap.has(resourceId)) {
+        permissionMap.set(resourceId, []);
+      }
+      permissionMap.get(resourceId)!.push(permission);
+    }
+
+    // userId -> PermissionLevel
+    const userPermissionMap: Map<string, PermissionLevel> = new Map();
+    for (const resourceId of parentResourceIds) {
+      for (const permission of permissionMap.get(resourceId) || []) {
         const userId = permission.userId;
-        if (userId && !userIds.has(userId)) {
-          userIds.add(userId);
-          userPermissions.push(permission);
+        if (!userPermissionMap.has(userId)) {
+          userPermissionMap.set(userId, permission.level);
         }
       }
-      const parentId = await this.getParentId(namespaceId, resourceId);
-      if (!parentId) {
-        break;
-      }
-      resourceId = parentId;
     }
-    return userPermissions;
+    return userPermissionMap;
   }
 
   async updateGlobalPermission(
@@ -478,33 +491,40 @@ export class PermissionsService {
     return null;
   }
 
-  async getGroupPermissionFromParents(
+  async getGroupPermissions(
     namespaceId: string,
     parentResourceIds: string[],
-    groupIds: string[],
-  ): Promise<PermissionLevel | null> {
-    const groupPermissions = await this.groupPermiRepo.find({
+    groupIds?: string[],
+  ): Promise<Map<string, PermissionLevel>> {
+    const permissions = await this.groupPermiRepo.find({
       where: {
         namespaceId,
         resourceId: In(parentResourceIds),
-        groupId: In(groupIds),
+        groupId: groupIds ? In(groupIds) : undefined,
       },
     });
-    const permiMap: Map<string, PermissionLevel | null> = new Map();
-    for (const groupPermi of groupPermissions) {
-      const resourceId = groupPermi.resourceId;
-      if (resourceId) {
-        const curPermi = permiMap.get(resourceId) || null;
-        permiMap.set(resourceId, maxPermission(curPermi, groupPermi.level));
+
+    // resourceId -> GroupPermission[]
+    const permissionMap: Map<string, GroupPermission[]> = new Map();
+    for (const permission of permissions) {
+      const resourceId = permission.resourceId;
+      if (!permissionMap.has(resourceId)) {
+        permissionMap.set(resourceId, []);
       }
+      permissionMap.get(resourceId)!.push(permission);
     }
+
+    // groupId -> PermissionLevel
+    const groupPermissionMap: Map<string, PermissionLevel> = new Map();
     for (const resourceId of parentResourceIds) {
-      const permission = permiMap.get(resourceId);
-      if (permission) {
-        return permission;
+      for (const permission of permissionMap.get(resourceId) || []) {
+        const groupId = permission.groupId;
+        if (!groupPermissionMap.has(groupId)) {
+          groupPermissionMap.set(groupId, permission.level);
+        }
       }
     }
-    return null;
+    return groupPermissionMap;
   }
 
   async getCurrentPermissionFromParents(
@@ -528,7 +548,7 @@ export class PermissionsService {
       parentResourceIds,
       userId,
     );
-    const groupPermission = await this.getGroupPermissionFromParents(
+    const groupPermissionMap = await this.getGroupPermissions(
       namespaceId,
       parentResourceIds,
       groupIds,
@@ -536,7 +556,7 @@ export class PermissionsService {
     const curPermission = maxPermissions([
       globalPermission,
       userPermission,
-      groupPermission,
+      ...groupPermissionMap.values(),
     ]);
     return curPermission || PermissionLevel.NO_ACCESS;
   }
@@ -552,5 +572,27 @@ export class PermissionsService {
       return null;
     }
     return resource.parentId;
+  }
+
+  async getParentResources(
+    namespaceId: string,
+    resourceId: string | null,
+  ): Promise<Resource[]> {
+    if (!resourceId) {
+      return [];
+    }
+    const resources: Resource[] = [];
+    while (true) {
+      const resource = await this.resourceRepository.findOneOrFail({
+        where: { namespaceId, id: resourceId },
+        select: ['id', 'name', 'resourceType', 'parentId', 'globalLevel'],
+      });
+      resources.push(resource);
+      if (!resource.parentId) {
+        break;
+      }
+      resourceId = resource.parentId;
+    }
+    return resources;
   }
 }

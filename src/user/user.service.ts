@@ -91,6 +91,13 @@ export class UserService {
     });
   }
 
+  async findByIds(ids: string[]): Promise<User[]> {
+    return await this.userRepository.find({
+      where: { id: In(ids) },
+      select: ['id', 'username', 'email'],
+    });
+  }
+
   async findByEmail(email: string) {
     return await this.userRepository.findOne({
       where: { email },

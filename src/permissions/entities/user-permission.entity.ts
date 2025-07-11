@@ -15,11 +15,11 @@ export class UserPermission extends Base {
   level: PermissionLevel;
 
   @Column({ name: 'namespace_id' })
-  namespaceId?: string;
+  namespaceId: string;
 
   @Column({ name: 'resource_id', nullable: false })
   resourceId: string;
 
   @Column({ name: 'user_id' })
-  userId?: string;
+  userId: string;
 }

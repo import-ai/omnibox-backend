@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PermissionsService } from './permissions.service';
+import { Group } from 'src/groups/entities/group.entity';
 import { PermissionsController } from './permissions.controller';
 import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
@@ -19,6 +20,7 @@ import { NamespaceMember } from 'src/namespaces/entities/namespace-member.entity
       GroupPermission,
       Resource,
       GroupUser,
+      Group,
       NamespaceMember,
     ]),
     UserModule,

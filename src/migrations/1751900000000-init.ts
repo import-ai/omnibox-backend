@@ -131,7 +131,7 @@ async function createResourcesTable(queryRunner: QueryRunner): Promise<void> {
         name: 'name',
         type: 'character varying',
         isNullable: false,
-        default: '',
+        default: "''",
       },
       {
         name: 'resource_type',
@@ -142,7 +142,7 @@ async function createResourcesTable(queryRunner: QueryRunner): Promise<void> {
         name: 'content',
         type: 'text',
         isNullable: false,
-        default: '',
+        default: "''",
       },
       {
         name: 'tags',
@@ -260,14 +260,307 @@ async function createUserPermissionsTable(
   await queryRunner.createTable(table, true, true, true);
 }
 
+async function createGroupsTable(queryRunner: QueryRunner): Promise<void> {
+  const table = new Table({
+    name: 'groups',
+    columns: [
+      {
+        name: 'id',
+        type: 'character varying',
+        isPrimary: true,
+        isNullable: false,
+      },
+      {
+        name: 'title',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'namespace_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      ...BaseColumns(),
+    ],
+    foreignKeys: [
+      {
+        columnNames: ['namespace_id'],
+        referencedTableName: 'namespaces',
+        referencedColumnNames: ['id'],
+      },
+    ],
+  });
+  await queryRunner.createTable(table, true, true, true);
+}
+
+async function createGroupUsersTable(queryRunner: QueryRunner): Promise<void> {
+  const table = new Table({
+    name: 'group_users',
+    columns: [
+      {
+        name: 'id',
+        type: 'bigserial',
+        isPrimary: true,
+        isNullable: false,
+      },
+      {
+        name: 'namespace_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'group_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'user_id',
+        type: 'uuid',
+        isNullable: false,
+      },
+      ...BaseColumns(),
+    ],
+    indices: [
+      {
+        columnNames: ['namespace_id', 'group_id', 'user_id'],
+        isUnique: true,
+        where: 'deleted_at IS NULL',
+      },
+    ],
+    foreignKeys: [
+      {
+        columnNames: ['namespace_id'],
+        referencedTableName: 'namespaces',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['group_id'],
+        referencedTableName: 'groups',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['user_id'],
+        referencedTableName: 'users',
+        referencedColumnNames: ['id'],
+      },
+    ],
+  });
+  await queryRunner.createTable(table, true, true, true);
+}
+
+async function createNamespaceRoleEnum(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  await queryRunner.query(`
+    CREATE TYPE namespace_role AS ENUM (
+      'owner',
+      'member'
+    )
+  `);
+}
+
+async function createNamespaceMembersTable(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  const table = new Table({
+    name: 'namespace_members',
+    columns: [
+      {
+        name: 'id',
+        type: 'bigserial',
+        isPrimary: true,
+        isNullable: false,
+      },
+      {
+        name: 'role',
+        type: 'namespace_role',
+        isNullable: false,
+      },
+      {
+        name: 'namespace_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'user_id',
+        type: 'uuid',
+        isNullable: false,
+      },
+      {
+        name: 'root_resource_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      ...BaseColumns(),
+    ],
+    indices: [
+      {
+        columnNames: ['user_id', 'namespace_id'],
+        isUnique: true,
+        where: 'deleted_at IS NULL',
+      },
+    ],
+    foreignKeys: [
+      {
+        columnNames: ['namespace_id'],
+        referencedTableName: 'namespaces',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['user_id'],
+        referencedTableName: 'users',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['root_resource_id'],
+        referencedTableName: 'resources',
+        referencedColumnNames: ['id'],
+      },
+    ],
+  });
+  await queryRunner.createTable(table, true, true, true);
+}
+
+async function createGroupPermissionsTable(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  const table = new Table({
+    name: 'group_permissions',
+    columns: [
+      {
+        name: 'id',
+        type: 'bigserial',
+        isPrimary: true,
+        isNullable: false,
+      },
+      {
+        name: 'level',
+        type: 'permission_level',
+        isNullable: false,
+      },
+      {
+        name: 'namespace_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'resource_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'group_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      ...BaseColumns(),
+    ],
+    indices: [
+      {
+        columnNames: ['namespace_id', 'resource_id', 'group_id'],
+        isUnique: true,
+        where: 'deleted_at IS NULL',
+      },
+    ],
+    foreignKeys: [
+      {
+        columnNames: ['group_id'],
+        referencedTableName: 'groups',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['resource_id'],
+        referencedTableName: 'resources',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['namespace_id'],
+        referencedTableName: 'namespaces',
+        referencedColumnNames: ['id'],
+      },
+    ],
+  });
+  await queryRunner.createTable(table, true, true, true);
+}
+
+async function createInvitationsTable(queryRunner: QueryRunner): Promise<void> {
+  const table = new Table({
+    name: 'invitations',
+    columns: [
+      {
+        name: 'id',
+        type: 'character varying',
+        isPrimary: true,
+        isNullable: false,
+      },
+      {
+        name: 'namespace_role',
+        type: 'namespace_role',
+        isNullable: false,
+      },
+      {
+        name: 'root_permission_level',
+        type: 'permission_level',
+        isNullable: false,
+      },
+      {
+        name: 'namespace_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'group_id',
+        type: 'character varying',
+        isNullable: true,
+      },
+      ...BaseColumns(),
+    ],
+    indices: [
+      {
+        columnNames: ['namespace_id', 'group_id'],
+        isUnique: true,
+        where: 'deleted_at IS NULL',
+      },
+      {
+        columnNames: ['namespace_id'],
+        isUnique: true,
+        where: 'deleted_at IS NULL AND group_id IS NULL',
+      },
+    ],
+    foreignKeys: [
+      {
+        columnNames: ['group_id'],
+        referencedTableName: 'groups',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['namespace_id'],
+        referencedTableName: 'namespaces',
+        referencedColumnNames: ['id'],
+      },
+    ],
+  });
+  await queryRunner.createTable(table, true, true, true);
+}
+
 export class Init1751900000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await createNamespaceRoleEnum(queryRunner);
+    await createPermissionLevelEnum(queryRunner);
+    await createResourceTypeEnum(queryRunner);
+
     await createUsersTable(queryRunner);
     await createNamespacesTable(queryRunner);
-    await createResourceTypeEnum(queryRunner);
     await createResourcesTable(queryRunner);
-    await createPermissionLevelEnum(queryRunner);
+    await createNamespaceMembersTable(queryRunner);
+
+    await createGroupsTable(queryRunner);
+    await createGroupUsersTable(queryRunner);
+
     await createUserPermissionsTable(queryRunner);
+    await createGroupPermissionsTable(queryRunner);
+
+    await createInvitationsTable(queryRunner);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

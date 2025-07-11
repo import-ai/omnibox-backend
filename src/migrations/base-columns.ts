@@ -1,4 +1,4 @@
-import { ColumnOptions, TableColumnOptions } from 'typeorm';
+import { TableColumnOptions } from 'typeorm';
 
 export function BaseColumns(): TableColumnOptions[] {
   return [

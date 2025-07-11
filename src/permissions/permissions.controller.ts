@@ -78,7 +78,7 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       groupId,
-      permissionDto,
+      permissionDto.level,
     );
   }
 

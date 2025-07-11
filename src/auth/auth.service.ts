@@ -236,40 +236,19 @@ export class AuthService {
     resourceId: string,
     groupTitles: string[],
     permissionLevel: PermissionLevel,
-  ) {
-    await Promise.all(
-      groupTitles.map((title) =>
-        this.groupsService
-          .getGroupsByTitle(namespaceId, title)
-          .then((groups) => {
-            if (groups.length <= 0) {
-              return Promise.resolve([]);
-            }
-            return Promise.all(
-              groups.map((group) =>
-                this.permissionsService
-                  .getGroupPermission(
-                    namespaceId,
-                    resourceId,
-                    group.id,
-                    permissionLevel,
-                  )
-                  .then((groupPermissionExists) => {
-                    if (groupPermissionExists) {
-                      return Promise.resolve();
-                    }
-                    return this.permissionsService.createGroupPermission(
-                      namespaceId,
-                      resourceId,
-                      group.id,
-                      permissionLevel,
-                    );
-                  }),
-              ),
-            );
-          }),
-      ),
+  ): Promise<void> {
+    const groups = await this.groupsService.getGroupsByTitles(
+      namespaceId,
+      groupTitles,
     );
+    for (const group of groups) {
+      await this.permissionsService.updateGroupPermission(
+        namespaceId,
+        resourceId,
+        group.id,
+        permissionLevel,
+      );
+    }
   }
 
   async handleUserInvitation(

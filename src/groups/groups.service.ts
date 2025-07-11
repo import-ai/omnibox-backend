@@ -1,6 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, IsNull, Not, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  Not,
+  Repository,
+} from 'typeorm';
 import { Group } from './entities/group.entity';
 import { GroupUser } from './entities/group-user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
@@ -69,10 +76,13 @@ export class GroupsService {
     );
   }
 
-  async getGroupsByTitle(namespaceId: string, title: string): Promise<Group[]> {
+  async getGroupsByTitles(
+    namespaceId: string,
+    titles: string[],
+  ): Promise<Group[]> {
     const groups = await this.groupRepository.findBy({
       namespaceId,
-      title,
+      title: In(titles),
     });
     return groups;
   }

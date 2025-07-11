@@ -191,65 +191,20 @@ export class PermissionsService {
     );
   }
 
-  async getGroupPermission(
-    namespaceId: string,
-    resourceId: string,
-    groupId: string,
-    permissionLevel: PermissionLevel,
-  ) {
-    return await this.groupPermiRepo.findOne({
-      where: {
-        level: permissionLevel,
-        namespaceId,
-        resourceId,
-        groupId,
-      },
-    });
-  }
-
-  async createGroupPermission(
-    namespaceId: string,
-    resourceId: string,
-    groupId: string,
-    permissionLevel: PermissionLevel,
-  ) {
-    const groupPermission = this.groupPermiRepo.create({
-      level: permissionLevel,
-      namespaceId,
-      resourceId,
-      groupId,
-    });
-    await this.groupPermiRepo.save(groupPermission);
-  }
-
   async updateGroupPermission(
     namespaceId: string,
     resourceId: string,
     groupId: string,
-    permission: PermissionDto,
-  ) {
-    const level = permission.level;
-    await this.dataSource.transaction(async (manager) => {
-      const result = await manager.update(
-        GroupPermission,
-        {
-          namespaceId,
-          resourceId,
-          groupId,
-          deletedAt: IsNull(),
-        },
-        { level },
-      );
-      if (result.affected === 0) {
-        await manager.save(
-          manager.create(GroupPermission, {
-            namespaceId,
-            resourceId,
-            groupId,
-            level,
-          }),
-        );
-      }
+    permission: PermissionLevel,
+  ): Promise<void> {
+    const groupPermission = this.groupPermiRepo.create({
+      namespaceId,
+      resourceId,
+      groupId,
+      level: permission,
+    });
+    await this.groupPermiRepo.upsert(groupPermission, {
+      conflictPaths: ['namespaceId', 'resourceId', 'groupId'],
     });
   }
 

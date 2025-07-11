@@ -3,11 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from 'src/groups/entities/group.entity';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
-import { ListRespDto, UserPermissionDto } from './dto/list-resp.dto';
+import {
+  GroupPermissionDto,
+  ListRespDto,
+  UserPermissionDto,
+} from './dto/list-resp.dto';
 import { plainToInstance } from 'class-transformer';
 import {
   comparePermissionLevel,
-  maxPermission,
   maxPermissions,
   PermissionLevel,
 } from './permission-level.enum';
@@ -31,7 +34,7 @@ export class PermissionsService {
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     @InjectRepository(Group)
-    private readonly GroupRepository: Repository<Group>,
+    private readonly groupRepository: Repository<Group>,
     @InjectRepository(NamespaceMember)
     private readonly namespaceMembersRepository: Repository<NamespaceMember>,
     private readonly dataSource: DataSource,
@@ -43,59 +46,70 @@ export class PermissionsService {
     resourceId: string,
     userId: string,
   ): Promise<ListRespDto> {
-    const parentResources = await this.getParentResources(
-      namespaceId,
-      resourceId,
-    );
-    const parentResourceIds = parentResources.map((resource) => resource.id);
+    // Get resources
+    const resources = await this.getParentResources(namespaceId, resourceId);
+    const resourceIds = resources.map((resource) => resource.id);
 
-    const userPermissionMap = await this.listUserPermissions(
+    // Get permissions
+    const globalPermission = this.getGlobalPermissionFromParents(resources);
+    const userPermissionMap = await this.getUserPermissions(
       namespaceId,
-      parentResourceIds,
+      resourceIds,
     );
+    const groupPermissionMap = await this.getGroupPermissions(
+      namespaceId,
+      resourceIds,
+    );
+
+    // Get user information
     const userIds = Array.from(userPermissionMap.keys());
     const users = await this.userService.findByIds(userIds);
     const userMap = new Map<string, User>(users.map((user) => [user.id, user]));
+
+    // Get group information
+    const groupIds = Array.from(groupPermissionMap.keys());
+    const groups = await this.groupRepository.find({
+      where: { namespaceId, id: In(groupIds) },
+      select: ['id', 'title'],
+    });
+    const groupMap = new Map<string, Group>(
+      groups.map((group) => [group.id, group]),
+    );
+
+    // Prepare response
     const userPermissions: UserPermissionDto[] = [];
     for (const [userId, level] of userPermissionMap) {
       const user = userMap.get(userId);
-      if (!user) {
-        continue;
+      if (user) {
+        userPermissions.push(UserPermissionDto.new(user, level));
       }
-      userPermissions.push(UserPermissionDto.new(user, level));
     }
-
-    let groups: GroupPermission[] = [];
-    const groupsPermi = await this.groupPermiRepo.find({
-      where: { namespaceId, resourceId },
+    const groupPermissions: GroupPermissionDto[] = [];
+    for (const [groupId, level] of groupPermissionMap) {
+      const group = groupMap.get(groupId);
+      if (group) {
+        groupPermissions.push(GroupPermissionDto.new(group, level));
+      }
+    }
+    userPermissions.sort((a, b) => {
+      // Current user first
+      if (a.user.id == userId) {
+        return -1;
+      }
+      if (b.user.id == userId) {
+        return 1;
+      }
+      // Other users sorted by email
+      return a.user.email.localeCompare(b.user.email);
     });
-    if (groupsPermi.length > 0) {
-      groups = await Promise.all(
-        groupsPermi.map((groupPermi) =>
-          groupPermi.groupId
-            ? this.GroupRepository.findOneBy({ id: groupPermi.groupId }).then(
-                (group) => Promise.resolve({ ...groupPermi, group }),
-              )
-            : Promise.resolve(groupPermi),
-        ),
-      );
-    }
-    const globalLevel = await this.getGlobalPermissionLevel(
-      namespaceId,
-      resourceId,
-    );
-    return plainToInstance(
-      ListRespDto,
-      {
-        users,
-        groups,
-        globalLevel,
-      },
-      { excludeExtraneousValues: true },
-    );
+    return {
+      globalLevel: globalPermission || PermissionLevel.NO_ACCESS,
+      users: userPermissions,
+      groups: groupPermissions,
+    };
   }
 
-  async listUserPermissions(
+  async getUserPermissions(
     namespaceId: string,
     parentResourceIds: string[],
     userId?: string,
@@ -519,7 +533,7 @@ export class PermissionsService {
 
     const globalPermission =
       this.getGlobalPermissionFromParents(parentResources);
-    const userPermission = await this.listUserPermissions(
+    const userPermission = await this.getUserPermissions(
       namespaceId,
       parentResourceIds,
       userId,

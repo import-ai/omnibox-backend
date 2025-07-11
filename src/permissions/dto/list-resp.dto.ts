@@ -1,9 +1,17 @@
+import { Group } from 'src/groups/entities/group.entity';
 import { PermissionLevel } from '../permission-level.enum';
 import { User } from 'src/user/entities/user.entity';
 
 export class GroupDto {
   id: string;
   title: string;
+
+  static fromGroupEntity(group: Group): GroupDto {
+    return {
+      id: group.id,
+      title: group.title,
+    };
+  }
 }
 
 export class UserDto {
@@ -35,6 +43,13 @@ export class UserPermissionDto {
 export class GroupPermissionDto {
   group: GroupDto;
   level: PermissionLevel;
+
+  static new(group: Group, level: PermissionLevel | null): GroupPermissionDto {
+    return {
+      group: GroupDto.fromGroupEntity(group),
+      level: level || PermissionLevel.NO_ACCESS,
+    };
+  }
 }
 
 export class ListRespDto {

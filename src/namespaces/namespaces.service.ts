@@ -189,14 +189,14 @@ export class NamespacesService {
       }),
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId, manager);
-    await this.permissionsService.updateUserLevel(
+    await this.permissionsService.updateUserPermission(
       namespaceId,
       teamspaceRoot.id,
       userId,
       level,
       manager,
     );
-    await this.permissionsService.updateUserLevel(
+    await this.permissionsService.updateUserPermission(
       namespaceId,
       privateRoot.id,
       userId,

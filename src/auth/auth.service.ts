@@ -275,7 +275,7 @@ export class AuthService {
       );
     }
     if (invitation.resourceId && invitation.permissionLevel) {
-      await this.permissionsService.updateUserLevel(
+      await this.permissionsService.updateUserPermission(
         invitation.namespaceId,
         invitation.resourceId,
         userId,

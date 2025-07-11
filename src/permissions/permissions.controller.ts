@@ -124,7 +124,7 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       userId,
-      permissionDto,
+      permissionDto.level,
     );
   }
 

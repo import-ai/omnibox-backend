@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from 'src/groups/entities/group.entity';
-import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
 import {
   GroupPermissionDto,
@@ -112,6 +112,110 @@ export class PermissionsService {
     return userPermissionMap;
   }
 
+  async getCurrentPermission(
+    namespaceId: string,
+    resources: Resource[],
+    userId: string,
+  ): Promise<PermissionLevel> {
+    const groups = await this.groupUserRepository.find({
+      where: {
+        namespaceId,
+        userId,
+      },
+    });
+    const groupIds = groups.map((group) => group.groupId);
+    const resourceIds = resources.map((resource) => resource.id);
+
+    const globalPermission = getGlobalPermission(resources);
+    const userPermission = await this.getUserPermissions(
+      namespaceId,
+      resourceIds,
+      [userId],
+    );
+    const groupPermissionMap = await this.getGroupPermissions(
+      namespaceId,
+      resourceIds,
+      groupIds,
+    );
+    const curPermission = maxPermissions([
+      globalPermission,
+      userPermission.get(userId) || null,
+      ...groupPermissionMap.values(),
+    ]);
+    return curPermission || PermissionLevel.NO_ACCESS;
+  }
+
+  async updateGlobalPermission(
+    namespaceId: string,
+    resourceId: string,
+    permission: PermissionDto,
+  ) {
+    await this.resourceRepository.update(
+      { namespaceId, id: resourceId },
+      { globalLevel: permission.level },
+    );
+  }
+
+  async updateGroupPermission(
+    namespaceId: string,
+    resourceId: string,
+    groupId: string,
+    permission: PermissionLevel,
+  ): Promise<void> {
+    const groupPermission = this.groupPermiRepo.create({
+      namespaceId,
+      resourceId,
+      groupId,
+      level: permission,
+    });
+    await this.groupPermiRepo.upsert(groupPermission, {
+      conflictPaths: ['namespaceId', 'resourceId', 'groupId'],
+    });
+  }
+
+  async updateUserPermission(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    permission: PermissionLevel,
+    manager: EntityManager = this.dataSource.manager,
+  ) {
+    const repo = manager.getRepository(UserPermission);
+    const userPermission = repo.create({
+      namespaceId,
+      resourceId,
+      userId,
+      level: permission,
+    });
+    await repo.upsert(userPermission, {
+      conflictPaths: ['namespaceId', 'resourceId', 'userId'],
+    });
+  }
+
+  async deleteGroupPermission(
+    namespaceId: string,
+    resourceId: string,
+    groupId: string,
+  ) {
+    await this.groupPermiRepo.delete({
+      namespaceId,
+      resourceId,
+      groupId,
+    });
+  }
+
+  async deleteUserPermission(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ) {
+    await this.userPermiRepo.delete({
+      namespaceId,
+      resourceId,
+      userId,
+    });
+  }
+
   async listPermissions(
     namespaceId: string,
     resourceId: string,
@@ -180,115 +284,6 @@ export class PermissionsService {
     };
   }
 
-  async updateGlobalPermission(
-    namespaceId: string,
-    resourceId: string,
-    permission: PermissionDto,
-  ) {
-    await this.resourceRepository.update(
-      { namespaceId, id: resourceId },
-      { globalLevel: permission.level },
-    );
-  }
-
-  async updateGroupPermission(
-    namespaceId: string,
-    resourceId: string,
-    groupId: string,
-    permission: PermissionLevel,
-  ): Promise<void> {
-    const groupPermission = this.groupPermiRepo.create({
-      namespaceId,
-      resourceId,
-      groupId,
-      level: permission,
-    });
-    await this.groupPermiRepo.upsert(groupPermission, {
-      conflictPaths: ['namespaceId', 'resourceId', 'groupId'],
-    });
-  }
-
-  async deleteGroupPermission(
-    namespaceId: string,
-    resourceId: string,
-    groupId: string,
-  ) {
-    await this.groupPermiRepo.delete({
-      namespaceId,
-      resourceId,
-      groupId,
-    });
-  }
-
-  async updateUserPermission(
-    namespaceId: string,
-    resourceId: string,
-    userId: string,
-    permission: PermissionDto,
-  ) {
-    await this.dataSource.transaction(async (manager) => {
-      await this.updateUserLevel(
-        namespaceId,
-        resourceId,
-        userId,
-        permission.level,
-        manager,
-      );
-    });
-  }
-
-  async getUserLevel(namespaceId: string, resourceId: string, userId: string) {
-    const userPermission = await this.userPermiRepo.findOne({
-      where: {
-        namespaceId,
-        resourceId,
-        userId,
-      },
-    });
-    return userPermission ? userPermission.level : PermissionLevel.NO_ACCESS;
-  }
-
-  async updateUserLevel(
-    namespaceId: string,
-    resourceId: string,
-    userId: string,
-    level: PermissionLevel,
-    manager: EntityManager,
-  ) {
-    const result = await manager.update(
-      UserPermission,
-      {
-        namespaceId,
-        resourceId,
-        userId,
-        deletedAt: IsNull(),
-      },
-      { level },
-    );
-    if (result.affected === 0) {
-      await manager.save(
-        manager.create(UserPermission, {
-          namespaceId,
-          resourceId,
-          userId,
-          level,
-        }),
-      );
-    }
-  }
-
-  async deleteUserPermission(
-    namespaceId: string,
-    resourceId: string,
-    userId: string,
-  ) {
-    await this.userPermiRepo.delete({
-      namespaceId,
-      resourceId,
-      userId,
-    });
-  }
-
   async userHasPermission(
     namespaceId: string,
     resourceId: string,
@@ -312,39 +307,6 @@ export class PermissionsService {
       userId,
     );
     return comparePermissionLevel(permission, requiredPermission) >= 0;
-  }
-
-  async getCurrentPermission(
-    namespaceId: string,
-    resources: Resource[],
-    userId: string,
-  ): Promise<PermissionLevel> {
-    const groups = await this.groupUserRepository.find({
-      where: {
-        namespaceId,
-        userId,
-      },
-    });
-    const groupIds = groups.map((group) => group.groupId);
-    const resourceIds = resources.map((resource) => resource.id);
-
-    const globalPermission = getGlobalPermission(resources);
-    const userPermission = await this.getUserPermissions(
-      namespaceId,
-      resourceIds,
-      [userId],
-    );
-    const groupPermissionMap = await this.getGroupPermissions(
-      namespaceId,
-      resourceIds,
-      groupIds,
-    );
-    const curPermission = maxPermissions([
-      globalPermission,
-      userPermission.get(userId) || null,
-      ...groupPermissionMap.values(),
-    ]);
-    return curPermission || PermissionLevel.NO_ACCESS;
   }
 
   async getParentResources(

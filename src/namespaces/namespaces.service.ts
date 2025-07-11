@@ -7,7 +7,7 @@ import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { GroupUser } from 'src/groups/entities/group-user.entity';
 import { ResourcesService } from 'src/resources/resources.service';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
-import { DataSource, EntityManager, IsNull, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { UserPermission } from 'src/permissions/entities/user-permission.entity';
 import { UserService } from 'src/user/user.service';
@@ -217,53 +217,52 @@ export class NamespacesService {
   }
 
   async listNamespaces(userId: string): Promise<Namespace[]> {
-    const namespaces = await this.namespaceMemberRepository.find({
+    const memberRecords = await this.namespaceMemberRepository.find({
       where: {
         userId,
       },
       select: ['namespaceId'],
     });
-    return await Promise.all(namespaces.map((v) => this.get(v.namespaceId)));
+    const namespaceIds = memberRecords.map((v) => v.namespaceId);
+    return await this.namespaceRepository.find({
+      where: {
+        id: In(namespaceIds),
+      },
+    });
   }
 
-  async listMembers(
-    namespaceId: string,
-    manager?: EntityManager,
-  ): Promise<NamespaceMemberDto[]> {
+  async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
       where: { namespaceId },
     });
-    if (members.length <= 0) {
-      return [];
-    }
-    return await Promise.all(
-      members.map((member) =>
-        this.getTeamspaceRoot(namespaceId, manager)
-          .then((teamspaceRoot) =>
-            this.permissionsService.getUserLevel(
-              namespaceId,
-              teamspaceRoot.id,
-              member.userId,
-            ),
-          )
-          .then((userLevel) =>
-            this.userService.find(member.userId).then((user) => {
-              if (user) {
-                return Promise.resolve({
-                  id: member.id,
-                  level: userLevel,
-                  role: member.role,
-                  userId: user.id,
-                  email: user.email,
-                  username: user.username,
-                });
-              } else {
-                throw new NotFoundException('User not found.');
-              }
-            }),
-          ),
-      ),
+    const userIds = members.map((member) => member.userId);
+    const users = await this.userService.findByIds(userIds);
+    const userMap = new Map(users.map((user) => [user.id, user]));
+
+    const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
+    const permissionMap = await this.permissionsService.getUserPermissions(
+      namespaceId,
+      [teamspaceRoot.id],
+      userIds,
     );
+
+    const memberDtos: NamespaceMemberDto[] = [];
+    for (const member of members) {
+      const user = userMap.get(member.userId);
+      if (!user) {
+        continue;
+      }
+      const permission =
+        permissionMap.get(member.userId) || PermissionLevel.NO_ACCESS;
+      memberDtos.push({
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        role: member.role,
+        level: permission,
+      });
+    }
+    return memberDtos;
   }
 
   async getMemberByUserId(namespaceId: string, userId: string) {

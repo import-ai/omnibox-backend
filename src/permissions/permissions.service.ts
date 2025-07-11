@@ -79,13 +79,13 @@ export class PermissionsService {
   async getUserPermissions(
     namespaceId: string,
     parentResourceIds: string[],
-    userId?: string,
+    userIds?: string[],
   ): Promise<Map<string, PermissionLevel>> {
     const permissions = await this.userPermiRepo.find({
       where: {
         namespaceId,
         resourceId: In(parentResourceIds),
-        userId,
+        userId: userIds ? In(userIds) : undefined,
       },
     });
 
@@ -332,7 +332,7 @@ export class PermissionsService {
     const userPermission = await this.getUserPermissions(
       namespaceId,
       resourceIds,
-      userId,
+      [userId],
     );
     const groupPermissionMap = await this.getGroupPermissions(
       namespaceId,

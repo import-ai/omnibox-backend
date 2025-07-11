@@ -10,7 +10,6 @@ import {
 } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { PermissionDto } from './dto/permission.dto';
-import { plainToInstance } from 'class-transformer';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')
 export class PermissionsController {
@@ -59,29 +58,6 @@ export class PermissionsController {
     );
   }
 
-  @Get('groups/:groupId')
-  async getGroupPermission(
-    @Req() req,
-    @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
-    @Param('groupId') groupId: string,
-  ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
-      namespaceId,
-      resourceId,
-      req.user.id,
-    );
-    if (!hasPermission) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const level = await this.permissionsService.getGroupPermissionLevel(
-      namespaceId,
-      resourceId,
-      groupId,
-    );
-    return plainToInstance(PermissionDto, { level });
-  }
-
   @Patch('groups/:groupId')
   async updateGroupPermission(
     @Req() req,
@@ -126,29 +102,6 @@ export class PermissionsController {
       resourceId,
       groupId,
     );
-  }
-
-  @Get('users/:userId')
-  async getUserPermission(
-    @Req() req,
-    @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
-    @Param('userId') userId: string,
-  ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
-      namespaceId,
-      resourceId,
-      req.user.id,
-    );
-    if (!hasPermission) {
-      throw new ForbiddenException('Not authorized');
-    }
-    const userPermi = await this.permissionsService.getUserPermission(
-      namespaceId,
-      resourceId,
-      userId,
-    );
-    return plainToInstance(PermissionDto, { level: userPermi.level });
   }
 
   @Patch('users/:userId')

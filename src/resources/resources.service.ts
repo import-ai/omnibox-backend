@@ -255,12 +255,11 @@ export class ResourcesService {
       namespaceId,
       resourceId,
     );
-    const permission =
-      await this.permissionsService.getCurrentPermissionFromParents(
-        namespaceId,
-        parentResources,
-        userId,
-      );
+    const permission = await this.permissionsService.getCurrentPermission(
+      namespaceId,
+      parentResources,
+      userId,
+    );
     if (permission === PermissionLevel.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');
     }
@@ -284,12 +283,11 @@ export class ResourcesService {
 
     const filteredChildren: Resource[] = [];
     for (const child of children) {
-      const permission =
-        await this.permissionsService.getCurrentPermissionFromParents(
-          namespaceId,
-          [child, ...parentResources],
-          userId,
-        );
+      const permission = await this.permissionsService.getCurrentPermission(
+        namespaceId,
+        [child, ...parentResources],
+        userId,
+      );
       if (permission !== PermissionLevel.NO_ACCESS) {
         filteredChildren.push(child);
       }
@@ -315,12 +313,11 @@ export class ResourcesService {
       resource.parentId,
     );
 
-    const permission =
-      await this.permissionsService.getCurrentPermissionFromParents(
-        namespaceId,
-        [resource, ...parentResources],
-        userId,
-      );
+    const permission = await this.permissionsService.getCurrentPermission(
+      namespaceId,
+      [resource, ...parentResources],
+      userId,
+    );
 
     if (permission === PermissionLevel.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');

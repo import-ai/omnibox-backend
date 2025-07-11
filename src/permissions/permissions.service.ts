@@ -36,7 +36,7 @@ export class PermissionsService {
     private readonly namespaceMembersRepository: Repository<NamespaceMember>,
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
-  ) { }
+  ) {}
 
   async listPermissions(
     namespaceId: string,
@@ -74,8 +74,8 @@ export class PermissionsService {
         groupsPermi.map((groupPermi) =>
           groupPermi.groupId
             ? this.GroupRepository.findOneBy({ id: groupPermi.groupId }).then(
-              (group) => Promise.resolve({ ...groupPermi, group }),
-            )
+                (group) => Promise.resolve({ ...groupPermi, group }),
+              )
             : Promise.resolve(groupPermi),
         ),
       );
@@ -467,30 +467,6 @@ export class PermissionsService {
     return null;
   }
 
-  async getUserPermissionFromParents(
-    namespaceId: string,
-    parentResourceIds: string[],
-    userId: string,
-  ): Promise<PermissionLevel | null> {
-    const userPermissions = await this.userPermiRepo.find({
-      where: {
-        namespaceId,
-        userId,
-        resourceId: In(parentResourceIds),
-      },
-    });
-    const userPermiMap: Map<string, UserPermission> = new Map(
-      userPermissions.map((permi) => [permi.resourceId, permi]),
-    );
-    for (const resourceId of parentResourceIds) {
-      const permission = userPermiMap.get(resourceId);
-      if (permission) {
-        return permission.level;
-      }
-    }
-    return null;
-  }
-
   async getGroupPermissions(
     namespaceId: string,
     parentResourceIds: string[],
@@ -543,7 +519,7 @@ export class PermissionsService {
 
     const globalPermission =
       this.getGlobalPermissionFromParents(parentResources);
-    const userPermission = await this.getUserPermissionFromParents(
+    const userPermission = await this.listUserPermissions(
       namespaceId,
       parentResourceIds,
       userId,
@@ -555,7 +531,7 @@ export class PermissionsService {
     );
     const curPermission = maxPermissions([
       globalPermission,
-      userPermission,
+      userPermission.get(userId) || null,
       ...groupPermissionMap.values(),
     ]);
     return curPermission || PermissionLevel.NO_ACCESS;

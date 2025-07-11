@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from 'src/groups/entities/group.entity';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
 import {
   GroupPermissionDto,
@@ -162,15 +162,19 @@ export class PermissionsService {
     groupId: string,
     permission: PermissionLevel,
   ): Promise<void> {
-    const groupPermission = this.groupPermiRepo.create({
-      namespaceId,
-      resourceId,
-      groupId,
-      level: permission,
-    });
-    await this.groupPermiRepo.upsert(groupPermission, {
-      conflictPaths: ['namespaceId', 'resourceId', 'groupId'],
-    });
+    const result = await this.groupPermiRepo.update(
+      { namespaceId, resourceId, groupId, deletedAt: IsNull() },
+      { level: permission },
+    );
+    if (result.affected === 0) {
+      const groupPermission = this.groupPermiRepo.create({
+        namespaceId,
+        resourceId,
+        groupId,
+        level: permission,
+      });
+      await this.groupPermiRepo.save(groupPermission);
+    }
   }
 
   async updateUserPermission(
@@ -181,15 +185,19 @@ export class PermissionsService {
     manager: EntityManager = this.dataSource.manager,
   ) {
     const repo = manager.getRepository(UserPermission);
-    const userPermission = repo.create({
-      namespaceId,
-      resourceId,
-      userId,
-      level: permission,
-    });
-    await repo.upsert(userPermission, {
-      conflictPaths: ['namespaceId', 'resourceId', 'userId'],
-    });
+    const result = await repo.update(
+      { namespaceId, resourceId, userId, deletedAt: IsNull() },
+      { level: permission },
+    );
+    if (result.affected === 0) {
+      const userPermission = repo.create({
+        namespaceId,
+        resourceId,
+        userId,
+        level: permission,
+      });
+      await repo.save(userPermission);
+    }
   }
 
   async deleteGroupPermission(

@@ -18,7 +18,7 @@ export class User extends Base {
     nullable: true,
     comment: '用户名',
   })
-  username: string | null;
+  username?: string;
 
   @Column({
     comment: '绑定邮箱',

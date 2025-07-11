@@ -1,5 +1,5 @@
 import { Expose, Type } from 'class-transformer';
-import { InvitationDto } from './invitation.dto';
+import { UserInvitationDto } from './invitation.dto';
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class SignUpPayloadDto {
@@ -10,6 +10,6 @@ export class SignUpPayloadDto {
 
   @Expose()
   @IsOptional()
-  @Type(() => InvitationDto)
-  invitation?: InvitationDto;
+  @Type(() => UserInvitationDto)
+  invitation?: UserInvitationDto;
 }

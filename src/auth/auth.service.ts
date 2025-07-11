@@ -15,7 +15,7 @@ import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { GroupsService } from 'src/groups/groups.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
-import { InvitationDto } from './dto/invitation.dto';
+import { UserInvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
 import { LoginPayloadDto } from './dto/login-payload.dto';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
@@ -110,7 +110,7 @@ export class AuthService {
         manager,
       );
       if (payload.invitation) {
-        await this.handleInvitation(user.id, payload.invitation, manager);
+        await this.handleUserInvitation(user.id, payload.invitation, manager);
       }
       return {
         id: user.id,
@@ -176,7 +176,7 @@ export class AuthService {
       groupId?: string;
     },
   ) {
-    const invitation: InvitationDto = {
+    const invitation: UserInvitationDto = {
       namespaceId: data.namespaceId,
       namespaceRole: data.role,
       resourceId: data.resourceId,
@@ -227,7 +227,7 @@ export class AuthService {
       throw new NotFoundException('User not found.');
     }
     await this.dataSource.transaction(async (manager) => {
-      await this.handleInvitation(user.id, payload.invitation, manager);
+      await this.handleUserInvitation(user.id, payload.invitation, manager);
     });
   }
 
@@ -272,9 +272,9 @@ export class AuthService {
     );
   }
 
-  async handleInvitation(
+  async handleUserInvitation(
     userId: string,
-    invitation: InvitationDto,
+    invitation: UserInvitationDto,
     manager?: EntityManager,
   ) {
     if (!manager) {
@@ -316,7 +316,9 @@ export class AuthService {
   }
 }
 
-function getRootPermissionLevel(invitation: InvitationDto): PermissionLevel {
+function getRootPermissionLevel(
+  invitation: UserInvitationDto,
+): PermissionLevel {
   if (invitation.groupId || invitation.resourceId) {
     return PermissionLevel.NO_ACCESS;
   }

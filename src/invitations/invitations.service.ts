@@ -7,7 +7,7 @@ import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { AuthService } from 'src/auth/auth.service';
-import { InvitationDto as AuthInvitationDto } from 'src/auth/dto/invitation.dto';
+import { UserInvitationDto as AuthInvitationDto } from 'src/auth/dto/invitation.dto';
 import { GroupsService } from '../groups/groups.service';
 
 @Injectable()
@@ -149,6 +149,6 @@ export class InvitationsService {
       permissionLevel: invitation.rootPermissionLevel,
       groupId: invitation.groupId,
     };
-    await this.authService.handleInvitation(userId, invitationDto);
+    await this.authService.handleUserInvitation(userId, invitationDto);
   }
 }

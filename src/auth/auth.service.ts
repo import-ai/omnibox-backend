@@ -15,7 +15,7 @@ import { PermissionLevel } from 'src/permissions/permission-level.enum';
 import { GroupsService } from 'src/groups/groups.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
-import { InvitationDto } from './dto/invitation.dto';
+import { UserInvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
 import { LoginPayloadDto } from './dto/login-payload.dto';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
@@ -110,7 +110,7 @@ export class AuthService {
         manager,
       );
       if (payload.invitation) {
-        await this.handleInvitation(user.id, payload.invitation, manager);
+        await this.handleUserInvitation(user.id, payload.invitation, manager);
       }
       return {
         id: user.id,
@@ -176,7 +176,7 @@ export class AuthService {
       groupId?: string;
     },
   ) {
-    const invitation: InvitationDto = {
+    const invitation: UserInvitationDto = {
       namespaceId: data.namespaceId,
       namespaceRole: data.role,
       resourceId: data.resourceId,
@@ -189,7 +189,7 @@ export class AuthService {
         data.namespaceId,
       );
       const userInNamespace = namespaceMembers.find(
-        (member) => `${member.id}` === account.id,
+        (member) => `${member.userId}` === account.id,
       );
       if (userInNamespace) {
         // User already in namespace
@@ -227,7 +227,7 @@ export class AuthService {
       throw new NotFoundException('User not found.');
     }
     await this.dataSource.transaction(async (manager) => {
-      await this.handleInvitation(user.id, payload.invitation, manager);
+      await this.handleUserInvitation(user.id, payload.invitation, manager);
     });
   }
 
@@ -236,45 +236,24 @@ export class AuthService {
     resourceId: string,
     groupTitles: string[],
     permissionLevel: PermissionLevel,
-  ) {
-    await Promise.all(
-      groupTitles.map((title) =>
-        this.groupsService
-          .getGroupsByTitle(namespaceId, title)
-          .then((groups) => {
-            if (groups.length <= 0) {
-              return Promise.resolve([]);
-            }
-            return Promise.all(
-              groups.map((group) =>
-                this.permissionsService
-                  .getGroupPermission(
-                    namespaceId,
-                    resourceId,
-                    group.id,
-                    permissionLevel,
-                  )
-                  .then((groupPermissionExists) => {
-                    if (groupPermissionExists) {
-                      return Promise.resolve();
-                    }
-                    return this.permissionsService.createGroupPermission(
-                      namespaceId,
-                      resourceId,
-                      group.id,
-                      permissionLevel,
-                    );
-                  }),
-              ),
-            );
-          }),
-      ),
+  ): Promise<void> {
+    const groups = await this.groupsService.getGroupsByTitles(
+      namespaceId,
+      groupTitles,
     );
+    for (const group of groups) {
+      await this.permissionsService.updateGroupPermission(
+        namespaceId,
+        resourceId,
+        group.id,
+        permissionLevel,
+      );
+    }
   }
 
-  async handleInvitation(
+  async handleUserInvitation(
     userId: string,
-    invitation: InvitationDto,
+    invitation: UserInvitationDto,
     manager?: EntityManager,
   ) {
     if (!manager) {
@@ -296,7 +275,7 @@ export class AuthService {
       );
     }
     if (invitation.resourceId && invitation.permissionLevel) {
-      await this.permissionsService.updateUserLevel(
+      await this.permissionsService.updateUserPermission(
         invitation.namespaceId,
         invitation.resourceId,
         userId,
@@ -316,7 +295,9 @@ export class AuthService {
   }
 }
 
-function getRootPermissionLevel(invitation: InvitationDto): PermissionLevel {
+function getRootPermissionLevel(
+  invitation: UserInvitationDto,
+): PermissionLevel {
   if (invitation.groupId || invitation.resourceId) {
     return PermissionLevel.NO_ACCESS;
   }

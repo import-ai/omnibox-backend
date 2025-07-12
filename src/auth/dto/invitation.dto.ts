@@ -3,7 +3,8 @@ import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 import { PermissionLevel } from 'src/permissions/permission-level.enum';
 
-export class InvitationDto {
+// Invite a user to a group or a resource within a namespace
+export class UserInvitationDto {
   @Expose()
   @IsString()
   @IsNotEmpty()

@@ -15,11 +15,11 @@ export class GroupPermission extends Base {
   level: PermissionLevel;
 
   @Column({ name: 'namespace_id' })
-  namespaceId?: string;
+  namespaceId: string;
 
   @Column({ name: 'resource_id' })
-  resourceId?: string;
+  resourceId: string;
 
   @Column({ name: 'group_id' })
-  groupId?: string;
+  groupId: string;
 }

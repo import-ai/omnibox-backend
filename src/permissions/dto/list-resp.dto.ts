@@ -1,86 +1,59 @@
-import { Exclude, Expose, Type } from 'class-transformer';
-import {
-  IsArray,
-  IsEnum,
-  IsNotEmpty,
-  IsString,
-  ValidateNested,
-} from 'class-validator';
+import { Group } from 'src/groups/entities/group.entity';
 import { PermissionLevel } from '../permission-level.enum';
+import { User } from 'src/user/entities/user.entity';
 
-@Exclude()
 export class GroupDto {
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
   id: string;
-
-  @Expose()
-  @IsString()
   title: string;
+
+  static fromGroupEntity(group: Group): GroupDto {
+    return {
+      id: group.id,
+      title: group.title,
+    };
+  }
 }
 
-@Exclude()
 export class UserDto {
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
   id: string;
-
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
   email: string;
+  username?: string;
 
-  @Expose()
-  @IsString()
-  @IsNotEmpty()
-  username: string;
+  static fromUserEntity(user: User): UserDto {
+    return {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+    };
+  }
 }
 
-@Exclude()
 export class UserPermissionDto {
-  @Expose()
-  @IsNotEmpty()
-  @ValidateNested()
-  @Type(() => UserDto)
   user: UserDto;
-
-  @Expose()
-  @IsEnum(PermissionLevel)
-  @IsNotEmpty()
   level: PermissionLevel;
+
+  static new(user: User, level: PermissionLevel | null): UserPermissionDto {
+    return {
+      user: UserDto.fromUserEntity(user),
+      level: level || PermissionLevel.NO_ACCESS,
+    };
+  }
 }
 
-@Exclude()
 export class GroupPermissionDto {
-  @Expose()
-  @IsNotEmpty()
-  @Type(() => GroupDto)
   group: GroupDto;
-
-  @Expose()
-  @IsEnum(PermissionLevel)
-  @IsNotEmpty()
   level: PermissionLevel;
+
+  static new(group: Group, level: PermissionLevel | null): GroupPermissionDto {
+    return {
+      group: GroupDto.fromGroupEntity(group),
+      level: level || PermissionLevel.NO_ACCESS,
+    };
+  }
 }
 
-@Exclude()
 export class ListRespDto {
-  @Expose()
-  @IsEnum(PermissionLevel)
-  @IsNotEmpty()
   globalLevel: PermissionLevel;
-
-  @Expose()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => UserPermissionDto)
   users: UserPermissionDto[];
-
-  @Expose()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => GroupPermissionDto)
   groups: GroupPermissionDto[];
 }

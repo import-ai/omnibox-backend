@@ -1,16 +1,49 @@
-import { MigrationInterface, QueryRunner } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+import { BaseColumns } from './base-columns';
 
 export class UserOptions1751904560034 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`CREATE TABLE user_options
-(
-    "name"       CHARACTER VARYING(20) PRIMARY KEY,
-    "value"      TEXT                     NOT NULL,
-    "user_id"    UUID                     NOT NULL REFERENCES users (id),
-    "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    "deleted_at" TIMESTAMP WITH TIME ZONE
-)`);
+    const table = new Table({
+      name: 'user_options',
+      columns: [
+        {
+          name: 'id',
+          type: 'bigserial',
+          isPrimary: true,
+        },
+        {
+          name: 'user_id',
+          type: 'uuid',
+          isNullable: false,
+        },
+        {
+          name: 'name',
+          type: 'character varying',
+          isNullable: false,
+        },
+        {
+          name: 'value',
+          type: 'character varying',
+          isNullable: false,
+        },
+        ...BaseColumns(),
+      ],
+      indices: [
+        {
+          columnNames: ['user_id', 'name'],
+          isUnique: true,
+          where: '"deleted_at" IS NULL',
+        },
+      ],
+      foreignKeys: [
+        {
+          columnNames: ['user_id'],
+          referencedTableName: 'users',
+          referencedColumnNames: ['id'],
+        },
+      ],
+    });
+    await queryRunner.createTable(table, true, true, true);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

@@ -24,6 +24,7 @@ import { LoggerMiddleware } from './logger.middleware';
 import { UserOptions1751904560034 } from 'src/migrations/1751904560034-user-options';
 import { Tags1751905414493 } from 'src/migrations/1751905414493-tags';
 import { Init1751900000000 } from 'src/migrations/1751900000000-init';
+import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 
 @Module({
   controllers: [AppController],
@@ -83,6 +84,7 @@ import { Init1751900000000 } from 'src/migrations/1751900000000-init';
           Tags1751905414493,
         ],
         migrationsRun: true,
+        namingStrategy: new SnakeNamingStrategy(),
       }),
     }),
   ],

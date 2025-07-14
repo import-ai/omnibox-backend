@@ -90,6 +90,12 @@ export class WizardService {
       where: { id: data.id },
     });
 
+    if (!task.startedAt) {
+      throw new BadRequestException(
+        `Task ${task.id} has not been started yet.`,
+      );
+    }
+
     task.endedAt = new Date();
     task.exception = data.exception;
     task.output = data.output;

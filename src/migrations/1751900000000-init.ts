@@ -266,12 +266,12 @@ async function createGroupsTable(queryRunner: QueryRunner): Promise<void> {
         isPrimary: true,
       },
       {
-        name: 'title',
+        name: 'namespace_id',
         type: 'character varying',
         isNullable: false,
       },
       {
-        name: 'namespace_id',
+        name: 'title',
         type: 'character varying',
         isNullable: false,
       },
@@ -365,11 +365,6 @@ async function createNamespaceMembersTable(
         isPrimary: true,
       },
       {
-        name: 'role',
-        type: 'namespace_role',
-        isNullable: false,
-      },
-      {
         name: 'namespace_id',
         type: 'character varying',
         isNullable: false,
@@ -377,6 +372,11 @@ async function createNamespaceMembersTable(
       {
         name: 'user_id',
         type: 'uuid',
+        isNullable: false,
+      },
+      {
+        name: 'role',
+        type: 'namespace_role',
         isNullable: false,
       },
       {
@@ -426,12 +426,12 @@ async function createGroupPermissionsTable(
         isPrimary: true,
       },
       {
-        name: 'level',
-        type: 'permission_level',
+        name: 'namespace_id',
+        type: 'character varying',
         isNullable: false,
       },
       {
-        name: 'namespace_id',
+        name: 'group_id',
         type: 'character varying',
         isNullable: false,
       },
@@ -441,8 +441,8 @@ async function createGroupPermissionsTable(
         isNullable: false,
       },
       {
-        name: 'group_id',
-        type: 'character varying',
+        name: 'level',
+        type: 'permission_level',
         isNullable: false,
       },
       ...BaseColumns(),
@@ -485,6 +485,11 @@ async function createInvitationsTable(queryRunner: QueryRunner): Promise<void> {
         isPrimary: true,
       },
       {
+        name: 'namespace_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
         name: 'namespace_role',
         type: 'namespace_role',
         isNullable: false,
@@ -492,11 +497,6 @@ async function createInvitationsTable(queryRunner: QueryRunner): Promise<void> {
       {
         name: 'root_permission_level',
         type: 'permission_level',
-        isNullable: false,
-      },
-      {
-        name: 'namespace_id',
-        type: 'character varying',
         isNullable: false,
       },
       {
@@ -644,7 +644,6 @@ async function createConversationsTable(
         name: 'title',
         type: 'character varying',
         isNullable: false,
-        default: "''",
       },
       ...BaseColumns(),
     ],

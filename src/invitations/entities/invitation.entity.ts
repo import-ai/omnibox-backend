@@ -5,14 +5,6 @@ import { Column, Entity, Index, PrimaryColumn, BeforeInsert } from 'typeorm';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 
 @Entity('invitations')
-@Index(['namespaceId'], {
-  unique: true,
-  where: 'deleted_at IS NULL AND group_id IS NULL',
-})
-@Index(['namespaceId', 'groupId'], {
-  unique: true,
-  where: 'deleted_at IS NULL',
-})
 export class Invitation extends Base {
   @PrimaryColumn()
   id: string;
@@ -22,15 +14,15 @@ export class Invitation extends Base {
     this.id = generateId(6);
   }
 
-  @Column({ name: 'namespace_id' })
+  @Column()
   namespaceId: string;
 
-  @Column({ type: 'enum', enum: NamespaceRole, nullable: false })
+  @Column('enum', { enum: NamespaceRole })
   namespaceRole: NamespaceRole;
 
-  @Column({ type: 'enum', enum: PermissionLevel, nullable: false })
+  @Column('enum', { enum: PermissionLevel })
   rootPermissionLevel: PermissionLevel;
 
-  @Column({ name: 'group_id' })
-  groupId: string;
+  @Column('varchar', { nullable: true })
+  groupId: string | null;
 }

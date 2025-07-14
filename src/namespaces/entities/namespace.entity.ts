@@ -3,11 +3,8 @@ import generateId from 'src/utils/generate-id';
 import { Column, Entity, Index, PrimaryColumn, BeforeInsert } from 'typeorm';
 
 @Entity('namespaces')
-@Index(['name'], { unique: true, where: '"deleted_at" IS NULL' })
 export class Namespace extends Base {
-  @PrimaryColumn('varchar', {
-    length: 6,
-  })
+  @PrimaryColumn()
   id: string;
 
   @BeforeInsert()
@@ -18,9 +15,9 @@ export class Namespace extends Base {
   @Column()
   name: string;
 
-  @Column({ name: 'max_running_tasks', type: 'int', default: 1 })
+  @Column({ default: 1 })
   maxRunningTasks: number;
 
-  @Column('varchar', { name: 'root_resource_id', nullable: true })
+  @Column('varchar', { nullable: true })
   rootResourceId: string | null;
 }

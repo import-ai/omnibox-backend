@@ -9,7 +9,7 @@ import {
   Controller,
   HttpCode,
 } from '@nestjs/common';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/permission-level.enum';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 
 @Controller('api/v1')
@@ -69,7 +69,7 @@ export class AuthController {
     @Body('namespace') namespaceId: string,
     @Body('role') role: NamespaceRole,
     @Body('resourceId') resourceId: string,
-    @Body('permissionLevel') permissionLevel: PermissionLevel,
+    @Body('permissionLevel') permissionLevel: ResourcePermission,
     @Body('groupId') groupId: string,
     @Body('emails') emails: Array<string>,
     @Body('groupTitles') groupTitles: Array<string>,

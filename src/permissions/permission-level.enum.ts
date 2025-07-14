@@ -1,4 +1,4 @@
-export enum PermissionLevel {
+export enum ResourcePermission {
   NO_ACCESS = 'no_access',
   CAN_VIEW = 'can_view',
   CAN_COMMENT = 'can_comment',
@@ -7,24 +7,24 @@ export enum PermissionLevel {
 }
 
 const order = [
-  PermissionLevel.NO_ACCESS,
-  PermissionLevel.CAN_VIEW,
-  PermissionLevel.CAN_COMMENT,
-  PermissionLevel.CAN_EDIT,
-  PermissionLevel.FULL_ACCESS,
+  ResourcePermission.NO_ACCESS,
+  ResourcePermission.CAN_VIEW,
+  ResourcePermission.CAN_COMMENT,
+  ResourcePermission.CAN_EDIT,
+  ResourcePermission.FULL_ACCESS,
 ];
 
 export function comparePermissionLevel(
-  a: PermissionLevel,
-  b: PermissionLevel,
+  a: ResourcePermission,
+  b: ResourcePermission,
 ): number {
   return order.indexOf(a) - order.indexOf(b);
 }
 
 export function maxPermission(
-  a: PermissionLevel | null,
-  b: PermissionLevel | null,
-): PermissionLevel | null {
+  a: ResourcePermission | null,
+  b: ResourcePermission | null,
+): ResourcePermission | null {
   if (!a) {
     return b;
   }
@@ -35,9 +35,9 @@ export function maxPermission(
 }
 
 export function maxPermissions(
-  permissions: Array<PermissionLevel | null>,
-): PermissionLevel | null {
-  let permission: PermissionLevel | null = null;
+  permissions: Array<ResourcePermission | null>,
+): ResourcePermission | null {
+  let permission: ResourcePermission | null = null;
   for (const p of permissions) {
     permission = maxPermission(permission, p);
   }

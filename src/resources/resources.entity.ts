@@ -1,7 +1,7 @@
 import { Base } from 'src/common/base.entity';
 import generateId from 'src/utils/generate-id';
 import { Column, Entity, PrimaryColumn, BeforeInsert } from 'typeorm';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/permission-level.enum';
 
 export enum ResourceType {
   DOC = 'doc',
@@ -44,6 +44,6 @@ export class Resource extends Base {
   @Column('jsonb')
   attrs: Record<string, any>;
 
-  @Column('enum', { enum: PermissionLevel, nullable: true })
-  globalLevel: PermissionLevel | null;
+  @Column('enum', { enum: ResourcePermission, nullable: true })
+  globalLevel: ResourcePermission | null;
 }

@@ -1,6 +1,6 @@
 import { Base } from 'src/common/base.entity';
 import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
-import { PermissionLevel } from '../permission-level.enum';
+import { ResourcePermission } from '../permission-level.enum';
 
 @Entity('group_permissions')
 export class GroupPermission extends Base {
@@ -16,6 +16,6 @@ export class GroupPermission extends Base {
   @Column()
   resourceId: string;
 
-  @Column('enum', { enum: PermissionLevel })
-  level: PermissionLevel;
+  @Column('enum', { enum: ResourcePermission })
+  level: ResourcePermission;
 }

@@ -1,9 +1,9 @@
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/permission-level.enum';
 
 export class NamespaceMemberDto {
   userId: string;
   email: string;
   username: string | null;
   role: string;
-  level: PermissionLevel;
+  level: ResourcePermission;
 }

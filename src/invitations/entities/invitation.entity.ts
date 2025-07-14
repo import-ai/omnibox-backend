@@ -1,6 +1,6 @@
 import { Base } from 'src/common/base.entity';
 import generateId from 'src/utils/generate-id';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/permission-level.enum';
 import { Column, Entity, Index, PrimaryColumn, BeforeInsert } from 'typeorm';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 
@@ -20,8 +20,8 @@ export class Invitation extends Base {
   @Column('enum', { enum: NamespaceRole })
   namespaceRole: NamespaceRole;
 
-  @Column('enum', { enum: PermissionLevel })
-  rootPermissionLevel: PermissionLevel;
+  @Column('enum', { enum: ResourcePermission })
+  rootPermissionLevel: ResourcePermission;
 
   @Column('varchar', { nullable: true })
   groupId: string | null;

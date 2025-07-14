@@ -11,7 +11,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/permission-level.enum';
 import { GroupsService } from 'src/groups/groups.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
@@ -172,7 +172,7 @@ export class AuthService {
       namespaceId: string;
       role: NamespaceRole;
       resourceId?: string;
-      permissionLevel?: PermissionLevel;
+      permissionLevel?: ResourcePermission;
       groupId?: string;
     },
   ) {
@@ -235,7 +235,7 @@ export class AuthService {
     namespaceId: string,
     resourceId: string,
     groupTitles: string[],
-    permissionLevel: PermissionLevel,
+    permissionLevel: ResourcePermission,
   ): Promise<void> {
     const groups = await this.groupsService.getGroupsByTitles(
       namespaceId,
@@ -297,9 +297,9 @@ export class AuthService {
 
 function getRootPermissionLevel(
   invitation: UserInvitationDto,
-): PermissionLevel {
+): ResourcePermission {
   if (invitation.groupId || invitation.resourceId) {
-    return PermissionLevel.NO_ACCESS;
+    return ResourcePermission.NO_ACCESS;
   }
-  return invitation.permissionLevel || PermissionLevel.FULL_ACCESS;
+  return invitation.permissionLevel || ResourcePermission.FULL_ACCESS;
 }

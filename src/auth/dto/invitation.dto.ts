@@ -1,7 +1,7 @@
 import { Expose } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/permission-level.enum';
 
 // Invite a user to a group or a resource within a namespace
 export class UserInvitationDto {
@@ -21,9 +21,9 @@ export class UserInvitationDto {
   resourceId?: string;
 
   @Expose()
-  @IsEnum(PermissionLevel)
+  @IsEnum(ResourcePermission)
   @IsOptional()
-  permissionLevel?: PermissionLevel;
+  permissionLevel?: ResourcePermission;
 
   @Expose()
   @IsString()

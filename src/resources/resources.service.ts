@@ -26,7 +26,7 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/permission-level.enum';
 
 export interface IQuery {
   namespaceId: string;
@@ -260,7 +260,7 @@ export class ResourcesService {
       parentResources,
       userId,
     );
-    if (permission === PermissionLevel.NO_ACCESS) {
+    if (permission === ResourcePermission.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');
     }
 
@@ -288,7 +288,7 @@ export class ResourcesService {
         [child, ...parentResources],
         userId,
       );
-      if (permission !== PermissionLevel.NO_ACCESS) {
+      if (permission !== ResourcePermission.NO_ACCESS) {
         filteredChildren.push(child);
       }
     }
@@ -319,7 +319,7 @@ export class ResourcesService {
       userId,
     );
 
-    if (permission === PermissionLevel.NO_ACCESS) {
+    if (permission === ResourcePermission.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');
     }
 

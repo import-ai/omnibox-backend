@@ -5,7 +5,7 @@ import { FindOptionsWhere, IsNull, Not, Repository } from 'typeorm';
 import { InvitationDto } from './dto/invitation.dto';
 import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/permission-level.enum';
 import { AuthService } from 'src/auth/auth.service';
 import { UserInvitationDto as AuthInvitationDto } from 'src/auth/dto/invitation.dto';
 import { GroupsService } from '../groups/groups.service';
@@ -96,7 +96,7 @@ export class InvitationsService {
     }
     if (req.groupId) {
       req.namespaceRole = NamespaceRole.MEMBER;
-      req.rootPermissionLevel = PermissionLevel.NO_ACCESS;
+      req.rootPermissionLevel = ResourcePermission.NO_ACCESS;
     }
     if (!req.namespaceRole || !req.rootPermissionLevel) {
       throw new UnprocessableEntityException(

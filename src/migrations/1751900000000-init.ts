@@ -156,7 +156,7 @@ async function createResourcesTable(queryRunner: QueryRunner): Promise<void> {
       {
         name: 'global_level',
         type: 'permission_level',
-        isNullable: false,
+        isNullable: true,
       },
       ...BaseColumns(),
     ],

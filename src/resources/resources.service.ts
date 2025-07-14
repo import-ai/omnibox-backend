@@ -11,7 +11,7 @@ import {
   IsNull,
   Repository,
 } from 'typeorm';
-import { Resource } from 'src/resources/resources.entity';
+import { Resource, ResourceType } from 'src/resources/resources.entity';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
@@ -477,7 +477,7 @@ export class ResourcesService {
     } else if (parentId) {
       resource = await this.create(user, {
         name: originalname,
-        resourceType: 'file',
+        resourceType: ResourceType.FILE,
         namespaceId,
         parentId,
         attrs: {
@@ -527,7 +527,7 @@ export class ResourcesService {
     } else if (parentId) {
       resource = await this.create(user, {
         name: file.originalname,
-        resourceType: 'file',
+        resourceType: ResourceType.FILE,
         namespaceId,
         parentId,
         attrs: {
@@ -572,7 +572,7 @@ export class ResourcesService {
   ) {
     return await manager.save(
       manager.create(Resource, {
-        resourceType: 'folder',
+        resourceType: ResourceType.FOLDER,
         namespaceId,
         parentId,
         userId,

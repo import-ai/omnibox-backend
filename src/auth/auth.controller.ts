@@ -9,7 +9,7 @@ import {
   Controller,
   HttpCode,
 } from '@nestjs/common';
-import { ResourcePermission } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
 
 @Controller('api/v1')

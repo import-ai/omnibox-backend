@@ -14,7 +14,7 @@ const order = [
   ResourcePermission.FULL_ACCESS,
 ];
 
-export function comparePermissionLevel(
+export function comparePermission(
   a: ResourcePermission,
   b: ResourcePermission,
 ): number {
@@ -31,7 +31,7 @@ export function maxPermission(
   if (!b) {
     return a;
   }
-  return comparePermissionLevel(a, b) > 0 ? a : b;
+  return comparePermission(a, b) > 0 ? a : b;
 }
 
 export function maxPermissions(

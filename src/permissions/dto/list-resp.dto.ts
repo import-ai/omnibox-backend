@@ -1,5 +1,5 @@
 import { Group } from 'src/groups/entities/group.entity';
-import { ResourcePermission } from '../permission-level.enum';
+import { ResourcePermission } from '../resource-permission.enum';
 import { User } from 'src/user/entities/user.entity';
 
 export class GroupDto {
@@ -44,7 +44,10 @@ export class GroupPermissionDto {
   group: GroupDto;
   level: ResourcePermission;
 
-  static new(group: Group, level: ResourcePermission | null): GroupPermissionDto {
+  static new(
+    group: Group,
+    level: ResourcePermission | null,
+  ): GroupPermissionDto {
     return {
       group: GroupDto.fromGroupEntity(group),
       level: level || ResourcePermission.NO_ACCESS,

@@ -9,10 +9,10 @@ import {
   UserPermissionDto,
 } from './dto/list-resp.dto';
 import {
-  comparePermissionLevel,
+  comparePermission,
   maxPermissions,
   ResourcePermission,
-} from './permission-level.enum';
+} from './resource-permission.enum';
 import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
 import { Resource } from 'src/resources/resources.entity';
@@ -314,7 +314,7 @@ export class PermissionsService {
       resources,
       userId,
     );
-    return comparePermissionLevel(permission, requiredPermission) >= 0;
+    return comparePermission(permission, requiredPermission) >= 0;
   }
 
   async getParentResources(

@@ -26,7 +26,7 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
-import { ResourcePermission } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 
 export interface IQuery {
   namespaceId: string;

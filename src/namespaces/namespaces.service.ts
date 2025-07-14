@@ -6,7 +6,7 @@ import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { GroupUser } from 'src/groups/entities/group-user.entity';
 import { ResourcesService } from 'src/resources/resources.service';
-import { ResourcePermission } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { UserPermission } from 'src/permissions/entities/user-permission.entity';

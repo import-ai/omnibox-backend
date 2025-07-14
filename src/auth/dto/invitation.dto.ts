@@ -1,7 +1,7 @@
 import { Expose } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
-import { ResourcePermission } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 
 // Invite a user to a group or a resource within a namespace
 export class UserInvitationDto {

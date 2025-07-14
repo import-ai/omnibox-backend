@@ -1,4 +1,4 @@
-import { ResourcePermission } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 
 export class NamespaceMemberDto {
   userId: string;

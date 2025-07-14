@@ -11,7 +11,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ResourcePermission } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 import { GroupsService } from 'src/groups/groups.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';

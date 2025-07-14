@@ -69,7 +69,7 @@ export class PermissionsService {
       for (const permission of permissionMap.get(resourceId) || []) {
         const groupId = permission.groupId;
         if (!groupPermissionMap.has(groupId)) {
-          groupPermissionMap.set(groupId, permission.level);
+          groupPermissionMap.set(groupId, permission.permission);
         }
       }
     }
@@ -105,7 +105,7 @@ export class PermissionsService {
       for (const permission of permissionMap.get(resourceId) || []) {
         const userId = permission.userId;
         if (!userPermissionMap.has(userId)) {
-          userPermissionMap.set(userId, permission.level);
+          userPermissionMap.set(userId, permission.permission);
         }
       }
     }
@@ -164,14 +164,14 @@ export class PermissionsService {
   ): Promise<void> {
     const result = await this.groupPermiRepo.update(
       { namespaceId, resourceId, groupId, deletedAt: IsNull() },
-      { level: permission },
+      { permission: permission },
     );
     if (result.affected === 0) {
       const groupPermission = this.groupPermiRepo.create({
         namespaceId,
         resourceId,
         groupId,
-        level: permission,
+        permission: permission,
       });
       await this.groupPermiRepo.save(groupPermission);
     }
@@ -187,14 +187,14 @@ export class PermissionsService {
     const repo = manager.getRepository(UserPermission);
     const result = await repo.update(
       { namespaceId, resourceId, userId, deletedAt: IsNull() },
-      { level: permission },
+      { permission: permission },
     );
     if (result.affected === 0) {
       const userPermission = repo.create({
         namespaceId,
         resourceId,
         userId,
-        level: permission,
+        permission: permission,
       });
       await repo.save(userPermission);
     }

@@ -39,7 +39,7 @@ export class InvitationsService {
         const invitationDto: InvitationDto = {
           id: invitation.id,
           namespaceRole: invitation.namespaceRole,
-          rootPermissionLevel: invitation.rootPermissionLevel,
+          rootPermissionLevel: invitation.rootPermission,
         };
         if (invitation.groupId) {
           const group = await this.groupsService.get(invitation.groupId);
@@ -72,7 +72,7 @@ export class InvitationsService {
     const invitationDto: InvitationDto = {
       id: invitation.id,
       namespaceRole: invitation.namespaceRole,
-      rootPermissionLevel: invitation.rootPermissionLevel,
+      rootPermissionLevel: invitation.rootPermission,
     };
     if (invitation.groupId) {
       const group = await this.groupsService.get(invitation.groupId);
@@ -107,14 +107,14 @@ export class InvitationsService {
       this.invitationsRepository.create({
         namespaceId,
         namespaceRole: req.namespaceRole,
-        rootPermissionLevel: req.rootPermissionLevel,
+        rootPermission: req.rootPermissionLevel,
         groupId: req.groupId,
       }),
     );
     const invitationDto: InvitationDto = {
       id: invitation.id,
       namespaceRole: invitation.namespaceRole,
-      rootPermissionLevel: invitation.rootPermissionLevel,
+      rootPermissionLevel: invitation.rootPermission,
     };
     return invitationDto;
   }
@@ -146,7 +146,7 @@ export class InvitationsService {
     const invitationDto: AuthInvitationDto = {
       namespaceId,
       namespaceRole: invitation.namespaceRole,
-      permissionLevel: invitation.rootPermissionLevel,
+      permissionLevel: invitation.rootPermission,
       groupId: invitation.groupId,
     };
     await this.authService.handleUserInvitation(userId, invitationDto);

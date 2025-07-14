@@ -222,7 +222,7 @@ async function createUserPermissionsTable(
         isNullable: false,
       },
       {
-        name: 'level',
+        name: 'permission',
         type: 'resource_permission',
         isNullable: false,
       },
@@ -441,7 +441,7 @@ async function createGroupPermissionsTable(
         isNullable: false,
       },
       {
-        name: 'level',
+        name: 'permission',
         type: 'resource_permission',
         isNullable: false,
       },
@@ -495,7 +495,7 @@ async function createInvitationsTable(queryRunner: QueryRunner): Promise<void> {
         isNullable: false,
       },
       {
-        name: 'root_permission_level',
+        name: 'root_permission',
         type: 'resource_permission',
         isNullable: false,
       },

@@ -17,5 +17,5 @@ export class UserPermission extends Base {
   resourceId: string;
 
   @Column('enum', { enum: ResourcePermission })
-  level: ResourcePermission;
+  permission: ResourcePermission;
 }

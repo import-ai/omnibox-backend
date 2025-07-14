@@ -21,7 +21,7 @@ export class Invitation extends Base {
   namespaceRole: NamespaceRole;
 
   @Column('enum', { enum: ResourcePermission })
-  rootPermissionLevel: ResourcePermission;
+  rootPermission: ResourcePermission;
 
   @Column('varchar', { nullable: true })
   groupId: string | null;

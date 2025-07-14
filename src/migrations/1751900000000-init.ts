@@ -154,8 +154,8 @@ async function createResourcesTable(queryRunner: QueryRunner): Promise<void> {
         default: "'{}'::jsonb",
       },
       {
-        name: 'global_level',
-        type: 'permission_level',
+        name: 'global_permission',
+        type: 'resource_permission',
         isNullable: true,
       },
       ...BaseColumns(),
@@ -181,11 +181,11 @@ async function createResourcesTable(queryRunner: QueryRunner): Promise<void> {
   await queryRunner.createTable(table, true, true, true);
 }
 
-async function createPermissionLevelEnum(
+async function createResourcePermissionEnum(
   queryRunner: QueryRunner,
 ): Promise<void> {
   await queryRunner.query(`
-    CREATE TYPE permission_level AS ENUM (
+    CREATE TYPE resource_permission AS ENUM (
       'no_access',
       'can_view',
       'can_comment',
@@ -223,7 +223,7 @@ async function createUserPermissionsTable(
       },
       {
         name: 'level',
-        type: 'permission_level',
+        type: 'resource_permission',
         isNullable: false,
       },
       ...BaseColumns(),
@@ -442,7 +442,7 @@ async function createGroupPermissionsTable(
       },
       {
         name: 'level',
-        type: 'permission_level',
+        type: 'resource_permission',
         isNullable: false,
       },
       ...BaseColumns(),
@@ -496,7 +496,7 @@ async function createInvitationsTable(queryRunner: QueryRunner): Promise<void> {
       },
       {
         name: 'root_permission_level',
-        type: 'permission_level',
+        type: 'resource_permission',
         isNullable: false,
       },
       {
@@ -745,7 +745,7 @@ async function createMessagesTable(queryRunner: QueryRunner): Promise<void> {
 export class Init1751900000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await createNamespaceRoleEnum(queryRunner);
-    await createPermissionLevelEnum(queryRunner);
+    await createResourcePermissionEnum(queryRunner);
     await createResourceTypeEnum(queryRunner);
     await createMessagesStatusEnum(queryRunner);
 

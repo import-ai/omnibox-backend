@@ -152,7 +152,7 @@ export class PermissionsService {
   ) {
     await this.resourceRepository.update(
       { namespaceId, id: resourceId },
-      { globalLevel: permission.level },
+      { globalPermission: permission.level },
     );
   }
 
@@ -286,7 +286,7 @@ export class PermissionsService {
       return a.user.email.localeCompare(b.user.email);
     });
     return {
-      globalLevel: globalPermission || ResourcePermission.NO_ACCESS,
+      globalPermission: globalPermission || ResourcePermission.NO_ACCESS,
       users: userPermissions,
       groups: groupPermissions,
     };
@@ -328,7 +328,7 @@ export class PermissionsService {
     while (true) {
       const resource = await this.resourceRepository.findOneOrFail({
         where: { namespaceId, id: resourceId },
-        select: ['id', 'name', 'resourceType', 'parentId', 'globalLevel'],
+        select: ['id', 'name', 'resourceType', 'parentId', 'globalPermission'],
       });
       resources.push(resource);
       if (!resource.parentId) {
@@ -344,8 +344,8 @@ function getGlobalPermission(
   parentResources: Resource[],
 ): ResourcePermission | null {
   for (const resource of parentResources) {
-    if (resource.globalLevel) {
-      return resource.globalLevel;
+    if (resource.globalPermission) {
+      return resource.globalPermission;
     }
   }
   return null;

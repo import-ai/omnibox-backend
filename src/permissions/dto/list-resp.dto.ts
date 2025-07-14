@@ -56,7 +56,7 @@ export class GroupPermissionDto {
 }
 
 export class ListRespDto {
-  globalLevel: ResourcePermission;
+  globalPermission: ResourcePermission;
   users: UserPermissionDto[];
   groups: GroupPermissionDto[];
 }

@@ -358,7 +358,7 @@ export class ResourcesService {
     while (true) {
       const resource = await this.resourceRepository.findOneOrFail({
         where: { namespaceId, id: resourceId },
-        select: ['id', 'name', 'resourceType', 'parentId', 'globalLevel'],
+        select: ['id', 'name', 'resourceType', 'parentId', 'globalPermission'],
       });
       resources.push(resource);
       if (!resource.parentId) {

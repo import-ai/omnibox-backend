@@ -45,5 +45,5 @@ export class Resource extends Base {
   attrs: Record<string, any>;
 
   @Column('enum', { enum: ResourcePermission, nullable: true })
-  globalLevel: ResourcePermission | null;
+  globalPermission: ResourcePermission | null;
 }

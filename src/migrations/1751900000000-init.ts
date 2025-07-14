@@ -543,11 +543,224 @@ async function createInvitationsTable(queryRunner: QueryRunner): Promise<void> {
   await queryRunner.createTable(table, true, true, true);
 }
 
+async function createTasksTable(queryRunner: QueryRunner): Promise<void> {
+  const table = new Table({
+    name: 'tasks',
+    columns: [
+      {
+        name: 'id',
+        type: 'uuid',
+        isPrimary: true,
+        isNullable: false,
+        default: 'uuid_generate_v4()',
+      },
+      {
+        name: 'namespace_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'user_id',
+        type: 'uuid',
+        isNullable: false,
+      },
+      {
+        name: 'priority',
+        type: 'bigint',
+        isNullable: false,
+        default: 5,
+      },
+      {
+        name: 'function',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'input',
+        type: 'jsonb',
+        isNullable: false,
+      },
+      {
+        name: 'payload',
+        type: 'jsonb',
+        isNullable: true,
+      },
+      {
+        name: 'output',
+        type: 'jsonb',
+        isNullable: true,
+      },
+      {
+        name: 'exception',
+        type: 'jsonb',
+        isNullable: true,
+      },
+      {
+        name: 'started_at',
+        type: 'timestamp with time zone',
+        isNullable: true,
+      },
+      {
+        name: 'ended_at',
+        type: 'timestamp with time zone',
+        isNullable: true,
+      },
+      {
+        name: 'canceled_at',
+        type: 'timestamp with time zone',
+        isNullable: true,
+      },
+      ...BaseColumns(),
+    ],
+    foreignKeys: [
+      {
+        columnNames: ['namespace_id'],
+        referencedTableName: 'namespaces',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['user_id'],
+        referencedTableName: 'users',
+        referencedColumnNames: ['id'],
+      },
+    ],
+  });
+  await queryRunner.createTable(table, true, true, true);
+}
+
+async function createConversationsTable(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  const table = new Table({
+    name: 'conversations',
+    columns: [
+      {
+        name: 'id',
+        type: 'uuid',
+        isPrimary: true,
+        isNullable: false,
+        default: 'uuid_generate_v4()',
+      },
+      {
+        name: 'namespace_id',
+        type: 'character varying',
+        isNullable: false,
+      },
+      {
+        name: 'user_id',
+        type: 'uuid',
+        isNullable: false,
+      },
+      {
+        name: 'title',
+        type: 'character varying',
+        isNullable: false,
+        default: "''",
+      },
+      ...BaseColumns(),
+    ],
+    foreignKeys: [
+      {
+        columnNames: ['namespace_id'],
+        referencedTableName: 'namespaces',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['user_id'],
+        referencedTableName: 'users',
+        referencedColumnNames: ['id'],
+      },
+    ],
+  });
+  await queryRunner.createTable(table, true, true, true);
+}
+
+async function createMessagesStatusEnum(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  await queryRunner.query(`
+    CREATE TYPE messages_status AS ENUM (
+      'pending',
+      'streaming',
+      'success',
+      'stopped',
+      'interrupted',
+      'failed'
+    )
+  `);
+}
+
+async function createMessagesTable(queryRunner: QueryRunner): Promise<void> {
+  const table = new Table({
+    name: 'messages',
+    columns: [
+      {
+        name: 'id',
+        type: 'uuid',
+        isPrimary: true,
+        isNullable: false,
+        default: 'uuid_generate_v4()',
+      },
+      {
+        name: 'user_id',
+        type: 'uuid',
+        isNullable: false,
+      },
+      {
+        name: 'conversation_id',
+        type: 'uuid',
+        isNullable: false,
+      },
+      {
+        name: 'parent_id',
+        type: 'uuid',
+        isNullable: true,
+      },
+      {
+        name: 'status',
+        type: 'messages_status',
+        isNullable: false,
+        default: "'pending'",
+      },
+      {
+        name: 'message',
+        type: 'jsonb',
+        isNullable: false,
+      },
+      {
+        name: 'attrs',
+        type: 'jsonb',
+        isNullable: true,
+      },
+      ...BaseColumns(),
+    ],
+    foreignKeys: [
+      {
+        columnNames: ['user_id'],
+        referencedTableName: 'users',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['conversation_id'],
+        referencedTableName: 'conversations',
+        referencedColumnNames: ['id'],
+      },
+      {
+        columnNames: ['parent_id'],
+        referencedTableName: 'messages',
+        referencedColumnNames: ['id'],
+      },
+    ],
+  });
+  await queryRunner.createTable(table, true, true, true);
+}
+
 export class Init1751900000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await createNamespaceRoleEnum(queryRunner);
     await createPermissionLevelEnum(queryRunner);
     await createResourceTypeEnum(queryRunner);
+    await createMessagesStatusEnum(queryRunner);
 
     await createUsersTable(queryRunner);
     await createNamespacesTable(queryRunner);
@@ -559,8 +772,11 @@ export class Init1751900000000 implements MigrationInterface {
 
     await createUserPermissionsTable(queryRunner);
     await createGroupPermissionsTable(queryRunner);
-
     await createInvitationsTable(queryRunner);
+
+    await createTasksTable(queryRunner);
+    await createConversationsTable(queryRunner);
+    await createMessagesTable(queryRunner);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

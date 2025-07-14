@@ -9,7 +9,6 @@ async function createUsersTable(queryRunner: QueryRunner): Promise<void> {
         name: 'id',
         type: 'uuid',
         isPrimary: true,
-        isNullable: false,
         default: 'uuid_generate_v4()',
       },
       {
@@ -53,7 +52,6 @@ async function createNamespacesTable(queryRunner: QueryRunner): Promise<void> {
         name: 'id',
         type: 'character varying',
         isPrimary: true,
-        isNullable: false,
       },
       {
         name: 'name',
@@ -110,7 +108,6 @@ async function createResourcesTable(queryRunner: QueryRunner): Promise<void> {
         name: 'id',
         type: 'character varying',
         isPrimary: true,
-        isNullable: false,
       },
       {
         name: 'namespace_id',
@@ -208,7 +205,6 @@ async function createUserPermissionsTable(
         name: 'id',
         type: 'bigserial',
         isPrimary: true,
-        isNullable: false,
       },
       {
         name: 'namespace_id',
@@ -268,7 +264,6 @@ async function createGroupsTable(queryRunner: QueryRunner): Promise<void> {
         name: 'id',
         type: 'character varying',
         isPrimary: true,
-        isNullable: false,
       },
       {
         name: 'title',
@@ -301,7 +296,6 @@ async function createGroupUsersTable(queryRunner: QueryRunner): Promise<void> {
         name: 'id',
         type: 'bigserial',
         isPrimary: true,
-        isNullable: false,
       },
       {
         name: 'namespace_id',
@@ -369,7 +363,6 @@ async function createNamespaceMembersTable(
         name: 'id',
         type: 'bigserial',
         isPrimary: true,
-        isNullable: false,
       },
       {
         name: 'role',
@@ -431,7 +424,6 @@ async function createGroupPermissionsTable(
         name: 'id',
         type: 'bigserial',
         isPrimary: true,
-        isNullable: false,
       },
       {
         name: 'level',
@@ -491,7 +483,6 @@ async function createInvitationsTable(queryRunner: QueryRunner): Promise<void> {
         name: 'id',
         type: 'character varying',
         isPrimary: true,
-        isNullable: false,
       },
       {
         name: 'namespace_role',
@@ -551,7 +542,6 @@ async function createTasksTable(queryRunner: QueryRunner): Promise<void> {
         name: 'id',
         type: 'uuid',
         isPrimary: true,
-        isNullable: false,
         default: 'uuid_generate_v4()',
       },
       {
@@ -638,7 +628,6 @@ async function createConversationsTable(
         name: 'id',
         type: 'uuid',
         isPrimary: true,
-        isNullable: false,
         default: 'uuid_generate_v4()',
       },
       {
@@ -698,7 +687,6 @@ async function createMessagesTable(queryRunner: QueryRunner): Promise<void> {
         name: 'id',
         type: 'uuid',
         isPrimary: true,
-        isNullable: false,
         default: 'uuid_generate_v4()',
       },
       {

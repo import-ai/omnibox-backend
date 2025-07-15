@@ -37,6 +37,7 @@ export class ConversationsService {
     const conversation = this.conversationRepository.create({
       namespaceId,
       userId: user.id,
+      title: '',
     });
     return await this.conversationRepository.save(conversation);
   }

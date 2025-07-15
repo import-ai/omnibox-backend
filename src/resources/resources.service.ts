@@ -11,7 +11,7 @@ import {
   IsNull,
   Repository,
 } from 'typeorm';
-import { Resource } from 'src/resources/resources.entity';
+import { Resource, ResourceType } from 'src/resources/resources.entity';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import {
@@ -26,7 +26,7 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { WizardTask } from 'src/resources/wizard.task.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 
 export interface IQuery {
   namespaceId: string;
@@ -260,7 +260,7 @@ export class ResourcesService {
       parentResources,
       userId,
     );
-    if (permission === PermissionLevel.NO_ACCESS) {
+    if (permission === ResourcePermission.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');
     }
 
@@ -288,7 +288,7 @@ export class ResourcesService {
         [child, ...parentResources],
         userId,
       );
-      if (permission !== PermissionLevel.NO_ACCESS) {
+      if (permission !== ResourcePermission.NO_ACCESS) {
         filteredChildren.push(child);
       }
     }
@@ -319,7 +319,7 @@ export class ResourcesService {
       userId,
     );
 
-    if (permission === PermissionLevel.NO_ACCESS) {
+    if (permission === ResourcePermission.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');
     }
 
@@ -358,7 +358,7 @@ export class ResourcesService {
     while (true) {
       const resource = await this.resourceRepository.findOneOrFail({
         where: { namespaceId, id: resourceId },
-        select: ['id', 'name', 'resourceType', 'parentId', 'globalLevel'],
+        select: ['id', 'name', 'resourceType', 'parentId', 'globalPermission'],
       });
       resources.push(resource);
       if (!resource.parentId) {
@@ -477,7 +477,7 @@ export class ResourcesService {
     } else if (parentId) {
       resource = await this.create(user, {
         name: originalname,
-        resourceType: 'file',
+        resourceType: ResourceType.FILE,
         namespaceId,
         parentId,
         attrs: {
@@ -527,7 +527,7 @@ export class ResourcesService {
     } else if (parentId) {
       resource = await this.create(user, {
         name: file.originalname,
-        resourceType: 'file',
+        resourceType: ResourceType.FILE,
         namespaceId,
         parentId,
         attrs: {
@@ -572,7 +572,7 @@ export class ResourcesService {
   ) {
     return await manager.save(
       manager.create(Resource, {
-        resourceType: 'folder',
+        resourceType: ResourceType.FOLDER,
         namespaceId,
         parentId,
         userId,

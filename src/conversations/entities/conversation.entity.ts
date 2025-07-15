@@ -3,15 +3,15 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('conversations')
 export class Conversation extends Base {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn()
   id: string;
 
-  @Column({ nullable: true })
-  title?: string;
-
-  @Column({ name: 'namespace_id' })
+  @Column()
   namespaceId: string;
 
-  @Column({ name: 'user_id' })
+  @Column()
   userId: string;
+
+  @Column()
+  title: string;
 }

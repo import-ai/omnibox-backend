@@ -5,7 +5,7 @@ import { FindOptionsWhere, IsNull, Not, Repository } from 'typeorm';
 import { InvitationDto } from './dto/invitation.dto';
 import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 import { AuthService } from 'src/auth/auth.service';
 import { UserInvitationDto as AuthInvitationDto } from 'src/auth/dto/invitation.dto';
 import { GroupsService } from '../groups/groups.service';
@@ -39,7 +39,7 @@ export class InvitationsService {
         const invitationDto: InvitationDto = {
           id: invitation.id,
           namespaceRole: invitation.namespaceRole,
-          rootPermissionLevel: invitation.rootPermissionLevel,
+          rootPermissionLevel: invitation.rootPermission,
         };
         if (invitation.groupId) {
           const group = await this.groupsService.get(invitation.groupId);
@@ -72,7 +72,7 @@ export class InvitationsService {
     const invitationDto: InvitationDto = {
       id: invitation.id,
       namespaceRole: invitation.namespaceRole,
-      rootPermissionLevel: invitation.rootPermissionLevel,
+      rootPermissionLevel: invitation.rootPermission,
     };
     if (invitation.groupId) {
       const group = await this.groupsService.get(invitation.groupId);
@@ -96,7 +96,7 @@ export class InvitationsService {
     }
     if (req.groupId) {
       req.namespaceRole = NamespaceRole.MEMBER;
-      req.rootPermissionLevel = PermissionLevel.NO_ACCESS;
+      req.rootPermissionLevel = ResourcePermission.NO_ACCESS;
     }
     if (!req.namespaceRole || !req.rootPermissionLevel) {
       throw new UnprocessableEntityException(
@@ -107,14 +107,14 @@ export class InvitationsService {
       this.invitationsRepository.create({
         namespaceId,
         namespaceRole: req.namespaceRole,
-        rootPermissionLevel: req.rootPermissionLevel,
+        rootPermission: req.rootPermissionLevel,
         groupId: req.groupId,
       }),
     );
     const invitationDto: InvitationDto = {
       id: invitation.id,
       namespaceRole: invitation.namespaceRole,
-      rootPermissionLevel: invitation.rootPermissionLevel,
+      rootPermissionLevel: invitation.rootPermission,
     };
     return invitationDto;
   }
@@ -146,7 +146,7 @@ export class InvitationsService {
     const invitationDto: AuthInvitationDto = {
       namespaceId,
       namespaceRole: invitation.namespaceRole,
-      permissionLevel: invitation.rootPermissionLevel,
+      permissionLevel: invitation.rootPermission,
       groupId: invitation.groupId,
     };
     await this.authService.handleUserInvitation(userId, invitationDto);

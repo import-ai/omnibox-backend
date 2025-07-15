@@ -167,7 +167,7 @@ export class StreamService {
 
   getMessages(allMessages: Message[], parentMessageId: string): Message[] {
     const messages: Message[] = [];
-    let parentId: string | undefined = parentMessageId;
+    let parentId: string | null = parentMessageId;
     while (parentId) {
       const message = this.findOneOrFail(allMessages, parentId);
       messages.unshift(message);

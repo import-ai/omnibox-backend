@@ -4,9 +4,7 @@ import { Column, Entity, BeforeInsert, PrimaryColumn } from 'typeorm';
 
 @Entity('tags')
 export class Tag extends Base {
-  @PrimaryColumn('varchar', {
-    length: 6,
-  })
+  @PrimaryColumn()
   id: string;
 
   @BeforeInsert()
@@ -14,13 +12,9 @@ export class Tag extends Base {
     this.id = generateId(6);
   }
 
-  @Column({
-    type: 'varchar',
-    length: 20,
-    nullable: false,
-  })
-  name: string;
-
-  @Column({ name: 'namespace_id', nullable: false })
+  @Column()
   namespaceId: string;
+
+  @Column()
+  name: string;
 }

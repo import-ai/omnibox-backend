@@ -1,5 +1,5 @@
 import { Group } from 'src/groups/entities/group.entity';
-import { PermissionLevel } from '../permission-level.enum';
+import { ResourcePermission } from '../resource-permission.enum';
 import { User } from 'src/user/entities/user.entity';
 
 export class GroupDto {
@@ -17,7 +17,7 @@ export class GroupDto {
 export class UserDto {
   id: string;
   email: string;
-  username?: string;
+  username: string | null;
 
   static fromUserEntity(user: User): UserDto {
     return {
@@ -30,30 +30,33 @@ export class UserDto {
 
 export class UserPermissionDto {
   user: UserDto;
-  level: PermissionLevel;
+  level: ResourcePermission;
 
-  static new(user: User, level: PermissionLevel | null): UserPermissionDto {
+  static new(user: User, level: ResourcePermission | null): UserPermissionDto {
     return {
       user: UserDto.fromUserEntity(user),
-      level: level || PermissionLevel.NO_ACCESS,
+      level: level || ResourcePermission.NO_ACCESS,
     };
   }
 }
 
 export class GroupPermissionDto {
   group: GroupDto;
-  level: PermissionLevel;
+  level: ResourcePermission;
 
-  static new(group: Group, level: PermissionLevel | null): GroupPermissionDto {
+  static new(
+    group: Group,
+    level: ResourcePermission | null,
+  ): GroupPermissionDto {
     return {
       group: GroupDto.fromGroupEntity(group),
-      level: level || PermissionLevel.NO_ACCESS,
+      level: level || ResourcePermission.NO_ACCESS,
     };
   }
 }
 
 export class ListRespDto {
-  globalLevel: PermissionLevel;
+  globalPermission: ResourcePermission;
   users: UserPermissionDto[];
   groups: GroupPermissionDto[];
 }

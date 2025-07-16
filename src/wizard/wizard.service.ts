@@ -17,6 +17,7 @@ import { MessagesService } from 'src/messages/messages.service';
 import { StreamService } from 'src/wizard/stream.service';
 import { WizardAPIService } from 'src/wizard/api.wizard.service';
 import { UserService } from 'src/user/user.service';
+import { ResourceType } from 'src/resources/resources.entity';
 
 @Injectable()
 export class WizardService {
@@ -65,7 +66,7 @@ export class WizardService {
     const resourceDto: CreateResourceDto = {
       name: title || url,
       namespaceId: namespace_id,
-      resourceType: 'link',
+      resourceType: ResourceType.LINK,
       parentId: parentId,
       attrs: { url },
     };
@@ -88,6 +89,12 @@ export class WizardService {
     const task = await this.taskRepository.findOneOrFail({
       where: { id: data.id },
     });
+
+    if (!task.startedAt) {
+      throw new BadRequestException(
+        `Task ${task.id} has not been started yet.`,
+      );
+    }
 
     task.endedAt = new Date();
     task.exception = data.exception;

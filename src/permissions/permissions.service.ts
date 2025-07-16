@@ -9,10 +9,10 @@ import {
   UserPermissionDto,
 } from './dto/list-resp.dto';
 import {
-  comparePermissionLevel,
+  comparePermission,
   maxPermissions,
-  PermissionLevel,
-} from './permission-level.enum';
+  ResourcePermission,
+} from './resource-permission.enum';
 import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
 import { Resource } from 'src/resources/resources.entity';
@@ -44,7 +44,7 @@ export class PermissionsService {
     namespaceId: string,
     parentResourceIds: string[],
     groupIds?: string[],
-  ): Promise<Map<string, PermissionLevel>> {
+  ): Promise<Map<string, ResourcePermission>> {
     const permissions = await this.groupPermiRepo.find({
       where: {
         namespaceId,
@@ -64,12 +64,12 @@ export class PermissionsService {
     }
 
     // groupId -> PermissionLevel
-    const groupPermissionMap: Map<string, PermissionLevel> = new Map();
+    const groupPermissionMap: Map<string, ResourcePermission> = new Map();
     for (const resourceId of parentResourceIds) {
       for (const permission of permissionMap.get(resourceId) || []) {
         const groupId = permission.groupId;
         if (!groupPermissionMap.has(groupId)) {
-          groupPermissionMap.set(groupId, permission.level);
+          groupPermissionMap.set(groupId, permission.permission);
         }
       }
     }
@@ -80,7 +80,7 @@ export class PermissionsService {
     namespaceId: string,
     parentResourceIds: string[],
     userIds?: string[],
-  ): Promise<Map<string, PermissionLevel>> {
+  ): Promise<Map<string, ResourcePermission>> {
     const permissions = await this.userPermiRepo.find({
       where: {
         namespaceId,
@@ -100,12 +100,12 @@ export class PermissionsService {
     }
 
     // userId -> PermissionLevel
-    const userPermissionMap: Map<string, PermissionLevel> = new Map();
+    const userPermissionMap: Map<string, ResourcePermission> = new Map();
     for (const resourceId of parentResourceIds) {
       for (const permission of permissionMap.get(resourceId) || []) {
         const userId = permission.userId;
         if (!userPermissionMap.has(userId)) {
-          userPermissionMap.set(userId, permission.level);
+          userPermissionMap.set(userId, permission.permission);
         }
       }
     }
@@ -116,7 +116,7 @@ export class PermissionsService {
     namespaceId: string,
     resources: Resource[],
     userId: string,
-  ): Promise<PermissionLevel> {
+  ): Promise<ResourcePermission> {
     const groups = await this.groupUserRepository.find({
       where: {
         namespaceId,
@@ -142,7 +142,7 @@ export class PermissionsService {
       userPermission.get(userId) || null,
       ...groupPermissionMap.values(),
     ]);
-    return curPermission || PermissionLevel.NO_ACCESS;
+    return curPermission || ResourcePermission.NO_ACCESS;
   }
 
   async updateGlobalPermission(
@@ -152,7 +152,7 @@ export class PermissionsService {
   ) {
     await this.resourceRepository.update(
       { namespaceId, id: resourceId },
-      { globalLevel: permission.level },
+      { globalPermission: permission.level },
     );
   }
 
@@ -160,18 +160,18 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
     groupId: string,
-    permission: PermissionLevel,
+    permission: ResourcePermission,
   ): Promise<void> {
     const result = await this.groupPermiRepo.update(
       { namespaceId, resourceId, groupId, deletedAt: IsNull() },
-      { level: permission },
+      { permission: permission },
     );
     if (result.affected === 0) {
       const groupPermission = this.groupPermiRepo.create({
         namespaceId,
         resourceId,
         groupId,
-        level: permission,
+        permission: permission,
       });
       await this.groupPermiRepo.save(groupPermission);
     }
@@ -181,20 +181,20 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-    permission: PermissionLevel,
+    permission: ResourcePermission,
     manager: EntityManager = this.dataSource.manager,
   ) {
     const repo = manager.getRepository(UserPermission);
     const result = await repo.update(
       { namespaceId, resourceId, userId, deletedAt: IsNull() },
-      { level: permission },
+      { permission: permission },
     );
     if (result.affected === 0) {
       const userPermission = repo.create({
         namespaceId,
         resourceId,
         userId,
-        level: permission,
+        permission: permission,
       });
       await repo.save(userPermission);
     }
@@ -286,7 +286,7 @@ export class PermissionsService {
       return a.user.email.localeCompare(b.user.email);
     });
     return {
-      globalLevel: globalPermission || PermissionLevel.NO_ACCESS,
+      globalPermission: globalPermission || ResourcePermission.NO_ACCESS,
       users: userPermissions,
       groups: groupPermissions,
     };
@@ -296,7 +296,7 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-    requiredPermission: PermissionLevel = PermissionLevel.CAN_VIEW,
+    requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
     resources?: Resource[],
   ) {
     // Check if the user is a member of the namespace
@@ -314,7 +314,7 @@ export class PermissionsService {
       resources,
       userId,
     );
-    return comparePermissionLevel(permission, requiredPermission) >= 0;
+    return comparePermission(permission, requiredPermission) >= 0;
   }
 
   async getParentResources(
@@ -328,7 +328,7 @@ export class PermissionsService {
     while (true) {
       const resource = await this.resourceRepository.findOneOrFail({
         where: { namespaceId, id: resourceId },
-        select: ['id', 'name', 'resourceType', 'parentId', 'globalLevel'],
+        select: ['id', 'name', 'resourceType', 'parentId', 'globalPermission'],
       });
       resources.push(resource);
       if (!resource.parentId) {
@@ -342,10 +342,10 @@ export class PermissionsService {
 
 function getGlobalPermission(
   parentResources: Resource[],
-): PermissionLevel | null {
+): ResourcePermission | null {
   for (const resource of parentResources) {
-    if (resource.globalLevel) {
-      return resource.globalLevel;
+    if (resource.globalPermission) {
+      return resource.globalPermission;
     }
   }
   return null;

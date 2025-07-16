@@ -37,6 +37,7 @@ export class ConversationsService {
     const conversation = this.conversationRepository.create({
       namespaceId,
       userId: user.id,
+      title: '',
     });
     return await this.conversationRepository.save(conversation);
   }
@@ -73,7 +74,7 @@ export class ConversationsService {
   async compose(
     userId: string,
     conversationId: string,
-    lastMessageId?: string,
+    lastMessageId: string | null = null,
   ) {
     const messages: Message[] = await this.messagesService.findAll(
       userId,
@@ -194,7 +195,7 @@ export class ConversationsService {
         continue;
       }
       if (msg.parentId === system_message.id) {
-        msg.parentId = undefined;
+        msg.parentId = null;
       }
       if (msg.parentId) {
         if (!childrenMap[msg.parentId]) {

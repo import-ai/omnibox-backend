@@ -4,9 +4,7 @@ import { Entity, Column, PrimaryColumn, BeforeInsert } from 'typeorm';
 
 @Entity('groups')
 export class Group extends Base {
-  @PrimaryColumn('varchar', {
-    length: 6,
-  })
+  @PrimaryColumn()
   id: string;
 
   @BeforeInsert()
@@ -15,8 +13,8 @@ export class Group extends Base {
   }
 
   @Column()
-  title: string;
-
-  @Column({ name: 'namespace_id' })
   namespaceId: string;
+
+  @Column()
+  title: string;
 }

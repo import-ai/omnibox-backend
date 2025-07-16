@@ -6,7 +6,7 @@ import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { GroupUser } from 'src/groups/entities/group-user.entity';
 import { ResourcesService } from 'src/resources/resources.service';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { UserPermission } from 'src/permissions/entities/user-permission.entity';
@@ -108,7 +108,7 @@ export class NamespacesService {
         namespace.id,
         ownerId,
         NamespaceRole.OWNER,
-        PermissionLevel.FULL_ACCESS,
+        ResourcePermission.FULL_ACCESS,
         manager,
       );
       return namespace;
@@ -161,7 +161,7 @@ export class NamespacesService {
     namespaceId: string,
     userId: string,
     role: NamespaceRole,
-    level: PermissionLevel,
+    level: ResourcePermission,
     manager: EntityManager,
   ) {
     const count = await manager.count(NamespaceMember, {
@@ -200,7 +200,7 @@ export class NamespacesService {
       namespaceId,
       privateRoot.id,
       userId,
-      PermissionLevel.FULL_ACCESS,
+      ResourcePermission.FULL_ACCESS,
       manager,
     );
   }
@@ -253,7 +253,7 @@ export class NamespacesService {
         continue;
       }
       const permission =
-        permissionMap.get(member.userId) || PermissionLevel.NO_ACCESS;
+        permissionMap.get(member.userId) || ResourcePermission.NO_ACCESS;
       memberDtos.push({
         userId: user.id,
         email: user.email,

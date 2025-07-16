@@ -6,7 +6,7 @@ import {
   IndexedResourceDto,
 } from './dto/indexed-doc.dto';
 import { PermissionsService } from 'src/permissions/permissions.service';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 import { WizardAPIService } from 'src/wizard/api.wizard.service';
 import { SearchRequestDto } from 'src/wizard/dto/search-request.dto';
 import { IndexRecordType } from 'src/wizard/dto/index-record.dto';
@@ -77,7 +77,7 @@ export class SearchService {
             namespaceId,
             chunk.resourceId,
             userId,
-            PermissionLevel.CAN_VIEW,
+            ResourcePermission.CAN_VIEW,
           );
           if (!hasPermission) {
             continue;

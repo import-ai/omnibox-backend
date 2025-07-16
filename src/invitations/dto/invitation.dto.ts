@@ -1,10 +1,10 @@
 import { GroupDto } from 'src/groups/dto/group.dto';
 import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 
 export class InvitationDto {
   id: string;
   namespaceRole: NamespaceRole;
-  rootPermissionLevel: PermissionLevel;
+  rootPermissionLevel: ResourcePermission;
   group?: GroupDto;
 }

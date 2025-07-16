@@ -41,31 +41,30 @@ export interface MessageAttrs {
 
 @Entity('messages')
 export class Message extends Base {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn()
   id: string;
 
-  @Column({ name: 'conversation_id' })
-  conversationId: string;
-
-  @Column({ name: 'user_id' })
+  @Column()
   userId: string;
 
-  @Column('uuid', { name: 'parent_id', nullable: true })
-  parentId?: string;
+  @Column()
+  conversationId: string;
 
-  /**
-   * OpenAI format message
-   */
-  @Column('jsonb', { nullable: false })
-  message: OpenAIMessage;
+  @Column('uuid', { nullable: true })
+  parentId: string | null;
 
-  @Column({
-    type: 'enum',
+  @Column('enum', {
     enum: MessageStatus,
     default: MessageStatus.PENDING,
   })
   status: MessageStatus;
 
+  /**
+   * OpenAI format message
+   */
+  @Column('jsonb')
+  message: OpenAIMessage;
+
   @Column('jsonb', { nullable: true })
-  attrs?: MessageAttrs;
+  attrs: MessageAttrs | null;
 }

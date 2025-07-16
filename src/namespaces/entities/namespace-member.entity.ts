@@ -7,20 +7,19 @@ export enum NamespaceRole {
 }
 
 @Entity('namespace_members')
-@Index(['userId', 'namespaceId'], { unique: true, where: 'deleted_at IS NULL' })
 export class NamespaceMember extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'enum', enum: NamespaceRole, default: NamespaceRole.OWNER })
-  role: NamespaceRole;
-
-  @Column({ name: 'namespace_id' })
+  @Column()
   namespaceId: string;
 
-  @Column({ name: 'user_id' })
+  @Column()
   userId: string;
 
-  @Column({ name: 'root_resource_id' })
+  @Column('enum', { enum: NamespaceRole })
+  role: NamespaceRole;
+
+  @Column()
   rootResourceId: string;
 }

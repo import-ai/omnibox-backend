@@ -5,7 +5,7 @@ import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
 import { PermissionsService } from 'src/permissions/permissions.service';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 import {
   Req,
   Res,
@@ -151,7 +151,7 @@ export class ResourcesController {
       namespaceId,
       resourceId,
       req.user.id,
-      PermissionLevel.CAN_EDIT,
+      ResourcePermission.CAN_EDIT,
     );
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
@@ -169,7 +169,7 @@ export class ResourcesController {
       namespaceId,
       resourceId,
       req.user.id,
-      PermissionLevel.CAN_EDIT,
+      ResourcePermission.CAN_EDIT,
     );
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');

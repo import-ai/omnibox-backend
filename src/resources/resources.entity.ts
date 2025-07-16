@@ -1,7 +1,7 @@
 import { Base } from 'src/common/base.entity';
 import generateId from 'src/utils/generate-id';
 import { Column, Entity, PrimaryColumn, BeforeInsert } from 'typeorm';
-import { PermissionLevel } from 'src/permissions/permission-level.enum';
+import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 
 export enum ResourceType {
   DOC = 'doc',
@@ -12,9 +12,7 @@ export enum ResourceType {
 
 @Entity('resources')
 export class Resource extends Base {
-  @PrimaryColumn('varchar', {
-    length: 16,
-  })
+  @PrimaryColumn()
   id: string;
 
   @BeforeInsert()
@@ -22,35 +20,30 @@ export class Resource extends Base {
     this.id = generateId(16);
   }
 
-  @Column({ nullable: true })
-  name: string;
+  @Column()
+  namespaceId: string;
 
-  @Column({ name: 'resource_type', type: 'enum', enum: ResourceType })
-  resourceType: string;
-
-  @Column('varchar', { name: 'parent_id', nullable: true })
-  parentId: string | null;
-
-  @Column('jsonb', { nullable: true })
-  tags: string[];
-
-  @Column({ type: 'text', nullable: true })
-  content: string;
-
-  @Column('jsonb', { nullable: true })
-  attrs: Record<string, any>;
-
-  @Column({
-    type: 'enum',
-    name: 'global_level',
-    enum: PermissionLevel,
-    nullable: true,
-  })
-  globalLevel: PermissionLevel | null;
-
-  @Column('uuid', { name: 'user_id', nullable: true })
+  @Column('uuid', { nullable: true })
   userId: string | null;
 
-  @Column({ name: 'namespace_id' })
-  namespaceId: string;
+  @Column('varchar', { nullable: true })
+  parentId: string | null;
+
+  @Column()
+  name: string;
+
+  @Column('enum', { enum: ResourceType })
+  resourceType: ResourceType;
+
+  @Column()
+  content: string;
+
+  @Column('jsonb')
+  tags: string[];
+
+  @Column('jsonb')
+  attrs: Record<string, any>;
+
+  @Column('enum', { enum: ResourcePermission, nullable: true })
+  globalPermission: ResourcePermission | null;
 }

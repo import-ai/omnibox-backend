@@ -1,10 +1,10 @@
 import { Expose } from 'class-transformer';
 import { IsEnum, IsNotEmpty } from 'class-validator';
-import { PermissionLevel } from '../permission-level.enum';
+import { ResourcePermission } from '../resource-permission.enum';
 
 @Expose()
 export class PermissionDto {
-  @IsEnum(PermissionLevel)
+  @IsEnum(ResourcePermission)
   @IsNotEmpty()
-  level: PermissionLevel;
+  level: ResourcePermission;
 }

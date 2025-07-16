@@ -8,6 +8,7 @@ import { UpdateUserDto } from 'src/user/dto/update-user.dto';
 import { Injectable, ConflictException } from '@nestjs/common';
 import { UserOption } from 'src/user/entities/user-option.entity';
 import { CreateUserOptionDto } from 'src/user/dto/create-user-option.dto';
+import { CreateWechatUserDto } from 'src/user/dto/create-wechat-user.dto';
 
 @Injectable()
 export class UserService {
@@ -61,6 +62,32 @@ export class UserService {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...reset } = await repo.save(newUser);
+    return reset;
+  }
+
+  async findByWechatUnionid(unionid: string, manager?: EntityManager) {
+    const repo = manager ? manager.getRepository(User) : this.userRepository;
+    return await repo.findOne({
+      where: { id: unionid },
+    });
+  }
+
+  async createWechatUser(
+    userData: CreateWechatUserDto,
+    manager?: EntityManager,
+  ) {
+    const repo = manager ? manager.getRepository(User) : this.userRepository;
+
+    const hash = await bcrypt.hash(Math.random().toString(36), 10);
+    const newUser = repo.create({
+      ...userData,
+      email: '',
+      password: hash,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...reset } = await repo.save(newUser);
+
     return reset;
   }
 

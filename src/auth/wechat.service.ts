@@ -2,6 +2,7 @@ import * as QRCode from 'qrcode';
 import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import generateId from 'src/utils/generate-id';
 import { UserService } from 'src/user/user.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
@@ -9,27 +10,6 @@ import {
   WechatCheckResponseDto,
   WechatQrcodeResponseDto,
 } from './dto/wechat-login.dto';
-
-interface WechatAccessTokenResponse {
-  access_token: string;
-  expires_in: number;
-  refresh_token: string;
-  openid: string;
-  scope: string;
-  unionid?: string;
-}
-
-interface WechatUserInfoResponse {
-  openid: string;
-  nickname: string;
-  sex: number;
-  province: string;
-  city: string;
-  country: string;
-  headimgurl: string;
-  privilege: string[];
-  unionid?: string;
-}
 
 @Injectable()
 export class WechatService {
@@ -40,8 +20,8 @@ export class WechatService {
     string,
     {
       createdAt: number;
-      userInfo?: any;
       expiresIn: number;
+      userInfo?: WechatCheckResponseDto['user'];
     }
   >();
 
@@ -60,8 +40,26 @@ export class WechatService {
     );
   }
 
+  private cleanExpiresState() {
+    const now = Date.now();
+    for (const [state, info] of this.qrCodeStates.entries()) {
+      if (now - info.createdAt > info.expiresIn) {
+        this.qrCodeStates.delete(state);
+      }
+    }
+  }
+
+  private setState() {
+    const state = generateId();
+    this.qrCodeStates.set(state, {
+      createdAt: Date.now(),
+      expiresIn: 5 * 60 * 1000, // Expires in 5 minutes
+    });
+    return state;
+  }
+
   async generateQrCode(): Promise<WechatQrcodeResponseDto> {
-    const state = `wechat_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+    const state = this.setState();
     const qrcode = await QRCode.toDataURL(
       `https://open.weixin.qq.com/connect/qrconnect?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`,
       {
@@ -69,19 +67,10 @@ export class WechatService {
         margin: 2,
       },
     );
-
-    const expiresIn = 5 * 60; // Expires in 5 minutes
-    this.qrCodeStates.set(state, {
-      createdAt: Date.now(),
-      expiresIn: expiresIn * 1000,
-    });
-
     this.cleanExpiresState();
-
     return {
       state,
       qrcode,
-      expiresIn,
     };
   }
 
@@ -108,25 +97,9 @@ export class WechatService {
   }
 
   getWechatAuthUrl(): string {
-    const state = `wechat_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-    const expiresIn = 5 * 60; // Expires in 5 minutes
-    this.qrCodeStates.set(state, {
-      createdAt: Date.now(),
-      expiresIn: expiresIn * 1000,
-    });
-
+    const state = this.setState();
     this.cleanExpiresState();
-
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
-  }
-
-  private cleanExpiresState() {
-    const now = Date.now();
-    for (const [state, info] of this.qrCodeStates.entries()) {
-      if (now - info.createdAt > info.expiresIn) {
-        this.qrCodeStates.delete(state);
-      }
-    }
   }
 
   async handleCallback(code: string, state: string): Promise<any> {
@@ -140,17 +113,14 @@ export class WechatService {
     if (!accessTokenResponse.ok) {
       throw new UnauthorizedException('Failed to get WeChat access token');
     }
-    const accessTokenData =
-      (await accessTokenResponse.json()) as WechatAccessTokenResponse;
+    const accessTokenData = await accessTokenResponse.json();
     const userDataResponse = await fetch(
       `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
     );
     if (!userDataResponse.ok) {
       throw new UnauthorizedException('Failed to get WeChat user info');
     }
-    const userData = (await userDataResponse.json()) as WechatUserInfoResponse;
-
-    stateInfo.userInfo = userData;
+    const userData = await userDataResponse.json();
 
     if (!userData.unionid) {
       throw new UnauthorizedException(
@@ -158,40 +128,42 @@ export class WechatService {
       );
     }
 
-    const loginId = userData.unionid || '';
-    const wechatUser = await this.userService.findByWechatUnionid(loginId);
+    const wechatUser = await this.userService.findByWechatUnionid(
+      userData.unionidinId,
+    );
     if (wechatUser) {
-      return {
+      const returnValue = {
         id: wechatUser.id,
-        username: wechatUser.username,
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
-          email: wechatUser.email,
         }),
       };
+      stateInfo.userInfo = returnValue;
+      return returnValue;
     }
 
     return await this.dataSource.transaction(async (manager) => {
-      const newWechatUser = await this.userService.createWechatUser(
+      const wechatUser = await this.userService.createWechatUser(
         {
-          loginId,
+          username: userData.nickname,
+          loginId: userData.unionidinId,
           loginType: 'wechat',
         },
         manager,
       );
       await this.namespaceService.createAndJoinNamespace(
-        newWechatUser.id,
-        `${newWechatUser.username}'s Namespace`,
+        wechatUser.id,
+        `${wechatUser.username}'s Namespace`,
         manager,
       );
-      return {
-        id: newWechatUser.id,
-        username: newWechatUser.username,
+      const returnValue = {
+        id: wechatUser.id,
         access_token: this.jwtService.sign({
-          sub: newWechatUser.id,
-          email: newWechatUser.email,
+          sub: wechatUser.id,
         }),
       };
+      stateInfo.userInfo = returnValue;
+      return returnValue;
     });
   }
 }

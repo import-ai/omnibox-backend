@@ -5,5 +5,8 @@ export class CreateWechatUserDto {
   loginId: string;
 
   @IsString()
+  username: string;
+
+  @IsString()
   loginType: string;
 }

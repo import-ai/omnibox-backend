@@ -77,12 +77,11 @@ export class UserService {
     manager?: EntityManager,
   ) {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
-
     const hash = await bcrypt.hash(Math.random().toString(36), 10);
     const newUser = repo.create({
-      ...userData,
       email: '',
       password: hash,
+      username: userData.username,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

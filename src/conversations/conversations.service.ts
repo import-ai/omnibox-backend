@@ -59,8 +59,8 @@ export class ConversationsService {
         updatedAt: options?.order?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC',
       },
     };
-    if (options?.limit !== undefined) query.take = Number(options.limit);
-    if (options?.offset !== undefined) query.skip = Number(options.offset);
+    if (options?.limit) query.take = Number(options.limit);
+    if (options?.offset) query.skip = Number(options.offset);
     return await this.conversationRepository.find(query);
   }
 
@@ -83,14 +83,14 @@ export class ConversationsService {
     if (messages.length === 0) {
       return [];
     }
-    if (lastMessageId === undefined) {
+    if (!lastMessageId) {
       const lastMessage = messages[messages.length - 1];
       lastMessageId = lastMessage.id;
     }
     const composed: Message[] = [];
     while (lastMessageId) {
       const message = messages.find((message) => message.id === lastMessageId);
-      if (message === undefined) {
+      if (!message) {
         throw new Error('message not found');
       }
       composed.unshift(message);

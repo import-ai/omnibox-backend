@@ -14,7 +14,6 @@ import { ConfigService } from '@nestjs/config';
 import { ResourcesService } from 'src/resources/resources.service';
 import { Repository } from 'typeorm';
 import { Task } from 'src/tasks/tasks.entity';
-import { UserService } from 'src/user/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Index } from 'src/resources/wizard-task/index.service';
 import { MessagesService } from 'src/messages/messages.service';
@@ -32,8 +31,6 @@ export class SearchService {
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
     private readonly configService: ConfigService,
-    private readonly userService: UserService,
-
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
   ) {
@@ -125,11 +122,12 @@ export class SearchService {
         if (!resource.userId) {
           continue;
         }
-        const user = await this.userService.find(resource.userId);
-        if (!user) {
-          continue;
-        }
-        await Index.upsert(TASK_PRIORITY, user, resource, this.taskRepository);
+        await Index.upsert(
+          TASK_PRIORITY,
+          resource.userId,
+          resource,
+          this.taskRepository,
+        );
       }
     }
   }

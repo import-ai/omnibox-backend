@@ -6,9 +6,9 @@ import {
   EntityManager,
   FindOptionsWhere,
   In,
+  IsNull,
   Like,
   Not,
-  IsNull,
   Repository,
 } from 'typeorm';
 import { Resource, ResourceType } from 'src/resources/resources.entity';
@@ -27,13 +27,7 @@ import { WizardTask } from 'src/resources/wizard.task.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
 import { ResourcePermission } from 'src/permissions/resource-permission.enum';
-
-export interface IQuery {
-  namespaceId: string;
-  parentId: string;
-  userId: string;
-  tags?: string;
-}
+import { embedImage } from 'src/resources/utils';
 
 const TASK_PRIORITY = 5;
 
@@ -99,7 +93,7 @@ export class ResourcesService {
       const savedResource = await repo.save(resource);
       await WizardTask.index.upsert(
         TASK_PRIORITY,
-        user,
+        user.id,
         savedResource,
         manager.getRepository(Task),
       );
@@ -324,7 +318,7 @@ export class ResourcesService {
     }
 
     return {
-      resource,
+      resource: embedImage(resource),
       permission,
       path: [resource, ...parentResources]
         .map((r) => ({
@@ -369,7 +363,7 @@ export class ResourcesService {
     return resources;
   }
 
-  async update(user: User, id: string, data: UpdateResourceDto) {
+  async update(userId: string, id: string, data: UpdateResourceDto) {
     console.debug({ id, data });
     const resource = await this.resourceRepository.findOne({
       where: { id, namespaceId: data.namespaceId },
@@ -387,7 +381,7 @@ export class ResourcesService {
     const savedNewResource = await this.resourceRepository.save(newResource);
     await WizardTask.index.upsert(
       TASK_PRIORITY,
-      user,
+      userId,
       savedNewResource,
       this.taskRepository,
     );
@@ -423,7 +417,7 @@ export class ResourcesService {
       await manager.restore(Resource, id);
       await WizardTask.index.upsert(
         TASK_PRIORITY,
-        user,
+        user.id,
         resource,
         manager.getRepository(Task),
       );
@@ -467,21 +461,21 @@ export class ResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    const originalname = encodeFileName(fileName);
+    const originalName = encodeFileName(fileName);
     let resource: Resource;
     if (resourceId) {
       resource = await this.get(resourceId);
-      if (resource.resourceType !== 'file') {
+      if (resource.resourceType !== ResourceType.FILE) {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
       resource = await this.create(user, {
-        name: originalname,
+        name: originalName,
         resourceType: ResourceType.FILE,
         namespaceId,
         parentId,
         attrs: {
-          original_name: originalname,
+          original_name: originalName,
           mimetype: mimetype,
         },
       });
@@ -521,7 +515,7 @@ export class ResourcesService {
     let resource: Resource;
     if (resourceId) {
       resource = await this.get(resourceId);
-      if (resource.resourceType !== 'file') {
+      if (resource.resourceType !== ResourceType.FILE) {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
@@ -555,7 +549,7 @@ export class ResourcesService {
     const resource = await this.resourceRepository.findOne({
       where: { id: resourceId },
     });
-    if (!resource || resource.resourceType !== 'file') {
+    if (!resource || resource.resourceType !== ResourceType.FILE) {
       throw new NotFoundException('File resource not found.');
     }
     const artifactName = resource.id;

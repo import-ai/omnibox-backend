@@ -2,7 +2,6 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Task } from 'src/tasks/tasks.entity';
 import { Repository } from 'typeorm';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
@@ -16,8 +15,8 @@ import { Processor } from 'src/wizard/processors/processor.abstract';
 import { MessagesService } from 'src/messages/messages.service';
 import { StreamService } from 'src/wizard/stream.service';
 import { WizardAPIService } from 'src/wizard/api.wizard.service';
-import { UserService } from 'src/user/user.service';
 import { ResourceType } from 'src/resources/resources.entity';
+import { MinioService } from '../resources/minio/minio.service';
 
 @Injectable()
 export class WizardService {
@@ -27,15 +26,14 @@ export class WizardService {
 
   constructor(
     @InjectRepository(Task) private taskRepository: Repository<Task>,
-    private readonly namespacesService: NamespacesService,
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
-    private readonly userService: UserService,
+    private readonly minioService: MinioService,
   ) {
     this.processors = {
-      collect: new CollectProcessor(userService, resourcesService),
-      file_reader: new ReaderProcessor(userService, resourcesService),
+      collect: new CollectProcessor(resourcesService),
+      file_reader: new ReaderProcessor(resourcesService, this.minioService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {

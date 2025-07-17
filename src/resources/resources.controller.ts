@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { fileResponse } from './utils';
+import { fileResponse } from 'src/resources/utils';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ResourcesService } from 'src/resources/resources.service';
 import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
@@ -156,7 +156,7 @@ export class ResourcesController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    return await this.resourcesService.update(req.user, resourceId, data);
+    return await this.resourcesService.update(req.user.id, resourceId, data);
   }
 
   @Delete(':resourceId')

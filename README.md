@@ -77,7 +77,6 @@ $ pnpm run start:prod
 
 - **Framework**: NestJS
 - **Database**: PostgreSQL + TypeORM
-- **Cache**: Redis
 - **Object Storage**: MinIO
 - **Authentication**: JWT + Passport
 - **Email Service**: Nodemailer

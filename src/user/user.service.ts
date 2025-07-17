@@ -7,8 +7,9 @@ import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
 import { Injectable, ConflictException } from '@nestjs/common';
 import { UserOption } from 'src/user/entities/user-option.entity';
+import { UserBinding } from 'src/user/entities/user-binding.entity';
 import { CreateUserOptionDto } from 'src/user/dto/create-user-option.dto';
-import { CreateWechatUserDto } from 'src/user/dto/create-wechat-user.dto';
+import { CreateUserBindingDto } from 'src/user/dto/create-user-binding.dto';
 
 @Injectable()
 export class UserService {
@@ -17,6 +18,8 @@ export class UserService {
     private userRepository: Repository<User>,
     @InjectRepository(UserOption)
     private userOptionRepository: Repository<UserOption>,
+    @InjectRepository(UserBinding)
+    private userBindingRepository: Repository<UserBinding>,
   ) {}
 
   async verify(email: string, password: string) {
@@ -65,15 +68,21 @@ export class UserService {
     return reset;
   }
 
-  async findByWechatUnionid(unionid: string, manager?: EntityManager) {
-    const repo = manager ? manager.getRepository(User) : this.userRepository;
-    return await repo.findOne({
-      where: { id: unionid },
+  async findByLoginId(loginId: string, manager?: EntityManager) {
+    const repo = manager
+      ? manager.getRepository(UserBinding)
+      : this.userBindingRepository;
+    const binding = await repo.findOne({
+      where: { loginId },
     });
+    if (!binding) {
+      return;
+    }
+    return await this.find(binding.userId);
   }
 
-  async createWechatUser(
-    userData: CreateWechatUserDto,
+  async createUserBinding(
+    userData: CreateUserBindingDto,
     manager?: EntityManager,
   ) {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
@@ -86,6 +95,18 @@ export class UserService {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...reset } = await repo.save(newUser);
+
+    const bindingRepo = manager
+      ? manager.getRepository(UserBinding)
+      : this.userBindingRepository;
+
+    const newBinding = bindingRepo.create({
+      userId: reset.id,
+      loginId: userData.loginId,
+      loginType: userData.loginType,
+    });
+
+    await bindingRepo.save(newBinding);
 
     return reset;
   }

@@ -1,6 +1,6 @@
 import { IsString } from 'class-validator';
 
-export class CreateWechatUserDto {
+export class CreateUserBindingDto {
   @IsString()
   loginId: string;
 

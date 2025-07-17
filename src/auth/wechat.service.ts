@@ -16,11 +16,15 @@ export class WechatService {
   private readonly appId: string;
   private readonly appSecret: string;
   private readonly redirectUri: string;
+  private readonly openAppId: string;
+  private readonly openAppSecret: string;
+  private readonly openRedirectUri: string;
   private readonly qrCodeStates = new Map<
     string,
     {
       createdAt: number;
       expiresIn: number;
+      type: 'weixin' | 'open_weixin';
       userInfo?: WechatCheckResponseDto['user'];
     }
   >();
@@ -38,6 +42,15 @@ export class WechatService {
       'WECHAT_REDIRECT_URI',
       '',
     );
+    this.openAppId = this.configService.get<string>('OPEN_WECHAT_APP_ID', '');
+    this.openAppSecret = this.configService.get<string>(
+      'OPEN_WECHAT_APP_SECRET',
+      '',
+    );
+    this.openRedirectUri = this.configService.get<string>(
+      'OPEN_WECHAT_REDIRECT_URI',
+      '',
+    );
   }
 
   private cleanExpiresState() {
@@ -49,9 +62,10 @@ export class WechatService {
     }
   }
 
-  private setState() {
+  private setState(type: 'weixin' | 'open_weixin') {
     const state = generateId();
     this.qrCodeStates.set(state, {
+      type,
       createdAt: Date.now(),
       expiresIn: 5 * 60 * 1000, // Expires in 5 minutes
     });
@@ -59,9 +73,9 @@ export class WechatService {
   }
 
   async generateQrCode(): Promise<WechatQrcodeResponseDto> {
-    const state = this.setState();
+    const state = this.setState('open_weixin');
     const qrcode = await QRCode.toDataURL(
-      `https://open.weixin.qq.com/connect/qrconnect?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`,
+      `https://open.weixin.qq.com/connect/qrconnect?appid=${this.openAppId}&redirect_uri=${encodeURIComponent(this.openRedirectUri)}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`,
       {
         width: 200,
         margin: 2,
@@ -97,7 +111,7 @@ export class WechatService {
   }
 
   getWechatAuthUrl(): string {
-    const state = this.setState();
+    const state = this.setState('weixin');
     this.cleanExpiresState();
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
@@ -107,8 +121,11 @@ export class WechatService {
     if (!stateInfo) {
       throw new UnauthorizedException('Invalid state identifier');
     }
+    const isWeixin = stateInfo.type === 'weixin';
+    const appId = isWeixin ? this.appId : this.openAppId;
+    const appSecret = isWeixin ? this.appSecret : this.openAppSecret;
     const accessTokenResponse = await fetch(
-      `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${this.appId}&secret=${this.appSecret}&code=${code}&grant_type=authorization_code`,
+      `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
     );
     if (!accessTokenResponse.ok) {
       throw new UnauthorizedException('Failed to get WeChat access token');
@@ -128,7 +145,7 @@ export class WechatService {
       );
     }
 
-    const wechatUser = await this.userService.findByWechatUnionid(
+    const wechatUser = await this.userService.findByLoginId(
       userData.unionidinId,
     );
     if (wechatUser) {
@@ -143,11 +160,11 @@ export class WechatService {
     }
 
     return await this.dataSource.transaction(async (manager) => {
-      const wechatUser = await this.userService.createWechatUser(
+      const wechatUser = await this.userService.createUserBinding(
         {
+          loginType: 'wechat',
           username: userData.nickname,
           loginId: userData.unionidinId,
-          loginType: 'wechat',
         },
         manager,
       );

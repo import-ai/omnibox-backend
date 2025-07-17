@@ -36,19 +36,25 @@ export class WechatService {
     private readonly namespaceService: NamespacesService,
     private readonly dataSource: DataSource,
   ) {
-    this.appId = this.configService.get<string>('WECHAT_APP_ID', '');
-    this.appSecret = this.configService.get<string>('WECHAT_APP_SECRET', '');
-    this.redirectUri = this.configService.get<string>(
-      'WECHAT_REDIRECT_URI',
+    this.appId = this.configService.get<string>('OBB_WECHAT_APP_ID', '');
+    this.appSecret = this.configService.get<string>(
+      'OBB_WECHAT_APP_SECRET',
       '',
     );
-    this.openAppId = this.configService.get<string>('OPEN_WECHAT_APP_ID', '');
+    this.redirectUri = this.configService.get<string>(
+      'OBB_WECHAT_REDIRECT_URI',
+      '',
+    );
+    this.openAppId = this.configService.get<string>(
+      'OBB_OPEN_WECHAT_APP_ID',
+      '',
+    );
     this.openAppSecret = this.configService.get<string>(
-      'OPEN_WECHAT_APP_SECRET',
+      'OBB_OPEN_WECHAT_APP_SECRET',
       '',
     );
     this.openRedirectUri = this.configService.get<string>(
-      'OPEN_WECHAT_REDIRECT_URI',
+      'OBB_OPEN_WECHAT_REDIRECT_URI',
       '',
     );
   }

@@ -27,7 +27,6 @@ import { WizardTask } from 'src/resources/wizard.task.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
 import { ResourcePermission } from 'src/permissions/resource-permission.enum';
-import { embedImage } from 'src/resources/utils';
 
 const TASK_PRIORITY = 5;
 
@@ -318,7 +317,7 @@ export class ResourcesService {
     }
 
     return {
-      resource: embedImage(resource),
+      resource,
       permission,
       path: [resource, ...parentResources]
         .map((r) => ({

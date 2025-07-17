@@ -5,8 +5,5 @@ export class CreateUserBindingDto {
   loginId: string;
 
   @IsString()
-  username: string;
-
-  @IsString()
   loginType: string;
 }

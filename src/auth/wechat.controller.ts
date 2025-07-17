@@ -1,10 +1,6 @@
 import { WechatService } from './wechat.service';
 import { Public } from 'src/auth/decorators/public.decorator';
-import { Get, Param, Query, Controller } from '@nestjs/common';
-import {
-  WechatQrcodeResponseDto,
-  WechatCheckResponseDto,
-} from './dto/wechat-login.dto';
+import { Get, Query, Controller } from '@nestjs/common';
 
 @Controller('api/v1/wechat')
 export class WechatController {
@@ -12,14 +8,8 @@ export class WechatController {
 
   @Public()
   @Get('qrcode')
-  getQrCode(): WechatQrcodeResponseDto {
-    return this.wechatService.generateQrCode();
-  }
-
-  @Public()
-  @Get('check/:state')
-  checkStatus(@Param('state') state: string): WechatCheckResponseDto {
-    return this.wechatService.checkQrCodeStatus(state);
+  getQrCode() {
+    return this.wechatService.getQrCodeParams();
   }
 
   @Public()

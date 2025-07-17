@@ -90,7 +90,7 @@ export class UserService {
     const newUser = repo.create({
       email: '',
       password: hash,
-      username: userData.username,
+      username: userData.loginId,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -12,8 +12,8 @@ export class WechatController {
 
   @Public()
   @Get('qrcode')
-  async getQrCode(): Promise<WechatQrcodeResponseDto> {
-    return await this.wechatService.generateQrCode();
+  getQrCode(): WechatQrcodeResponseDto {
+    return this.wechatService.generateQrCode();
   }
 
   @Public()

@@ -1,4 +1,3 @@
-import * as QRCode from 'qrcode';
 import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -18,7 +17,6 @@ export class WechatService {
   private readonly redirectUri: string;
   private readonly openAppId: string;
   private readonly openAppSecret: string;
-  private readonly openRedirectUri: string;
   private readonly qrCodeStates = new Map<
     string,
     {
@@ -53,10 +51,6 @@ export class WechatService {
       'OBB_OPEN_WECHAT_APP_SECRET',
       '',
     );
-    this.openRedirectUri = this.configService.get<string>(
-      'OBB_OPEN_WECHAT_REDIRECT_URI',
-      '',
-    );
   }
 
   private cleanExpiresState() {
@@ -78,19 +72,12 @@ export class WechatService {
     return state;
   }
 
-  async generateQrCode(): Promise<WechatQrcodeResponseDto> {
+  generateQrCode(): WechatQrcodeResponseDto {
     const state = this.setState('open_weixin');
-    const qrcode = await QRCode.toDataURL(
-      `https://open.weixin.qq.com/connect/qrconnect?appid=${this.openAppId}&redirect_uri=${encodeURIComponent(this.openRedirectUri)}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`,
-      {
-        width: 200,
-        margin: 2,
-      },
-    );
     this.cleanExpiresState();
     return {
       state,
-      qrcode,
+      data: `https://open.weixin.qq.com/connect/qrconnect?appid=${this.openAppId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_login&state=${state}#wechat_redirect`,
     };
   }
 

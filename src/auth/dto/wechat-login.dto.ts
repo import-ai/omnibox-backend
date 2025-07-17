@@ -5,7 +5,7 @@ export class WechatQrcodeResponseDto {
   state: string;
 
   @IsString()
-  qrcode: string;
+  data: string;
 }
 
 export class WechatCheckResponseDto {

@@ -6,22 +6,12 @@ export class UserBinding extends Base {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({
-    type: 'uuid',
-    nullable: false,
-    name: 'user_id',
-  })
+  @Column()
   userId: string;
 
-  @Column({
-    nullable: false,
-    name: 'login_type',
-  })
+  @Column()
   loginType: string;
 
-  @Column({
-    nullable: false,
-    name: 'login_id',
-  })
+  @Column()
   loginId: string;
 }

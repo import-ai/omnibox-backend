@@ -28,6 +28,13 @@ export class UserBindings1752652489640 implements MigrationInterface {
         },
         ...BaseColumns(),
       ],
+      indices: [
+        {
+          columnNames: ['user_id', 'login_type'],
+          isUnique: true,
+          where: '"deleted_at" IS NULL',
+        },
+      ],
       foreignKeys: [
         {
           columnNames: ['user_id'],

@@ -132,12 +132,14 @@ export class ResourceAttachmentsService {
       const objectResponse = await this.minioService.get(
         this.getKey(namespaceId, resourceId, attachmentId),
       );
-      return objectStreamResponse(objectResponse, httpResponse);
+      if (objectResponse.mimetype.startsWith('image/')) {
+        return objectStreamResponse(objectResponse, httpResponse);
+      }
     } catch (error) {
       if (error.code !== 'NotFound') {
         console.error({ error });
       }
-      throw new NotFoundException();
     }
+    throw new NotFoundException();
   }
 }

@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { ResourcesService } from 'src/resources/resources.service';
+import { GetResponse as ObjectResponse } from 'src/resources/minio/minio.service';
 
 export async function fileResponse(
   resourceId: string,
@@ -18,4 +19,22 @@ export async function fileResponse(
     resource.attrs?.mimetype || 'application/octet-stream',
   );
   fileStream.pipe(response);
+}
+
+export function objectStreamResponse(
+  objectResponse: ObjectResponse,
+  httpResponse: Response,
+) {
+  const { stream, filename, mimetype, stat } = objectResponse;
+  const encodedName = encodeURIComponent(filename);
+  const headers = {
+    'Content-Length': stat.size,
+    'Last-Modified': stat.lastModified.toUTCString(),
+    'Content-Disposition': `attachment; filename="${encodedName}"`,
+    'Content-Type': mimetype,
+  };
+  for (const [key, value] of Object.entries(headers)) {
+    httpResponse.setHeader(key, value);
+  }
+  stream.pipe(httpResponse);
 }

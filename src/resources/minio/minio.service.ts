@@ -3,6 +3,20 @@ import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 import { Readable } from 'stream';
 
+export interface PutOptions {
+  savePath?: string;
+  metadata?: Record<string, any>;
+  bucket?: string;
+}
+
+export interface GetResponse {
+  stream: Readable;
+  filename: string;
+  mimetype: string;
+  metadata: Record<string, any>;
+  stat: Minio.BucketItemStat;
+}
+
 @Injectable()
 export class MinioService {
   private readonly minioClient: Minio.Client;
@@ -117,43 +131,36 @@ export class MinioService {
     return this.minioClient.removeObject(bucket, objectName);
   }
 
-  async putBase64(
-    objectName: string,
-    base64String: string,
-    mimetype: string,
-    bucket: string = this.bucket,
-  ) {
-    const buffer = Buffer.from(base64String, 'base64');
-    return this.putObject(objectName, buffer, mimetype, bucket);
+  async getStat(objectName: string, bucket: string = this.bucket) {
+    return this.minioClient.statObject(bucket, objectName);
   }
 
-  async getBase64(
+  async put(
+    filename: string,
+    buffer: Buffer,
+    mimetype: string,
+    options?: PutOptions,
+  ) {
+    const { savePath, metadata = {}, bucket = this.bucket } = options || {};
+    return await this.minioClient.putObject(
+      bucket,
+      savePath || filename,
+      buffer,
+      buffer.length,
+      { mimetype, filename, ...metadata },
+    );
+  }
+
+  async get(
     objectName: string,
     bucket: string = this.bucket,
-  ): Promise<{ base64: string; mimetype: string }> {
+  ): Promise<GetResponse> {
     const [stream, stat] = await Promise.all([
-      this.minioClient.getObject(bucket, objectName),
-      this.minioClient.statObject(bucket, objectName),
+      this.getObject(objectName, bucket),
+      this.getStat(objectName, bucket),
     ]);
-
-    const mimetype: string = stat?.metaData?.mimetype;
-
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-
-      stream.on('data', (chunk: Buffer) => {
-        chunks.push(chunk);
-      });
-
-      stream.on('end', () => {
-        const buffer = Buffer.concat(chunks);
-        const base64 = buffer.toString('base64');
-        resolve({ base64, mimetype });
-      });
-
-      stream.on('error', (error) => {
-        reject(error);
-      });
-    });
+    const metadata: Record<string, any> = stat?.metaData || {};
+    const { filename, mimetype = 'application/octet-stream' } = metadata;
+    return { stream, filename, mimetype, metadata, stat };
   }
 }

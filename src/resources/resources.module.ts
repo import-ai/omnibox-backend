@@ -7,11 +7,19 @@ import { Task } from 'src/tasks/tasks.entity';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { InternalResourcesController } from 'src/resources/internal.resource.controller';
 import { PermissionsModule } from 'src/permissions/permissions.module';
+import { FileResourcesController } from 'src/resources/file-resources.controller';
+import { ResourceAttachmentsController } from 'src/resources/attachments/attachments.resources.controller';
+import { ResourceAttachmentsService } from 'src/resources/attachments/attachments.resources.service';
 
 @Module({
-  exports: [ResourcesService, MinioService, InternalResourcesController],
-  providers: [ResourcesService, MinioService, InternalResourcesController],
-  controllers: [ResourcesController, InternalResourcesController],
+  exports: [ResourcesService, MinioService, ResourceAttachmentsService],
+  providers: [ResourcesService, MinioService, ResourceAttachmentsService],
+  controllers: [
+    ResourcesController,
+    InternalResourcesController,
+    FileResourcesController,
+    ResourceAttachmentsController,
+  ],
   imports: [
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Task]),

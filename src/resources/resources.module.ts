@@ -10,6 +10,7 @@ import { PermissionsModule } from 'src/permissions/permissions.module';
 import { FileResourcesController } from 'src/resources/file-resources.controller';
 import { ResourceAttachmentsController } from 'src/resources/attachments/attachments.resources.controller';
 import { ResourceAttachmentsService } from 'src/resources/attachments/attachments.resources.service';
+import { ResourceImagesController } from 'src/resources/attachments/images.resources.controller';
 
 @Module({
   exports: [ResourcesService, MinioService, ResourceAttachmentsService],
@@ -19,6 +20,7 @@ import { ResourceAttachmentsService } from 'src/resources/attachments/attachment
     InternalResourcesController,
     FileResourcesController,
     ResourceAttachmentsController,
+    ResourceImagesController,
   ],
   imports: [
     TypeOrmModule.forFeature([Resource]),

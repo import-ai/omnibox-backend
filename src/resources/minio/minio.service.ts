@@ -73,7 +73,9 @@ export class MinioService {
       objectName,
       buffer,
       buffer.length,
-      { mimetype },
+      {
+        'Content-Type': mimetype,
+      },
     );
   }
 
@@ -147,7 +149,12 @@ export class MinioService {
       savePath || filename,
       buffer,
       buffer.length,
-      { mimetype, filename, ...metadata },
+      {
+        'Content-Type': mimetype,
+        filename,
+        // Minio would convert metadata keys to lowercase
+        metadata_string: JSON.stringify(metadata),
+      },
     );
   }
 
@@ -159,8 +166,11 @@ export class MinioService {
       this.getObject(objectName, bucket),
       this.getStat(objectName, bucket),
     ]);
-    const metadata: Record<string, any> = stat?.metaData || {};
-    const { filename, mimetype = 'application/octet-stream' } = metadata;
+    const metadataString: string = stat?.metaData.metadata_string || '{}';
+    const filename: string = stat?.metaData.filename;
+    const mimetype: string =
+      stat?.metaData['content-type'] || 'application/octet-stream';
+    const metadata: Record<string, any> = JSON.parse(metadataString);
     return { stream, filename, mimetype, metadata, stat };
   }
 }

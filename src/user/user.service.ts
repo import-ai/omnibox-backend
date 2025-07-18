@@ -88,7 +88,6 @@ export class UserService {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
     const hash = await bcrypt.hash(Math.random().toString(36), 10);
     const newUser = repo.create({
-      email: '',
       password: hash,
       username: userData.loginId,
     });

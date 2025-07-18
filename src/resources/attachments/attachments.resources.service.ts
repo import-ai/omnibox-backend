@@ -1,5 +1,9 @@
 import encodeFileName from 'src/utils/encode-filename';
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { MinioService } from 'src/resources/minio/minio.service';
 import { PermissionsService } from 'src/permissions/permissions.service';
@@ -13,6 +17,14 @@ export class ResourceAttachmentsService {
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
   ) {}
+
+  getKey(
+    namespaceId: string,
+    resourceId: string,
+    attachmentId: string,
+  ): string {
+    return `${namespaceId}/${resourceId}/${attachmentId}`;
+  }
 
   async checkPermission(
     namespaceId: string,
@@ -58,7 +70,7 @@ export class ResourceAttachmentsService {
         const filename: string = `${uuid}${ext}`;
         await this.minioService.put(originalName, file.buffer, file.mimetype, {
           metadata: { namespaceId, resourceId, userId },
-          savePath: filename,
+          savePath: this.getKey(namespaceId, resourceId, filename),
         });
         uploaded.push({
           name: originalName,
@@ -86,7 +98,9 @@ export class ResourceAttachmentsService {
       userId,
       ResourcePermission.CAN_VIEW,
     );
-    const objectResponse = await this.minioService.get(attachmentId);
+    const objectResponse = await this.minioService.get(
+      this.getKey(namespaceId, resourceId, attachmentId),
+    );
     return objectStreamResponse(objectResponse, httpResponse);
   }
 
@@ -102,7 +116,9 @@ export class ResourceAttachmentsService {
       userId,
       ResourcePermission.CAN_EDIT,
     );
-    await this.minioService.removeObject(attachmentId);
+    await this.minioService.removeObject(
+      this.getKey(namespaceId, resourceId, attachmentId),
+    );
     return { success: true };
   }
 
@@ -112,14 +128,16 @@ export class ResourceAttachmentsService {
     attachmentId: string,
     httpResponse: Response,
   ) {
-    const objectResponse = await this.minioService.get(attachmentId);
-    if (
-      objectResponse.mimetype.startsWith('image') &&
-      namespaceId === objectResponse.metadata.namespaceId &&
-      resourceId === objectResponse.metadata.resourceId
-    ) {
+    try {
+      const objectResponse = await this.minioService.get(
+        this.getKey(namespaceId, resourceId, attachmentId),
+      );
       return objectStreamResponse(objectResponse, httpResponse);
+    } catch (error) {
+      if (error.code !== 'NotFound') {
+        console.error({ error });
+      }
+      throw new NotFoundException();
     }
-    throw new ForbiddenException('Not authorized');
   }
 }

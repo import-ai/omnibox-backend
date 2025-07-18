@@ -144,6 +144,7 @@ export class MinioService {
     options?: PutOptions,
   ) {
     const { savePath, metadata = {}, bucket = this.bucket } = options || {};
+    console.warn({ savePath, metadata });
     return await this.minioClient.putObject(
       bucket,
       savePath || filename,

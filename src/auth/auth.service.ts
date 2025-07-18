@@ -51,14 +51,11 @@ export class AuthService {
     if (!account) {
       throw new BadRequestException('User not found');
     }
-    const payload: LoginPayloadDto = {
-      email: account.email,
-      sub: account.id,
-    };
     return {
       id: account.id,
-      username: account.username,
-      access_token: this.jwtService.sign(payload),
+      access_token: this.jwtService.sign({
+        sub: account.id,
+      }),
     };
   }
 
@@ -114,10 +111,8 @@ export class AuthService {
       }
       return {
         id: user.id,
-        username: user.username,
         access_token: this.jwtService.sign({
           sub: user.id,
-          email: user.email,
         }),
       };
     });
@@ -133,12 +128,12 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found.');
     }
-    const payload: LoginPayloadDto = { email: user.email, sub: user.id };
+    const payload: LoginPayloadDto = { email: user.email!, sub: user.id };
     const token = this.jwtService.sign(payload, {
       expiresIn: '1h',
     });
     const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendPasswordEmail(user.email, mailSendUri);
+    await this.mailService.sendPasswordEmail(user.email!, mailSendUri);
     // return { url: mailSendUri };
   }
 

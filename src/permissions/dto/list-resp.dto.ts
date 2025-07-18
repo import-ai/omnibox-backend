@@ -16,7 +16,7 @@ export class GroupDto {
 
 export class UserDto {
   id: string;
-  email: string;
+  email: string | null;
   username: string | null;
 
   static fromUserEntity(user: User): UserDto {

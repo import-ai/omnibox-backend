@@ -282,8 +282,11 @@ export class PermissionsService {
       if (b.user.id == userId) {
         return 1;
       }
-      // Other users sorted by email
-      return a.user.email.localeCompare(b.user.email);
+      if (a.user.email && b.user.email) {
+        // Sort by email if both have email
+        return a.user.email.localeCompare(b.user.email);
+      }
+      return 0;
     });
     return {
       globalPermission: globalPermission || ResourcePermission.NO_ACCESS,

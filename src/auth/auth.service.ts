@@ -128,12 +128,12 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found.');
     }
-    const payload: LoginPayloadDto = { email: user.email, sub: user.id };
+    const payload: LoginPayloadDto = { email: user.email!, sub: user.id };
     const token = this.jwtService.sign(payload, {
       expiresIn: '1h',
     });
     const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendPasswordEmail(user.email, mailSendUri);
+    await this.mailService.sendPasswordEmail(user.email!, mailSendUri);
     // return { url: mailSendUri };
   }
 

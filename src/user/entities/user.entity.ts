@@ -9,8 +9,8 @@ export class User extends Base {
   @Column('varchar', { nullable: true })
   username: string | null;
 
-  @Column()
-  email: string;
+  @Column('varchar', { nullable: true })
+  email: string | null;
 
   @Column()
   password: string;

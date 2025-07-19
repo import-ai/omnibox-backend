@@ -10,14 +10,12 @@ import { MessagesModule } from 'src/messages/messages.module';
 import { ConversationsModule } from 'src/conversations/conversations.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Task } from 'src/tasks/tasks.entity';
-import { UserModule } from 'src/user/user.module';
 
 @Module({
   exports: [SearchService],
   providers: [SearchService],
   controllers: [SearchController, InternalSearchController],
   imports: [
-    UserModule,
     PermissionsModule,
     ResourcesModule,
     MessagesModule,

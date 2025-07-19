@@ -2,6 +2,29 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 import { Readable } from 'stream';
+import generateId from 'src/utils/generate-id';
+import { UploadedObjectInfo } from 'minio/dist/main/internal/type';
+
+export interface PutOptions {
+  id?: string;
+  metadata?: Record<string, any>;
+  bucket?: string;
+}
+
+export interface PutResponse extends UploadedObjectInfo {
+  id: string;
+}
+
+export interface ObjectInfo {
+  filename: string;
+  mimetype: string;
+  metadata: Record<string, any>;
+  stat: Minio.BucketItemStat;
+}
+
+export interface GetResponse extends ObjectInfo {
+  stream: Readable;
+}
 
 @Injectable()
 export class MinioService {
@@ -59,7 +82,9 @@ export class MinioService {
       objectName,
       buffer,
       buffer.length,
-      { mimetype },
+      {
+        'Content-Type': mimetype,
+      },
     );
   }
 
@@ -117,43 +142,51 @@ export class MinioService {
     return this.minioClient.removeObject(bucket, objectName);
   }
 
-  async putBase64(
-    objectName: string,
-    base64String: string,
-    mimetype: string,
-    bucket: string = this.bucket,
-  ) {
-    const buffer = Buffer.from(base64String, 'base64');
-    return this.putObject(objectName, buffer, mimetype, bucket);
+  async getStat(objectName: string, bucket: string = this.bucket) {
+    return this.minioClient.statObject(bucket, objectName);
   }
 
-  async getBase64(
-    objectName: string,
-    bucket: string = this.bucket,
-  ): Promise<{ base64: string; mimetype: string }> {
-    const [stream, stat] = await Promise.all([
-      this.minioClient.getObject(bucket, objectName),
-      this.minioClient.statObject(bucket, objectName),
+  async put(
+    filename: string,
+    buffer: Buffer,
+    mimetype: string,
+    options?: PutOptions,
+  ) {
+    const {
+      id = generateId(32),
+      metadata = {},
+      bucket = this.bucket,
+    } = options || {};
+    const info = await this.minioClient.putObject(
+      bucket,
+      id,
+      buffer,
+      buffer.length,
+      {
+        'Content-Type': mimetype,
+        filename,
+        // Minio would convert metadata keys to lowercase
+        metadata_string: JSON.stringify(metadata),
+      },
+    );
+    return { ...info, id } as PutResponse;
+  }
+
+  async info(objectName: string, bucket: string = this.bucket) {
+    const stat = await this.getStat(objectName, bucket);
+    const metadataString: string = stat?.metaData.metadata_string || '{}';
+    const filename: string = stat?.metaData.filename;
+    const mimetype: string =
+      stat?.metaData['content-type'] || 'application/octet-stream';
+    const metadata: Record<string, any> = JSON.parse(metadataString);
+    return { filename, mimetype, metadata, stat } as ObjectInfo;
+  }
+
+  async get(objectName: string, bucket: string = this.bucket) {
+    const [stream, info] = await Promise.all([
+      this.getObject(objectName, bucket),
+      this.info(objectName, bucket),
     ]);
-
-    const mimetype: string = stat?.metaData?.mimetype;
-
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-
-      stream.on('data', (chunk: Buffer) => {
-        chunks.push(chunk);
-      });
-
-      stream.on('end', () => {
-        const buffer = Buffer.concat(chunks);
-        const base64 = buffer.toString('base64');
-        resolve({ base64, mimetype });
-      });
-
-      stream.on('error', (error) => {
-        reject(error);
-      });
-    });
+    return { stream, ...info } as GetResponse;
   }
 }

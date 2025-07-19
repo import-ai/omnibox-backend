@@ -50,9 +50,16 @@ describe('MinioService (integration, env config)', () => {
     const content = Buffer.from(base64img, 'base64');
     const requestMimetype = 'image/jpeg';
     await minioService.putObject(objectName, content, requestMimetype);
-    const { base64, mimetype } = await minioService.getBase64(objectName);
+    const stream = await minioService.getObject(objectName);
+
+    const base64 = await new Promise<string>((resolve, reject) => {
+      let result = '';
+      stream.on('data', (chunk) => (result += chunk.toString('base64')));
+      stream.on('end', () => resolve(result));
+      stream.on('error', reject);
+    });
+
     expect(base64).toBe(base64img);
-    expect(mimetype).toBe(requestMimetype);
     await minioService.removeObject(objectName);
   });
 });

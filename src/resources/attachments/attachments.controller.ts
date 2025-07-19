@@ -9,15 +9,13 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { ResourceAttachmentsService } from 'src/resources/attachments/attachments.resources.service';
+import { AttachmentsService } from 'src/resources/attachments/attachments.service';
 import { Response } from 'express';
 import { UserId } from 'src/auth/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
-export class ResourceAttachmentsController {
-  constructor(
-    private readonly resourceAttachmentsService: ResourceAttachmentsService,
-  ) {}
+export class AttachmentsController {
+  constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Post()
   @UseInterceptors(FilesInterceptor('file[]'))
@@ -27,7 +25,7 @@ export class ResourceAttachmentsController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    return await this.resourceAttachmentsService.uploadAttachments(
+    return await this.attachmentsService.uploadAttachments(
       namespaceId,
       resourceId,
       userId,
@@ -43,7 +41,7 @@ export class ResourceAttachmentsController {
     @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    return await this.resourceAttachmentsService.downloadAttachment(
+    return await this.attachmentsService.downloadAttachment(
       namespaceId,
       resourceId,
       attachmentId,
@@ -59,7 +57,7 @@ export class ResourceAttachmentsController {
     @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    return await this.resourceAttachmentsService.deleteAttachment(
+    return await this.attachmentsService.deleteAttachment(
       namespaceId,
       resourceId,
       attachmentId,

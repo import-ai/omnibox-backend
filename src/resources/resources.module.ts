@@ -8,19 +8,19 @@ import { MinioService } from 'src/resources/minio/minio.service';
 import { InternalResourcesController } from 'src/resources/internal.resource.controller';
 import { PermissionsModule } from 'src/permissions/permissions.module';
 import { FileResourcesController } from 'src/resources/file-resources.controller';
-import { ResourceAttachmentsController } from 'src/resources/attachments/attachments.resources.controller';
-import { ResourceAttachmentsService } from 'src/resources/attachments/attachments.resources.service';
-import { ResourceImagesController } from 'src/resources/attachments/images.resources.controller';
+import { AttachmentsController } from 'src/resources/attachments/attachments.controller';
+import { AttachmentsService } from 'src/resources/attachments/attachments.service';
+import { ImageAttachmentsController } from 'src/resources/attachments/image.attachments.controller';
 
 @Module({
-  exports: [ResourcesService, MinioService, ResourceAttachmentsService],
-  providers: [ResourcesService, MinioService, ResourceAttachmentsService],
+  exports: [ResourcesService, MinioService, AttachmentsService],
+  providers: [ResourcesService, MinioService, AttachmentsService],
   controllers: [
     ResourcesController,
     InternalResourcesController,
     FileResourcesController,
-    ResourceAttachmentsController,
-    ResourceImagesController,
+    AttachmentsController,
+    ImageAttachmentsController,
   ],
   imports: [
     TypeOrmModule.forFeature([Resource]),

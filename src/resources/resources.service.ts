@@ -363,7 +363,6 @@ export class ResourcesService {
   }
 
   async update(userId: string, id: string, data: UpdateResourceDto) {
-    console.debug({ id, data });
     const resource = await this.resourceRepository.findOne({
       where: { id, namespaceId: data.namespaceId },
     });

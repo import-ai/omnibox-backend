@@ -19,25 +19,24 @@ export class ReaderProcessor extends CollectProcessor {
   }
 
   async process(task: Task): Promise<Record<string, any>> {
+    let markdown: string | undefined = task.output?.markdown;
+    if (!markdown) {
+      return {};
+    }
     if (task.output?.images) {
       const images: Image[] = task.output.images;
       for (const image of images) {
         const stream = Buffer.from(image.data, 'base64');
-        await this.minioService.put(
+        const { id } = await this.minioService.put(
           image.name || image.link,
           stream,
           image.mimetype,
-          {
-            savePath: image.link,
-          },
         );
+        markdown = markdown.replaceAll(image.link, `/api/v1/images/${id}`);
       }
       task.output.images = undefined;
+      task.output.markdown = markdown;
     }
-    if (task.output?.markdown) {
-      return await super.process(task);
-    } else {
-      return {};
-    }
+    return await super.process(task);
   }
 }

@@ -2,19 +2,28 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 import { Readable } from 'stream';
+import generateId from 'src/utils/generate-id';
+import { UploadedObjectInfo } from 'minio/dist/main/internal/type';
 
 export interface PutOptions {
-  savePath?: string;
+  id?: string;
   metadata?: Record<string, any>;
   bucket?: string;
 }
 
-export interface GetResponse {
-  stream: Readable;
+export interface PutResponse extends UploadedObjectInfo {
+  id: string;
+}
+
+export interface ObjectInfo {
   filename: string;
   mimetype: string;
   metadata: Record<string, any>;
   stat: Minio.BucketItemStat;
+}
+
+export interface GetResponse extends ObjectInfo {
+  stream: Readable;
 }
 
 @Injectable()
@@ -143,11 +152,14 @@ export class MinioService {
     mimetype: string,
     options?: PutOptions,
   ) {
-    const { savePath, metadata = {}, bucket = this.bucket } = options || {};
-    console.warn({ savePath, metadata });
-    return await this.minioClient.putObject(
+    const {
+      id = generateId(32),
+      metadata = {},
+      bucket = this.bucket,
+    } = options || {};
+    const info = await this.minioClient.putObject(
       bucket,
-      savePath || filename,
+      id,
       buffer,
       buffer.length,
       {
@@ -157,21 +169,24 @@ export class MinioService {
         metadata_string: JSON.stringify(metadata),
       },
     );
+    return { ...info, id } as PutResponse;
   }
 
-  async get(
-    objectName: string,
-    bucket: string = this.bucket,
-  ): Promise<GetResponse> {
-    const [stream, stat] = await Promise.all([
-      this.getObject(objectName, bucket),
-      this.getStat(objectName, bucket),
-    ]);
+  async info(objectName: string, bucket: string = this.bucket) {
+    const stat = await this.getStat(objectName, bucket);
     const metadataString: string = stat?.metaData.metadata_string || '{}';
     const filename: string = stat?.metaData.filename;
     const mimetype: string =
       stat?.metaData['content-type'] || 'application/octet-stream';
     const metadata: Record<string, any> = JSON.parse(metadataString);
-    return { stream, filename, mimetype, metadata, stat };
+    return { filename, mimetype, metadata, stat } as ObjectInfo;
+  }
+
+  async get(objectName: string, bucket: string = this.bucket) {
+    const [stream, info] = await Promise.all([
+      this.getObject(objectName, bucket),
+      this.info(objectName, bucket),
+    ]);
+    return { stream, ...info } as GetResponse;
   }
 }

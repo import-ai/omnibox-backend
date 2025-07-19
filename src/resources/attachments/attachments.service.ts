@@ -12,19 +12,11 @@ import { ResourcePermission } from 'src/permissions/resource-permission.enum';
 import { objectStreamResponse } from 'src/resources/utils';
 
 @Injectable()
-export class ResourceAttachmentsService {
+export class AttachmentsService {
   constructor(
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
   ) {}
-
-  getKey(
-    namespaceId: string,
-    resourceId: string,
-    attachmentId: string,
-  ): string {
-    return `${namespaceId}/${resourceId}/${attachmentId}`;
-  }
 
   async checkPermission(
     namespaceId: string,
@@ -41,6 +33,21 @@ export class ResourceAttachmentsService {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
+  }
+
+  async checkAttachment(
+    namespaceId: string,
+    resourceId: string,
+    attachmentId: string,
+  ) {
+    const info = await this.minioService.info(attachmentId);
+    if (
+      info.metadata.namespaceId === namespaceId ||
+      info.metadata.resourceId === resourceId
+    ) {
+      return info;
+    }
+    throw new NotFoundException(attachmentId);
   }
 
   async uploadAttachments(
@@ -62,7 +69,7 @@ export class ResourceAttachmentsService {
       try {
         const originalName: string = encodeFileName(file.originalname);
         file.originalname = originalName;
-        const uuid: string = generateId(16);
+        const uuid: string = generateId(32);
         const ext: string = originalName.substring(
           originalName.lastIndexOf('.'),
           originalName.length,
@@ -70,7 +77,7 @@ export class ResourceAttachmentsService {
         const filename: string = `${uuid}${ext}`;
         await this.minioService.put(originalName, file.buffer, file.mimetype, {
           metadata: { namespaceId, resourceId, userId },
-          savePath: this.getKey(namespaceId, resourceId, filename),
+          id: filename,
         });
         uploaded.push({
           name: originalName,
@@ -98,10 +105,13 @@ export class ResourceAttachmentsService {
       userId,
       ResourcePermission.CAN_VIEW,
     );
-    const objectResponse = await this.minioService.get(
-      this.getKey(namespaceId, resourceId, attachmentId),
+    const info = await this.checkAttachment(
+      namespaceId,
+      resourceId,
+      attachmentId,
     );
-    return objectStreamResponse(objectResponse, httpResponse);
+    const stream = await this.minioService.getObject(attachmentId);
+    return objectStreamResponse({ stream, ...info }, httpResponse);
   }
 
   async deleteAttachment(
@@ -116,22 +126,14 @@ export class ResourceAttachmentsService {
       userId,
       ResourcePermission.CAN_EDIT,
     );
-    await this.minioService.removeObject(
-      this.getKey(namespaceId, resourceId, attachmentId),
-    );
-    return { success: true };
+    await this.checkAttachment(namespaceId, resourceId, attachmentId);
+    await this.minioService.removeObject(attachmentId);
+    return { id: attachmentId, success: true };
   }
 
-  async displayImage(
-    namespaceId: string,
-    resourceId: string,
-    attachmentId: string,
-    httpResponse: Response,
-  ) {
+  async displayImage(attachmentId: string, httpResponse: Response) {
     try {
-      const objectResponse = await this.minioService.get(
-        this.getKey(namespaceId, resourceId, attachmentId),
-      );
+      const objectResponse = await this.minioService.get(attachmentId);
       if (objectResponse.mimetype.startsWith('image/')) {
         return objectStreamResponse(objectResponse, httpResponse);
       }
@@ -140,6 +142,6 @@ export class ResourceAttachmentsService {
         console.error({ error });
       }
     }
-    throw new NotFoundException();
+    throw new NotFoundException(attachmentId);
   }
 }

@@ -146,6 +146,15 @@ export class MinioService {
     return this.minioClient.statObject(bucket, objectName);
   }
 
+  generateId(filename: string, length: number = 32): string {
+    const uuid = generateId(length);
+    const ext: string = filename.substring(
+      filename.lastIndexOf('.'),
+      filename.length,
+    );
+    return `${uuid}${ext}`;
+  }
+
   async put(
     filename: string,
     buffer: Buffer,
@@ -153,7 +162,7 @@ export class MinioService {
     options?: PutOptions,
   ) {
     const {
-      id = generateId(32),
+      id = this.generateId(filename),
       metadata = {},
       bucket = this.bucket,
     } = options || {};

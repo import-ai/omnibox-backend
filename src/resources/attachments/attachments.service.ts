@@ -67,21 +67,19 @@ export class AttachmentsService {
 
     for (const file of files) {
       try {
-        const originalName: string = encodeFileName(file.originalname);
-        file.originalname = originalName;
-        const uuid: string = generateId(32);
-        const ext: string = originalName.substring(
-          originalName.lastIndexOf('.'),
-          originalName.length,
+        const filename: string = encodeFileName(file.originalname);
+        file.originalname = filename;
+        const { id } = await this.minioService.put(
+          filename,
+          file.buffer,
+          file.mimetype,
+          {
+            metadata: { namespaceId, resourceId, userId },
+          },
         );
-        const filename: string = `${uuid}${ext}`;
-        await this.minioService.put(originalName, file.buffer, file.mimetype, {
-          metadata: { namespaceId, resourceId, userId },
-          id: filename,
-        });
         uploaded.push({
-          name: originalName,
-          link: filename,
+          name: filename,
+          link: id,
         });
       } catch (e) {
         console.error(e);

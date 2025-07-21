@@ -4,8 +4,12 @@ import { ConfigService } from '@nestjs/config';
 import generateId from 'src/utils/generate-id';
 import { UserService } from 'src/user/user.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { WechatCheckResponseDto } from './dto/wechat-login.dto';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 
 @Injectable()
 export class WechatService {
@@ -101,6 +105,10 @@ export class WechatService {
       throw new UnauthorizedException('Failed to get WeChat access token');
     }
     const userData = await response.json();
+
+    if (userData.errmsg) {
+      throw new BadRequestException(userData.errmsg);
+    }
 
     if (!userData.unionid) {
       throw new UnauthorizedException(

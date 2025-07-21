@@ -1,5 +1,4 @@
 import { JwtService } from '@nestjs/jwt';
-import { isEmail } from 'class-validator';
 import { User } from 'src/user/entities/user.entity';
 import { DataSource, EntityManager } from 'typeorm';
 import { MailService } from 'src/mail/mail.service';

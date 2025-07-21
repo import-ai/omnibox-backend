@@ -20,8 +20,8 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(200)
-  async login(@Request() req) {
-    return await this.authService.login(req.user.email);
+  login(@Request() req) {
+    return this.authService.login(req.user);
   }
 
   @Public()

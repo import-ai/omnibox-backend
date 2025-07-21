@@ -32,8 +32,8 @@ export class UserController {
     return await this.userService.find(id);
   }
 
-  @Patch('email/validate')
-  async validateEmail(@Body('newEmail') email: string) {
+  @Post('email/validate')
+  async validateEmail(@Body('email') email: string) {
     return await this.userService.validateEmail(email);
   }
 

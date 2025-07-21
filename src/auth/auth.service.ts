@@ -1,5 +1,7 @@
-import { DataSource, EntityManager } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { isEmail } from 'class-validator';
+import { User } from 'src/user/entities/user.entity';
+import { DataSource, EntityManager } from 'typeorm';
 import { MailService } from 'src/mail/mail.service';
 import { UserService } from 'src/user/user.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
@@ -46,15 +48,11 @@ export class AuthService {
     };
   }
 
-  async login(email: string) {
-    const account = await this.userService.findByEmail(email);
-    if (!account) {
-      throw new BadRequestException('User not found');
-    }
+  login(user: User) {
     return {
-      id: account.id,
+      id: user.id,
       access_token: this.jwtService.sign({
-        sub: account.id,
+        sub: user.id,
       }),
     };
   }

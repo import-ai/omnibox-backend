@@ -199,6 +199,8 @@ export class UserService {
     this.cleanExpiresState();
 
     await this.mailService.validateEmail(email, code);
+
+    return { code, email };
   }
 
   async update(id: string, account: UpdateUserDto) {
@@ -212,10 +214,10 @@ export class UserService {
       }
       existUser.password = await bcrypt.hash(account.password, 10);
     }
-    if (account.username) {
+    if (account.username && existUser.username !== account.username) {
       existUser.username = account.username;
     }
-    if (account.email) {
+    if (account.email && existUser.email !== account.email) {
       if (!account.code) {
         throw new BadRequestException(
           'Please provide the email verification code',
@@ -229,6 +231,7 @@ export class UserService {
         throw new BadRequestException('Incorrect email verification code');
       }
       this.emailStates.delete(account.email);
+      existUser.email = account.email;
     }
     return await this.userRepository.update(id, existUser);
   }

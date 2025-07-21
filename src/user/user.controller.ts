@@ -32,6 +32,11 @@ export class UserController {
     return await this.userService.find(id);
   }
 
+  @Patch('email/validate')
+  async validateEmail(@Body('newEmail') email: string) {
+    return await this.userService.validateEmail(email);
+  }
+
   @Patch(':id')
   async update(@Param('id') id: string, @Body() account: UpdateUserDto) {
     return await this.userService.update(id, account);

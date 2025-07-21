@@ -21,6 +21,10 @@ export class UpdateUserDto {
   @IsOptional()
   email: string;
 
+  @IsString()
+  @IsOptional()
+  code: string;
+
   @IsStrongPassword({ minLength: 8 })
   @IsOptional()
   password: string;

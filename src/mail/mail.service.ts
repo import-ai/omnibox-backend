@@ -37,6 +37,22 @@ export class MailService {
     }
   }
 
+  async validateEmail(email: string, code: string): Promise<void> {
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'Email Verification',
+        template: 'email-verification',
+        context: {
+          code,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      throw new Error('Unable to send email');
+    }
+  }
+
   async sendInviteEmail(email: string, resetUrl: string): Promise<void> {
     try {
       await this.mailerService.sendMail({

@@ -1,10 +1,10 @@
 import { JwtService } from '@nestjs/jwt';
-import { User } from 'src/user/entities/user.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
 import { DataSource, EntityManager } from 'typeorm';
-import { MailService } from 'src/mail/mail.service';
-import { UserService } from 'src/user/user.service';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
-import { CreateUserDto } from 'src/user/dto/create-user.dto';
+import { MailService } from 'omnibox-backend/mail/mail.service';
+import { UserService } from 'omnibox-backend/user/user.service';
+import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
+import { CreateUserDto } from 'omnibox-backend/user/dto/create-user.dto';
 import {
   BadRequestException,
   ForbiddenException,

@@ -1,16 +1,16 @@
 import * as bcrypt from 'bcrypt';
 import { isEmail } from 'class-validator';
-import generateId from 'src/utils/generate-id';
+import generateId from 'omnibox-backend/utils/generate-id';
 import { InjectRepository } from '@nestjs/typeorm';
-import { User } from 'src/user/entities/user.entity';
-import { MailService } from 'src/mail/mail.service';
+import { User } from 'omnibox-backend/user/entities/user.entity';
+import { MailService } from 'omnibox-backend/mail/mail.service';
 import { In, Repository, Like, EntityManager } from 'typeorm';
-import { CreateUserDto } from 'src/user/dto/create-user.dto';
-import { UpdateUserDto } from 'src/user/dto/update-user.dto';
-import { UserOption } from 'src/user/entities/user-option.entity';
-import { UserBinding } from 'src/user/entities/user-binding.entity';
-import { CreateUserOptionDto } from 'src/user/dto/create-user-option.dto';
-import { CreateUserBindingDto } from 'src/user/dto/create-user-binding.dto';
+import { CreateUserDto } from 'omnibox-backend/user/dto/create-user.dto';
+import { UpdateUserDto } from 'omnibox-backend/user/dto/update-user.dto';
+import { UserOption } from 'omnibox-backend/user/entities/user-option.entity';
+import { UserBinding } from 'omnibox-backend/user/entities/user-binding.entity';
+import { CreateUserOptionDto } from 'omnibox-backend/user/dto/create-user-option.dto';
+import { CreateUserBindingDto } from 'omnibox-backend/user/dto/create-user-binding.dto';
 import {
   Injectable,
   ConflictException,

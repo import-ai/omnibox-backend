@@ -10,12 +10,12 @@ import { JwtAuthGuard } from 'omnibox-backend/auth/jwt-auth.guard';
 import { LocalStrategy } from 'omnibox-backend/auth/local.strategy';
 import { AuthController } from 'omnibox-backend/auth/auth.controller';
 import { ConfigService, ConfigModule } from '@nestjs/config';
-import { InternalAuthController } from 'src/auth/internal.auth.controller';
-import { NamespacesModule } from 'src/namespaces/namespaces.module';
-import { GroupsModule } from 'src/groups/groups.module';
-import { PermissionsModule } from 'src/permissions/permissions.module';
-import { WechatService } from 'src/auth/wechat.service';
-import { WechatController } from 'src/auth/wechat.controller';
+import { InternalAuthController } from 'omnibox-backend/auth/internal.auth.controller';
+import { NamespacesModule } from 'omnibox-backend/namespaces/namespaces.module';
+import { GroupsModule } from 'omnibox-backend/groups/groups.module';
+import { PermissionsModule } from 'omnibox-backend/permissions/permissions.module';
+import { WechatService } from 'omnibox-backend/auth/wechat.service';
+import { WechatController } from 'omnibox-backend/auth/wechat.controller';
 
 @Module({
   exports: [AuthService, WechatService],

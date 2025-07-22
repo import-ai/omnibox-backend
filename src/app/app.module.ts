@@ -21,12 +21,12 @@ import { MessagesModule } from 'omnibox-backend/messages/messages.module';
 import { SearchModule } from 'omnibox-backend/search/search.module';
 import { InvitationsModule } from 'omnibox-backend/invitations/invitations.module';
 import { LoggerMiddleware } from './logger.middleware';
-import { UserOptions1751904560034 } from 'src/migrations/1751904560034-user-options';
-import { UserBindings1752652489640 } from 'src/migrations/1752652489640-user-bindings.ts';
-import { Tags1751905414493 } from 'src/migrations/1751905414493-tags';
-import { Init1751900000000 } from 'src/migrations/1751900000000-init';
+import { UserOptions1751904560034 } from 'omnibox-backend/migrations/1751904560034-user-options';
+import { UserBindings1752652489640 } from 'omnibox-backend/migrations/1752652489640-user-bindings.ts';
+import { Tags1751905414493 } from 'omnibox-backend/migrations/1751905414493-tags';
+import { Init1751900000000 } from 'omnibox-backend/migrations/1751900000000-init';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
-import { NullUserEmail1752814358259 } from 'src/migrations/1752814358259-null-user-email';
+import { NullUserEmail1752814358259 } from 'omnibox-backend/migrations/1752814358259-null-user-email';
 
 @Module({
   controllers: [AppController],

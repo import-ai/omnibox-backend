@@ -11,7 +11,10 @@ import {
   IsNull,
   Repository,
 } from 'typeorm';
-import { Resource, ResourceType } from 'omnibox-backend/resources/resources.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omnibox-backend/resources/resources.entity';
 import { CreateResourceDto } from 'omnibox-backend/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omnibox-backend/resources/dto/update-resource.dto';
 import {

@@ -5,7 +5,7 @@ import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import {
   Message,
   OpenAIMessageRole,
-} from 'src/messages/entities/message.entity';
+} from 'omnibox-backend/messages/entities/message.entity';
 
 export class Index {
   static async upsert(

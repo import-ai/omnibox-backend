@@ -5,7 +5,7 @@ import {
   Message,
   MessageStatus,
   OpenAIMessage,
-} from 'src/messages/entities/message.entity';
+} from 'omnibox-backend/messages/entities/message.entity';
 import { CreateMessageDto } from 'omnibox-backend/messages/dto/create-message.dto';
 import { User } from 'omnibox-backend/user/entities/user.entity';
 import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';

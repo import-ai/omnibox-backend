@@ -9,12 +9,12 @@ import { WizardAPIService } from 'omnibox-backend/wizard/api.wizard.service';
 import {
   ConversationDetailDto,
   ConversationMessageMappingDto,
-} from 'src/conversations/dto/conversation-detail.dto';
+} from 'omnibox-backend/conversations/dto/conversation-detail.dto';
 import { ConversationSummaryDto } from 'omnibox-backend/conversations/dto/conversation-summary.dto';
 import {
   Message,
   OpenAIMessageRole,
-} from 'src/messages/entities/message.entity';
+} from 'omnibox-backend/messages/entities/message.entity';
 
 @Injectable()
 export class ConversationsService {

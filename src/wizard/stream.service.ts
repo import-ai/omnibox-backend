@@ -7,12 +7,12 @@ import {
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
-} from 'src/messages/entities/message.entity';
+} from 'omnibox-backend/messages/entities/message.entity';
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
-} from 'src/wizard/dto/agent-request.dto';
+} from 'omnibox-backend/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'omnibox-backend/resources/resources.service';
 import { Resource } from 'omnibox-backend/resources/resources.entity';
 import { ChatResponse } from 'omnibox-backend/wizard/dto/chat-response.dto';

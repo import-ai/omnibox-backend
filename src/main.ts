@@ -2,7 +2,7 @@ import * as express from 'express';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app/app.module';
-import { LogLevel } from '@nestjs/common';
+import { ConsoleLogger, LogLevel } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule.forRoot([]), {
@@ -19,7 +19,8 @@ async function bootstrap() {
   const logLevels: LogLevel[] = configService
     .get('OBB_LOG_LEVELS', 'error,warn,log')
     .split(',');
-  app.useLogger(logLevels);
+  const logger = new ConsoleLogger({ json: true, logLevels });
+  app.useLogger(logger);
 
   await app.listen(parseInt(configService.get('OBB_PORT', '8000')));
 }

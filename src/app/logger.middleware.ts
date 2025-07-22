@@ -29,13 +29,13 @@ export class LoggerMiddleware implements NestMiddleware {
           logLevel = 'debug';
         }
       }
-      const logMessage: string = JSON.stringify({
+      const logMessage: Record<string, any> = {
         method: req.method,
         url: req.originalUrl,
         status: res.statusCode,
         duration: `${duration}ms`,
         requestId: req.headers['x-request-id'] || undefined,
-      });
+      };
       switch (logLevel) {
         case 'error':
           this.logger.error(logMessage);

@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { DynamicModule, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omnibox-backend/tag/tag.module';
@@ -28,72 +28,78 @@ import { Init1751900000000 } from 'omnibox-backend/migrations/1751900000000-init
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { NullUserEmail1752814358259 } from 'omnibox-backend/migrations/1752814358259-null-user-email';
 
-@Module({
-  controllers: [AppController],
-  providers: [
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: SnakeCaseInterceptor,
-    },
-  ],
-  imports: [
-    ConfigModule.forRoot({
-      cache: true,
-      isGlobal: true,
-    }),
-    TagModule,
-    MailModule,
-    AuthModule,
-    UserModule,
-    APIKeyModule,
-    NamespacesModule,
-    ResourcesModule,
-    TasksModule,
-    WizardModule,
-    GroupsModule,
-    PermissionsModule,
-    ConversationsModule,
-    MessagesModule,
-    SearchModule,
-    InvitationsModule,
-    // CacheModule.registerAsync({
-    //   imports: [ConfigModule],
-    //   inject: [ConfigService],
-    //   useFactory: (config: ConfigService) => ({
-    //     store: 'redis',
-    //     host: config.get('REDIS_URL'),
-    //     port: config.get('REDIS_PORT'),
-    //     ttl: config.get('REDIS_TTL'),
-    //   }),
-    // }),
-    TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get('OBB_DB_HOST', 'postgres'),
-        port: config.get('OBB_DB_PORT', 5432),
-        database: config.get('OBB_DB_DATABASE', 'omnibox'),
-        username: config.get('OBB_DB_USERNAME', 'omnibox'),
-        password: config.get('OBB_DB_PASSWORD', 'omnibox'),
-        logging: config.get('OBB_DB_LOGGING') === 'true',
-        synchronize: config.get('OBB_DB_SYNC') === 'true',
-        autoLoadEntities: true,
-        maxQueryExecutionTime: config.get('OBB_DB_EXEC_TIME', 0),
-        migrations: [
-          Init1751900000000,
-          Tags1751905414493,
-          UserOptions1751904560034,
-          UserBindings1752652489640,
-          NullUserEmail1752814358259,
-        ],
-        migrationsRun: true,
-        namingStrategy: new SnakeNamingStrategy(),
-      }),
-    }),
-  ],
-})
+@Module({})
 export class AppModule implements NestModule {
+  static forRoot(extraMigrations: Function[]): DynamicModule {
+    return {
+      module: AppModule,
+      controllers: [AppController],
+      providers: [
+        {
+          provide: APP_INTERCEPTOR,
+          useClass: SnakeCaseInterceptor,
+        },
+      ],
+      imports: [
+        ConfigModule.forRoot({
+          cache: true,
+          isGlobal: true,
+        }),
+        TagModule,
+        MailModule,
+        AuthModule,
+        UserModule,
+        APIKeyModule,
+        NamespacesModule,
+        ResourcesModule,
+        TasksModule,
+        WizardModule,
+        GroupsModule,
+        PermissionsModule,
+        ConversationsModule,
+        MessagesModule,
+        SearchModule,
+        InvitationsModule,
+        // CacheModule.registerAsync({
+        //   imports: [ConfigModule],
+        //   inject: [ConfigService],
+        //   useFactory: (config: ConfigService) => ({
+        //     store: 'redis',
+        //     host: config.get('REDIS_URL'),
+        //     port: config.get('REDIS_PORT'),
+        //     ttl: config.get('REDIS_TTL'),
+        //   }),
+        // }),
+        TypeOrmModule.forRootAsync({
+          imports: [ConfigModule],
+          inject: [ConfigService],
+          useFactory: (config: ConfigService) => ({
+            type: 'postgres',
+            host: config.get('OBB_DB_HOST', 'postgres'),
+            port: config.get('OBB_DB_PORT', 5432),
+            database: config.get('OBB_DB_DATABASE', 'omnibox'),
+            username: config.get('OBB_DB_USERNAME', 'omnibox'),
+            password: config.get('OBB_DB_PASSWORD', 'omnibox'),
+            logging: config.get('OBB_DB_LOGGING') === 'true',
+            synchronize: config.get('OBB_DB_SYNC') === 'true',
+            autoLoadEntities: true,
+            maxQueryExecutionTime: config.get('OBB_DB_EXEC_TIME', 0),
+            migrations: [
+              Init1751900000000,
+              Tags1751905414493,
+              UserOptions1751904560034,
+              UserBindings1752652489640,
+              NullUserEmail1752814358259,
+              ...extraMigrations,
+            ],
+            migrationsRun: true,
+            namingStrategy: new SnakeNamingStrategy(),
+          }),
+        }),
+      ],
+    };
+  }
+
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(LoggerMiddleware).forRoutes('*');
   }

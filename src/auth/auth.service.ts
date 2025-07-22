@@ -12,14 +12,14 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ResourcePermission } from 'src/permissions/resource-permission.enum';
-import { GroupsService } from 'src/groups/groups.service';
-import { PermissionsService } from 'src/permissions/permissions.service';
+import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { GroupsService } from 'omnibox-backend/groups/groups.service';
+import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
 import { UserInvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
 import { LoginPayloadDto } from './dto/login-payload.dto';
-import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
+import { NamespaceRole } from 'omnibox-backend/namespaces/entities/namespace-member.entity';
 
 @Injectable()
 export class AuthService {

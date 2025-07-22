@@ -1,5 +1,5 @@
 import { IsOptional, IsString } from 'class-validator';
-import { MessageStatus } from 'src/messages/entities/message.entity';
+import { MessageStatus } from 'omnibox-backend/messages/entities/message.entity';
 
 export class CreateMessageDto {
   message: Record<string, any>;

@@ -1,7 +1,7 @@
 import { Repository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { APIKey } from 'src/api-key/api-key.entity';
+import { APIKey } from 'omnibox-backend/api-key/api-key.entity';
 
 @Injectable()
 export class APIKeyService {

@@ -1,4 +1,4 @@
-import { Base } from 'src/common/base.entity';
+import { Base } from 'omnibox-backend/common/base.entity';
 import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
 import { ResourcePermission } from '../resource-permission.enum';
 

@@ -1,23 +1,23 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Task } from 'src/tasks/tasks.entity';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { Repository } from 'typeorm';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
-import { ResourcesService } from 'src/resources/resources.service';
-import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
-import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
-import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
-import { User } from 'src/user/entities/user.entity';
-import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
+import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
+import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { CreateResourceDto } from 'omnibox-backend/resources/dto/create-resource.dto';
+import { CollectRequestDto } from 'omnibox-backend/wizard/dto/collect-request.dto';
+import { CollectResponseDto } from 'omnibox-backend/wizard/dto/collect-response.dto';
+import { User } from 'omnibox-backend/user/entities/user.entity';
+import { TaskCallbackDto } from 'omnibox-backend/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
-import { CollectProcessor } from 'src/wizard/processors/collect.processor';
-import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
-import { Processor } from 'src/wizard/processors/processor.abstract';
-import { MessagesService } from 'src/messages/messages.service';
-import { StreamService } from 'src/wizard/stream.service';
-import { WizardAPIService } from 'src/wizard/api.wizard.service';
-import { UserService } from 'src/user/user.service';
-import { ResourceType } from 'src/resources/resources.entity';
+import { CollectProcessor } from 'omnibox-backend/wizard/processors/collect.processor';
+import { ReaderProcessor } from 'omnibox-backend/wizard/processors/reader.processor';
+import { Processor } from 'omnibox-backend/wizard/processors/processor.abstract';
+import { MessagesService } from 'omnibox-backend/messages/messages.service';
+import { StreamService } from 'omnibox-backend/wizard/stream.service';
+import { WizardAPIService } from 'omnibox-backend/wizard/api.wizard.service';
+import { UserService } from 'omnibox-backend/user/user.service';
+import { ResourceType } from 'omnibox-backend/resources/resources.entity';
 
 @Injectable()
 export class WizardService {

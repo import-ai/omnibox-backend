@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Group } from 'src/groups/entities/group.entity';
+import { Group } from 'omnibox-backend/groups/entities/group.entity';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionDto } from './dto/permission.dto';
 import {
@@ -15,11 +15,11 @@ import {
 } from './resource-permission.enum';
 import { UserPermission } from './entities/user-permission.entity';
 import { GroupPermission } from './entities/group-permission.entity';
-import { Resource } from 'src/resources/resources.entity';
-import { UserService } from 'src/user/user.service';
-import { GroupUser } from 'src/groups/entities/group-user.entity';
-import { NamespaceMember } from 'src/namespaces/entities/namespace-member.entity';
-import { User } from 'src/user/entities/user.entity';
+import { Resource } from 'omnibox-backend/resources/resources.entity';
+import { UserService } from 'omnibox-backend/user/user.service';
+import { GroupUser } from 'omnibox-backend/groups/entities/group-user.entity';
+import { NamespaceMember } from 'omnibox-backend/namespaces/entities/namespace-member.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
 
 @Injectable()
 export class PermissionsService {

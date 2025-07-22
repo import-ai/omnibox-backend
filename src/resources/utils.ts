@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { ResourcesService } from 'src/resources/resources.service';
+import { ResourcesService } from 'omnibox-backend/resources/resources.service';
 
 export async function fileResponse(
   resourceId: string,

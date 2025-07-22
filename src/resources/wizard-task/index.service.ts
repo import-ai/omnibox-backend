@@ -1,7 +1,7 @@
-import { User } from 'src/user/entities/user.entity';
-import { Resource } from 'src/resources/resources.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
+import { Resource } from 'omnibox-backend/resources/resources.entity';
 import { Repository } from 'typeorm';
-import { Task } from 'src/tasks/tasks.entity';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import {
   Message,
   OpenAIMessageRole,

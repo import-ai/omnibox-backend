@@ -6,11 +6,11 @@ import {
   MessageStatus,
   OpenAIMessage,
 } from 'src/messages/entities/message.entity';
-import { CreateMessageDto } from 'src/messages/dto/create-message.dto';
-import { User } from 'src/user/entities/user.entity';
+import { CreateMessageDto } from 'omnibox-backend/messages/dto/create-message.dto';
+import { User } from 'omnibox-backend/user/entities/user.entity';
 import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
-import { Task } from 'src/tasks/tasks.entity';
-import { WizardTask } from 'src/resources/wizard.task.service';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { WizardTask } from 'omnibox-backend/resources/wizard.task.service';
 
 const TASK_PRIORITY = 5;
 

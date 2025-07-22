@@ -1,5 +1,5 @@
-import { CollectProcessor } from 'src/wizard/processors/collect.processor';
-import { Task } from 'src/tasks/tasks.entity';
+import { CollectProcessor } from 'omnibox-backend/wizard/processors/collect.processor';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
 
 export class ReaderProcessor extends CollectProcessor {
   async process(task: Task): Promise<Record<string, any>> {

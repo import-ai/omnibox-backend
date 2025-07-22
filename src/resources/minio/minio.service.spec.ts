@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
-import { MinioService } from 'src/resources/minio/minio.service';
+import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
 
 describe('MinioService (integration, env config)', () => {
   let minioService: MinioService;

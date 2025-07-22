@@ -16,11 +16,7 @@
     "test:e2e": "jest --config test/jest-e2e.json"
   },
   "exports": {
-    "./*.js": "./*.js",
-    "./*": {
-      "require": "./*.js",
-      "import": "./*"
-    }
+    ".": "./dist"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

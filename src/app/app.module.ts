@@ -1,4 +1,9 @@
-import { DynamicModule, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import {
+  DynamicModule,
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+} from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omnibox-backend/tag/tag.module';

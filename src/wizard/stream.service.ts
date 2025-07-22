@@ -99,6 +99,8 @@ export class StreamService {
         );
         chunk.id = message.id;
         chunk.parentId = message.parentId || undefined;
+        chunk.userId = user.id;
+        chunk.namespaceId = namespaceId;
 
         if (context.message?.role === OpenAIMessageRole.SYSTEM) {
           chunk.parentId = undefined;

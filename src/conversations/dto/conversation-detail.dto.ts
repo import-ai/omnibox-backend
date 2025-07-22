@@ -1,5 +1,5 @@
-import { MessageStatus } from 'src/messages/entities/message.entity';
-import { BaseDto } from 'src/common/base.dto';
+import { MessageStatus } from 'omnibox-backend/messages/entities/message.entity';
+import { BaseDto } from 'omnibox-backend/common/base.dto';
 
 export interface ConversationMessageMappingDto extends BaseDto {
   id: string;

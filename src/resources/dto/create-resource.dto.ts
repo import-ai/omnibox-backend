@@ -6,7 +6,7 @@ import {
   IsOptional,
   IsNotEmpty,
 } from 'class-validator';
-import { ResourceType } from 'src/resources/resources.entity';
+import { ResourceType } from 'omnibox-backend/resources/resources.entity';
 
 export class CreateResourceDto {
   @IsString()

@@ -1,5 +1,5 @@
-import { APIKey } from 'src/api-key/api-key.entity';
-import { APIKeyService } from 'src/api-key/api-key.service';
+import { APIKey } from 'omnibox-backend/api-key/api-key.entity';
+import { APIKeyService } from 'omnibox-backend/api-key/api-key.service';
 import { Get, Post, Body, Param, Controller } from '@nestjs/common';
 
 @Controller('api/v1/api-keys')

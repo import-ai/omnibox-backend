@@ -1,6 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import duplicateName from 'src/utils/duplicate-name';
-import encodeFileName from 'src/utils/encode-filename';
+import duplicateName from 'omnibox-backend/utils/duplicate-name';
+import encodeFileName from 'omnibox-backend/utils/encode-filename';
 import {
   DataSource,
   EntityManager,
@@ -11,22 +11,25 @@ import {
   IsNull,
   Repository,
 } from 'typeorm';
-import { Resource, ResourceType } from 'src/resources/resources.entity';
-import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
+import {
+  Resource,
+  ResourceType,
+} from 'omnibox-backend/resources/resources.entity';
+import { CreateResourceDto } from 'omnibox-backend/resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omnibox-backend/resources/dto/update-resource.dto';
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Task } from 'src/tasks/tasks.entity';
-import { User } from 'src/user/entities/user.entity';
-import { MinioService } from 'src/resources/minio/minio.service';
-import { WizardTask } from 'src/resources/wizard.task.service';
-import { PermissionsService } from 'src/permissions/permissions.service';
-import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
-import { ResourcePermission } from 'src/permissions/resource-permission.enum';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
+import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
+import { WizardTask } from 'omnibox-backend/resources/wizard.task.service';
+import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
+import { PrivateSearchResourceDto } from 'omnibox-backend/wizard/dto/agent-request.dto';
+import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
 
 export interface IQuery {
   namespaceId: string;

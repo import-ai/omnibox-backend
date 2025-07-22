@@ -1,8 +1,8 @@
 import { Body, Controller, Post, Req, Sse } from '@nestjs/common';
-import { WizardService } from 'src/wizard/wizard.service';
-import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
-import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
-import { AgentRequestDto } from 'src/wizard/dto/agent-request.dto';
+import { WizardService } from 'omnibox-backend/wizard/wizard.service';
+import { CollectRequestDto } from 'omnibox-backend/wizard/dto/collect-request.dto';
+import { CollectResponseDto } from 'omnibox-backend/wizard/dto/collect-response.dto';
+import { AgentRequestDto } from 'omnibox-backend/wizard/dto/agent-request.dto';
 
 @Controller('api/v1/wizard')
 export class WizardController {

@@ -1,5 +1,5 @@
-import { MessagesService } from 'src/messages/messages.service';
-import { User } from 'src/user/entities/user.entity';
+import { MessagesService } from 'omnibox-backend/messages/messages.service';
+import { User } from 'omnibox-backend/user/entities/user.entity';
 import { Observable, Subscriber } from 'rxjs';
 import { MessageEvent } from '@nestjs/common';
 import {
@@ -7,15 +7,15 @@ import {
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
-} from 'src/messages/entities/message.entity';
+} from 'omnibox-backend/messages/entities/message.entity';
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
-} from 'src/wizard/dto/agent-request.dto';
-import { ResourcesService } from 'src/resources/resources.service';
-import { Resource } from 'src/resources/resources.entity';
-import { ChatResponse } from 'src/wizard/dto/chat-response.dto';
+} from 'omnibox-backend/wizard/dto/agent-request.dto';
+import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { Resource } from 'omnibox-backend/resources/resources.entity';
+import { ChatResponse } from 'omnibox-backend/wizard/dto/chat-response.dto';
 
 interface HandlerContext {
   parentId?: string;
@@ -99,6 +99,8 @@ export class StreamService {
         );
         chunk.id = message.id;
         chunk.parentId = message.parentId || undefined;
+        chunk.userId = user.id;
+        chunk.namespaceId = namespaceId;
 
         if (context.message?.role === OpenAIMessageRole.SYSTEM) {
           chunk.parentId = undefined;

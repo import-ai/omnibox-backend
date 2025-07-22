@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Resource } from 'src/resources/resources.entity';
-import { ResourcesService } from 'src/resources/resources.service';
-import { ResourcesController } from 'src/resources/resources.controller';
-import { Task } from 'src/tasks/tasks.entity';
-import { MinioService } from 'src/resources/minio/minio.service';
-import { InternalResourcesController } from 'src/resources/internal.resource.controller';
-import { PermissionsModule } from 'src/permissions/permissions.module';
+import { Resource } from 'omnibox-backend/resources/resources.entity';
+import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { ResourcesController } from 'omnibox-backend/resources/resources.controller';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
+import { InternalResourcesController } from 'omnibox-backend/resources/internal.resource.controller';
+import { PermissionsModule } from 'omnibox-backend/permissions/permissions.module';
 
 @Module({
   exports: [ResourcesService, MinioService, InternalResourcesController],

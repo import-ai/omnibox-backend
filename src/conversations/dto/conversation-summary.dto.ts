@@ -1,4 +1,4 @@
-import { BaseDto } from 'src/common/base.dto';
+import { BaseDto } from 'omnibox-backend/common/base.dto';
 
 export interface ConversationSummaryDto extends BaseDto {
   id: string;

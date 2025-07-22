@@ -1,4 +1,4 @@
-import { Message } from 'src/messages/entities/message.entity';
+import { Message } from 'omnibox-backend/messages/entities/message.entity';
 export type FloatPair = [number, number];
 
 export interface ToolDto {

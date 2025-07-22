@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { MailService } from 'src/mail/mail.service';
+import { MailService } from 'omnibox-backend/mail/mail.service';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';

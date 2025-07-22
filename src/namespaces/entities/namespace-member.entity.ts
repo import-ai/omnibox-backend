@@ -1,4 +1,4 @@
-import { Base } from 'src/common/base.entity';
+import { Base } from 'omnibox-backend/common/base.entity';
 import { Index, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum NamespaceRole {

@@ -16,7 +16,7 @@ import { GroupDto } from './dto/group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupUserDto } from './dto/group-user.dto';
 import { AddGroupUserDto } from './dto/add-group-user.dto';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
 
 @Controller('api/v1/namespaces/:namespaceId/groups')
 export class GroupsController {

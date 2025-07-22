@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { Task } from 'src/tasks/tasks.entity';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable, NotFoundException } from '@nestjs/common';
 

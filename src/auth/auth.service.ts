@@ -1,5 +1,6 @@
-import { DataSource, EntityManager } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { User } from 'src/user/entities/user.entity';
+import { DataSource, EntityManager } from 'typeorm';
 import { MailService } from 'src/mail/mail.service';
 import { UserService } from 'src/user/user.service';
 import { NamespacesService } from 'src/namespaces/namespaces.service';
@@ -46,19 +47,12 @@ export class AuthService {
     };
   }
 
-  async login(email: string) {
-    const account = await this.userService.findByEmail(email);
-    if (!account) {
-      throw new BadRequestException('User not found');
-    }
-    const payload: LoginPayloadDto = {
-      email: account.email,
-      sub: account.id,
-    };
+  login(user: User) {
     return {
-      id: account.id,
-      username: account.username,
-      access_token: this.jwtService.sign(payload),
+      id: user.id,
+      access_token: this.jwtService.sign({
+        sub: user.id,
+      }),
     };
   }
 
@@ -114,10 +108,8 @@ export class AuthService {
       }
       return {
         id: user.id,
-        username: user.username,
         access_token: this.jwtService.sign({
           sub: user.id,
-          email: user.email,
         }),
       };
     });
@@ -133,12 +125,12 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('User not found.');
     }
-    const payload: LoginPayloadDto = { email: user.email, sub: user.id };
+    const payload: LoginPayloadDto = { email: user.email!, sub: user.id };
     const token = this.jwtService.sign(payload, {
       expiresIn: '1h',
     });
     const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendPasswordEmail(user.email, mailSendUri);
+    await this.mailService.sendPasswordEmail(user.email!, mailSendUri);
     // return { url: mailSendUri };
   }
 

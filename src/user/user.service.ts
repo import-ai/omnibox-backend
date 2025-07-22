@@ -1,21 +1,41 @@
 import * as bcrypt from 'bcrypt';
 import { isEmail } from 'class-validator';
+import generateId from 'src/utils/generate-id';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/user/entities/user.entity';
+import { MailService } from 'src/mail/mail.service';
 import { In, Repository, Like, EntityManager } from 'typeorm';
 import { CreateUserDto } from 'src/user/dto/create-user.dto';
 import { UpdateUserDto } from 'src/user/dto/update-user.dto';
-import { Injectable, ConflictException } from '@nestjs/common';
 import { UserOption } from 'src/user/entities/user-option.entity';
+import { UserBinding } from 'src/user/entities/user-binding.entity';
 import { CreateUserOptionDto } from 'src/user/dto/create-user-option.dto';
+import { CreateUserBindingDto } from 'src/user/dto/create-user-binding.dto';
+import {
+  Injectable,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 
 @Injectable()
 export class UserService {
+  private readonly emailStates = new Map<
+    string,
+    {
+      code: string;
+      createdAt: number;
+      expiresIn: number;
+    }
+  >();
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(UserOption)
     private userOptionRepository: Repository<UserOption>,
+    @InjectRepository(UserBinding)
+    private userBindingRepository: Repository<UserBinding>,
+    private readonly mailService: MailService,
   ) {}
 
   async verify(email: string, password: string) {
@@ -64,6 +84,48 @@ export class UserService {
     return reset;
   }
 
+  async findByLoginId(loginId: string, manager?: EntityManager) {
+    const repo = manager
+      ? manager.getRepository(UserBinding)
+      : this.userBindingRepository;
+    const binding = await repo.findOne({
+      where: { loginId },
+    });
+    if (!binding) {
+      return;
+    }
+    return await this.find(binding.userId);
+  }
+
+  async createUserBinding(
+    userData: CreateUserBindingDto,
+    manager?: EntityManager,
+  ) {
+    const repo = manager ? manager.getRepository(User) : this.userRepository;
+    const hash = await bcrypt.hash(Math.random().toString(36), 10);
+    const newUser = repo.create({
+      password: hash,
+      username: userData.loginId,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...reset } = await repo.save(newUser);
+
+    const bindingRepo = manager
+      ? manager.getRepository(UserBinding)
+      : this.userBindingRepository;
+
+    const newBinding = bindingRepo.create({
+      userId: reset.id,
+      loginId: userData.loginId,
+      loginType: userData.loginType,
+    });
+
+    await bindingRepo.save(newBinding);
+
+    return reset;
+  }
+
   async findAll(start: number, limit: number, search?: string) {
     const where: any = {};
     if (search) {
@@ -105,24 +167,72 @@ export class UserService {
     });
   }
 
+  private cleanExpiresState() {
+    const now = Date.now();
+    for (const [state, info] of this.emailStates.entries()) {
+      if (now - info.createdAt > info.expiresIn) {
+        this.emailStates.delete(state);
+      }
+    }
+  }
+
+  async validateEmail(email: string) {
+    if (!isEmail(email)) {
+      throw new BadRequestException('Invalid email format');
+    }
+
+    const userExists = await this.findByEmail(email);
+    if (userExists) {
+      throw new BadRequestException(
+        'This email is already in use, please use a different email',
+      );
+    }
+
+    const code = generateId(6);
+
+    this.emailStates.set(email, {
+      code,
+      createdAt: Date.now(),
+      expiresIn: 5 * 60 * 1000,
+    });
+
+    this.cleanExpiresState();
+
+    await this.mailService.validateEmail(email, code);
+
+    return { code, email };
+  }
+
   async update(id: string, account: UpdateUserDto) {
     const existUser = await this.find(id);
-
     if (!existUser) {
       throw new ConflictException('The account does not exist');
     }
-
     if (account.password && account.password_repeat) {
       if (account.password !== account.password_repeat) {
         throw new ConflictException('Passwords do not match');
       }
       existUser.password = await bcrypt.hash(account.password, 10);
     }
-    ['email', 'username'].forEach((field) => {
-      if (account[field]) {
-        existUser[field] = account[field];
+    if (account.username && existUser.username !== account.username) {
+      existUser.username = account.username;
+    }
+    if (account.email && existUser.email !== account.email) {
+      if (!account.code) {
+        throw new BadRequestException(
+          'Please provide the email verification code',
+        );
       }
-    });
+      const emailState = this.emailStates.get(account.email);
+      if (!emailState) {
+        throw new BadRequestException('Please verify your email first');
+      }
+      if (emailState.code !== account.code) {
+        throw new BadRequestException('Incorrect email verification code');
+      }
+      this.emailStates.delete(account.email);
+      existUser.email = account.email;
+    }
     return await this.userRepository.update(id, existUser);
   }
 

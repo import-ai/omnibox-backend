@@ -14,12 +14,15 @@ import { InternalAuthController } from 'src/auth/internal.auth.controller';
 import { NamespacesModule } from 'src/namespaces/namespaces.module';
 import { GroupsModule } from 'src/groups/groups.module';
 import { PermissionsModule } from 'src/permissions/permissions.module';
+import { WechatService } from 'src/auth/wechat.service';
+import { WechatController } from 'src/auth/wechat.controller';
 
 @Module({
-  exports: [AuthService],
-  controllers: [AuthController, InternalAuthController],
+  exports: [AuthService, WechatService],
+  controllers: [AuthController, InternalAuthController, WechatController],
   providers: [
     AuthService,
+    WechatService,
     JwtStrategy,
     LocalStrategy,
     {

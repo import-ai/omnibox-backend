@@ -4,16 +4,17 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Res,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { AttachmentsService } from 'src/resources/attachments/attachments.service';
+import { AttachmentsService } from 'omnibox-backend/attachments/attachments.service';
 import { Response } from 'express';
-import { UserId } from 'src/auth/decorators/user-id.decorator';
+import { UserId } from 'omnibox-backend/auth/decorators/user-id.decorator';
 
-@Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
+@Controller('api/v1/attachments')
 export class AttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
@@ -22,8 +23,8 @@ export class AttachmentsController {
   async uploadAttachments(
     @UserId() userId: string,
     @UploadedFiles() files: Express.Multer.File[],
-    @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
+    @Query('namespaceId') namespaceId: string,
+    @Query('resourceId') resourceId: string,
   ) {
     return await this.attachmentsService.uploadAttachments(
       namespaceId,
@@ -37,8 +38,8 @@ export class AttachmentsController {
   async downloadAttachment(
     @UserId() userId: string,
     @Res() res: Response,
-    @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
+    @Query('namespaceId') namespaceId: string,
+    @Query('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
     return await this.attachmentsService.downloadAttachment(
@@ -50,11 +51,28 @@ export class AttachmentsController {
     );
   }
 
+  @Get('images/:attachmentId')
+  async displayImage(
+    @Res() res: Response,
+    @Query('namespaceId') namespaceId: string,
+    @Query('resourceId') resourceId: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    const userId = '';
+    return await this.attachmentsService.displayImage(
+      namespaceId,
+      resourceId,
+      attachmentId,
+      userId,
+      res,
+    );
+  }
+
   @Delete(':attachmentId')
   async deleteAttachment(
     @UserId() userId: string,
-    @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
+    @Query('namespaceId') namespaceId: string,
+    @Query('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
     return await this.attachmentsService.deleteAttachment(

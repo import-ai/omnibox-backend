@@ -8,19 +8,14 @@ import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
 import { InternalResourcesController } from 'omnibox-backend/resources/internal.resource.controller';
 import { PermissionsModule } from 'omnibox-backend/permissions/permissions.module';
 import { FileResourcesController } from 'omnibox-backend/resources/file-resources.controller';
-import { AttachmentsController } from 'omnibox-backend/resources/attachments/attachments.controller';
-import { AttachmentsService } from 'omnibox-backend/resources/attachments/attachments.service';
-import { ImageAttachmentsController } from 'omnibox-backend/resources/attachments/image.attachments.controller';
 
 @Module({
-  exports: [ResourcesService, MinioService, AttachmentsService],
-  providers: [ResourcesService, MinioService, AttachmentsService],
+  exports: [ResourcesService, MinioService],
+  providers: [ResourcesService, MinioService],
   controllers: [
     ResourcesController,
     InternalResourcesController,
     FileResourcesController,
-    AttachmentsController,
-    ImageAttachmentsController,
   ],
   imports: [
     TypeOrmModule.forFeature([Resource]),

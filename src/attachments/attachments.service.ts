@@ -1,15 +1,15 @@
-import encodeFileName from 'src/utils/encode-filename';
+import encodeFileName from 'omnibox-backend/utils/encode-filename';
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { MinioService } from 'src/resources/minio/minio.service';
-import { PermissionsService } from 'src/permissions/permissions.service';
-import generateId from 'src/utils/generate-id';
-import { ResourcePermission } from 'src/permissions/resource-permission.enum';
-import { objectStreamResponse } from 'src/resources/utils';
+import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
+import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
+import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { objectStreamResponse } from 'omnibox-backend/resources/utils';
 
 @Injectable()
 export class AttachmentsService {
@@ -129,17 +129,24 @@ export class AttachmentsService {
     return { id: attachmentId, success: true };
   }
 
-  async displayImage(attachmentId: string, httpResponse: Response) {
-    try {
-      const objectResponse = await this.minioService.get(attachmentId);
-      if (objectResponse.mimetype.startsWith('image/')) {
-        return objectStreamResponse(objectResponse, httpResponse);
-      }
-    } catch (error) {
-      if (error.code !== 'NotFound') {
-        console.error({ error });
-      }
+  async displayImage(
+    namespaceId: string,
+    resourceId: string,
+    attachmentId: string,
+    userId: string,
+    httpResponse: Response,
+  ) {
+    await this.checkPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    await this.checkAttachment(namespaceId, resourceId, attachmentId);
+    const objectResponse = await this.minioService.get(attachmentId);
+    if (objectResponse.mimetype.startsWith('image/')) {
+      return objectStreamResponse(objectResponse, httpResponse);
     }
-    throw new NotFoundException(attachmentId);
+    throw new BadRequestException(attachmentId);
   }
 }

@@ -1,7 +1,7 @@
 import { CollectProcessor } from 'omnibox-backend/wizard/processors/collect.processor';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
-import { ResourcesService } from 'src/resources/resources.service';
-import { MinioService } from 'src/resources/minio/minio.service';
+import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
 
 interface Image {
   name?: string;

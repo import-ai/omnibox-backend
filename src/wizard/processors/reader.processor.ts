@@ -2,6 +2,7 @@ import { CollectProcessor } from 'omnibox-backend/wizard/processors/collect.proc
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { ResourcesService } from 'omnibox-backend/resources/resources.service';
 import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
+import { BadRequestException } from '@nestjs/common';
 
 interface Image {
   name?: string;
@@ -27,12 +28,27 @@ export class ReaderProcessor extends CollectProcessor {
       const images: Image[] = task.output.images;
       for (const image of images) {
         const stream = Buffer.from(image.data, 'base64');
+        const resourceId =
+          task.payload?.resource_id || task.payload?.resourceId;
+        if (!resourceId) {
+          throw new BadRequestException('Invalid task payload');
+        }
         const { id } = await this.minioService.put(
           image.name || image.link,
           stream,
           image.mimetype,
+          {
+            metadata: {
+              namespaceId: task.namespaceId,
+              resourceId,
+              userId: task.userId,
+            },
+          },
         );
-        markdown = markdown.replaceAll(image.link, `/api/v1/images/${id}`);
+        markdown = markdown.replaceAll(
+          image.link,
+          `/api/v1/attachments/images/${id}`,
+        );
       }
       task.output.images = undefined;
       task.output.markdown = markdown;

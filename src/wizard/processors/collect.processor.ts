@@ -2,7 +2,6 @@ import { ResourcesService } from 'omnibox-backend/resources/resources.service';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { BadRequestException } from '@nestjs/common';
 import { Processor } from 'omnibox-backend/wizard/processors/processor.abstract';
-import { UserService } from 'omnibox-backend/user/user.service';
 
 export class CollectProcessor extends Processor {
   constructor(protected readonly resourcesService: ResourcesService) {

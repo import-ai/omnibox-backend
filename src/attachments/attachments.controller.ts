@@ -2,21 +2,32 @@ import {
   Controller,
   Delete,
   Get,
+  HttpStatus,
+  Logger,
   Param,
   Post,
   Query,
+  Req,
   Res,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from 'omnibox-backend/attachments/attachments.service';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { UserId } from 'omnibox-backend/auth/decorators/user-id.decorator';
+import { Public } from 'omnibox-backend/auth/decorators/public.decorator';
+import { Cookies } from 'omnibox-backend/decorators/cookie.decorators';
+import { AuthService } from 'omnibox-backend/auth/auth.service';
 
 @Controller('api/v1/attachments')
 export class AttachmentsController {
-  constructor(private readonly attachmentsService: AttachmentsService) {}
+  private readonly logger = new Logger(AttachmentsController.name);
+
+  constructor(
+    private readonly attachmentsService: AttachmentsService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Post()
   @UseInterceptors(FilesInterceptor('file[]'))
@@ -51,21 +62,37 @@ export class AttachmentsController {
     );
   }
 
+  @Public()
   @Get('images/:attachmentId')
   async displayImage(
+    @Req() req: Request,
     @Res() res: Response,
-    @Query('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
+    @Cookies('token') token: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    const userId = '';
-    return await this.attachmentsService.displayImage(
-      namespaceId,
-      resourceId,
-      attachmentId,
-      userId,
-      res,
-    );
+    let userId = '';
+
+    if (token) {
+      try {
+        const payload = this.authService.jwtVerify(token);
+        userId = payload.sub;
+      } catch (error) {
+        console.warn({ error });
+      }
+    }
+    this.logger.debug({ userId, token, cookies: req.cookies });
+    if (userId) {
+      return await this.attachmentsService.displayImage(
+        attachmentId,
+        userId,
+        res,
+      );
+    } else {
+      res
+        .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+        .status(HttpStatus.FOUND)
+        .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
+    }
   }
 
   @Delete(':attachmentId')

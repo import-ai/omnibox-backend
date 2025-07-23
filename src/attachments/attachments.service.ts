@@ -130,20 +130,20 @@ export class AttachmentsService {
   }
 
   async displayImage(
-    namespaceId: string,
-    resourceId: string,
     attachmentId: string,
     userId: string,
     httpResponse: Response,
   ) {
+    const objectResponse = await this.minioService.get(attachmentId);
+    const { namespaceId, resourceId } = objectResponse.metadata;
+
     await this.checkPermission(
       namespaceId,
       resourceId,
       userId,
-      ResourcePermission.CAN_EDIT,
+      ResourcePermission.CAN_VIEW,
     );
     await this.checkAttachment(namespaceId, resourceId, attachmentId);
-    const objectResponse = await this.minioService.get(attachmentId);
     if (objectResponse.mimetype.startsWith('image/')) {
       return objectStreamResponse(objectResponse, httpResponse);
     }

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { Repository } from 'typeorm';

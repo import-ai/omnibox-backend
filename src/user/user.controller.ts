@@ -1,6 +1,6 @@
-import { UserService } from 'src/user/user.service';
-import { UpdateUserDto } from 'src/user/dto/update-user.dto';
-import { CreateUserOptionDto } from 'src/user/dto/create-user-option.dto';
+import { UserService } from 'omnibox-backend/user/user.service';
+import { UpdateUserDto } from 'omnibox-backend/user/dto/update-user.dto';
+import { CreateUserOptionDto } from 'omnibox-backend/user/dto/create-user-option.dto';
 import {
   Req,
   Get,

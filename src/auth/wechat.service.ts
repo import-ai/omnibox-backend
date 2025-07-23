@@ -1,9 +1,9 @@
 import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import generateId from 'src/utils/generate-id';
-import { UserService } from 'src/user/user.service';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
+import generateId from 'omnibox-backend/utils/generate-id';
+import { UserService } from 'omnibox-backend/user/user.service';
+import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
 import { WechatCheckResponseDto } from './dto/wechat-login.dto';
 import {
   Injectable,

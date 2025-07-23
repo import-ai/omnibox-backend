@@ -1,8 +1,8 @@
 import { Response } from 'express';
-import { WizardService } from 'src/wizard/wizard.service';
-import { Public } from 'src/auth/decorators/public.decorator';
-import { transformKeysToSnakeCase } from 'src/interceptor/utils';
-import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
+import { WizardService } from 'omnibox-backend/wizard/wizard.service';
+import { Public } from 'omnibox-backend/auth/decorators/public.decorator';
+import { transformKeysToSnakeCase } from 'omnibox-backend/interceptor/utils';
+import { TaskCallbackDto } from 'omnibox-backend/wizard/dto/task-callback.dto';
 import { Body, Controller, Get, Post, Res } from '@nestjs/common';
 
 @Controller('internal/api/v1/wizard')

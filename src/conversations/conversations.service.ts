@@ -1,20 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Conversation } from 'src/conversations/entities/conversation.entity';
-import { User } from 'src/user/entities/user.entity';
+import { Conversation } from 'omnibox-backend/conversations/entities/conversation.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
-import { MessagesService } from 'src/messages/messages.service';
-import { WizardAPIService } from 'src/wizard/api.wizard.service';
+import { MessagesService } from 'omnibox-backend/messages/messages.service';
+import { WizardAPIService } from 'omnibox-backend/wizard/api.wizard.service';
 import {
   ConversationDetailDto,
   ConversationMessageMappingDto,
-} from 'src/conversations/dto/conversation-detail.dto';
-import { ConversationSummaryDto } from 'src/conversations/dto/conversation-summary.dto';
+} from 'omnibox-backend/conversations/dto/conversation-detail.dto';
+import { ConversationSummaryDto } from 'omnibox-backend/conversations/dto/conversation-summary.dto';
 import {
   Message,
   OpenAIMessageRole,
-} from 'src/messages/entities/message.entity';
+} from 'omnibox-backend/messages/entities/message.entity';
 
 @Injectable()
 export class ConversationsService {

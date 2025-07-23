@@ -1,5 +1,5 @@
-import { Base } from 'src/common/base.entity';
-import generateId from 'src/utils/generate-id';
+import { Base } from 'omnibox-backend/common/base.entity';
+import generateId from 'omnibox-backend/utils/generate-id';
 import { Entity, Column, PrimaryColumn, BeforeInsert } from 'typeorm';
 
 @Entity('groups')

@@ -3,8 +3,8 @@ import { InvitationsController } from './invitations.controller';
 import { InvitationsService } from './invitations.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Invitation } from './entities/invitation.entity';
-import { AuthModule } from 'src/auth/auth.module';
-import { GroupsModule } from 'src/groups/groups.module';
+import { AuthModule } from 'omnibox-backend/auth/auth.module';
+import { GroupsModule } from 'omnibox-backend/groups/groups.module';
 
 @Module({
   exports: [],

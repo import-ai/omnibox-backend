@@ -1,5 +1,5 @@
 {
-  "name": "omnibox-node",
+  "name": "omnibox-backend",
   "version": "0.0.1",
   "private": true,
   "scripts": {

@@ -1,6 +1,6 @@
 import { Response } from 'express';
-import { ResourcesService } from 'src/resources/resources.service';
-import { GetResponse as ObjectResponse } from 'src/resources/minio/minio.service';
+import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { GetResponse as ObjectResponse } from 'omnibox-backend/resources/minio/minio.service';
 
 export async function fileResponse(
   resourceId: string,

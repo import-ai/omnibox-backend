@@ -1,4 +1,4 @@
-import { Base } from 'src/common/base.entity';
+import { Base } from 'omnibox-backend/common/base.entity';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('api_keys')

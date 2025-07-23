@@ -12,10 +12,10 @@ import { Group } from './entities/group.entity';
 import { GroupUser } from './entities/group-user.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
-import { User } from 'src/user/entities/user.entity';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
-import { Invitation } from 'src/invitations/entities/invitation.entity';
-import { UserService } from 'src/user/user.service';
+import { User } from 'omnibox-backend/user/entities/user.entity';
+import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
+import { Invitation } from 'omnibox-backend/invitations/entities/invitation.entity';
+import { UserService } from 'omnibox-backend/user/user.service';
 
 @Injectable()
 export class GroupsService {

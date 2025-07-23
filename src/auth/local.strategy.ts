@@ -1,5 +1,5 @@
 import { Strategy } from 'passport-local';
-import { AuthService } from 'src/auth/auth.service';
+import { AuthService } from 'omnibox-backend/auth/auth.service';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 

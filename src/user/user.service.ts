@@ -97,6 +97,17 @@ export class UserService {
     return await this.find(binding.userId);
   }
 
+  async findByUsername(
+    username: string,
+    manager?: EntityManager,
+  ): Promise<User | null> {
+    const repo = manager ? manager.getRepository(User) : this.userRepository;
+    return await repo.findOne({
+      where: { username },
+      select: ['id', 'username', 'email'],
+    });
+  }
+
   async createUserBinding(
     userData: CreateUserBindingDto,
     manager?: EntityManager,

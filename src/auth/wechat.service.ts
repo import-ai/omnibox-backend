@@ -133,13 +133,28 @@ export class WechatService {
       stateInfo.userInfo = returnValue;
       return returnValue;
     }
-
     return await this.dataSource.transaction(async (manager) => {
+      let username = userData.nickname;
+      const suffix =
+        '_' +
+        generateId(4, 'useandomTPXpxJACKVERYMINDBUSHWOLFGQZbfghjklqvwyzrict');
+      if (userData.nickname.length < 2) {
+        username = userData.nickname + suffix;
+      } else if (userData.nickname.length > 32) {
+        username = userData.nickname.slice(0, 27) + suffix;
+      }
+      const existingUser = await this.userService.findByUsername(
+        username,
+        manager,
+      );
+      if (existingUser) {
+        username = userData.nickname.slice(0, 22) + suffix;
+      }
       const wechatUser = await this.userService.createUserBinding(
         {
+          username,
           loginType: 'wechat',
           loginId: userData.unionid,
-          username: userData.nickname,
         },
         manager,
       );

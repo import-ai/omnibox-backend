@@ -15,8 +15,8 @@ import { Processor } from 'omnibox-backend/wizard/processors/processor.abstract'
 import { MessagesService } from 'omnibox-backend/messages/messages.service';
 import { StreamService } from 'omnibox-backend/wizard/stream.service';
 import { WizardAPIService } from 'omnibox-backend/wizard/api.wizard.service';
-import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
 import { ResourceType } from 'omnibox-backend/resources/resources.entity';
+import { AttachmentsService } from 'omnibox-backend/attachments/attachments.service';
 
 @Injectable()
 export class WizardService {
@@ -30,11 +30,14 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
-    private readonly minioService: MinioService,
+    private readonly attachmentsService: AttachmentsService,
   ) {
     this.processors = {
       collect: new CollectProcessor(resourcesService),
-      file_reader: new ReaderProcessor(resourcesService, this.minioService),
+      file_reader: new ReaderProcessor(
+        this.resourcesService,
+        this.attachmentsService,
+      ),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {

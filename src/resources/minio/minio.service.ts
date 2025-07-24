@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 import { Readable } from 'stream';
@@ -28,6 +28,7 @@ export interface GetResponse extends ObjectInfo {
 
 @Injectable()
 export class MinioService {
+  private readonly logger = new Logger(MinioService.name);
   private readonly minioClient: Minio.Client;
   private readonly bucket: string;
 
@@ -66,7 +67,7 @@ export class MinioService {
         }
       })
       .catch((err) => {
-        console.error('Error ensuring bucket exists:', err);
+        this.logger.error('Error ensuring bucket exists:', err);
         throw err;
       });
   }

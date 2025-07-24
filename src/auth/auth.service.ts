@@ -9,6 +9,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -23,6 +24,8 @@ import { NamespaceRole } from 'omnibox-backend/namespaces/entities/namespace-mem
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
@@ -150,7 +153,7 @@ export class AuthService {
       }
       await this.userService.updatePassword(user.id, password);
     } catch (e) {
-      console.error(e);
+      this.logger.error(e);
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }
@@ -281,7 +284,7 @@ export class AuthService {
     try {
       return this.jwtService.verify(token);
     } catch (e) {
-      console.error(e);
+      this.logger.error(e);
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }

@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Response } from 'express';
@@ -13,6 +14,8 @@ import { objectStreamResponse } from 'omnibox-backend/resources/utils';
 
 @Injectable()
 export class AttachmentsService {
+  private readonly logger = new Logger(AttachmentsService.name);
+
   constructor(
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
@@ -82,7 +85,7 @@ export class AttachmentsService {
           link: id,
         });
       } catch (e) {
-        console.error(e);
+        this.logger.error(e);
         failed.push(file.originalname);
       }
     }

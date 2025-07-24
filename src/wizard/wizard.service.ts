@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { Repository } from 'typeorm';
@@ -20,6 +20,7 @@ import { ResourceType } from 'omnibox-backend/resources/resources.entity';
 
 @Injectable()
 export class WizardService {
+  private readonly logger = new Logger(WizardService.name);
   private readonly processors: Record<string, Processor>;
   readonly streamService: StreamService;
   readonly wizardApiService: WizardAPIService;
@@ -69,7 +70,6 @@ export class WizardService {
       attrs: { url },
     };
     const resource = await this.resourcesService.create(user, resourceDto);
-    console.debug({ resource });
 
     const payload = { resource_id: resource.id };
 
@@ -101,7 +101,7 @@ export class WizardService {
 
     const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
     const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
-    console.debug(`Task ${task.id} cost: ${cost}ms, wait: ${wait}ms`);
+    this.logger.debug({ taskId: task.id, cost, wait });
 
     const postprocessResult = await this.postprocess(task);
 

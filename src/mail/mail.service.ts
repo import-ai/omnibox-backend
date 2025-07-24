@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 
 @Injectable()
 export class MailService {
+  private readonly logger = new Logger(MailService.name);
+
   constructor(private readonly mailerService: MailerService) {}
 
   async sendSignUpEmail(email: string, resetUrl: string): Promise<void> {
@@ -16,7 +18,7 @@ export class MailService {
         },
       });
     } catch (error) {
-      console.error('Failed to send email:', error);
+      this.logger.error(error);
       throw new Error('Unable to send email');
     }
   }
@@ -32,7 +34,7 @@ export class MailService {
         },
       });
     } catch (error) {
-      console.error('Failed to send email:', error);
+      this.logger.error(error);
       throw new Error('Unable to send email');
     }
   }
@@ -48,7 +50,7 @@ export class MailService {
         },
       });
     } catch (error) {
-      console.error('Failed to send email:', error);
+      this.logger.error(error);
       throw new Error('Unable to send email');
     }
   }
@@ -64,7 +66,7 @@ export class MailService {
         },
       });
     } catch (error) {
-      console.error('Failed to send email:', error);
+      this.logger.error(error);
       throw new Error('Unable to send email');
     }
   }

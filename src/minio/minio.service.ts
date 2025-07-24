@@ -9,6 +9,7 @@ export interface PutOptions {
   id?: string;
   metadata?: Record<string, any>;
   bucket?: string;
+  folder?: string;
 }
 
 export interface PutResponse extends UploadedObjectInfo {
@@ -57,7 +58,7 @@ export class MinioService {
     });
 
     this.bucket =
-      this.configService.get<string>('OBB_MINIO_BUCKET') || 'default';
+      this.configService.get<string>('OBB_MINIO_BUCKET') || 'omnibox';
 
     this.minioClient
       .bucketExists(this.bucket)

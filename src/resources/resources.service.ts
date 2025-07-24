@@ -25,7 +25,7 @@ import {
 } from '@nestjs/common';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { User } from 'omnibox-backend/user/entities/user.entity';
-import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
+import { MinioService } from 'omnibox-backend/minio/minio.service';
 import { WizardTask } from 'omnibox-backend/resources/wizard.task.service';
 import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omnibox-backend/wizard/dto/agent-request.dto';

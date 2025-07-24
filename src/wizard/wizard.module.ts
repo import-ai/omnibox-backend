@@ -8,6 +8,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { MessagesModule } from 'omnibox-backend/messages/messages.module';
 import { UserModule } from 'omnibox-backend/user/user.module';
+import { AttachmentsModule } from 'omnibox-backend/attachments/attachments.module';
 
 @Module({
   providers: [WizardService],
@@ -16,6 +17,7 @@ import { UserModule } from 'omnibox-backend/user/user.module';
     NamespacesModule,
     ResourcesModule,
     MessagesModule,
+    AttachmentsModule,
     TypeOrmModule.forFeature([Task]),
   ],
   controllers: [WizardController, InternalWizardController],

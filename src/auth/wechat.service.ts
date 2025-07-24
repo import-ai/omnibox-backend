@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import generateId from 'omnibox-backend/utils/generate-id';
@@ -6,13 +6,17 @@ import { UserService } from 'omnibox-backend/user/user.service';
 import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
 import { WechatCheckResponseDto } from './dto/wechat-login.dto';
 import {
-  Injectable,
-  UnauthorizedException,
   BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 
 @Injectable()
 export class WechatService {
+  private readonly logger = new Logger(WechatService.name);
+
   private readonly appId: string;
   private readonly appSecret: string;
   private readonly redirectUri: string;
@@ -27,6 +31,9 @@ export class WechatService {
       userInfo?: WechatCheckResponseDto['user'];
     }
   >();
+
+  private readonly minUsernameLength = 2;
+  private readonly maxUsernameLength = 32;
 
   constructor(
     private readonly configService: ConfigService,
@@ -90,6 +97,46 @@ export class WechatService {
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
+  generateSuffix(): string {
+    return (
+      '_' +
+      generateId(4, 'useandomTPXpxJACKVERYMINDBUSHWOLFGQZbfghjklqvwyzrict')
+    );
+  }
+
+  async getValidUsername(
+    nickname: string,
+    manager: EntityManager,
+  ): Promise<string> {
+    let username = nickname;
+
+    if (username.length > this.maxUsernameLength) {
+      username = nickname.slice(0, this.maxUsernameLength);
+    }
+    if (username.length >= this.minUsernameLength) {
+      const user = await this.userService.findByUsername(username, manager);
+      if (!user) {
+        return username;
+      }
+    }
+
+    username = nickname.slice(0, this.maxUsernameLength - 5);
+    for (let i = 0; i < 5; i++) {
+      const suffix = this.generateSuffix();
+      const user = await this.userService.findByUsername(
+        username + suffix,
+        manager,
+      );
+      if (!user) {
+        return username + suffix;
+      }
+    }
+
+    throw new InternalServerErrorException(
+      'Unable to generate a valid username',
+    );
+  }
+
   async handleCallback(code: string, state: string): Promise<any> {
     const stateInfo = this.qrCodeStates.get(state);
     if (!stateInfo) {
@@ -134,22 +181,9 @@ export class WechatService {
       return returnValue;
     }
     return await this.dataSource.transaction(async (manager) => {
-      let username = userData.nickname;
-      const suffix =
-        '_' +
-        generateId(4, 'useandomTPXpxJACKVERYMINDBUSHWOLFGQZbfghjklqvwyzrict');
-      if (userData.nickname.length < 2) {
-        username = userData.nickname + suffix;
-      } else if (userData.nickname.length > 32) {
-        username = userData.nickname.slice(0, 27) + suffix;
-      }
-      const existingUser = await this.userService.findByUsername(
-        username,
-        manager,
-      );
-      if (existingUser) {
-        username = userData.nickname.slice(0, 22) + suffix;
-      }
+      const nickname: string = userData.nickname;
+      const username: string = await this.getValidUsername(nickname, manager);
+      this.logger.debug({ nickname, username });
       const wechatUser = await this.userService.createUserBinding(
         {
           username,

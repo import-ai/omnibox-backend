@@ -38,13 +38,16 @@ export class AttachmentsService {
     }
   }
 
+  minioPath(attachmentId: string): string {
+    return `attachments/${attachmentId}`;
+  }
+
   async checkAttachment(
     namespaceId: string,
     resourceId: string,
     attachmentId: string,
   ) {
-    const path: string = `attachments/${attachmentId}`;
-    const info = await this.minioService.info(path);
+    const info = await this.minioService.info(this.minioPath(attachmentId));
     if (
       info.metadata.namespaceId === namespaceId ||
       info.metadata.resourceId === resourceId
@@ -133,8 +136,9 @@ export class AttachmentsService {
       resourceId,
       attachmentId,
     );
-    const path: string = `attachments/${attachmentId}`;
-    const stream = await this.minioService.getObject(path);
+    const stream = await this.minioService.getObject(
+      this.minioPath(attachmentId),
+    );
     return objectStreamResponse({ stream, ...info }, httpResponse);
   }
 
@@ -151,8 +155,7 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
     await this.checkAttachment(namespaceId, resourceId, attachmentId);
-    const path: string = `attachments/${attachmentId}`;
-    await this.minioService.removeObject(path);
+    await this.minioService.removeObject(this.minioPath(attachmentId));
     return { id: attachmentId, success: true };
   }
 
@@ -161,8 +164,9 @@ export class AttachmentsService {
     userId: string,
     httpResponse: Response,
   ) {
-    const path: string = `attachments/${attachmentId}`;
-    const objectResponse = await this.minioService.get(path);
+    const objectResponse = await this.minioService.get(
+      this.minioPath(attachmentId),
+    );
     const { namespaceId, resourceId } = objectResponse.metadata;
 
     await this.checkPermission(

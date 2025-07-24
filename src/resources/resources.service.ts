@@ -30,6 +30,7 @@ import { WizardTask } from 'omnibox-backend/resources/wizard.task.service';
 import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omnibox-backend/wizard/dto/agent-request.dto';
 import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { Response } from 'express';
 
 const TASK_PRIORITY = 5;
 
@@ -425,15 +426,26 @@ export class ResourcesService {
     });
   }
 
+  minioPath(resourceId: string) {
+    return `resources/${resourceId}`;
+  }
+
+  chunkPath(
+    namespaceId: string,
+    fileHash: string,
+    chunkNumber: string | number,
+  ) {
+    return `chunks/${namespaceId}/${fileHash}/${chunkNumber}`;
+  }
+
   async uploadFileChunk(
     namespaceId: string,
     chunk: Express.Multer.File,
     chunkNumber: string,
     fileHash: string,
   ) {
-    const chunkObjectName = `${namespaceId}/chunks/${fileHash}/${chunkNumber}`;
     await this.minioService.putChunkObject(
-      chunkObjectName,
+      this.chunkPath(namespaceId, fileHash, chunkNumber),
       chunk.buffer,
       chunk.size,
     );
@@ -446,7 +458,7 @@ export class ResourcesService {
   ) {
     const chunksName = chunksNumber
       .split(',')
-      .map((chunkNumber) => `${namespaceId}/chunks/${fileHash}/${chunkNumber}`);
+      .map((chunkNumber) => this.chunkPath(namespaceId, fileHash, chunkNumber));
     await Promise.all(
       chunksName.map((name) => this.minioService.removeObject(name)),
     );
@@ -486,12 +498,14 @@ export class ResourcesService {
 
     const artifactName = resource.id;
 
-    const chunksName = Array.from(
-      { length: totalChunks },
-      (_, i) => `${namespaceId}/chunks/${fileHash}/${i}`,
+    const chunksName = Array.from({ length: totalChunks }, (_, i) =>
+      this.chunkPath(namespaceId, fileHash, i),
     );
 
-    await this.minioService.composeObject(artifactName, chunksName);
+    await this.minioService.composeObject(
+      this.minioPath(artifactName),
+      chunksName,
+    );
     await Promise.all(
       chunksName.map((name) => this.minioService.removeObject(name)),
     );
@@ -536,7 +550,11 @@ export class ResourcesService {
 
     const artifactName = resource.id;
 
-    await this.minioService.putObject(artifactName, file.buffer, file.mimetype);
+    await this.minioService.putObject(
+      this.minioPath(artifactName),
+      file.buffer,
+      file.mimetype,
+    );
 
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
@@ -555,7 +573,9 @@ export class ResourcesService {
     }
     const artifactName = resource.id;
 
-    const fileStream = await this.minioService.getObject(artifactName);
+    const fileStream = await this.minioService.getObject(
+      this.minioPath(artifactName),
+    );
     return { fileStream, resource };
   }
 
@@ -595,5 +615,19 @@ export class ResourcesService {
       skip: offset,
       take: limit,
     });
+  }
+
+  async fileResponse(resourceId: string, response: Response) {
+    const { fileStream, resource } = await this.downloadFile(resourceId);
+    const encodedName = encodeURIComponent(resource.name);
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodedName}"`,
+    );
+    response.setHeader(
+      'Content-Type',
+      resource.attrs?.mimetype || 'application/octet-stream',
+    );
+    fileStream.pipe(response);
   }
 }

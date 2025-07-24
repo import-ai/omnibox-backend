@@ -168,9 +168,10 @@ export class MinioService {
       metadata = {},
       bucket = this.bucket,
     } = options || {};
+    const path: string = options?.folder ? `${options.folder}/${id}` : id;
     const info = await this.minioClient.putObject(
       bucket,
-      id,
+      path,
       buffer,
       buffer.length,
       {

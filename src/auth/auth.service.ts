@@ -1,4 +1,4 @@
-import { JwtService } from '@nestjs/jwt';
+import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
 import { User } from 'omnibox-backend/user/entities/user.entity';
 import { DataSource, EntityManager } from 'typeorm';
 import { MailService } from 'omnibox-backend/mail/mail.service';
@@ -25,6 +25,7 @@ import { NamespaceRole } from 'omnibox-backend/namespaces/entities/namespace-mem
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly knownErrors = [JsonWebTokenError, TokenExpiredError];
 
   constructor(
     private readonly jwtService: JwtService,
@@ -284,7 +285,9 @@ export class AuthService {
     try {
       return this.jwtService.verify(token);
     } catch (error) {
-      this.logger.error({ error });
+      if (!this.knownErrors.some((cls) => error instanceof cls)) {
+        this.logger.error({ error });
+      }
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }

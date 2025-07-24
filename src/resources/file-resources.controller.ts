@@ -1,5 +1,4 @@
 import { Response } from 'express';
-import { fileResponse } from 'omnibox-backend/resources/utils';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ResourcesService } from 'omnibox-backend/resources/resources.service';
 import {
@@ -116,11 +115,11 @@ export class FileResourcesController {
     );
   }
 
-  @Get('files/:resourceId')
+  @Get(':resourceId')
   async downloadFile(
     @Param('resourceId') resourceId: string,
     @Res() res: Response,
   ) {
-    return await fileResponse(resourceId, res, this.resourcesService);
+    return await this.resourcesService.fileResponse(resourceId, res);
   }
 }

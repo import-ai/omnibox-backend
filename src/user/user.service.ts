@@ -112,7 +112,7 @@ export class UserService {
     const hash = await bcrypt.hash(Math.random().toString(36), 10);
     const newUser = repo.create({
       password: hash,
-      username: userData.loginId,
+      username: userData.username,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

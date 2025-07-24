@@ -1,26 +1,19 @@
-import { Response } from 'express';
-import { fileResponse } from './utils';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { ResourcesService } from 'omnibox-backend/resources/resources.service';
 import { CreateResourceDto } from 'omnibox-backend/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omnibox-backend/resources/dto/update-resource.dto';
 import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
 import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
 import {
-  Req,
-  Res,
-  Get,
-  Post,
   Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
   Param,
   Patch,
+  Post,
   Query,
-  Delete,
-  Controller,
-  ParseIntPipe,
-  UploadedFile,
-  UseInterceptors,
-  ForbiddenException,
+  Req,
 } from '@nestjs/common';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
@@ -156,7 +149,7 @@ export class ResourcesController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    return await this.resourcesService.update(req.user, resourceId, data);
+    return await this.resourcesService.update(req.user.id, resourceId, data);
   }
 
   @Delete(':resourceId')
@@ -190,109 +183,5 @@ export class ResourcesController {
       userId: req.user.id,
     });
     return { ...resource, currentLevel: permission, path };
-  }
-
-  @Post('files')
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(
-    @Req() req,
-    @UploadedFile() file: Express.Multer.File,
-    @Body('namespace_id') namespaceId: string,
-    @Body('parent_id') parentId: string,
-  ) {
-    const newResource = await this.resourcesService.uploadFile(
-      req.user,
-      namespaceId,
-      file,
-      parentId,
-      undefined,
-    );
-    const { resource, permission, path } = await this.resourcesService.getPath({
-      namespaceId,
-      userId: req.user.id,
-      resourceId: newResource.id,
-    });
-    return { ...resource, currentLevel: permission, path };
-  }
-
-  @Post('files/chunk')
-  @UseInterceptors(FileInterceptor('chunk'))
-  async uploadFileChunk(
-    @UploadedFile() chunk: Express.Multer.File,
-    @Body('chunk_number') chunkNumber: string,
-    @Body('file_hash') fileHash: string,
-    @Body('namespace_id') namespaceId: string,
-  ) {
-    return this.resourcesService.uploadFileChunk(
-      namespaceId,
-      chunk,
-      chunkNumber,
-      fileHash,
-    );
-  }
-
-  @Post('files/chunk/clean')
-  async cleanFileChunks(
-    @Body('namespace_id') namespaceId: string,
-    @Body('chunks_number') chunksNumber: string,
-    @Body('file_hash') fileHash: string,
-  ) {
-    return this.resourcesService.cleanFileChunks(
-      namespaceId,
-      chunksNumber,
-      fileHash,
-    );
-  }
-
-  @Post('files/merge')
-  async mergeFileChunks(
-    @Req() req,
-    @Body('namespace_id') namespaceId: string,
-    @Body('total_chunks', ParseIntPipe) totalChunks: number,
-    @Body('file_hash') fileHash: string,
-    @Body('file_name') fileName: string,
-    @Body('mimetype') mimetype: string,
-    @Body('parent_id') parentId: string,
-  ) {
-    const newResource = await this.resourcesService.mergeFileChunks(
-      req.user,
-      namespaceId,
-      totalChunks,
-      fileHash,
-      fileName,
-      mimetype,
-      parentId,
-    );
-    const { resource, permission, path } = await this.resourcesService.getPath({
-      namespaceId,
-      userId: req.user.id,
-      resourceId: newResource.id,
-    });
-    return { ...resource, currentLevel: permission, path };
-  }
-
-  @Patch('files/:resourceId')
-  @UseInterceptors(FileInterceptor('file'))
-  async patchFile(
-    @Req() req,
-    @UploadedFile() file: Express.Multer.File,
-    @Body('namespace_id') namespaceId: string,
-    @Body('resource_id') resourceId: string,
-  ) {
-    return this.resourcesService.uploadFile(
-      req.user,
-      namespaceId,
-      file,
-      undefined,
-      resourceId,
-    );
-  }
-
-  @Get('files/:resourceId')
-  async downloadFile(
-    @Param('resourceId') resourceId: string,
-    @Res() res: Response,
-  ) {
-    return await fileResponse(resourceId, res, this.resourcesService);
   }
 }

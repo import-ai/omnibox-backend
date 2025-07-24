@@ -32,6 +32,7 @@ import { Tags1751905414493 } from 'omnibox-backend/migrations/1751905414493-tags
 import { Init1751900000000 } from 'omnibox-backend/migrations/1751900000000-init';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { NullUserEmail1752814358259 } from 'omnibox-backend/migrations/1752814358259-null-user-email';
+import { AttachmentsModule } from 'omnibox-backend/attachments/attachments.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -65,6 +66,7 @@ export class AppModule implements NestModule {
         MessagesModule,
         SearchModule,
         InvitationsModule,
+        AttachmentsModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
         //   inject: [ConfigService],

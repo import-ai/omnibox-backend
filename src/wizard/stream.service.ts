@@ -1,7 +1,7 @@
 import { MessagesService } from 'omnibox-backend/messages/messages.service';
 import { User } from 'omnibox-backend/user/entities/user.entity';
 import { Observable, Subscriber } from 'rxjs';
-import { MessageEvent } from '@nestjs/common';
+import { Logger, MessageEvent } from '@nestjs/common';
 import {
   Message,
   MessageStatus,
@@ -24,6 +24,8 @@ interface HandlerContext {
 }
 
 export class StreamService {
+  private readonly logger = new Logger(StreamService.name);
+
   constructor(
     private readonly wizardBaseUrl: string,
     private readonly messagesService: MessagesService,
@@ -182,12 +184,12 @@ export class StreamService {
     return messages;
   }
 
-  streamError(subscriber: Subscriber<MessageEvent>, err: Error) {
-    console.error(err);
+  streamError(subscriber: Subscriber<MessageEvent>, error: Error) {
+    this.logger.error({ error });
     subscriber.error(
       JSON.stringify({
         response_type: 'error',
-        error: err.name,
+        error: error.name,
       }),
     );
   }

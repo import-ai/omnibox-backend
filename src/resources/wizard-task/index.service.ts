@@ -1,5 +1,5 @@
 import { User } from 'omnibox-backend/user/entities/user.entity';
-import { Resource } from 'omnibox-backend/resources/resources.entity';
+import { Resource, ResourceType } from 'omnibox-backend/resources/resources.entity';
 import { Repository } from 'typeorm';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import {
@@ -10,11 +10,11 @@ import {
 export class Index {
   static async upsert(
     priority: number,
-    user: User,
+    userId: string,
     resource: Resource,
     repo: Repository<Task>,
   ) {
-    if (resource.resourceType === 'folder' || !resource.content) {
+    if (resource.resourceType === ResourceType.FOLDER || !resource.content) {
       return;
     }
     const task = repo.create({
@@ -30,7 +30,7 @@ export class Index {
         },
       },
       namespaceId: resource.namespaceId,
-      userId: user.id,
+      userId: userId,
     });
     return await repo.save(task);
   }

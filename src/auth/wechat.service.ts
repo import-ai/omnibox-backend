@@ -98,22 +98,28 @@ export class WechatService {
     const isWeixin = stateInfo.type === 'weixin';
     const appId = isWeixin ? this.appId : this.openAppId;
     const appSecret = isWeixin ? this.appSecret : this.openAppSecret;
-    const response = await fetch(
+    const accessTokenResponse = await fetch(
       `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
     );
-    if (!response.ok) {
+    if (!accessTokenResponse.ok) {
       throw new UnauthorizedException('Failed to get WeChat access token');
     }
-    const userData = await response.json();
+    const accessTokenData = await accessTokenResponse.json();
+
+    if (accessTokenData.errmsg) {
+      throw new BadRequestException(accessTokenData.errmsg);
+    }
+
+    const userDataResponse = await fetch(
+      `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
+    );
+    if (!userDataResponse.ok) {
+      throw new UnauthorizedException('Failed to get WeChat user info');
+    }
+    const userData = await userDataResponse.json();
 
     if (userData.errmsg) {
       throw new BadRequestException(userData.errmsg);
-    }
-
-    if (!userData.unionid) {
-      throw new UnauthorizedException(
-        'Failed to get WeChat UnionID, please make sure you have followed the official account',
-      );
     }
 
     const wechatUser = await this.userService.findByLoginId(userData.unionid);
@@ -133,6 +139,7 @@ export class WechatService {
         {
           loginType: 'wechat',
           loginId: userData.unionid,
+          username: userData.nickname,
         },
         manager,
       );

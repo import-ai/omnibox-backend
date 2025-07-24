@@ -1,20 +1,20 @@
-import { User } from 'src/user/entities/user.entity';
-import { Resource } from 'src/resources/resources.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
+import { Resource, ResourceType } from 'omnibox-backend/resources/resources.entity';
 import { Repository } from 'typeorm';
-import { Task } from 'src/tasks/tasks.entity';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import {
   Message,
   OpenAIMessageRole,
-} from 'src/messages/entities/message.entity';
+} from 'omnibox-backend/messages/entities/message.entity';
 
 export class Index {
   static async upsert(
     priority: number,
-    user: User,
+    userId: string,
     resource: Resource,
     repo: Repository<Task>,
   ) {
-    if (resource.resourceType === 'folder' || !resource.content) {
+    if (resource.resourceType === ResourceType.FOLDER || !resource.content) {
       return;
     }
     const task = repo.create({
@@ -30,7 +30,7 @@ export class Index {
         },
       },
       namespaceId: resource.namespaceId,
-      userId: user.id,
+      userId: userId,
     });
     return await repo.save(task);
   }

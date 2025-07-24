@@ -1,21 +1,21 @@
-import { MessagesService } from 'src/messages/messages.service';
-import { User } from 'src/user/entities/user.entity';
+import { MessagesService } from 'omnibox-backend/messages/messages.service';
+import { User } from 'omnibox-backend/user/entities/user.entity';
 import { Observable, Subscriber } from 'rxjs';
-import { MessageEvent } from '@nestjs/common';
+import { Logger, MessageEvent } from '@nestjs/common';
 import {
   Message,
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
-} from 'src/messages/entities/message.entity';
+} from 'omnibox-backend/messages/entities/message.entity';
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
-} from 'src/wizard/dto/agent-request.dto';
-import { ResourcesService } from 'src/resources/resources.service';
-import { Resource } from 'src/resources/resources.entity';
-import { ChatResponse } from 'src/wizard/dto/chat-response.dto';
+} from 'omnibox-backend/wizard/dto/agent-request.dto';
+import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { Resource } from 'omnibox-backend/resources/resources.entity';
+import { ChatResponse } from 'omnibox-backend/wizard/dto/chat-response.dto';
 
 interface HandlerContext {
   parentId?: string;
@@ -24,6 +24,8 @@ interface HandlerContext {
 }
 
 export class StreamService {
+  private readonly logger = new Logger(StreamService.name);
+
   constructor(
     private readonly wizardBaseUrl: string,
     private readonly messagesService: MessagesService,
@@ -33,11 +35,15 @@ export class StreamService {
   async stream(
     url: string,
     body: Record<string, any>,
+    requestId: string,
     callback: (data: string) => Promise<void>,
   ): Promise<void> {
     const response = await fetch(`${this.wizardBaseUrl}${url}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-Id': requestId,
+      },
       body: JSON.stringify(body),
     });
     if (!response.ok) {
@@ -99,6 +105,8 @@ export class StreamService {
         );
         chunk.id = message.id;
         chunk.parentId = message.parentId || undefined;
+        chunk.userId = user.id;
+        chunk.namespaceId = namespaceId;
 
         if (context.message?.role === OpenAIMessageRole.SYSTEM) {
           chunk.parentId = undefined;
@@ -176,12 +184,12 @@ export class StreamService {
     return messages;
   }
 
-  streamError(subscriber: Subscriber<MessageEvent>, err: Error) {
-    console.error(err);
+  streamError(subscriber: Subscriber<MessageEvent>, error: Error) {
+    this.logger.error({ error });
     subscriber.error(
       JSON.stringify({
         response_type: 'error',
-        error: err.name,
+        error: error.name,
       }),
     );
   }
@@ -189,6 +197,7 @@ export class StreamService {
   async agentStream(
     user: User,
     body: AgentRequestDto,
+    requestId: string,
     mode: 'ask' | 'write' = 'ask',
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
@@ -275,9 +284,14 @@ export class StreamService {
         enable_thinking: body.enable_thinking,
       };
 
-      this.stream(`/api/v1/wizard/${mode}`, wizardRequestBody, async (data) => {
-        await handler(data, handlerContext);
-      })
+      this.stream(
+        `/api/v1/wizard/${mode}`,
+        wizardRequestBody,
+        requestId,
+        async (data) => {
+          await handler(data, handlerContext);
+        },
+      )
         .then(() => subscriber.complete())
         .catch((err: Error) => this.streamError(subscriber, err));
     });
@@ -286,10 +300,11 @@ export class StreamService {
   async agentStreamWrapper(
     user: User,
     body: AgentRequestDto,
+    requestId: string,
     mode: 'ask' | 'write' = 'ask',
   ): Promise<Observable<MessageEvent>> {
     try {
-      return await this.agentStream(user, body, mode);
+      return await this.agentStream(user, body, requestId, mode);
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>
         this.streamError(subscriber, e),

@@ -1,28 +1,31 @@
 import { JwtService } from '@nestjs/jwt';
-import { User } from 'src/user/entities/user.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
 import { DataSource, EntityManager } from 'typeorm';
-import { MailService } from 'src/mail/mail.service';
-import { UserService } from 'src/user/user.service';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
-import { CreateUserDto } from 'src/user/dto/create-user.dto';
+import { MailService } from 'omnibox-backend/mail/mail.service';
+import { UserService } from 'omnibox-backend/user/user.service';
+import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
+import { CreateUserDto } from 'omnibox-backend/user/dto/create-user.dto';
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ResourcePermission } from 'src/permissions/resource-permission.enum';
-import { GroupsService } from 'src/groups/groups.service';
-import { PermissionsService } from 'src/permissions/permissions.service';
+import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { GroupsService } from 'omnibox-backend/groups/groups.service';
+import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
 import { UserInvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
 import { LoginPayloadDto } from './dto/login-payload.dto';
-import { NamespaceRole } from 'src/namespaces/entities/namespace-member.entity';
+import { NamespaceRole } from 'omnibox-backend/namespaces/entities/namespace-member.entity';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
@@ -149,8 +152,8 @@ export class AuthService {
         throw new NotFoundException('User not found.');
       }
       await this.userService.updatePassword(user.id, password);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      this.logger.error({ error });
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }
@@ -280,8 +283,8 @@ export class AuthService {
   jwtVerify(token: string) {
     try {
       return this.jwtService.verify(token);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      this.logger.error({ error });
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }

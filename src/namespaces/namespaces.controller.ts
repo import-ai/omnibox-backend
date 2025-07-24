@@ -1,5 +1,5 @@
 import { NamespaceRole } from './entities/namespace-member.entity';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
+import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
 import {
   Req,
   Get,

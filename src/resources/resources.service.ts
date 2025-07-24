@@ -1,39 +1,35 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import duplicateName from 'src/utils/duplicate-name';
-import encodeFileName from 'src/utils/encode-filename';
+import duplicateName from 'omnibox-backend/utils/duplicate-name';
+import encodeFileName from 'omnibox-backend/utils/encode-filename';
 import {
   DataSource,
   EntityManager,
   FindOptionsWhere,
   In,
+  IsNull,
   Like,
   Not,
-  IsNull,
   Repository,
 } from 'typeorm';
-import { Resource, ResourceType } from 'src/resources/resources.entity';
-import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'src/resources/dto/update-resource.dto';
+import {
+  Resource,
+  ResourceType,
+} from 'omnibox-backend/resources/resources.entity';
+import { CreateResourceDto } from 'omnibox-backend/resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omnibox-backend/resources/dto/update-resource.dto';
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Task } from 'src/tasks/tasks.entity';
-import { User } from 'src/user/entities/user.entity';
-import { MinioService } from 'src/resources/minio/minio.service';
-import { WizardTask } from 'src/resources/wizard.task.service';
-import { PermissionsService } from 'src/permissions/permissions.service';
-import { PrivateSearchResourceDto } from 'src/wizard/dto/agent-request.dto';
-import { ResourcePermission } from 'src/permissions/resource-permission.enum';
-
-export interface IQuery {
-  namespaceId: string;
-  parentId: string;
-  userId: string;
-  tags?: string;
-}
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
+import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
+import { WizardTask } from 'omnibox-backend/resources/wizard.task.service';
+import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
+import { PrivateSearchResourceDto } from 'omnibox-backend/wizard/dto/agent-request.dto';
+import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
 
 const TASK_PRIORITY = 5;
 
@@ -99,7 +95,7 @@ export class ResourcesService {
       const savedResource = await repo.save(resource);
       await WizardTask.index.upsert(
         TASK_PRIORITY,
-        user,
+        user.id,
         savedResource,
         manager.getRepository(Task),
       );
@@ -369,8 +365,7 @@ export class ResourcesService {
     return resources;
   }
 
-  async update(user: User, id: string, data: UpdateResourceDto) {
-    console.debug({ id, data });
+  async update(userId: string, id: string, data: UpdateResourceDto) {
     const resource = await this.resourceRepository.findOne({
       where: { id, namespaceId: data.namespaceId },
     });
@@ -387,7 +382,7 @@ export class ResourcesService {
     const savedNewResource = await this.resourceRepository.save(newResource);
     await WizardTask.index.upsert(
       TASK_PRIORITY,
-      user,
+      userId,
       savedNewResource,
       this.taskRepository,
     );
@@ -423,7 +418,7 @@ export class ResourcesService {
       await manager.restore(Resource, id);
       await WizardTask.index.upsert(
         TASK_PRIORITY,
-        user,
+        user.id,
         resource,
         manager.getRepository(Task),
       );
@@ -467,21 +462,21 @@ export class ResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    const originalname = encodeFileName(fileName);
+    const originalName = encodeFileName(fileName);
     let resource: Resource;
     if (resourceId) {
       resource = await this.get(resourceId);
-      if (resource.resourceType !== 'file') {
+      if (resource.resourceType !== ResourceType.FILE) {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
       resource = await this.create(user, {
-        name: originalname,
+        name: originalName,
         resourceType: ResourceType.FILE,
         namespaceId,
         parentId,
         attrs: {
-          original_name: originalname,
+          original_name: originalName,
           mimetype: mimetype,
         },
       });
@@ -521,7 +516,7 @@ export class ResourcesService {
     let resource: Resource;
     if (resourceId) {
       resource = await this.get(resourceId);
-      if (resource.resourceType !== 'file') {
+      if (resource.resourceType !== ResourceType.FILE) {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
@@ -555,7 +550,7 @@ export class ResourcesService {
     const resource = await this.resourceRepository.findOne({
       where: { id: resourceId },
     });
-    if (!resource || resource.resourceType !== 'file') {
+    if (!resource || resource.resourceType !== ResourceType.FILE) {
       throw new NotFoundException('File resource not found.');
     }
     const artifactName = resource.id;

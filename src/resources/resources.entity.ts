@@ -1,7 +1,7 @@
-import { Base } from 'src/common/base.entity';
-import generateId from 'src/utils/generate-id';
+import { Base } from 'omnibox-backend/common/base.entity';
+import generateId from 'omnibox-backend/utils/generate-id';
 import { Column, Entity, PrimaryColumn, BeforeInsert } from 'typeorm';
-import { ResourcePermission } from 'src/permissions/resource-permission.enum';
+import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
 
 export enum ResourceType {
   DOC = 'doc',

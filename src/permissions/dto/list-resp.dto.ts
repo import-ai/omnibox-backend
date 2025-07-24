@@ -1,6 +1,6 @@
-import { Group } from 'src/groups/entities/group.entity';
+import { Group } from 'omnibox-backend/groups/entities/group.entity';
 import { ResourcePermission } from '../resource-permission.enum';
-import { User } from 'src/user/entities/user.entity';
+import { User } from 'omnibox-backend/user/entities/user.entity';
 
 export class GroupDto {
   id: string;

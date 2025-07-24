@@ -1,41 +1,40 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Task } from 'src/tasks/tasks.entity';
+import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { Repository } from 'typeorm';
-import { NamespacesService } from 'src/namespaces/namespaces.service';
-import { ResourcesService } from 'src/resources/resources.service';
-import { CreateResourceDto } from 'src/resources/dto/create-resource.dto';
-import { CollectRequestDto } from 'src/wizard/dto/collect-request.dto';
-import { CollectResponseDto } from 'src/wizard/dto/collect-response.dto';
-import { User } from 'src/user/entities/user.entity';
-import { TaskCallbackDto } from 'src/wizard/dto/task-callback.dto';
+import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { CreateResourceDto } from 'omnibox-backend/resources/dto/create-resource.dto';
+import { CollectRequestDto } from 'omnibox-backend/wizard/dto/collect-request.dto';
+import { CollectResponseDto } from 'omnibox-backend/wizard/dto/collect-response.dto';
+import { User } from 'omnibox-backend/user/entities/user.entity';
+import { TaskCallbackDto } from 'omnibox-backend/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
-import { CollectProcessor } from 'src/wizard/processors/collect.processor';
-import { ReaderProcessor } from 'src/wizard/processors/reader.processor';
-import { Processor } from 'src/wizard/processors/processor.abstract';
-import { MessagesService } from 'src/messages/messages.service';
-import { StreamService } from 'src/wizard/stream.service';
-import { WizardAPIService } from 'src/wizard/api.wizard.service';
-import { UserService } from 'src/user/user.service';
-import { ResourceType } from 'src/resources/resources.entity';
+import { CollectProcessor } from 'omnibox-backend/wizard/processors/collect.processor';
+import { ReaderProcessor } from 'omnibox-backend/wizard/processors/reader.processor';
+import { Processor } from 'omnibox-backend/wizard/processors/processor.abstract';
+import { MessagesService } from 'omnibox-backend/messages/messages.service';
+import { StreamService } from 'omnibox-backend/wizard/stream.service';
+import { WizardAPIService } from 'omnibox-backend/wizard/api.wizard.service';
+import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
+import { ResourceType } from 'omnibox-backend/resources/resources.entity';
 
 @Injectable()
 export class WizardService {
+  private readonly logger = new Logger(WizardService.name);
   private readonly processors: Record<string, Processor>;
   readonly streamService: StreamService;
   readonly wizardApiService: WizardAPIService;
 
   constructor(
     @InjectRepository(Task) private taskRepository: Repository<Task>,
-    private readonly namespacesService: NamespacesService,
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
-    private readonly userService: UserService,
+    private readonly minioService: MinioService,
   ) {
     this.processors = {
-      collect: new CollectProcessor(userService, resourcesService),
-      file_reader: new ReaderProcessor(userService, resourcesService),
+      collect: new CollectProcessor(resourcesService),
+      file_reader: new ReaderProcessor(resourcesService, this.minioService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -71,7 +70,6 @@ export class WizardService {
       attrs: { url },
     };
     const resource = await this.resourcesService.create(user, resourceDto);
-    console.debug({ resource });
 
     const payload = { resource_id: resource.id };
 
@@ -103,7 +101,7 @@ export class WizardService {
 
     const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
     const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
-    console.debug(`Task ${task.id} cost: ${cost}ms, wait: ${wait}ms`);
+    this.logger.debug({ taskId: task.id, cost, wait });
 
     const postprocessResult = await this.postprocess(task);
 

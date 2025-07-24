@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Conversation } from 'src/conversations/entities/conversation.entity';
-import { ConversationsService } from 'src/conversations/conversations.service';
-import { ConversationsController } from 'src/conversations/conversations.controller';
+import { Conversation } from 'omnibox-backend/conversations/entities/conversation.entity';
+import { ConversationsService } from 'omnibox-backend/conversations/conversations.service';
+import { ConversationsController } from 'omnibox-backend/conversations/conversations.controller';
 import { MessagesModule } from '../messages/messages.module';
 
 @Module({

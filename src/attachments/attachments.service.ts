@@ -7,10 +7,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
+import { MinioService } from 'omnibox-backend/minio/minio.service';
 import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
 import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
-import { objectStreamResponse } from 'omnibox-backend/resources/utils';
+import { objectStreamResponse } from 'omnibox-backend/minio/utils';
 
 @Injectable()
 export class AttachmentsService {
@@ -38,12 +38,16 @@ export class AttachmentsService {
     }
   }
 
+  minioPath(attachmentId: string): string {
+    return `attachments/${attachmentId}`;
+  }
+
   async checkAttachment(
     namespaceId: string,
     resourceId: string,
     attachmentId: string,
   ) {
-    const info = await this.minioService.info(attachmentId);
+    const info = await this.minioService.info(this.minioPath(attachmentId));
     if (
       info.metadata.namespaceId === namespaceId ||
       info.metadata.resourceId === resourceId
@@ -51,6 +55,27 @@ export class AttachmentsService {
       return info;
     }
     throw new NotFoundException(attachmentId);
+  }
+
+  async uploadAttachment(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    filename: string,
+    buffer: Buffer,
+    mimetype: string,
+  ) {
+    await this.checkPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    const { id } = await this.minioService.put(filename, buffer, mimetype, {
+      metadata: { namespaceId, resourceId, userId },
+      folder: 'attachments',
+    });
+    return id;
   }
 
   async uploadAttachments(
@@ -72,13 +97,13 @@ export class AttachmentsService {
       try {
         const filename: string = encodeFileName(file.originalname);
         file.originalname = filename;
-        const { id } = await this.minioService.put(
+        const id = await this.uploadAttachment(
+          namespaceId,
+          resourceId,
+          userId,
           filename,
           file.buffer,
           file.mimetype,
-          {
-            metadata: { namespaceId, resourceId, userId },
-          },
         );
         uploaded.push({
           name: filename,
@@ -111,7 +136,9 @@ export class AttachmentsService {
       resourceId,
       attachmentId,
     );
-    const stream = await this.minioService.getObject(attachmentId);
+    const stream = await this.minioService.getObject(
+      this.minioPath(attachmentId),
+    );
     return objectStreamResponse({ stream, ...info }, httpResponse);
   }
 
@@ -128,7 +155,7 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
     await this.checkAttachment(namespaceId, resourceId, attachmentId);
-    await this.minioService.removeObject(attachmentId);
+    await this.minioService.removeObject(this.minioPath(attachmentId));
     return { id: attachmentId, success: true };
   }
 
@@ -137,7 +164,9 @@ export class AttachmentsService {
     userId: string,
     httpResponse: Response,
   ) {
-    const objectResponse = await this.minioService.get(attachmentId);
+    const objectResponse = await this.minioService.get(
+      this.minioPath(attachmentId),
+    );
     const { namespaceId, resourceId } = objectResponse.metadata;
 
     await this.checkPermission(

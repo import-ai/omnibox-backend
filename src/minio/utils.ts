@@ -1,25 +1,5 @@
+import { GetResponse as ObjectResponse } from 'omnibox-backend/minio/minio.service';
 import { Response } from 'express';
-import { ResourcesService } from 'omnibox-backend/resources/resources.service';
-import { GetResponse as ObjectResponse } from 'omnibox-backend/resources/minio/minio.service';
-
-export async function fileResponse(
-  resourceId: string,
-  response: Response,
-  resourcesService: ResourcesService,
-) {
-  const { fileStream, resource } =
-    await resourcesService.downloadFile(resourceId);
-  const encodedName = encodeURIComponent(resource.name);
-  response.setHeader(
-    'Content-Disposition',
-    `attachment; filename="${encodedName}"`,
-  );
-  response.setHeader(
-    'Content-Type',
-    resource.attrs?.mimetype || 'application/octet-stream',
-  );
-  fileStream.pipe(response);
-}
 
 export function objectStreamResponse(
   objectResponse: ObjectResponse,

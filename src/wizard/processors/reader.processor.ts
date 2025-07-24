@@ -1,8 +1,8 @@
 import { CollectProcessor } from 'omnibox-backend/wizard/processors/collect.processor';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import { ResourcesService } from 'omnibox-backend/resources/resources.service';
-import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
 import { BadRequestException } from '@nestjs/common';
+import { AttachmentsService } from 'omnibox-backend/attachments/attachments.service';
 
 interface Image {
   name?: string;
@@ -14,7 +14,7 @@ interface Image {
 export class ReaderProcessor extends CollectProcessor {
   constructor(
     protected readonly resourcesService: ResourcesService,
-    protected readonly minioService: MinioService,
+    protected readonly attachmentsService: AttachmentsService,
   ) {
     super(resourcesService);
   }
@@ -33,17 +33,13 @@ export class ReaderProcessor extends CollectProcessor {
         if (!resourceId) {
           throw new BadRequestException('Invalid task payload');
         }
-        const { id } = await this.minioService.put(
+        const id = await this.attachmentsService.uploadAttachment(
+          task.namespaceId,
+          resourceId,
+          task.userId,
           image.name || image.link,
           stream,
           image.mimetype,
-          {
-            metadata: {
-              namespaceId: task.namespaceId,
-              resourceId,
-              userId: task.userId,
-            },
-          },
         );
         markdown = markdown.replaceAll(
           image.link,

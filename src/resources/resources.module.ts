@@ -4,14 +4,14 @@ import { Resource } from 'omnibox-backend/resources/resources.entity';
 import { ResourcesService } from 'omnibox-backend/resources/resources.service';
 import { ResourcesController } from 'omnibox-backend/resources/resources.controller';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
-import { MinioService } from 'omnibox-backend/resources/minio/minio.service';
 import { InternalResourcesController } from 'omnibox-backend/resources/internal.resource.controller';
 import { PermissionsModule } from 'omnibox-backend/permissions/permissions.module';
 import { FileResourcesController } from 'omnibox-backend/resources/file-resources.controller';
+import { MinioModule } from 'omnibox-backend/minio/minio.module';
 
 @Module({
-  exports: [ResourcesService, MinioService],
-  providers: [ResourcesService, MinioService],
+  exports: [ResourcesService],
+  providers: [ResourcesService],
   controllers: [
     ResourcesController,
     InternalResourcesController,
@@ -21,6 +21,7 @@ import { FileResourcesController } from 'omnibox-backend/resources/file-resource
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Task]),
     PermissionsModule,
+    MinioModule,
   ],
 })
 export class ResourcesModule {}

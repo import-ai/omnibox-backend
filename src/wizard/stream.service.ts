@@ -14,7 +14,10 @@ import {
   WizardAgentRequestDto,
 } from 'omnibox-backend/wizard/dto/agent-request.dto';
 import { ResourcesService } from 'omnibox-backend/resources/resources.service';
-import { Resource } from 'omnibox-backend/resources/resources.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omnibox-backend/resources/resources.entity';
 import { ChatResponse } from 'omnibox-backend/wizard/dto/chat-response.dto';
 
 interface HandlerContext {
@@ -225,7 +228,10 @@ export class StreamService {
               return {
                 id: r.id,
                 name: r.name || '',
-                type: r.resourceType === 'folder' ? 'folder' : 'resource',
+                type:
+                  r.resourceType === ResourceType.FOLDER
+                    ? 'folder'
+                    : 'resource',
               } as PrivateSearchResourceDto;
             });
           } else {
@@ -252,7 +258,10 @@ export class StreamService {
                     return {
                       id: r.id,
                       name: r.name || '',
-                      type: r.resourceType === 'folder' ? 'folder' : 'resource',
+                      type:
+                        r.resourceType === ResourceType.FOLDER
+                          ? 'folder'
+                          : 'resource',
                     } as PrivateSearchResourceDto;
                   }),
                 );

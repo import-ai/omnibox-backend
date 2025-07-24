@@ -36,12 +36,10 @@ export class AuthController {
     @Body('token') token: string,
     @Body('username') username: string,
     @Body('password') password: string,
-    @Body('password_repeat') password_repeat: string,
   ) {
     return await this.authService.signUpConfirm(token, {
       username,
       password,
-      password_repeat,
     });
   }
 
@@ -56,9 +54,8 @@ export class AuthController {
   async resetPassword(
     @Body('token') token: string,
     @Body('password') password: string,
-    @Body('password_repeat') password_repeat: string,
   ) {
-    return this.authService.resetPassword(token, password, password_repeat);
+    return this.authService.resetPassword(token, password);
   }
 
   @Post('invite')

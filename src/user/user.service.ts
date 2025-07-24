@@ -69,10 +69,6 @@ export class UserService {
       throw new ConflictException('The account already exists');
     }
 
-    if (account.password !== account.password_repeat) {
-      throw new ConflictException('Passwords do not match');
-    }
-
     const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({
       ...account,
@@ -219,10 +215,7 @@ export class UserService {
     if (!existUser) {
       throw new ConflictException('The account does not exist');
     }
-    if (account.password && account.password_repeat) {
-      if (account.password !== account.password_repeat) {
-        throw new ConflictException('Passwords do not match');
-      }
+    if (account.password) {
       existUser.password = await bcrypt.hash(account.password, 10);
     }
     if (account.username && existUser.username !== account.username) {

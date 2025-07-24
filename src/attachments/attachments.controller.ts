@@ -76,8 +76,8 @@ export class AttachmentsController {
       try {
         const payload = this.authService.jwtVerify(token);
         userId = payload.sub;
-      } catch (error) {
-        this.logger.warn({ error });
+      } catch {
+        /* empty */
       }
     }
     this.logger.debug({ userId, token, cookies: req.cookies });

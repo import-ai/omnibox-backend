@@ -152,8 +152,8 @@ export class AuthService {
         throw new NotFoundException('User not found.');
       }
       await this.userService.updatePassword(user.id, password);
-    } catch (e) {
-      this.logger.error(e);
+    } catch (error) {
+      this.logger.error({ error });
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }
@@ -283,8 +283,8 @@ export class AuthService {
   jwtVerify(token: string) {
     try {
       return this.jwtService.verify(token);
-    } catch (e) {
-      this.logger.error(e);
+    } catch (error) {
+      this.logger.error({ error });
       throw new UnauthorizedException('Invalid or expired token.');
     }
   }

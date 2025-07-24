@@ -18,7 +18,7 @@ export class MailService {
         },
       });
     } catch (error) {
-      this.logger.error(error);
+      this.logger.error({ error });
       throw new Error('Unable to send email');
     }
   }
@@ -34,7 +34,7 @@ export class MailService {
         },
       });
     } catch (error) {
-      this.logger.error(error);
+      this.logger.error({ error });
       throw new Error('Unable to send email');
     }
   }
@@ -50,7 +50,7 @@ export class MailService {
         },
       });
     } catch (error) {
-      this.logger.error(error);
+      this.logger.error({ error });
       throw new Error('Unable to send email');
     }
   }
@@ -66,7 +66,7 @@ export class MailService {
         },
       });
     } catch (error) {
-      this.logger.error(error);
+      this.logger.error({ error });
       throw new Error('Unable to send email');
     }
   }

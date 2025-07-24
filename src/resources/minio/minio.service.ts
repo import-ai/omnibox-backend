@@ -66,9 +66,9 @@ export class MinioService {
           return this.minioClient.makeBucket(this.bucket, 'us-east-1');
         }
       })
-      .catch((err) => {
-        this.logger.error('Error ensuring bucket exists:', err);
-        throw err;
+      .catch((error) => {
+        this.logger.error({ error });
+        throw error;
       });
   }
 

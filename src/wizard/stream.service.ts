@@ -25,6 +25,7 @@ interface HandlerContext {
 
 export class StreamService {
   private readonly logger = new Logger(StreamService.name);
+
   constructor(
     private readonly wizardBaseUrl: string,
     private readonly messagesService: MessagesService,
@@ -183,12 +184,12 @@ export class StreamService {
     return messages;
   }
 
-  streamError(subscriber: Subscriber<MessageEvent>, err: Error) {
-    this.logger.error(err);
+  streamError(subscriber: Subscriber<MessageEvent>, error: Error) {
+    this.logger.error({ error });
     subscriber.error(
       JSON.stringify({
         response_type: 'error',
-        error: err.name,
+        error: error.name,
       }),
     );
   }

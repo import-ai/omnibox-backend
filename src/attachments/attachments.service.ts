@@ -84,8 +84,8 @@ export class AttachmentsService {
           name: filename,
           link: id,
         });
-      } catch (e) {
-        this.logger.error(e);
+      } catch (error) {
+        this.logger.error({ error });
         failed.push(file.originalname);
       }
     }

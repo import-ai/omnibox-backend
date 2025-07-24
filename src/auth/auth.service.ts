@@ -90,6 +90,11 @@ export class AuthService {
         'The email is already registered. Please log in directly.',
       );
     }
+    if (data.username.length < 2 || data.username.length > 32) {
+      throw new BadRequestException(
+        'Username must be between 2 and 32 characters.',
+      );
+    }
     return await this.dataSource.transaction(async (manager) => {
       const user = await this.userService.create(
         {

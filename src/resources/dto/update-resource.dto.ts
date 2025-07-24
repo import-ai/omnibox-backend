@@ -11,7 +11,6 @@ import { ResourceType } from 'omnibox-backend/resources/resources.entity';
 export class UpdateResourceDto {
   @IsString()
   @IsOptional()
-  @IsNotEmpty()
   name?: string;
 
   @IsString()

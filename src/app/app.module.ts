@@ -3,8 +3,9 @@ import {
   MiddlewareConsumer,
   Module,
   NestModule,
+  ValidationPipe,
 } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omnibox-backend/tag/tag.module';
 // import { CacheModule } from '@nestjs/cache-manager';
@@ -44,6 +45,10 @@ export class AppModule implements NestModule {
         {
           provide: APP_INTERCEPTOR,
           useClass: SnakeCaseInterceptor,
+        },
+        {
+          provide: APP_PIPE,
+          useClass: ValidationPipe,
         },
       ],
       imports: [

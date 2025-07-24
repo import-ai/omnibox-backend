@@ -37,7 +37,6 @@ export const signUp = async (
     .send({
       username: username,
       password: password,
-      password_repeat: password,
       email: email,
     })
     .expect(201)

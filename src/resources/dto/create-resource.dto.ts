@@ -10,7 +10,7 @@ import { ResourceType } from 'omnibox-backend/resources/resources.entity';
 
 export class CreateResourceDto {
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   name: string;
 
   @IsString()

@@ -82,7 +82,6 @@ export class AuthService {
     data: {
       username: string;
       password: string;
-      password_repeat: string;
     },
   ) {
     const payload: SignUpPayloadDto = await this.jwtVerify(token);
@@ -92,13 +91,17 @@ export class AuthService {
         'The email is already registered. Please log in directly.',
       );
     }
+    if (data.username.length < 2 || data.username.length > 32) {
+      throw new BadRequestException(
+        'Username must be between 2 and 32 characters.',
+      );
+    }
     return await this.dataSource.transaction(async (manager) => {
       const user = await this.userService.create(
         {
           email: payload.email,
           username: data.username,
           password: data.password,
-          password_repeat: data.password_repeat,
         },
         manager,
       );
@@ -138,14 +141,7 @@ export class AuthService {
     // return { url: mailSendUri };
   }
 
-  async resetPassword(
-    token: string,
-    password: string,
-    password_repeat: string,
-  ): Promise<void> {
-    if (password !== password_repeat) {
-      throw new BadRequestException('The passwords entered do not match.');
-    }
+  async resetPassword(token: string, password: string): Promise<void> {
     try {
       const payload = this.jwtService.verify(token);
       const user = await this.userService.find(payload.sub);

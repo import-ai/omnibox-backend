@@ -17,7 +17,4 @@ export class CreateUserDto {
 
   @IsStrongPassword({ minLength: 8 })
   password: string;
-
-  @IsStrongPassword({ minLength: 8 })
-  password_repeat: string;
 }

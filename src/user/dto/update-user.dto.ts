@@ -28,8 +28,4 @@ export class UpdateUserDto {
   @IsStrongPassword({ minLength: 8 })
   @IsOptional()
   password: string;
-
-  @IsStrongPassword({ minLength: 8 })
-  @IsOptional()
-  password_repeat: string;
 }

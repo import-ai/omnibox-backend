@@ -1,5 +1,8 @@
 import { User } from 'omnibox-backend/user/entities/user.entity';
-import { Resource, ResourceType } from 'omnibox-backend/resources/resources.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omnibox-backend/resources/resources.entity';
 import { Repository } from 'typeorm';
 import { Task } from 'omnibox-backend/tasks/tasks.entity';
 import {

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from 'omnibox-backend/groups/entities/group.entity';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
@@ -231,6 +231,10 @@ export class PermissionsService {
   ): Promise<ListRespDto> {
     // Get resources
     const resources = await this.getParentResources(namespaceId, resourceId);
+    if (resources.length === 0 || resources[resources.length - 1].parentId) {
+      // Parent resource has been deleted
+      throw new NotFoundException('Resource not found');
+    }
     const resourceIds = resources.map((resource) => resource.id);
 
     // Get permissions
@@ -312,6 +316,10 @@ export class PermissionsService {
     if (!resources) {
       resources = await this.getParentResources(namespaceId, resourceId);
     }
+    if (resources.length === 0 || resources[resources.length - 1].parentId) {
+      // Parent resource has been deleted
+      return false;
+    }
     const permission = await this.getCurrentPermission(
       namespaceId,
       resources,
@@ -329,10 +337,13 @@ export class PermissionsService {
     }
     const resources: Resource[] = [];
     while (true) {
-      const resource = await this.resourceRepository.findOneOrFail({
+      const resource = await this.resourceRepository.findOne({
         where: { namespaceId, id: resourceId },
         select: ['id', 'name', 'resourceType', 'parentId', 'globalPermission'],
       });
+      if (!resource) {
+        break;
+      }
       resources.push(resource);
       if (!resource.parentId) {
         break;

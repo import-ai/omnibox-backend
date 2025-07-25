@@ -93,6 +93,17 @@ export class UserService {
     return await this.find(binding.userId);
   }
 
+  async findByUsername(
+    username: string,
+    manager?: EntityManager,
+  ): Promise<User | null> {
+    const repo = manager ? manager.getRepository(User) : this.userRepository;
+    return await repo.findOne({
+      where: { username },
+      select: ['id', 'username', 'email'],
+    });
+  }
+
   async createUserBinding(
     userData: CreateUserBindingDto,
     manager?: EntityManager,
@@ -101,7 +112,7 @@ export class UserService {
     const hash = await bcrypt.hash(Math.random().toString(36), 10);
     const newUser = repo.create({
       password: hash,
-      username: userData.loginId,
+      username: userData.username,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

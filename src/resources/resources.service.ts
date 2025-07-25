@@ -69,6 +69,15 @@ export class ResourcesService {
   }
 
   async create(user: User, data: CreateResourceDto) {
+    const ok = await this.permissionsService.userHasPermission(
+      data.namespaceId,
+      data.parentId,
+      user.id,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (!ok) {
+      throw new ForbiddenException('Not authorized to create resource.');
+    }
     const where: FindOptionsWhere<Resource> = {
       id: data.parentId,
       namespaceId: data.namespaceId,
@@ -107,12 +116,16 @@ export class ResourcesService {
 
   async duplicate(user: User, resourceId: string) {
     const resource = await this.get(resourceId);
+    if (!resource.parentId) {
+      throw new BadRequestException('Cannot duplicate root resource.');
+    }
     const newResource = {
       name: duplicateName(resource.name),
       namespaceId: resource.namespaceId,
       resourceType: resource.resourceType,
+      parentId: resource.parentId,
     };
-    ['parentId', 'tags', 'content', 'attrs'].forEach((key) => {
+    ['tags', 'content', 'attrs'].forEach((key) => {
       if (resource[key]) {
         (newResource as any)[key] = resource[key];
       }
@@ -258,7 +271,7 @@ export class ResourcesService {
       userId,
     );
     if (permission === ResourcePermission.NO_ACCESS) {
-      throw new ForbiddenException('Not authorized');
+      return [];
     }
 
     const children = await this.resourceRepository.find({
@@ -391,7 +404,7 @@ export class ResourcesService {
 
   async delete(user: User, id: string) {
     const resource = await this.get(id);
-    if (resource.parentId === null) {
+    if (!resource.parentId) {
       throw new BadRequestException('Cannot delete root resource.');
     }
     await this.dataSource.transaction(async (manager) => {

@@ -22,7 +22,7 @@ export class CreateResourceDto {
 
   @IsString()
   @IsNotEmpty()
-  parentId?: string;
+  parentId: string;
 
   @IsArray()
   @IsOptional()

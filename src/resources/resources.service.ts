@@ -387,7 +387,6 @@ export class ResourcesService {
       savedNewResource,
       this.taskRepository,
     );
-    return savedNewResource;
   }
 
   async delete(user: User, id: string) {

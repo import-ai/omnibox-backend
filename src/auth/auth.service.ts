@@ -40,6 +40,10 @@ export class AuthService {
   async verify(email: string, password: string): Promise<any> {
     const user = await this.userService.verify(email, password);
     if (!user) {
+      const userUseEmail = await this.userService.findByEmail(email);
+      if (userUseEmail) {
+        throw new ForbiddenException('Wrong password, please check');
+      }
       throw new ForbiddenException(
         'No account found for the provided email. Please register first.',
       );

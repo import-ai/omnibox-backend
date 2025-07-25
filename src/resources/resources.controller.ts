@@ -149,7 +149,13 @@ export class ResourcesController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    return await this.resourcesService.update(req.user.id, resourceId, data);
+    await this.resourcesService.update(req.user.id, resourceId, data);
+    const { resource, permission, path } = await this.resourcesService.getPath({
+      namespaceId,
+      resourceId,
+      userId: req.user.id,
+    });
+    return { ...resource, currentLevel: permission, path };
   }
 
   @Delete(':resourceId')

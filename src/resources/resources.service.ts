@@ -404,7 +404,7 @@ export class ResourcesService {
 
   async delete(user: User, id: string) {
     const resource = await this.get(id);
-    if (resource.parentId === null) {
+    if (!resource.parentId) {
       throw new BadRequestException('Cannot delete root resource.');
     }
     await this.dataSource.transaction(async (manager) => {

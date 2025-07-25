@@ -23,6 +23,6 @@ describe('AppController (e2e)', () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/health')
       .expect(200);
-    expect(res.text).toBe('');
+    expect(res.text).toMatch(/uptime/);
   });
 });

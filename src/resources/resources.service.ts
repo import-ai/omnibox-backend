@@ -1,6 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
-import duplicateName from 'omnibox-backend/utils/duplicate-name';
-import encodeFileName from 'omnibox-backend/utils/encode-filename';
+import duplicateName from 'omniboxd/utils/duplicate-name';
+import encodeFileName from 'omniboxd/utils/encode-filename';
 import {
   DataSource,
   EntityManager,
@@ -14,22 +14,22 @@ import {
 import {
   Resource,
   ResourceType,
-} from 'omnibox-backend/resources/resources.entity';
-import { CreateResourceDto } from 'omnibox-backend/resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'omnibox-backend/resources/dto/update-resource.dto';
+} from 'omniboxd/resources/resources.entity';
+import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/resources/dto/update-resource.dto';
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
-import { User } from 'omnibox-backend/user/entities/user.entity';
-import { MinioService } from 'omnibox-backend/minio/minio.service';
-import { WizardTask } from 'omnibox-backend/resources/wizard.task.service';
-import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
-import { PrivateSearchResourceDto } from 'omnibox-backend/wizard/dto/agent-request.dto';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { MinioService } from 'omniboxd/minio/minio.service';
+import { WizardTask } from 'omniboxd/resources/wizard.task.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { Response } from 'express';
 
 const TASK_PRIORITY = 5;

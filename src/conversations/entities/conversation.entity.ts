@@ -1,4 +1,4 @@
-import { Base } from 'omnibox-backend/common/base.entity';
+import { Base } from 'omniboxd/common/base.entity';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('conversations')

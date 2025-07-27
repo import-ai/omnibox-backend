@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 import { Readable } from 'stream';
-import generateId from 'omnibox-backend/utils/generate-id';
+import generateId from 'omniboxd/utils/generate-id';
 import { UploadedObjectInfo } from 'minio/dist/main/internal/type';
 
 export interface PutOptions {

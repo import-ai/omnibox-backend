@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
-import { AppModule } from 'omnibox-backend/app/app.module';
+import { AppModule } from 'omniboxd/app/app.module';
 import * as fs from 'fs';
 import * as path from 'path';
 import { App } from 'supertest/types';

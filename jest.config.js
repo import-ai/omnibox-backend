@@ -10,6 +10,6 @@ module.exports = {
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
   moduleNameMapper: {
-    '^omnibox-backend/(.*)$': '<rootDir>/../src/$1',
+    '^omniboxd/(.*)$': '<rootDir>/../src/$1',
   },
 };

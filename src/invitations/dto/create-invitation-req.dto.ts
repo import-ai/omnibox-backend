@@ -1,5 +1,5 @@
-import { NamespaceRole } from 'omnibox-backend/namespaces/entities/namespace-member.entity';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 export class CreateInvitationReqDto {
   namespaceRole?: NamespaceRole;

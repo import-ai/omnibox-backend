@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { PermissionsModule } from 'omnibox-backend/permissions/permissions.module';
-import { AttachmentsController } from 'omnibox-backend/attachments/attachments.controller';
-import { AttachmentsService } from 'omnibox-backend/attachments/attachments.service';
-import { AuthModule } from 'omnibox-backend/auth/auth.module';
-import { MinioModule } from 'omnibox-backend/minio/minio.module';
+import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
+import { AttachmentsController } from 'omniboxd/attachments/attachments.controller';
+import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
+import { AuthModule } from 'omniboxd/auth/auth.module';
+import { MinioModule } from 'omniboxd/minio/minio.module';
 
 @Module({
   exports: [AttachmentsService],

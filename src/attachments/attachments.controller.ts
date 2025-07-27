@@ -13,12 +13,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { AttachmentsService } from 'omnibox-backend/attachments/attachments.service';
+import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { Request, Response } from 'express';
-import { UserId } from 'omnibox-backend/auth/decorators/user-id.decorator';
-import { Public } from 'omnibox-backend/auth/decorators/public.decorator';
-import { Cookies } from 'omnibox-backend/decorators/cookie.decorators';
-import { AuthService } from 'omnibox-backend/auth/auth.service';
+import { UserId } from 'omniboxd/auth/decorators/user-id.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.decorator';
+import { Cookies } from 'omniboxd/decorators/cookie.decorators';
+import { AuthService } from 'omniboxd/auth/auth.service';
 
 @Controller('api/v1/attachments')
 export class AttachmentsController {

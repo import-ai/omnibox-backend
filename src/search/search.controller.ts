@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { DocType } from './doc-type.enum';
-import { Public } from 'omnibox-backend/auth/decorators/public.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/search')
 export class SearchController {

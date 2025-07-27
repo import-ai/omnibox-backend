@@ -1,5 +1,5 @@
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
-import { TasksService } from 'omnibox-backend/tasks/tasks.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 import {
   Body,
   Controller,

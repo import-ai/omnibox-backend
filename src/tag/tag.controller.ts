@@ -1,5 +1,5 @@
-import { TagService } from 'omnibox-backend/tag/tag.service';
-import { CreateTagDto } from 'omnibox-backend/tag/dto/create-tag.dto';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { CreateTagDto } from 'omniboxd/tag/dto/create-tag.dto';
 import { Get, Body, Param, Query, Post, Controller } from '@nestjs/common';
 
 @Controller('api/v1/namespaces/:namespaceId/tag')

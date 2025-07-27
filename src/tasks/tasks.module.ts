@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TasksService } from 'omnibox-backend/tasks/tasks.service';
-import { TasksController } from 'omnibox-backend/tasks/tasks.controller';
-import { NamespacesModule } from 'omnibox-backend/namespaces/namespaces.module';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { TasksController } from 'omniboxd/tasks/tasks.controller';
+import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 
 @Module({
   providers: [TasksService],

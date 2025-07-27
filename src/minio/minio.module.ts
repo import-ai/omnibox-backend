@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { MinioService } from 'omnibox-backend/minio/minio.service';
+import { MinioService } from 'omniboxd/minio/minio.service';
 
 @Module({
   exports: [MinioService],

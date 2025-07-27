@@ -1,5 +1,5 @@
-import { MessagesService } from 'omnibox-backend/messages/messages.service';
-import { User } from 'omnibox-backend/user/entities/user.entity';
+import { MessagesService } from 'omniboxd/messages/messages.service';
+import { User } from 'omniboxd/user/entities/user.entity';
 import { Observable, Subscriber } from 'rxjs';
 import { Logger, MessageEvent } from '@nestjs/common';
 import {
@@ -7,18 +7,18 @@ import {
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
-} from 'omnibox-backend/messages/entities/message.entity';
+} from 'omniboxd/messages/entities/message.entity';
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
-} from 'omnibox-backend/wizard/dto/agent-request.dto';
-import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+} from 'omniboxd/wizard/dto/agent-request.dto';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import {
   Resource,
   ResourceType,
-} from 'omnibox-backend/resources/resources.entity';
-import { ChatResponse } from 'omnibox-backend/wizard/dto/chat-response.dto';
+} from 'omniboxd/resources/resources.entity';
+import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 
 interface HandlerContext {
   parentId?: string;

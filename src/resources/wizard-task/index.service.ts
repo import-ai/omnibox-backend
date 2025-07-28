@@ -79,19 +79,19 @@ export class Index {
     return await repo.save(task);
   }
 
-  static async deleteMessageIndex(
+  static async deleteConversation(
     namespaceId: string,
     userId: string,
-    messageId: string,
+    conversationId: string,
     priority: number,
     repo: Repository<Task>,
   ) {
     return repo.save(
       repo.create({
-        function: 'delete_message_index',
+        function: 'delete_conversation',
         priority,
         input: {
-          message_id: messageId,
+          conversation_id: conversationId,
         },
         namespaceId,
         userId,

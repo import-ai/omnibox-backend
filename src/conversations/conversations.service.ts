@@ -236,18 +236,14 @@ export class ConversationsService {
   }
 
   async remove(namespaceId: string, userId: string, conversationId: string) {
-    const messages = await this.messagesService.findAll(userId, conversationId);
     await this.dataSource.transaction(async (manager) => {
-      const taskRepo = manager.getRepository(Task);
-      for (const message of messages) {
-        await Index.deleteMessageIndex(
-          namespaceId,
-          userId,
-          message.id,
-          TASK_PRIORITY,
-          taskRepo,
-        );
-      }
+      await Index.deleteConversation(
+        namespaceId,
+        userId,
+        conversationId,
+        TASK_PRIORITY,
+        manager.getRepository(Task),
+      );
       return await manager.softDelete(Conversation, {
         namespaceId,
         userId,

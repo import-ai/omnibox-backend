@@ -1,6 +1,6 @@
-import { AuthService } from 'omnibox-backend/auth/auth.service';
-import { LocalAuthGuard } from 'omnibox-backend/auth/local-auth.guard';
-import { Public } from 'omnibox-backend/auth/decorators/public.decorator';
+import { AuthService } from 'omniboxd/auth/auth.service';
+import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
+import { Public } from 'omniboxd/auth/decorators/public.decorator';
 import {
   Body,
   Post,
@@ -9,8 +9,8 @@ import {
   Controller,
   HttpCode,
 } from '@nestjs/common';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
-import { NamespaceRole } from 'omnibox-backend/namespaces/entities/namespace-member.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 
 @Controller('api/v1')
 export class AuthController {

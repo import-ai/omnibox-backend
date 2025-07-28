@@ -1,7 +1,7 @@
-import { User } from 'omnibox-backend/user/entities/user.entity';
-import { Resource } from 'omnibox-backend/resources/resources.entity';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { Resource } from 'omniboxd/resources/resources.entity';
 import { Repository } from 'typeorm';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 
 export class Reader {
   static async upsert(user: User, resource: Resource, repo: Repository<Task>) {

@@ -1,10 +1,10 @@
 import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
-import { User } from 'omnibox-backend/user/entities/user.entity';
+import { User } from 'omniboxd/user/entities/user.entity';
 import { DataSource, EntityManager } from 'typeorm';
-import { MailService } from 'omnibox-backend/mail/mail.service';
-import { UserService } from 'omnibox-backend/user/user.service';
-import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
-import { CreateUserDto } from 'omnibox-backend/user/dto/create-user.dto';
+import { MailService } from 'omniboxd/mail/mail.service';
+import { UserService } from 'omniboxd/user/user.service';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -13,14 +13,14 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
-import { GroupsService } from 'omnibox-backend/groups/groups.service';
-import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { GroupsService } from 'omniboxd/groups/groups.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
 import { UserInvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
 import { LoginPayloadDto } from './dto/login-payload.dto';
-import { NamespaceRole } from 'omnibox-backend/namespaces/entities/namespace-member.entity';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 
 @Injectable()
 export class AuthService {

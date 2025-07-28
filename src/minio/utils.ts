@@ -1,4 +1,4 @@
-import { GetResponse as ObjectResponse } from 'omnibox-backend/minio/minio.service';
+import { GetResponse as ObjectResponse } from 'omniboxd/minio/minio.service';
 import { Response } from 'express';
 
 export function objectStreamResponse(

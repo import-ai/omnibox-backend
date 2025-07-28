@@ -3,10 +3,10 @@ import { GroupsService } from './groups.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Group } from './entities/group.entity';
 import { GroupUser } from './entities/group-user.entity';
-import { NamespacesModule } from 'omnibox-backend/namespaces/namespaces.module';
+import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { GroupsController } from './groups.controller';
-import { Invitation } from 'omnibox-backend/invitations/entities/invitation.entity';
-import { UserModule } from 'omnibox-backend/user/user.module';
+import { Invitation } from 'omniboxd/invitations/entities/invitation.entity';
+import { UserModule } from 'omniboxd/user/user.module';
 
 @Module({
   providers: [GroupsService],

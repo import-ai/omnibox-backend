@@ -1,4 +1,4 @@
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 export class NamespaceMemberDto {
   userId: string;

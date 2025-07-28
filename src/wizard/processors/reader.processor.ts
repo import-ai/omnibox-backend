@@ -1,8 +1,8 @@
-import { CollectProcessor } from 'omnibox-backend/wizard/processors/collect.processor';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
-import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { BadRequestException } from '@nestjs/common';
-import { AttachmentsService } from 'omnibox-backend/attachments/attachments.service';
+import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 
 interface Image {
   name?: string;

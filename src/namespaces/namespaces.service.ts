@@ -1,16 +1,16 @@
-import each from 'omnibox-backend/utils/each';
+import each from 'omniboxd/utils/each';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from './entities/namespace.entity';
-import { Resource } from 'omnibox-backend/resources/resources.entity';
+import { Resource } from 'omniboxd/resources/resources.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
-import { GroupUser } from 'omnibox-backend/groups/entities/group-user.entity';
-import { ResourcesService } from 'omnibox-backend/resources/resources.service';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
-import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
-import { UserPermission } from 'omnibox-backend/permissions/entities/user-permission.entity';
-import { UserService } from 'omnibox-backend/user/user.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
+import { UserService } from 'omniboxd/user/user.service';
 import {
   Injectable,
   ConflictException,

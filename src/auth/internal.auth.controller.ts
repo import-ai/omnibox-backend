@@ -1,7 +1,7 @@
-import { AuthService } from 'omnibox-backend/auth/auth.service';
-import { Public } from 'omnibox-backend/auth/decorators/public.decorator';
+import { AuthService } from 'omniboxd/auth/auth.service';
+import { Public } from 'omniboxd/auth/decorators/public.decorator';
 import { Controller, Body, Post } from '@nestjs/common';
-import { CreateUserDto } from 'omnibox-backend/user/dto/create-user.dto';
+import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
 
 @Controller('internal/api/v1')
 export class InternalAuthController {

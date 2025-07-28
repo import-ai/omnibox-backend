@@ -1,14 +1,14 @@
-import { User } from 'omnibox-backend/user/entities/user.entity';
+import { User } from 'omniboxd/user/entities/user.entity';
 import {
   Resource,
   ResourceType,
-} from 'omnibox-backend/resources/resources.entity';
+} from 'omniboxd/resources/resources.entity';
 import { Repository } from 'typeorm';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import {
   Message,
   OpenAIMessageRole,
-} from 'omnibox-backend/messages/entities/message.entity';
+} from 'omniboxd/messages/entities/message.entity';
 
 export class Index {
   static async upsert(

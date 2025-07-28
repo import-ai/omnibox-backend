@@ -2,7 +2,7 @@ import {
   OpenAIMessage,
   OpenAIMessageRole,
   MessageAttrs,
-} from 'omnibox-backend/messages/entities/message.entity';
+} from 'omniboxd/messages/entities/message.entity';
 
 export type ChatResponseType = 'bos' | 'delta' | 'eos' | 'done' | 'error';
 

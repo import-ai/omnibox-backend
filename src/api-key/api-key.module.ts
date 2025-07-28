@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APIKey } from './api-key.entity';
-import { APIKeyService } from 'omnibox-backend/api-key/api-key.service';
-import { APIKeyController } from 'omnibox-backend/api-key/api-key.controller';
+import { APIKeyService } from 'omniboxd/api-key/api-key.service';
+import { APIKeyController } from 'omniboxd/api-key/api-key.controller';
 
 @Module({
   providers: [APIKeyService],

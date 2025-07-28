@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { MailModule } from 'omnibox-backend/mail/mail.module';
+import { MailModule } from 'omniboxd/mail/mail.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserService } from 'omnibox-backend/user/user.service';
-import { User } from 'omnibox-backend/user/entities/user.entity';
-import { UserController } from 'omnibox-backend/user/user.controller';
-import { UserOption } from 'omnibox-backend/user/entities/user-option.entity';
-import { UserBinding } from 'omnibox-backend/user/entities/user-binding.entity';
+import { UserService } from 'omniboxd/user/user.service';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { UserController } from 'omniboxd/user/user.controller';
+import { UserOption } from 'omniboxd/user/entities/user-option.entity';
+import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
 
 @Module({
   exports: [UserService],

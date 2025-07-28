@@ -5,12 +5,12 @@ import {
   Message,
   MessageStatus,
   OpenAIMessage,
-} from 'omnibox-backend/messages/entities/message.entity';
-import { CreateMessageDto } from 'omnibox-backend/messages/dto/create-message.dto';
-import { User } from 'omnibox-backend/user/entities/user.entity';
+} from 'omniboxd/messages/entities/message.entity';
+import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
+import { User } from 'omniboxd/user/entities/user.entity';
 import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
-import { WizardTask } from 'omnibox-backend/resources/wizard.task.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { WizardTask } from 'omniboxd/resources/wizard.task.service';
 
 const TASK_PRIORITY = 5;
 

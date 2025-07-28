@@ -4,12 +4,12 @@ import {
   InternalSearchController,
   SearchController,
 } from './search.controller';
-import { PermissionsModule } from 'omnibox-backend/permissions/permissions.module';
-import { ResourcesModule } from 'omnibox-backend/resources/resources.module';
-import { MessagesModule } from 'omnibox-backend/messages/messages.module';
-import { ConversationsModule } from 'omnibox-backend/conversations/conversations.module';
+import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { MessagesModule } from 'omniboxd/messages/messages.module';
+import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 
 @Module({
   exports: [SearchService],

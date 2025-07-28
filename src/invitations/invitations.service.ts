@@ -4,10 +4,10 @@ import { Invitation } from './entities/invitation.entity';
 import { FindOptionsWhere, IsNull, Not, Repository } from 'typeorm';
 import { InvitationDto } from './dto/invitation.dto';
 import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
-import { NamespaceRole } from 'omnibox-backend/namespaces/entities/namespace-member.entity';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
-import { AuthService } from 'omnibox-backend/auth/auth.service';
-import { UserInvitationDto as AuthInvitationDto } from 'omnibox-backend/auth/dto/invitation.dto';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { AuthService } from 'omniboxd/auth/auth.service';
+import { UserInvitationDto as AuthInvitationDto } from 'omniboxd/auth/dto/invitation.dto';
 import { GroupsService } from '../groups/groups.service';
 
 @Injectable()

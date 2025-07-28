@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
-import { WizardService } from 'omnibox-backend/wizard/wizard.service';
-import { WizardController } from 'omnibox-backend/wizard/wizard.controller';
-import { InternalWizardController } from 'omnibox-backend/wizard/internal.wizard.controller';
-import { NamespacesModule } from 'omnibox-backend/namespaces/namespaces.module';
-import { ResourcesModule } from 'omnibox-backend/resources/resources.module';
+import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { WizardController } from 'omniboxd/wizard/wizard.controller';
+import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
+import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
-import { MessagesModule } from 'omnibox-backend/messages/messages.module';
-import { UserModule } from 'omnibox-backend/user/user.module';
-import { AttachmentsModule } from 'omnibox-backend/attachments/attachments.module';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { MessagesModule } from 'omniboxd/messages/messages.module';
+import { UserModule } from 'omniboxd/user/user.module';
+import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 
 @Module({
   providers: [WizardService],

@@ -1,4 +1,4 @@
-import encodeFileName from 'omnibox-backend/utils/encode-filename';
+import encodeFileName from 'omniboxd/utils/encode-filename';
 import {
   BadRequestException,
   ForbiddenException,
@@ -7,10 +7,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { MinioService } from 'omnibox-backend/minio/minio.service';
-import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
-import { objectStreamResponse } from 'omnibox-backend/minio/utils';
+import { MinioService } from 'omniboxd/minio/minio.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { objectStreamResponse } from 'omniboxd/minio/utils';
 
 @Injectable()
 export class AttachmentsService {

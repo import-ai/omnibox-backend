@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import {
   Body,
   Controller,

@@ -5,19 +5,19 @@ import {
   IndexedMessageDto,
   IndexedResourceDto,
 } from './dto/indexed-doc.dto';
-import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
-import { WizardAPIService } from 'omnibox-backend/wizard/api.wizard.service';
-import { SearchRequestDto } from 'omnibox-backend/wizard/dto/search-request.dto';
-import { IndexRecordType } from 'omnibox-backend/wizard/dto/index-record.dto';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
+import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
+import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
 import { ConfigService } from '@nestjs/config';
-import { ResourcesService } from 'omnibox-backend/resources/resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Repository } from 'typeorm';
-import { Task } from 'omnibox-backend/tasks/tasks.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Index } from 'omnibox-backend/resources/wizard-task/index.service';
-import { MessagesService } from 'omnibox-backend/messages/messages.service';
-import { ConversationsService } from 'omnibox-backend/conversations/conversations.service';
+import { Index } from 'omniboxd/resources/wizard-task/index.service';
+import { MessagesService } from 'omniboxd/messages/messages.service';
+import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 
 const TASK_PRIORITY = 4;
 

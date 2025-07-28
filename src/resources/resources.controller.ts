@@ -1,8 +1,8 @@
-import { ResourcesService } from 'omnibox-backend/resources/resources.service';
-import { CreateResourceDto } from 'omnibox-backend/resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'omnibox-backend/resources/dto/update-resource.dto';
-import { PermissionsService } from 'omnibox-backend/permissions/permissions.service';
-import { ResourcePermission } from 'omnibox-backend/permissions/resource-permission.enum';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/resources/dto/update-resource.dto';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
   Body,
   Controller,

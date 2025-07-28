@@ -1,8 +1,8 @@
-import { Tag } from 'omnibox-backend/tag/tag.entity';
+import { Tag } from 'omniboxd/tag/tag.entity';
 import { Repository, In, Like } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { CreateTagDto } from 'omnibox-backend/tag/dto/create-tag.dto';
+import { CreateTagDto } from 'omniboxd/tag/dto/create-tag.dto';
 
 @Injectable()
 export class TagService {

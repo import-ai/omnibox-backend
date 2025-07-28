@@ -1,9 +1,9 @@
 import { DataSource, EntityManager } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import generateId from 'omnibox-backend/utils/generate-id';
-import { UserService } from 'omnibox-backend/user/user.service';
-import { NamespacesService } from 'omnibox-backend/namespaces/namespaces.service';
+import generateId from 'omniboxd/utils/generate-id';
+import { UserService } from 'omniboxd/user/user.service';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { WechatCheckResponseDto } from './dto/wechat-login.dto';
 import {
   BadRequestException,

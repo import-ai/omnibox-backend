@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { Tag } from 'omnibox-backend/tag/tag.entity';
+import { Tag } from 'omniboxd/tag/tag.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TagService } from 'omnibox-backend/tag/tag.service';
-import { TagController } from 'omnibox-backend/tag/tag.controller';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { TagController } from 'omniboxd/tag/tag.controller';
 
 @Module({
   exports: [TagService],

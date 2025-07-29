@@ -94,6 +94,9 @@ export class SearchService {
           continue;
         }
         seenConversationIds.add(message.conversationId);
+        if (!(await this.conversationsService.has(message.conversationId))) {
+          continue;
+        }
         const messageDto: IndexedMessageDto = {
           type: DocType.MESSAGE,
           id: record.id,

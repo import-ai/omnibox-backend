@@ -67,12 +67,28 @@ export class ConversationsController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return await this.conversationsService.remove(id);
+  async remove(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('id') conversationId: string,
+  ) {
+    return await this.conversationsService.remove(
+      namespaceId,
+      req.user.id,
+      conversationId,
+    );
   }
 
   @Post(':id/restore')
-  async restore(@Param('id') id: string) {
-    return await this.conversationsService.restore(id);
+  async restore(
+    @Req() req,
+    @Param('namespaceId') namespaceId: string,
+    @Param('id') conversationId: string,
+  ) {
+    return await this.conversationsService.restore(
+      namespaceId,
+      req.user.id,
+      conversationId,
+    );
   }
 }

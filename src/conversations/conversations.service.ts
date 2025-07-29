@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +15,10 @@ import {
   Message,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
+import { Index } from 'omniboxd/resources/wizard-task/index.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+
+const TASK_PRIORITY = 5;
 
 @Injectable()
 export class ConversationsService {
@@ -23,6 +27,7 @@ export class ConversationsService {
   constructor(
     @InjectRepository(Conversation)
     private readonly conversationRepository: Repository<Conversation>,
+    private readonly dataSource: DataSource,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
   ) {
@@ -230,17 +235,56 @@ export class ConversationsService {
     });
   }
 
-  async remove(id: string) {
-    return await this.conversationRepository.softDelete(id);
+  async remove(namespaceId: string, userId: string, conversationId: string) {
+    await this.dataSource.transaction(async (manager) => {
+      await Index.deleteConversation(
+        namespaceId,
+        userId,
+        conversationId,
+        TASK_PRIORITY,
+        manager.getRepository(Task),
+      );
+      return await manager.softDelete(Conversation, {
+        namespaceId,
+        userId,
+        id: conversationId,
+      });
+    });
   }
 
-  async restore(id: string) {
-    await this.conversationRepository.restore(id);
-    return await this.get(id);
+  async restore(namespaceId: string, userId: string, conversationId: string) {
+    const messages = await this.messagesService.findAll(userId, conversationId);
+    return await this.dataSource.transaction(async (manager) => {
+      const taskRepo = manager.getRepository(Task);
+      for (const message of messages) {
+        await Index.upsertMessageIndex(
+          TASK_PRIORITY,
+          userId,
+          namespaceId,
+          conversationId,
+          message,
+          taskRepo,
+        );
+      }
+      await manager.restore(Conversation, {
+        namespaceId,
+        userId,
+        id: conversationId,
+      });
+      return await manager.findOne(Conversation, {
+        where: { namespaceId, userId, id: conversationId },
+      });
+    });
   }
 
   async get(id: string) {
     return await this.conversationRepository.findOne({
+      where: { id },
+    });
+  }
+
+  async has(id: string) {
+    return await this.conversationRepository.exists({
       where: { id },
     });
   }

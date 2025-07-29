@@ -1,8 +1,5 @@
 import { User } from 'omniboxd/user/entities/user.entity';
-import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/resources.entity';
+import { Resource, ResourceType } from 'omniboxd/resources/resources.entity';
 import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import {
@@ -80,5 +77,25 @@ export class Index {
       userId,
     });
     return await repo.save(task);
+  }
+
+  static async deleteConversation(
+    namespaceId: string,
+    userId: string,
+    conversationId: string,
+    priority: number,
+    repo: Repository<Task>,
+  ) {
+    return repo.save(
+      repo.create({
+        function: 'delete_conversation',
+        priority,
+        input: {
+          conversation_id: conversationId,
+        },
+        namespaceId,
+        userId,
+      }),
+    );
   }
 }

@@ -11,10 +11,7 @@ import {
   Not,
   Repository,
 } from 'typeorm';
-import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/resources.entity';
+import { Resource, ResourceType } from 'omniboxd/resources/resources.entity';
 import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/resources/dto/update-resource.dto';
 import {

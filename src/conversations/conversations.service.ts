@@ -254,7 +254,7 @@ export class ConversationsService {
 
   async restore(namespaceId: string, userId: string, conversationId: string) {
     const messages = await this.messagesService.findAll(userId, conversationId);
-    await this.dataSource.transaction(async (manager) => {
+    return await this.dataSource.transaction(async (manager) => {
       const taskRepo = manager.getRepository(Task);
       for (const message of messages) {
         await Index.upsertMessageIndex(

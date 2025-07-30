@@ -37,7 +37,7 @@ import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 
 @Module({})
 export class AppModule implements NestModule {
-  static forRoot(extraMigrations: Function[]): DynamicModule {
+  static forRoot(extraMigrations: Array<() => void>): DynamicModule {
     return {
       module: AppModule,
       controllers: [AppController],
@@ -87,11 +87,7 @@ export class AppModule implements NestModule {
           inject: [ConfigService],
           useFactory: (config: ConfigService) => ({
             type: 'postgres',
-            host: config.get('OBB_DB_HOST', 'postgres'),
-            port: config.get('OBB_DB_PORT', 5432),
-            database: config.get('OBB_DB_DATABASE', 'omnibox'),
-            username: config.get('OBB_DB_USERNAME', 'omnibox'),
-            password: config.get('OBB_DB_PASSWORD', 'omnibox'),
+            url: config.get('OBB_POSTGRES_URL'),
             logging: config.get('OBB_DB_LOGGING') === 'true',
             synchronize: config.get('OBB_DB_SYNC') === 'true',
             autoLoadEntities: true,

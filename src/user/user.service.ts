@@ -4,7 +4,7 @@ import generateId from 'omniboxd/utils/generate-id';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { MailService } from 'omniboxd/mail/mail.service';
-import { In, Repository, Like, EntityManager } from 'typeorm';
+import { EntityManager, In, Like, Repository } from 'typeorm';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
@@ -12,9 +12,9 @@ import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import {
-  Injectable,
-  ConflictException,
   BadRequestException,
+  ConflictException,
+  Injectable,
 } from '@nestjs/common';
 
 @Injectable()
@@ -27,6 +27,9 @@ export class UserService {
       expiresIn: number;
     }
   >();
+
+  private readonly alphaRegex = /[a-zA-Z]/;
+  private readonly numberRegex = /\d/;
 
   constructor(
     @InjectRepository(User)
@@ -59,6 +62,20 @@ export class UserService {
     return account;
   }
 
+  validatePassword(password: string) {
+    if (!password || password.length < 8) {
+      throw new BadRequestException(
+        'Password must be at least 6 characters long',
+      );
+    }
+    if (!this.alphaRegex.test(password) || !this.numberRegex.test(password)) {
+      throw new BadRequestException(
+        'Password must contain at least one letter and one number',
+      );
+    }
+    return true;
+  }
+
   async create(account: CreateUserDto, manager?: EntityManager) {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
     const existingUser = await repo.findOne({
@@ -68,6 +85,8 @@ export class UserService {
     if (existingUser) {
       throw new ConflictException('The account already exists');
     }
+
+    this.validatePassword(account.password);
 
     const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({

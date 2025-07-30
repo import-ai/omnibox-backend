@@ -1,6 +1,6 @@
 import { Base } from 'omniboxd/common/base.entity';
 import generateId from 'omniboxd/utils/generate-id';
-import { Column, Entity, Index, PrimaryColumn, BeforeInsert } from 'typeorm';
+import { Column, Entity, PrimaryColumn, BeforeInsert } from 'typeorm';
 
 @Entity('namespaces')
 export class Namespace extends Base {

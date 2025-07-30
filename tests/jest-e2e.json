@@ -6,9 +6,9 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "setupFilesAfterEnv": ["<rootDir>/../jest.setup.js"],
+  "setupFilesAfterEnv": ["<rootDir>/../jest.setup.ts"],
   "moduleNameMapper": {
     "^omniboxd/(.*)$": "<rootDir>/../src/$1",
-    "^test/(.*)$": "<rootDir>/../test/$1"
+    "^tests/(.*)$": "<rootDir>/../tests/$1"
   }
 }

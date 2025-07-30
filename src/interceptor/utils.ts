@@ -1,4 +1,4 @@
-import { isObject } from 'lodash-es';
+import { isObject } from 'lodash';
 
 export function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);

@@ -53,12 +53,18 @@ importers:
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
+      ejs:
+        specifier: ^3.1.10
+        version: 3.1.10
       express:
         specifier: ^5.1.0
         version: 5.1.0
       handlebars:
         specifier: ^4.7.8
         version: 4.7.8
+      isbot:
+        specifier: ^5.1.29
+        version: 5.1.29
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
@@ -2922,6 +2928,10 @@ packages:
 
   isarray@2.0.5:
     resolution: {integrity: sha512-xHjhDr3cNBK0BzdUJSPXZntQUx/mwMS5Rw4A7lPJ90XGAO6ISP/ePDNuo0vhqOZU+UD5JoodwCAAoZQd3FeAKw==}
+
+  isbot@5.1.29:
+    resolution: {integrity: sha512-DelDWWoa3mBoyWTq3wjp+GIWx/yZdN7zLUE7NFhKjAiJ+uJVRkbLlwykdduCE4sPUUy8mlTYTmdhBUYu91F+sw==}
+    engines: {node: '>=18'}
 
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
@@ -7978,6 +7988,8 @@ snapshots:
     optional: true
 
   isarray@2.0.5: {}
+
+  isbot@5.1.29: {}
 
   isexe@2.0.0: {}
 

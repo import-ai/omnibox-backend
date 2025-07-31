@@ -118,7 +118,7 @@ jobs:
           - /tmp/minio-data:/data
 
     container:
-      image: ghcr.io/import-ai/omnibox-backend-runtime:main
+      image: ghcr.io/import-ai/omnibox-backend-runtime:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

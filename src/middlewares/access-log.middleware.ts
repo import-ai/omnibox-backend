@@ -2,7 +2,7 @@ import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 
 @Injectable()
-export class LoggerMiddleware implements NestMiddleware {
+export class AccessLogMiddleware implements NestMiddleware {
   private readonly logger = new Logger();
 
   use(req: Request, res: Response, next: NextFunction) {
@@ -34,7 +34,7 @@ export class LoggerMiddleware implements NestMiddleware {
         method: req.method,
         url: req.originalUrl,
         status: res.statusCode,
-        duration: `${duration}ms`,
+        duration: duration,
         requestId: req.headers['x-request-id'] || undefined,
         userId: user?.id,
       };

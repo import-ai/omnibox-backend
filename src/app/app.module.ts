@@ -26,7 +26,7 @@ import { ConversationsModule } from 'omniboxd/conversations/conversations.module
 import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { SearchModule } from 'omniboxd/search/search.module';
 import { InvitationsModule } from 'omniboxd/invitations/invitations.module';
-import { LoggerMiddleware } from 'omniboxd/middlewares/logger.middleware';
+import { AccessLogMiddleware } from 'omniboxd/middlewares/access-log.middleware';
 import { UserOptions1751904560034 } from 'omniboxd/migrations/1751904560034-user-options';
 import { UserBindings1752652489640 } from 'omniboxd/migrations/1752652489640-user-bindings.ts';
 import { Tags1751905414493 } from 'omniboxd/migrations/1751905414493-tags';
@@ -109,6 +109,6 @@ export class AppModule implements NestModule {
   }
 
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggerMiddleware).forRoutes('*');
+    consumer.apply(AccessLogMiddleware).forRoutes('*');
   }
 }

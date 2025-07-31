@@ -1,4 +1,4 @@
-import { TestClient } from 'tests/test-client';
+import { TestClient } from 'test/test-client';
 
 describe('UserController (e2e)', () => {
   let client: TestClient;

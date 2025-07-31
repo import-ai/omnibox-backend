@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { TestClient } from 'tests/test-client';
+import { TestClient } from 'test/test-client';
 
 describe('ResourcesController (e2e)', () => {
   let client: TestClient;

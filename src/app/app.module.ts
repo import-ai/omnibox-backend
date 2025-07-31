@@ -35,6 +35,7 @@ import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { NullUserEmail1752814358259 } from 'omniboxd/migrations/1752814358259-null-user-email';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { Shares1753866547335 } from 'omniboxd/migrations/1753866547335-shares';
+import { SharesModule } from 'omniboxd/shares/shares.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -73,6 +74,7 @@ export class AppModule implements NestModule {
         SearchModule,
         InvitationsModule,
         AttachmentsModule,
+        SharesModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
         //   inject: [ConfigService],

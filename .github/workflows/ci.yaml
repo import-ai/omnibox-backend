@@ -102,7 +102,7 @@ jobs:
           --health-retries 5
 
       minio:
-        image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+        image: ghcr.io/import-ai/minio-server:RELEASE.2025-04-22T22-12-26Z
         env:
           MINIO_ROOT_USER: username
           MINIO_ROOT_PASSWORD: password
@@ -114,7 +114,6 @@ jobs:
           --health-interval 30s
           --health-timeout 20s
           --health-retries 3
-          server /data --console-address ":9001"
 
     container:
       image: ghcr.io/import-ai/omnibox-backend-runtime:latest

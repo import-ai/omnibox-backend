@@ -12,6 +12,7 @@ export class LoggerMiddleware implements NestMiddleware {
       const duration = Date.now() - start;
       const url: string = req.originalUrl;
       const status = res.statusCode;
+      const user = req.user as { id: string };
 
       let logLevel: 'info' | 'error' | 'warn' | 'debug' = 'info';
       if (status >= 500) {
@@ -35,6 +36,7 @@ export class LoggerMiddleware implements NestMiddleware {
         status: res.statusCode,
         duration: `${duration}ms`,
         requestId: req.headers['x-request-id'] || undefined,
+        userId: user?.id,
       };
       switch (logLevel) {
         case 'error':

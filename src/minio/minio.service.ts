@@ -35,10 +35,10 @@ export class MinioService {
 
   constructor(private readonly configService: ConfigService) {
     // Parse MINIO_URL from config
-    const minioEndpoint =
-      this.configService.get<string>('OBB_MINIO_ENDPOINT') ||
-      'http://username:password@minio:9000';
-    const url = new URL(minioEndpoint);
+    const minioUrl =
+      this.configService.get<string>('OBB_MINIO_URL') ||
+      'http://username:password@minio:9000/omnibox';
+    const url = new URL(minioUrl);
     const accessKey = url.username;
     const secretKey = url.password;
     const endPoint = url.hostname;
@@ -57,8 +57,7 @@ export class MinioService {
       secretKey,
     });
 
-    this.bucket =
-      this.configService.get<string>('OBB_MINIO_BUCKET') || 'omnibox';
+    this.bucket = url.pathname.split('/')[1];
 
     this.minioClient
       .bucketExists(this.bucket)

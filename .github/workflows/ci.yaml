@@ -1,4 +1,4 @@
-name: Registry push
+name: CI
 
 on:
   push:
@@ -15,10 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  runtime:
+  check-dependencies:
     runs-on: ubuntu-latest
     outputs:
-      runtime_built: ${{ steps.set_output.outputs.runtime_built }}
+      changed: ${{ steps.dep-check.outputs.changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +27,7 @@ jobs:
         run: git fetch origin main
 
       - name: Check if dependencies changed
-        id: depcheck
+        id: dep-check
         run: |
           if git diff --name-only origin/main | grep -E 'package.json|pnpm-lock.yaml|pnpm-workspace.yaml|runtime.Dockerfile'; then
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -35,8 +35,17 @@ jobs:
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
 
+  runtime:
+    runs-on: ubuntu-latest
+    needs: [check-dependencies]
+    if: needs.check-dependencies.outputs.changed == 'true'
+    outputs:
+      runtime_built: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Docker meta (runtime)
-        if: steps.depcheck.outputs.changed == 'true'
         id: meta_runtime
         uses: docker/metadata-action@v5
         with:
@@ -47,15 +56,12 @@ jobs:
             type=raw,value=latest
 
       - name: Set up QEMU
-        if: steps.depcheck.outputs.changed == 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: steps.depcheck.outputs.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to ghcr.io Registry
-        if: steps.depcheck.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -63,7 +69,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push runtime image
-        if: steps.depcheck.outputs.changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -74,14 +79,70 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Set output
-        id: set_output
-        run: echo "runtime_built=${{ steps.depcheck.outputs.changed }}" >> $GITHUB_OUTPUT
+  test:
+    runs-on: ubuntu-latest
+    needs: [check-dependencies, runtime]
+    if: always() && !cancelled() && !failure()
+    services:
+      postgres:
+        image: postgres:17.5
+        env:
+          POSTGRES_PASSWORD: omnibox
+          POSTGRES_USER: omnibox
+          POSTGRES_DB: omnibox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      minio:
+        image: ghcr.io/import-ai/minio-server:RELEASE.2025-04-22T22-12-26Z
+        env:
+          MINIO_ROOT_USER: username
+          MINIO_ROOT_PASSWORD: password
+        ports:
+          - 9000:9000
+          - 9100:9001
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 30s
+          --health-timeout 20s
+          --health-retries 3
+
+    container:
+      image: ghcr.io/import-ai/omnibox-backend-runtime:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare .env
+        run: cp example.env .env
+
+      - name: Run unit tests
+        run: pnpm run test
+
+      - name: Run e2e tests
+        env:
+          OBB_POSTGRES_URL: postgres://omnibox:omnibox@postgres:5432/omnibox
+          OBB_MINIO_URL: http://username:password@minio:9000/omnibox
+        run: pnpm run test:e2e
 
   app:
     runs-on: ubuntu-latest
-    needs: [ runtime ]
+    needs: [test]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -123,13 +184,15 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   webhook:
     runs-on: ubuntu-latest
-    needs: [ app ]
+    needs: [app]
     steps:
       - name: DEV Webhook
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           curl "${{ secrets.DEV_WEBHOOK_URL }}/dev" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
 
@@ -137,3 +200,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           curl "${{ secrets.DEV_WEBHOOK_URL }}/pr?module=backend&pr=pr-${{ github.event.number }}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
+
+      - name: PROD Webhook
+        if: false && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          curl "${{ secrets.PROD_WEBHOOK_URL }}/prod?tag=${{ github.ref }}" -H "Authorization: Bearer ${{ secrets.PROD_WEBHOOK_API_KEY }}"

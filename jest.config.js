@@ -5,7 +5,7 @@ module.exports = {
   transform: {
     '^.+\\.ts$': 'ts-jest',
   },
-  setupFilesAfterEnv: ['<rootDir>/../jest.setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/../jest.setup.ts'],
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',

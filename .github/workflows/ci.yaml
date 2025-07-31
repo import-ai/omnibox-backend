@@ -122,17 +122,34 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Get version identifier
+        id: get_version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Prepare .env
         run: cp example.env .env
 
-      - name: Run unit tests
-        run: pnpm run test
-
-      - name: Run e2e tests
+      - name: Run tests
+        run: pnpm run test:e2e --coverage
         env:
           OBB_POSTGRES_URL: postgres://omnibox:omnibox@postgres:5432/omnibox
           OBB_MINIO_URL: http://username:password@minio:9000/omnibox
-        run: pnpm run test:e2e
+
+      - name: Print coverage report
+        run: |
+          bash test/coverage_report.sh "coverage/lcov-report/index.html" "${GITHUB_STEP_SUMMARY}"
+          mv coverage coverage-report-${{ steps.get_version.outputs.version }}
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ steps.get_version.outputs.version }}
+          path: coverage-report-${{ steps.get_version.outputs.version }}
 
   app:
     runs-on: ubuntu-latest

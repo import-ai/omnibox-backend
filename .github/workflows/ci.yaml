@@ -125,10 +125,10 @@ jobs:
       - name: Get version identifier
         id: get_version
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
             echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "version=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+            echo "version=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
           fi
 
       - name: Prepare .env

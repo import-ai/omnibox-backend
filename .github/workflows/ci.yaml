@@ -1,4 +1,4 @@
-name: Registry push
+name: CI
 
 on:
   push:

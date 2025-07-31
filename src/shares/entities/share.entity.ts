@@ -15,7 +15,7 @@ export class Share extends Base {
 
   @BeforeInsert()
   generateId?() {
-    this.id = generateId(16);
+    this.id = generateId(6);
   }
 
   @Column()
@@ -23,6 +23,9 @@ export class Share extends Base {
 
   @Column()
   resourceId: string;
+
+  @Column()
+  enabled: boolean;
 
   @Column()
   requireLogin: boolean;

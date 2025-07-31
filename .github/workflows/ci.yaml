@@ -114,8 +114,7 @@ jobs:
           --health-interval 30s
           --health-timeout 20s
           --health-retries 3
-        volumes:
-          - /tmp/minio-data:/data
+          server /data --console-address ":9001"
 
     container:
       image: ghcr.io/import-ai/omnibox-backend-runtime:latest

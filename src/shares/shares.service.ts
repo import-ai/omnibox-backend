@@ -22,6 +22,9 @@ export class SharesService {
         resourceId,
       },
     });
+    if (!share) {
+      return ShareInfoDto.new(namespaceId, resourceId);
+    }
     return ShareInfoDto.fromEntity(share);
   }
 

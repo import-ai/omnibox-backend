@@ -10,10 +10,20 @@ export class ShareInfoDto {
   shareType: ShareType;
   expiresAt: Date | null;
 
-  static fromEntity(share: Share | null): ShareInfoDto {
-    if (!share) {
-      return new ShareInfoDto();
-    }
+  static new(namespaceId: string, resourceId: string): ShareInfoDto {
+    const dto = new ShareInfoDto();
+    dto.id = '';
+    dto.namespaceId = namespaceId;
+    dto.resourceId = resourceId;
+    dto.enabled = false;
+    dto.requireLogin = false;
+    dto.passwordEnabled = false;
+    dto.shareType = ShareType.ALL;
+    dto.expiresAt = null;
+    return dto;
+  }
+
+  static fromEntity(share: Share): ShareInfoDto {
     const dto = new ShareInfoDto();
     dto.id = share.id;
     dto.namespaceId = share.namespaceId;

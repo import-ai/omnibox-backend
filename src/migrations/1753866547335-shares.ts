@@ -31,6 +31,11 @@ async function createSharesTable(queryRunner: QueryRunner): Promise<void> {
         isNullable: false,
       },
       {
+        name: 'enabled',
+        type: 'boolean',
+        isNullable: false,
+      },
+      {
         name: 'require_login',
         type: 'boolean',
         isNullable: false,

@@ -98,6 +98,12 @@ export class TestClient {
       .set('Authorization', `Bearer ${this.user.token}`);
   }
 
+  patch(url: string) {
+    return this.request()
+      .patch(url)
+      .set('Authorization', `Bearer ${this.user.token}`);
+  }
+
   public static async create(): Promise<TestClient> {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule.forRoot([])],

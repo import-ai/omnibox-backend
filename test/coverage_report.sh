@@ -47,13 +47,8 @@ function badge_url() {
 }
 
 function main() {
-  COVERAGE_HTML="${1}"
+  COVERAGE_HTML="${1:-coverage/lcov-report/index.html}"
   MARKDOWN_REPORT_PATH="${2}"
-
-  if [ -z "${COVERAGE_HTML}" ]; then
-    echo "Usage: $0 <coverage_html_file> [markdown_report_path]"
-    exit 1
-  fi
 
   if [ -f "${COVERAGE_HTML}" ]; then
     STATEMENTS_FRACTION=$(fraction "${COVERAGE_HTML}" "Statements")

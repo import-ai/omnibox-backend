@@ -6,7 +6,7 @@ module.exports = {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-  collectCoverageFrom: ['**/*.(t|j)s'],
+  collectCoverageFrom: ['<rootDir>/src/**/*.(t|j)s'],
   testEnvironment: 'node',
   moduleNameMapper: {
     '^omniboxd/(.*)$': '<rootDir>/src/$1',

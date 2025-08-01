@@ -159,7 +159,7 @@ export class AttachmentsService {
     return { id: attachmentId, success: true };
   }
 
-  async displayImage(
+  async displayAttachment(
     attachmentId: string,
     userId: string,
     httpResponse: Response,
@@ -176,9 +176,6 @@ export class AttachmentsService {
       ResourcePermission.CAN_VIEW,
     );
     await this.checkAttachment(namespaceId, resourceId, attachmentId);
-    if (objectResponse.mimetype.startsWith('image/')) {
-      return objectStreamResponse(objectResponse, httpResponse);
-    }
-    throw new BadRequestException(attachmentId);
+    return objectStreamResponse(objectResponse, httpResponse);
   }
 }

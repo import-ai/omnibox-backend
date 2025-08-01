@@ -3,8 +3,9 @@ import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from 'omniboxd/app/app.module';
+import { configureApp } from 'omniboxd/app/app-config';
 
-function randomChoice(choices: string): string {
+export function randomChoice(choices: string): string {
   return choices[Math.floor(Math.random() * choices.length)];
 }
 
@@ -102,7 +103,14 @@ export class TestClient {
       imports: [AppModule.forRoot([])],
     }).compile();
 
-    const app = moduleFixture.createNestApplication();
+    const app = moduleFixture.createNestApplication({
+      cors: true,
+      bodyParser: true,
+      abortOnError: false,
+    });
+
+    configureApp(app);
+
     await app.init();
 
     const client = new TestClient(app);

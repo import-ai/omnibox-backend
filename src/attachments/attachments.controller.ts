@@ -63,8 +63,8 @@ export class AttachmentsController {
   }
 
   @Public()
-  @Get('images/:attachmentId')
-  async displayImage(
+  @Get(':attachmentId/display')
+  async displayAttachment(
     @Req() req: Request,
     @Res() res: Response,
     @Cookies('token') token: string,
@@ -82,7 +82,7 @@ export class AttachmentsController {
     }
     this.logger.debug({ userId, token, cookies: req.cookies });
     if (userId) {
-      return await this.attachmentsService.displayImage(
+      return await this.attachmentsService.displayAttachment(
         attachmentId,
         userId,
         res,

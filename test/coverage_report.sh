@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 function fraction() {
   local file="${1}"
   local field="${2}"
 
-  grep "${field}</span>" "${file}" -A 1 | grep -oE '\d+/\d+'
+  grep "${field}</span>" "${file}" -A 1 | grep -oE '[0-9]+/[0-9]+'
 }
 
 function calc_percentage() {
@@ -13,7 +13,7 @@ function calc_percentage() {
     local hit="${BASH_REMATCH[1]}"
     local total="${BASH_REMATCH[2]}"
     if (( total > 0 )); then
-      printf "%.2f" "$(echo "scale=4; (${hit}/${total}) * 100" | bc)"
+      awk -v h="$hit" -v t="$total" 'BEGIN { printf "%.2f", (h/t)*100 }'
     else
       echo "nan"
     fi
@@ -24,16 +24,16 @@ function calc_percentage() {
 
 function create_time() {
   local file="${1}"
-  grep -oE 'at \d{4}-\d{2}-\d{2}T.+' "${file}" | sed 's/^at //'
+  grep -oE 'at [0-9]{4}-[0-9]{2}-[0-9]{2}T.+' "${file}" | sed 's/^at //'
 }
 
 function badge_color() {
   local percentage="${1}"
-  if (( $(echo "${percentage} >= 80" | bc -l) )); then
+  if awk "BEGIN {exit !(${percentage} >= 80)}"; then
     echo "brightgreen"
-  elif (( $(echo "${percentage} >= 60" | bc -l) )); then
+  elif awk "BEGIN {exit !(${percentage} >= 60)}"; then
     echo "yellow"
-  elif (( $(echo "${percentage} >= 40" | bc -l) )); then
+  elif awk "BEGIN {exit !(${percentage} >= 40)}"; then
     echo "orange"
   else
     echo "red"

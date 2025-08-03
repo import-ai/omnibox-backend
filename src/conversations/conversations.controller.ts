@@ -13,6 +13,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ConversationSummaryDto } from './dto/conversation-summary.dto';
+import { RequestId } from 'omniboxd/decorators/request-id.decorators';
 
 @Controller('api/v1/namespaces/:namespaceId/conversations')
 export class ConversationsController {
@@ -62,8 +63,16 @@ export class ConversationsController {
   }
 
   @Post(':id/title')
-  async createTitle(@Param('id') id: string, @Req() req) {
-    return await this.conversationsService.createTitle(id, req.user.id);
+  async createTitle(
+    @Param('id') id: string,
+    @RequestId() requestId: string,
+    @Req() req,
+  ) {
+    return await this.conversationsService.createTitle(
+      requestId,
+      id,
+      req.user.id,
+    );
   }
 
   @Delete(':id')

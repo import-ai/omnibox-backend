@@ -104,7 +104,11 @@ export class ConversationsService {
     return composed;
   }
 
-  async createTitle(id: string, userId: string): Promise<{ title: string }> {
+  async createTitle(
+    requestId: string,
+    id: string,
+    userId: string,
+  ): Promise<{ title: string }> {
     const conversation = await this.conversationRepository.findOneOrFail({
       where: { id, userId },
     });
@@ -118,9 +122,8 @@ export class ConversationsService {
         const titleCreateResponse = await this.wizardApiService.request(
           'POST',
           '/internal/api/v1/wizard/title',
-          {
-            text: content,
-          },
+          { text: content },
+          { 'X-Request-Id': requestId },
         );
         conversation.title = titleCreateResponse.title!;
         await this.conversationRepository.save(conversation);

@@ -198,7 +198,7 @@ export class StreamService {
     user: User,
     body: AgentRequestDto,
     requestId: string,
-    mode: 'ask' | 'write' = 'ask',
+    mode: string = 'ask',
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Message[] = [];
@@ -307,7 +307,7 @@ export class StreamService {
     user: User,
     body: AgentRequestDto,
     requestId: string,
-    mode: 'ask' | 'write' = 'ask',
+    mode: string = 'ask',
   ): Promise<Observable<MessageEvent>> {
     try {
       return await this.agentStream(user, body, requestId, mode);

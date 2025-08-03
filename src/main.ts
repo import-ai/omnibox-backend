@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from 'omniboxd/app/app.module';
 import { configureApp } from 'omniboxd/app/app-config';
+import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule.forRoot([]), {
@@ -10,7 +11,7 @@ async function bootstrap() {
     abortOnError: false,
   });
 
-  configureApp(app);
+  configureApp(app, [cookieParser()]);
 
   const configService = app.get(ConfigService);
   await app.listen(parseInt(configService.get('OBB_PORT', '8000')));

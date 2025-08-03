@@ -1,12 +1,17 @@
 import { ConsoleLogger, INestApplication, LogLevel } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as express from 'express';
-import * as cookieParser from 'cookie-parser';
+import { Handler } from 'express';
 
-export function configureApp(app: INestApplication): INestApplication {
+export function configureApp(
+  app: INestApplication,
+  handlers?: Handler[],
+): INestApplication {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
-  app.use(cookieParser());
+  for (const handler of handlers || []) {
+    app.use(handler);
+  }
 
   const configService = app.get(ConfigService);
   const logLevels: LogLevel[] = configService

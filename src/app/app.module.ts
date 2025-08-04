@@ -40,7 +40,10 @@ import { ApiKeys1754550165406 } from 'omniboxd/migrations/1754550165406-api-keys
 
 @Module({})
 export class AppModule implements NestModule {
-  static forRoot(extraMigrations: Array<() => void>): DynamicModule {
+  static forRoot(
+    extraMigrations: Array<() => void>,
+    extraModules: Array<any> = [],
+  ): DynamicModule {
     return {
       module: AppModule,
       controllers: [AppController],
@@ -110,6 +113,7 @@ export class AppModule implements NestModule {
             namingStrategy: new SnakeNamingStrategy(),
           }),
         }),
+        ...extraModules,
       ],
     };
   }

@@ -39,7 +39,10 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
 
 @Module({})
 export class AppModule implements NestModule {
-  static forRoot(extraMigrations: Array<() => void>): DynamicModule {
+  static forRoot(
+    extraMigrations: Array<() => void>,
+    extraModules: Array<any> = [],
+  ): DynamicModule {
     return {
       module: AppModule,
       controllers: [AppController],
@@ -108,6 +111,7 @@ export class AppModule implements NestModule {
             namingStrategy: new SnakeNamingStrategy(),
           }),
         }),
+        ...extraModules,
       ],
     };
   }

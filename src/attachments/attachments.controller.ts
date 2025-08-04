@@ -45,26 +45,47 @@ export class AttachmentsController {
     );
   }
 
+  @Public()
   @Get(':attachmentId')
   async downloadAttachment(
-    @UserId() userId: string,
+    @Req() req: Request,
     @Res() res: Response,
-    @Query('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
+    @Cookies('token') token: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    return await this.attachmentsService.downloadAttachment(
-      namespaceId,
-      resourceId,
-      attachmentId,
-      userId,
-      res,
-    );
+    let userId = '';
+
+    if (req.headers.authorization) {
+      const headerToken = req.headers.authorization.replace('Bearer ', '');
+      const payload = this.authService.jwtVerify(headerToken);
+      if (payload && payload.sub) {
+        userId = payload.sub;
+      }
+    }
+
+    if (!userId && token) {
+      const payload = this.authService.jwtVerify(token);
+      if (payload && payload.sub) {
+        userId = payload.sub;
+      }
+    }
+
+    if (userId) {
+      return await this.attachmentsService.downloadAttachment(
+        attachmentId,
+        userId,
+        res,
+      );
+    }
+    res
+      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      .status(HttpStatus.UNAUTHORIZED)
+      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
   }
 
   @Public()
-  @Get(':attachmentId/display')
-  async displayAttachment(
+  @Get('images/:attachmentId')
+  async displayImage(
     @Req() req: Request,
     @Res() res: Response,
     @Cookies('token') token: string,
@@ -82,17 +103,16 @@ export class AttachmentsController {
     }
     this.logger.debug({ userId, token, cookies: req.cookies });
     if (userId) {
-      return await this.attachmentsService.displayAttachment(
+      return await this.attachmentsService.displayImage(
         attachmentId,
         userId,
         res,
       );
-    } else {
-      res
-        .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-        .status(HttpStatus.FOUND)
-        .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
     }
+    res
+      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      .status(HttpStatus.FOUND)
+      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
   }
 
   @Delete(':attachmentId')

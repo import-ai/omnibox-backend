@@ -119,27 +119,23 @@ export class AttachmentsService {
   }
 
   async downloadAttachment(
-    namespaceId: string,
-    resourceId: string,
     attachmentId: string,
     userId: string,
     httpResponse: Response,
   ) {
+    const objectResponse = await this.minioService.get(
+      this.minioPath(attachmentId),
+    );
+    const { namespaceId, resourceId } = objectResponse.metadata;
+
     await this.checkPermission(
       namespaceId,
       resourceId,
       userId,
       ResourcePermission.CAN_VIEW,
     );
-    const info = await this.checkAttachment(
-      namespaceId,
-      resourceId,
-      attachmentId,
-    );
-    const stream = await this.minioService.getObject(
-      this.minioPath(attachmentId),
-    );
-    return objectStreamResponse({ stream, ...info }, httpResponse);
+    await this.checkAttachment(namespaceId, resourceId, attachmentId);
+    return objectStreamResponse(objectResponse, httpResponse);
   }
 
   async deleteAttachment(
@@ -159,7 +155,7 @@ export class AttachmentsService {
     return { id: attachmentId, success: true };
   }
 
-  async displayAttachment(
+  async displayImage(
     attachmentId: string,
     userId: string,
     httpResponse: Response,
@@ -176,6 +172,9 @@ export class AttachmentsService {
       ResourcePermission.CAN_VIEW,
     );
     await this.checkAttachment(namespaceId, resourceId, attachmentId);
-    return objectStreamResponse(objectResponse, httpResponse);
+    if (objectResponse.mimetype.startsWith('image/')) {
+      return objectStreamResponse(objectResponse, httpResponse);
+    }
+    throw new BadRequestException(attachmentId);
   }
 }

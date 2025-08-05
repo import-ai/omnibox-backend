@@ -47,8 +47,10 @@ export class WizardController {
     );
   }
 
+  /*
   @Post('*path')
   async proxy(@Req() req: Request): Promise<Record<string, any>> {
     return await this.wizardService.wizardApiService.proxy(req);
   }
+   */
 }

@@ -16,13 +16,21 @@ import { GroupsModule } from 'omniboxd/groups/groups.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { WechatService } from 'omniboxd/auth/wechat.service';
 import { WechatController } from 'omniboxd/auth/wechat.controller';
+import { GoogleService } from 'omniboxd/auth/google.service';
+import { GoogleController } from 'omniboxd/auth/google.controller';
 
 @Module({
-  exports: [AuthService, WechatService],
-  controllers: [AuthController, InternalAuthController, WechatController],
+  exports: [AuthService, WechatService, GoogleService],
+  controllers: [
+    AuthController,
+    InternalAuthController,
+    WechatController,
+    GoogleController,
+  ],
   providers: [
     AuthService,
     WechatService,
+    GoogleService,
     JwtStrategy,
     LocalStrategy,
     {

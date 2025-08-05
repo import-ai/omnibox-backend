@@ -7,4 +7,5 @@ export class UpdateShareInfoReqDto {
   password?: string | null;
   share_type?: ShareType;
   expires_at?: Date | null;
+  expires_seconds?: number;
 }

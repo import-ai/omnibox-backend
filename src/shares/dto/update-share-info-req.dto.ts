@@ -2,8 +2,9 @@ import { ShareType } from '../entities/share.entity';
 
 export class UpdateShareInfoReqDto {
   enabled?: boolean;
-  requireLogin?: boolean;
+  all_resources?: boolean;
+  require_login?: boolean;
   password?: string | null;
-  shareType?: ShareType;
-  expiresAt?: Date | null;
+  share_type?: ShareType;
+  expires_at?: Date | null;
 }

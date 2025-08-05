@@ -28,6 +28,9 @@ export class Share extends Base {
   enabled: boolean;
 
   @Column()
+  allResources: boolean;
+
+  @Column()
   requireLogin: boolean;
 
   @Column('enum', { enum: ShareType })

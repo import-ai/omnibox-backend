@@ -69,6 +69,9 @@ export class SharesService {
     if (req.expires_at !== undefined) {
       share.expiresAt = req.expires_at;
     }
+    if (req.expires_seconds !== undefined) {
+      share.expiresAt = new Date(Date.now() + req.expires_seconds * 1000);
+    }
     const savedShare = await this.shareRepo.save(share);
     return ShareInfoDto.fromEntity(savedShare);
   }

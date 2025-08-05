@@ -73,6 +73,9 @@ export class StreamService {
           if (line.startsWith('data:')) {
             const data = line.slice(5).trim();
             await callback(data);
+          } else if (line.startsWith(': ping')) {
+            const data = '{"response_type": "ping"}';
+            await callback(data);
           }
         }
       }
@@ -140,6 +143,8 @@ export class StreamService {
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
         // Do nothing, this is the end of the stream
+      } else if (chunk.response_type === 'ping') {
+        // Do nothing, this is the ping message
       } else if (chunk.response_type === 'error') {
         if (context.messageId) {
           await this.messagesService.update(

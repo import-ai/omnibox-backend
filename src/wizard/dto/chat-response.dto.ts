@@ -1,10 +1,16 @@
 import {
+  MessageAttrs,
   OpenAIMessage,
   OpenAIMessageRole,
-  MessageAttrs,
 } from 'omniboxd/messages/entities/message.entity';
 
-export type ChatResponseType = 'bos' | 'delta' | 'eos' | 'done' | 'error';
+export type ChatResponseType =
+  | 'bos'
+  | 'delta'
+  | 'eos'
+  | 'done'
+  | 'error'
+  | 'ping';
 
 export interface ChatBaseResponse {
   response_type: ChatResponseType;
@@ -33,6 +39,10 @@ export interface ChatDoneResponse extends ChatBaseResponse {
   response_type: 'done';
 }
 
+export interface ChatPingResponse extends ChatBaseResponse {
+  response_type: 'ping';
+}
+
 export interface ChatErrorResponse extends ChatBaseResponse {
   response_type: 'error';
   message: string;
@@ -43,4 +53,5 @@ export type ChatResponse =
   | ChatDeltaResponse
   | ChatEOSResponse
   | ChatDoneResponse
-  | ChatErrorResponse;
+  | ChatErrorResponse
+  | ChatPingResponse;

@@ -44,6 +44,7 @@ export class SharesService {
         namespaceId,
         resourceId,
         enabled: false,
+        allResources: false,
         requireLogin: true,
         shareType: ShareType.ALL,
         password: null,
@@ -53,17 +54,20 @@ export class SharesService {
     if (req.enabled !== undefined) {
       share.enabled = req.enabled;
     }
-    if (req.requireLogin !== undefined) {
-      share.requireLogin = req.requireLogin;
+    if (req.all_resources !== undefined) {
+      share.allResources = req.all_resources;
+    }
+    if (req.require_login !== undefined) {
+      share.requireLogin = req.require_login;
     }
     if (req.password !== undefined) {
       share.password = req.password;
     }
-    if (req.shareType !== undefined) {
-      share.shareType = req.shareType;
+    if (req.share_type !== undefined) {
+      share.shareType = req.share_type;
     }
-    if (req.expiresAt !== undefined) {
-      share.expiresAt = req.expiresAt;
+    if (req.expires_at !== undefined) {
+      share.expiresAt = req.expires_at;
     }
     const savedShare = await this.shareRepo.save(share);
     return ShareInfoDto.fromEntity(savedShare);

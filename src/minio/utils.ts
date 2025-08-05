@@ -4,15 +4,20 @@ import { Response } from 'express';
 export function objectStreamResponse(
   objectResponse: ObjectResponse,
   httpResponse: Response,
-  cacheControl: boolean = true,
+  options: {
+    cacheControl?: boolean;
+    forceDownload?: boolean;
+  } = {},
 ) {
+  const cacheControl = options.cacheControl ?? true;
+  const forceDownload = options.forceDownload ?? true;
   const { stream, filename, mimetype, stat } = objectResponse;
   const encodedName = encodeURIComponent(filename);
-  const isImage: boolean = mimetype.startsWith('image/');
+  const disposition = forceDownload ? 'attachment' : 'inline';
   const headers = {
     'Content-Length': stat.size,
     'Last-Modified': stat.lastModified.toUTCString(),
-    'Content-Disposition': `${isImage ? 'inline' : 'attachment'}; filename="${encodedName}"`,
+    'Content-Disposition': `${disposition}; filename="${encodedName}"`,
     'Content-Type': mimetype,
   };
   if (cacheControl) {

@@ -159,6 +159,28 @@ export class AttachmentsService {
     return { id: attachmentId, success: true };
   }
 
+  async displayMedia(
+    attachmentId: string,
+    userId: string,
+    httpResponse: Response,
+  ) {
+    const objectResponse = await this.minioService.get(
+      this.minioPath(attachmentId),
+    );
+    const { namespaceId, resourceId } = objectResponse.metadata;
+
+    await this.checkPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    await this.checkAttachment(namespaceId, resourceId, attachmentId);
+    return objectStreamResponse(objectResponse, httpResponse, {
+      forceDownload: false,
+    });
+  }
+
   async displayImage(
     attachmentId: string,
     userId: string,
@@ -177,7 +199,9 @@ export class AttachmentsService {
     );
     await this.checkAttachment(namespaceId, resourceId, attachmentId);
     if (objectResponse.mimetype.startsWith('image/')) {
-      return objectStreamResponse(objectResponse, httpResponse);
+      return objectStreamResponse(objectResponse, httpResponse, {
+        forceDownload: false,
+      });
     }
     throw new BadRequestException(attachmentId);
   }

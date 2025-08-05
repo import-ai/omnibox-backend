@@ -73,13 +73,12 @@ export class AttachmentsController {
     let userId = '';
 
     if (token) {
-      try {
-        const payload = this.authService.jwtVerify(token);
+      const payload = this.authService.jwtVerify(token);
+      if (payload && payload.sub) {
         userId = payload.sub;
-      } catch {
-        /* empty */
       }
     }
+
     this.logger.debug({ userId, token, cookies: req.cookies });
     if (userId) {
       return await this.attachmentsService.displayImage(
@@ -87,12 +86,41 @@ export class AttachmentsController {
         userId,
         res,
       );
-    } else {
-      res
-        .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-        .status(HttpStatus.FOUND)
-        .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
     }
+    res
+      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      .status(HttpStatus.FOUND)
+      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
+  }
+
+  @Public()
+  @Get('media/:attachmentId')
+  async displayMedia(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Cookies('token') token: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    let userId = '';
+
+    if (token) {
+      const payload = this.authService.jwtVerify(token);
+      if (payload && payload.sub) {
+        userId = payload.sub;
+      }
+    }
+
+    if (userId) {
+      return await this.attachmentsService.displayMedia(
+        attachmentId,
+        userId,
+        res,
+      );
+    }
+    res
+      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      .status(HttpStatus.FOUND)
+      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
   }
 
   @Delete(':attachmentId')

@@ -282,6 +282,9 @@ export class AuthService {
   }
 
   jwtVerify(token: string) {
+    if (!token) {
+      throw new UnauthorizedException('No token provided.');
+    }
     try {
       return this.jwtService.verify(token);
     } catch (error) {

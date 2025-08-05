@@ -45,42 +45,21 @@ export class AttachmentsController {
     );
   }
 
-  @Public()
   @Get(':attachmentId')
   async downloadAttachment(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Res() res: Response,
-    @Cookies('token') token: string,
+    @Query('namespaceId') namespaceId: string,
+    @Query('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    let userId = '';
-
-    if (req.headers.authorization) {
-      const headerToken = req.headers.authorization.replace('Bearer ', '');
-      const payload = this.authService.jwtVerify(headerToken);
-      if (payload && payload.sub) {
-        userId = payload.sub;
-      }
-    }
-
-    if (!userId && token) {
-      const payload = this.authService.jwtVerify(token);
-      if (payload && payload.sub) {
-        userId = payload.sub;
-      }
-    }
-
-    if (userId) {
-      return await this.attachmentsService.downloadAttachment(
-        attachmentId,
-        userId,
-        res,
-      );
-    }
-    res
-      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-      .status(HttpStatus.UNAUTHORIZED)
-      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
+    return await this.attachmentsService.downloadAttachment(
+      namespaceId,
+      resourceId,
+      attachmentId,
+      userId,
+      res,
+    );
   }
 
   @Public()
@@ -94,16 +73,45 @@ export class AttachmentsController {
     let userId = '';
 
     if (token) {
-      try {
-        const payload = this.authService.jwtVerify(token);
+      const payload = this.authService.jwtVerify(token);
+      if (payload && payload.sub) {
         userId = payload.sub;
-      } catch {
-        /* empty */
       }
     }
+
     this.logger.debug({ userId, token, cookies: req.cookies });
     if (userId) {
       return await this.attachmentsService.displayImage(
+        attachmentId,
+        userId,
+        res,
+      );
+    }
+    res
+      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      .status(HttpStatus.FOUND)
+      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
+  }
+
+  @Public()
+  @Get('media/:attachmentId')
+  async displayMedia(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Cookies('token') token: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    let userId = '';
+
+    if (token) {
+      const payload = this.authService.jwtVerify(token);
+      if (payload && payload.sub) {
+        userId = payload.sub;
+      }
+    }
+
+    if (userId) {
+      return await this.attachmentsService.displayMedia(
         attachmentId,
         userId,
         res,

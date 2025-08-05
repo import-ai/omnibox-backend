@@ -1,3 +1,4 @@
+import * as bcrypt from 'bcrypt';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Share, ShareType } from './entities/share.entity';
@@ -61,7 +62,12 @@ export class SharesService {
       share.requireLogin = req.require_login;
     }
     if (req.password !== undefined) {
-      share.password = req.password;
+      if (req.password === null) {
+        share.password = null;
+      } else {
+        const hash = await bcrypt.hash(req.password, 10);
+        share.password = hash;
+      }
     }
     if (req.share_type !== undefined) {
       share.shareType = req.share_type;

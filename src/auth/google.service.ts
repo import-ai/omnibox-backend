@@ -21,14 +21,15 @@ interface GoogleTokenResponse {
 }
 
 interface GoogleUserInfo {
-  id: string;
-  email: string;
-  verified_email: boolean;
-  name: string;
-  given_name: string;
-  family_name: string;
+  sub: string;
+  name?: string;
+  given_name?: string;
+  family_name?: string;
   picture?: string;
+  email?: string;
+  email_verified?: boolean;
   locale?: string;
+  hd?: string;
 }
 
 @Injectable()
@@ -66,12 +67,9 @@ export class GoogleService extends SocialService {
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
       response_type: 'code',
-      scope: 'openid profile email',
+      scope: 'openid email profile',
       state: state,
-      access_type: 'offline',
-      prompt: 'select_account',
     });
-
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
@@ -81,7 +79,6 @@ export class GoogleService extends SocialService {
       throw new UnauthorizedException('Invalid state identifier');
     }
 
-    // 使用授权码获取访问令牌
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -102,13 +99,15 @@ export class GoogleService extends SocialService {
 
     const tokenData: GoogleTokenResponse = await tokenResponse.json();
 
-    if (!tokenData.access_token) {
+    if (!tokenData.id_token) {
       throw new BadRequestException('Invalid token response from Google');
     }
 
-    // 使用访问令牌获取用户信息
     const userInfoResponse = await fetch(
-      `https://www.googleapis.com/oauth2/v2/userinfo?access_token=${tokenData.access_token}`,
+      'https://www.googleapis.com/oauth2/v3/userinfo',
+      {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      },
     );
 
     if (!userInfoResponse.ok) {
@@ -117,12 +116,12 @@ export class GoogleService extends SocialService {
 
     const userData: GoogleUserInfo = await userInfoResponse.json();
 
-    if (!userData.id || !userData.email) {
+    if (!userData.sub || !userData.email) {
       throw new BadRequestException('Invalid user data from Google');
     }
 
     // 检查用户是否已存在
-    const existingUser = await this.userService.findByLoginId(userData.id);
+    const existingUser = await this.userService.findByLoginId(userData.sub);
     if (existingUser) {
       const returnValue = {
         id: existingUser.id,
@@ -134,14 +133,23 @@ export class GoogleService extends SocialService {
       return returnValue;
     }
     return await this.dataSource.transaction(async (manager) => {
-      const nickname = userData.name || userData.email.split('@')[0];
+      let nickname = userData.name;
+      if (!nickname) {
+        nickname = userData.given_name;
+      }
+      if (!nickname && userData.email) {
+        nickname = userData.email.split('@')[0];
+      }
+      if (!nickname) {
+        nickname = userData.sub;
+      }
       const username = await this.getValidUsername(nickname, manager);
       this.logger.debug({ nickname, username });
       const googleUser = await this.userService.createUserBinding(
         {
           username,
           loginType: 'google',
-          loginId: userData.id,
+          loginId: userData.sub,
         },
         manager,
       );

@@ -1,6 +1,6 @@
 import { GoogleService } from './google.service';
 import { Public } from 'omniboxd/auth/decorators/public.decorator';
-import { Get, Query, Controller } from '@nestjs/common';
+import { Get, Body, Controller, Post } from '@nestjs/common';
 
 @Controller('api/v1/google')
 export class GoogleController {
@@ -13,11 +13,8 @@ export class GoogleController {
   }
 
   @Public()
-  @Get('callback')
-  async handleCallback(
-    @Query('code') code: string,
-    @Query('state') state: string,
-  ) {
-    return await this.googleService.handleCallback(code, state);
+  @Post('callback')
+  async handleCallback(@Body() body: { code: string; state: string }) {
+    return await this.googleService.handleCallback(body.code, body.state);
   }
 }

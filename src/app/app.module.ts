@@ -44,6 +44,7 @@ import { CleanResourceNames1755396702021 } from 'omniboxd/migrations/17553967020
 import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/1755499552000-update-attachment-urls';
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
 import { OAuthModule } from 'omniboxd/oauth2/oauth.module';
+import { SharesAllResources1754471311959 } from 'omniboxd/migrations/1754471311959-shares-all-resources';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -118,6 +119,7 @@ export class AppModule implements NestModule {
               CleanResourceNames1755396702021,
               UpdateAttachmentUrls1755499552000,
               ScanResourceAttachments1755504936756,
+              SharesAllResources1754471311959,
               ...extraMigrations,
             ],
             migrationsRun: true,

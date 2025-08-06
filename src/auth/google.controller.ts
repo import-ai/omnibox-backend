@@ -1,6 +1,6 @@
 import { GoogleService } from './google.service';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
 import { Get, Body, Controller, Post } from '@nestjs/common';
+import { Public } from 'omniboxd/auth/decorators/public.decorator';
 
 @Controller('api/v1/google')
 export class GoogleController {

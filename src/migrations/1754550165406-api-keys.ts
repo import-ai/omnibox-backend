@@ -22,6 +22,12 @@ async function createApiKeysTable(queryRunner: QueryRunner): Promise<void> {
         isNullable: false,
       },
       {
+        name: 'value',
+        type: 'character varying',
+        isNullable: false,
+        isUnique: true,
+      },
+      {
         name: 'attrs',
         type: 'jsonb',
         isNullable: false,

@@ -6,9 +6,12 @@ export class APIKey extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ length: 32, nullable: true })
-  comment: string;
-
-  @Column({ name: 'user_id' })
+  @Column()
   userId: string;
+
+  @Column()
+  namespaceId: string;
+
+  @Column('jsonb')
+  attrs: Record<string, any>;
 }

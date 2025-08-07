@@ -766,6 +766,7 @@ export class Init1751900000000 implements MigrationInterface {
     await createMessagesTable(queryRunner);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
   public async down(queryRunner: QueryRunner): Promise<void> {
     throw new Error('Not supported.');
   }

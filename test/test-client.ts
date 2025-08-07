@@ -104,6 +104,18 @@ export class TestClient {
       .set('Authorization', `Bearer ${this.user.token}`);
   }
 
+  put(url: string) {
+    return this.request()
+      .put(url)
+      .set('Authorization', `Bearer ${this.user.token}`);
+  }
+
+  delete(url: string) {
+    return this.request()
+      .delete(url)
+      .set('Authorization', `Bearer ${this.user.token}`);
+  }
+
   public static async create(): Promise<TestClient> {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule.forRoot([])],

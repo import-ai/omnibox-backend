@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { randomBytes } from 'crypto';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
   APIKeyResponseDto,
@@ -40,7 +41,10 @@ export class APIKeyService {
       );
     }
 
+    const value = await this.generateUniqueApiKeyValue();
+
     const apiKey = this.apiKeyRepository.create({
+      value,
       userId: createApiKeyDto.user_id,
       namespaceId: createApiKeyDto.namespace_id,
       attrs: createApiKeyDto.attrs,
@@ -56,6 +60,10 @@ export class APIKeyService {
       throw new NotFoundException('API Key not found');
     }
     return this.toResponseDto(apiKey);
+  }
+
+  async findByValue(value: string): Promise<APIKey | null> {
+    return await this.apiKeyRepository.findOne({ where: { value } });
   }
 
   async findAll(
@@ -93,9 +101,29 @@ export class APIKeyService {
     }
   }
 
+  private async generateUniqueApiKeyValue(): Promise<string> {
+    let value: string;
+    let isUnique = false;
+
+    while (!isUnique) {
+      // Generate 20 random bytes and convert to hex (40 characters)
+      const randomHex = randomBytes(20).toString('hex');
+      value = `sk-${randomHex}`;
+
+      // Check if this value already exists
+      const existing = await this.apiKeyRepository.findOne({
+        where: { value },
+      });
+      isUnique = !existing;
+    }
+
+    return value!;
+  }
+
   private toResponseDto(apiKey: APIKey): APIKeyResponseDto {
     return {
       id: apiKey.id,
+      value: apiKey.value,
       user_id: apiKey.userId,
       namespace_id: apiKey.namespaceId,
       attrs: apiKey.attrs,

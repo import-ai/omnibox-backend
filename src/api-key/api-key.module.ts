@@ -9,6 +9,7 @@ import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 @Module({
   providers: [APIKeyService],
   controllers: [APIKeyController],
+  exports: [APIKeyService],
   imports: [
     TypeOrmModule.forFeature([APIKey]),
     PermissionsModule,

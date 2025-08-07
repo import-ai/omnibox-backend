@@ -32,6 +32,9 @@ export class APIKeyResponseDto {
   id: string;
 
   @IsString()
+  value: string;
+
+  @IsString()
   user_id: string;
 
   @IsString()

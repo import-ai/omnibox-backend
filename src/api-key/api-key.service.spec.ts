@@ -22,6 +22,7 @@ describe('APIKeyService', () => {
 
   const mockApiKey = {
     id: 'test-api-key-id',
+    value: 'sk-1234567890abcdef1234567890abcdef12345678',
     userId: 'test-user-id',
     namespaceId: 'test-namespace-id',
     attrs: {
@@ -106,6 +107,7 @@ describe('APIKeyService', () => {
       permissionsService.userHasPermission.mockResolvedValue(true);
 
       // Mock repository methods
+      apiKeyRepository.findOne.mockResolvedValue(null); // For uniqueness check
       apiKeyRepository.create.mockReturnValue(mockApiKey as any);
       apiKeyRepository.save.mockResolvedValue(mockApiKey as any);
 
@@ -125,6 +127,7 @@ describe('APIKeyService', () => {
       expect(apiKeyRepository.save).toHaveBeenCalled();
       expect(result).toMatchObject({
         id: mockApiKey.id,
+        value: mockApiKey.value,
         user_id: mockApiKey.userId,
         namespace_id: mockApiKey.namespaceId,
         attrs: mockApiKey.attrs,
@@ -205,6 +208,7 @@ describe('APIKeyService', () => {
       } as any);
 
       // Mock repository methods
+      apiKeyRepository.findOne.mockResolvedValue(null); // For uniqueness check
       apiKeyRepository.create.mockReturnValue(mockApiKey as any);
       apiKeyRepository.save.mockResolvedValue(mockApiKey as any);
 
@@ -219,6 +223,59 @@ describe('APIKeyService', () => {
       expect(apiKeyRepository.create).toHaveBeenCalled();
       expect(apiKeyRepository.save).toHaveBeenCalled();
       expect(result).toBeDefined();
+    });
+  });
+
+  describe('findByValue', () => {
+    it('should find an API key by its value', async () => {
+      apiKeyRepository.findOne.mockResolvedValue(mockApiKey as any);
+
+      const result = await service.findByValue(
+        'sk-1234567890abcdef1234567890abcdef12345678',
+      );
+
+      expect(result).toEqual(mockApiKey);
+      expect(apiKeyRepository.findOne).toHaveBeenCalledWith({
+        where: { value: 'sk-1234567890abcdef1234567890abcdef12345678' },
+      });
+    });
+
+    it('should return null when API key is not found', async () => {
+      apiKeyRepository.findOne.mockResolvedValue(null);
+
+      const result = await service.findByValue('sk-nonexistent');
+
+      expect(result).toBeNull();
+      expect(apiKeyRepository.findOne).toHaveBeenCalledWith({
+        where: { value: 'sk-nonexistent' },
+      });
+    });
+  });
+
+  describe('generateUniqueApiKeyValue', () => {
+    it('should generate a unique API key value with sk- prefix', async () => {
+      // Mock findOne to return null (value is unique)
+      apiKeyRepository.findOne.mockResolvedValue(null);
+
+      // Access the private method using bracket notation for testing
+      const value = await (service as any).generateUniqueApiKeyValue();
+
+      expect(value).toMatch(/^sk-[a-f0-9]{40}$/);
+      expect(apiKeyRepository.findOne).toHaveBeenCalledWith({
+        where: { value },
+      });
+    });
+
+    it('should retry generation if value already exists', async () => {
+      // Mock findOne to return an existing API key first, then null
+      apiKeyRepository.findOne
+        .mockResolvedValueOnce(mockApiKey as any) // First call returns existing
+        .mockResolvedValueOnce(null); // Second call returns null (unique)
+
+      const value = await (service as any).generateUniqueApiKeyValue();
+
+      expect(value).toMatch(/^sk-[a-f0-9]{40}$/);
+      expect(apiKeyRepository.findOne).toHaveBeenCalledTimes(2);
     });
   });
 });

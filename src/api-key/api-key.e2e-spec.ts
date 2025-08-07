@@ -43,6 +43,8 @@ describe('APIKeyController (e2e)', () => {
       },
     });
     expect(body.id).toBeDefined();
+    expect(body.value).toBeDefined();
+    expect(body.value).toMatch(/^sk-[a-f0-9]{40}$/);
     expect(body.created_at).toBeDefined();
     expect(body.updated_at).toBeDefined();
 

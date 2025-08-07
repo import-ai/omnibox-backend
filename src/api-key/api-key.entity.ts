@@ -22,6 +22,9 @@ export class APIKey extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ unique: true, nullable: false })
+  value: string;
+
   @Column()
   userId: string;
 

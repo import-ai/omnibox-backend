@@ -1,4 +1,5 @@
 import { TestClient } from 'test/test-client';
+import { APIKeyPermission } from './api-key.entity';
 
 describe('APIKeyController (e2e)', () => {
   let client: TestClient;
@@ -16,7 +17,12 @@ describe('APIKeyController (e2e)', () => {
     const apiKeyData = {
       user_id: client.user.id,
       namespace_id: client.namespace.id,
-      attrs: { name: 'Test API Key', permissions: ['read', 'write'] },
+      attrs: {
+        root_resource_id: client.namespace.id,
+        permissions: {
+          resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
+        },
+      },
     };
 
     const response = await client
@@ -29,7 +35,12 @@ describe('APIKeyController (e2e)', () => {
     expect(body).toMatchObject({
       user_id: client.user.id,
       namespace_id: client.namespace.id,
-      attrs: { name: 'Test API Key', permissions: ['read', 'write'] },
+      attrs: {
+        root_resource_id: client.namespace.id,
+        permissions: {
+          resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
+        },
+      },
     });
     expect(body.id).toBeDefined();
     expect(body.created_at).toBeDefined();
@@ -39,7 +50,9 @@ describe('APIKeyController (e2e)', () => {
   });
 
   it('should get all API keys (GET)', async () => {
-    const response = await client.get('/api/v1/api-keys').expect(200);
+    const response = await client
+      .get(`/api/v1/api-keys?user_id=${client.user.id}`)
+      .expect(200);
 
     expect(Array.isArray(response.body)).toBe(true);
     expect(response.body.length).toBeGreaterThan(0);
@@ -94,13 +107,21 @@ describe('APIKeyController (e2e)', () => {
 
     expect(response.body).toMatchObject({
       id: apiKeyId,
-      attrs: { name: 'Test API Key', permissions: ['read', 'write'] },
+      attrs: {
+        root_resource_id: client.namespace.id,
+        permissions: {
+          resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
+        },
+      },
     });
   });
 
   it('should update an API key (PUT)', async () => {
     const updateData = {
-      attrs: { name: 'Updated API Key', permissions: ['read'] },
+      attrs: {
+        root_resource_id: client.namespace.id,
+        permissions: { resources: [APIKeyPermission.READ] },
+      },
     };
 
     const response = await client
@@ -110,7 +131,10 @@ describe('APIKeyController (e2e)', () => {
 
     expect(response.body).toMatchObject({
       id: apiKeyId,
-      attrs: { name: 'Updated API Key', permissions: ['read'] },
+      attrs: {
+        root_resource_id: client.namespace.id,
+        permissions: { resources: [APIKeyPermission.READ] },
+      },
     });
   });
 

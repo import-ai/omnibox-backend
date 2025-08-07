@@ -1,4 +1,5 @@
 import { IsOptional, IsString, IsUUID, IsObject } from 'class-validator';
+import { APIKeyAttrs } from './api-key.entity';
 
 export class CreateAPIKeyDto {
   @IsString()
@@ -9,7 +10,7 @@ export class CreateAPIKeyDto {
 
   @IsObject()
   @IsOptional()
-  attrs?: Record<string, any>;
+  attrs?: APIKeyAttrs;
 }
 
 export class UpdateAPIKeyDto {
@@ -23,7 +24,7 @@ export class UpdateAPIKeyDto {
 
   @IsObject()
   @IsOptional()
-  attrs?: Record<string, any>;
+  attrs?: APIKeyAttrs;
 }
 
 export class APIKeyResponseDto {
@@ -37,7 +38,7 @@ export class APIKeyResponseDto {
   namespace_id: string;
 
   @IsObject()
-  attrs: Record<string, any>;
+  attrs: APIKeyAttrs;
 
   created_at: Date;
 

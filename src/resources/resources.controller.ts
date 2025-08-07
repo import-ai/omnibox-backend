@@ -15,6 +15,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class ResourcesController {
@@ -39,8 +40,8 @@ export class ResourcesController {
   }
 
   @Post()
-  async create(@Req() req, @Body() data: CreateResourceDto) {
-    return await this.resourcesService.create(req.user, data);
+  async create(@UserId() userId: string, @Body() data: CreateResourceDto) {
+    return await this.resourcesService.create(userId, data);
   }
 
   @Post('duplicate/:resourceId')

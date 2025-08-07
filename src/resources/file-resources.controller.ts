@@ -14,6 +14,7 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/files')
 export class FileResourcesController {
@@ -22,13 +23,13 @@ export class FileResourcesController {
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
-    @Req() req,
+    @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body('namespace_id') namespaceId: string,
     @Body('parent_id') parentId: string,
   ) {
     const newResource = await this.resourcesService.uploadFile(
-      req.user,
+      userId,
       namespaceId,
       file,
       parentId,
@@ -36,7 +37,7 @@ export class FileResourcesController {
     );
     const { resource, permission, path } = await this.resourcesService.getPath({
       namespaceId,
-      userId: req.user.id,
+      userId,
       resourceId: newResource.id,
     });
     return { ...resource, currentLevel: permission, path };
@@ -101,13 +102,13 @@ export class FileResourcesController {
   @Patch(':resourceId')
   @UseInterceptors(FileInterceptor('file'))
   async patchFile(
-    @Req() req,
+    @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body('namespace_id') namespaceId: string,
     @Body('resource_id') resourceId: string,
   ) {
     return this.resourcesService.uploadFile(
-      req.user,
+      userId,
       namespaceId,
       file,
       undefined,

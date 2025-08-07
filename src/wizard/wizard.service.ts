@@ -72,7 +72,7 @@ export class WizardService {
       parentId: parentId,
       attrs: { url },
     };
-    const resource = await this.resourcesService.create(user, resourceDto);
+    const resource = await this.resourcesService.create(user.id, resourceDto);
 
     const payload = { resource_id: resource.id };
 

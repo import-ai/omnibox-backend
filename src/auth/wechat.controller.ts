@@ -1,5 +1,5 @@
 import { WechatService } from './wechat.service';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { Get, Query, Controller } from '@nestjs/common';
 
 @Controller('api/v1/wechat')

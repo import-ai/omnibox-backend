@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { transformKeysToSnakeCase } from 'omniboxd/interceptor/utils';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { Body, Controller, Get, Post, Res } from '@nestjs/common';

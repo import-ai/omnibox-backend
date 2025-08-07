@@ -1,6 +1,6 @@
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import {
   Body,
   Post,

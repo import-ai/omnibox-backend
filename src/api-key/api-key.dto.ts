@@ -14,14 +14,6 @@ export class CreateAPIKeyDto {
 }
 
 export class UpdateAPIKeyDto {
-  @IsString()
-  @IsOptional()
-  user_id?: string;
-
-  @IsString()
-  @IsOptional()
-  namespace_id?: string;
-
   @IsObject()
   @IsOptional()
   attrs?: APIKeyAttrs;

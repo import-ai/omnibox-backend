@@ -83,10 +83,6 @@ export class APIKeyService {
     updateApiKeyDto: UpdateAPIKeyDto,
   ): Promise<APIKeyResponseDto> {
     const updateData: Partial<APIKey> = {};
-    if (updateApiKeyDto.user_id !== undefined)
-      updateData.userId = updateApiKeyDto.user_id;
-    if (updateApiKeyDto.namespace_id !== undefined)
-      updateData.namespaceId = updateApiKeyDto.namespace_id;
     if (updateApiKeyDto.attrs !== undefined)
       updateData.attrs = updateApiKeyDto.attrs;
 

@@ -1,5 +1,5 @@
 import { Repository } from 'typeorm';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
@@ -7,15 +7,35 @@ import {
   UpdateAPIKeyDto,
   APIKeyResponseDto,
 } from 'omniboxd/api-key/api-key.dto';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 
 @Injectable()
 export class APIKeyService {
   constructor(
     @InjectRepository(APIKey)
     private readonly apiKeyRepository: Repository<APIKey>,
+    private readonly permissionsService: PermissionsService,
+    private readonly namespacesService: NamespacesService,
   ) {}
 
   async create(createApiKeyDto: CreateAPIKeyDto): Promise<APIKeyResponseDto> {
+    // Validate user has permission to the namespace
+    await this.validateUserNamespacePermission(
+      createApiKeyDto.user_id,
+      createApiKeyDto.namespace_id,
+    );
+
+    // If root_resource_id is provided, validate user has write permission to it
+    if (createApiKeyDto.attrs?.root_resource_id) {
+      await this.validateUserResourcePermission(
+        createApiKeyDto.user_id,
+        createApiKeyDto.namespace_id,
+        createApiKeyDto.attrs.root_resource_id,
+      );
+    }
+
     const apiKey = this.apiKeyRepository.create({
       userId: createApiKeyDto.user_id,
       namespaceId: createApiKeyDto.namespace_id,
@@ -78,5 +98,41 @@ export class APIKeyService {
       created_at: apiKey.createdAt,
       updated_at: apiKey.updatedAt,
     };
+  }
+
+  private async validateUserNamespacePermission(
+    userId: string,
+    namespaceId: string,
+  ): Promise<void> {
+    // Check if user is a member of the namespace
+    const member = await this.namespacesService.getMemberByUserId(
+      namespaceId,
+      userId,
+    );
+
+    if (!member) {
+      throw new ForbiddenException(
+        `User ${userId} does not have permission to namespace ${namespaceId}`,
+      );
+    }
+  }
+
+  private async validateUserResourcePermission(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<void> {
+    const hasWritePermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT, // Write permission requires at least CAN_EDIT
+    );
+
+    if (!hasWritePermission) {
+      throw new ForbiddenException(
+        `User ${userId} does not have write permission to resource ${resourceId} in namespace ${namespaceId}`,
+      );
+    }
   }
 }

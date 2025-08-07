@@ -34,6 +34,7 @@ export class TestClient {
     id: string;
     name: string;
     root_resource_id: string;
+    rootResourceId: string;
   };
 
   constructor(public readonly app: INestApplication<App>) {}
@@ -76,6 +77,10 @@ export class TestClient {
     expect(namespaceGetResponse[0].name).toContain(this.user.username);
 
     this.namespace = namespaceGetResponse[0];
+    // Ensure root_resource_id is available for backward compatibility
+    if (this.namespace.rootResourceId && !this.namespace.root_resource_id) {
+      this.namespace.root_resource_id = this.namespace.rootResourceId;
+    }
 
     return {
       namespace: this.namespace,

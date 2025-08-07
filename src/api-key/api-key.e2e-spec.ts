@@ -18,7 +18,7 @@ describe('APIKeyController (e2e)', () => {
       user_id: client.user.id,
       namespace_id: client.namespace.id,
       attrs: {
-        root_resource_id: client.namespace.id,
+        root_resource_id: client.namespace.root_resource_id,
         permissions: {
           resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
         },
@@ -36,7 +36,7 @@ describe('APIKeyController (e2e)', () => {
       user_id: client.user.id,
       namespace_id: client.namespace.id,
       attrs: {
-        root_resource_id: client.namespace.id,
+        root_resource_id: client.namespace.root_resource_id,
         permissions: {
           resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
         },
@@ -108,7 +108,7 @@ describe('APIKeyController (e2e)', () => {
     expect(response.body).toMatchObject({
       id: apiKeyId,
       attrs: {
-        root_resource_id: client.namespace.id,
+        root_resource_id: client.namespace.root_resource_id,
         permissions: {
           resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
         },
@@ -119,7 +119,7 @@ describe('APIKeyController (e2e)', () => {
   it('should update an API key (PUT)', async () => {
     const updateData = {
       attrs: {
-        root_resource_id: client.namespace.id,
+        root_resource_id: client.namespace.root_resource_id,
         permissions: { resources: [APIKeyPermission.READ] },
       },
     };
@@ -132,7 +132,7 @@ describe('APIKeyController (e2e)', () => {
     expect(response.body).toMatchObject({
       id: apiKeyId,
       attrs: {
-        root_resource_id: client.namespace.id,
+        root_resource_id: client.namespace.root_resource_id,
         permissions: { resources: [APIKeyPermission.READ] },
       },
     });
@@ -147,5 +147,41 @@ describe('APIKeyController (e2e)', () => {
   it('should return 404 for non-existent API key (GET)', async () => {
     const nonExistentId = '00000000-0000-0000-0000-000000000000';
     await client.get(`/api/v1/api-keys/${nonExistentId}`).expect(404);
+  });
+
+  it('should return 403 when user tries to create API key for namespace they are not a member of', async () => {
+    const apiKeyData = {
+      user_id: client.user.id,
+      namespace_id: 'non-existent-namespace',
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: {
+          resources: [APIKeyPermission.READ],
+        },
+      },
+    };
+
+    await client
+      .post('/api/v1/api-keys')
+      .send(apiKeyData)
+      .expect(403);
+  });
+
+  it('should return 403 when user tries to create API key with resource they do not have write access to', async () => {
+    const apiKeyData = {
+      user_id: client.user.id,
+      namespace_id: client.namespace.id,
+      attrs: {
+        root_resource_id: 'non-existent-resource',
+        permissions: {
+          resources: [APIKeyPermission.READ],
+        },
+      },
+    };
+
+    await client
+      .post('/api/v1/api-keys')
+      .send(apiKeyData)
+      .expect(403);
   });
 });

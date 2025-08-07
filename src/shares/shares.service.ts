@@ -29,6 +29,14 @@ export class SharesService {
     return ShareInfoDto.fromEntity(share);
   }
 
+  async getShareById(shareId: string): Promise<Share | null> {
+    return await this.shareRepo.findOne({
+      where: {
+        id: shareId,
+      },
+    });
+  }
+
   async updateShareInfo(
     namespaceId: string,
     resourceId: string,

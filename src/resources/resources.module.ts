@@ -13,6 +13,7 @@ import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { SharesModule } from 'omniboxd/shares/shares.module';
 
 @Module({
   exports: [ResourcesService],
@@ -29,6 +30,7 @@ import { TagModule } from 'omniboxd/tag/tag.module';
     TypeOrmModule.forFeature([Namespace]),
     TagModule,
     PermissionsModule,
+    SharesModule,
     MinioModule,
     AttachmentsModule,
     TasksModule,

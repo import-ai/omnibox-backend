@@ -1,11 +1,15 @@
 import { Repository } from 'typeorm';
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
+  APIKeyResponseDto,
   CreateAPIKeyDto,
   UpdateAPIKeyDto,
-  APIKeyResponseDto,
 } from 'omniboxd/api-key/api-key.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';

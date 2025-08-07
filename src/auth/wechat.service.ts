@@ -1,8 +1,8 @@
 import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { SocialService } from './social.service';
 import { UserService } from 'omniboxd/user/user.service';
+import { SocialService } from 'omniboxd/auth/social.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import {
   Logger,
@@ -65,7 +65,11 @@ export class WechatService extends SocialService {
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
-  async handleCallback(code: string, state: string): Promise<any> {
+  async handleCallback(
+    code: string,
+    state: string,
+    userId: string,
+  ): Promise<any> {
     const stateInfo = this.getState(state);
     if (!stateInfo) {
       throw new UnauthorizedException('Invalid state identifier');
@@ -97,6 +101,27 @@ export class WechatService extends SocialService {
       throw new BadRequestException(userData.errmsg);
     }
 
+    if (userId) {
+      const wechatUser = await this.userService.findByLoginId(userData.unionid);
+      if (wechatUser && wechatUser.id !== userId) {
+        throw new BadRequestException(
+          'This wechat account is already bound to another user',
+        );
+      }
+      const existingUser = await this.userService.bindingExistUser({
+        userId,
+        loginType: 'wechat',
+        loginId: userData.unionid,
+      });
+      const returnValue = {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+        }),
+      };
+      stateInfo.userInfo = returnValue;
+      return returnValue;
+    }
     const wechatUser = await this.userService.findByLoginId(userData.unionid);
     if (wechatUser) {
       const returnValue = {
@@ -134,5 +159,9 @@ export class WechatService extends SocialService {
       stateInfo.userInfo = returnValue;
       return returnValue;
     });
+  }
+
+  async unbind(userId: string) {
+    await this.userService.unbindByLoginType(userId, 'wechat');
   }
 }

@@ -1,8 +1,12 @@
 import { EntityManager } from 'typeorm';
 import generateId from 'omniboxd/utils/generate-id';
 import { UserService } from 'omniboxd/user/user.service';
-import { WechatCheckResponseDto } from './dto/wechat-login.dto';
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { WechatCheckResponseDto } from 'omniboxd/auth/dto/wechat-login.dto';
+import {
+  Injectable,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 
 @Injectable()
 export class SocialService {

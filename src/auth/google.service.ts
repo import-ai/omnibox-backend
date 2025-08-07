@@ -1,7 +1,7 @@
 import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { SocialService } from './social.service';
+import { SocialService } from 'omniboxd/auth/social.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import {
@@ -73,7 +73,11 @@ export class GoogleService extends SocialService {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  async handleCallback(code: string, state: string): Promise<any> {
+  async handleCallback(
+    code: string,
+    state: string,
+    userId: string,
+  ): Promise<any> {
     const stateInfo = this.getState(state);
     if (!stateInfo) {
       throw new UnauthorizedException('Invalid state identifier');
@@ -118,6 +122,28 @@ export class GoogleService extends SocialService {
 
     if (!userData.sub || !userData.email) {
       throw new BadRequestException('Invalid user data from Google');
+    }
+
+    if (userId) {
+      const wechatUser = await this.userService.findByLoginId(userData.sub);
+      if (wechatUser && wechatUser.id !== userId) {
+        throw new BadRequestException(
+          'This google account is already bound to another user',
+        );
+      }
+      const existingUser = await this.userService.bindingExistUser({
+        userId,
+        loginType: 'google',
+        loginId: userData.sub,
+      });
+      const returnValue = {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+        }),
+      };
+      stateInfo.userInfo = returnValue;
+      return returnValue;
     }
 
     // 检查用户是否已存在
@@ -169,5 +195,9 @@ export class GoogleService extends SocialService {
       stateInfo.userInfo = returnValue;
       return returnValue;
     });
+  }
+
+  async unbind(userId: string) {
+    await this.userService.unbindByLoginType(userId, 'google');
   }
 }

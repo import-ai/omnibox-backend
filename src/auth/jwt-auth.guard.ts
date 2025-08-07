@@ -1,8 +1,7 @@
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
-import { Injectable, ExecutionContext } from '@nestjs/common';
-import { IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
-import { IS_API_KEY_AUTH } from 'omniboxd/auth/api-key/decorators';
+import { ExecutionContext, Injectable } from '@nestjs/common';
+import { IS_API_KEY_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {

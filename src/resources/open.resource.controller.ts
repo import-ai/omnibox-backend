@@ -5,8 +5,8 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { APIKeyAuth } from 'omniboxd/auth/api-key/decorators/api-key.auth.decorator';
-import { APIKey } from 'omniboxd/auth/api-key/decorators/api-key.decorator';
+import { APIKeyAuth } from 'omniboxd/auth/decorators';
+import { APIKey } from 'omniboxd/auth/decorators';
 import { APIKey as APIKeyEntity } from 'omniboxd/api-key/api-key.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';

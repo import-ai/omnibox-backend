@@ -6,8 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
-import { IS_API_KEY_AUTH } from 'omniboxd/auth/api-key/decorators';
-import { IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
+import { IS_API_KEY_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
 
 @Injectable()
 export class APIKeyAuthGuard implements CanActivate {

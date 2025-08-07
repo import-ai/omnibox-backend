@@ -16,6 +16,7 @@ import {
   ConflictException,
   Injectable,
 } from '@nestjs/common';
+import { isUsernameBlocked } from 'omniboxd/utils/blocked-usernames';
 
 @Injectable()
 export class UserService {
@@ -77,6 +78,9 @@ export class UserService {
   }
 
   async create(account: CreateUserDto, manager?: EntityManager) {
+    if (account.username && isUsernameBlocked(account.username)) {
+      throw new ConflictException('The account already exists');
+    }
     const repo = manager ? manager.getRepository(User) : this.userRepository;
     const existingUser = await repo.findOne({
       where: [{ username: account.username }, { email: account.email }],
@@ -230,6 +234,9 @@ export class UserService {
   }
 
   async update(id: string, account: UpdateUserDto) {
+    if (account.username && isUsernameBlocked(account.username)) {
+      throw new ConflictException('The account already exists');
+    }
     const existUser = await this.find(id);
     if (!existUser) {
       throw new ConflictException('The account does not exist');

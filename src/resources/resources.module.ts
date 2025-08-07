@@ -10,6 +10,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { FileResourcesController } from 'omniboxd/resources/file-resources.controller';
 import { MinioModule } from 'omniboxd/minio/minio.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
+import { SharesModule } from 'omniboxd/shares/shares.module';
 
 @Module({
   exports: [ResourcesService],
@@ -25,6 +26,7 @@ import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
     TypeOrmModule.forFeature([Task]),
     TypeOrmModule.forFeature([Namespace]),
     PermissionsModule,
+    SharesModule,
     MinioModule,
   ],
 })

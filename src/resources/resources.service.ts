@@ -263,7 +263,11 @@ export class ResourcesService {
       : resources;
   }
 
-  async listChildren(namespaceId: string, resourceId: string, userId: string) {
+  async listChildren(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<ResourceMetaDto[]> {
     const parentResources = await this.getParentResources(
       namespaceId,
       resourceId,
@@ -278,16 +282,7 @@ export class ResourcesService {
     }
 
     const children = await this.resourceRepository.find({
-      select: [
-        'id',
-        'tags',
-        'name',
-        'attrs',
-        'parentId',
-        'updatedAt',
-        'namespaceId',
-        'resourceType',
-      ],
+      select: ['id', 'name', 'parentId', 'resourceType'],
       where: {
         namespaceId,
         parentId: resourceId,
@@ -305,7 +300,7 @@ export class ResourcesService {
         filteredChildren.push(child);
       }
     }
-    return filteredChildren;
+    return filteredChildren.map((r) => ResourceMetaDto.fromEntity(r));
   }
 
   async getSpaceType(

@@ -8,12 +8,14 @@ export enum SpaceType {
 
 export class ResourceMetaDto {
   id: string;
+  parent_id: string | null;
   name: string;
   resource_type: string;
 
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
     dto.id = resource.id;
+    dto.parent_id = resource.parentId;
     dto.name = resource.name;
     dto.resource_type = resource.resourceType;
     return dto;

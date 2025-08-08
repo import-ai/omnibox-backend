@@ -14,6 +14,7 @@ import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
+import { SharedResourcesController } from './shared-resources.controller';
 
 @Module({
   exports: [ResourcesService],
@@ -23,6 +24,7 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
     InternalResourcesController,
     OpenResourcesController,
     FileResourcesController,
+    SharedResourcesController,
   ],
   imports: [
     TypeOrmModule.forFeature([Resource]),

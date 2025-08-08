@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
+
 import { MailModule } from 'omniboxd/mail/mail.module';
 import { UserModule } from 'omniboxd/user/user.module';
 import { AuthService } from 'omniboxd/auth/auth.service';
@@ -18,6 +19,7 @@ import { WechatService } from 'omniboxd/auth/wechat.service';
 import { WechatController } from 'omniboxd/auth/wechat.controller';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
+import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
 
 @Module({
   exports: [AuthService, WechatService],
@@ -35,6 +37,10 @@ import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
       provide: APP_GUARD,
       useClass: APIKeyAuthGuard,
     },
+    {
+      provide: APP_GUARD,
+      useClass: CookieAuthGuard,
+    },
   ],
   imports: [
     UserModule,
@@ -44,6 +50,7 @@ import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
     GroupsModule,
     PermissionsModule,
     APIKeyModule,
+
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

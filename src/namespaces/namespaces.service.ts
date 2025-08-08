@@ -259,7 +259,7 @@ export class NamespacesService {
         email: user.email,
         username: user.username,
         role: member.role,
-        level: permission,
+        permission: permission,
       });
     }
     return memberDtos;

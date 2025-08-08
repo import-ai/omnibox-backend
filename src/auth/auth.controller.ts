@@ -66,7 +66,7 @@ export class AuthController {
     @Body('namespace') namespaceId: string,
     @Body('role') role: NamespaceRole,
     @Body('resourceId') resourceId: string,
-    @Body('permissionLevel') permissionLevel: ResourcePermission,
+    @Body('permission') permission: ResourcePermission,
     @Body('groupId') groupId: string,
     @Body('emails') emails: Array<string>,
     @Body('groupTitles') groupTitles: Array<string>,
@@ -76,7 +76,7 @@ export class AuthController {
         namespaceId,
         resourceId,
         groupTitles,
-        permissionLevel,
+        permission,
       );
     }
     if (emails && emails.length > 0) {
@@ -88,7 +88,7 @@ export class AuthController {
             registerUrl,
             namespaceId,
             resourceId,
-            permissionLevel,
+            permission,
             groupId,
           }),
         ),

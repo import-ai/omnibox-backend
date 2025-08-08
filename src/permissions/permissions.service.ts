@@ -63,7 +63,7 @@ export class PermissionsService {
       permissionMap.get(resourceId)!.push(permission);
     }
 
-    // groupId -> PermissionLevel
+    // groupId -> Permission
     const groupPermissionMap: Map<string, ResourcePermission> = new Map();
     for (const resourceId of parentResourceIds) {
       for (const permission of permissionMap.get(resourceId) || []) {
@@ -99,7 +99,7 @@ export class PermissionsService {
       permissionMap.get(resourceId)!.push(permission);
     }
 
-    // userId -> PermissionLevel
+    // userId -> Permission
     const userPermissionMap: Map<string, ResourcePermission> = new Map();
     for (const resourceId of parentResourceIds) {
       for (const permission of permissionMap.get(resourceId) || []) {
@@ -265,17 +265,17 @@ export class PermissionsService {
 
     // Prepare response
     const userPermissions: UserPermissionDto[] = [];
-    for (const [userId, level] of userPermissionMap) {
+    for (const [userId, permission] of userPermissionMap) {
       const user = userMap.get(userId);
       if (user) {
-        userPermissions.push(UserPermissionDto.new(user, level));
+        userPermissions.push(UserPermissionDto.new(user, permission));
       }
     }
     const groupPermissions: GroupPermissionDto[] = [];
-    for (const [groupId, level] of groupPermissionMap) {
+    for (const [groupId, permission] of groupPermissionMap) {
       const group = groupMap.get(groupId);
       if (group) {
-        groupPermissions.push(GroupPermissionDto.new(group, level));
+        groupPermissions.push(GroupPermissionDto.new(group, permission));
       }
     }
     userPermissions.sort((a, b) => {

@@ -1,4 +1,7 @@
-import encodeFileName from 'omniboxd/utils/encode-filename';
+import {
+  encodeFileName,
+  getOriginalFileName,
+} from 'omniboxd/utils/encode-filename';
 import {
   BadRequestException,
   ForbiddenException,
@@ -94,9 +97,9 @@ export class AttachmentsService {
     const uploaded: Record<string, string>[] = [];
 
     for (const file of files) {
+      const originalName = getOriginalFileName(file.originalname); // Get corrected original name
       try {
         const filename: string = encodeFileName(file.originalname);
-        file.originalname = filename;
         const id = await this.uploadAttachment(
           namespaceId,
           resourceId,
@@ -106,12 +109,12 @@ export class AttachmentsService {
           file.mimetype,
         );
         uploaded.push({
-          name: filename,
+          name: originalName, // Use corrected original name in response
           link: id,
         });
       } catch (error) {
         this.logger.error({ error });
-        failed.push(file.originalname);
+        failed.push(originalName); // Use corrected original name in failed array
       }
     }
 

@@ -1,6 +1,9 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
-import encodeFileName from 'omniboxd/utils/encode-filename';
+import {
+  encodeFileName,
+  getOriginalFileName,
+} from 'omniboxd/utils/encode-filename';
 import {
   DataSource,
   EntityManager,
@@ -65,11 +68,11 @@ export class ResourcesService {
     });
   }
 
-  async create(user: User, data: CreateResourceDto) {
+  async create(userId: string, data: CreateResourceDto) {
     const ok = await this.permissionsService.userHasPermission(
       data.namespaceId,
       data.parentId,
-      user.id,
+      userId,
       ResourcePermission.CAN_EDIT,
     );
     if (!ok) {
@@ -79,7 +82,8 @@ export class ResourcesService {
       id: data.parentId,
       namespaceId: data.namespaceId,
     };
-    const savedResource = await this.dataSource.transaction(async (manager) => {
+
+    return await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(Resource);
       const parentResource = await repo.findOne({
         where,
@@ -95,20 +99,19 @@ export class ResourcesService {
 
       const resource = repo.create({
         ...data,
-        userId: user.id,
+        userId: userId,
         namespaceId: data.namespaceId,
         parentId: parentResource.id,
       });
       const savedResource = await repo.save(resource);
       await WizardTask.index.upsert(
         TASK_PRIORITY,
-        user.id,
+        userId,
         savedResource,
         manager.getRepository(Task),
       );
       return savedResource;
     });
-    return savedResource;
   }
 
   async duplicate(user: User, resourceId: string) {
@@ -127,7 +130,7 @@ export class ResourcesService {
         (newResource as any)[key] = resource[key];
       }
     });
-    return await this.create(user, newResource);
+    return await this.create(user.id, newResource);
   }
 
   async permissionFilter<
@@ -491,7 +494,7 @@ export class ResourcesService {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
-      resource = await this.create(user, {
+      resource = await this.create(user.id, {
         name: originalName,
         resourceType: ResourceType.FILE,
         namespaceId,
@@ -522,19 +525,20 @@ export class ResourcesService {
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
-    await WizardTask.reader.upsert(user, resource, this.taskRepository);
+    await WizardTask.reader.upsert(user.id, resource, this.taskRepository);
 
     return resource;
   }
 
   async uploadFile(
-    user: User,
+    userId: string,
     namespaceId: string,
     file: Express.Multer.File,
     parentId?: string,
     resourceId?: string,
   ) {
-    file.originalname = encodeFileName(file.originalname);
+    const originalFilename = getOriginalFileName(file.originalname);
+    const encodedFilename = encodeFileName(file.originalname);
 
     let resource: Resource;
     if (resourceId) {
@@ -543,13 +547,14 @@ export class ResourcesService {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
-      resource = await this.create(user, {
-        name: file.originalname,
+      resource = await this.create(userId, {
+        name: originalFilename, // Use original filename for display
         resourceType: ResourceType.FILE,
         namespaceId,
         parentId,
         attrs: {
-          original_name: file.originalname,
+          original_name: originalFilename,
+          encoded_name: encodedFilename, // Store encoded name for MinIO
           mimetype: file.mimetype,
         },
       });
@@ -568,7 +573,7 @@ export class ResourcesService {
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
-    await WizardTask.reader.upsert(user, resource, this.taskRepository);
+    await WizardTask.reader.upsert(userId, resource, this.taskRepository);
 
     return resource;
   }

@@ -36,6 +36,7 @@ import { NullUserEmail1752814358259 } from 'omniboxd/migrations/1752814358259-nu
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { Shares1753866547335 } from 'omniboxd/migrations/1753866547335-shares';
 import { SharesModule } from 'omniboxd/shares/shares.module';
+import { ApiKeys1754550165406 } from 'omniboxd/migrations/1754550165406-api-keys';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -102,6 +103,7 @@ export class AppModule implements NestModule {
               UserBindings1752652489640,
               NullUserEmail1752814358259,
               Shares1753866547335,
+              ApiKeys1754550165406,
               ...extraMigrations,
             ],
             migrationsRun: true,

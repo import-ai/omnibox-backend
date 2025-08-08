@@ -1,5 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Index, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('group_users')
 export class GroupUser extends Base {

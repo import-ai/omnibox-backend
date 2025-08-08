@@ -13,6 +13,7 @@ describe('UserController (e2e)', () => {
 
   it('should login with valid credentials', async () => {
     const response = await client
+      .request()
       .post('/api/v1/login')
       .send({
         email: client.user.email,
@@ -22,6 +23,8 @@ describe('UserController (e2e)', () => {
 
     expect(response.body).toHaveProperty('id');
     expect(response.body).toHaveProperty('access_token');
+
+    expect(response.body.id).toBe(client.user.id);
   });
 
   it('should access protected route with valid token', async () => {

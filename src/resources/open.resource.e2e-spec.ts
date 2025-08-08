@@ -1,5 +1,6 @@
 import { TestClient } from 'test/test-client';
 import { APIKeyPermission } from 'omniboxd/api-key/api-key.entity';
+import { uploadLanguageDatasets } from 'omniboxd/resources/file-resources.e2e-spec';
 
 describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;
@@ -32,20 +33,20 @@ describe('OpenResourcesController (e2e)', () => {
     await client.close();
   });
 
-  test.each([
-    { filename: 'test.txt', content: 'This is a test file.' },
-    { filename: '中文测试.txt', content: '这是一个中文测试文件。' },
-  ])('upload file via api: $filename', async ({ filename, content }) => {
-    const response = await client
-      .post('/open/api/v1/resources/upload')
-      .set('Authorization', `Bearer ${apiKeyValue}`)
-      .attach('file', Buffer.from(content), filename)
-      .expect(201);
+  test.each(uploadLanguageDatasets)(
+    'upload file via api: $filename',
+    async ({ filename, content }) => {
+      const response = await client
+        .post('/open/api/v1/resources/upload')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .attach('file', Buffer.from(content), filename)
+        .expect(201);
 
-    expect(response.body).toHaveProperty('id');
-    expect(typeof response.body.id).toBe('string');
-    expect(response.body.name).toBe(filename);
-  });
+      expect(response.body).toHaveProperty('id');
+      expect(typeof response.body.id).toBe('string');
+      expect(response.body.name).toBe(filename);
+    },
+  );
 
   it('should reject file upload without authorization header', async () => {
     const testFile = Buffer.from('test file content');

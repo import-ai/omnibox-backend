@@ -9,6 +9,7 @@ export const uploadLanguageDatasets = [
   { filename: '日本語.txt', content: '日本語のコンテンツです。' },
   { filename: '한국어.txt', content: '한국어 콘텐츠입니다.' },
   { filename: 'français.txt', content: 'Contenu en français.' },
+  { filename: 'ئۇيغۇرچە.txt', content: 'ئۇيغۇرچە مەزمۇنى.' },
   { filename: '🚀🔥.txt', content: '😊👍🌍' },
 ];
 

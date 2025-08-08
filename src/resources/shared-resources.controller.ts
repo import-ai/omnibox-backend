@@ -1,8 +1,8 @@
 import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
 import { ResourcesService } from './resources.service';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
 import { SharesService } from 'omniboxd/shares/shares.service';
-import { ResourceDto } from './dto/resource.dto';
+import { SharedResourceDto } from './dto/resource.dto';
+import { Public } from 'omniboxd/auth';
 
 @Controller('api/v1/shares/:shareId/resources')
 export class SharedResourcesController {
@@ -16,7 +16,7 @@ export class SharedResourcesController {
   async getResource(
     @Param('shareId') shareId: string,
     @Param('resourceId') resourceId: string,
-  ): Promise<ResourceDto> {
+  ): Promise<SharedResourceDto> {
     const share = await this.sharesService.getShareById(shareId);
     if (!share) {
       throw new NotFoundException(`No share found with id ${shareId}`);
@@ -34,6 +34,6 @@ export class SharedResourcesController {
         throw new NotFoundException(`No resource found with id ${resourceId}`);
       }
     }
-    return ResourceDto.fromEntity(resource);
+    return SharedResourceDto.fromEntity(resource);
   }
 }

@@ -339,7 +339,7 @@ describe('AttachmentsController (e2e)', () => {
   describe('GET /api/v1/attachments/media/:attachmentId (Public)', () => {
     let mediaAttachmentId: string;
     const mediaContent = Buffer.from('fake-media-content');
-    const mediaFilename = 'test-media.mp4';
+    const mediaFilename = 'test-media.mp3';
 
     beforeAll(async () => {
       // Upload a media file to test display

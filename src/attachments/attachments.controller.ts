@@ -16,9 +16,8 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { Request, Response } from 'express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { Cookies } from 'omniboxd/decorators/cookie.decorators';
 import { AuthService } from 'omniboxd/auth/auth.service';
+import { CookieAuth } from 'omniboxd/auth';
 
 @Controller('api/v1/attachments')
 export class AttachmentsController {
@@ -62,54 +61,21 @@ export class AttachmentsController {
     );
   }
 
-  @Public()
-  @Get('images/:attachmentId')
-  async displayImage(
-    @Req() req: Request,
-    @Res() res: Response,
-    @Cookies('token') token: string,
-    @Param('attachmentId') attachmentId: string,
-  ) {
-    let userId = '';
-
-    if (token) {
-      const payload = this.authService.jwtVerify(token);
-      if (payload && payload.sub) {
-        userId = payload.sub;
-      }
-    }
-
-    this.logger.debug({ userId, token, cookies: req.cookies });
-    if (userId) {
-      return await this.attachmentsService.displayImage(
-        attachmentId,
-        userId,
-        res,
-      );
-    }
+  setRedirect(req: Request, res: Response) {
     res
       .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
       .status(HttpStatus.FOUND)
       .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
   }
 
-  @Public()
-  @Get('media/:attachmentId')
-  async displayMedia(
+  @CookieAuth({ onAuthFail: 'continue' })
+  @Get('images/:attachmentId')
+  async displayImage(
+    @UserId({ optional: true }) userId: string | undefined,
     @Req() req: Request,
     @Res() res: Response,
-    @Cookies('token') token: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    let userId = '';
-
-    if (token) {
-      const payload = this.authService.jwtVerify(token);
-      if (payload && payload.sub) {
-        userId = payload.sub;
-      }
-    }
-
     if (userId) {
       return await this.attachmentsService.displayMedia(
         attachmentId,
@@ -117,10 +83,25 @@ export class AttachmentsController {
         res,
       );
     }
-    res
-      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-      .status(HttpStatus.FOUND)
-      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
+    this.setRedirect(req, res);
+  }
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @Get('media/:attachmentId')
+  async displayMedia(
+    @UserId({ optional: true }) userId: string | undefined,
+    @Req() req: Request,
+    @Res() res: Response,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    if (userId) {
+      return await this.attachmentsService.displayMedia(
+        attachmentId,
+        userId,
+        res,
+      );
+    }
+    this.setRedirect(req, res);
   }
 
   @Delete(':attachmentId')

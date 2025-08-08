@@ -1,12 +1,13 @@
 import {
-  Injectable,
   CanActivate,
   ExecutionContext,
+  Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { IS_COOKIE_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
+import { CookieAuthOptions } from 'omniboxd/auth/cookie/cookie.auth.decorator';
 
 @Injectable()
 export class CookieAuthGuard implements CanActivate {
@@ -25,19 +26,22 @@ export class CookieAuthGuard implements CanActivate {
       return true;
     }
 
-    const isCookieAuth = this.reflector.getAllAndOverride<boolean>(
-      IS_COOKIE_AUTH,
-      [context.getHandler(), context.getClass()],
-    );
+    const cookieAuthOptions = this.reflector.getAllAndOverride<
+      CookieAuthOptions & { enabled: boolean }
+    >(IS_COOKIE_AUTH, [context.getHandler(), context.getClass()]);
 
-    if (!isCookieAuth) {
+    if (!cookieAuthOptions?.enabled) {
       return true; // Let other guards handle non-cookie routes
     }
 
     const request = context.switchToHttp().getRequest();
     const token = request.cookies?.token;
+    const onAuthFail = cookieAuthOptions.onAuthFail || 'reject';
 
     if (!token) {
+      if (onAuthFail === 'continue') {
+        return true; // Continue without authentication
+      }
       throw new UnauthorizedException(
         'Authentication token cookie is required',
       );
@@ -47,6 +51,9 @@ export class CookieAuthGuard implements CanActivate {
       const payload = this.authService.jwtVerify(token);
 
       if (!payload.sub) {
+        if (onAuthFail === 'continue') {
+          return true; // Continue without authentication
+        }
         throw new UnauthorizedException('Invalid token payload');
       }
 
@@ -59,6 +66,10 @@ export class CookieAuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
+      if (onAuthFail === 'continue') {
+        return true; // Continue without authentication
+      }
+
       // Re-throw UnauthorizedException with original message
       if (error instanceof UnauthorizedException) {
         throw error;

@@ -162,6 +162,15 @@ export class AttachmentsService {
     return { id: attachmentId, success: true };
   }
 
+  isMedia(mimetype: string): boolean {
+    for (const type of ['image/', 'audio/']) {
+      if (mimetype.startsWith(type)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   async displayMedia(
     attachmentId: string,
     userId: string,
@@ -179,33 +188,11 @@ export class AttachmentsService {
       ResourcePermission.CAN_VIEW,
     );
     await this.checkAttachment(namespaceId, resourceId, attachmentId);
+    if (!this.isMedia(objectResponse.mimetype)) {
+      throw new BadRequestException(attachmentId);
+    }
     return objectStreamResponse(objectResponse, httpResponse, {
       forceDownload: false,
     });
-  }
-
-  async displayImage(
-    attachmentId: string,
-    userId: string,
-    httpResponse: Response,
-  ) {
-    const objectResponse = await this.minioService.get(
-      this.minioPath(attachmentId),
-    );
-    const { namespaceId, resourceId } = objectResponse.metadata;
-
-    await this.checkPermission(
-      namespaceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_VIEW,
-    );
-    await this.checkAttachment(namespaceId, resourceId, attachmentId);
-    if (objectResponse.mimetype.startsWith('image/')) {
-      return objectStreamResponse(objectResponse, httpResponse, {
-        forceDownload: false,
-      });
-    }
-    throw new BadRequestException(attachmentId);
   }
 }

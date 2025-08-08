@@ -21,6 +21,9 @@ export function randomString(length: number): string {
   return result;
 }
 
+/**
+ * End-to-end test client
+ */
 export class TestClient {
   public user: {
     id: string;

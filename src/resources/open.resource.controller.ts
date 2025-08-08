@@ -5,8 +5,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { APIKeyAuth } from 'omniboxd/auth/decorators';
-import { APIKey } from 'omniboxd/auth/decorators';
+import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import { APIKey as APIKeyEntity } from 'omniboxd/api-key/api-key.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
@@ -30,6 +29,6 @@ export class OpenResourcesController {
       apiKey.attrs.root_resource_id,
       undefined,
     );
-    return { id: newResource.id };
+    return { id: newResource.id, name: newResource.name };
   }
 }

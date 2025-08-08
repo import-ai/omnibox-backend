@@ -3,7 +3,5 @@ export default function encodeFileName(val?: string) {
     return '';
   }
 
-  const data = val.trim().replace(/\s+/g, '_');
-
-  return encodeURIComponent(data);
+  return Buffer.from(val, 'latin1').toString('utf-8');
 }

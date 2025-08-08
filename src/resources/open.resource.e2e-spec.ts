@@ -32,18 +32,19 @@ describe('OpenResourcesController (e2e)', () => {
     await client.close();
   });
 
-  it('should allow file upload with valid API key', async () => {
-    // Create a test file to upload
-    const testFile = Buffer.from('test file content');
-
+  test.each([
+    { filename: 'test.txt', content: 'This is a test file.' },
+    { filename: '中文测试.txt', content: '这是一个中文测试文件。' },
+  ])('upload file via api: $filename', async ({ filename, content }) => {
     const response = await client
       .post('/open/api/v1/resources/upload')
       .set('Authorization', `Bearer ${apiKeyValue}`)
-      .attach('file', testFile, 'test.txt')
+      .attach('file', Buffer.from(content), filename)
       .expect(201);
 
     expect(response.body).toHaveProperty('id');
     expect(typeof response.body.id).toBe('string');
+    expect(response.body.name).toBe(filename);
   });
 
   it('should reject file upload without authorization header', async () => {

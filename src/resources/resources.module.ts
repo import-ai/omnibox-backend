@@ -11,6 +11,7 @@ import { FileResourcesController } from 'omniboxd/resources/file-resources.contr
 import { MinioModule } from 'omniboxd/minio/minio.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { SharesModule } from 'omniboxd/shares/shares.module';
+import { SharedResourcesController } from './shared-resources.controller';
 
 @Module({
   exports: [ResourcesService],
@@ -20,6 +21,7 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
     InternalResourcesController,
     OpenResourcesController,
     FileResourcesController,
+    SharedResourcesController,
   ],
   imports: [
     TypeOrmModule.forFeature([Resource]),

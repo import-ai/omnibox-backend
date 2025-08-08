@@ -168,7 +168,7 @@ export class AuthService {
       namespaceId: string;
       role: NamespaceRole;
       resourceId?: string;
-      permissionLevel?: ResourcePermission;
+      permission?: ResourcePermission;
       groupId?: string;
     },
   ) {
@@ -176,7 +176,7 @@ export class AuthService {
       namespaceId: data.namespaceId,
       namespaceRole: data.role,
       resourceId: data.resourceId,
-      permissionLevel: data.permissionLevel,
+      permission: data.permission,
       groupId: data.groupId,
     };
     const account = await this.userService.findByEmail(email);
@@ -231,7 +231,7 @@ export class AuthService {
     namespaceId: string,
     resourceId: string,
     groupTitles: string[],
-    permissionLevel: ResourcePermission,
+    permission: ResourcePermission,
   ): Promise<void> {
     const groups = await this.groupsService.getGroupsByTitles(
       namespaceId,
@@ -242,7 +242,7 @@ export class AuthService {
         namespaceId,
         resourceId,
         group.id,
-        permissionLevel,
+        permission,
       );
     }
   }
@@ -259,7 +259,7 @@ export class AuthService {
       invitation.namespaceId,
       userId,
       invitation.namespaceRole,
-      getRootPermissionLevel(invitation),
+      getRootPermission(invitation),
       manager,
     );
     if (invitation.groupId) {
@@ -270,12 +270,12 @@ export class AuthService {
         manager,
       );
     }
-    if (invitation.resourceId && invitation.permissionLevel) {
+    if (invitation.resourceId && invitation.permission) {
       await this.permissionsService.updateUserPermission(
         invitation.namespaceId,
         invitation.resourceId,
         userId,
-        invitation.permissionLevel,
+        invitation.permission,
         manager,
       );
     }
@@ -296,11 +296,9 @@ export class AuthService {
   }
 }
 
-function getRootPermissionLevel(
-  invitation: UserInvitationDto,
-): ResourcePermission {
+function getRootPermission(invitation: UserInvitationDto): ResourcePermission {
   if (invitation.groupId || invitation.resourceId) {
     return ResourcePermission.NO_ACCESS;
   }
-  return invitation.permissionLevel || ResourcePermission.FULL_ACCESS;
+  return invitation.permission || ResourcePermission.FULL_ACCESS;
 }

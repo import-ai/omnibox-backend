@@ -21,6 +21,9 @@ export function randomString(length: number): string {
   return result;
 }
 
+/**
+ * End-to-end test client
+ */
 export class TestClient {
   public user: {
     id: string;
@@ -101,6 +104,18 @@ export class TestClient {
   patch(url: string) {
     return this.request()
       .patch(url)
+      .set('Authorization', `Bearer ${this.user.token}`);
+  }
+
+  put(url: string) {
+    return this.request()
+      .put(url)
+      .set('Authorization', `Bearer ${this.user.token}`);
+  }
+
+  delete(url: string) {
+    return this.request()
+      .delete(url)
       .set('Authorization', `Bearer ${this.user.token}`);
   }
 

@@ -6,5 +6,5 @@ import { ResourcePermission } from '../resource-permission.enum';
 export class PermissionDto {
   @IsEnum(ResourcePermission)
   @IsNotEmpty()
-  level: ResourcePermission;
+  permission: ResourcePermission;
 }

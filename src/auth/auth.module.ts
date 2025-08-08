@@ -18,6 +18,8 @@ import { WechatService } from 'omniboxd/auth/wechat.service';
 import { WechatController } from 'omniboxd/auth/wechat.controller';
 import { GoogleService } from 'omniboxd/auth/google.service';
 import { GoogleController } from 'omniboxd/auth/google.controller';
+import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
+import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
 
 @Module({
   exports: [AuthService, WechatService, GoogleService],
@@ -37,6 +39,10 @@ import { GoogleController } from 'omniboxd/auth/google.controller';
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
+    {
+      provide: APP_GUARD,
+      useClass: APIKeyAuthGuard,
+    },
   ],
   imports: [
     UserModule,
@@ -45,6 +51,7 @@ import { GoogleController } from 'omniboxd/auth/google.controller';
     NamespacesModule,
     GroupsModule,
     PermissionsModule,
+    APIKeyModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

@@ -15,8 +15,8 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { Request, Response } from 'express';
-import { UserId } from 'omniboxd/auth/decorators/user-id.decorator';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { Cookies } from 'omniboxd/decorators/cookie.decorators';
 import { AuthService } from 'omniboxd/auth/auth.service';
 

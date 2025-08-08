@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import {
@@ -14,6 +14,7 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/files')
 export class FileResourcesController {
@@ -22,24 +23,23 @@ export class FileResourcesController {
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
-    @Req() req,
+    @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body('namespace_id') namespaceId: string,
     @Body('parent_id') parentId: string,
   ) {
     const newResource = await this.resourcesService.uploadFile(
-      req.user,
+      userId,
       namespaceId,
       file,
       parentId,
       undefined,
     );
-    const { resource, permission, path } = await this.resourcesService.getPath({
+    return await this.resourcesService.getPath({
       namespaceId,
-      userId: req.user.id,
+      userId,
       resourceId: newResource.id,
     });
-    return { ...resource, currentLevel: permission, path };
   }
 
   @Post('chunk')
@@ -73,7 +73,7 @@ export class FileResourcesController {
 
   @Post('merge')
   async mergeFileChunks(
-    @Req() req,
+    @Req() req: Request,
     @Body('namespace_id') namespaceId: string,
     @Body('total_chunks', ParseIntPipe) totalChunks: number,
     @Body('file_hash') fileHash: string,
@@ -82,7 +82,7 @@ export class FileResourcesController {
     @Body('parent_id') parentId: string,
   ) {
     const newResource = await this.resourcesService.mergeFileChunks(
-      req.user,
+      req.user!.id,
       namespaceId,
       totalChunks,
       fileHash,
@@ -90,24 +90,23 @@ export class FileResourcesController {
       mimetype,
       parentId,
     );
-    const { resource, permission, path } = await this.resourcesService.getPath({
+    return await this.resourcesService.getPath({
       namespaceId,
-      userId: req.user.id,
+      userId: req.user!.id,
       resourceId: newResource.id,
     });
-    return { ...resource, currentLevel: permission, path };
   }
 
   @Patch(':resourceId')
   @UseInterceptors(FileInterceptor('file'))
   async patchFile(
-    @Req() req,
+    @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body('namespace_id') namespaceId: string,
     @Body('resource_id') resourceId: string,
   ) {
     return this.resourcesService.uploadFile(
-      req.user,
+      userId,
       namespaceId,
       file,
       undefined,

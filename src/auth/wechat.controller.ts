@@ -3,8 +3,8 @@ import { Get, Post, Query, Controller, Req } from '@nestjs/common';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { WechatService } from 'omniboxd/auth/wechat.service';
 import { SocialController } from 'omniboxd/auth/social.controller';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
-import { UserId } from 'omniboxd/auth/decorators/user-id.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/wechat')
 export class WechatController extends SocialController {

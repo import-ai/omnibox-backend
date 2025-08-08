@@ -39,7 +39,7 @@ export class InvitationsService {
         const invitationDto: InvitationDto = {
           id: invitation.id,
           namespaceRole: invitation.namespaceRole,
-          rootPermissionLevel: invitation.rootPermission,
+          rootPermission: invitation.rootPermission,
         };
         if (invitation.groupId) {
           const group = await this.groupsService.get(invitation.groupId);
@@ -72,7 +72,7 @@ export class InvitationsService {
     const invitationDto: InvitationDto = {
       id: invitation.id,
       namespaceRole: invitation.namespaceRole,
-      rootPermissionLevel: invitation.rootPermission,
+      rootPermission: invitation.rootPermission,
     };
     if (invitation.groupId) {
       const group = await this.groupsService.get(invitation.groupId);
@@ -96,9 +96,9 @@ export class InvitationsService {
     }
     if (req.groupId) {
       req.namespaceRole = NamespaceRole.MEMBER;
-      req.rootPermissionLevel = ResourcePermission.NO_ACCESS;
+      req.rootPermission = ResourcePermission.NO_ACCESS;
     }
-    if (!req.namespaceRole || !req.rootPermissionLevel) {
+    if (!req.namespaceRole || !req.rootPermission) {
       throw new UnprocessableEntityException(
         'Namespace role and root permission level are required',
       );
@@ -107,14 +107,14 @@ export class InvitationsService {
       this.invitationsRepository.create({
         namespaceId,
         namespaceRole: req.namespaceRole,
-        rootPermission: req.rootPermissionLevel,
+        rootPermission: req.rootPermission,
         groupId: req.groupId,
       }),
     );
     const invitationDto: InvitationDto = {
       id: invitation.id,
       namespaceRole: invitation.namespaceRole,
-      rootPermissionLevel: invitation.rootPermission,
+      rootPermission: invitation.rootPermission,
     };
     return invitationDto;
   }
@@ -146,7 +146,7 @@ export class InvitationsService {
     const invitationDto: AuthInvitationDto = {
       namespaceId,
       namespaceRole: invitation.namespaceRole,
-      permissionLevel: invitation.rootPermission,
+      permission: invitation.rootPermission,
       groupId: invitation.groupId,
     };
     await this.authService.handleUserInvitation(userId, invitationDto);

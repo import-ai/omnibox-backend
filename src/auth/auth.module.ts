@@ -27,7 +27,6 @@ import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
     WechatService,
     JwtStrategy,
     LocalStrategy,
-    APIKeyAuthGuard,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

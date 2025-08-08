@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import {
@@ -35,12 +35,11 @@ export class FileResourcesController {
       parentId,
       undefined,
     );
-    const { resource, permission, path } = await this.resourcesService.getPath({
+    return await this.resourcesService.getPath({
       namespaceId,
       userId,
       resourceId: newResource.id,
     });
-    return { ...resource, currentLevel: permission, path };
   }
 
   @Post('chunk')
@@ -74,7 +73,7 @@ export class FileResourcesController {
 
   @Post('merge')
   async mergeFileChunks(
-    @Req() req,
+    @Req() req: Request,
     @Body('namespace_id') namespaceId: string,
     @Body('total_chunks', ParseIntPipe) totalChunks: number,
     @Body('file_hash') fileHash: string,
@@ -83,7 +82,7 @@ export class FileResourcesController {
     @Body('parent_id') parentId: string,
   ) {
     const newResource = await this.resourcesService.mergeFileChunks(
-      req.user,
+      req.user!.id,
       namespaceId,
       totalChunks,
       fileHash,
@@ -91,12 +90,11 @@ export class FileResourcesController {
       mimetype,
       parentId,
     );
-    const { resource, permission, path } = await this.resourcesService.getPath({
+    return await this.resourcesService.getPath({
       namespaceId,
-      userId: req.user.id,
+      userId: req.user!.id,
       resourceId: newResource.id,
     });
-    return { ...resource, currentLevel: permission, path };
   }
 
   @Patch(':resourceId')

@@ -45,7 +45,7 @@ export class ResourcesController {
     return await this.resourcesService.create(userId, data);
   }
 
-  @Post('duplicate/:resourceId')
+  @Post(':resourceId/duplicate')
   async duplicate(
     @Req() req: Request,
     @Param('namespaceId') namespaceId: string,
@@ -55,12 +55,11 @@ export class ResourcesController {
       req.user!.id,
       resourceId,
     );
-    const { resource, permission, path } = await this.resourcesService.getPath({
+    return await this.resourcesService.getPath({
       namespaceId,
       userId: req.user!.id,
       resourceId: newResource.id,
     });
-    return { ...resource, currentLevel: permission, path };
   }
 
   @Get('query')
@@ -127,12 +126,11 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    const { resource, permission, path } = await this.resourcesService.getPath({
+    return await this.resourcesService.getPath({
       namespaceId,
       resourceId,
       userId: req.user!.id,
     });
-    return { ...resource, currentLevel: permission, path };
   }
 
   @Patch(':resourceId')
@@ -152,12 +150,11 @@ export class ResourcesController {
       throw new ForbiddenException('Not authorized');
     }
     await this.resourcesService.update(req.user!.id, resourceId, data);
-    const { resource, permission, path } = await this.resourcesService.getPath({
+    return await this.resourcesService.getPath({
       namespaceId,
       resourceId,
       userId: req.user!.id,
     });
-    return { ...resource, currentLevel: permission, path };
   }
 
   @Delete(':resourceId')
@@ -185,11 +182,10 @@ export class ResourcesController {
     @Param('resourceId') resourceId: string,
   ) {
     await this.resourcesService.restore(req.user!.id, resourceId);
-    const { resource, permission, path } = await this.resourcesService.getPath({
+    return await this.resourcesService.getPath({
       namespaceId,
       resourceId,
       userId: req.user!.id,
     });
-    return { ...resource, currentLevel: permission, path };
   }
 }

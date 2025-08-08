@@ -9,6 +9,7 @@ import { OpenResourcesController } from 'omniboxd/resources/open.resource.contro
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { FileResourcesController } from 'omniboxd/resources/file-resources.controller';
 import { MinioModule } from 'omniboxd/minio/minio.module';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 
 @Module({
   exports: [ResourcesService],
@@ -22,6 +23,7 @@ import { MinioModule } from 'omniboxd/minio/minio.module';
   imports: [
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Task]),
+    TypeOrmModule.forFeature([Namespace]),
     PermissionsModule,
     MinioModule,
   ],

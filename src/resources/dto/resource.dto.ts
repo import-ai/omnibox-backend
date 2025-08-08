@@ -3,7 +3,7 @@ import { Resource, ResourceType } from '../resources.entity';
 
 export enum SpaceType {
   PRIVATE = 'private',
-  TEAM = 'team',
+  TEAM = 'teamspace',
 }
 
 export class ResourceMetaDto {

@@ -99,7 +99,7 @@ export class ResourcesService {
 
       const resource = repo.create({
         ...data,
-        userId: userId,
+        userId,
         namespaceId: data.namespaceId,
         parentId: parentResource.id,
       });
@@ -114,7 +114,7 @@ export class ResourcesService {
     });
   }
 
-  async duplicate(user: User, resourceId: string) {
+  async duplicate(userId: string, resourceId: string) {
     const resource = await this.get(resourceId);
     if (!resource.parentId) {
       throw new BadRequestException('Cannot duplicate root resource.');
@@ -130,7 +130,7 @@ export class ResourcesService {
         (newResource as any)[key] = resource[key];
       }
     });
-    return await this.create(user.id, newResource);
+    return await this.create(userId, newResource);
   }
 
   async permissionFilter<
@@ -402,7 +402,7 @@ export class ResourcesService {
     );
   }
 
-  async delete(user: User, id: string) {
+  async delete(userId: string, id: string) {
     const resource = await this.get(id);
     if (!resource.parentId) {
       throw new BadRequestException('Cannot delete root resource.');
@@ -410,14 +410,14 @@ export class ResourcesService {
     await this.dataSource.transaction(async (manager) => {
       await manager.softDelete(Resource, id);
       await WizardTask.index.delete(
-        user,
+        userId,
         resource,
         manager.getRepository(Task),
       );
     });
   }
 
-  async restore(user: User, id: string) {
+  async restore(userId: string, id: string) {
     const resource = await this.resourceRepository.findOneOrFail({
       withDeleted: true,
       where: {
@@ -431,7 +431,7 @@ export class ResourcesService {
       await manager.restore(Resource, id);
       await WizardTask.index.upsert(
         TASK_PRIORITY,
-        user.id,
+        userId,
         resource,
         manager.getRepository(Task),
       );

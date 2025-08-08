@@ -1,6 +1,6 @@
 import { UserService } from 'omniboxd/user/user.service';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
-import { UserId } from 'omniboxd/auth/decorators/user-id.decorator';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {
   Req,

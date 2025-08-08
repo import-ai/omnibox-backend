@@ -161,7 +161,7 @@ export class NamespacesService {
     namespaceId: string,
     userId: string,
     role: NamespaceRole,
-    level: ResourcePermission,
+    permission: ResourcePermission,
     manager: EntityManager,
   ) {
     const count = await manager.count(NamespaceMember, {
@@ -193,7 +193,7 @@ export class NamespacesService {
       namespaceId,
       teamspaceRoot.id,
       userId,
-      level,
+      permission,
       manager,
     );
     await this.permissionsService.updateUserPermission(

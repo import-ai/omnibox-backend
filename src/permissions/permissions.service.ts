@@ -152,7 +152,7 @@ export class PermissionsService {
   ) {
     await this.resourceRepository.update(
       { namespaceId, id: resourceId },
-      { globalPermission: permission.level },
+      { globalPermission: permission.permission },
     );
   }
 

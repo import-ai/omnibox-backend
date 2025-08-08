@@ -146,7 +146,6 @@ export class GoogleService extends SocialService {
       return returnValue;
     }
 
-    // 检查用户是否已存在
     const existingUser = await this.userService.findByLoginId(userData.sub);
     if (existingUser) {
       const returnValue = {

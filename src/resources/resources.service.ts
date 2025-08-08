@@ -1,6 +1,8 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
-import encodeFileName from 'omniboxd/utils/encode-filename';
+import { encodeFileName, 
+  getOriginalFileName,
+} from 'omniboxd/utils/encode-filename';
 import {
   DataSource,
   EntityManager,
@@ -534,7 +536,8 @@ export class ResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    file.originalname = encodeFileName(file.originalname);
+    const originalFilename = getOriginalFileName(file.originalname);
+    const encodedFilename = encodeFileName(file.originalname);
 
     let resource: Resource;
     if (resourceId) {
@@ -544,12 +547,13 @@ export class ResourcesService {
       }
     } else if (parentId) {
       resource = await this.create(userId, {
-        name: file.originalname,
+        name: originalFilename, // Use original filename for display
         resourceType: ResourceType.FILE,
         namespaceId,
         parentId,
         attrs: {
-          original_name: file.originalname,
+          original_name: originalFilename,
+          encoded_name: encodedFilename, // Store encoded name for MinIO
           mimetype: file.mimetype,
         },
       });

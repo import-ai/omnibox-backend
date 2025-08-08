@@ -10,6 +10,7 @@ import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
 import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
+import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import {
   BadRequestException,
@@ -116,6 +117,31 @@ export class UserService {
     return await this.find(binding.userId);
   }
 
+  async findBindingByLoginType(userId: string, loginType: string) {
+    const repo = this.userBindingRepository;
+    return await repo.findOne({
+      where: { userId, loginType },
+    });
+  }
+
+  async unbindByLoginType(userId: string, loginType: string) {
+    const repo = this.userBindingRepository;
+    const binding = await repo.findOne({
+      where: { userId, loginType },
+    });
+    if (!binding) {
+      return;
+    }
+    await repo.remove(binding);
+  }
+
+  async listBinding(userId: string) {
+    const repo = this.userBindingRepository;
+    return await repo.find({
+      where: { userId },
+    });
+  }
+
   async findByUsername(
     username: string,
     manager?: EntityManager,
@@ -154,6 +180,19 @@ export class UserService {
     await bindingRepo.save(newBinding);
 
     return reset;
+  }
+
+  async bindingExistUser(userData: UpdateUserBindingDto): Promise<User> {
+    const bindingRepo = this.userBindingRepository;
+    const newBinding = bindingRepo.create({
+      userId: userData.userId,
+      loginId: userData.loginId,
+      loginType: userData.loginType,
+    });
+
+    await bindingRepo.save(newBinding);
+
+    return (await this.find(userData.userId)) as User;
   }
 
   async findAll(start: number, limit: number, search?: string) {

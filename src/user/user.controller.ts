@@ -1,5 +1,6 @@
 import { UserService } from 'omniboxd/user/user.service';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {
   Req,
@@ -66,5 +67,10 @@ export class UserController {
   @Get('option/:name')
   async getOption(@Req() req, @Param('name') name: string) {
     return await this.userService.getOption(req.user.id, name);
+  }
+
+  @Get('binding/list')
+  async listBinding(@UserId() userId: string) {
+    return await this.userService.listBinding(userId);
   }
 }

@@ -24,13 +24,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { User } from 'omniboxd/user/entities/user.entity';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { WizardTask } from 'omniboxd/resources/wizard.task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { Response } from 'express';
+import { ResourceDto, ResourceMetaDto, SpaceType } from './dto/resource.dto';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 
 const TASK_PRIORITY = 5;
 
@@ -41,6 +42,8 @@ export class ResourcesService {
     private readonly resourceRepository: Repository<Resource>,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
+    @InjectRepository(Namespace)
+    private readonly namespaceRepository: Repository<Namespace>,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
@@ -99,7 +102,7 @@ export class ResourcesService {
 
       const resource = repo.create({
         ...data,
-        userId: userId,
+        userId,
         namespaceId: data.namespaceId,
         parentId: parentResource.id,
       });
@@ -114,7 +117,7 @@ export class ResourcesService {
     });
   }
 
-  async duplicate(user: User, resourceId: string) {
+  async duplicate(userId: string, resourceId: string) {
     const resource = await this.get(resourceId);
     if (!resource.parentId) {
       throw new BadRequestException('Cannot duplicate root resource.');
@@ -130,7 +133,7 @@ export class ResourcesService {
         (newResource as any)[key] = resource[key];
       }
     });
-    return await this.create(user.id, newResource);
+    return await this.create(userId, newResource);
   }
 
   async permissionFilter<
@@ -260,7 +263,11 @@ export class ResourcesService {
       : resources;
   }
 
-  async listChildren(namespaceId: string, resourceId: string, userId: string) {
+  async listChildren(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<ResourceMetaDto[]> {
     const parentResources = await this.getParentResources(
       namespaceId,
       resourceId,
@@ -275,16 +282,7 @@ export class ResourcesService {
     }
 
     const children = await this.resourceRepository.find({
-      select: [
-        'id',
-        'tags',
-        'name',
-        'attrs',
-        'parentId',
-        'updatedAt',
-        'namespaceId',
-        'resourceType',
-      ],
+      select: ['id', 'name', 'parentId', 'resourceType'],
       where: {
         namespaceId,
         parentId: resourceId,
@@ -302,7 +300,20 @@ export class ResourcesService {
         filteredChildren.push(child);
       }
     }
-    return filteredChildren;
+    return filteredChildren.map((r) => ResourceMetaDto.fromEntity(r));
+  }
+
+  async getSpaceType(
+    namespaceId: string,
+    rootResourceId: string,
+  ): Promise<SpaceType> {
+    const count = await this.namespaceRepository.count({
+      where: {
+        id: namespaceId,
+        rootResourceId: rootResourceId,
+      },
+    });
+    return count > 0 ? SpaceType.TEAM : SpaceType.PRIVATE;
   }
 
   async getPath({
@@ -313,7 +324,7 @@ export class ResourcesService {
     userId: string;
     namespaceId: string;
     resourceId: string;
-  }) {
+  }): Promise<ResourceDto> {
     const resource = await this.get(resourceId);
     if (resource.namespaceId !== namespaceId) {
       throw new NotFoundException('Not found');
@@ -323,26 +334,26 @@ export class ResourcesService {
       resource.parentId,
     );
 
-    const permission = await this.permissionsService.getCurrentPermission(
+    const rootResourceId = parentResources
+      ? parentResources[parentResources.length - 1].id
+      : resourceId;
+    const spaceType = await this.getSpaceType(namespaceId, rootResourceId);
+
+    const curPermission = await this.permissionsService.getCurrentPermission(
       namespaceId,
       [resource, ...parentResources],
       userId,
     );
 
-    if (permission === ResourcePermission.NO_ACCESS) {
+    if (curPermission === ResourcePermission.NO_ACCESS) {
       throw new ForbiddenException('Not authorized');
     }
 
-    return {
-      resource,
-      permission,
-      path: [resource, ...parentResources]
-        .map((r) => ({
-          id: r.id,
-          name: r.name,
-        }))
-        .reverse(),
-    };
+    const path = [resource, ...parentResources]
+      .map((r) => ResourceMetaDto.fromEntity(r))
+      .reverse();
+
+    return ResourceDto.fromEntity(resource, curPermission, path, spaceType);
   }
 
   async get(id: string) {
@@ -402,7 +413,7 @@ export class ResourcesService {
     );
   }
 
-  async delete(user: User, id: string) {
+  async delete(userId: string, id: string) {
     const resource = await this.get(id);
     if (!resource.parentId) {
       throw new BadRequestException('Cannot delete root resource.');
@@ -410,14 +421,14 @@ export class ResourcesService {
     await this.dataSource.transaction(async (manager) => {
       await manager.softDelete(Resource, id);
       await WizardTask.index.delete(
-        user,
+        userId,
         resource,
         manager.getRepository(Task),
       );
     });
   }
 
-  async restore(user: User, id: string) {
+  async restore(userId: string, id: string) {
     const resource = await this.resourceRepository.findOneOrFail({
       withDeleted: true,
       where: {
@@ -431,7 +442,7 @@ export class ResourcesService {
       await manager.restore(Resource, id);
       await WizardTask.index.upsert(
         TASK_PRIORITY,
-        user.id,
+        userId,
         resource,
         manager.getRepository(Task),
       );
@@ -477,7 +488,7 @@ export class ResourcesService {
   }
 
   async mergeFileChunks(
-    user: User,
+    userId: string,
     namespaceId: string,
     totalChunks: number,
     fileHash: string,
@@ -494,7 +505,7 @@ export class ResourcesService {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
-      resource = await this.create(user.id, {
+      resource = await this.create(userId, {
         name: originalName,
         resourceType: ResourceType.FILE,
         namespaceId,
@@ -525,7 +536,7 @@ export class ResourcesService {
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
-    await WizardTask.reader.upsert(user.id, resource, this.taskRepository);
+    await WizardTask.reader.upsert(userId, resource, this.taskRepository);
 
     return resource;
   }

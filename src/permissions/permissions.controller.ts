@@ -78,7 +78,7 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       groupId,
-      permissionDto.level,
+      permissionDto.permission,
     );
   }
 
@@ -124,7 +124,7 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       userId,
-      permissionDto.level,
+      permissionDto.permission,
     );
   }
 

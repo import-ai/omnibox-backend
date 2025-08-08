@@ -23,7 +23,7 @@ export class UserInvitationDto {
   @Expose()
   @IsEnum(ResourcePermission)
   @IsOptional()
-  permissionLevel?: ResourcePermission;
+  permission?: ResourcePermission;
 
   @Expose()
   @IsString()

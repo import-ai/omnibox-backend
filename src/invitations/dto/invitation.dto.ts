@@ -5,6 +5,6 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 export class InvitationDto {
   id: string;
   namespaceRole: NamespaceRole;
-  rootPermissionLevel: ResourcePermission;
+  rootPermission: ResourcePermission;
   group?: GroupDto;
 }

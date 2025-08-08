@@ -7,6 +7,7 @@ import { SharesController } from './shares.controller';
 @Module({
   imports: [TypeOrmModule.forFeature([Share])],
   providers: [SharesService],
+  exports: [SharesService],
   controllers: [SharesController],
 })
 export class SharesModule {}

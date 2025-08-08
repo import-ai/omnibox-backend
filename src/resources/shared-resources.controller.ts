@@ -18,7 +18,7 @@ export class SharedResourcesController {
     @Param('resourceId') resourceId: string,
   ): Promise<SharedResourceDto> {
     const share = await this.sharesService.getShareById(shareId);
-    if (!share) {
+    if (!share || !share.enabled) {
       throw new NotFoundException(`No share found with id ${shareId}`);
     }
     const resource = await this.resourcesService.get(resourceId);

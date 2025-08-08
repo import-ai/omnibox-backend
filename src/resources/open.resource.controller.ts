@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   Post,
   UploadedFile,
@@ -9,10 +11,40 @@ import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import { APIKey as APIKeyEntity } from 'omniboxd/api-key/api-key.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { OpenCreateResourceDto } from 'omniboxd/resources/dto/open.create-resource.dto';
+import { ResourceType } from 'omniboxd/resources/resources.entity';
 
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
+
+  @Post()
+  @APIKeyAuth()
+  async create(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Body() data: OpenCreateResourceDto,
+  ) {
+    if (!data.content) {
+      throw new BadRequestException('Content is required for the resource.');
+    }
+
+    const resourceData = {
+      name: data.name || '',
+      content: data.content,
+      tags: data.tags || [],
+      attrs: data.attrs || {},
+      resourceType: ResourceType.FILE,
+      namespaceId: apiKey.namespaceId,
+      parentId: apiKey.attrs.root_resource_id,
+    };
+
+    const newResource = await this.resourcesService.create(
+      userId,
+      resourceData,
+    );
+    return { id: newResource.id, name: newResource.name };
+  }
 
   @Post('/upload')
   @APIKeyAuth()

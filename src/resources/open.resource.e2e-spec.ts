@@ -33,6 +33,158 @@ describe('OpenResourcesController (e2e)', () => {
     await client.close();
   });
 
+  describe('POST /open/api/v1/resources', () => {
+    it('should create a new resource with valid data', async () => {
+      const resourceData = {
+        name: 'Test Document',
+        content: 'This is a test document content',
+        tags: ['test', 'document'],
+        attrs: { custom: 'attribute' },
+      };
+
+      const response = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send(resourceData)
+        .expect(201);
+
+      expect(response.body).toHaveProperty('id');
+      expect(typeof response.body.id).toBe('string');
+      expect(response.body.name).toBe(resourceData.name);
+    });
+
+    it('should create a resource with minimal required data', async () => {
+      const resourceData = {
+        content: 'Minimal content for the resource',
+      };
+
+      const response = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send(resourceData)
+        .expect(201);
+
+      expect(response.body).toHaveProperty('id');
+      expect(typeof response.body.id).toBe('string');
+      expect(response.body).toHaveProperty('name');
+    });
+
+    it('should create resources with different content types', async () => {
+      const testCases = [
+        {
+          name: 'Text Content',
+          content: 'This is plain text content',
+        },
+        {
+          name: 'JSON Content',
+          content: JSON.stringify({ key: 'value', number: 42 }),
+        },
+        {
+          name: 'Code Content',
+          content: 'function hello() { return "world"; }',
+        },
+      ];
+
+      for (const resourceData of testCases) {
+        const response = await client
+          .request()
+          .post('/open/api/v1/resources')
+          .set('Authorization', `Bearer ${apiKeyValue}`)
+          .send(resourceData)
+          .expect(201);
+
+        expect(response.body).toHaveProperty('id');
+        expect(typeof response.body.id).toBe('string');
+        expect(response.body.name).toBe(resourceData.name);
+      }
+    });
+
+    it('should reject resource creation without authorization header', async () => {
+      const resourceData = {
+        name: 'Test Document',
+        content: 'This is a test document content',
+      };
+
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .send(resourceData)
+        .expect(401);
+    });
+
+    it('should reject resource creation with invalid API key format', async () => {
+      const resourceData = {
+        name: 'Test Document',
+        content: 'This is a test document content',
+      };
+
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', 'Bearer invalid-key-format')
+        .send(resourceData)
+        .expect(401);
+    });
+
+    it('should reject resource creation with non-existent API key', async () => {
+      const resourceData = {
+        name: 'Test Document',
+        content: 'This is a test document content',
+      };
+
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', 'Bearer sk-nonexistentkey1234567890123456789012')
+        .send(resourceData)
+        .expect(401);
+    });
+
+    it('should reject resource creation without required content', async () => {
+      const resourceData = {
+        name: 'Test Document',
+        tags: ['test'],
+      };
+
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send(resourceData)
+        .expect(400);
+    });
+
+    it('should reject resource creation with empty content', async () => {
+      const resourceData = {
+        name: 'Test Document',
+        content: '',
+      };
+
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send(resourceData)
+        .expect(400);
+    });
+
+    it('should reject resource creation with null content', async () => {
+      const resourceData = {
+        name: 'Test Document',
+        content: null,
+      };
+
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send(resourceData)
+        .expect(400);
+    });
+  });
+
   test.each(uploadLanguageDatasets)(
     'upload file via api: $filename',
     async ({ filename, content }) => {

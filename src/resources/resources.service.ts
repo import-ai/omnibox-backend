@@ -1,6 +1,7 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
-import { encodeFileName, 
+import {
+  encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 import {

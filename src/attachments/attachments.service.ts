@@ -1,4 +1,5 @@
-import { encodeFileName, 
+import {
+  encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 import {

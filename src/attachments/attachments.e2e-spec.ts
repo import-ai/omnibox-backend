@@ -18,56 +18,28 @@ describe('AttachmentsController (e2e)', () => {
   });
 
   describe('POST /api/v1/attachments', () => {
-    it('should upload single attachment successfully', async () => {
-      const testContent = 'This is a test file content';
-      const filename = 'test-file.txt';
+    describe('Single file upload', () => {
+      test.each(uploadLanguageDatasets)(
+        'should upload single attachment $filename successfully',
+        async ({ filename, content }) => {
+          const response = await client
+            .post('/api/v1/attachments')
+            .query({
+              namespaceId: client.namespace.id,
+              resourceId: testResourceId,
+            })
+            .attach('file[]', Buffer.from(content), filename)
+            .expect(201);
 
-      const response = await client
-        .post('/api/v1/attachments')
-        .query({
-          namespaceId: client.namespace.id,
-          resourceId: testResourceId,
-        })
-        .attach('file[]', Buffer.from(testContent), filename)
-        .expect(201);
-
-      expect(response.body).toHaveProperty('uploaded');
-      expect(response.body).toHaveProperty('failed');
-      expect(response.body.uploaded).toHaveLength(1);
-      expect(response.body.failed).toHaveLength(0);
-      expect(response.body.uploaded[0]).toHaveProperty('name', filename);
-      expect(response.body.uploaded[0]).toHaveProperty('link');
-      expect(typeof response.body.uploaded[0].link).toBe('string');
-    });
-
-    it('should upload multiple attachments successfully', async () => {
-      const files = [
-        { content: 'First file content', filename: 'file1.txt' },
-        { content: 'Second file content', filename: 'file2.txt' },
-        { content: 'Third file content', filename: 'file3.txt' },
-      ];
-
-      const request = client.post('/api/v1/attachments').query({
-        namespaceId: client.namespace.id,
-        resourceId: testResourceId,
-      });
-
-      files.forEach(({ content, filename }) => {
-        request.attach('file[]', Buffer.from(content), filename);
-      });
-
-      const response = await request.expect(201);
-
-      expect(response.body.uploaded).toHaveLength(3);
-      expect(response.body.failed).toHaveLength(0);
-
-      files.forEach((file, index) => {
-        expect(response.body.uploaded[index]).toHaveProperty(
-          'name',
-          file.filename,
-        );
-        expect(response.body.uploaded[index]).toHaveProperty('link');
-      });
+          expect(response.body).toHaveProperty('uploaded');
+          expect(response.body).toHaveProperty('failed');
+          expect(response.body.uploaded).toHaveLength(1);
+          expect(response.body.failed).toHaveLength(0);
+          expect(response.body.uploaded[0]).toHaveProperty('name', filename);
+          expect(response.body.uploaded[0]).toHaveProperty('link');
+          expect(typeof response.body.uploaded[0].link).toBe('string');
+        },
+      );
     });
 
     it('should handle special characters in filenames', async () => {
@@ -94,51 +66,15 @@ describe('AttachmentsController (e2e)', () => {
       expect(response.body.uploaded.length).toBeGreaterThanOrEqual(1);
     });
 
-    test.each(uploadLanguageDatasets)(
-      'should upload file with multi-language filename: $filename',
-      async ({ filename, content }) => {
-        const response = await client
-          .post('/api/v1/attachments')
-          .query({
-            namespaceId: client.namespace.id,
-            resourceId: testResourceId,
-          })
-          .attach('file[]', Buffer.from(content), filename)
-          .expect(201);
-
-        expect(response.body).toHaveProperty('uploaded');
-        expect(response.body).toHaveProperty('failed');
-
-        // For multi-language filenames, some may fail due to encoding issues
-        // We check that the total count is correct and at least the upload was attempted
-        expect(
-          response.body.uploaded.length + response.body.failed.length,
-        ).toBe(1);
-
-        // If the upload succeeded, verify the structure
-        if (response.body.uploaded.length > 0) {
-          expect(response.body.uploaded[0]).toHaveProperty('name');
-          expect(response.body.uploaded[0]).toHaveProperty('link');
-          expect(typeof response.body.uploaded[0].link).toBe('string');
-        }
-
-        // If it failed, it should be in the failed array
-        if (response.body.failed.length > 0) {
-          expect(response.body.failed).toContain(filename);
-        }
-      },
-    );
-
     it('should upload multiple multi-language attachments successfully', async () => {
       // Use a subset of language datasets for batch testing
-      const multiLangFiles = uploadLanguageDatasets.slice(0, 5);
 
       const request = client.post('/api/v1/attachments').query({
         namespaceId: client.namespace.id,
         resourceId: testResourceId,
       });
 
-      multiLangFiles.forEach(({ content, filename }) => {
+      uploadLanguageDatasets.forEach(({ content, filename }) => {
         request.attach('file[]', Buffer.from(content), filename);
       });
 
@@ -146,16 +82,16 @@ describe('AttachmentsController (e2e)', () => {
 
       // For multi-language filenames, some may fail due to encoding issues
       // We check that all files were processed (either uploaded or failed)
-      expect(response.body.uploaded.length + response.body.failed.length).toBe(
-        5,
+      expect(response.body.uploaded).toHaveLength(
+        uploadLanguageDatasets.length,
       );
 
-      // At least some files should succeed (English should always work)
-      expect(response.body.uploaded.length).toBeGreaterThanOrEqual(1);
-
       // Verify structure of uploaded files
-      response.body.uploaded.forEach((uploadedFile) => {
-        expect(uploadedFile).toHaveProperty('name');
+      response.body.uploaded.forEach((uploadedFile, index) => {
+        expect(uploadedFile).toHaveProperty(
+          'name',
+          uploadLanguageDatasets[index].filename,
+        );
         expect(uploadedFile).toHaveProperty('link');
         expect(typeof uploadedFile.link).toBe('string');
       });

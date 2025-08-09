@@ -387,6 +387,21 @@ describe('ReaderProcessor', () => {
         expect(attachmentsService.uploadAttachment).toHaveBeenCalled();
         expect(task.output!.images).toBeUndefined();
       });
+
+      it('empty dict exception', async () => {
+        const task = createMockTask({
+          exception: {},
+          output: {
+            markdown: '# Test Document',
+          },
+        });
+
+        resourcesService.get.mockResolvedValue(mockResource as Resource);
+        resourcesService.update.mockResolvedValue(undefined);
+
+        const result = await processor.process(task);
+        expect(result).toEqual({ resourceId: 'test-resource-id' });
+      });
     });
   });
 });

@@ -1,7 +1,7 @@
 import { Base } from 'omniboxd/common/base.entity';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
-export enum APIKeyPermission {
+export enum APIKeyPermissionType {
   CREATE = 'create',
   READ = 'read',
   UPDATE = 'update',
@@ -12,10 +12,15 @@ export enum APIKeyPermissionTarget {
   RESOURCES = 'resources',
 }
 
-export class APIKeyAttrs {
+export type APIKeyPermission = {
+  target: APIKeyPermissionTarget;
+  permissions: APIKeyPermissionType[];
+};
+
+export type APIKeyAttrs = {
   root_resource_id: string;
-  permissions: Record<APIKeyPermissionTarget, APIKeyPermission[]>;
-}
+  permissions: APIKeyPermission[];
+};
 
 @Entity('api_keys')
 export class APIKey extends Base {

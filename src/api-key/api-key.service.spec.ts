@@ -6,7 +6,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { APIKeyService } from './api-key.service';
 import {
   APIKey,
-  APIKeyPermission,
+  APIKeyPermissionType,
   APIKeyPermissionTarget,
 } from './api-key.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -27,9 +27,12 @@ describe('APIKeyService', () => {
     namespaceId: 'test-namespace-id',
     attrs: {
       root_resource_id: 'test-resource-id',
-      permissions: {
-        [APIKeyPermissionTarget.RESOURCES]: [APIKeyPermission.READ],
-      },
+      permissions: [
+        {
+          target: APIKeyPermissionTarget.RESOURCES,
+          permissions: [APIKeyPermissionType.READ],
+        },
+      ],
     },
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -87,9 +90,12 @@ describe('APIKeyService', () => {
       namespace_id: 'test-namespace-id',
       attrs: {
         root_resource_id: 'test-resource-id',
-        permissions: {
-          [APIKeyPermissionTarget.RESOURCES]: [APIKeyPermission.READ],
-        },
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
       },
     };
 
@@ -192,9 +198,12 @@ describe('APIKeyService', () => {
         user_id: 'test-user-id',
         namespace_id: 'test-namespace-id',
         attrs: {
-          permissions: {
-            [APIKeyPermissionTarget.RESOURCES]: [APIKeyPermission.READ],
-          },
+          permissions: [
+            {
+              target: APIKeyPermissionTarget.RESOURCES,
+              permissions: [APIKeyPermissionType.READ],
+            },
+          ],
         } as any,
       };
 

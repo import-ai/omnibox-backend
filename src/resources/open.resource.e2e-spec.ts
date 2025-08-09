@@ -1,23 +1,33 @@
 import { TestClient } from 'test/test-client';
-import { APIKeyPermission } from 'omniboxd/api-key/api-key.entity';
+import {
+  APIKeyPermissionType,
+  APIKeyPermissionTarget,
+} from 'omniboxd/api-key/api-key.entity';
 import { uploadLanguageDatasets } from 'omniboxd/resources/file-resources.e2e-spec';
 
 describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;
   let apiKeyValue: string;
+  let readOnlyApiKeyValue: string;
 
   beforeAll(async () => {
     client = await TestClient.create();
 
-    // Create an API key for testing
+    // Create an API key with CREATE permissions for testing
     const apiKeyData = {
       user_id: client.user.id,
       namespace_id: client.namespace.id,
       attrs: {
         root_resource_id: client.namespace.root_resource_id,
-        permissions: {
-          resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
-        },
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.CREATE,
+            ],
+          },
+        ],
       },
     };
 
@@ -27,6 +37,28 @@ describe('OpenResourcesController (e2e)', () => {
       .expect(201);
 
     apiKeyValue = response.body.value;
+
+    // Create a read-only API key for permission testing
+    const readOnlyApiKeyData = {
+      user_id: client.user.id,
+      namespace_id: client.namespace.id,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
+      },
+    };
+
+    const readOnlyResponse = await client
+      .post('/api/v1/api-keys')
+      .send(readOnlyApiKeyData)
+      .expect(201);
+
+    readOnlyApiKeyValue = readOnlyResponse.body.value;
   });
 
   afterAll(async () => {
@@ -156,6 +188,20 @@ describe('OpenResourcesController (e2e)', () => {
         .expect(400);
     });
 
+    it('should reject resource creation with API key lacking CREATE permission', async () => {
+      const resourceData = {
+        name: 'Test Document',
+        content: 'This is a test document content',
+      };
+
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .send(resourceData)
+        .expect(403);
+    });
+
     it('should reject resource creation with empty content', async () => {
       const resourceData = {
         name: 'Test Document',
@@ -227,5 +273,15 @@ describe('OpenResourcesController (e2e)', () => {
       .set('Authorization', 'Bearer sk-nonexistentkey1234567890123456789012')
       .attach('file', testFile, 'test.txt')
       .expect(401);
+  });
+
+  it('should reject file upload with API key lacking CREATE permission', async () => {
+    const testFile = Buffer.from('test file content');
+
+    await client
+      .post('/open/api/v1/resources/upload')
+      .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+      .attach('file', testFile, 'test.txt')
+      .expect(403);
   });
 });

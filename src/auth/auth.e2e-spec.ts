@@ -1,6 +1,6 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
-import { APIKeyPermission } from 'omniboxd/api-key/api-key.entity';
+import { APIKeyPermissionType } from 'omniboxd/api-key/api-key.entity';
 
 describe('AuthModule (e2e)', () => {
   let client: TestClient;
@@ -17,9 +17,15 @@ describe('AuthModule (e2e)', () => {
       namespace_id: client.namespace.id,
       attrs: {
         root_resource_id: client.namespace.root_resource_id,
-        permissions: {
-          resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
-        },
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.CREATE,
+            ],
+          },
+        ],
       },
     };
 

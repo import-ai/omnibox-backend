@@ -3,7 +3,6 @@ import {
   Delete,
   Get,
   HttpStatus,
-  Logger,
   Param,
   Post,
   Query,
@@ -16,17 +15,11 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { Request, Response } from 'express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { AuthService } from 'omniboxd/auth/auth.service';
 import { CookieAuth } from 'omniboxd/auth';
 
 @Controller('api/v1/attachments')
 export class AttachmentsController {
-  private readonly logger = new Logger(AttachmentsController.name);
-
-  constructor(
-    private readonly attachmentsService: AttachmentsService,
-    private readonly authService: AuthService,
-  ) {}
+  constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Post()
   @UseInterceptors(FilesInterceptor('file[]'))

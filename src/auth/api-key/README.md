@@ -94,7 +94,12 @@ interface APIKey {
 
 interface APIKeyAttrs {
   root_resource_id: string;
-  permissions: Record<APIKeyPermissionTarget, APIKeyPermission[]>;
+  permissions: APIKeyPermission[];
+}
+
+interface APIKeyPermission {
+  target: APIKeyPermissionTarget;
+  permissions: APIKeyPermissionType[];
 }
 ```
 

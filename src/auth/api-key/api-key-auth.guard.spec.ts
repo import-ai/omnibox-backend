@@ -5,7 +5,7 @@ import { APIKeyAuthGuard } from 'omniboxd/auth';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import {
   APIKey,
-  APIKeyPermission,
+  APIKeyPermissionType,
   APIKeyPermissionTarget,
 } from 'omniboxd/api-key/api-key.entity';
 
@@ -122,9 +122,12 @@ describe('APIKeyAuthGuard', () => {
       namespaceId: 'namespace-456',
       attrs: {
         root_resource_id: 'resource-789',
-        permissions: {
-          [APIKeyPermissionTarget.RESOURCES]: [APIKeyPermission.READ],
-        },
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
       },
       createdAt: new Date(),
       updatedAt: new Date(),

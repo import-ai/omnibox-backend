@@ -243,7 +243,9 @@ export class ResourcesService {
       take: 10,
       order: { updatedAt: 'DESC' },
     });
-    return await this.permissionFilter(namespaceId, userId, resources);
+    return (await this.permissionFilter(namespaceId, userId, resources)).map(
+      (res) => ResourceMetaDto.fromEntity(res),
+    );
   }
 
   async getAllSubResources(

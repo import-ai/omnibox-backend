@@ -3,18 +3,7 @@ import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/resources/dto/update-resource.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import {
-  Body,
-  Controller,
-  Delete,
-  ForbiddenException,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, Req, } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { Request } from 'express';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource.dto';
@@ -106,12 +95,12 @@ export class ResourcesController {
   async search(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
-    @Query('name') name: string,
+    @Query('exclude_resource_id') excludeResourceId: string | undefined,
+    @Query('name') name: string | undefined,
   ): Promise<ResourceMetaDto[]> {
     return await this.resourcesService.search({
       namespaceId,
-      resourceId,
+      excludeResourceId,
       name,
       userId,
     });

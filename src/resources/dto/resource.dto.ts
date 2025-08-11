@@ -11,6 +11,7 @@ export class ResourceMetaDto {
   parent_id: string | null;
   name: string;
   resource_type: string;
+  attrs: Record<string, any>;
 
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
@@ -18,6 +19,7 @@ export class ResourceMetaDto {
     dto.parent_id = resource.parentId;
     dto.name = resource.name;
     dto.resource_type = resource.resourceType;
+    dto.attrs = resource.attrs;
     return dto;
   }
 }

@@ -8,7 +8,11 @@ import {
 } from '@nestjs/common';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
-import { APIKey as APIKeyEntity } from 'omniboxd/api-key/api-key.entity';
+import {
+  APIKey as APIKeyEntity,
+  APIKeyPermissionTarget,
+  APIKeyPermissionType,
+} from 'omniboxd/api-key/api-key.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { OpenCreateResourceDto } from 'omniboxd/resources/dto/open.create-resource.dto';
@@ -19,7 +23,14 @@ export class OpenResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}
 
   @Post()
-  @APIKeyAuth()
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.CREATE],
+      },
+    ],
+  })
   async create(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
@@ -47,7 +58,14 @@ export class OpenResourcesController {
   }
 
   @Post('/upload')
-  @APIKeyAuth()
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.CREATE],
+      },
+    ],
+  })
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @APIKey() apiKey: APIKeyEntity,

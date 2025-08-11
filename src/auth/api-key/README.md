@@ -31,6 +31,36 @@ export class ProtectedController {
 }
 ```
 
+### Permission-Based Authentication
+
+To require specific permissions for an endpoint, use the `permissions` option:
+
+```typescript
+import { Controller, Post } from '@nestjs/common';
+import { APIKeyAuth } from 'omniboxd/auth/decorators';
+import {
+  APIKeyPermissionTarget,
+  APIKeyPermissionType
+} from 'omniboxd/api-key/api-key.entity';
+
+@Controller('api/v1/resources')
+export class ResourcesController {
+
+  @Post()
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.CREATE]
+      }
+    ]
+  })
+  createResource() {
+    return { message: 'Resource created' };
+  }
+}
+```
+
 ### Accessing API Key Data
 
 To access the API key data in your controller, use the `@APIKey()` parameter decorator:
@@ -94,18 +124,50 @@ interface APIKey {
 
 interface APIKeyAttrs {
   root_resource_id: string;
-  permissions: Record<APIKeyPermissionTarget, APIKeyPermission[]>;
+  permissions: APIKeyPermission[];
+}
+
+interface APIKeyPermission {
+  target: APIKeyPermissionTarget;
+  permissions: APIKeyPermissionType[];
+}
+```
+
+## Permission Validation
+
+When using the `permissions` option, the guard validates that the API key has all required permissions:
+
+1. **Target Matching**: The API key must have permissions for the specified target (e.g., `RESOURCES`)
+2. **Permission Checking**: The API key must have all required permission types for each target
+3. **Validation Logic**: If any required permission is missing, a `ForbiddenException` is thrown
+
+### Available Permission Types
+
+```typescript
+enum APIKeyPermissionType {
+  CREATE = 'create',
+  READ = 'read',
+  UPDATE = 'update',
+  DELETE = 'delete',
+}
+
+enum APIKeyPermissionTarget {
+  RESOURCES = 'resources',
 }
 ```
 
 ## Error Handling
 
-The `APIKeyAuthGuard` throws `UnauthorizedException` in the following cases:
+The `APIKeyAuthGuard` throws exceptions in the following cases:
 
-- **Missing Authorization Header**: No `Authorization` header is provided
-- **Invalid Format**: API key doesn't start with `sk-`
-- **Not Found**: API key is not found in the database
-- **Parameter Decorator**: `@APIKey()` decorator throws if no API key data is available
+- **UnauthorizedException**:
+  - Missing Authorization Header: No `Authorization` header is provided
+  - Invalid Format: API key doesn't start with `sk-`
+  - Not Found: API key is not found in the database
+- **ForbiddenException**:
+  - Missing Target Permission: API key doesn't have permission for the required target
+  - Missing Permission Type: API key doesn't have the specific permission type required
+- **Parameter Decorator**: `@APIKey()` decorator throws `UnauthorizedException` if no API key data is available
 
 ## Integration with JWT Authentication
 

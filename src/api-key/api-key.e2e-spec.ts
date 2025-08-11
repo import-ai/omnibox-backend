@@ -1,5 +1,5 @@
 import { TestClient } from 'test/test-client';
-import { APIKeyPermission } from './api-key.entity';
+import { APIKeyPermissionType } from './api-key.entity';
 
 describe('APIKeyController (e2e)', () => {
   let client: TestClient;
@@ -19,9 +19,15 @@ describe('APIKeyController (e2e)', () => {
       namespace_id: client.namespace.id,
       attrs: {
         root_resource_id: client.namespace.root_resource_id,
-        permissions: {
-          resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
-        },
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.CREATE,
+            ],
+          },
+        ],
       },
     };
 
@@ -37,9 +43,15 @@ describe('APIKeyController (e2e)', () => {
       namespace_id: client.namespace.id,
       attrs: {
         root_resource_id: client.namespace.root_resource_id,
-        permissions: {
-          resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
-        },
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.CREATE,
+            ],
+          },
+        ],
       },
     });
     expect(body.id).toBeDefined();
@@ -111,9 +123,15 @@ describe('APIKeyController (e2e)', () => {
       id: apiKeyId,
       attrs: {
         root_resource_id: client.namespace.root_resource_id,
-        permissions: {
-          resources: [APIKeyPermission.READ, APIKeyPermission.CREATE],
-        },
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.CREATE,
+            ],
+          },
+        ],
       },
     });
   });
@@ -122,7 +140,12 @@ describe('APIKeyController (e2e)', () => {
     const updateData = {
       attrs: {
         root_resource_id: client.namespace.root_resource_id,
-        permissions: { resources: [APIKeyPermission.READ] },
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
       },
     };
 
@@ -135,7 +158,12 @@ describe('APIKeyController (e2e)', () => {
       id: apiKeyId,
       attrs: {
         root_resource_id: client.namespace.root_resource_id,
-        permissions: { resources: [APIKeyPermission.READ] },
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
       },
     });
   });
@@ -157,9 +185,12 @@ describe('APIKeyController (e2e)', () => {
       namespace_id: 'non-existent-namespace',
       attrs: {
         root_resource_id: client.namespace.root_resource_id,
-        permissions: {
-          resources: [APIKeyPermission.READ],
-        },
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
       },
     };
 
@@ -172,9 +203,12 @@ describe('APIKeyController (e2e)', () => {
       namespace_id: client.namespace.id,
       attrs: {
         root_resource_id: 'non-existent-resource',
-        permissions: {
-          resources: [APIKeyPermission.READ],
-        },
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
       },
     };
 

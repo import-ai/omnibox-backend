@@ -217,7 +217,7 @@ export class ResourcesService {
     await this.resourceRepository.save(newResource);
   }
 
-  async search({ namespaceId, resourceId, name, userId }) {
+  async search({ namespaceId, excludeResourceId, name, userId }) {
     const where: any = {
       userId,
       // Cannot move to root directory
@@ -225,10 +225,10 @@ export class ResourcesService {
       namespaceId,
     };
     // Self and child exclusions
-    if (resourceId) {
+    if (excludeResourceId) {
       const resourceChildren = await this.getAllSubResources(
         namespaceId,
-        resourceId,
+        excludeResourceId,
         '',
         true,
       );
@@ -243,7 +243,9 @@ export class ResourcesService {
       take: 10,
       order: { updatedAt: 'DESC' },
     });
-    return await this.permissionFilter(namespaceId, userId, resources);
+    return (await this.permissionFilter(namespaceId, userId, resources)).map(
+      (res) => ResourceMetaDto.fromEntity(res),
+    );
   }
 
   async getAllSubResources(
@@ -282,7 +284,7 @@ export class ResourcesService {
     }
 
     const children = await this.resourceRepository.find({
-      select: ['id', 'name', 'parentId', 'resourceType'],
+      select: ['id', 'name', 'parentId', 'resourceType', 'attrs'],
       where: {
         namespaceId,
         parentId: resourceId,

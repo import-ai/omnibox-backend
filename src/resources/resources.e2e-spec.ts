@@ -141,6 +141,11 @@ describe('ResourcesController (e2e)', () => {
 
   describe('GET /api/v1/namespaces/:namespaceId/resources', () => {
     let resourceId: string;
+    const testAttrs = {
+      custom: 'attribute',
+      nested: { key: 'value' },
+      number: 42,
+    };
 
     beforeEach(async () => {
       // Create a resource for testing
@@ -151,7 +156,7 @@ describe('ResourcesController (e2e)', () => {
         parentId: client.namespace.root_resource_id,
         content: 'Test content',
         tags: ['test'],
-        attrs: {},
+        attrs: testAttrs,
       };
 
       const response = await client
@@ -161,7 +166,7 @@ describe('ResourcesController (e2e)', () => {
       resourceId = response.body.id;
     });
 
-    it('should find resource by single ID', async () => {
+    it('should find resource by single ID and validate attrs match source', async () => {
       const response = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources?id=${resourceId}`,
@@ -171,10 +176,16 @@ describe('ResourcesController (e2e)', () => {
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body).toHaveLength(1);
       expect(response.body[0].id).toBe(resourceId);
+      expect(response.body[0].attrs).toEqual(testAttrs);
     });
 
-    it('should find resources by multiple IDs', async () => {
-      // Create another resource
+    it('should find resources by multiple IDs and validate attrs match source', async () => {
+      // Create another resource with different attrs
+      const testAttrs2 = {
+        different: 'attrs',
+        array: [1, 2, 3],
+        boolean: true,
+      };
       const resourceData2 = {
         name: 'Second Test Resource',
         namespaceId: client.namespace.id,
@@ -182,7 +193,7 @@ describe('ResourcesController (e2e)', () => {
         parentId: client.namespace.root_resource_id,
         content: 'Second test content',
         tags: ['test2'],
-        attrs: {},
+        attrs: testAttrs2,
       };
 
       const response2 = await client
@@ -202,6 +213,12 @@ describe('ResourcesController (e2e)', () => {
       const ids = response.body.map((r: any) => r.id);
       expect(ids).toContain(resourceId);
       expect(ids).toContain(resourceId2);
+
+      // Validate attrs for both resources
+      const resource1 = response.body.find((r: any) => r.id === resourceId);
+      const resource2 = response.body.find((r: any) => r.id === resourceId2);
+      expect(resource1.attrs).toEqual(testAttrs);
+      expect(resource2.attrs).toEqual(testAttrs2);
     });
 
     it('should return empty array when no ID provided', async () => {
@@ -485,6 +502,8 @@ describe('ResourcesController (e2e)', () => {
   describe('GET /api/v1/namespaces/:namespaceId/resources/query', () => {
     let parentFolderId: string;
     let childResourceId: string;
+    const folderAttrs = { folder: 'metadata', type: 'container' };
+    const childAttrs = { child: 'data', priority: 1, tags_meta: ['important'] };
 
     beforeEach(async () => {
       // Create a parent folder
@@ -495,7 +514,7 @@ describe('ResourcesController (e2e)', () => {
         parentId: client.namespace.root_resource_id,
         content: '',
         tags: ['folder'],
-        attrs: {},
+        attrs: folderAttrs,
       };
 
       const folderResponse = await client
@@ -512,7 +531,7 @@ describe('ResourcesController (e2e)', () => {
         parentId: parentFolderId,
         content: 'Child content',
         tags: ['child', 'query-test'],
-        attrs: {},
+        attrs: childAttrs,
       };
 
       const childResponse = await client
@@ -522,7 +541,7 @@ describe('ResourcesController (e2e)', () => {
       childResourceId = childResponse.body.id;
     });
 
-    it('should query resources by parentId', async () => {
+    it('should query resources by parentId and validate attrs match source', async () => {
       const response = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/query?parentId=${parentFolderId}`,
@@ -536,6 +555,7 @@ describe('ResourcesController (e2e)', () => {
       );
       expect(childResource).toBeDefined();
       expect(childResource.name).toBe('Child Resource');
+      expect(childResource.attrs).toEqual(childAttrs);
     });
 
     // Note: Tag filtering tests are skipped due to PostgreSQL JSONB array query limitations
@@ -584,6 +604,12 @@ describe('ResourcesController (e2e)', () => {
   describe('GET /api/v1/namespaces/:namespaceId/resources/:resourceId/children', () => {
     let parentFolderId: string;
     let childResourceId: string;
+    const parentAttrs = { parent: 'folder', permissions: 'read-write' };
+    const childAttrs = {
+      child: 'document',
+      version: 1.0,
+      metadata: { author: 'test' },
+    };
 
     beforeEach(async () => {
       // Create a parent folder
@@ -594,7 +620,7 @@ describe('ResourcesController (e2e)', () => {
         parentId: client.namespace.root_resource_id,
         content: '',
         tags: ['folder'],
-        attrs: {},
+        attrs: parentAttrs,
       };
 
       const folderResponse = await client
@@ -611,7 +637,7 @@ describe('ResourcesController (e2e)', () => {
         parentId: parentFolderId,
         content: 'Child content for list',
         tags: ['child'],
-        attrs: {},
+        attrs: childAttrs,
       };
 
       const childResponse = await client
@@ -621,7 +647,7 @@ describe('ResourcesController (e2e)', () => {
       childResourceId = childResponse.body.id;
     });
 
-    it('should list children of a resource', async () => {
+    it('should list children of a resource and validate attrs match source', async () => {
       const response = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/${parentFolderId}/children`,
@@ -635,6 +661,7 @@ describe('ResourcesController (e2e)', () => {
       );
       expect(childResource).toBeDefined();
       expect(childResource.name).toBe('Child Resource for List');
+      expect(childResource.attrs).toEqual(childAttrs);
     });
 
     it('should return empty array for resource with no children', async () => {
@@ -734,9 +761,15 @@ describe('ResourcesController (e2e)', () => {
     });
   });
 
-  // Note: Search tests are skipped due to timeout issues in the test environment
-  describe.skip('GET /api/v1/namespaces/:namespaceId/resources/search', () => {
+  describe('GET /api/v1/namespaces/:namespaceId/resources/search', () => {
     let searchableResourceId: string;
+    let anotherSearchableResourceId: string;
+    const searchAttrs = {
+      searchable: true,
+      category: 'document',
+      priority: 'high',
+      metadata: { indexed: true },
+    };
 
     beforeEach(async () => {
       // Create a resource for searching
@@ -747,7 +780,7 @@ describe('ResourcesController (e2e)', () => {
         parentId: client.namespace.root_resource_id,
         content: 'This is searchable content',
         tags: ['searchable'],
-        attrs: {},
+        attrs: searchAttrs,
       };
 
       const response = await client
@@ -755,9 +788,16 @@ describe('ResourcesController (e2e)', () => {
         .send(resourceData)
         .expect(HttpStatus.CREATED);
       searchableResourceId = response.body.id;
+
+      anotherSearchableResourceId = (
+        await client
+          .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+          .send(resourceData)
+          .expect(HttpStatus.CREATED)
+      ).body.id;
     });
 
-    it('should search resources by name', async () => {
+    it('should search resources by name and validate attrs match source', async () => {
       const response = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/search?name=Searchable`,
@@ -771,9 +811,10 @@ describe('ResourcesController (e2e)', () => {
       );
       expect(foundResource).toBeDefined();
       expect(foundResource.name).toBe('Searchable Document');
+      expect(foundResource.attrs).toEqual(searchAttrs);
     });
 
-    it('should search resources by partial name', async () => {
+    it('should search resources by partial name and validate attrs match source', async () => {
       const response = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/search?name=Search`,
@@ -786,6 +827,7 @@ describe('ResourcesController (e2e)', () => {
         (r: any) => r.id === searchableResourceId,
       );
       expect(foundResource).toBeDefined();
+      expect(foundResource.attrs).toEqual(searchAttrs);
     });
 
     it('should return empty array for non-matching search', async () => {
@@ -799,17 +841,28 @@ describe('ResourcesController (e2e)', () => {
       expect(response.body).toHaveLength(0);
     });
 
-    it('should search within specific resource scope', async () => {
+    it('return empty with root resource excluded', async () => {
       const response = await client
         .get(
-          `/api/v1/namespaces/${client.namespace.id}/resources/search?resourceId=${client.namespace.root_resource_id}&name=Searchable`,
+          `/api/v1/namespaces/${client.namespace.id}/resources/search?exclude_resource_id=${client.namespace.root_resource_id}&name=Searchable`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(0);
+    });
+
+    it('return another resource', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/search?exclude_resource_id=${searchableResourceId}`,
         )
         .expect(HttpStatus.OK);
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
       const foundResource = response.body.find(
-        (r: any) => r.id === searchableResourceId,
+        (r: any) => r.id === anotherSearchableResourceId,
       );
       expect(foundResource).toBeDefined();
     });
@@ -886,6 +939,168 @@ describe('ResourcesController (e2e)', () => {
         .get(`/api/v1/namespaces/${client.namespace.id}/resources`)
         .set('Authorization', 'Bearer invalid-token')
         .expect(HttpStatus.UNAUTHORIZED);
+    });
+  });
+
+  describe('Attrs Validation Across All Endpoints', () => {
+    let testResourceId: string;
+    let parentFolderId: string;
+    const complexAttrs = {
+      nested: {
+        object: {
+          with: 'values',
+          and: ['arrays', 'of', 'strings'],
+          numbers: [1, 2, 3],
+        },
+      },
+      boolean: true,
+      null_value: null,
+      unicode: '🌍🚀💻',
+      date: '2023-01-01T00:00:00Z',
+      float: 3.14159,
+    };
+
+    beforeEach(async () => {
+      // Create a parent folder
+      const folderData = {
+        name: 'Attrs Test Folder',
+        namespaceId: client.namespace.id,
+        resourceType: ResourceType.FOLDER,
+        parentId: client.namespace.root_resource_id,
+        content: '',
+        tags: ['attrs-test'],
+        attrs: { folder: 'metadata', type: 'test' },
+      };
+
+      const folderResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send(folderData)
+        .expect(HttpStatus.CREATED);
+      parentFolderId = folderResponse.body.id;
+
+      // Create a test resource with complex attrs
+      const resourceData = {
+        name: 'Attrs Test Resource',
+        namespaceId: client.namespace.id,
+        resourceType: ResourceType.DOC,
+        parentId: parentFolderId,
+        content: 'Content with complex attrs',
+        tags: ['attrs-test'],
+        attrs: complexAttrs,
+      };
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send(resourceData)
+        .expect(HttpStatus.CREATED);
+      testResourceId = response.body.id;
+    });
+
+    it('should preserve attrs in GET single resource endpoint', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(response.body.attrs).toEqual(complexAttrs);
+    });
+
+    it('should preserve attrs in GET multiple resources endpoint', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources?id=${testResourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].attrs).toEqual(complexAttrs);
+    });
+
+    it('should preserve attrs in query endpoint', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/query?parentId=${parentFolderId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      const foundResource = response.body.find(
+        (r: any) => r.id === testResourceId,
+      );
+      expect(foundResource).toBeDefined();
+      expect(foundResource.attrs).toEqual(complexAttrs);
+    });
+
+    it('should preserve attrs in children endpoint', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${parentFolderId}/children`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      const foundResource = response.body.find(
+        (r: any) => r.id === testResourceId,
+      );
+      expect(foundResource).toBeDefined();
+      expect(foundResource.attrs).toEqual(complexAttrs);
+    });
+
+    it('should preserve attrs in search endpoint', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/search?name=Attrs Test`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      const foundResource = response.body.find(
+        (r: any) => r.id === testResourceId,
+      );
+      expect(foundResource).toBeDefined();
+      expect(foundResource.attrs).toEqual(complexAttrs);
+    });
+
+    it('should preserve attrs after update', async () => {
+      const updatedAttrs = {
+        ...complexAttrs,
+        updated: true,
+        timestamp: new Date().toISOString(),
+      };
+
+      const updateResponse = await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}`,
+        )
+        .send({
+          namespaceId: client.namespace.id,
+          attrs: updatedAttrs,
+        })
+        .expect(HttpStatus.OK);
+
+      expect(updateResponse.body.attrs).toEqual(updatedAttrs);
+
+      // Verify attrs are preserved in subsequent GET request
+      const getResponse = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(getResponse.body.attrs).toEqual(updatedAttrs);
+    });
+
+    it('should preserve attrs after duplicate', async () => {
+      const duplicateResponse = await client
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/duplicate`,
+        )
+        .expect(HttpStatus.CREATED);
+
+      expect(duplicateResponse.body.attrs).toEqual(complexAttrs);
+      expect(duplicateResponse.body.id).not.toBe(testResourceId);
     });
   });
 

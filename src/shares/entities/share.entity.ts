@@ -15,7 +15,7 @@ export class Share extends Base {
 
   @BeforeInsert()
   generateId?() {
-    this.id = generateId(6);
+    this.id = generateId(10);
   }
 
   @Column()

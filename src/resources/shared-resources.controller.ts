@@ -1,4 +1,12 @@
-import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Headers,
+  NotFoundException,
+  Param,
+} from '@nestjs/common';
 import { ResourcesService } from './resources.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourceDto } from './dto/resource.dto';
@@ -16,10 +24,20 @@ export class SharedResourcesController {
   async getResource(
     @Param('shareId') shareId: string,
     @Param('resourceId') resourceId: string,
+    @Headers('X-OmniBox-Share-Password') password: string,
   ): Promise<SharedResourceDto> {
     const share = await this.sharesService.getShareById(shareId);
     if (!share || !share.enabled) {
       throw new NotFoundException(`No share found with id ${shareId}`);
+    }
+    if (share.password) {
+      if (!password) {
+        throw new ForbiddenException(`Invalid password for share ${shareId}`);
+      }
+      const match = await bcrypt.compare(password, share.password);
+      if (!match) {
+        throw new ForbiddenException(`Invalid password for share ${shareId}`);
+      }
     }
     const resource = await this.resourcesService.get(resourceId);
     if (!resource || resource.namespaceId != share.namespaceId) {

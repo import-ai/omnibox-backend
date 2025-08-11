@@ -1,9 +1,19 @@
-import { Body, Controller, Get, Param, Patch, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Req,
+} from '@nestjs/common';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { SharesService } from './shares.service';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
+import { ShareInfoDto } from './dto/share-info.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/share')
-export class SharesController {
+export class ResourceSharesController {
   constructor(private readonly sharesService: SharesService) {}
 
   @Get()
@@ -27,5 +37,20 @@ export class SharesController {
       resourceId,
       updateReq,
     );
+  }
+}
+
+@Controller('api/v1/shares/:shareId')
+export class SharesController {
+  constructor(private readonly sharesService: SharesService) {}
+
+  @Public()
+  @Get()
+  async getShareInfo(@Param('shareId') shareId: string) {
+    const share = await this.sharesService.getShareById(shareId);
+    if (!share || !share.enabled) {
+      throw new NotFoundException(`Cannot find share with id ${shareId}.`);
+    }
+    return ShareInfoDto.fromEntity(share);
   }
 }

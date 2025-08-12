@@ -6,11 +6,12 @@ import {
   Headers,
   NotFoundException,
   Param,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ResourcesService } from './resources.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourceDto } from './dto/resource.dto';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/shares/:shareId/resources')
 export class SharedResourcesController {
@@ -19,9 +20,9 @@ export class SharedResourcesController {
     private readonly sharesService: SharesService,
   ) {}
 
-  @Public()
   @Get(':resourceId')
   async getResource(
+    @UserId({ optional: true }) userId: string | undefined,
     @Param('shareId') shareId: string,
     @Param('resourceId') resourceId: string,
     @Headers('X-OmniBox-Share-Password') password: string,
@@ -30,6 +31,11 @@ export class SharedResourcesController {
     if (!share || !share.enabled) {
       throw new NotFoundException(`No share found with id ${shareId}`);
     }
+
+    if (share.requireLogin && !userId) {
+      throw new UnauthorizedException('This share requires login');
+    }
+
     if (share.password) {
       if (!password) {
         throw new ForbiddenException(`Invalid password for share ${shareId}`);

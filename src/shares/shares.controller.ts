@@ -12,7 +12,7 @@ import { SharesService } from './shares.service';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { ShareInfoDto } from './dto/share-info.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { CookieAuth } from 'omniboxd/auth';
+import { CookieAuth } from 'omniboxd/auth/decorators';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/share')
 export class ResourceSharesController {

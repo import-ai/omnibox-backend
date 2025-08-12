@@ -54,7 +54,7 @@ export class SharesService {
         resourceId,
         enabled: false,
         allResources: false,
-        requireLogin: true,
+        requireLogin: false,
         shareType: ShareType.ALL,
         password: null,
         expiresAt: null,

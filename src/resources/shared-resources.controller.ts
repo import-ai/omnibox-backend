@@ -12,6 +12,7 @@ import { ResourcesService } from './resources.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourceDto } from './dto/resource.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { CookieAuth } from 'omniboxd/auth';
 
 @Controller('api/v1/shares/:shareId/resources')
 export class SharedResourcesController {
@@ -20,6 +21,7 @@ export class SharedResourcesController {
     private readonly sharesService: SharesService,
   ) {}
 
+  @CookieAuth({ onAuthFail: 'continue' })
   @Get(':resourceId')
   async getResource(
     @Param('shareId') shareId: string,
@@ -29,6 +31,11 @@ export class SharedResourcesController {
   ): Promise<SharedResourceDto> {
     const share = await this.sharesService.getShareById(shareId);
     if (!share || !share.enabled) {
+      throw new NotFoundException(`No share found with id ${shareId}`);
+    }
+
+    // Check if share has expired
+    if (share.expiresAt && share.expiresAt < new Date()) {
       throw new NotFoundException(`No share found with id ${shareId}`);
     }
 

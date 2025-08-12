@@ -6,11 +6,12 @@ import {
   Param,
   Patch,
   Req,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { SharesService } from './shares.service';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { ShareInfoDto } from './dto/share-info.dto';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/share')
 export class ResourceSharesController {
@@ -44,13 +45,21 @@ export class ResourceSharesController {
 export class SharesController {
   constructor(private readonly sharesService: SharesService) {}
 
-  @Public()
   @Get()
-  async getShareInfo(@Param('shareId') shareId: string) {
+  async getShareInfo(
+    @Param('shareId') shareId: string,
+    @UserId({ optional: true }) userId?: string,
+  ) {
     const share = await this.sharesService.getShareById(shareId);
     if (!share || !share.enabled) {
       throw new NotFoundException(`Cannot find share with id ${shareId}.`);
     }
+
+    // Check if share requires login and user is authenticated
+    if (share.requireLogin && !userId) {
+      throw new UnauthorizedException('This share requires authentication');
+    }
+
     return ShareInfoDto.fromEntity(share);
   }
 }

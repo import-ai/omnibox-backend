@@ -22,10 +22,10 @@ export class SharedResourcesController {
 
   @Get(':resourceId')
   async getResource(
-    @UserId({ optional: true }) userId: string | undefined,
     @Param('shareId') shareId: string,
     @Param('resourceId') resourceId: string,
     @Headers('X-OmniBox-Share-Password') password: string,
+    @UserId({ optional: true }) userId?: string,
   ): Promise<SharedResourceDto> {
     const share = await this.sharesService.getShareById(shareId);
     if (!share || !share.enabled) {

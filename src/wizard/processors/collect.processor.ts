@@ -3,9 +3,14 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { BadRequestException } from '@nestjs/common';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { Repository } from 'typeorm';
+import { WizardTask } from 'omniboxd/resources/wizard.task.service';
 
 export class CollectProcessor extends Processor {
-  constructor(protected readonly resourcesService: ResourcesService) {
+  constructor(
+    protected readonly resourcesService: ResourcesService,
+    protected readonly taskRepository?: Repository<Task>,
+  ) {
     super();
   }
 
@@ -30,6 +35,28 @@ export class CollectProcessor extends Processor {
         content: markdown,
         attrs: mergedAttrs,
       });
+
+      // Trigger tag extraction if we have content and task repository
+      if (markdown && this.taskRepository) {
+        try {
+          const updatedResource = await this.resourcesService.get(resourceId);
+          if (updatedResource) {
+            await WizardTask.tagExtract.upsert(
+              task.userId,
+              updatedResource,
+              this.taskRepository,
+              3, // Higher priority than default for tag extraction
+            );
+          }
+        } catch (error) {
+          // Log error but don't fail the main task
+          console.warn(
+            `Failed to create tag extraction task for resource ${resourceId}:`,
+            error,
+          );
+        }
+      }
+
       return { resourceId };
     }
     return {};

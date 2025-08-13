@@ -11,12 +11,14 @@ import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
+import { TagExtractProcessor } from 'omniboxd/wizard/processors/tag-extract.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
 import { ResourceType } from 'omniboxd/resources/resources.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
+import { TagService } from 'omniboxd/tag/tag.service';
 
 @Injectable()
 export class WizardService {
@@ -31,12 +33,18 @@ export class WizardService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly tagService: TagService,
   ) {
     this.processors = {
-      collect: new CollectProcessor(resourcesService),
+      collect: new CollectProcessor(resourcesService, this.taskRepository),
       file_reader: new ReaderProcessor(
         this.resourcesService,
         this.attachmentsService,
+        this.taskRepository,
+      ),
+      tag_extract: new TagExtractProcessor(
+        this.resourcesService,
+        this.tagService,
       ),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');

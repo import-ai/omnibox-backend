@@ -3,6 +3,7 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { BadRequestException } from '@nestjs/common';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
+import { Repository } from 'typeorm';
 
 interface Image {
   name?: string;
@@ -15,8 +16,9 @@ export class ReaderProcessor extends CollectProcessor {
   constructor(
     protected readonly resourcesService: ResourcesService,
     protected readonly attachmentsService: AttachmentsService,
+    protected readonly taskRepository?: Repository<Task>,
   ) {
-    super(resourcesService);
+    super(resourcesService, taskRepository);
   }
 
   async process(task: Task): Promise<Record<string, any>> {

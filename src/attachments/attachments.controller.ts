@@ -5,7 +5,6 @@ import {
   HttpStatus,
   Param,
   Post,
-  Query,
   Req,
   Res,
   UploadedFiles,
@@ -17,7 +16,7 @@ import { Request, Response } from 'express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CookieAuth } from 'omniboxd/auth';
 
-@Controller('api/v1/attachments')
+@Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
 export class AttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
@@ -25,9 +24,9 @@ export class AttachmentsController {
   @UseInterceptors(FilesInterceptor('file[]'))
   async uploadAttachments(
     @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @UploadedFiles() files: Express.Multer.File[],
-    @Query('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
   ) {
     return await this.attachmentsService.uploadAttachments(
       namespaceId,
@@ -40,10 +39,10 @@ export class AttachmentsController {
   @Get(':attachmentId')
   async downloadAttachment(
     @UserId() userId: string,
-    @Res() res: Response,
-    @Query('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
+    @Res() res: Response,
   ) {
     return await this.attachmentsService.downloadAttachment(
       namespaceId,
@@ -62,15 +61,19 @@ export class AttachmentsController {
   }
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @Get('images/:attachmentId')
+  @Get(':attachmentId/images')
   async displayImage(
-    @UserId({ optional: true }) userId: string | undefined,
     @Req() req: Request,
-    @Res() res: Response,
+    @UserId({ optional: true }) userId: string | undefined,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
+    @Res() res: Response,
   ) {
     if (userId) {
       return await this.attachmentsService.displayMedia(
+        namespaceId,
+        resourceId,
         attachmentId,
         userId,
         res,
@@ -80,15 +83,19 @@ export class AttachmentsController {
   }
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @Get('media/:attachmentId')
+  @Get(':attachmentId/media')
   async displayMedia(
-    @UserId({ optional: true }) userId: string | undefined,
     @Req() req: Request,
-    @Res() res: Response,
+    @UserId({ optional: true }) userId: string | undefined,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
+    @Res() res: Response,
   ) {
     if (userId) {
       return await this.attachmentsService.displayMedia(
+        namespaceId,
+        resourceId,
         attachmentId,
         userId,
         res,
@@ -100,8 +107,8 @@ export class AttachmentsController {
   @Delete(':attachmentId')
   async deleteAttachment(
     @UserId() userId: string,
-    @Query('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
     return await this.attachmentsService.deleteAttachment(

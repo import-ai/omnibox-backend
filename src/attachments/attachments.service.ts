@@ -14,12 +14,17 @@ import { MinioService } from 'omniboxd/minio/minio.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { objectStreamResponse } from 'omniboxd/minio/utils';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, EntityManager } from 'typeorm';
+import { ResourceAttachment } from './entities/resource-attachment.entity';
 
 @Injectable()
 export class AttachmentsService {
   private readonly logger = new Logger(AttachmentsService.name);
 
   constructor(
+    @InjectRepository(ResourceAttachment)
+    private readonly resourceAttachmentRepository: Repository<ResourceAttachment>,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
   ) {}
@@ -45,19 +50,24 @@ export class AttachmentsService {
     return `attachments/${attachmentId}`;
   }
 
-  async checkAttachment(
+  async getRelationOrFail(
     namespaceId: string,
     resourceId: string,
     attachmentId: string,
   ) {
-    const info = await this.minioService.info(this.minioPath(attachmentId));
-    if (
-      info.metadata.namespaceId === namespaceId ||
-      info.metadata.resourceId === resourceId
-    ) {
-      return info;
+    const relation = await this.resourceAttachmentRepository.findOne({
+      where: {
+        namespaceId,
+        resourceId,
+        attachmentId,
+      },
+    });
+
+    if (!relation) {
+      throw new NotFoundException(attachmentId);
     }
-    throw new NotFoundException(attachmentId);
+
+    return relation;
   }
 
   async uploadAttachment(
@@ -75,9 +85,17 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
     const { id } = await this.minioService.put(filename, buffer, mimetype, {
-      metadata: { namespaceId, resourceId, userId },
       folder: 'attachments',
     });
+
+    // Create the resource-attachment relation
+    const resourceAttachment = this.resourceAttachmentRepository.create({
+      namespaceId,
+      resourceId,
+      attachmentId: id,
+    });
+    await this.resourceAttachmentRepository.save(resourceAttachment);
+
     return id;
   }
 
@@ -134,15 +152,12 @@ export class AttachmentsService {
       userId,
       ResourcePermission.CAN_VIEW,
     );
-    const info = await this.checkAttachment(
-      namespaceId,
-      resourceId,
-      attachmentId,
-    );
-    const stream = await this.minioService.getObject(
+    await this.getRelationOrFail(namespaceId, resourceId, attachmentId);
+
+    const objectResponse = await this.minioService.get(
       this.minioPath(attachmentId),
     );
-    return objectStreamResponse({ stream, ...info }, httpResponse);
+    return objectStreamResponse(objectResponse, httpResponse);
   }
 
   async deleteAttachment(
@@ -157,8 +172,12 @@ export class AttachmentsService {
       userId,
       ResourcePermission.CAN_EDIT,
     );
-    await this.checkAttachment(namespaceId, resourceId, attachmentId);
-    await this.minioService.removeObject(this.minioPath(attachmentId));
+    const relation = await this.getRelationOrFail(
+      namespaceId,
+      resourceId,
+      attachmentId,
+    );
+    await this.resourceAttachmentRepository.softRemove(relation);
     return { id: attachmentId, success: true };
   }
 
@@ -172,27 +191,63 @@ export class AttachmentsService {
   }
 
   async displayMedia(
+    namespaceId: string,
+    resourceId: string,
     attachmentId: string,
     userId: string,
     httpResponse: Response,
   ) {
-    const objectResponse = await this.minioService.get(
-      this.minioPath(attachmentId),
-    );
-    const { namespaceId, resourceId } = objectResponse.metadata;
-
     await this.checkPermission(
       namespaceId,
       resourceId,
       userId,
       ResourcePermission.CAN_VIEW,
     );
-    await this.checkAttachment(namespaceId, resourceId, attachmentId);
+
+    await this.getRelationOrFail(namespaceId, resourceId, attachmentId);
+
+    const objectResponse = await this.minioService.get(
+      this.minioPath(attachmentId),
+    );
+
     if (!this.isMedia(objectResponse.mimetype)) {
       throw new BadRequestException(attachmentId);
     }
+
     return objectStreamResponse(objectResponse, httpResponse, {
       forceDownload: false,
     });
+  }
+
+  async copyAttachmentsToResource(
+    namespaceId: string,
+    sourceResourceId: string,
+    targetResourceId: string,
+    entityManager?: EntityManager,
+  ) {
+    const repository = entityManager
+      ? entityManager.getRepository(ResourceAttachment)
+      : this.resourceAttachmentRepository;
+
+    const sourceRelations = await repository.find({
+      where: {
+        namespaceId,
+        resourceId: sourceResourceId,
+      },
+    });
+
+    const newRelations = sourceRelations.map((relation) =>
+      repository.create({
+        namespaceId,
+        resourceId: targetResourceId,
+        attachmentId: relation.attachmentId,
+      }),
+    );
+
+    if (newRelations.length > 0) {
+      await repository.save(newRelations);
+    }
+
+    return newRelations.length;
   }
 }

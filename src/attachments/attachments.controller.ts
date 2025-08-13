@@ -14,7 +14,8 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { Request, Response } from 'express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { CookieAuth } from 'omniboxd/auth';
+import { UploadAttachmentsResponseDto } from './dto/upload-attachments-response.dto';
+import { CookieAuth } from 'omniboxd/auth/decorators';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
 export class AttachmentsController {
@@ -27,7 +28,7 @@ export class AttachmentsController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @UploadedFiles() files: Express.Multer.File[],
-  ) {
+  ): Promise<UploadAttachmentsResponseDto> {
     return await this.attachmentsService.uploadAttachments(
       namespaceId,
       resourceId,

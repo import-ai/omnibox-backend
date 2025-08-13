@@ -17,6 +17,10 @@ import { objectStreamResponse } from 'omniboxd/minio/utils';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { ResourceAttachment } from './entities/resource-attachment.entity';
+import {
+  UploadAttachmentsResponseDto,
+  UploadedAttachmentDto,
+} from './dto/upload-attachments-response.dto';
 
 @Injectable()
 export class AttachmentsService {
@@ -104,7 +108,7 @@ export class AttachmentsService {
     resourceId: string,
     userId: string,
     files: Express.Multer.File[],
-  ) {
+  ): Promise<UploadAttachmentsResponseDto> {
     await this.checkPermission(
       namespaceId,
       resourceId,
@@ -112,7 +116,7 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
     const failed: string[] = [];
-    const uploaded: Record<string, string>[] = [];
+    const uploaded: UploadedAttachmentDto[] = [];
 
     for (const file of files) {
       const originalName = getOriginalFileName(file.originalname); // Get corrected original name
@@ -136,7 +140,12 @@ export class AttachmentsService {
       }
     }
 
-    return { uploaded, failed };
+    return {
+      namespaceId,
+      resourceId,
+      uploaded,
+      failed,
+    };
   }
 
   async downloadAttachment(

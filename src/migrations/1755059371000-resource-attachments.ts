@@ -13,12 +13,12 @@ export class ResourceAttachments1755059371000 implements MigrationInterface {
         },
         {
           name: 'namespace_id',
-          type: 'uuid',
+          type: 'character varying',
           isNullable: false,
         },
         {
           name: 'resource_id',
-          type: 'uuid',
+          type: 'character varying',
           isNullable: false,
         },
         {

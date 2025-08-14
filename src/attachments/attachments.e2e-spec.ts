@@ -146,13 +146,15 @@ describe('AttachmentsController (e2e)', () => {
       expect(response.headers['content-disposition']).toContain(testFilename);
     });
 
-    it('should reject download without authentication', async () => {
-      await client
+    it('should redirect to login when no authentication provided', async () => {
+      const response = await client
         .request()
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${attachmentId}`,
         )
-        .expect(401);
+        .expect(302);
+
+      expect(response.headers.location).toContain('/user/login');
     });
 
     it('should reject download with invalid attachment ID', async () => {
@@ -257,7 +259,7 @@ describe('AttachmentsController (e2e)', () => {
     });
   });
 
-  describe('GET /api/v1/namespaces/:namespaceId/resources/:resourceId/attachments/:attachmentId/images (Public)', () => {
+  describe('GET /api/v1/namespaces/:namespaceId/resources/:resourceId/attachments/:attachmentId (Public)', () => {
     let imageAttachmentId: string;
     const imageContent = Buffer.from('fake-image-content');
     const imageFilename = 'test-image.png';
@@ -278,7 +280,7 @@ describe('AttachmentsController (e2e)', () => {
       const response = await client
         .request()
         .get(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${imageAttachmentId}/images`,
+          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${imageAttachmentId}`,
         )
         .expect(HttpStatus.FOUND);
 
@@ -290,7 +292,7 @@ describe('AttachmentsController (e2e)', () => {
       const response = await client
         .request()
         .get(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${imageAttachmentId}/images`,
+          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${imageAttachmentId}`,
         )
         .set('Cookie', `token=${client.user.token}`)
         .expect(200);
@@ -299,7 +301,7 @@ describe('AttachmentsController (e2e)', () => {
     });
   });
 
-  describe('GET /api/v1/namespaces/:namespaceId/resources/:resourceId/attachments/:attachmentId/media (Public)', () => {
+  describe('GET /api/v1/namespaces/:namespaceId/resources/:resourceId/attachments/:attachmentId (Public)', () => {
     let mediaAttachmentId: string;
     const mediaContent = Buffer.from('fake-media-content');
     const mediaFilename = 'test-media.mp3';
@@ -320,7 +322,7 @@ describe('AttachmentsController (e2e)', () => {
       const response = await client
         .request()
         .get(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${mediaAttachmentId}/media`,
+          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${mediaAttachmentId}`,
         )
         .expect(HttpStatus.FOUND);
 
@@ -332,7 +334,7 @@ describe('AttachmentsController (e2e)', () => {
       const response = await client
         .request()
         .get(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${mediaAttachmentId}/media`,
+          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/attachments/${mediaAttachmentId}`,
         )
         .set('Cookie', `token=${client.user.token}`)
         .expect(200);

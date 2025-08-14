@@ -92,31 +92,36 @@ export class TestClient {
   get(url: string) {
     return this.request()
       .get(url)
-      .set('Authorization', `Bearer ${this.user.token}`);
+      .set('Authorization', `Bearer ${this.user.token}`)
+      .set('Cookie', `token=${this.user.token}`);
   }
 
   post(url: string) {
     return this.request()
       .post(url)
-      .set('Authorization', `Bearer ${this.user.token}`);
+      .set('Authorization', `Bearer ${this.user.token}`)
+      .set('Cookie', `token=${this.user.token}`);
   }
 
   patch(url: string) {
     return this.request()
       .patch(url)
-      .set('Authorization', `Bearer ${this.user.token}`);
+      .set('Authorization', `Bearer ${this.user.token}`)
+      .set('Cookie', `token=${this.user.token}`);
   }
 
   put(url: string) {
     return this.request()
       .put(url)
-      .set('Authorization', `Bearer ${this.user.token}`);
+      .set('Authorization', `Bearer ${this.user.token}`)
+      .set('Cookie', `token=${this.user.token}`);
   }
 
   delete(url: string) {
     return this.request()
       .delete(url)
-      .set('Authorization', `Bearer ${this.user.token}`);
+      .set('Authorization', `Bearer ${this.user.token}`)
+      .set('Cookie', `token=${this.user.token}`);
   }
 
   public static async create(): Promise<TestClient> {

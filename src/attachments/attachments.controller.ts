@@ -38,13 +38,19 @@ export class AttachmentsController {
   }
 
   @Get(':attachmentId')
+  @CookieAuth({ onAuthFail: 'continue' })
   async downloadAttachment(
-    @UserId() userId: string,
+    @Req() req: Request,
+    @UserId({ optional: true }) userId: string | undefined,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
     @Res() res: Response,
   ) {
+    if (!userId) {
+      this.setRedirect(req, res);
+      return;
+    }
     return await this.attachmentsService.downloadAttachment(
       namespaceId,
       resourceId,
@@ -59,50 +65,6 @@ export class AttachmentsController {
       .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
       .status(HttpStatus.FOUND)
       .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
-  }
-
-  @CookieAuth({ onAuthFail: 'continue' })
-  @Get(':attachmentId/images')
-  async displayImage(
-    @Req() req: Request,
-    @UserId({ optional: true }) userId: string | undefined,
-    @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
-    @Param('attachmentId') attachmentId: string,
-    @Res() res: Response,
-  ) {
-    if (userId) {
-      return await this.attachmentsService.displayMedia(
-        namespaceId,
-        resourceId,
-        attachmentId,
-        userId,
-        res,
-      );
-    }
-    this.setRedirect(req, res);
-  }
-
-  @CookieAuth({ onAuthFail: 'continue' })
-  @Get(':attachmentId/media')
-  async displayMedia(
-    @Req() req: Request,
-    @UserId({ optional: true }) userId: string | undefined,
-    @Param('namespaceId') namespaceId: string,
-    @Param('resourceId') resourceId: string,
-    @Param('attachmentId') attachmentId: string,
-    @Res() res: Response,
-  ) {
-    if (userId) {
-      return await this.attachmentsService.displayMedia(
-        namespaceId,
-        resourceId,
-        attachmentId,
-        userId,
-        res,
-      );
-    }
-    this.setRedirect(req, res);
   }
 
   @Delete(':attachmentId')

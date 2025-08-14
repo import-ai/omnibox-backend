@@ -3,7 +3,6 @@ import {
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 import {
-  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -166,7 +165,13 @@ export class AttachmentsService {
     const objectResponse = await this.minioService.get(
       this.minioPath(attachmentId),
     );
-    return objectStreamResponse(objectResponse, httpResponse);
+
+    // Display media files inline, download other files as attachments
+    const forceDownload = !this.isMedia(objectResponse.mimetype);
+
+    return objectStreamResponse(objectResponse, httpResponse, {
+      forceDownload,
+    });
   }
 
   async deleteAttachment(
@@ -197,35 +202,6 @@ export class AttachmentsService {
       }
     }
     return false;
-  }
-
-  async displayMedia(
-    namespaceId: string,
-    resourceId: string,
-    attachmentId: string,
-    userId: string,
-    httpResponse: Response,
-  ) {
-    await this.checkPermission(
-      namespaceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_VIEW,
-    );
-
-    await this.getRelationOrFail(namespaceId, resourceId, attachmentId);
-
-    const objectResponse = await this.minioService.get(
-      this.minioPath(attachmentId),
-    );
-
-    if (!this.isMedia(objectResponse.mimetype)) {
-      throw new BadRequestException(attachmentId);
-    }
-
-    return objectStreamResponse(objectResponse, httpResponse, {
-      forceDownload: false,
-    });
   }
 
   async copyAttachmentsToResource(

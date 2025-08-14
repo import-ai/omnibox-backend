@@ -56,7 +56,7 @@ export class ApiKeys1754550165406 implements MigrationInterface {
     await createApiKeysTable(queryRunner);
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropTable('api_keys');
+  public down(): Promise<void> {
+    throw new Error('Not supported.');
   }
 }

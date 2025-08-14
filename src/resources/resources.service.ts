@@ -32,6 +32,7 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 import { Response } from 'express';
 import { ResourceDto, ResourceMetaDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
+import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 
 const TASK_PRIORITY = 5;
 
@@ -47,6 +48,7 @@ export class ResourcesService {
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
+    private readonly attachmentsService: AttachmentsService,
   ) {}
 
   async findByIds(namespaceId: string, ids: Array<string>) {
@@ -71,7 +73,11 @@ export class ResourcesService {
     });
   }
 
-  async create(userId: string, data: CreateResourceDto) {
+  async create(
+    userId: string,
+    data: CreateResourceDto,
+    manager?: EntityManager,
+  ) {
     const ok = await this.permissionsService.userHasPermission(
       data.namespaceId,
       data.parentId,
@@ -81,15 +87,14 @@ export class ResourcesService {
     if (!ok) {
       throw new ForbiddenException('Not authorized to create resource.');
     }
-    const where: FindOptionsWhere<Resource> = {
-      id: data.parentId,
-      namespaceId: data.namespaceId,
-    };
 
-    return await this.dataSource.transaction(async (manager) => {
+    const transaction = async (manager: EntityManager) => {
       const repo = manager.getRepository(Resource);
       const parentResource = await repo.findOne({
-        where,
+        where: {
+          id: data.parentId,
+          namespaceId: data.namespaceId,
+        },
       });
       if (!parentResource) {
         throw new BadRequestException('Parent resource not exists.');
@@ -114,6 +119,13 @@ export class ResourcesService {
         manager.getRepository(Task),
       );
       return savedResource;
+    };
+
+    if (manager) {
+      return await transaction(manager);
+    }
+    return await this.dataSource.transaction(async (manager) => {
+      return await transaction(manager);
     });
   }
 
@@ -133,7 +145,23 @@ export class ResourcesService {
         (newResource as any)[key] = resource[key];
       }
     });
-    return await this.create(userId, newResource);
+
+    return await this.dataSource.transaction(async (entityManager) => {
+      // Create the duplicated resource within the transaction
+      const duplicatedResource = await this.create(
+        userId,
+        newResource,
+        entityManager,
+      );
+      // Copy attachment relations to the duplicated resource within the same transaction
+      await this.attachmentsService.copyAttachmentsToResource(
+        resource.namespaceId,
+        resource.id,
+        duplicatedResource.id,
+        entityManager,
+      );
+      return duplicatedResource;
+    });
   }
 
   async permissionFilter<

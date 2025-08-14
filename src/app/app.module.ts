@@ -26,8 +26,8 @@ import { ConversationsModule } from 'omniboxd/conversations/conversations.module
 import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { SearchModule } from 'omniboxd/search/search.module';
 import { InvitationsModule } from 'omniboxd/invitations/invitations.module';
-import { LoggerMiddleware } from 'omniboxd/middleware/logger.middleware';
 import { SeoMiddleware } from 'omniboxd/middleware/seo.middleware';
+import { AccessLogMiddleware } from 'omniboxd/middlewares/access-log.middleware';
 import { UserOptions1751904560034 } from 'omniboxd/migrations/1751904560034-user-options';
 import { UserBindings1752652489640 } from 'omniboxd/migrations/1752652489640-user-bindings.ts';
 import { Tags1751905414493 } from 'omniboxd/migrations/1751905414493-tags';
@@ -35,6 +35,10 @@ import { Init1751900000000 } from 'omniboxd/migrations/1751900000000-init';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { NullUserEmail1752814358259 } from 'omniboxd/migrations/1752814358259-null-user-email';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
+import { Shares1753866547335 } from 'omniboxd/migrations/1753866547335-shares';
+import { SharesModule } from 'omniboxd/shares/shares.module';
+import { ApiKeys1754550165406 } from 'omniboxd/migrations/1754550165406-api-keys';
+import { ResourceAttachments1755059371000 } from 'omniboxd/migrations/1755059371000-resource-attachments';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -73,6 +77,7 @@ export class AppModule implements NestModule {
         SearchModule,
         InvitationsModule,
         AttachmentsModule,
+        SharesModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
         //   inject: [ConfigService],
@@ -88,11 +93,7 @@ export class AppModule implements NestModule {
           inject: [ConfigService],
           useFactory: (config: ConfigService) => ({
             type: 'postgres',
-            host: config.get('OBB_DB_HOST', 'postgres'),
-            port: config.get('OBB_DB_PORT', 5432),
-            database: config.get('OBB_DB_DATABASE', 'omnibox'),
-            username: config.get('OBB_DB_USERNAME', 'omnibox'),
-            password: config.get('OBB_DB_PASSWORD', 'omnibox'),
+            url: config.get('OBB_POSTGRES_URL'),
             logging: config.get('OBB_DB_LOGGING') === 'true',
             synchronize: config.get('OBB_DB_SYNC') === 'true',
             autoLoadEntities: true,
@@ -103,6 +104,9 @@ export class AppModule implements NestModule {
               UserOptions1751904560034,
               UserBindings1752652489640,
               NullUserEmail1752814358259,
+              Shares1753866547335,
+              ApiKeys1754550165406,
+              ResourceAttachments1755059371000,
               ...extraMigrations,
             ],
             migrationsRun: true,
@@ -114,6 +118,6 @@ export class AppModule implements NestModule {
   }
 
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggerMiddleware, SeoMiddleware).forRoutes('*');
+    consumer.apply(AccessLogMiddleware, SeoMiddleware).forRoutes('*');
   }
 }

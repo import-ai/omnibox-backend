@@ -3,10 +3,8 @@ import {
   Delete,
   Get,
   HttpStatus,
-  Logger,
   Param,
   Post,
-  Query,
   Req,
   Res,
   UploadedFiles,
@@ -15,28 +13,22 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { Request, Response } from 'express';
-import { UserId } from 'omniboxd/auth/decorators/user-id.decorator';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
-import { Cookies } from 'omniboxd/decorators/cookie.decorators';
-import { AuthService } from 'omniboxd/auth/auth.service';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { UploadAttachmentsResponseDto } from './dto/upload-attachments-response.dto';
+import { CookieAuth } from 'omniboxd/auth/decorators';
 
-@Controller('api/v1/attachments')
+@Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
 export class AttachmentsController {
-  private readonly logger = new Logger(AttachmentsController.name);
-
-  constructor(
-    private readonly attachmentsService: AttachmentsService,
-    private readonly authService: AuthService,
-  ) {}
+  constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Post()
   @UseInterceptors(FilesInterceptor('file[]'))
   async uploadAttachments(
     @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @UploadedFiles() files: Express.Multer.File[],
-    @Query('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
-  ) {
+  ): Promise<UploadAttachmentsResponseDto> {
     return await this.attachmentsService.uploadAttachments(
       namespaceId,
       resourceId,
@@ -46,13 +38,19 @@ export class AttachmentsController {
   }
 
   @Get(':attachmentId')
+  @CookieAuth({ onAuthFail: 'continue' })
   async downloadAttachment(
-    @UserId() userId: string,
-    @Res() res: Response,
-    @Query('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
+    @Req() req: Request,
+    @UserId({ optional: true }) userId: string | undefined,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
+    @Res() res: Response,
   ) {
+    if (!userId) {
+      this.setRedirect(req, res);
+      return;
+    }
     return await this.attachmentsService.downloadAttachment(
       namespaceId,
       resourceId,
@@ -62,44 +60,18 @@ export class AttachmentsController {
     );
   }
 
-  @Public()
-  @Get('images/:attachmentId')
-  async displayImage(
-    @Req() req: Request,
-    @Res() res: Response,
-    @Cookies('token') token: string,
-    @Param('attachmentId') attachmentId: string,
-  ) {
-    let userId = '';
-
-    if (token) {
-      try {
-        const payload = this.authService.jwtVerify(token);
-        userId = payload.sub;
-      } catch {
-        /* empty */
-      }
-    }
-    this.logger.debug({ userId, token, cookies: req.cookies });
-    if (userId) {
-      return await this.attachmentsService.displayImage(
-        attachmentId,
-        userId,
-        res,
-      );
-    } else {
-      res
-        .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-        .status(HttpStatus.FOUND)
-        .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
-    }
+  setRedirect(req: Request, res: Response) {
+    res
+      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      .status(HttpStatus.FOUND)
+      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
   }
 
   @Delete(':attachmentId')
   async deleteAttachment(
     @UserId() userId: string,
-    @Query('namespaceId') namespaceId: string,
-    @Query('resourceId') resourceId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
     return await this.attachmentsService.deleteAttachment(

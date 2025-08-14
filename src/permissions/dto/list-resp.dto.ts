@@ -30,27 +30,30 @@ export class UserDto {
 
 export class UserPermissionDto {
   user: UserDto;
-  level: ResourcePermission;
+  permission: ResourcePermission;
 
-  static new(user: User, level: ResourcePermission | null): UserPermissionDto {
+  static new(
+    user: User,
+    permission: ResourcePermission | null,
+  ): UserPermissionDto {
     return {
       user: UserDto.fromUserEntity(user),
-      level: level || ResourcePermission.NO_ACCESS,
+      permission: permission || ResourcePermission.NO_ACCESS,
     };
   }
 }
 
 export class GroupPermissionDto {
   group: GroupDto;
-  level: ResourcePermission;
+  permission: ResourcePermission;
 
   static new(
     group: Group,
-    level: ResourcePermission | null,
+    permission: ResourcePermission | null,
   ): GroupPermissionDto {
     return {
       group: GroupDto.fromGroupEntity(group),
-      level: level || ResourcePermission.NO_ACCESS,
+      permission: permission || ResourcePermission.NO_ACCESS,
     };
   }
 }

@@ -5,5 +5,5 @@ export class NamespaceMemberDto {
   email: string | null;
   username: string | null;
   role: string;
-  level: ResourcePermission;
+  permission: ResourcePermission;
 }

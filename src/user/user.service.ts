@@ -4,18 +4,20 @@ import generateId from 'omniboxd/utils/generate-id';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { MailService } from 'omniboxd/mail/mail.service';
-import { In, Repository, Like, EntityManager } from 'typeorm';
+import { EntityManager, In, Like, Repository } from 'typeorm';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
 import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
+import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import {
-  Injectable,
-  ConflictException,
   BadRequestException,
+  ConflictException,
+  Injectable,
 } from '@nestjs/common';
+import { isUsernameBlocked } from 'omniboxd/utils/blocked-usernames';
 
 @Injectable()
 export class UserService {
@@ -27,6 +29,9 @@ export class UserService {
       expiresIn: number;
     }
   >();
+
+  private readonly alphaRegex = /[a-zA-Z]/;
+  private readonly numberRegex = /\d/;
 
   constructor(
     @InjectRepository(User)
@@ -59,7 +64,24 @@ export class UserService {
     return account;
   }
 
+  validatePassword(password: string) {
+    if (!password || password.length < 8) {
+      throw new BadRequestException(
+        'Password must be at least 6 characters long',
+      );
+    }
+    if (!this.alphaRegex.test(password) || !this.numberRegex.test(password)) {
+      throw new BadRequestException(
+        'Password must contain at least one letter and one number',
+      );
+    }
+    return true;
+  }
+
   async create(account: CreateUserDto, manager?: EntityManager) {
+    if (account.username && isUsernameBlocked(account.username)) {
+      throw new ConflictException('The account already exists');
+    }
     const repo = manager ? manager.getRepository(User) : this.userRepository;
     const existingUser = await repo.findOne({
       where: [{ username: account.username }, { email: account.email }],
@@ -68,6 +90,8 @@ export class UserService {
     if (existingUser) {
       throw new ConflictException('The account already exists');
     }
+
+    this.validatePassword(account.password);
 
     const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({
@@ -91,6 +115,31 @@ export class UserService {
       return;
     }
     return await this.find(binding.userId);
+  }
+
+  async findBindingByLoginType(userId: string, loginType: string) {
+    const repo = this.userBindingRepository;
+    return await repo.findOne({
+      where: { userId, loginType },
+    });
+  }
+
+  async unbindByLoginType(userId: string, loginType: string) {
+    const repo = this.userBindingRepository;
+    const binding = await repo.findOne({
+      where: { userId, loginType },
+    });
+    if (!binding) {
+      return;
+    }
+    await repo.remove(binding);
+  }
+
+  async listBinding(userId: string) {
+    const repo = this.userBindingRepository;
+    return await repo.find({
+      where: { userId },
+    });
   }
 
   async findByUsername(
@@ -131,6 +180,19 @@ export class UserService {
     await bindingRepo.save(newBinding);
 
     return reset;
+  }
+
+  async bindingExistUser(userData: UpdateUserBindingDto): Promise<User> {
+    const bindingRepo = this.userBindingRepository;
+    const newBinding = bindingRepo.create({
+      userId: userData.userId,
+      loginId: userData.loginId,
+      loginType: userData.loginType,
+    });
+
+    await bindingRepo.save(newBinding);
+
+    return (await this.find(userData.userId)) as User;
   }
 
   async findAll(start: number, limit: number, search?: string) {
@@ -211,6 +273,9 @@ export class UserService {
   }
 
   async update(id: string, account: UpdateUserDto) {
+    if (account.username && isUsernameBlocked(account.username)) {
+      throw new ConflictException('The account already exists');
+    }
     const existUser = await this.find(id);
     if (!existUser) {
       throw new ConflictException('The account does not exist');

@@ -1,10 +1,19 @@
-import { WechatService } from './wechat.service';
-import { Public } from 'omniboxd/auth/decorators/public.decorator';
-import { Get, Query, Controller } from '@nestjs/common';
+import { Request } from 'express';
+import { Get, Post, Query, Controller, Req } from '@nestjs/common';
+import { AuthService } from 'omniboxd/auth/auth.service';
+import { WechatService } from 'omniboxd/auth/wechat.service';
+import { SocialController } from 'omniboxd/auth/social.controller';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/wechat')
-export class WechatController {
-  constructor(private readonly wechatService: WechatService) {}
+export class WechatController extends SocialController {
+  constructor(
+    private readonly wechatService: WechatService,
+    protected readonly authService: AuthService,
+  ) {
+    super(authService);
+  }
 
   @Public()
   @Get('qrcode')
@@ -15,15 +24,22 @@ export class WechatController {
   @Public()
   @Get('callback')
   async handleCallback(
+    @Req() req: Request,
     @Query('code') code: string,
     @Query('state') state: string,
   ) {
-    return await this.wechatService.handleCallback(code, state);
+    const userId = this.findUserId(req.headers.authorization);
+    return await this.wechatService.handleCallback(code, state, userId);
   }
 
   @Public()
   @Get('auth-url')
   getAuthUrl() {
     return this.wechatService.getWechatAuthUrl();
+  }
+
+  @Post('unbind')
+  unbind(@UserId() userId: string) {
+    return this.wechatService.unbind(userId);
   }
 }

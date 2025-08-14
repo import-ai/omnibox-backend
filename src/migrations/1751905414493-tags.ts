@@ -34,6 +34,7 @@ export class Tags1751905414493 implements MigrationInterface {
     await queryRunner.createTable(table, true, true, true);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
   public async down(queryRunner: QueryRunner): Promise<void> {
     throw new Error('Not supported.');
   }

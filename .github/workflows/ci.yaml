@@ -1,4 +1,4 @@
-name: Registry push
+name: CI
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
   runtime:
     runs-on: ubuntu-latest
     outputs:
-      runtime_built: ${{ steps.set_output.outputs.runtime_built }}
+      runtime_built: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +27,7 @@ jobs:
         run: git fetch origin main
 
       - name: Check if dependencies changed
-        id: depcheck
+        id: dep_check
         run: |
           if git diff --name-only origin/main | grep -E 'package.json|pnpm-lock.yaml|pnpm-workspace.yaml|runtime.Dockerfile'; then
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -36,7 +36,7 @@ jobs:
           fi
 
       - name: Docker meta (runtime)
-        if: steps.depcheck.outputs.changed == 'true'
+        if: steps.dep_check.outputs.changed == 'true'
         id: meta_runtime
         uses: docker/metadata-action@v5
         with:
@@ -47,15 +47,15 @@ jobs:
             type=raw,value=latest
 
       - name: Set up QEMU
-        if: steps.depcheck.outputs.changed == 'true'
+        if: steps.dep_check.outputs.changed == 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        if: steps.depcheck.outputs.changed == 'true'
+        if: steps.dep_check.outputs.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to ghcr.io Registry
-        if: steps.depcheck.outputs.changed == 'true'
+        if: steps.dep_check.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -63,7 +63,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push runtime image
-        if: steps.depcheck.outputs.changed == 'true'
+        if: steps.dep_check.outputs.changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -74,14 +74,86 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Set output
-        id: set_output
-        run: echo "runtime_built=${{ steps.depcheck.outputs.changed }}" >> $GITHUB_OUTPUT
+  test:
+    runs-on: ubuntu-latest
+    needs: [ runtime ]
+    services:
+      postgres:
+        image: postgres:17.5
+        env:
+          POSTGRES_PASSWORD: omnibox
+          POSTGRES_USER: omnibox
+          POSTGRES_DB: omnibox
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      minio:
+        image: ghcr.io/import-ai/minio-server:RELEASE.2025-04-22T22-12-26Z
+        env:
+          MINIO_ROOT_USER: username
+          MINIO_ROOT_PASSWORD: password
+        ports:
+          - 9000:9000
+          - 9100:9001
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 30s
+          --health-timeout 20s
+          --health-retries 3
+
+    container:
+      image: ghcr.io/import-ai/omnibox-backend-runtime:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Get version identifier
+        id: get_version
+        run: |
+          if [ "${GITHUB_REF#refs/tags/}" != "$GITHUB_REF" ]; then
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Prepare .env
+        run: cp example.env .env
+
+      - name: Run tests
+        run: pnpm run test:e2e --coverage
+        env:
+          OBB_POSTGRES_URL: postgres://omnibox:omnibox@postgres:5432/omnibox
+          OBB_MINIO_URL: http://username:password@minio:9000/omnibox
+
+      - name: Print coverage report
+        run: |
+          bash test/coverage_report.sh "coverage/lcov-report/index.html" "${GITHUB_STEP_SUMMARY}"
+          mv coverage coverage-report-${{ steps.get_version.outputs.version }}
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ steps.get_version.outputs.version }}
+          path: coverage-report-${{ steps.get_version.outputs.version }}
 
   app:
     runs-on: ubuntu-latest
-    needs: [ runtime ]
+    needs: [ test ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -123,13 +195,15 @@ jobs:
           platforms: |
             linux/amd64
             linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   webhook:
     runs-on: ubuntu-latest
     needs: [ app ]
     steps:
       - name: DEV Webhook
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           curl "${{ secrets.DEV_WEBHOOK_URL }}/dev" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
 
@@ -137,3 +211,8 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           curl "${{ secrets.DEV_WEBHOOK_URL }}/pr?module=backend&pr=pr-${{ github.event.number }}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
+
+      - name: PROD Webhook
+        if: false && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: |
+          curl "${{ secrets.PROD_WEBHOOK_URL }}/prod?tag=${{ github.ref }}" -H "Authorization: Bearer ${{ secrets.PROD_WEBHOOK_API_KEY }}"

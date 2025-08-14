@@ -1,4 +1,3 @@
-import { User } from 'omniboxd/user/entities/user.entity';
 import { Resource, ResourceType } from 'omniboxd/resources/resources.entity';
 import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -35,14 +34,18 @@ export class Index {
     return await repo.save(task);
   }
 
-  static async delete(user: User, resource: Resource, repo: Repository<Task>) {
+  static async delete(
+    userId: string,
+    resource: Resource,
+    repo: Repository<Task>,
+  ) {
     const task = repo.create({
       function: 'delete_index',
       input: {
         resource_id: resource.id,
       },
       namespaceId: resource.namespaceId,
-      userId: user.id,
+      userId,
     });
     return await repo.save(task);
   }

@@ -2,6 +2,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { BadRequestException } from '@nestjs/common';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 
 export class CollectProcessor extends Processor {
   constructor(protected readonly resourcesService: ResourcesService) {
@@ -13,7 +14,7 @@ export class CollectProcessor extends Processor {
     if (!resourceId) {
       throw new BadRequestException('Invalid task payload');
     }
-    if (task.exception) {
+    if (task.exception && !isEmpty(task.exception)) {
       await this.resourcesService.update(task.userId, resourceId, {
         namespaceId: task.namespaceId,
         content: task.exception.error,

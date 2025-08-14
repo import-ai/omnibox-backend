@@ -1,7 +1,7 @@
 import { Base } from 'omniboxd/common/base.entity';
 import generateId from 'omniboxd/utils/generate-id';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { Column, Entity, Index, PrimaryColumn, BeforeInsert } from 'typeorm';
+import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 
 @Entity('invitations')

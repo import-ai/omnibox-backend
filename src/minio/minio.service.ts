@@ -3,6 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import * as Minio from 'minio';
 import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
+import {
+  decodeFileName,
+  getOriginalFileName,
+} from 'omniboxd/utils/encode-filename';
 import { UploadedObjectInfo } from 'minio/dist/main/internal/type';
 
 export interface PutOptions {
@@ -35,10 +39,10 @@ export class MinioService {
 
   constructor(private readonly configService: ConfigService) {
     // Parse MINIO_URL from config
-    const minioEndpoint =
-      this.configService.get<string>('OBB_MINIO_ENDPOINT') ||
-      'http://username:password@minio:9000';
-    const url = new URL(minioEndpoint);
+    const minioUrl =
+      this.configService.get<string>('OBB_MINIO_URL') ||
+      'http://username:password@minio:9000/omnibox';
+    const url = new URL(minioUrl);
     const accessKey = url.username;
     const secretKey = url.password;
     const endPoint = url.hostname;
@@ -57,8 +61,7 @@ export class MinioService {
       secretKey,
     });
 
-    this.bucket =
-      this.configService.get<string>('OBB_MINIO_BUCKET') || 'omnibox';
+    this.bucket = url.pathname.split('/')[1];
 
     this.minioClient
       .bucketExists(this.bucket)
@@ -150,9 +153,11 @@ export class MinioService {
 
   generateId(filename: string, length: number = 32): string {
     const uuid = generateId(length);
-    const ext: string = filename.substring(
-      filename.lastIndexOf('.'),
-      filename.length,
+    // Get the original filename to extract the proper extension
+    const originalFilename = getOriginalFileName(filename);
+    const ext: string = originalFilename.substring(
+      originalFilename.lastIndexOf('.'),
+      originalFilename.length,
     );
     return `${uuid}${ext}`;
   }
@@ -187,7 +192,8 @@ export class MinioService {
   async info(objectName: string, bucket: string = this.bucket) {
     const stat = await this.getStat(objectName, bucket);
     const metadataString: string = stat?.metaData.metadata_string || '{}';
-    const filename: string = stat?.metaData.filename;
+    const encodedFilename: string = stat?.metaData.filename;
+    const filename: string = decodeFileName(encodedFilename);
     const mimetype: string =
       stat?.metaData['content-type'] || 'application/octet-stream';
     const metadata: Record<string, any> = JSON.parse(metadataString);

@@ -80,35 +80,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: [ runtime ]
-    services:
-      postgres:
-        image: postgres:17.5
-        env:
-          POSTGRES_PASSWORD: omnibox
-          POSTGRES_USER: omnibox
-          POSTGRES_DB: omnibox
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      minio:
-        image: ghcr.io/import-ai/minio-server:RELEASE.2025-04-22T22-12-26Z
-        env:
-          MINIO_ROOT_USER: username
-          MINIO_ROOT_PASSWORD: password
-        ports:
-          - 9000:9000
-          - 9100:9001
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 30s
-          --health-timeout 20s
-          --health-retries 3
-
     container:
       image: ghcr.io/import-ai/omnibox-backend-runtime:latest
       credentials:

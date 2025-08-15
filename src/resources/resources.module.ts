@@ -10,6 +10,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { FileResourcesController } from 'omniboxd/resources/file-resources.controller';
 import { MinioModule } from 'omniboxd/minio/minio.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
+import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 
 @Module({
   exports: [ResourcesService],
@@ -26,6 +27,7 @@ import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
     TypeOrmModule.forFeature([Namespace]),
     PermissionsModule,
     MinioModule,
+    AttachmentsModule,
   ],
 })
 export class ResourcesModule {}

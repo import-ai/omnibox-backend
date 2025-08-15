@@ -189,6 +189,7 @@ export class WizardService {
                                        WHERE started_at IS NOT NULL
                                          AND ended_at IS NULL
                                          AND canceled_at IS NULL
+                                         AND deleted_at IS NULL
                                        GROUP BY namespace_id),
            id_subquery AS (SELECT tasks.id
                            FROM tasks
@@ -198,6 +199,7 @@ export class WizardService {
                                                   ON tasks.namespace_id = namespaces.id
                            WHERE tasks.started_at IS NULL
                              AND tasks.canceled_at IS NULL
+                             AND tasks.deleted_at IS NULL
                              AND COALESCE(running_tasks_sub_query.running_count, 0) <
                                  COALESCE(namespaces.max_running_tasks, 0)
                            ORDER BY priority DESC,

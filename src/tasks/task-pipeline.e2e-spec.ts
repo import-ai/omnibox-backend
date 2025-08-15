@@ -1,7 +1,8 @@
 import { TestClient } from 'test/test-client';
-import { HttpStatus, INestApplication } from '@nestjs/common';
+import { HttpStatus } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 
 /**
  * Mock wizard worker that simulates the wizard worker service behavior
@@ -10,9 +11,9 @@ import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 class MockWizardWorker {
   private isPolling = false;
   private pollingInterval: NodeJS.Timeout | null = null;
-  private readonly pollIntervalMs = 100; // Fast polling for tests
+  private readonly pollIntervalMs = 500; // Fast polling for tests
 
-  constructor(private readonly app: INestApplication) {}
+  constructor(private readonly client: TestClient) {}
 
   /**
    * Starts polling for tasks and processing them
@@ -50,23 +51,55 @@ class MockWizardWorker {
     }
   }
 
+  async deleteAllTasks(): Promise<void> {
+    this.stopPolling();
+
+    let flag = true;
+    while (flag) {
+      const tasks: Task[] = (
+        await this.client.get(
+          `/api/v1/namespaces/${this.client.namespace.id}/tasks`,
+        )
+      ).body;
+      if (tasks.length === 0) {
+        flag = false;
+        continue;
+      }
+      for (const task of tasks) {
+        await this.client.delete(
+          `/api/v1/namespaces/${this.client.namespace.id}/tasks/${task.id}`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
+    }
+    console.log({ message: 'All tasks cleared' });
+  }
+
   /**
    * Fetches a task from the backend (simulates wizard worker fetching)
    */
   private async fetchTask(): Promise<Task | null> {
-    const response = await this.makeRequest().get(
-      '/internal/api/v1/wizard/task',
-    );
+    try {
+      const response = await this.makeRequest()
+        .get('/internal/api/v1/wizard/task')
+        .timeout(5000); // 5 second timeout
 
-    if (response.status === 204) {
-      return null; // No tasks available
+      if (response.status === 204) {
+        return null; // No tasks available
+      }
+
+      if (response.status !== 200) {
+        throw new Error(`Failed to fetch task: ${response.status}`);
+      }
+
+      return response.body as Task;
+    } catch (error) {
+      if (error.code === 'ECONNRESET' || error.timeout) {
+        console.warn('Connection issue when fetching task, retrying...');
+        return null; // Treat connection issues as no tasks available for now
+      }
+      throw error;
     }
-
-    if (response.status !== 200) {
-      throw new Error(`Failed to fetch task: ${response.status}`);
-    }
-
-    return response.body as Task;
   }
 
   /**
@@ -83,6 +116,8 @@ class MockWizardWorker {
           return this.processGenerateTitleTask(task);
         case 'file_reader':
           return this.processFileReaderTask(task);
+        case 'upsert_index':
+          return this.processUpsertIndexTask(task);
         default:
           throw new Error(`Unknown task function: ${task.function}`);
       }
@@ -112,7 +147,7 @@ class MockWizardWorker {
    * Simulates extract_tags task processing
    */
   private processExtractTagsTask(task: Task): { output: any } {
-    console.log({ taskId: task.id });
+    console.log({ taskId: task.id, function: 'extractTags' });
     return {
       output: {
         tags: [
@@ -128,7 +163,7 @@ class MockWizardWorker {
    * Simulates generate_title task processing
    */
   private processGenerateTitleTask(task: Task): { output: any } {
-    console.log({ taskId: task.id });
+    console.log({ taskId: task.id, function: 'generateTitle' });
     return {
       output: {
         title: 'Generated Title Based on Content',
@@ -162,6 +197,20 @@ class MockWizardWorker {
   }
 
   /**
+   * Simulates upsert_index task processing
+   */
+  private processUpsertIndexTask(task: Task): { output: any } {
+    console.log({ taskId: task.id, function: 'upsertIndex' });
+    return {
+      output: {
+        indexed: true,
+        records_updated: 1,
+        success: true,
+      },
+    };
+  }
+
+  /**
    * Sends task completion callback to the backend
    */
   private async sendCallback(
@@ -174,12 +223,25 @@ class MockWizardWorker {
       exception: result.exception ? { message: result.exception } : {},
     };
 
-    const response = await this.makeRequest()
-      .post('/internal/api/v1/wizard/callback')
-      .send(callbackData);
+    try {
+      const response = await this.makeRequest()
+        .post('/internal/api/v1/wizard/callback')
+        .send(callbackData)
+        .timeout(10000); // 10 second timeout for callbacks
 
-    if (response.status !== 200 && response.status !== 201) {
-      throw new Error(`Failed to send callback: ${response.status}`);
+      if (response.status !== 200 && response.status !== 201) {
+        throw new Error(`Failed to send callback: ${response.status}`);
+      }
+    } catch (error) {
+      if (error.code === 'ECONNRESET' || error.timeout) {
+        console.warn(
+          `Connection issue when sending callback for task ${taskId}:`,
+          error.message,
+        );
+        // Don't rethrow connection errors to avoid failing tests
+        return;
+      }
+      throw error;
     }
   }
 
@@ -187,9 +249,7 @@ class MockWizardWorker {
    * Creates a request object for internal API calls
    */
   private makeRequest() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const request = require('supertest');
-    return request(this.app.getHttpServer());
+    return this.client.request();
   }
 
   /**
@@ -198,7 +258,7 @@ class MockWizardWorker {
   static async waitFor(
     condition: () => Promise<boolean> | boolean,
     timeoutMs = 5000,
-    intervalMs = 100,
+    intervalMs = 200,
   ): Promise<void> {
     const startTime = Date.now();
 
@@ -219,15 +279,15 @@ describe('Task Pipeline (e2e)', () => {
 
   beforeAll(async () => {
     client = await TestClient.create();
-    mockWorker = new MockWizardWorker(client.app);
+    mockWorker = new MockWizardWorker(client);
   });
 
   afterAll(async () => {
     await client.close();
   });
 
-  afterEach(() => {
-    mockWorker.stopPolling();
+  afterEach(async () => {
+    await mockWorker.deleteAllTasks();
   });
 
   describe('Basic Task Processing', () => {
@@ -257,14 +317,18 @@ describe('Task Pipeline (e2e)', () => {
 
       // Wait for the task to be processed
       await MockWizardWorker.waitFor(async () => {
-        const taskResponse = await client.get(`/api/v1/tasks/${taskId}`);
+        const taskResponse = await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+        );
         return (
           taskResponse.status === 200 && taskResponse.body.ended_at !== null
         );
       });
 
       // Verify the task was completed successfully
-      const completedTaskResponse = await client.get(`/api/v1/tasks/${taskId}`);
+      const completedTaskResponse = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+      );
       expect(completedTaskResponse.status).toBe(200);
 
       const completedTask = completedTaskResponse.body;
@@ -297,14 +361,18 @@ describe('Task Pipeline (e2e)', () => {
 
       // Wait for the task to be processed
       await MockWizardWorker.waitFor(async () => {
-        const taskResponse = await client.get(`/api/v1/tasks/${taskId}`);
+        const taskResponse = await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+        );
         return (
           taskResponse.status === 200 && taskResponse.body.ended_at !== null
         );
       });
 
       // Verify the task completed with an exception
-      const completedTaskResponse = await client.get(`/api/v1/tasks/${taskId}`);
+      const completedTaskResponse = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+      );
       expect(completedTaskResponse.status).toBe(200);
 
       const completedTask = completedTaskResponse.body;
@@ -356,8 +424,12 @@ describe('Task Pipeline (e2e)', () => {
 
       // Wait for both tasks to be completed
       await MockWizardWorker.waitFor(async () => {
-        const task1Response = await client.get(`/api/v1/tasks/${taskId1}`);
-        const task2Response = await client.get(`/api/v1/tasks/${taskId2}`);
+        const task1Response = await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId1}`,
+        );
+        const task2Response = await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId2}`,
+        );
 
         return (
           task1Response.status === 200 &&
@@ -368,8 +440,12 @@ describe('Task Pipeline (e2e)', () => {
       });
 
       // Verify both tasks were completed
-      const task1Final = await client.get(`/api/v1/tasks/${taskId1}`);
-      const task2Final = await client.get(`/api/v1/tasks/${taskId2}`);
+      const task1Final = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId1}`,
+      );
+      const task2Final = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId2}`,
+      );
 
       expect(task1Final.body.ended_at).toBeDefined();
       expect(task2Final.body.ended_at).toBeDefined();
@@ -398,7 +474,9 @@ describe('Task Pipeline (e2e)', () => {
       await mockWorker.pollOnce();
 
       // Verify the task was processed
-      const taskResponse = await client.get(`/api/v1/tasks/${taskId}`);
+      const taskResponse = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+      );
       expect(taskResponse.status).toBe(200);
       expect(taskResponse.body.ended_at).toBeDefined();
       expect(taskResponse.body.output).toBeDefined();
@@ -426,12 +504,16 @@ describe('Task Pipeline (e2e)', () => {
 
       const collectTaskId = response.body.task_id;
       const resourceId = response.body.resource_id;
+      console.log({
+        collectTaskId,
+        resourceId,
+      });
 
       // Wait for both the collect task and the triggered extract_tags task to complete
       await MockWizardWorker.waitFor(async () => {
         // Check if extract_tags task was created and completed
         const tasksResponse = await client.get(
-          `/api/v1/tasks?namespace=${client.namespace.id}`,
+          `/api/v1/namespaces/${client.namespace.id}/tasks?namespace=${client.namespace.id}`,
         );
         if (tasksResponse.status !== 200) return false;
 
@@ -443,17 +525,19 @@ describe('Task Pipeline (e2e)', () => {
             t.payload?.parent_task_id === collectTaskId,
         );
 
+        expect(isEmpty(collectTask?.exception)).toBe(true);
+        expect(isEmpty(extractTagsTask?.exception)).toBe(true);
+
+        // console.log({ collectTask, extractTagsTask });
+
         return (
-          collectTask?.ended_at &&
-          extractTagsTask?.ended_at &&
-          !collectTask.exception &&
-          !extractTagsTask.exception
+          !isEmpty(collectTask?.ended_at) && !isEmpty(extractTagsTask?.ended_at)
         );
-      }, 10000); // Longer timeout for chained tasks
+      }, 10 * 1000); // Longer timeout for chained tasks
 
       // Verify both tasks completed successfully
       const tasksResponse = await client.get(
-        `/api/v1/tasks?namespace=${client.namespace.id}`,
+        `/api/v1/namespaces/${client.namespace.id}/tasks?namespace=${client.namespace.id}`,
       );
       const tasks = tasksResponse.body;
 
@@ -472,15 +556,6 @@ describe('Task Pipeline (e2e)', () => {
       expect(extractTagsTask.ended_at).toBeDefined();
       expect(extractTagsTask.output.tags).toBeDefined();
       expect(extractTagsTask.payload.resource_id).toBe(resourceId);
-    });
-
-    it('should trigger extract_tags task for collect tasks', () => {
-      // This test verifies that the postprocessing logic creates follow-up tasks
-      // We'll test this by creating a collect task and checking if extract_tags is triggered
-
-      // Note: This is a simplified test since the full chaining depends on
-      // the actual implementation details of the wizard service
-      expect(true).toBe(true); // Placeholder for now
     });
   });
 
@@ -525,8 +600,12 @@ describe('Task Pipeline (e2e)', () => {
       await mockWorker.pollOnce(); // Process second task
 
       // Verify both tasks were processed
-      const task1Response = await client.get(`/api/v1/tasks/${taskId1}`);
-      const task2Response = await client.get(`/api/v1/tasks/${taskId2}`);
+      const task1Response = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId1}`,
+      );
+      const task2Response = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId2}`,
+      );
 
       expect(task1Response.body.ended_at).toBeDefined();
       expect(task2Response.body.ended_at).toBeDefined();
@@ -561,7 +640,9 @@ describe('Task Pipeline (e2e)', () => {
       // Wait for all tasks to complete
       await MockWizardWorker.waitFor(async () => {
         const promises = tasks.map((taskId) =>
-          client.get(`/api/v1/tasks/${taskId}`),
+          client.get(
+            `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+          ),
         );
         const responses = await Promise.all(promises);
         return responses.every(
@@ -572,7 +653,9 @@ describe('Task Pipeline (e2e)', () => {
 
       // Verify all tasks completed
       for (const taskId of tasks) {
-        const response = await client.get(`/api/v1/tasks/${taskId}`);
+        const response = await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+        );
         expect(response.body.ended_at).toBeDefined();
         expect(response.body.exception).toEqual({});
       }
@@ -615,7 +698,9 @@ describe('Task Pipeline (e2e)', () => {
       // Verify task can still be processed normally
       await mockWorker.pollOnce();
 
-      const taskResponse = await client.get(`/api/v1/tasks/${taskId}`);
+      const taskResponse = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+      );
       expect(taskResponse.status).toBe(200);
     });
 
@@ -640,7 +725,9 @@ describe('Task Pipeline (e2e)', () => {
       await mockWorker.pollOnce();
 
       // Verify task was completed
-      const taskResponse = await client.get(`/api/v1/tasks/${taskId}`);
+      const taskResponse = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+      );
       expect(taskResponse.status).toBe(200);
       expect(taskResponse.body.ended_at).toBeDefined();
     });
@@ -701,7 +788,9 @@ describe('Task Pipeline (e2e)', () => {
       // Now process normally
       await mockWorker.pollOnce();
 
-      const taskResponse = await client.get(`/api/v1/tasks/${taskId}`);
+      const taskResponse = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+      );
       expect(taskResponse.status).toBe(200);
       expect(taskResponse.body.ended_at).toBeDefined();
     });

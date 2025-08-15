@@ -31,6 +31,11 @@ export class UpdateResourceDto {
   @IsString({ each: true })
   tagIds?: string[];
 
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  tags?: string[];
+
   @IsString()
   @IsOptional()
   content?: string;

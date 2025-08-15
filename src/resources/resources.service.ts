@@ -73,6 +73,45 @@ export class ResourcesService {
     return tags.map((tag) => TagDto.fromEntity(tag));
   }
 
+  private async getOrCreateTagsByNames(
+    namespaceId: string,
+    tagNames: string[],
+    manager?: EntityManager,
+  ): Promise<string[]> {
+    if (!tagNames || tagNames.length === 0) {
+      return [];
+    }
+
+    const repo = manager 
+      ? manager.getRepository(Tag) 
+      : this.tagRepository;
+
+    // Find existing tags
+    const existingTags = await repo.find({
+      where: {
+        namespaceId,
+        name: In(tagNames),
+      },
+    });
+
+    const existingTagNames = new Set(existingTags.map(tag => tag.name));
+    const tagIds = existingTags.map(tag => tag.id);
+
+    // Create missing tags
+    const missingTagNames = tagNames.filter(name => !existingTagNames.has(name));
+    
+    for (const tagName of missingTagNames) {
+      const newTag = repo.create({
+        namespaceId,
+        name: tagName,
+      });
+      const savedTag = await repo.save(newTag);
+      tagIds.push(savedTag.id);
+    }
+
+    return tagIds;
+  }
+
   private async getTagsForResources(
     namespaceId: string,
     resources: Resource[],
@@ -203,11 +242,15 @@ export class ResourcesService {
         );
       }
 
+      // Use provided tagIds directly
+      const tagIds = data.tagIds || [];
+
       const resource = repo.create({
         ...data,
         userId,
         namespaceId: data.namespaceId,
         parentId: parentResource.id,
+        tagIds: tagIds.length > 0 ? tagIds : undefined,
       });
       const savedResource = await repo.save(resource);
       await WizardTask.index.upsert(
@@ -361,6 +404,15 @@ export class ResourcesService {
     const resource = await this.resourceRepository.findOneByOrFail({
       id: resourceId,
     });
+    
+    // Validate that the target resource exists
+    const targetResource = await this.resourceRepository.findOne({
+      where: { namespaceId, id: targetId },
+    });
+    if (!targetResource) {
+      throw new NotFoundException('Target resource not found');
+    }
+    
     const newResource = this.resourceRepository.create({
       ...resource,
       parentId: targetId,
@@ -560,10 +612,13 @@ export class ResourcesService {
     }
     const resources: Resource[] = [];
     while (true) {
-      const resource = await this.resourceRepository.findOneOrFail({
+      const resource = await this.resourceRepository.findOne({
         where: { namespaceId, id: resourceId },
         select: ['id', 'name', 'resourceType', 'parentId', 'globalPermission'],
       });
+      if (!resource) {
+        throw new NotFoundException('Resource not found');
+      }
       resources.push(resource);
       if (!resource.parentId) {
         break;
@@ -582,10 +637,21 @@ export class ResourcesService {
       throw new NotFoundException('Resource not found.');
     }
 
+    // Convert tag names to tag IDs if provided
+    let tagIds = data.tagIds || resource.tagIds || [];
+    if (data.tags && data.tags.length > 0) {
+      const convertedTagIds = await this.getOrCreateTagsByNames(
+        data.namespaceId,
+        data.tags,
+      );
+      tagIds = convertedTagIds; // Replace existing tags when tags array is provided
+    }
+
     const newResource = this.resourceRepository.create({
       ...resource,
       ...data,
       namespaceId: data.namespaceId,
+      tagIds: tagIds.length > 0 ? tagIds : [],
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
     await WizardTask.index.upsert(

@@ -7,6 +7,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import {
   APIKey as APIKeyEntity,
@@ -20,7 +21,10 @@ import { ResourceType } from 'omniboxd/resources/resources.entity';
 
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) {}
+  constructor(
+    private readonly resourcesService: ResourcesService,
+    private readonly wizardTaskService: WizardTaskService,
+  ) {}
 
   @Post()
   @APIKeyAuth({
@@ -54,6 +58,16 @@ export class OpenResourcesController {
       userId,
       resourceData,
     );
+
+    if (!newResource.name || newResource.name.trim() === '') {
+      await this.wizardTaskService.createGenerateTitleTask(
+        userId,
+        apiKey.namespaceId,
+        { resource_id: newResource.id },
+        { text: data.content },
+      );
+    }
+
     return { id: newResource.id, name: newResource.name };
   }
 
@@ -78,6 +92,7 @@ export class OpenResourcesController {
       file,
       apiKey.attrs.root_resource_id,
       undefined,
+      'open_api',
     );
     return { id: newResource.id, name: newResource.name };
   }

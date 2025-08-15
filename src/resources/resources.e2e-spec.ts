@@ -37,7 +37,9 @@ describe('ResourcesController (e2e)', () => {
       expect(response.body.resource_type).toBe(resourceData.resourceType);
       expect(response.body.content).toBe(resourceData.content);
       expect(response.body.tags).toHaveLength(resourceData.tag_ids.length);
-      expect(response.body.tags.map(tag => tag.name)).toEqual(expect.arrayContaining(['test', 'document']));
+      expect(response.body.tags.map((tag) => tag.name)).toEqual(
+        expect.arrayContaining(['test', 'document']),
+      );
       expect(response.body.attrs).toEqual(resourceData.attrs);
     });
 
@@ -279,7 +281,7 @@ describe('ResourcesController (e2e)', () => {
       expect(response.body).toHaveProperty('name', 'Test Resource for Get');
       expect(response.body).toHaveProperty('content', 'Test content for get');
       expect(response.body).toHaveProperty('tags');
-      expect(response.body.tags.map(tag => tag.name)).toContain('get-test');
+      expect(response.body.tags.map((tag) => tag.name)).toContain('get-test');
       expect(response.body).toHaveProperty('attrs');
       expect(response.body.attrs).toEqual({ test: 'value' });
       expect(response.body).toHaveProperty('path');
@@ -365,7 +367,9 @@ describe('ResourcesController (e2e)', () => {
         .send(updateData)
         .expect(HttpStatus.OK);
 
-      expect(response.body.tags.map(tag => tag.name)).toEqual(expect.arrayContaining(['updated', 'tags']));
+      expect(response.body.tags.map((tag) => tag.name)).toEqual(
+        expect.arrayContaining(['updated', 'tags']),
+      );
     });
 
     it('should update resource attrs', async () => {
@@ -492,7 +496,9 @@ describe('ResourcesController (e2e)', () => {
       expect(response.body.id).not.toBe(resourceId); // Should be a different ID
       expect(response.body.name).toContain('Test Resource for Duplicate'); // Name should be similar but different
       expect(response.body.content).toBe('Content to be duplicated');
-      expect(response.body.tags.map(tag => tag.name)).toEqual(['duplicate-test']);
+      expect(response.body.tags.map((tag) => tag.name)).toEqual([
+        'duplicate-test',
+      ]);
       expect(response.body.attrs).toEqual({ test: 'duplicate' });
     });
 
@@ -512,6 +518,10 @@ describe('ResourcesController (e2e)', () => {
     const childAttrs = { child: 'data', priority: 1, tags_meta: ['important'] };
 
     beforeEach(async () => {
+      // Create tags first
+      const folderTagIds = await client.createTags(['folder']);
+      const childTagIds = await client.createTags(['child', 'query-test']);
+
       // Create a parent folder
       const folderData = {
         name: 'Parent Folder',
@@ -519,7 +529,7 @@ describe('ResourcesController (e2e)', () => {
         resourceType: ResourceType.FOLDER,
         parentId: client.namespace.root_resource_id,
         content: '',
-        tags: ['folder'],
+        tag_ids: folderTagIds,
         attrs: folderAttrs,
       };
 
@@ -536,7 +546,7 @@ describe('ResourcesController (e2e)', () => {
         resourceType: ResourceType.DOC,
         parentId: parentFolderId,
         content: 'Child content',
-        tags: ['child', 'query-test'],
+        tag_ids: childTagIds,
         attrs: childAttrs,
       };
 
@@ -564,8 +574,7 @@ describe('ResourcesController (e2e)', () => {
       expect(childResource.attrs).toEqual(childAttrs);
     });
 
-    // Note: Tag filtering tests are skipped due to PostgreSQL JSONB array query limitations
-    it.skip('should query resources by tags', async () => {
+    it('should query resources by tags', async () => {
       const response = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/query?parentId=${parentFolderId}&tags=child`,
@@ -580,7 +589,7 @@ describe('ResourcesController (e2e)', () => {
       expect(childResource).toBeDefined();
     });
 
-    it.skip('should query resources by multiple tags', async () => {
+    it('should query resources by multiple tags', async () => {
       const response = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/query?parentId=${parentFolderId}&tags=child,query-test`,
@@ -595,7 +604,7 @@ describe('ResourcesController (e2e)', () => {
       expect(childResource).toBeDefined();
     });
 
-    it.skip('should return empty array for non-matching tags', async () => {
+    it('should return empty array for non-matching tags', async () => {
       const response = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/query?parentId=${parentFolderId}&tags=non-existent-tag`,
@@ -875,7 +884,7 @@ describe('ResourcesController (e2e)', () => {
   });
 
   // Note: Restore tests are skipped due to timeout issues in the test environment
-  describe.skip('POST /api/v1/namespaces/:namespaceId/resources/:resourceId/restore', () => {
+  describe('POST /api/v1/namespaces/:namespaceId/resources/:resourceId/restore', () => {
     let deletedResourceId: string;
 
     beforeEach(async () => {

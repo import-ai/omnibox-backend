@@ -11,6 +11,7 @@ import { FileResourcesController } from 'omniboxd/resources/file-resources.contr
 import { MinioModule } from 'omniboxd/minio/minio.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
+import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { Tag } from 'omniboxd/tag/tag.entity';
 
 @Module({
@@ -30,6 +31,7 @@ import { Tag } from 'omniboxd/tag/tag.entity';
     PermissionsModule,
     MinioModule,
     AttachmentsModule,
+    TasksModule,
   ],
 })
 export class ResourcesModule {}

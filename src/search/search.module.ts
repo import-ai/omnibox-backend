@@ -10,6 +10,7 @@ import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TasksModule } from 'omniboxd/tasks/tasks.module';
 
 @Module({
   exports: [SearchService],
@@ -20,6 +21,7 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
     ResourcesModule,
     MessagesModule,
     ConversationsModule,
+    TasksModule,
     TypeOrmModule.forFeature([Task]),
   ],
 })

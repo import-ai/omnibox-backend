@@ -1,6 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
-export class AddTagIdsToResources1755230000000 implements MigrationInterface {
+export class AddTagIdsToResources1755248141570 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add tag_ids column to resources table
     await queryRunner.addColumn(

@@ -25,7 +25,7 @@ import {
 } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { MinioService } from 'omniboxd/minio/minio.service';
-import { WizardTask } from 'omniboxd/resources/wizard.task.service';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
@@ -53,6 +53,7 @@ export class ResourcesService {
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly wizardTaskService: WizardTaskService,
   ) {}
 
   private async getTagsByIds(
@@ -82,9 +83,7 @@ export class ResourcesService {
       return [];
     }
 
-    const repo = manager 
-      ? manager.getRepository(Tag) 
-      : this.tagRepository;
+    const repo = manager ? manager.getRepository(Tag) : this.tagRepository;
 
     // Find existing tags
     const existingTags = await repo.find({
@@ -94,12 +93,14 @@ export class ResourcesService {
       },
     });
 
-    const existingTagNames = new Set(existingTags.map(tag => tag.name));
-    const tagIds = existingTags.map(tag => tag.id);
+    const existingTagNames = new Set(existingTags.map((tag) => tag.name));
+    const tagIds = existingTags.map((tag) => tag.id);
 
     // Create missing tags
-    const missingTagNames = tagNames.filter(name => !existingTagNames.has(name));
-    
+    const missingTagNames = tagNames.filter(
+      (name) => !existingTagNames.has(name),
+    );
+
     for (const tagName of missingTagNames) {
       const newTag = repo.create({
         namespaceId,
@@ -253,7 +254,7 @@ export class ResourcesService {
         tagIds: tagIds.length > 0 ? tagIds : undefined,
       });
       const savedResource = await repo.save(resource);
-      await WizardTask.index.upsert(
+      await this.wizardTaskService.createIndexTask(
         TASK_PRIORITY,
         userId,
         savedResource,
@@ -286,7 +287,7 @@ export class ResourcesService {
         (newResource as any)[key] = resource[key];
       }
     });
-    
+
     // Handle tagIds separately since DTO expects tag_ids
     if (resource.tagIds) {
       (newResource as any).tag_ids = resource.tagIds;
@@ -409,7 +410,7 @@ export class ResourcesService {
     const resource = await this.resourceRepository.findOneByOrFail({
       id: resourceId,
     });
-    
+
     // Validate that the target resource exists
     const targetResource = await this.resourceRepository.findOne({
       where: { namespaceId, id: targetId },
@@ -417,7 +418,7 @@ export class ResourcesService {
     if (!targetResource) {
       throw new NotFoundException('Target resource not found');
     }
-    
+
     const newResource = this.resourceRepository.create({
       ...resource,
       parentId: targetId,
@@ -643,7 +644,7 @@ export class ResourcesService {
     }
 
     // Use provided tag_ids directly
-    let tagIds = data.tag_ids || resource.tagIds || [];
+    const tagIds = data.tag_ids || resource.tagIds || [];
 
     const newResource = this.resourceRepository.create({
       ...resource,
@@ -652,11 +653,10 @@ export class ResourcesService {
       tagIds: tagIds.length > 0 ? tagIds : [],
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
-    await WizardTask.index.upsert(
+    await this.wizardTaskService.createIndexTask(
       TASK_PRIORITY,
       userId,
       savedNewResource,
-      this.taskRepository,
     );
   }
 
@@ -667,7 +667,7 @@ export class ResourcesService {
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.softDelete(Resource, id);
-      await WizardTask.index.delete(
+      await this.wizardTaskService.deleteIndexTask(
         userId,
         resource,
         manager.getRepository(Task),
@@ -687,7 +687,7 @@ export class ResourcesService {
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.restore(Resource, id);
-      await WizardTask.index.upsert(
+      await this.wizardTaskService.createIndexTask(
         TASK_PRIORITY,
         userId,
         resource,
@@ -783,7 +783,7 @@ export class ResourcesService {
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
-    await WizardTask.reader.upsert(userId, resource, this.taskRepository);
+    await this.wizardTaskService.createFileReaderTask(userId, resource);
 
     return resource;
   }
@@ -794,6 +794,7 @@ export class ResourcesService {
     file: Express.Multer.File,
     parentId?: string,
     resourceId?: string,
+    source?: string,
   ) {
     const originalFilename = getOriginalFileName(file.originalname);
     const encodedFilename = encodeFileName(file.originalname);
@@ -831,7 +832,7 @@ export class ResourcesService {
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
-    await WizardTask.reader.upsert(userId, resource, this.taskRepository);
+    await this.wizardTaskService.createFileReaderTask(userId, resource, source);
 
     return resource;
   }

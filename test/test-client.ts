@@ -148,7 +148,9 @@ export class TestClient {
   async createTags(tagNames: string[]): Promise<string[]> {
     const tagIds: string[] = [];
     for (const tagName of tagNames) {
-      const response = await this.post(`/api/v1/namespaces/${this.namespace.id}/tag`)
+      const response = await this.post(
+        `/api/v1/namespaces/${this.namespace.id}/tag`,
+      )
         .send({ name: tagName })
         .expect(201);
       tagIds.push(response.body.id);

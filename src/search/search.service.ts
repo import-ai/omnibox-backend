@@ -15,7 +15,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Index } from 'omniboxd/resources/wizard-task/index.service';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 
@@ -33,6 +33,7 @@ export class SearchService {
     private readonly configService: ConfigService,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
+    private readonly wizardTaskService: WizardTaskService,
   ) {
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -125,11 +126,10 @@ export class SearchService {
         if (!resource.userId) {
           continue;
         }
-        await Index.upsert(
+        await this.wizardTaskService.createIndexTask(
           TASK_PRIORITY,
           resource.userId,
           resource,
-          this.taskRepository,
         );
       }
     }
@@ -153,13 +153,12 @@ export class SearchService {
           conversation.id,
         );
         for (const message of messages) {
-          await Index.upsertMessageIndex(
+          await this.wizardTaskService.createMessageIndexTask(
             TASK_PRIORITY,
             conversation.userId,
             conversation.namespaceId,
             conversation.id,
             message,
-            this.taskRepository,
           );
         }
       }

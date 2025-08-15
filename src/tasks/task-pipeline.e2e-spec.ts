@@ -282,10 +282,11 @@ describe('Task Pipeline (e2e)', () => {
   });
 
   afterAll(async () => {
+    await mockWorker.deleteAllTasks();
     await client.close();
   });
 
-  afterEach(async () => {
+  beforeEach(async () => {
     await mockWorker.deleteAllTasks();
   });
 

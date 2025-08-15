@@ -11,6 +11,7 @@ import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
+import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
@@ -38,6 +39,7 @@ export class WizardService {
         this.resourcesService,
         this.attachmentsService,
       ),
+      extract_tags: new ExtractTagsProcessor(resourcesService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -112,11 +114,47 @@ export class WizardService {
   }
 
   async postprocess(task: Task): Promise<Record<string, any>> {
+    let result = {};
+
     if (task.function in this.processors) {
       const processor = this.processors[task.function];
-      return await processor.process(task);
+      result = await processor.process(task);
     }
-    return {};
+
+    // Trigger extract_tags after collect or file_reader tasks finish
+    if (
+      (task.function === 'collect' || task.function === 'file_reader') &&
+      task.output?.markdown
+    ) {
+      await this.triggerExtractTags(task);
+    }
+
+    return result;
+  }
+
+  private async triggerExtractTags(parentTask: Task): Promise<void> {
+    try {
+      const extractTagsTask = await this.create({
+        function: 'extract_tags',
+        input: { text: parentTask.output?.markdown },
+        namespaceId: parentTask.namespaceId,
+        payload: {
+          resource_id:
+            parentTask.payload?.resource_id || parentTask.payload?.resourceId,
+          parent_task_id: parentTask.id,
+        },
+        userId: parentTask.userId,
+      });
+
+      this.logger.debug(
+        `Triggered extract_tags task ${extractTagsTask.id} for parent task ${parentTask.id}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to trigger extract_tags task for parent task ${parentTask.id}:`,
+        error,
+      );
+    }
   }
 
   async fetchTask(): Promise<Task | null> {

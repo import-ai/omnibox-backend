@@ -33,6 +33,8 @@ import { Response } from 'express';
 import { ResourceDto, ResourceMetaDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
+import { Tag } from 'omniboxd/tag/tag.entity';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -45,32 +47,128 @@ export class ResourcesService {
     private readonly taskRepository: Repository<Task>,
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
+    @InjectRepository(Tag)
+    private readonly tagRepository: Repository<Tag>,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
     private readonly attachmentsService: AttachmentsService,
   ) {}
 
+  private async getTagsByIds(
+    namespaceId: string,
+    tagIds: string[],
+  ): Promise<TagDto[]> {
+    if (tagIds.length === 0) {
+      return [];
+    }
+
+    const tags = await this.tagRepository.find({
+      where: {
+        namespaceId,
+        id: In(tagIds),
+      },
+    });
+
+    return tags.map((tag) => TagDto.fromEntity(tag));
+  }
+
+  private async getTagsForResources(
+    namespaceId: string,
+    resources: Resource[],
+  ): Promise<Map<string, TagDto[]>> {
+    const resourceTagsMap = new Map<string, TagDto[]>();
+
+    // Get all unique tag IDs from all resources
+    const allTagIds = new Set<string>();
+    resources.forEach((resource) => {
+      if (resource.tagIds) {
+        resource.tagIds.forEach((tagId) => allTagIds.add(tagId));
+      }
+    });
+
+    // Fetch all tags at once
+    const tags = await this.getTagsByIds(namespaceId, Array.from(allTagIds));
+    const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
+
+    // Build the map for each resource
+    resources.forEach((resource) => {
+      const resourceTags: TagDto[] = [];
+      if (resource.tagIds) {
+        resource.tagIds.forEach((tagId) => {
+          const tag = tagsById.get(tagId);
+          if (tag) {
+            resourceTags.push(tag);
+          }
+        });
+      }
+      resourceTagsMap.set(resource.id, resourceTags);
+    });
+
+    return resourceTagsMap;
+  }
+
+  private async getResourceIdsByTagNames(
+    namespaceId: string,
+    tagNames: string[],
+  ): Promise<string[]> {
+    if (tagNames.length === 0) {
+      return [];
+    }
+
+    // Get tag IDs by names
+    const tags = await this.tagRepository.find({
+      where: {
+        namespaceId,
+        name: In(tagNames),
+      },
+      select: ['id'],
+    });
+
+    const tagIds = tags.map((tag) => tag.id);
+    if (tagIds.length === 0) {
+      return [];
+    }
+
+    // Find resources that contain any of these tag IDs
+    const resources = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.tag_ids && :tagIds', { tagIds })
+      .select('resource.id')
+      .getMany();
+
+    return resources.map((resource) => resource.id);
+  }
+
   async findByIds(namespaceId: string, ids: Array<string>) {
     if (ids.length <= 0) {
       return [];
     }
-    return await this.resourceRepository.find({
+    const resources = await this.resourceRepository.find({
       where: {
         namespaceId,
         id: In(ids),
       },
       select: [
         'id',
-        'tags',
         'name',
         'attrs',
         'parentId',
         'updatedAt',
         'namespaceId',
         'resourceType',
+        'tagIds',
       ],
     });
+
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    return resources.map((resource) => ({
+      ...resource,
+      tags: tagsMap.get(resource.id) || [],
+    }));
   }
 
   async create(
@@ -140,7 +238,7 @@ export class ResourcesService {
       resourceType: resource.resourceType,
       parentId: resource.parentId,
     };
-    ['tags', 'content', 'attrs'].forEach((key) => {
+    ['content', 'attrs', 'tagIds'].forEach((key) => {
       if (resource[key]) {
         (newResource as any)[key] = resource[key];
       }
@@ -153,6 +251,7 @@ export class ResourcesService {
         newResource,
         entityManager,
       );
+
       // Copy attachment relations to the duplicated resource within the same transaction
       await this.attachmentsService.copyAttachmentsToResource(
         resource.namespaceId,
@@ -196,33 +295,57 @@ export class ResourcesService {
     userId?: string, // if is undefined, would skip the permission filter
     tags?: string, // separated by `,`
   ): Promise<Resource[]> {
+    let resourceIds: string[] = [];
+
+    if (tags) {
+      const tagsValue = tags.split(',').filter((tag) => tag.trim());
+      if (tagsValue.length > 0) {
+        resourceIds = await this.getResourceIdsByTagNames(
+          namespaceId,
+          tagsValue,
+        );
+        // If no resources match the tags, return empty array
+        if (resourceIds.length === 0) {
+          return [];
+        }
+      }
+    }
+
     const where: FindOptionsWhere<Resource> = {
       namespaceId,
       parentId,
     };
-    if (tags) {
-      const tagsValue = tags.split(',');
-      if (tagsValue.length > 0) {
-        where.tags = In(tagsValue);
-      }
+
+    // If we have tag filtering, add resource ID constraint
+    if (resourceIds.length > 0) {
+      where.id = In(resourceIds);
     }
 
     const resources = await this.resourceRepository.find({
       where,
       select: [
         'id',
-        'tags',
         'name',
         'attrs',
         'parentId',
         'updatedAt',
         'namespaceId',
         'resourceType',
+        'tagIds',
       ],
     });
+
+    // Load tags for all resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    const resourcesWithTags = resources.map((resource) => ({
+      ...resource,
+      tags: tagsMap.get(resource.id) || [],
+    }));
+
     return userId
-      ? await this.permissionFilter(namespaceId, userId, resources)
-      : resources;
+      ? await this.permissionFilter(namespaceId, userId, resourcesWithTags)
+      : resourcesWithTags;
   }
 
   async move({ namespaceId, resourceId, targetId, userId }) {
@@ -271,8 +394,20 @@ export class ResourcesService {
       take: 10,
       order: { updatedAt: 'DESC' },
     });
-    return (await this.permissionFilter(namespaceId, userId, resources)).map(
-      (res) => ResourceMetaDto.fromEntity(res),
+    const filteredResources = await this.permissionFilter(
+      namespaceId,
+      userId,
+      resources,
+    );
+
+    // Load tags for filtered resources
+    const tagsMap = await this.getTagsForResources(
+      namespaceId,
+      filteredResources,
+    );
+
+    return filteredResources.map((res) =>
+      ResourceMetaDto.fromEntity(res, tagsMap.get(res.id) || []),
     );
   }
 
@@ -312,7 +447,7 @@ export class ResourcesService {
     }
 
     const children = await this.resourceRepository.find({
-      select: ['id', 'name', 'parentId', 'resourceType', 'attrs'],
+      select: ['id', 'name', 'parentId', 'resourceType', 'attrs', 'tagIds'],
       where: {
         namespaceId,
         parentId: resourceId,
@@ -330,7 +465,15 @@ export class ResourcesService {
         filteredChildren.push(child);
       }
     }
-    return filteredChildren.map((r) => ResourceMetaDto.fromEntity(r));
+    // Load tags for filtered children
+    const tagsMap = await this.getTagsForResources(
+      namespaceId,
+      filteredChildren,
+    );
+
+    return filteredChildren.map((r) =>
+      ResourceMetaDto.fromEntity(r, tagsMap.get(r.id) || []),
+    );
   }
 
   async getSpaceType(
@@ -379,11 +522,21 @@ export class ResourcesService {
       throw new ForbiddenException('Not authorized');
     }
 
+    // Load tags for resource and path
+    const allResources = [resource, ...parentResources];
+    const tagsMap = await this.getTagsForResources(namespaceId, allResources);
+
     const path = [resource, ...parentResources]
-      .map((r) => ResourceMetaDto.fromEntity(r))
+      .map((r) => ResourceMetaDto.fromEntity(r, tagsMap.get(r.id) || []))
       .reverse();
 
-    return ResourceDto.fromEntity(resource, curPermission, path, spaceType);
+    return ResourceDto.fromEntity(
+      resource,
+      curPermission,
+      path,
+      spaceType,
+      tagsMap.get(resource.id) || [],
+    );
   }
 
   async get(id: string) {
@@ -658,11 +811,22 @@ export class ResourcesService {
     const resources = await this.resourceRepository.find({
       where: { namespaceId, deletedAt: IsNull() },
     });
-    return await this.permissionFilter(
+    const filteredResources = await this.permissionFilter(
       namespaceId,
       userId,
       resources.filter((res) => res.parentId !== null || includeRoot),
     );
+
+    // Load tags for filtered resources
+    const tagsMap = await this.getTagsForResources(
+      namespaceId,
+      filteredResources,
+    );
+
+    return filteredResources.map((resource) => ({
+      ...resource,
+      tags: tagsMap.get(resource.id) || [],
+    }));
   }
 
   async listAllResources(offset: number, limit: number) {

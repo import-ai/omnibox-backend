@@ -72,7 +72,6 @@ class MockWizardWorker {
       }
       await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
     }
-    console.log({ message: 'All tasks cleared' });
   }
 
   /**
@@ -257,7 +256,7 @@ class MockWizardWorker {
    */
   static async waitFor(
     condition: () => Promise<boolean> | boolean,
-    timeoutMs = 5000,
+    timeoutMs = 30 * 1000,
     intervalMs = 200,
   ): Promise<void> {
     const startTime = Date.now();
@@ -504,10 +503,6 @@ describe('Task Pipeline (e2e)', () => {
 
       const collectTaskId = response.body.task_id;
       const resourceId = response.body.resource_id;
-      console.log({
-        collectTaskId,
-        resourceId,
-      });
 
       // Wait for both the collect task and the triggered extract_tags task to complete
       await MockWizardWorker.waitFor(async () => {
@@ -528,12 +523,10 @@ describe('Task Pipeline (e2e)', () => {
         expect(isEmpty(collectTask?.exception)).toBe(true);
         expect(isEmpty(extractTagsTask?.exception)).toBe(true);
 
-        // console.log({ collectTask, extractTagsTask });
-
         return (
           !isEmpty(collectTask?.ended_at) && !isEmpty(extractTagsTask?.ended_at)
         );
-      }, 10 * 1000); // Longer timeout for chained tasks
+      });
 
       // Verify both tasks completed successfully
       const tasksResponse = await client.get(

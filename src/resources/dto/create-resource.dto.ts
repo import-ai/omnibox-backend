@@ -27,7 +27,7 @@ export class CreateResourceDto {
   @IsArray()
   @IsOptional()
   @IsString({ each: true })
-  tagIds?: string[];
+  tag_ids?: string[];
 
   @IsString()
   @IsOptional()

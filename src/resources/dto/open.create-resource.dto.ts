@@ -14,7 +14,7 @@ export class OpenCreateResourceDto {
   @IsArray()
   @IsOptional()
   @IsString({ each: true })
-  tagIds?: string[];
+  tag_ids?: string[];
 
   @IsString()
   @IsNotEmpty()

@@ -23,7 +23,7 @@ describe('ResourcesController (e2e)', () => {
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
         content: 'This is a test document content',
-        tagIds: tagIds,
+        tag_ids: tagIds,
         attrs: { custom: 'attribute' },
       };
 
@@ -36,7 +36,7 @@ describe('ResourcesController (e2e)', () => {
       expect(response.body.name).toBe(resourceData.name);
       expect(response.body.resource_type).toBe(resourceData.resourceType);
       expect(response.body.content).toBe(resourceData.content);
-      expect(response.body.tags).toHaveLength(resourceData.tagIds.length);
+      expect(response.body.tags).toHaveLength(resourceData.tag_ids.length);
       expect(response.body.tags.map(tag => tag.name)).toEqual(expect.arrayContaining(['test', 'document']));
       expect(response.body.attrs).toEqual(resourceData.attrs);
     });
@@ -257,7 +257,7 @@ describe('ResourcesController (e2e)', () => {
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
         content: 'Test content for get',
-        tagIds: tagIds,
+        tag_ids: tagIds,
         attrs: { test: 'value' },
       };
 
@@ -352,8 +352,9 @@ describe('ResourcesController (e2e)', () => {
     });
 
     it('should update resource tags', async () => {
+      const tagIds = await client.createTags(['updated', 'tags']);
       const updateData = {
-        tags: ['updated', 'tags'],
+        tag_ids: tagIds,
         namespaceId: client.namespace.id,
       };
 
@@ -364,7 +365,7 @@ describe('ResourcesController (e2e)', () => {
         .send(updateData)
         .expect(HttpStatus.OK);
 
-      expect(response.body.tags.map(tag => tag.name)).toEqual(expect.arrayContaining(updateData.tags));
+      expect(response.body.tags.map(tag => tag.name)).toEqual(expect.arrayContaining(['updated', 'tags']));
     });
 
     it('should update resource attrs', async () => {
@@ -469,7 +470,7 @@ describe('ResourcesController (e2e)', () => {
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
         content: 'Content to be duplicated',
-        tagIds: tagIds,
+        tag_ids: tagIds,
         attrs: { test: 'duplicate' },
       };
 

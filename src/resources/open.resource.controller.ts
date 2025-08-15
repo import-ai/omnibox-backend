@@ -43,7 +43,7 @@ export class OpenResourcesController {
     const resourceData = {
       name: data.name || '',
       content: data.content,
-      tagIds: data.tagIds || [],
+      tagIds: data.tag_ids || [],
       attrs: data.attrs || {},
       resourceType: ResourceType.FILE,
       namespaceId: apiKey.namespaceId,

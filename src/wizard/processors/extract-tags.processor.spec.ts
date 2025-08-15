@@ -101,7 +101,7 @@ describe('ExtractTagsProcessor', () => {
         'test-resource-id',
         {
           namespaceId: 'test-namespace',
-          tagIds: ['test', 'important', 'javascript'],
+          tag_ids: ['test', 'important', 'javascript'],
         },
       );
     });
@@ -122,7 +122,7 @@ describe('ExtractTagsProcessor', () => {
         'test-resource-id',
         {
           namespaceId: 'test-namespace',
-          tagIds: [],
+          tag_ids: [],
         },
       );
     });
@@ -143,7 +143,7 @@ describe('ExtractTagsProcessor', () => {
         'test-resource-id',
         {
           namespaceId: 'test-namespace',
-          tagIds: [],
+          tag_ids: [],
         },
       );
     });

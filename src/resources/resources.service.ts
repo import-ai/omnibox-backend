@@ -242,8 +242,8 @@ export class ResourcesService {
         );
       }
 
-      // Use provided tagIds directly
-      const tagIds = data.tagIds || [];
+      // Use provided tag_ids directly
+      const tagIds = data.tag_ids || [];
 
       const resource = repo.create({
         ...data,
@@ -281,11 +281,16 @@ export class ResourcesService {
       resourceType: resource.resourceType,
       parentId: resource.parentId,
     };
-    ['content', 'attrs', 'tagIds'].forEach((key) => {
+    ['content', 'attrs'].forEach((key) => {
       if (resource[key]) {
         (newResource as any)[key] = resource[key];
       }
     });
+    
+    // Handle tagIds separately since DTO expects tag_ids
+    if (resource.tagIds) {
+      (newResource as any).tag_ids = resource.tagIds;
+    }
 
     return await this.dataSource.transaction(async (entityManager) => {
       // Create the duplicated resource within the transaction
@@ -637,15 +642,8 @@ export class ResourcesService {
       throw new NotFoundException('Resource not found.');
     }
 
-    // Convert tag names to tag IDs if provided
-    let tagIds = data.tagIds || resource.tagIds || [];
-    if (data.tags && data.tags.length > 0) {
-      const convertedTagIds = await this.getOrCreateTagsByNames(
-        data.namespaceId,
-        data.tags,
-      );
-      tagIds = convertedTagIds; // Replace existing tags when tags array is provided
-    }
+    // Use provided tag_ids directly
+    let tagIds = data.tag_ids || resource.tagIds || [];
 
     const newResource = this.resourceRepository.create({
       ...resource,

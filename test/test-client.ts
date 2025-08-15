@@ -44,7 +44,7 @@ export class TestClient {
   async signUp(username?: string, password?: string, email?: string) {
     username = username || randomString(10);
     password = password || randomString(12);
-    email = email || randomString(15) + '@example.com';
+    email = email || randomString(15) + '@qq.com';
 
     const signUpResponse = (
       await this.request()

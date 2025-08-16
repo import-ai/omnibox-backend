@@ -1,5 +1,6 @@
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { Resource, ResourceType } from '../resources.entity';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 
 export enum SpaceType {
   PRIVATE = 'private',
@@ -12,14 +13,16 @@ export class ResourceMetaDto {
   name: string;
   resource_type: string;
   attrs: Record<string, any>;
+  tags: TagDto[];
 
-  static fromEntity(resource: Resource) {
+  static fromEntity(resource: Resource, tags: TagDto[] = []) {
     const dto = new ResourceMetaDto();
     dto.id = resource.id;
     dto.parent_id = resource.parentId;
     dto.name = resource.name;
     dto.resource_type = resource.resourceType;
     dto.attrs = resource.attrs;
+    dto.tags = tags;
     return dto;
   }
 }
@@ -31,7 +34,7 @@ export class ResourceDto {
   name: string;
   resource_type: ResourceType;
   content: string;
-  tags: string[];
+  tags: TagDto[];
   attrs: Record<string, any>;
   global_permission: ResourcePermission | null;
   current_permission: ResourcePermission;
@@ -43,6 +46,7 @@ export class ResourceDto {
     currentPermission: ResourcePermission,
     path: ResourceMetaDto[],
     spaceType: SpaceType,
+    tags: TagDto[] = [],
   ) {
     const dto = new ResourceDto();
     dto.id = resource.id;
@@ -51,7 +55,7 @@ export class ResourceDto {
     dto.name = resource.name;
     dto.resource_type = resource.resourceType;
     dto.content = resource.content;
-    dto.tags = resource.tags;
+    dto.tags = tags;
     dto.attrs = resource.attrs;
     dto.global_permission = resource.globalPermission;
     dto.current_permission = currentPermission;

@@ -10,7 +10,7 @@ import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { WizardTask } from 'omniboxd/resources/wizard.task.service';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 
 const TASK_PRIORITY = 5;
 
@@ -20,6 +20,7 @@ export class MessagesService {
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
     private readonly dataSource: DataSource,
+    private readonly wizardTaskService: WizardTaskService,
   ) {}
 
   async index(
@@ -31,7 +32,7 @@ export class MessagesService {
     manager: EntityManager,
   ) {
     if (index) {
-      await WizardTask.index.upsertMessageIndex(
+      await this.wizardTaskService.createMessageIndexTask(
         TASK_PRIORITY,
         userId,
         namespaceId,

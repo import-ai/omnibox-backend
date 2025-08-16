@@ -4,6 +4,10 @@ import * as request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from 'omniboxd/app/app.module';
 import { configureApp } from 'omniboxd/app/app-config';
+import {
+  APIKeyPermissionTarget,
+  APIKeyPermissionType,
+} from 'omniboxd/api-key/api-key.entity';
 
 export function randomChoice(choices: string): string {
   return choices[Math.floor(Math.random() * choices.length)];
@@ -37,6 +41,11 @@ export class TestClient {
     id: string;
     name: string;
     root_resource_id: string;
+  };
+
+  public apiKey: {
+    id: string;
+    value: string;
   };
 
   constructor(public readonly app: INestApplication<App>) {}
@@ -80,8 +89,32 @@ export class TestClient {
 
     this.namespace = namespaceGetResponse[0];
 
+    const apiKeyData = {
+      user_id: this.user.id,
+      namespace_id: this.namespace.id,
+      attrs: {
+        root_resource_id: this.namespace.root_resource_id,
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.CREATE,
+            ],
+          },
+        ],
+      },
+    };
+
+    const apiKeyResponse = (
+      await this.post('/api/v1/api-keys').send(apiKeyData).expect(201)
+    ).body;
+
+    this.apiKey = apiKeyResponse;
+
     return {
       namespace: this.namespace,
+      apiKey: apiKeyResponse,
     };
   }
 
@@ -143,6 +176,19 @@ export class TestClient {
     await client.signUp();
 
     return client;
+  }
+
+  async createTags(tagNames: string[]): Promise<string[]> {
+    const tagIds: string[] = [];
+    for (const tagName of tagNames) {
+      const response = await this.post(
+        `/api/v1/namespaces/${this.namespace.id}/tag`,
+      )
+        .send({ name: tagName })
+        .expect(201);
+      tagIds.push(response.body.id);
+    }
+    return tagIds;
   }
 
   async close() {

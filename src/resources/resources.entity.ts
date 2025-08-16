@@ -39,10 +39,10 @@ export class Resource extends Base {
   content: string;
 
   @Column('jsonb')
-  tags: string[];
-
-  @Column('jsonb')
   attrs: Record<string, any>;
+
+  @Column('text', { array: true, default: '{}' })
+  tagIds: string[];
 
   @Column('enum', { enum: ResourcePermission, nullable: true })
   globalPermission: ResourcePermission | null;

@@ -15,6 +15,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 
 // Set environment variable to avoid the error in SearchService constructor
@@ -127,6 +128,13 @@ describe('SearchController (e2e)', () => {
           useValue: {
             find: jest.fn().mockResolvedValue([]),
             save: jest.fn().mockResolvedValue({}),
+          },
+        },
+        {
+          provide: WizardTaskService,
+          useValue: {
+            createIndexTask: jest.fn().mockResolvedValue({}),
+            createMessageIndexTask: jest.fn().mockResolvedValue({}),
           },
         },
       ],

@@ -10,7 +10,7 @@ import {
   Query,
 } from '@nestjs/common';
 
-@Controller('api/v1/tasks')
+@Controller('api/v1/namespaces/:namespaceId/tasks')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
 
@@ -21,7 +21,7 @@ export class TasksController {
 
   @Get()
   async listTasks(
-    @Query('namespace') namespace: string,
+    @Param('namespace') namespace: string,
     @Query('offset') offset: number = 0,
     @Query('limit') limit: number = 10,
   ) {

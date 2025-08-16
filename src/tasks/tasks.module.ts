@@ -3,11 +3,12 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TasksController } from 'omniboxd/tasks/tasks.controller';
-import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 
 @Module({
-  providers: [TasksService],
-  imports: [NamespacesModule, TypeOrmModule.forFeature([Task])],
+  providers: [TasksService, WizardTaskService],
+  imports: [TypeOrmModule.forFeature([Task])],
   controllers: [TasksController],
+  exports: [TasksService, WizardTaskService],
 })
 export class TasksModule {}

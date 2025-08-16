@@ -43,7 +43,12 @@ export class ResourcesController {
 
   @Post()
   async create(@UserId() userId: string, @Body() data: CreateResourceDto) {
-    return await this.resourcesService.create(userId, data);
+    const newResource = await this.resourcesService.create(userId, data);
+    return await this.resourcesService.getPath({
+      namespaceId: data.namespaceId,
+      resourceId: newResource.id,
+      userId: userId,
+    });
   }
 
   @Post(':resourceId/duplicate')

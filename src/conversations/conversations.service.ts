@@ -15,7 +15,7 @@ import {
   Message,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
-import { Index } from 'omniboxd/resources/wizard-task/index.service';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 
 const TASK_PRIORITY = 5;
@@ -30,6 +30,7 @@ export class ConversationsService {
     private readonly dataSource: DataSource,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
+    private readonly wizardTaskService: WizardTaskService,
   ) {
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -237,7 +238,7 @@ export class ConversationsService {
 
   async remove(namespaceId: string, userId: string, conversationId: string) {
     await this.dataSource.transaction(async (manager) => {
-      await Index.deleteConversation(
+      await this.wizardTaskService.deleteConversationTask(
         namespaceId,
         userId,
         conversationId,
@@ -257,7 +258,7 @@ export class ConversationsService {
     return await this.dataSource.transaction(async (manager) => {
       const taskRepo = manager.getRepository(Task);
       for (const message of messages) {
-        await Index.upsertMessageIndex(
+        await this.wizardTaskService.createMessageIndexTask(
           TASK_PRIORITY,
           userId,
           namespaceId,

@@ -149,11 +149,7 @@ class MockWizardWorker {
     console.log({ taskId: task.id, function: 'extractTags' });
     return {
       output: {
-        tags: [
-          { name: 'technology', confidence: 0.9 },
-          { name: 'web-development', confidence: 0.8 },
-          { name: 'automation', confidence: 0.7 },
-        ],
+        tags: ['technology', 'web-development', 'automation'],
       },
     };
   }
@@ -337,6 +333,13 @@ describe('Task Pipeline (e2e)', () => {
       expect(completedTask.output).toBeDefined();
       expect(completedTask.output.markdown).toContain('Test Page Title');
       expect(completedTask.exception).toEqual({});
+
+      const resourceResponse = await client.get(
+        `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+      );
+      expect(resourceResponse.status).toBe(200);
+      expect(resourceResponse.body.id).toBe(resourceId);
+      expect(resourceResponse.body.content).toContain('Test Page Title');
     });
 
     it('should handle task exceptions properly', async () => {
@@ -550,6 +553,58 @@ describe('Task Pipeline (e2e)', () => {
       expect(extractTagsTask.ended_at).toBeDefined();
       expect(extractTagsTask.output.tags).toBeDefined();
       expect(extractTagsTask.payload.resource_id).toBe(resourceId);
+
+      const resource = (
+        await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+      ).body;
+      expect(resource.id).toEqual(resourceId);
+      expect(resource.tags).toHaveLength(3);
+      for (let i = 0; i < 3; i++) {
+        expect(resource.tags[i].name).toMatch(
+          /technology|web-development|automation/,
+        );
+      }
+    });
+
+    it('generate_title should be triggered after open create', async () => {
+      mockWorker.startPolling();
+
+      const content = 'test content for title generation';
+      const createResponse = (
+        await client
+          .post('/open/api/v1/resources')
+          .set('Authorization', client.apiKey.value)
+          .send({
+            content,
+          })
+      ).body;
+      const resourceId = createResponse.id;
+      expect(createResponse.name).toBe('');
+
+      await MockWizardWorker.waitFor(async () => {
+        const tasksResponse = await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks?namespace=${client.namespace.id}`,
+        );
+        const tasks = tasksResponse.body;
+        const generateTitleTask = tasks.find(
+          (t: any) =>
+            t.function === 'generate_title' &&
+            t.payload.resource_id === resourceId,
+        );
+        if (!generateTitleTask) return false;
+        expect(isEmpty(generateTitleTask.exception)).toBe(true);
+        return !isEmpty(generateTitleTask.ended_at);
+      });
+
+      const resource = (
+        await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+      ).body;
+      expect(resource.id).toEqual(resourceId);
+      expect(resource.name).toBe('Generated Title Based on Content');
     });
   });
 

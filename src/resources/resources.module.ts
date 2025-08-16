@@ -12,7 +12,7 @@ import { MinioModule } from 'omniboxd/minio/minio.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
-import { Tag } from 'omniboxd/tag/tag.entity';
+import { TagModule } from 'omniboxd/tag/tag.module';
 
 @Module({
   exports: [ResourcesService],
@@ -27,7 +27,7 @@ import { Tag } from 'omniboxd/tag/tag.entity';
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Task]),
     TypeOrmModule.forFeature([Namespace]),
-    TypeOrmModule.forFeature([Tag]),
+    TagModule,
     PermissionsModule,
     MinioModule,
     AttachmentsModule,

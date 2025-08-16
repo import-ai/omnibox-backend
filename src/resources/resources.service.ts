@@ -33,7 +33,7 @@ import { Response } from 'express';
 import { ResourceDto, ResourceMetaDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
-import { Tag } from 'omniboxd/tag/tag.entity';
+import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 
 const TASK_PRIORITY = 5;
@@ -47,8 +47,7 @@ export class ResourcesService {
     private readonly taskRepository: Repository<Task>,
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
-    @InjectRepository(Tag)
-    private readonly tagRepository: Repository<Tag>,
+    private readonly tagService: TagService,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
@@ -60,18 +59,7 @@ export class ResourcesService {
     namespaceId: string,
     tagIds: string[],
   ): Promise<TagDto[]> {
-    if (tagIds.length === 0) {
-      return [];
-    }
-
-    const tags = await this.tagRepository.find({
-      where: {
-        namespaceId,
-        id: In(tagIds),
-      },
-    });
-
-    return tags.map((tag) => TagDto.fromEntity(tag));
+    return await this.tagService.getTagsByIds(namespaceId, tagIds);
   }
 
   private async getOrCreateTagsByNames(
@@ -79,38 +67,7 @@ export class ResourcesService {
     tagNames: string[],
     manager?: EntityManager,
   ): Promise<string[]> {
-    if (!tagNames || tagNames.length === 0) {
-      return [];
-    }
-
-    const repo = manager ? manager.getRepository(Tag) : this.tagRepository;
-
-    // Find existing tags
-    const existingTags = await repo.find({
-      where: {
-        namespaceId,
-        name: In(tagNames),
-      },
-    });
-
-    const existingTagNames = new Set(existingTags.map((tag) => tag.name));
-    const tagIds = existingTags.map((tag) => tag.id);
-
-    // Create missing tags
-    const missingTagNames = tagNames.filter(
-      (name) => !existingTagNames.has(name),
-    );
-
-    for (const tagName of missingTagNames) {
-      const newTag = repo.create({
-        namespaceId,
-        name: tagName,
-      });
-      const savedTag = await repo.save(newTag);
-      tagIds.push(savedTag.id);
-    }
-
-    return tagIds;
+    return await this.tagService.getOrCreateTagsByNames(namespaceId, tagNames, manager);
   }
 
   private async getTagsForResources(
@@ -156,15 +113,8 @@ export class ResourcesService {
       return [];
     }
 
-    // Get tag IDs by names
-    const tags = await this.tagRepository.find({
-      where: {
-        namespaceId,
-        name: In(tagNames),
-      },
-      select: ['id'],
-    });
-
+    // Get tag IDs by names using tag service
+    const tags = await this.tagService.findByNames(namespaceId, tagNames);
     const tagIds = tags.map((tag) => tag.id);
     if (tagIds.length === 0) {
       return [];

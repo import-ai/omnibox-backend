@@ -8,12 +8,13 @@ export class UpdateAttachmentUrls1755499552000 implements MigrationInterface {
     while (true) {
       const resources = await queryRunner.query(
         `
-        SELECT id, content
-        FROM resources
-        WHERE content != '' AND deleted_at IS NULL
-        ORDER BY id
-        LIMIT $1 OFFSET $2
-      `,
+          SELECT id, content
+          FROM resources
+          WHERE content != '' AND deleted_at IS NULL
+          ORDER BY id
+            LIMIT $1
+          OFFSET $2
+        `,
         [batchSize, offset],
       );
 

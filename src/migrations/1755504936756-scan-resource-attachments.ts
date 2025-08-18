@@ -38,9 +38,13 @@ export class ScanResourceAttachments1755504936756
           // Check if this resource-attachment relation already exists
           const existingRelation = await queryRunner.query(
             `
-              SELECT id FROM resource_attachments
-              WHERE namespace_id = $1 AND resource_id = $2 AND attachment_id = $3 AND deleted_at IS NULL
-              `,
+              SELECT id
+              FROM resource_attachments
+              WHERE namespace_id = $1
+                AND resource_id = $2
+                AND attachment_id = $3
+                AND deleted_at IS NULL
+            `,
             [resource.namespace_id, resource.id, attachmentId],
           );
 

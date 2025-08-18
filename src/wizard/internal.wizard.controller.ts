@@ -34,22 +34,23 @@ export class InternalWizardController {
   async handleChunkCallback(
     @Body() chunkCallback: ChunkCallbackDto,
   ): Promise<Record<string, any>> {
-    const { id, chunkIndex, totalChunks, data, isFinalChunk } = chunkCallback;
+    const { id, chunk_index, total_chunks, data, is_final_chunk } =
+      chunkCallback;
 
     // Store the chunk
     await this.chunkManagerService.storeChunk(
       id,
-      chunkIndex,
-      totalChunks,
+      chunk_index,
+      total_chunks,
       data,
     );
 
-    if (isFinalChunk) {
+    if (is_final_chunk) {
       try {
         // Assemble all chunks
         const assembledData = await this.chunkManagerService.assembleChunks(
           id,
-          totalChunks,
+          total_chunks,
         );
 
         // Parse the assembled data and call the regular callback
@@ -57,16 +58,16 @@ export class InternalWizardController {
         const result = await this.wizardService.taskDoneCallback(taskCallback);
 
         // Schedule cleanup
-        this.chunkManagerService.cleanupChunks(id, totalChunks);
+        this.chunkManagerService.cleanupChunks(id, total_chunks);
 
         return result;
       } catch (error) {
         // Clean up on error
-        this.chunkManagerService.cleanupChunks(id, totalChunks);
+        this.chunkManagerService.cleanupChunks(id, total_chunks);
         throw error;
       }
     }
 
-    return { message: 'Chunk received', chunkIndex, totalChunks };
+    return { message: 'Chunk received', chunk_index, total_chunks };
   }
 }

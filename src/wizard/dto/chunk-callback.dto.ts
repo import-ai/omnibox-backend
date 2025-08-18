@@ -13,16 +13,16 @@ export class ChunkCallbackDto {
 
   @IsNumber()
   @Min(0)
-  chunkIndex: number;
+  chunk_index: number;
 
   @IsNumber()
   @Min(1)
-  totalChunks: number;
+  total_chunks: number;
 
   @IsString()
   @IsNotEmpty()
   data: string;
 
   @IsBoolean()
-  isFinalChunk: boolean;
+  is_final_chunk: boolean;
 }

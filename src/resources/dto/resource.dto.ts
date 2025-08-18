@@ -14,6 +14,8 @@ export class ResourceMetaDto {
   resource_type: string;
   attrs: Record<string, any>;
   tags: TagDto[];
+  created_at: string;
+  updated_at: string;
 
   static fromEntity(resource: Resource, tags: TagDto[] = []) {
     const dto = new ResourceMetaDto();
@@ -23,6 +25,8 @@ export class ResourceMetaDto {
     dto.resource_type = resource.resourceType;
     dto.attrs = resource.attrs;
     dto.tags = tags;
+    dto.created_at = resource.createdAt.toISOString();
+    dto.updated_at = resource.updatedAt.toISOString();
     return dto;
   }
 }
@@ -40,6 +44,8 @@ export class ResourceDto {
   current_permission: ResourcePermission;
   path: ResourceMetaDto[];
   space_type: SpaceType;
+  created_at: string;
+  updated_at: string;
 
   static fromEntity(
     resource: Resource,
@@ -61,6 +67,8 @@ export class ResourceDto {
     dto.current_permission = currentPermission;
     dto.path = path;
     dto.space_type = spaceType;
+    dto.created_at = resource.createdAt.toISOString();
+    dto.updated_at = resource.updatedAt.toISOString();
     return dto;
   }
 }

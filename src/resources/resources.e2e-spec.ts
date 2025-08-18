@@ -677,6 +677,16 @@ describe('ResourcesController (e2e)', () => {
       expect(childResource).toBeDefined();
       expect(childResource.name).toBe('Child Resource for List');
       expect(childResource.attrs).toEqual(childAttrs);
+
+      // Check for required timestamp fields
+      expect(childResource).toHaveProperty('created_at');
+      expect(childResource).toHaveProperty('updated_at');
+      expect(childResource.created_at).toMatch(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+      );
+      expect(childResource.updated_at).toMatch(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+      );
     });
 
     it('should return empty array for resource with no children', async () => {

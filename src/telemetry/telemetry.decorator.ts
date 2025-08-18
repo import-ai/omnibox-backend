@@ -1,5 +1,5 @@
-import { SetMetadata, applyDecorators } from '@nestjs/common';
-import { trace, context, SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { applyDecorators, SetMetadata } from '@nestjs/common';
+import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 
 export const TRACE_METADATA_KEY = 'TRACE_METADATA';
 
@@ -14,13 +14,18 @@ export interface TraceOptions {
  * Usage: @Trace() or @Trace({ name: 'custom-name', attributes: { key: 'value' } })
  */
 export function Trace(options: TraceOptions = {}) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (
+    target: any,
+    propertyKey: string,
+    descriptor: PropertyDescriptor,
+  ) {
     const originalMethod = descriptor.value;
-    const spanName = options.name || `${target.constructor.name}.${propertyKey}`;
+    const spanName =
+      options.name || `${target.constructor.name}.${propertyKey}`;
 
     descriptor.value = function (...args: any[]) {
       const tracer = trace.getTracer('omnibox-backend');
-      
+
       // If tracing is not available, just execute the original method
       if (!tracer) {
         return originalMethod.apply(this, args);

@@ -33,16 +33,27 @@ export class TelemetryConfigService {
 
   private getEnabledForEnv(env: string): boolean {
     // Disable telemetry in Jest test environment
-    if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined) {
+    if (
+      process.env.NODE_ENV === 'test' ||
+      process.env.JEST_WORKER_ID !== undefined
+    ) {
       return false;
     }
-    
+
     // For local environment, disabled by default
     if (env === 'local') {
-      return this.configService.get<string>('OTEL_TRACES_ENABLED', 'false').toLowerCase() === 'true';
+      return (
+        this.configService
+          .get<string>('OTEL_TRACES_ENABLED', 'false')
+          .toLowerCase() === 'true'
+      );
     }
     // For other environments, enabled by default
-    return this.configService.get<string>('OTEL_TRACES_ENABLED', 'true').toLowerCase() === 'true';
+    return (
+      this.configService
+        .get<string>('OTEL_TRACES_ENABLED', 'true')
+        .toLowerCase() === 'true'
+    );
   }
 
   private getSamplingRateForEnv(env: string): number {
@@ -53,7 +64,9 @@ export class TelemetryConfigService {
       publish: 0.01,
     };
 
-    const envSamplingRate = this.configService.get<string>('OTEL_TRACES_SAMPLING_RATIO');
+    const envSamplingRate = this.configService.get<string>(
+      'OTEL_TRACES_SAMPLING_RATIO',
+    );
     if (envSamplingRate) {
       return parseFloat(envSamplingRate);
     }

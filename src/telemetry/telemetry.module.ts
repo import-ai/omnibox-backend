@@ -1,4 +1,4 @@
-import { Global, Module, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Global, Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TelemetryService } from './telemetry.service';
 import { TelemetryConfigService } from './telemetry.config';
@@ -12,13 +12,11 @@ import { TelemetryConfigService } from './telemetry.config';
 export class TelemetryModule implements OnModuleInit, OnModuleDestroy {
   constructor(private telemetryService: TelemetryService) {}
 
-  async onModuleInit() {
-    // Initialize telemetry when the module loads
-    await this.telemetryService.onModuleInit();
+  onModuleInit() {
+    this.telemetryService.onModuleInit();
   }
 
   async onModuleDestroy() {
-    // Shutdown telemetry when the module is destroyed
     await this.telemetryService.onModuleDestroy();
   }
 }

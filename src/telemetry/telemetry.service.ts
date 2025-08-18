@@ -1,8 +1,14 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { SEMRESATTRS_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION, SEMRESATTRS_DEPLOYMENT_ENVIRONMENT } from '@opentelemetry/semantic-conventions';
-import { trace, context, SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 import { TelemetryConfigService } from './telemetry.config';
 import { TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-base';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
@@ -14,36 +20,38 @@ export class TelemetryService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TelemetryService.name);
   private sdk: NodeSDK | null = null;
   private tracer: any;
-  private enabled: boolean;
+  private readonly enabled: boolean;
 
   constructor(private configService: TelemetryConfigService) {
     this.enabled = this.configService.getConfig().enabled;
   }
 
-  async onModuleInit() {
+  onModuleInit() {
     if (!this.enabled) {
       this.logger.log('OpenTelemetry tracing is disabled');
       return;
     }
 
     try {
-      await this.initializeTracing();
+      this.initializeTracing();
       this.logger.log('OpenTelemetry tracing initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize OpenTelemetry tracing', error);
     }
   }
 
-  private async initializeTracing() {
+  private initializeTracing() {
     const config = this.configService.getConfig();
-
-    // Resource will be created by NodeSDK
 
     const traceExporter = new OTLPTraceExporter({
       url: `${config.otlpEndpoint}/v1/traces`,
     });
 
     this.sdk = new NodeSDK({
+      resource: resourceFromAttributes({
+        [ATTR_SERVICE_NAME]: config.serviceName,
+        ['deployment.environment.name']: config.environment,
+      }),
       traceExporter,
       sampler: new TraceIdRatioBasedSampler(config.samplingRate),
       instrumentations: [
@@ -76,12 +84,10 @@ export class TelemetryService implements OnModuleInit, OnModuleDestroy {
       return null;
     }
 
-    const span = this.tracer.startSpan(name, {
+    return this.tracer.startSpan(name, {
       kind: kind || SpanKind.INTERNAL,
       attributes,
     });
-
-    return span;
   }
 
   // Helper method to wrap async operations with spans
@@ -96,16 +102,17 @@ export class TelemetryService implements OnModuleInit, OnModuleDestroy {
     }
 
     const span = this.createSpan(name, attributes, kind);
-    
+
     try {
-      const result = await context.with(trace.setSpan(context.active(), span), () =>
-        operation(span),
+      const result = await context.with(
+        trace.setSpan(context.active(), span),
+        () => operation(span),
       );
-      
+
       if (span) {
         span.setStatus({ code: SpanStatusCode.OK });
       }
-      
+
       return result;
     } catch (error) {
       if (span) {
@@ -126,7 +133,7 @@ export class TelemetryService implements OnModuleInit, OnModuleDestroy {
   // Add attributes to current span if it exists
   addAttributes(attributes: Record<string, any>) {
     if (!this.enabled) return;
-    
+
     const currentSpan = trace.getActiveSpan();
     if (currentSpan) {
       currentSpan.setAttributes(attributes);
@@ -136,7 +143,7 @@ export class TelemetryService implements OnModuleInit, OnModuleDestroy {
   // Add event to current span if it exists
   addEvent(name: string, attributes?: Record<string, any>) {
     if (!this.enabled) return;
-    
+
     const currentSpan = trace.getActiveSpan();
     if (currentSpan) {
       currentSpan.addEvent(name, attributes);

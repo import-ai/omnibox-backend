@@ -1,7 +1,7 @@
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
 import { TelemetryService } from 'omniboxd/telemetry';
-import { trace, SpanKind, SpanStatusCode } from '@opentelemetry/api';
+import { SpanKind, SpanStatusCode } from '@opentelemetry/api';
 
 @Injectable()
 export class AccessLogMiddleware implements NestMiddleware {
@@ -12,7 +12,7 @@ export class AccessLogMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     const start = Date.now();
     const requestId = req.headers['x-request-id'] as string;
-    
+
     // Create OpenTelemetry span for the HTTP request
     const span = this.telemetryService.createSpan(
       `HTTP ${req.method} ${req.route?.path || req.originalUrl}`,
@@ -63,8 +63,10 @@ export class AccessLogMiddleware implements NestMiddleware {
       if (span) {
         span.setAttributes({
           'http.status_code': status,
-          'http.response_size': res.get('content-length') ? parseInt(res.get('content-length')!) : 0,
-          'duration_ms': duration,
+          'http.response_size': res.get('content-length')
+            ? parseInt(res.get('content-length')!)
+            : 0,
+          duration_ms: duration,
           'user.id': user?.id,
         });
 

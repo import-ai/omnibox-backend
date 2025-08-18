@@ -20,6 +20,8 @@ import { ResourceType } from 'omniboxd/resources/resources.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
+import { TelemetryService } from 'omniboxd/telemetry';
+import { SpanKind } from '@opentelemetry/api';
 
 @Injectable()
 export class WizardService {
@@ -35,6 +37,7 @@ export class WizardService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly telemetryService: TelemetryService,
   ) {
     this.processors = {
       collect: new CollectProcessor(resourcesService),
@@ -51,7 +54,7 @@ export class WizardService {
       this.messagesService,
       this.resourcesService,
     );
-    this.wizardApiService = new WizardAPIService(baseUrl);
+    this.wizardApiService = new WizardAPIService(baseUrl, this.telemetryService);
   }
 
   async create(partialTask: Partial<Task>) {
@@ -62,55 +65,127 @@ export class WizardService {
     user: User,
     data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
-    const { html, url, title, namespace_id, parentId } = data;
-    if (!namespace_id || !parentId || !url || !html) {
-      throw new BadRequestException('Missing required fields');
-    }
+    return this.telemetryService.withSpan(
+      'omnibox.backend.wizard.collect',
+      async (span) => {
+        const { html, url, title, namespace_id, parentId } = data;
 
-    const resourceDto: CreateResourceDto = {
-      name: title || url,
-      namespaceId: namespace_id,
-      resourceType: ResourceType.LINK,
-      parentId: parentId,
-      attrs: { url },
-    };
-    const resource = await this.resourcesService.create(user.id, resourceDto);
+        // Add span attributes
+        if (span) {
+          span.setAttributes({
+            'user.id': user.id,
+            'namespace.id': namespace_id,
+            'resource.parent_id': parentId,
+            'resource.url': url,
+            'resource.title': title || '',
+            'content.size': html.length,
+          });
+        }
 
-    const task = await this.wizardTaskService.createCollectTask(
-      user.id,
-      namespace_id,
-      resource.id,
-      { html, url, title },
+        if (!namespace_id || !parentId || !url || !html) {
+          throw new BadRequestException('Missing required fields');
+        }
+
+        const resourceDto: CreateResourceDto = {
+          name: title || url,
+          namespaceId: namespace_id,
+          resourceType: ResourceType.LINK,
+          parentId: parentId,
+          attrs: { url },
+        };
+        const resource = await this.resourcesService.create(user.id, resourceDto);
+
+        const task = await this.wizardTaskService.createCollectTask(
+          user.id,
+          namespace_id,
+          resource.id,
+          { html, url, title },
+        );
+
+        // Add more span attributes with results
+        if (span) {
+          span.setAttributes({
+            'resource.id': resource.id,
+            'task.id': task.id,
+          });
+          span.addEvent('collect.completed', {
+            'resource.id': resource.id,
+            'task.id': task.id,
+          });
+        }
+
+        return { task_id: task.id, resource_id: resource.id };
+      },
+      {
+        'operation': 'collect',
+        'service': 'wizard',
+      },
+      SpanKind.INTERNAL,
     );
-    return { task_id: task.id, resource_id: resource.id };
   }
 
   async taskDoneCallback(data: TaskCallbackDto) {
-    const task = await this.wizardTaskService.taskRepository.findOneOrFail({
-      where: { id: data.id },
-    });
+    return this.telemetryService.withSpan(
+      'omnibox.backend.wizard.task_callback',
+      async (span) => {
+        const task = await this.wizardTaskService.taskRepository.findOneOrFail({
+          where: { id: data.id },
+        });
 
-    if (!task.startedAt) {
-      throw new BadRequestException(
-        `Task ${task.id} has not been started yet.`,
-      );
-    }
+        // Add span attributes
+        if (span) {
+          span.setAttributes({
+            'task.id': task.id,
+            'task.function': task.function,
+            'task.user_id': task.userId,
+            'task.namespace_id': task.namespaceId,
+            'task.has_exception': !!data.exception,
+            'task.has_output': !!data.output,
+          });
+        }
 
-    task.endedAt = new Date();
-    task.exception = data.exception;
-    task.output = data.output;
+        if (!task.startedAt) {
+          throw new BadRequestException(
+            `Task ${task.id} has not been started yet.`,
+          );
+        }
 
-    await this.preprocessTask(task);
+        task.endedAt = new Date();
+        task.exception = data.exception;
+        task.output = data.output;
+        await this.preprocessTask(task);
 
-    await this.wizardTaskService.taskRepository.save(task);
+        await this.wizardTaskService.taskRepository.save(task);
 
-    const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
-    const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
-    this.logger.debug({ taskId: task.id, cost, wait });
+        const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
+        const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
 
-    const postprocessResult = await this.postprocess(task);
+        // Add timing metrics to span
+        if (span) {
+          span.setAttributes({
+            'task.duration_ms': cost,
+            'task.wait_ms': wait,
+          });
+          span.addEvent('task.completed', {
+            'task.id': task.id,
+            'duration_ms': cost,
+            'wait_ms': wait,
+          });
+        }
 
-    return { taskId: task.id, function: task.function, ...postprocessResult };
+        // Keep existing logging unchanged
+        this.logger.debug({ taskId: task.id, cost, wait });
+
+        const postprocessResult = await this.postprocess(task);
+
+        return { taskId: task.id, function: task.function, ...postprocessResult };
+      },
+      {
+        'operation': 'task_callback',
+        'service': 'wizard',
+      },
+      SpanKind.INTERNAL,
+    );
   }
 
   async postprocess(task: Task): Promise<Record<string, any>> {
@@ -224,49 +299,84 @@ export class WizardService {
   }
 
   async fetchTask(): Promise<Task | null> {
-    const rawQuery = `
-      WITH running_tasks_sub_query AS (SELECT namespace_id,
-                                              COUNT(id) AS running_count
-                                       FROM tasks
-                                       WHERE started_at IS NOT NULL
-                                         AND ended_at IS NULL
-                                         AND canceled_at IS NULL
-                                         AND deleted_at IS NULL
-                                       GROUP BY namespace_id),
-           id_subquery AS (SELECT tasks.id
-                           FROM tasks
-                                  LEFT OUTER JOIN running_tasks_sub_query
-                                                  ON tasks.namespace_id = running_tasks_sub_query.namespace_id
-                                  LEFT OUTER JOIN namespaces
-                                                  ON tasks.namespace_id = namespaces.id
-                           WHERE tasks.started_at IS NULL
-                             AND tasks.canceled_at IS NULL
-                             AND tasks.deleted_at IS NULL
-                             AND COALESCE(running_tasks_sub_query.running_count, 0) <
-                                 COALESCE(namespaces.max_running_tasks, 0)
-                           ORDER BY priority DESC,
-                                    tasks.created_at
-        LIMIT 1)
-      SELECT *
-      FROM tasks
-      WHERE id IN (SELECT id FROM id_subquery)
-        FOR UPDATE SKIP LOCKED;
-    `;
+    return this.telemetryService.withSpan(
+      'omnibox.backend.wizard.fetch_task',
+      async (span) => {
+        const rawQuery = `
+          WITH running_tasks_sub_query AS (SELECT namespace_id,
+                                                  COUNT(id) AS running_count
+                                           FROM tasks
+                                           WHERE started_at IS NOT NULL
+                                             AND ended_at IS NULL
+                                             AND canceled_at IS NULL
+                                             AND deleted_at IS NULL
+                                           GROUP BY namespace_id),
+               id_subquery AS (SELECT tasks.id
+                               FROM tasks
+                                      LEFT OUTER JOIN running_tasks_sub_query
+                                                      ON tasks.namespace_id = running_tasks_sub_query.namespace_id
+                                      LEFT OUTER JOIN namespaces
+                                                      ON tasks.namespace_id = namespaces.id
+                               WHERE tasks.started_at IS NULL
+                                 AND tasks.canceled_at IS NULL
+                                 AND tasks.deleted_at IS NULL
+                                 AND COALESCE(running_tasks_sub_query.running_count, 0) <
+                                     COALESCE(namespaces.max_running_tasks, 0)
+                               ORDER BY priority DESC,
+                                        tasks.created_at
+            LIMIT 1)
+          SELECT *
+          FROM tasks
+          WHERE id IN (SELECT id FROM id_subquery)
+            FOR UPDATE SKIP LOCKED;
+        `;
 
-    const queryResult =
-      await this.wizardTaskService.taskRepository.query(rawQuery);
+        const queryResult =
+          await this.wizardTaskService.taskRepository.query(rawQuery);
 
-    if (queryResult.length > 0) {
-      const task = this.wizardTaskService.taskRepository.create({
-        ...(queryResult[0] as Task),
-        startedAt: new Date(),
-        userId: queryResult[0].user_id,
-        namespaceId: queryResult[0].namespace_id,
-      });
-      await this.wizardTaskService.taskRepository.save(task);
-      return task;
-    }
+        if (queryResult.length > 0) {
+          const task = this.wizardTaskService.taskRepository.create({
+            ...(queryResult[0] as Task),
+            startedAt: new Date(),
+            userId: queryResult[0].user_id,
+            namespaceId: queryResult[0].namespace_id,
+          });
+          await this.wizardTaskService.taskRepository.save(task);
 
-    return null;
+          // Add span attributes
+          if (span) {
+            span.setAttributes({
+              'task.id': task.id,
+              'task.function': task.function,
+              'task.user_id': task.userId,
+              'task.namespace_id': task.namespaceId,
+              'task.priority': task.priority,
+              'task.fetched': true,
+            });
+            span.addEvent('task.fetched', {
+              'task.id': task.id,
+              'task.function': task.function,
+            });
+          }
+
+          return task;
+        }
+
+        // Add span attributes for no task case
+        if (span) {
+          span.setAttributes({
+            'task.fetched': false,
+          });
+          span.addEvent('no_task_available');
+        }
+
+        return null;
+      },
+      {
+        'operation': 'fetch_task',
+        'service': 'wizard',
+      },
+      SpanKind.INTERNAL,
+    );
   }
 }

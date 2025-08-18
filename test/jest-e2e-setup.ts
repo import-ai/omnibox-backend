@@ -15,7 +15,9 @@ export default async () => {
     .start();
   console.log('PostgreSQL container started');
 
-  minioContainer = await new GenericContainer('minio/minio:RELEASE.2025-04-22T22-12-26Z')
+  minioContainer = await new GenericContainer(
+    'minio/minio:RELEASE.2025-04-22T22-12-26Z',
+  )
     .withExposedPorts(9000)
     .withEnvironment({
       MINIO_ROOT_USER: 'minioadmin',

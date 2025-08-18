@@ -51,9 +51,9 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    // Create a test namespace that resources can reference
+    // Create a test namespace specific to this migration test
     await queryRunner.query(`
-      INSERT INTO namespaces (id, name) VALUES ('test-ns', 'Test Namespace')
+      INSERT INTO namespaces (id, name) VALUES ('update-attachment-urls-test', 'UpdateAttachmentUrls Migration Test')
       ON CONFLICT (id) DO NOTHING
     `);
   });
@@ -72,9 +72,9 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       // Setup: Insert resources with old-style image attachment URLs
       await queryRunner.query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
-        ('res1', 'Test Document 1', 'test-ns', 'doc', 'Here is an image: /api/v1/attachments/images/abc123.jpg'),
-        ('res2', 'Test Document 2', 'test-ns', 'doc', 'Multiple images: /api/v1/attachments/images/test1.png and /api/v1/attachments/images/test2.gif'),
-        ('res3', 'Test Document 3', 'test-ns', 'doc', 'No attachments here')
+        ('res1', 'Test Document 1', 'update-attachment-urls-test', 'doc', 'Here is an image: /api/v1/attachments/images/abc123.jpg'),
+        ('res2', 'Test Document 2', 'update-attachment-urls-test', 'doc', 'Multiple images: /api/v1/attachments/images/test1.png and /api/v1/attachments/images/test2.gif'),
+        ('res3', 'Test Document 3', 'update-attachment-urls-test', 'doc', 'No attachments here')
       `);
 
       // Execute migration
@@ -84,7 +84,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       // Verify results for our specific test resources only
       const results = await queryRunner.query(`
         SELECT id, content FROM resources
-        WHERE namespace_id = 'test-ns' AND id IN ('res1', 'res2', 'res3')
+        WHERE namespace_id = 'update-attachment-urls-test' AND id IN ('res1', 'res2', 'res3')
         ORDER BY id
       `);
 
@@ -103,9 +103,9 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       // Setup: Insert resources with old-style media attachment URLs
       await queryRunner.query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
-        ('res1', 'Audio Document', 'test-ns', 'doc', 'Audio file: /api/v1/attachments/media/audio123.wav'),
-        ('res2', 'Video Document', 'test-ns', 'doc', 'Video: /api/v1/attachments/media/video456.mp4'),
-        ('res3', 'Mixed Media', 'test-ns', 'doc', 'Mixed: /api/v1/attachments/images/pic.jpg and /api/v1/attachments/media/sound.mp3')
+        ('res1', 'Audio Document', 'update-attachment-urls-test', 'doc', 'Audio file: /api/v1/attachments/media/audio123.wav'),
+        ('res2', 'Video Document', 'update-attachment-urls-test', 'doc', 'Video: /api/v1/attachments/media/video456.mp4'),
+        ('res3', 'Mixed Media', 'update-attachment-urls-test', 'doc', 'Mixed: /api/v1/attachments/images/pic.jpg and /api/v1/attachments/media/sound.mp3')
       `);
 
       // Execute migration
@@ -115,7 +115,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       // Verify results for our specific test resources only
       const results = await queryRunner.query(`
         SELECT id, content FROM resources
-        WHERE namespace_id = 'test-ns' AND id IN ('res1', 'res2', 'res3')
+        WHERE namespace_id = 'update-attachment-urls-test' AND id IN ('res1', 'res2', 'res3')
         ORDER BY id
       `);
 
@@ -133,7 +133,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       // Setup: Insert resources with mix of old and new URLs
       await queryRunner.query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
-        ('res1', 'Mixed URLs', 'test-ns', 'doc',
+        ('res1', 'Mixed URLs', 'update-attachment-urls-test', 'doc',
          'Old: /api/v1/attachments/images/old.jpg New: attachments/new.png Already converted: attachments/existing.gif')
       `);
 
@@ -155,7 +155,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       // Setup: Insert resources with other API URLs that should not be changed
       await queryRunner.query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
-        ('res1', 'Other APIs', 'test-ns', 'doc',
+        ('res1', 'Other APIs', 'update-attachment-urls-test', 'doc',
          'These should not change: /api/v1/resources/123 /api/v1/auth/login /api/v1/users/profile
           But this should: /api/v1/attachments/images/photo.jpg
           And this: /api/v1/attachments/media/video.mp4')

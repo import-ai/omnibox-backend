@@ -53,9 +53,9 @@ describe('ScanResourceAttachments Migration E2E', () => {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    // Create a test namespace that resources can reference
+    // Create a test namespace specific to this migration test
     await queryRunner.query(`
-      INSERT INTO namespaces (id, name) VALUES ('test-ns', 'Test Namespace')
+      INSERT INTO namespaces (id, name) VALUES ('scan-resource-attachments-test', 'ScanResourceAttachments Migration Test')
       ON CONFLICT (id) DO NOTHING
     `);
   });
@@ -74,7 +74,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
       // Setup: Insert resource with attachment reference
       await queryRunner.query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
-        ('res1', 'Test Document', 'test-ns', 'doc', 'Here is an image: attachments/abc123.jpg')
+        ('res1', 'Test Document', 'scan-resource-attachments-test', 'doc', 'Here is an image: attachments/abc123.jpg')
       `);
 
       // Execute migration
@@ -84,13 +84,13 @@ describe('ScanResourceAttachments Migration E2E', () => {
       // Verify resource_attachments table entry was created for our specific resource
       const relations = await queryRunner.query(`
         SELECT namespace_id, resource_id, attachment_id FROM resource_attachments
-        WHERE namespace_id = 'test-ns' AND resource_id = 'res1' AND attachment_id = 'abc123.jpg'
+        WHERE namespace_id = 'scan-resource-attachments-test' AND resource_id = 'res1' AND attachment_id = 'abc123.jpg'
         ORDER BY attachment_id
       `);
 
       expect(relations).toHaveLength(1);
       expect(relations[0]).toEqual({
-        namespace_id: 'test-ns',
+        namespace_id: 'scan-resource-attachments-test',
         resource_id: 'res1',
         attachment_id: 'abc123.jpg',
       });
@@ -100,7 +100,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
       // Setup: Insert resource with multiple attachment references
       await queryRunner.query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
-        ('res1', 'Multi-attachment Doc', 'test-ns', 'doc',
+        ('res1', 'Multi-attachment Doc', 'scan-resource-attachments-test', 'doc',
          'Images: attachments/photo1.png and attachments/photo2.gif
           Audio: attachments/sound.wav
           Video: attachments/clip.mp4')
@@ -113,7 +113,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
       // Verify all relations were created
       const relations = await queryRunner.query(`
         SELECT attachment_id FROM resource_attachments
-        WHERE namespace_id = 'test-ns' AND resource_id = 'res1'
+        WHERE namespace_id = 'scan-resource-attachments-test' AND resource_id = 'res1'
         ORDER BY attachment_id
       `);
 
@@ -129,7 +129,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
       // Setup: Insert resource with different file types
       await queryRunner.query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
-        ('res1', 'Various Extensions', 'test-ns', 'doc',
+        ('res1', 'Various Extensions', 'scan-resource-attachments-test', 'doc',
          'Files: attachments/image.jpeg attachments/doc.pdf attachments/audio.mp3
           attachments/video.webm attachments/data.json attachments/archive.zip
           attachments/drawing.svg attachments/presentation.pptx')
@@ -142,7 +142,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
       // Verify all relations were created
       const relations = await queryRunner.query(`
         SELECT attachment_id FROM resource_attachments
-        WHERE namespace_id = 'test-ns' AND resource_id = 'res1'
+        WHERE namespace_id = 'scan-resource-attachments-test' AND resource_id = 'res1'
         ORDER BY attachment_id
       `);
 
@@ -162,7 +162,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
       // Setup: Insert resource with complex attachment filenames
       await queryRunner.query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
-        ('res1', 'Complex Filenames', 'test-ns', 'doc',
+        ('res1', 'Complex Filenames', 'scan-resource-attachments-test', 'doc',
          'Files: attachments/file-with-hyphens.png attachments/file_with_underscores.jpg
           attachments/MiXeD_CaSe-File123.jpeg attachments/very-long_filename-with-123_numbers.webm')
       `);
@@ -174,7 +174,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
       // Verify all relations were created
       const relations = await queryRunner.query(`
         SELECT attachment_id FROM resource_attachments
-        WHERE namespace_id = 'test-ns' AND resource_id = 'res1'
+        WHERE namespace_id = 'scan-resource-attachments-test' AND resource_id = 'res1'
         ORDER BY attachment_id
       `);
 

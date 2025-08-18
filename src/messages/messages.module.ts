@@ -4,9 +4,10 @@ import { Message } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { MessagesController } from 'omniboxd/messages/messages.controller';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TasksModule } from 'omniboxd/tasks/tasks.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Message, Task])],
+  imports: [TasksModule, TypeOrmModule.forFeature([Message, Task])],
   providers: [MessagesService],
   controllers: [MessagesController],
   exports: [MessagesService],

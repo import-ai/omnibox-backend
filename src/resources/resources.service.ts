@@ -25,7 +25,7 @@ import {
 } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { MinioService } from 'omniboxd/minio/minio.service';
-import { WizardTask } from 'omniboxd/resources/wizard.task.service';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
@@ -33,6 +33,8 @@ import { Response } from 'express';
 import { ResourceDto, ResourceMetaDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -45,32 +47,118 @@ export class ResourcesService {
     private readonly taskRepository: Repository<Task>,
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
+    private readonly tagService: TagService,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly wizardTaskService: WizardTaskService,
   ) {}
+
+  private async getTagsByIds(
+    namespaceId: string,
+    tagIds: string[],
+  ): Promise<TagDto[]> {
+    return await this.tagService.getTagsByIds(namespaceId, tagIds);
+  }
+
+  private async getOrCreateTagsByNames(
+    namespaceId: string,
+    tagNames: string[],
+    manager?: EntityManager,
+  ): Promise<string[]> {
+    return await this.tagService.getOrCreateTagsByNames(namespaceId, tagNames, manager);
+  }
+
+  private async getTagsForResources(
+    namespaceId: string,
+    resources: Resource[],
+  ): Promise<Map<string, TagDto[]>> {
+    const resourceTagsMap = new Map<string, TagDto[]>();
+
+    // Get all unique tag IDs from all resources
+    const allTagIds = new Set<string>();
+    resources.forEach((resource) => {
+      if (resource.tagIds) {
+        resource.tagIds.forEach((tagId) => allTagIds.add(tagId));
+      }
+    });
+
+    // Fetch all tags at once
+    const tags = await this.getTagsByIds(namespaceId, Array.from(allTagIds));
+    const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
+
+    // Build the map for each resource
+    resources.forEach((resource) => {
+      const resourceTags: TagDto[] = [];
+      if (resource.tagIds) {
+        resource.tagIds.forEach((tagId) => {
+          const tag = tagsById.get(tagId);
+          if (tag) {
+            resourceTags.push(tag);
+          }
+        });
+      }
+      resourceTagsMap.set(resource.id, resourceTags);
+    });
+
+    return resourceTagsMap;
+  }
+
+  private async getResourceIdsByTagNames(
+    namespaceId: string,
+    tagNames: string[],
+  ): Promise<string[]> {
+    if (tagNames.length === 0) {
+      return [];
+    }
+
+    // Get tag IDs by names using tag service
+    const tags = await this.tagService.findByNames(namespaceId, tagNames);
+    const tagIds = tags.map((tag) => tag.id);
+    if (tagIds.length === 0) {
+      return [];
+    }
+
+    // Find resources that contain any of these tag IDs
+    const resources = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.tag_ids && :tagIds', { tagIds })
+      .select('resource.id')
+      .getMany();
+
+    return resources.map((resource) => resource.id);
+  }
 
   async findByIds(namespaceId: string, ids: Array<string>) {
     if (ids.length <= 0) {
       return [];
     }
-    return await this.resourceRepository.find({
+    const resources = await this.resourceRepository.find({
       where: {
         namespaceId,
         id: In(ids),
       },
       select: [
         'id',
-        'tags',
         'name',
         'attrs',
         'parentId',
         'updatedAt',
         'namespaceId',
         'resourceType',
+        'tagIds',
       ],
     });
+
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    return resources.map((resource) => ({
+      ...resource,
+      tags: tagsMap.get(resource.id) || [],
+    }));
   }
 
   async create(
@@ -105,14 +193,18 @@ export class ResourcesService {
         );
       }
 
+      // Use provided tag_ids directly
+      const tagIds = data.tag_ids || [];
+
       const resource = repo.create({
         ...data,
         userId,
         namespaceId: data.namespaceId,
         parentId: parentResource.id,
+        tagIds: tagIds.length > 0 ? tagIds : undefined,
       });
       const savedResource = await repo.save(resource);
-      await WizardTask.index.upsert(
+      await this.wizardTaskService.createIndexTask(
         TASK_PRIORITY,
         userId,
         savedResource,
@@ -140,11 +232,16 @@ export class ResourcesService {
       resourceType: resource.resourceType,
       parentId: resource.parentId,
     };
-    ['tags', 'content', 'attrs'].forEach((key) => {
+    ['content', 'attrs'].forEach((key) => {
       if (resource[key]) {
         (newResource as any)[key] = resource[key];
       }
     });
+
+    // Handle tagIds separately since DTO expects tag_ids
+    if (resource.tagIds) {
+      (newResource as any).tag_ids = resource.tagIds;
+    }
 
     return await this.dataSource.transaction(async (entityManager) => {
       // Create the duplicated resource within the transaction
@@ -153,6 +250,7 @@ export class ResourcesService {
         newResource,
         entityManager,
       );
+
       // Copy attachment relations to the duplicated resource within the same transaction
       await this.attachmentsService.copyAttachmentsToResource(
         resource.namespaceId,
@@ -196,33 +294,57 @@ export class ResourcesService {
     userId?: string, // if is undefined, would skip the permission filter
     tags?: string, // separated by `,`
   ): Promise<Resource[]> {
+    let resourceIds: string[] = [];
+
+    if (tags) {
+      const tagsValue = tags.split(',').filter((tag) => tag.trim());
+      if (tagsValue.length > 0) {
+        resourceIds = await this.getResourceIdsByTagNames(
+          namespaceId,
+          tagsValue,
+        );
+        // If no resources match the tags, return empty array
+        if (resourceIds.length === 0) {
+          return [];
+        }
+      }
+    }
+
     const where: FindOptionsWhere<Resource> = {
       namespaceId,
       parentId,
     };
-    if (tags) {
-      const tagsValue = tags.split(',');
-      if (tagsValue.length > 0) {
-        where.tags = In(tagsValue);
-      }
+
+    // If we have tag filtering, add resource ID constraint
+    if (resourceIds.length > 0) {
+      where.id = In(resourceIds);
     }
 
     const resources = await this.resourceRepository.find({
       where,
       select: [
         'id',
-        'tags',
         'name',
         'attrs',
         'parentId',
         'updatedAt',
         'namespaceId',
         'resourceType',
+        'tagIds',
       ],
     });
+
+    // Load tags for all resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    const resourcesWithTags = resources.map((resource) => ({
+      ...resource,
+      tags: tagsMap.get(resource.id) || [],
+    }));
+
     return userId
-      ? await this.permissionFilter(namespaceId, userId, resources)
-      : resources;
+      ? await this.permissionFilter(namespaceId, userId, resourcesWithTags)
+      : resourcesWithTags;
   }
 
   async move({ namespaceId, resourceId, targetId, userId }) {
@@ -238,6 +360,15 @@ export class ResourcesService {
     const resource = await this.resourceRepository.findOneByOrFail({
       id: resourceId,
     });
+
+    // Validate that the target resource exists
+    const targetResource = await this.resourceRepository.findOne({
+      where: { namespaceId, id: targetId },
+    });
+    if (!targetResource) {
+      throw new NotFoundException('Target resource not found');
+    }
+
     const newResource = this.resourceRepository.create({
       ...resource,
       parentId: targetId,
@@ -271,8 +402,20 @@ export class ResourcesService {
       take: 10,
       order: { updatedAt: 'DESC' },
     });
-    return (await this.permissionFilter(namespaceId, userId, resources)).map(
-      (res) => ResourceMetaDto.fromEntity(res),
+    const filteredResources = await this.permissionFilter(
+      namespaceId,
+      userId,
+      resources,
+    );
+
+    // Load tags for filtered resources
+    const tagsMap = await this.getTagsForResources(
+      namespaceId,
+      filteredResources,
+    );
+
+    return filteredResources.map((res) =>
+      ResourceMetaDto.fromEntity(res, tagsMap.get(res.id) || []),
     );
   }
 
@@ -312,7 +455,7 @@ export class ResourcesService {
     }
 
     const children = await this.resourceRepository.find({
-      select: ['id', 'name', 'parentId', 'resourceType', 'attrs'],
+      select: ['id', 'name', 'parentId', 'resourceType', 'attrs', 'tagIds'],
       where: {
         namespaceId,
         parentId: resourceId,
@@ -330,7 +473,15 @@ export class ResourcesService {
         filteredChildren.push(child);
       }
     }
-    return filteredChildren.map((r) => ResourceMetaDto.fromEntity(r));
+    // Load tags for filtered children
+    const tagsMap = await this.getTagsForResources(
+      namespaceId,
+      filteredChildren,
+    );
+
+    return filteredChildren.map((r) =>
+      ResourceMetaDto.fromEntity(r, tagsMap.get(r.id) || []),
+    );
   }
 
   async getSpaceType(
@@ -379,11 +530,21 @@ export class ResourcesService {
       throw new ForbiddenException('Not authorized');
     }
 
+    // Load tags for resource and path
+    const allResources = [resource, ...parentResources];
+    const tagsMap = await this.getTagsForResources(namespaceId, allResources);
+
     const path = [resource, ...parentResources]
-      .map((r) => ResourceMetaDto.fromEntity(r))
+      .map((r) => ResourceMetaDto.fromEntity(r, tagsMap.get(r.id) || []))
       .reverse();
 
-    return ResourceDto.fromEntity(resource, curPermission, path, spaceType);
+    return ResourceDto.fromEntity(
+      resource,
+      curPermission,
+      path,
+      spaceType,
+      tagsMap.get(resource.id) || [],
+    );
   }
 
   async get(id: string) {
@@ -407,10 +568,13 @@ export class ResourcesService {
     }
     const resources: Resource[] = [];
     while (true) {
-      const resource = await this.resourceRepository.findOneOrFail({
+      const resource = await this.resourceRepository.findOne({
         where: { namespaceId, id: resourceId },
         select: ['id', 'name', 'resourceType', 'parentId', 'globalPermission'],
       });
+      if (!resource) {
+        throw new NotFoundException('Resource not found');
+      }
       resources.push(resource);
       if (!resource.parentId) {
         break;
@@ -429,17 +593,20 @@ export class ResourcesService {
       throw new NotFoundException('Resource not found.');
     }
 
+    // Use provided tag_ids directly
+    const tagIds = data.tag_ids || resource.tagIds || [];
+
     const newResource = this.resourceRepository.create({
       ...resource,
       ...data,
       namespaceId: data.namespaceId,
+      tagIds: tagIds.length > 0 ? tagIds : [],
     });
     const savedNewResource = await this.resourceRepository.save(newResource);
-    await WizardTask.index.upsert(
+    await this.wizardTaskService.createIndexTask(
       TASK_PRIORITY,
       userId,
       savedNewResource,
-      this.taskRepository,
     );
   }
 
@@ -450,7 +617,7 @@ export class ResourcesService {
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.softDelete(Resource, id);
-      await WizardTask.index.delete(
+      await this.wizardTaskService.deleteIndexTask(
         userId,
         resource,
         manager.getRepository(Task),
@@ -470,7 +637,7 @@ export class ResourcesService {
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.restore(Resource, id);
-      await WizardTask.index.upsert(
+      await this.wizardTaskService.createIndexTask(
         TASK_PRIORITY,
         userId,
         resource,
@@ -566,7 +733,7 @@ export class ResourcesService {
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
-    await WizardTask.reader.upsert(userId, resource, this.taskRepository);
+    await this.wizardTaskService.createFileReaderTask(userId, resource);
 
     return resource;
   }
@@ -577,6 +744,7 @@ export class ResourcesService {
     file: Express.Multer.File,
     parentId?: string,
     resourceId?: string,
+    source?: string,
   ) {
     const originalFilename = getOriginalFileName(file.originalname);
     const encodedFilename = encodeFileName(file.originalname);
@@ -614,7 +782,7 @@ export class ResourcesService {
     resource.attrs = { ...resource.attrs, url: artifactName };
     await this.resourceRepository.save(resource);
 
-    await WizardTask.reader.upsert(userId, resource, this.taskRepository);
+    await this.wizardTaskService.createFileReaderTask(userId, resource, source);
 
     return resource;
   }
@@ -658,11 +826,22 @@ export class ResourcesService {
     const resources = await this.resourceRepository.find({
       where: { namespaceId, deletedAt: IsNull() },
     });
-    return await this.permissionFilter(
+    const filteredResources = await this.permissionFilter(
       namespaceId,
       userId,
       resources.filter((res) => res.parentId !== null || includeRoot),
     );
+
+    // Load tags for filtered resources
+    const tagsMap = await this.getTagsForResources(
+      namespaceId,
+      filteredResources,
+    );
+
+    return filteredResources.map((resource) => ({
+      ...resource,
+      tags: tagsMap.get(resource.id) || [],
+    }));
   }
 
   async listAllResources(offset: number, limit: number) {

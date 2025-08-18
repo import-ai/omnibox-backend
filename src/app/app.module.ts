@@ -38,6 +38,7 @@ import { Shares1753866547335 } from 'omniboxd/migrations/1753866547335-shares';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { ApiKeys1754550165406 } from 'omniboxd/migrations/1754550165406-api-keys';
 import { ResourceAttachments1755059371000 } from 'omniboxd/migrations/1755059371000-resource-attachments';
+import { AddTagIdsToResources1755248141570 } from 'omniboxd/migrations/1755248141570-add-tag-ids-to-resources';
 import { CleanResourceNames1755396702021 } from 'omniboxd/migrations/1755396702021-clean-resource-names';
 
 @Module({})
@@ -107,6 +108,7 @@ export class AppModule implements NestModule {
               Shares1753866547335,
               ApiKeys1754550165406,
               ResourceAttachments1755059371000,
+              AddTagIdsToResources1755248141570,
               CleanResourceNames1755396702021,
               ...extraMigrations,
             ],

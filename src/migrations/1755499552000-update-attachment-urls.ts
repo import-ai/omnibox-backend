@@ -24,7 +24,8 @@ export class UpdateAttachmentUrls1755499552000 implements MigrationInterface {
       for (const resource of resources) {
         const originalContent = resource.content;
 
-        // Replace /api/v1/attachments/images/{id}.{extension} and /api/v1/attachments/media/{id}.{extension} with attachments/{id}.{extension}
+        // Replace /api/v1/attachments/images/{id}.{extension} and
+        // /api/v1/attachments/media/{id}.{extension} with attachments/{id}.{extension}
         const updatedContent = originalContent.replace(
           /\/api\/v1\/attachments\/(images|media)\/([a-zA-Z0-9_-]+\.[a-zA-Z0-9]+)/g,
           'attachments/$2',

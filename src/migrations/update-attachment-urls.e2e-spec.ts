@@ -33,16 +33,15 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
         ResourceAttachments1755059371000,
         AddTagIdsToResources1755248141570,
         CleanResourceNames1755396702021,
-        UpdateAttachmentUrls1755499552000,
       ],
       synchronize: false,
       migrationsRun: false,
     });
     await dataSource.initialize();
-    
+
     // Enable UUID extension
     await dataSource.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
-    
+
     // Run migrations manually
     await dataSource.runMigrations();
   });
@@ -51,7 +50,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
     queryRunner = dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
-    
+
     // Create a test namespace that resources can reference
     await queryRunner.query(`
       INSERT INTO namespaces (id, name) VALUES ('test-ns', 'Test Namespace')
@@ -72,7 +71,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
     it('should replace /api/v1/attachments/images/ URLs with attachments/', async () => {
       // Setup: Insert resources with old-style image attachment URLs
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Test Document 1', 'test-ns', 'doc', 'Here is an image: /api/v1/attachments/images/abc123.jpg'),
         ('res2', 'Test Document 2', 'test-ns', 'doc', 'Multiple images: /api/v1/attachments/images/test1.png and /api/v1/attachments/images/test2.gif'),
         ('res3', 'Test Document 3', 'test-ns', 'doc', 'No attachments here')
@@ -89,7 +88,11 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
       expect(results).toEqual([
         { id: 'res1', content: 'Here is an image: attachments/abc123.jpg' },
-        { id: 'res2', content: 'Multiple images: attachments/test1.png and attachments/test2.gif' },
+        {
+          id: 'res2',
+          content:
+            'Multiple images: attachments/test1.png and attachments/test2.gif',
+        },
         { id: 'res3', content: 'No attachments here' },
       ]);
     });
@@ -97,7 +100,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
     it('should replace /api/v1/attachments/media/ URLs with attachments/', async () => {
       // Setup: Insert resources with old-style media attachment URLs
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Audio Document', 'test-ns', 'doc', 'Audio file: /api/v1/attachments/media/audio123.wav'),
         ('res2', 'Video Document', 'test-ns', 'doc', 'Video: /api/v1/attachments/media/video456.mp4'),
         ('res3', 'Mixed Media', 'test-ns', 'doc', 'Mixed: /api/v1/attachments/images/pic.jpg and /api/v1/attachments/media/sound.mp3')
@@ -115,14 +118,17 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       expect(results).toEqual([
         { id: 'res1', content: 'Audio file: attachments/audio123.wav' },
         { id: 'res2', content: 'Video: attachments/video456.mp4' },
-        { id: 'res3', content: 'Mixed: attachments/pic.jpg and attachments/sound.mp3' },
+        {
+          id: 'res3',
+          content: 'Mixed: attachments/pic.jpg and attachments/sound.mp3',
+        },
       ]);
     });
 
     it('should handle various file extensions', async () => {
       // Setup: Insert resources with different file types
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Multi-format', 'test-ns', 'doc',
          'Images: /api/v1/attachments/images/photo.jpeg /api/v1/attachments/images/diagram.svg
           Audio: /api/v1/attachments/media/music.mp3 /api/v1/attachments/media/podcast.flac
@@ -150,7 +156,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
     it('should not affect already converted URLs', async () => {
       // Setup: Insert resources with mix of old and new URLs
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Mixed URLs', 'test-ns', 'doc',
          'Old: /api/v1/attachments/images/old.jpg New: attachments/new.png Already converted: attachments/existing.gif')
       `);
@@ -165,14 +171,14 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       `);
 
       expect(results[0].content).toBe(
-        'Old: attachments/old.jpg New: attachments/new.png Already converted: attachments/existing.gif'
+        'Old: attachments/old.jpg New: attachments/new.png Already converted: attachments/existing.gif',
       );
     });
 
     it('should not affect other /api/v1/ URLs', async () => {
       // Setup: Insert resources with other API URLs that should not be changed
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Other APIs', 'test-ns', 'doc',
          'These should not change: /api/v1/resources/123 /api/v1/auth/login /api/v1/users/profile
           But this should: /api/v1/attachments/images/photo.jpg
@@ -189,7 +195,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       `);
 
       expect(results[0].content).toBe(
-        'These should not change: /api/v1/resources/123 /api/v1/auth/login /api/v1/users/profile\n          But this should: attachments/photo.jpg\n          And this: attachments/video.mp4'
+        'These should not change: /api/v1/resources/123 /api/v1/auth/login /api/v1/users/profile\n          But this should: attachments/photo.jpg\n          And this: attachments/video.mp4',
       );
     });
   });
@@ -200,18 +206,21 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       const insertPromises: Promise<any>[] = [];
       for (let i = 1; i <= 250; i++) {
         insertPromises.push(
-          queryRunner.query(`
-            INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+          queryRunner.query(
+            `
+            INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
             ($1, $2, 'test-ns', 'doc', $3)
-          `, [
-            `res${i.toString().padStart(3, '0')}`,
-            `Resource ${i}`,
-            i % 3 === 0 
-              ? `Content with /api/v1/attachments/images/file${i}.jpg`
-              : i % 5 === 0
-              ? `Content with /api/v1/attachments/media/audio${i}.wav`
-              : `Regular content without attachments ${i}`
-          ])
+          `,
+            [
+              `res${i.toString().padStart(3, '0')}`,
+              `Resource ${i}`,
+              i % 3 === 0
+                ? `Content with /api/v1/attachments/images/file${i}.jpg`
+                : i % 5 === 0
+                  ? `Content with /api/v1/attachments/media/audio${i}.wav`
+                  : `Regular content without attachments ${i}`,
+            ],
+          ),
         );
       }
       await Promise.all(insertPromises);
@@ -222,17 +231,17 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
       // Verify a sample of results
       const convertedImageResources = await queryRunner.query(`
-        SELECT COUNT(*) as count FROM resources 
+        SELECT COUNT(*) as count FROM resources
         WHERE content LIKE '%attachments/file%.jpg%'
       `);
 
       const convertedAudioResources = await queryRunner.query(`
-        SELECT COUNT(*) as count FROM resources 
+        SELECT COUNT(*) as count FROM resources
         WHERE content LIKE '%attachments/audio%.wav%'
       `);
 
       const unconvertedResources = await queryRunner.query(`
-        SELECT COUNT(*) as count FROM resources 
+        SELECT COUNT(*) as count FROM resources
         WHERE content LIKE '%/api/v1/attachments/%'
       `);
 
@@ -253,7 +262,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
     it('should handle empty content gracefully', async () => {
       // Setup: Insert resources with empty or null content
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Empty Content', 'test-ns', 'doc', ''),
         ('res2', 'Normal Content', 'test-ns', 'doc', 'Some content with /api/v1/attachments/images/test.jpg')
       `);
@@ -276,7 +285,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
     it('should handle deleted resources by skipping them', async () => {
       // Setup: Insert both active and deleted resources
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content, deleted_at) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content, deleted_at) VALUES
         ('res1', 'Active Resource', 'test-ns', 'doc', 'Content with /api/v1/attachments/images/active.jpg', NULL),
         ('res2', 'Deleted Resource', 'test-ns', 'doc', 'Content with /api/v1/attachments/images/deleted.jpg', NOW())
       `);
@@ -293,17 +302,19 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
       // Active resource should be updated, deleted resource should be unchanged
       expect(results[0].content).toBe('Content with attachments/active.jpg');
       expect(results[0].deleted_at).toBe(null);
-      
-      expect(results[1].content).toBe('Content with /api/v1/attachments/images/deleted.jpg');
+
+      expect(results[1].content).toBe(
+        'Content with /api/v1/attachments/images/deleted.jpg',
+      );
       expect(results[1].deleted_at).not.toBe(null);
     });
 
     it('should handle complex filenames with underscores and hyphens', async () => {
       // Setup: Insert resources with complex filename patterns
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Complex Filenames', 'test-ns', 'doc',
-         'Files: /api/v1/attachments/images/file-with-hyphens.png 
+         'Files: /api/v1/attachments/images/file-with-hyphens.png
           /api/v1/attachments/media/file_with_underscores.mp4
           /api/v1/attachments/images/MiXeD_CaSe-File123.jpeg
           /api/v1/attachments/media/very-long_filename-with-123_numbers.webm')
@@ -318,7 +329,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
         SELECT content FROM resources WHERE id = 'res1'
       `);
 
-      const expectedContent = `Files: attachments/file-with-hyphens.png 
+      const expectedContent = `Files: attachments/file-with-hyphens.png
           attachments/file_with_underscores.mp4
           attachments/MiXeD_CaSe-File123.jpeg
           attachments/very-long_filename-with-123_numbers.webm`;
@@ -331,7 +342,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
     it('should be safe to run multiple times', async () => {
       // Setup: Insert resources with old URLs
       await queryRunner.query(`
-        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES 
+        INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Test Resource', 'test-ns', 'doc', 'Image: /api/v1/attachments/images/test.jpg')
       `);
 

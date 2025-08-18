@@ -56,7 +56,7 @@ describe('CleanResourceNames Migration E2E', () => {
     it('should decode URL-encoded resource names', async () => {
       // Setup: Insert URL-encoded names
       await queryRunner.query(`
-        INSERT INTO resources (id, name) VALUES 
+        INSERT INTO resources (id, name) VALUES
         ('res1', 'Hello%20World'),
         ('res2', 'My%20Document%2Etxt'),
         ('res3', 'Normal Name'),
@@ -82,7 +82,7 @@ describe('CleanResourceNames Migration E2E', () => {
 
     it('should handle double-encoded names', async () => {
       await queryRunner.query(`
-        INSERT INTO resources (id, name) VALUES 
+        INSERT INTO resources (id, name) VALUES
         ('res1', 'Hello%2520World')
       `);
 
@@ -104,7 +104,7 @@ describe('CleanResourceNames Migration E2E', () => {
 
       await queryRunner.query(
         `
-        INSERT INTO resources (id, name) VALUES 
+        INSERT INTO resources (id, name) VALUES
         ('res1', $1),
         ('res2', 'Normal Text')
       `,
@@ -134,7 +134,7 @@ describe('CleanResourceNames Migration E2E', () => {
 
       await queryRunner.query(
         `
-        INSERT INTO resources (id, name) VALUES 
+        INSERT INTO resources (id, name) VALUES
         ('res1', $1)
       `,
         [urlEncodedMojibake],
@@ -154,7 +154,7 @@ describe('CleanResourceNames Migration E2E', () => {
   describe('Edge cases', () => {
     it('should not modify already clean names', async () => {
       await queryRunner.query(`
-        INSERT INTO resources (id, name) VALUES 
+        INSERT INTO resources (id, name) VALUES
         ('res1', 'Clean Name'),
         ('res2', 'Another Clean Name 123'),
         ('res3', 'With-Special_Chars.txt'),
@@ -176,7 +176,7 @@ describe('CleanResourceNames Migration E2E', () => {
 
     it('should handle empty and null names gracefully', async () => {
       await queryRunner.query(`
-        INSERT INTO resources (id, name) VALUES 
+        INSERT INTO resources (id, name) VALUES
         ('res1', ''),
         ('res2', 'Valid Name')
       `);

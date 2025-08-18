@@ -12,7 +12,7 @@ export class ScanResourceAttachments1755504936756
         `
         SELECT id, namespace_id, content
         FROM resources
-        WHERE resource_type = 'doc' AND content IS NOT NULL AND content != '' AND deleted_at IS NULL
+        WHERE content != '' AND deleted_at IS NULL
         ORDER BY id
         LIMIT $1 OFFSET $2
       `,
@@ -38,7 +38,7 @@ export class ScanResourceAttachments1755504936756
           // Check if this resource-attachment relation already exists
           const existingRelation = await queryRunner.query(
             `
-              SELECT id FROM resource_attachments 
+              SELECT id FROM resource_attachments
               WHERE namespace_id = $1 AND resource_id = $2 AND attachment_id = $3 AND deleted_at IS NULL
               `,
             [resource.namespace_id, resource.id, attachmentId],

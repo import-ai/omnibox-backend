@@ -10,7 +10,11 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { context, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
 import { TelemetryConfigService } from './telemetry.config';
-import { TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-base';
+import {
+  BatchSpanProcessor,
+  ConsoleSpanExporter,
+  TraceIdRatioBasedSampler,
+} from '@opentelemetry/sdk-trace-base';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { NestInstrumentation } from '@opentelemetry/instrumentation-nestjs-core';
@@ -43,16 +47,16 @@ export class TelemetryService implements OnModuleInit, OnModuleDestroy {
   private initializeTracing() {
     const config = this.configService.getConfig();
 
-    const traceExporter = new OTLPTraceExporter({
-      url: `${config.otlpEndpoint}/v1/traces`,
-    });
+    const url = `${config.otlpEndpoint}/v1/traces`;
+    const otlpTraceExporter = new OTLPTraceExporter({ url });
+    const spanProcessor = new BatchSpanProcessor(otlpTraceExporter);
 
     this.sdk = new NodeSDK({
       resource: resourceFromAttributes({
         [ATTR_SERVICE_NAME]: config.serviceName,
         ['deployment.environment.name']: config.environment,
       }),
-      traceExporter,
+      spanProcessors: [spanProcessor],
       sampler: new TraceIdRatioBasedSampler(config.samplingRate),
       instrumentations: [
         new HttpInstrumentation({

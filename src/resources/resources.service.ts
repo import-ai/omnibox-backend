@@ -698,7 +698,8 @@ export class ResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    const originalName = encodeFileName(fileName);
+    const originalName = getOriginalFileName(fileName);
+    const encodedName = encodeFileName(fileName);
     let resource: Resource;
     if (resourceId) {
       resource = await this.get(resourceId);
@@ -713,6 +714,7 @@ export class ResourcesService {
         parentId,
         attrs: {
           original_name: originalName,
+          encoded_name: encodedName,
           mimetype: mimetype,
         },
       });

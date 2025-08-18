@@ -149,6 +149,7 @@ export class ResourcesService {
         'name',
         'attrs',
         'parentId',
+        'createdAt',
         'updatedAt',
         'namespaceId',
         'resourceType',
@@ -331,6 +332,7 @@ export class ResourcesService {
         'name',
         'attrs',
         'parentId',
+        'createdAt',
         'updatedAt',
         'namespaceId',
         'resourceType',
@@ -459,7 +461,16 @@ export class ResourcesService {
     }
 
     const children = await this.resourceRepository.find({
-      select: ['id', 'name', 'parentId', 'resourceType', 'attrs', 'tagIds'],
+      select: [
+        'id',
+        'name',
+        'parentId',
+        'resourceType',
+        'attrs',
+        'tagIds',
+        'createdAt',
+        'updatedAt',
+      ],
       where: {
         namespaceId,
         parentId: resourceId,
@@ -574,7 +585,15 @@ export class ResourcesService {
     while (true) {
       const resource = await this.resourceRepository.findOne({
         where: { namespaceId, id: resourceId },
-        select: ['id', 'name', 'resourceType', 'parentId', 'globalPermission'],
+        select: [
+          'id',
+          'name',
+          'resourceType',
+          'parentId',
+          'globalPermission',
+          'createdAt',
+          'updatedAt',
+        ],
       });
       if (!resource) {
         throw new NotFoundException('Resource not found');
@@ -698,7 +717,8 @@ export class ResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    const originalName = encodeFileName(fileName);
+    const originalName = getOriginalFileName(fileName);
+    const encodedName = encodeFileName(fileName);
     let resource: Resource;
     if (resourceId) {
       resource = await this.get(resourceId);
@@ -713,6 +733,7 @@ export class ResourcesService {
         parentId,
         attrs: {
           original_name: originalName,
+          encoded_name: encodedName,
           mimetype: mimetype,
         },
       });

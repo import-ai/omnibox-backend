@@ -13,7 +13,7 @@ export const uploadLanguageDatasets = [
   { filename: '🚀🔥.txt', content: '😊👍🌍' },
 ];
 
-describe('ResourcesController (e2e)', () => {
+describe('FileResourcesController (e2e)', () => {
   let client: TestClient;
 
   beforeAll(async () => {

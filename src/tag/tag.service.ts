@@ -55,10 +55,7 @@ export class TagService {
     });
   }
 
-  async getTagsByIds(
-    namespaceId: string,
-    tagIds: string[],
-  ): Promise<TagDto[]> {
+  async getTagsByIds(namespaceId: string, tagIds: string[]): Promise<TagDto[]> {
     if (tagIds.length === 0) {
       return [];
     }

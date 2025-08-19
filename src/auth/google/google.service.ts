@@ -5,9 +5,9 @@ import { SocialService } from 'omniboxd/auth/social.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import {
-  Logger,
-  Injectable,
   BadRequestException,
+  Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 
@@ -39,6 +39,7 @@ export class GoogleService extends SocialService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly redirectUri: string;
+  private readonly googleOAuthAPIUrl: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -56,6 +57,10 @@ export class GoogleService extends SocialService {
     this.redirectUri = this.configService.get<string>(
       'OBB_GOOGLE_REDIRECT_URI',
       '',
+    );
+    this.googleOAuthAPIUrl = this.configService.get<string>(
+      'OBB_GOOGLE_OAUTH_API_URL',
+      'https://oauth2.googleapis.com',
     );
   }
 
@@ -83,7 +88,7 @@ export class GoogleService extends SocialService {
       throw new UnauthorizedException('Invalid state identifier');
     }
 
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    const tokenResponse = await fetch(`${this.googleOAuthAPIUrl}/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',

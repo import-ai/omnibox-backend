@@ -27,7 +27,7 @@ export class UpdateAttachmentUrls1755499552000 implements MigrationInterface {
         // Replace /api/v1/attachments/images/{id} and
         // /api/v1/attachments/media/{id} with attachments/{id}
         const updatedContent = originalContent.replace(
-          /\/api\/v1\/attachments\/(images|media)\/([a-zA-Z0-9\._-]+)/g,
+          /\/api\/v1\/attachments\/(images|media)\/([a-zA-Z0-9._-]+)/g,
           'attachments/$2',
         );
 

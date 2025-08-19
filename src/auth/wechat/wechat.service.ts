@@ -48,6 +48,18 @@ export class WechatService extends SocialService {
     );
   }
 
+  available() {
+    return {
+      available: !!(
+        this.appId &&
+        this.openAppId &&
+        this.appSecret &&
+        this.openAppSecret &&
+        this.redirectUri
+      ),
+    };
+  }
+
   getQrCodeParams() {
     const state = this.setState('open_weixin');
     this.cleanExpiresState();
@@ -59,7 +71,7 @@ export class WechatService extends SocialService {
     };
   }
 
-  getWechatAuthUrl(): string {
+  authUrl(): string {
     const state = this.setState('weixin');
     this.cleanExpiresState();
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;

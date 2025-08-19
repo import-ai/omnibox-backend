@@ -16,6 +16,18 @@ export class WechatController extends SocialController {
   }
 
   @Public()
+  @Get('available')
+  available() {
+    return this.wechatService.available();
+  }
+
+  @Public()
+  @Get('auth-url')
+  getAuthUrl() {
+    return this.wechatService.authUrl();
+  }
+
+  @Public()
   @Get('qrcode')
   getQrCode() {
     return this.wechatService.getQrCodeParams();
@@ -30,12 +42,6 @@ export class WechatController extends SocialController {
   ) {
     const userId = this.findUserId(req.headers.authorization);
     return await this.wechatService.handleCallback(code, state, userId);
-  }
-
-  @Public()
-  @Get('auth-url')
-  getAuthUrl() {
-    return this.wechatService.getWechatAuthUrl();
   }
 
   @Post('unbind')

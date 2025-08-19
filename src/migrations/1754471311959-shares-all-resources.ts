@@ -11,6 +11,7 @@ export class SharesAllResources1754471311959 implements MigrationInterface {
         name: 'all_resources',
         type: 'boolean',
         isNullable: false,
+        default: false,
       }),
     );
   }

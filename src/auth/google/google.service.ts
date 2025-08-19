@@ -39,7 +39,8 @@ export class GoogleService extends SocialService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly redirectUri: string;
-  private readonly googleOAuthAPIUrl: string;
+  private readonly googleOAuthAPIBaseUrl: string;
+  private readonly googleAPIBaseUrl: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -58,9 +59,13 @@ export class GoogleService extends SocialService {
       'OBB_GOOGLE_REDIRECT_URI',
       '',
     );
-    this.googleOAuthAPIUrl = this.configService.get<string>(
-      'OBB_GOOGLE_OAUTH_API_URL',
+    this.googleOAuthAPIBaseUrl = this.configService.get<string>(
+      'OBB_GOOGLE_OAUTH_API_BASE_URL',
       'https://oauth2.googleapis.com',
+    );
+    this.googleAPIBaseUrl = this.configService.get<string>(
+      'OBB_GOOGLE_API_BASE_URL',
+      'https://www.googleapis.com',
     );
   }
 
@@ -88,7 +93,7 @@ export class GoogleService extends SocialService {
       throw new UnauthorizedException('Invalid state identifier');
     }
 
-    const tokenResponse = await fetch(`${this.googleOAuthAPIUrl}/token`, {
+    const tokenResponse = await fetch(`${this.googleOAuthAPIBaseUrl}/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -113,7 +118,7 @@ export class GoogleService extends SocialService {
     }
 
     const userInfoResponse = await fetch(
-      'https://www.googleapis.com/oauth2/v3/userinfo',
+      `${this.googleAPIBaseUrl}/oauth2/v3/userinfo`,
       {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       },

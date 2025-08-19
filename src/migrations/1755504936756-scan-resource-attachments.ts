@@ -28,7 +28,7 @@ export class ScanResourceAttachments1755504936756
 
         // Find all attachment references in the format: attachments/{id}
         const attachmentMatches = content.match(
-          /attachments\/([a-zA-Z0-9\._-]+)/g,
+          /attachments\/([a-zA-Z0-9._-]+)/g,
         );
 
         for (const match of attachmentMatches || []) {

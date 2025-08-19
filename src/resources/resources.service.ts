@@ -32,9 +32,9 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 import { Response } from 'express';
 import { ResourceDto, ResourceMetaDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
-import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 
 const TASK_PRIORITY = 5;
 
@@ -51,7 +51,7 @@ export class ResourcesService {
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
-    private readonly attachmentsService: AttachmentsService,
+    private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
   ) {}
 
@@ -245,7 +245,7 @@ export class ResourcesService {
       );
 
       // Copy attachment relations to the duplicated resource within the same transaction
-      await this.attachmentsService.copyAttachmentsToResource(
+      await this.resourceAttachmentsService.copyAttachmentsToResource(
         resource.namespaceId,
         resource.id,
         duplicatedResource.id,

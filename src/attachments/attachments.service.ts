@@ -2,20 +2,13 @@ import {
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
-import {
-  ForbiddenException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { objectStreamResponse } from 'omniboxd/minio/utils';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager } from 'typeorm';
-import { ResourceAttachment } from './entities/resource-attachment.entity';
+import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import {
   UploadAttachmentsResponseDto,
   UploadedAttachmentDto,
@@ -26,10 +19,9 @@ export class AttachmentsService {
   private readonly logger = new Logger(AttachmentsService.name);
 
   constructor(
-    @InjectRepository(ResourceAttachment)
-    private readonly resourceAttachmentRepository: Repository<ResourceAttachment>,
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
+    private readonly resourceAttachmentsService: ResourceAttachmentsService,
   ) {}
 
   async checkPermission(
@@ -53,26 +45,6 @@ export class AttachmentsService {
     return `attachments/${attachmentId}`;
   }
 
-  async getRelationOrFail(
-    namespaceId: string,
-    resourceId: string,
-    attachmentId: string,
-  ) {
-    const relation = await this.resourceAttachmentRepository.findOne({
-      where: {
-        namespaceId,
-        resourceId,
-        attachmentId,
-      },
-    });
-
-    if (!relation) {
-      throw new NotFoundException(attachmentId);
-    }
-
-    return relation;
-  }
-
   async uploadAttachment(
     namespaceId: string,
     resourceId: string,
@@ -87,17 +59,17 @@ export class AttachmentsService {
       userId,
       ResourcePermission.CAN_EDIT,
     );
+
     const { id } = await this.minioService.put(filename, buffer, mimetype, {
       folder: 'attachments',
     });
 
     // Create the resource-attachment relation
-    const resourceAttachment = this.resourceAttachmentRepository.create({
+    await this.resourceAttachmentsService.addAttachmentToResource(
       namespaceId,
       resourceId,
-      attachmentId: id,
-    });
-    await this.resourceAttachmentRepository.save(resourceAttachment);
+      id,
+    );
 
     return id;
   }
@@ -160,7 +132,12 @@ export class AttachmentsService {
       userId,
       ResourcePermission.CAN_VIEW,
     );
-    await this.getRelationOrFail(namespaceId, resourceId, attachmentId);
+
+    await this.resourceAttachmentsService.getResourceAttachmentOrFail(
+      namespaceId,
+      resourceId,
+      attachmentId,
+    );
 
     const objectResponse = await this.minioService.get(
       this.minioPath(attachmentId),
@@ -186,13 +163,12 @@ export class AttachmentsService {
       userId,
       ResourcePermission.CAN_EDIT,
     );
-    const relation = await this.getRelationOrFail(
+
+    return await this.resourceAttachmentsService.removeAttachmentFromResource(
       namespaceId,
       resourceId,
       attachmentId,
     );
-    await this.resourceAttachmentRepository.softRemove(relation);
-    return { id: attachmentId, success: true };
   }
 
   isMedia(mimetype: string): boolean {
@@ -202,37 +178,5 @@ export class AttachmentsService {
       }
     }
     return false;
-  }
-
-  async copyAttachmentsToResource(
-    namespaceId: string,
-    sourceResourceId: string,
-    targetResourceId: string,
-    entityManager?: EntityManager,
-  ) {
-    const repository = entityManager
-      ? entityManager.getRepository(ResourceAttachment)
-      : this.resourceAttachmentRepository;
-
-    const sourceRelations = await repository.find({
-      where: {
-        namespaceId,
-        resourceId: sourceResourceId,
-      },
-    });
-
-    const newRelations = sourceRelations.map((relation) =>
-      repository.create({
-        namespaceId,
-        resourceId: targetResourceId,
-        attachmentId: relation.attachmentId,
-      }),
-    );
-
-    if (newRelations.length > 0) {
-      await repository.save(newRelations);
-    }
-
-    return newRelations.length;
   }
 }

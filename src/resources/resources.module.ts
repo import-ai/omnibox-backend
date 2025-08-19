@@ -10,11 +10,11 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { FileResourcesController } from 'omniboxd/resources/file-resources.controller';
 import { MinioModule } from 'omniboxd/minio/minio.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
-import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { SharedResourcesController } from './shared-resources.controller';
+import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
 
 @Module({
   exports: [ResourcesService],
@@ -34,8 +34,8 @@ import { SharedResourcesController } from './shared-resources.controller';
     PermissionsModule,
     SharesModule,
     MinioModule,
-    AttachmentsModule,
     TasksModule,
+    ResourceAttachmentsModule,
   ],
 })
 export class ResourcesModule {}

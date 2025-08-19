@@ -54,7 +54,10 @@ export class WizardService {
       this.messagesService,
       this.resourcesService,
     );
-    this.wizardApiService = new WizardAPIService(baseUrl, this.telemetryService);
+    this.wizardApiService = new WizardAPIService(
+      baseUrl,
+      this.telemetryService,
+    );
   }
 
   async create(partialTask: Partial<Task>) {
@@ -93,7 +96,10 @@ export class WizardService {
           parentId: parentId,
           attrs: { url },
         };
-        const resource = await this.resourcesService.create(user.id, resourceDto);
+        const resource = await this.resourcesService.create(
+          user.id,
+          resourceDto,
+        );
 
         const task = await this.wizardTaskService.createCollectTask(
           user.id,
@@ -117,8 +123,8 @@ export class WizardService {
         return { task_id: task.id, resource_id: resource.id };
       },
       {
-        'operation': 'collect',
-        'service': 'wizard',
+        operation: 'collect',
+        service: 'wizard',
       },
       SpanKind.INTERNAL,
     );
@@ -158,7 +164,8 @@ export class WizardService {
         await this.wizardTaskService.taskRepository.save(task);
 
         const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
-        const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
+        const wait: number =
+          task.startedAt.getTime() - task.createdAt.getTime();
 
         // Add timing metrics to span
         if (span) {
@@ -168,8 +175,8 @@ export class WizardService {
           });
           span.addEvent('task.completed', {
             'task.id': task.id,
-            'duration_ms': cost,
-            'wait_ms': wait,
+            duration_ms: cost,
+            wait_ms: wait,
           });
         }
 
@@ -178,11 +185,15 @@ export class WizardService {
 
         const postprocessResult = await this.postprocess(task);
 
-        return { taskId: task.id, function: task.function, ...postprocessResult };
+        return {
+          taskId: task.id,
+          function: task.function,
+          ...postprocessResult,
+        };
       },
       {
-        'operation': 'task_callback',
-        'service': 'wizard',
+        operation: 'task_callback',
+        service: 'wizard',
       },
       SpanKind.INTERNAL,
     );
@@ -373,8 +384,8 @@ export class WizardService {
         return null;
       },
       {
-        'operation': 'fetch_task',
-        'service': 'wizard',
+        operation: 'fetch_task',
+        service: 'wizard',
       },
       SpanKind.INTERNAL,
     );

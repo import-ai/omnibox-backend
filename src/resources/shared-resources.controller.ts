@@ -3,7 +3,6 @@ import {
   Controller,
   ForbiddenException,
   Get,
-  Headers,
   NotFoundException,
   Param,
   UnauthorizedException,
@@ -13,6 +12,7 @@ import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourceDto } from './dto/resource.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CookieAuth } from 'omniboxd/auth/decorators';
+import { Cookies } from 'omniboxd/decorators/cookie.decorators';
 
 @Controller('api/v1/shares/:shareId/resources')
 export class SharedResourcesController {
@@ -26,7 +26,7 @@ export class SharedResourcesController {
   async getResource(
     @Param('shareId') shareId: string,
     @Param('resourceId') resourceId: string,
-    @Headers('X-OmniBox-Share-Password') password: string,
+    @Cookies('share-password') password: string,
     @UserId({ optional: true }) userId?: string,
   ): Promise<SharedResourceDto> {
     const share = await this.sharesService.getShareById(shareId);

@@ -2,11 +2,12 @@ import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { TaskDto } from './dto/task.dto';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 
 @Injectable()
 export class TasksService {
@@ -20,7 +21,11 @@ export class TasksService {
     return await this.taskRepository.save(newTask);
   }
 
-  async list(namespaceId: string, offset: number, limit: number): Promise<TaskDto[]> {
+  async list(
+    namespaceId: string,
+    offset: number,
+    limit: number,
+  ): Promise<TaskDto[]> {
     const tasks = await this.taskRepository.find({
       where: { namespaceId },
       skip: offset,
@@ -28,7 +33,9 @@ export class TasksService {
       order: { createdAt: 'DESC' },
     });
 
-    return tasks.map((task) => TaskDto.fromEntity(task, this.getTaskStatus(task)));
+    return tasks.map((task) =>
+      TaskDto.fromEntity(task, this.getTaskStatus(task)),
+    );
   }
 
   async get(id: string) {
@@ -55,7 +62,7 @@ export class TasksService {
     if (task.canceledAt) {
       return 'canceled';
     }
-    if (task.exception) {
+    if (!isEmpty(task.exception)) {
       return 'error';
     }
     if (task.endedAt) {

@@ -108,6 +108,11 @@ export class WizardService {
     const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
     this.logger.debug({ taskId: task.id, cost, wait });
 
+    if (task.canceledAt) {
+      this.logger.warn(`Task ${task.id} was canceled.`);
+      return { taskId: task.id, function: task.function, status: 'canceled' };
+    }
+
     const postprocessResult = await this.postprocess(task);
 
     return { taskId: task.id, function: task.function, ...postprocessResult };

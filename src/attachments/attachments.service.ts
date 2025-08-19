@@ -2,7 +2,13 @@ import {
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -13,6 +19,9 @@ import {
   UploadAttachmentsResponseDto,
   UploadedAttachmentDto,
 } from './dto/upload-attachments-response.dto';
+import { SharesService } from 'omniboxd/shares/shares.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AttachmentsService {
@@ -22,6 +31,8 @@ export class AttachmentsService {
     private readonly minioService: MinioService,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
+    private readonly sharesService: SharesService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   async checkPermission(
@@ -169,6 +180,71 @@ export class AttachmentsService {
       resourceId,
       attachmentId,
     );
+  }
+
+  async downloadAttachmentViaShare(
+    shareId: string,
+    resourceId: string,
+    attachmentId: string,
+    password: string,
+    userId: string | undefined,
+    httpResponse: Response,
+  ) {
+    const share = await this.sharesService.getShareById(shareId);
+    if (!share || !share.enabled) {
+      throw new NotFoundException(`No share found with id ${shareId}`);
+    }
+
+    // Check if share has expired
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      throw new NotFoundException(`No share found with id ${shareId}`);
+    }
+
+    if (share.requireLogin && !userId) {
+      throw new UnauthorizedException('This share requires login');
+    }
+
+    if (share.password) {
+      if (!password) {
+        throw new ForbiddenException(`Invalid password for share ${shareId}`);
+      }
+      const match = await bcrypt.compare(password, share.password);
+      if (!match) {
+        throw new ForbiddenException(`Invalid password for share ${shareId}`);
+      }
+    }
+
+    const resource = await this.resourcesService.get(resourceId);
+    if (!resource || resource.namespaceId != share.namespaceId) {
+      throw new NotFoundException(`No resource found with id ${resourceId}`);
+    }
+
+    if (resource.id !== share.resourceId) {
+      const parents = await this.resourcesService.getParentResources(
+        share.namespaceId,
+        resource.parentId,
+      );
+      if (!parents.map((r) => r.id).includes(share.resourceId)) {
+        throw new NotFoundException(`No resource found with id ${resourceId}`);
+      }
+    }
+
+    await this.resourceAttachmentsService.getResourceAttachmentOrFail(
+      share.namespaceId,
+      resourceId,
+      attachmentId,
+    );
+
+    const objectResponse = await this.minioService.get(
+      this.minioPath(attachmentId),
+    );
+
+    // Display media files inline, download other files as attachments
+    const forceDownload = !this.isMedia(objectResponse.mimetype);
+
+    return objectStreamResponse(objectResponse, httpResponse, {
+      forceDownload,
+    });
   }
 
   isMedia(mimetype: string): boolean {

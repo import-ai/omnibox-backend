@@ -1,22 +1,12 @@
-import { Global, Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { TelemetryService } from './telemetry.service';
-import { TelemetryConfigService } from './telemetry.config';
+import { Module } from '@nestjs/common';
+import { OpenTelemetryModule } from 'nestjs-otel';
 
-@Global()
 @Module({
-  imports: [ConfigModule],
-  providers: [TelemetryConfigService, TelemetryService],
-  exports: [TelemetryService, TelemetryConfigService],
+  imports: [
+    OpenTelemetryModule.forRoot({
+      // Configuration is handled in tracing.ts
+    }),
+  ],
+  exports: [OpenTelemetryModule],
 })
-export class TelemetryModule implements OnModuleInit, OnModuleDestroy {
-  constructor(private telemetryService: TelemetryService) {}
-
-  onModuleInit() {
-    this.telemetryService.onModuleInit();
-  }
-
-  async onModuleDestroy() {
-    await this.telemetryService.onModuleDestroy();
-  }
-}
+export class TelemetryModule {}

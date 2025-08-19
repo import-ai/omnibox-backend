@@ -142,7 +142,9 @@ describe('SearchController (e2e)', () => {
           provide: TelemetryService,
           useValue: {
             createSpan: jest.fn().mockReturnValue(null),
-            withSpan: jest.fn().mockImplementation((name, operation) => operation(null)),
+            withSpan: jest
+              .fn()
+              .mockImplementation((name, operation) => operation(null)),
             addAttributes: jest.fn(),
             addEvent: jest.fn(),
             isEnabled: jest.fn().mockReturnValue(false),

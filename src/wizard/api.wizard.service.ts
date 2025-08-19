@@ -1,93 +1,44 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { Injectable } from '@nestjs/common';
-import { trace, propagation, context, SpanStatusCode } from '@opentelemetry/api';
+import { propagation, context } from '@opentelemetry/api';
 import { SearchRequestDto } from './dto/search-request.dto';
 import { SearchResponseDto } from './dto/search-response.dto';
-import { TelemetryService } from 'omniboxd/telemetry';
+import { Span } from 'nestjs-otel';
 
 @Injectable()
 export class WizardAPIService {
-  constructor(
-    private readonly wizardBaseUrl: string,
-    private readonly telemetryService: TelemetryService,
-  ) {}
+  constructor(private readonly wizardBaseUrl: string) {}
 
+  @Span('omnibox.backend.wizard.api_call')
   async request(
     method: string,
     url: string,
     body: Record<string, any>,
     headers: Record<string, string> = {},
   ): Promise<Record<string, any>> {
-    return this.telemetryService.withSpan(
-      `omnibox.backend.wizard.api_call`,
-      async (span) => {
-        // Prepare headers with trace context propagation
-        const traceHeaders: Record<string, string> = {};
-        
-        // Inject trace context into headers
-        if (this.telemetryService.isEnabled()) {
-          propagation.inject(context.active(), traceHeaders);
-        }
+    // Prepare headers with trace context propagation
+    const traceHeaders: Record<string, string> = {};
 
-        const requestHeaders = {
-          'Content-Type': 'application/json',
-          ...headers,
-          ...traceHeaders,
-        };
+    // Inject trace context into headers for distributed tracing
+    propagation.inject(context.active(), traceHeaders);
 
-        // Add span attributes
-        if (span) {
-          span.setAttributes({
-            'http.method': method,
-            'http.url': `${this.wizardBaseUrl}${url}`,
-            'http.target': url,
-            'service.name': 'wizard',
-            'request.body_size': JSON.stringify(body).length,
-          });
-        }
+    const requestHeaders = {
+      'Content-Type': 'application/json',
+      ...headers,
+      ...traceHeaders,
+    };
 
-        const response = await fetch(`${this.wizardBaseUrl}${url}`, {
-          method,
-          headers: requestHeaders,
-          body: JSON.stringify(body),
-        });
+    const response = await fetch(`${this.wizardBaseUrl}${url}`, {
+      method,
+      headers: requestHeaders,
+      body: JSON.stringify(body),
+    });
 
-        // Add response attributes to span
-        if (span) {
-          span.setAttributes({
-            'http.status_code': response.status,
-            'http.response.size': response.headers.get('content-length') || 0,
-          });
-        }
+    if (!response.ok) {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
 
-        if (!response.ok) {
-          const error = new Error(`Request failed with status ${response.status}`);
-          if (span) {
-            span.recordException(error);
-            span.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: `HTTP ${response.status}`,
-            });
-          }
-          throw error;
-        }
-
-        const result = await response.json();
-        
-        if (span) {
-          span.addEvent('wizard.api.response_received', {
-            'response.type': typeof result,
-          });
-        }
-
-        return result;
-      },
-      {
-        'operation': 'wizard_api_call',
-        'http.method': method,
-        'http.target': url,
-      },
-    );
+    return await response.json();
   }
 
   async proxy(req: Request): Promise<Record<string, any>> {

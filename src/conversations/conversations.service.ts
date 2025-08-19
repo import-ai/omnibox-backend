@@ -17,7 +17,6 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { TelemetryService } from 'omniboxd/telemetry';
 
 const TASK_PRIORITY = 5;
 
@@ -32,13 +31,12 @@ export class ConversationsService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly wizardTaskService: WizardTaskService,
-    private readonly telemetryService: TelemetryService,
   ) {
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
       throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
     }
-    this.wizardApiService = new WizardAPIService(baseUrl, this.telemetryService);
+    this.wizardApiService = new WizardAPIService(baseUrl);
   }
 
   async create(namespaceId: string, user: User) {

@@ -18,7 +18,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
-import { TelemetryService } from 'omniboxd/telemetry';
 
 const TASK_PRIORITY = 4;
 
@@ -35,13 +34,12 @@ export class SearchService {
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
     private readonly wizardTaskService: WizardTaskService,
-    private readonly telemetryService: TelemetryService,
   ) {
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
       throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
     }
-    this.wizardApiService = new WizardAPIService(baseUrl, this.telemetryService);
+    this.wizardApiService = new WizardAPIService(baseUrl);
   }
 
   async search(

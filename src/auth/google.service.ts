@@ -59,7 +59,13 @@ export class GoogleService extends SocialService {
     );
   }
 
-  getGoogleAuthUrl(): string {
+  available() {
+    return {
+      available: !!(this.clientId && this.clientSecret && this.redirectUri),
+    };
+  }
+
+  authUrl(): string {
     const state = this.setState('google');
     this.cleanExpiresState();
 

@@ -16,9 +16,15 @@ export class GoogleController extends SocialController {
   }
 
   @Public()
+  @Get('available')
+  available() {
+    return this.googleService.available();
+  }
+
+  @Public()
   @Get('auth-url')
   getAuthUrl() {
-    return this.googleService.getGoogleAuthUrl();
+    return this.googleService.authUrl();
   }
 
   @Public()

@@ -3,6 +3,7 @@ import { GenericContainer, StartedTestContainer } from 'testcontainers';
 let postgresContainer: StartedTestContainer;
 let minioContainer: StartedTestContainer;
 
+// https://node.testcontainers.org/supported-container-runtimes
 export default async () => {
   console.log('Setting up test containers...');
   postgresContainer = await new GenericContainer('postgres:17.5')

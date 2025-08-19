@@ -1,7 +1,7 @@
 import { Request } from 'express';
 import { Get, Post, Query, Controller, Req } from '@nestjs/common';
 import { AuthService } from 'omniboxd/auth/auth.service';
-import { WechatService } from 'omniboxd/auth/wechat.service';
+import { WechatService } from 'omniboxd/auth/wechat/wechat.service';
 import { SocialController } from 'omniboxd/auth/social.controller';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';

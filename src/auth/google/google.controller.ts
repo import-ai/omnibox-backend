@@ -1,6 +1,6 @@
 import { Request } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
-import { GoogleService } from 'omniboxd/auth/google.service';
+import { GoogleService } from 'omniboxd/auth/google/google.service';
 import { Req, Get, Body, Controller, Post } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { SocialController } from 'omniboxd/auth/social.controller';

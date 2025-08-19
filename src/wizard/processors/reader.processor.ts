@@ -41,10 +41,7 @@ export class ReaderProcessor extends CollectProcessor {
           stream,
           image.mimetype,
         );
-        markdown = markdown.replaceAll(
-          image.link,
-          `/api/v1/attachments/images/${id}`,
-        );
+        markdown = markdown.replaceAll(image.link, `attachments/${id}`);
       }
       task.output.images = undefined;
       task.output.markdown = markdown;

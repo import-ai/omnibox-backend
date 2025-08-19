@@ -1,21 +1,10 @@
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { BadRequestException } from '@nestjs/common';
-import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
-
-interface Image {
-  name?: string;
-  link: string;
-  data: string;
-  mimetype: string;
-}
+import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 
 export class ReaderProcessor extends CollectProcessor {
-  constructor(
-    protected readonly resourcesService: ResourcesService,
-    protected readonly attachmentsService: AttachmentsService,
-  ) {
+  constructor(protected readonly resourcesService: ResourcesService) {
     super(resourcesService);
   }
 
@@ -24,28 +13,21 @@ export class ReaderProcessor extends CollectProcessor {
     if (!markdown) {
       return {};
     }
-    if (task.output?.images) {
-      const images: Image[] = task.output.images;
-      for (const image of images) {
-        const stream = Buffer.from(image.data, 'base64');
-        const resourceId =
-          task.payload?.resource_id || task.payload?.resourceId;
-        if (!resourceId) {
-          throw new BadRequestException('Invalid task payload');
-        }
-        const id = await this.attachmentsService.uploadAttachment(
-          task.namespaceId,
-          resourceId,
-          task.userId,
-          image.name || image.link,
-          stream,
-          image.mimetype,
+
+    // Handle markdown replacement for preprocessed images
+    if (task.output?.images && Array.isArray(task.output.images)) {
+      const processedImages: ProcessedImage[] = task.output.images;
+      for (const processedImage of processedImages) {
+        markdown = markdown.replaceAll(
+          processedImage.originalLink,
+          `attachments/${processedImage.attachmentId}`,
         );
-        markdown = markdown.replaceAll(image.link, `attachments/${id}`);
       }
-      task.output.images = undefined;
+      // Update task output with processed markdown and clear images
       task.output.markdown = markdown;
+      task.output.images = undefined;
     }
+
     return await super.process(task);
   }
 }

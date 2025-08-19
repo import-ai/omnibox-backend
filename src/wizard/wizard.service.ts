@@ -19,6 +19,7 @@ import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
 import { ResourceType } from 'omniboxd/resources/resources.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
+import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 
 @Injectable()
 export class WizardService {
@@ -37,11 +38,8 @@ export class WizardService {
   ) {
     this.processors = {
       collect: new CollectProcessor(resourcesService),
-      file_reader: new ReaderProcessor(
-        this.resourcesService,
-        this.attachmentsService,
-      ),
-      extract_tags: new ExtractTagsProcessor(resourcesService, tagService),
+      file_reader: new ReaderProcessor(this.resourcesService),
+      extract_tags: new ExtractTagsProcessor(resourcesService, this.tagService),
       generate_title: new GenerateTitleProcessor(resourcesService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
@@ -101,6 +99,9 @@ export class WizardService {
     task.endedAt = new Date();
     task.exception = data.exception;
     task.output = data.output;
+
+    await this.preprocessTask(task);
+
     await this.wizardTaskService.taskRepository.save(task);
 
     const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
@@ -179,6 +180,47 @@ export class WizardService {
         error,
       );
     }
+  }
+
+  /**
+   * Preprocess task to handle images in output.
+   * Converts base64 images to attachments and replaces them in task output.
+   * @param task
+   * @private
+   */
+  private async preprocessTask(task: Task): Promise<void> {
+    if (!task.output?.images || !Array.isArray(task.output.images)) {
+      return;
+    }
+
+    const images: Image[] = task.output.images;
+    const processedImages: ProcessedImage[] = [];
+
+    for (const image of images) {
+      const stream = Buffer.from(image.data, 'base64');
+      const resourceId = task.payload?.resource_id || task.payload?.resourceId;
+      if (!resourceId) {
+        throw new BadRequestException('Invalid task payload');
+      }
+      const attachmentId = await this.attachmentsService.uploadAttachment(
+        task.namespaceId,
+        resourceId,
+        task.userId,
+        image.name || image.link,
+        stream,
+        image.mimetype,
+      );
+
+      processedImages.push({
+        originalLink: image.link,
+        attachmentId,
+        name: image.name,
+        mimetype: image.mimetype,
+      });
+    }
+
+    // Replace images with processed attachment info, keep markdown unchanged
+    task.output.images = processedImages;
   }
 
   async fetchTask(): Promise<Task | null> {

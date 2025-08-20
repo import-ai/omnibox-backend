@@ -2,52 +2,24 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import {
   BatchSpanProcessor,
-  TraceIdRatioBasedSampler,
+  ConsoleSpanExporter,
 } from '@opentelemetry/sdk-trace-base';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { NestInstrumentation } from '@opentelemetry/instrumentation-nestjs-core';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 
-// Environment configuration
-const env = process.env.ENV || 'local';
-const serviceName = `omnibox-backend-${env}`;
+const env = process.env.ENV || 'unknown';
+const serviceName = `omnibox-backend`;
 
-// Check if tracing is enabled
 function isTracingEnabled(): boolean {
-  // Disable telemetry in Jest test environment
-  if (
-    process.env.NODE_ENV === 'test' ||
-    process.env.JEST_WORKER_ID !== undefined
-  ) {
+  if (process.env.JEST_WORKER_ID !== undefined) {
     return false;
   }
 
-  // For local environment, disabled by default
-  if (env === 'local') {
-    return process.env.OTEL_TRACES_ENABLED?.toLowerCase() === 'true';
-  }
-
-  // For other environments, enabled by default
-  return process.env.OTEL_TRACES_ENABLED?.toLowerCase() !== 'false';
-}
-
-// Get sampling rate based on environment
-function getSamplingRate(): number {
-  const defaultRates: Record<string, number> = {
-    local: 1.0,
-    test: 1.0,
-    dev: 0.1,
-    publish: 0.01,
-  };
-
-  const envSamplingRate = process.env.OTEL_TRACES_SAMPLING_RATIO;
-  if (envSamplingRate) {
-    return parseFloat(envSamplingRate);
-  }
-
-  return defaultRates[env] || 1.0;
+  return !isEmpty(process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
 }
 
 // Initialize OpenTelemetry SDK
@@ -61,18 +33,21 @@ if (isTracingEnabled()) {
   const otlpTraceExporter = new OTLPTraceExporter({ url });
   const spanProcessor = new BatchSpanProcessor(otlpTraceExporter);
 
+  const consoleExporter = new ConsoleSpanExporter();
+  const consoleSpanProcessor = new BatchSpanProcessor(consoleExporter);
+
+  const excludedUrls = ['/api/v1/health', '/internal/api/v1/wizard/task'];
+
   sdk = new NodeSDK({
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: serviceName,
       ['deployment.environment.name']: env,
     }),
-    spanProcessors: [spanProcessor],
-    sampler: new TraceIdRatioBasedSampler(getSamplingRate()),
+    spanProcessors: [spanProcessor, consoleSpanProcessor],
     instrumentations: [
       new HttpInstrumentation({
-        // Don't trace health check endpoints
         ignoreIncomingRequestHook: (req) => {
-          return req.url?.includes('/api/v1/health') || false;
+          return excludedUrls.some((url) => req.url?.includes(url)) || false;
         },
       }),
       new ExpressInstrumentation(),
@@ -82,3 +57,16 @@ if (isTracingEnabled()) {
 }
 
 export default sdk;
+
+process.on('SIGTERM', () => {
+  if (!sdk) {
+    return;
+  }
+  sdk
+    .shutdown()
+    .then(
+      () => console.log('SDK shut down successfully'),
+      (err) => console.log('Error shutting down SDK', err),
+    )
+    .finally(() => process.exit(0));
+});

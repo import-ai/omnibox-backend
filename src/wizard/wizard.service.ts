@@ -20,7 +20,6 @@ import { ResourceType } from 'omniboxd/resources/resources.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
-import { Span } from 'nestjs-otel';
 
 @Injectable()
 export class WizardService {
@@ -59,7 +58,6 @@ export class WizardService {
     return await this.wizardTaskService.create(partialTask);
   }
 
-  @Span('omnibox.backend.wizard.collect')
   async collect(
     user: User,
     data: CollectRequestDto,
@@ -89,7 +87,6 @@ export class WizardService {
     return { task_id: task.id, resource_id: resource.id };
   }
 
-  @Span('omnibox.backend.wizard.task_callback')
   async taskDoneCallback(data: TaskCallbackDto) {
     const task = await this.wizardTaskService.taskRepository.findOneOrFail({
       where: { id: data.id },
@@ -233,7 +230,6 @@ export class WizardService {
     task.output.images = processedImages;
   }
 
-  @Span('omnibox.backend.wizard.fetch_task')
   async fetchTask(): Promise<Task | null> {
     const rawQuery = `
       WITH running_tasks_sub_query AS (SELECT namespace_id,

@@ -9,7 +9,6 @@ import { Span } from 'nestjs-otel';
 export class WizardAPIService {
   constructor(private readonly wizardBaseUrl: string) {}
 
-  @Span('omnibox.backend.wizard.api_call')
   async request(
     method: string,
     url: string,

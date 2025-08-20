@@ -1,0 +1,46 @@
+import { Controller, Get, Param } from '@nestjs/common';
+import { ShareResourcesService } from './share-resources.service';
+import {
+  SharedResourceDto,
+  ResourceMetaDto,
+} from 'omniboxd/resources/dto/resource.dto';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { CookieAuth } from 'omniboxd/auth/decorators';
+import { Cookies } from 'omniboxd/decorators/cookie.decorators';
+
+@Controller('api/v1/shares/:shareId/resources')
+export class ShareResourcesController {
+  constructor(private readonly shareResourcesService: ShareResourcesService) {}
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @Get(':resourceId')
+  async getResource(
+    @Param('shareId') shareId: string,
+    @Param('resourceId') resourceId: string,
+    @Cookies('share-password') password: string,
+    @UserId({ optional: true }) userId?: string,
+  ): Promise<SharedResourceDto> {
+    return await this.shareResourcesService.getSharedResource(
+      shareId,
+      resourceId,
+      password,
+      userId,
+    );
+  }
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @Get(':resourceId/children')
+  async getResourceChildren(
+    @Param('shareId') shareId: string,
+    @Param('resourceId') resourceId: string,
+    @Cookies('share-password') password: string,
+    @UserId({ optional: true }) userId?: string,
+  ): Promise<ResourceMetaDto[]> {
+    return await this.shareResourcesService.getSharedResourceChildren(
+      shareId,
+      resourceId,
+      password,
+      userId,
+    );
+  }
+}

@@ -12,8 +12,6 @@ import { MinioModule } from 'omniboxd/minio/minio.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
-import { SharesModule } from 'omniboxd/shares/shares.module';
-import { SharedResourcesController } from './shared-resources.controller';
 import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
 
 @Module({
@@ -24,7 +22,6 @@ import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resourc
     InternalResourcesController,
     OpenResourcesController,
     FileResourcesController,
-    SharedResourcesController,
   ],
   imports: [
     TypeOrmModule.forFeature([Resource]),
@@ -32,7 +29,6 @@ import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resourc
     TypeOrmModule.forFeature([Namespace]),
     TagModule,
     PermissionsModule,
-    SharesModule,
     MinioModule,
     TasksModule,
     ResourceAttachmentsModule,

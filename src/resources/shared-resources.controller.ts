@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ResourcesService } from './resources.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
-import { SharedResourceDto, ResourceChildDto } from './dto/resource.dto';
+import { SharedResourceDto, ResourceMetaDto } from './dto/resource.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import { Cookies } from 'omniboxd/decorators/cookie.decorators';
@@ -75,7 +75,7 @@ export class SharedResourcesController {
     @Param('resourceId') resourceId: string,
     @Cookies('share-password') password: string,
     @UserId({ optional: true }) userId?: string,
-  ): Promise<ResourceChildDto[]> {
+  ): Promise<ResourceMetaDto[]> {
     const share = await this.sharesService.getShareById(shareId);
     if (!share || !share.enabled) {
       throw new NotFoundException(`No share found with id ${shareId}`);

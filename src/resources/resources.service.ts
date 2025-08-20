@@ -30,12 +30,7 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { Response } from 'express';
-import {
-  ResourceDto,
-  ResourceMetaDto,
-  SpaceType,
-  ResourceChildDto,
-} from './dto/resource.dto';
+import { ResourceDto, ResourceMetaDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
@@ -886,15 +881,21 @@ export class ResourcesService {
   async getResourceChildren(
     namespaceId: string,
     resourceId: string,
-  ): Promise<ResourceChildDto[]> {
+  ): Promise<ResourceMetaDto[]> {
     const children = await this.resourceRepository.find({
       where: {
         namespaceId,
         parentId: resourceId,
       },
-      select: ['id', 'name', 'resourceType'],
+      select: [
+        'id',
+        'name',
+        'parentId',
+        'resourceType',
+        'createdAt',
+        'updatedAt',
+      ],
     });
-
-    return children.map((child) => ResourceChildDto.fromEntity(child));
+    return children.map((child) => ResourceMetaDto.fromEntity(child, []));
   }
 }

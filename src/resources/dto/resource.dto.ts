@@ -12,7 +12,6 @@ export class ResourceMetaDto {
   parent_id: string | null;
   name: string;
   resource_type: string;
-  attrs: Record<string, any>;
   tags: TagDto[];
   created_at: string;
   updated_at: string;
@@ -23,7 +22,6 @@ export class ResourceMetaDto {
     dto.parent_id = resource.parentId;
     dto.name = resource.name;
     dto.resource_type = resource.resourceType;
-    dto.attrs = resource.attrs;
     dto.tags = tags;
     dto.created_at = resource.createdAt.toISOString();
     dto.updated_at = resource.updatedAt.toISOString();
@@ -87,20 +85,6 @@ export class SharedResourceDto {
     dto.resource_type = resource.resourceType;
     dto.content = resource.content;
     dto.attrs = resource.attrs;
-    return dto;
-  }
-}
-
-export class ResourceChildDto {
-  id: string;
-  name: string;
-  type: ResourceType;
-
-  static fromEntity(resource: Resource) {
-    const dto = new ResourceChildDto();
-    dto.id = resource.id;
-    dto.name = resource.name;
-    dto.type = resource.resourceType;
     return dto;
   }
 }

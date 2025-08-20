@@ -11,6 +11,9 @@ import {
   SharedResourceDto,
   ResourceMetaDto,
 } from 'omniboxd/resources/dto/resource.dto';
+import { Resource } from 'omniboxd/resources/resources.entity';
+import { Share } from 'omniboxd/shares/entities/share.entity';
+import { PublicShareInfoDto } from './dto/public-share-info.dto';
 
 @Injectable()
 export class ShareResourcesService {
@@ -19,6 +22,16 @@ export class ShareResourcesService {
     private readonly sharesService: SharesService,
   ) {}
 
+  async getShareInfo(
+    shareId: string,
+    password?: string,
+    userId?: string,
+  ): Promise<PublicShareInfoDto> {
+    const share = await this.getAndValidateShare(shareId, password, userId);
+    const resource = await this.getAndValidateResource(share, share.resourceId);
+    return PublicShareInfoDto.fromEntity(share, resource);
+  }
+
   async getSharedResource(
     shareId: string,
     resourceId: string,
@@ -26,22 +39,7 @@ export class ShareResourcesService {
     userId?: string,
   ): Promise<SharedResourceDto> {
     const share = await this.getAndValidateShare(shareId, password, userId);
-
-    const resource = await this.resourcesService.get(resourceId);
-    if (!resource || resource.namespaceId != share.namespaceId) {
-      throw new NotFoundException(`No resource found with id ${resourceId}`);
-    }
-
-    if (resource.id !== share.resourceId) {
-      const parents = await this.resourcesService.getParentResources(
-        share.namespaceId,
-        resource.parentId,
-      );
-      if (!parents.map((r) => r.id).includes(share.resourceId)) {
-        throw new NotFoundException(`No resource found with id ${resourceId}`);
-      }
-    }
-
+    const resource = await this.getAndValidateResource(share, resourceId);
     return SharedResourceDto.fromEntity(resource);
   }
 
@@ -52,26 +50,31 @@ export class ShareResourcesService {
     userId?: string,
   ): Promise<ResourceMetaDto[]> {
     const share = await this.getAndValidateShare(shareId, password, userId);
+    const resource = await this.getAndValidateResource(share, resourceId);
+    return await this.resourcesService.getResourceChildren(
+      share.namespaceId,
+      resource.id,
+    );
+  }
 
+  private async getAndValidateResource(
+    share: Share,
+    resourceId: string,
+  ): Promise<Resource> {
     const resource = await this.resourcesService.get(resourceId);
     if (!resource || resource.namespaceId != share.namespaceId) {
-      throw new NotFoundException(`No resource found with id ${resourceId}`);
+      throw new NotFoundException('Resource not found');
     }
-
     if (resource.id !== share.resourceId) {
       const parents = await this.resourcesService.getParentResources(
         share.namespaceId,
         resource.parentId,
       );
       if (!parents.map((r) => r.id).includes(share.resourceId)) {
-        throw new NotFoundException(`No resource found with id ${resourceId}`);
+        throw new NotFoundException('Resource not found');
       }
     }
-
-    return await this.resourcesService.getResourceChildren(
-      share.namespaceId,
-      resourceId,
-    );
+    return resource;
   }
 
   private async getAndValidateShare(

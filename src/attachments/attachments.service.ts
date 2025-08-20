@@ -175,11 +175,16 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
 
-    return await this.resourceAttachmentsService.removeAttachmentFromResource(
+    await this.resourceAttachmentsService.removeAttachmentFromResource(
       namespaceId,
       resourceId,
       attachmentId,
     );
+
+    return {
+      id: attachmentId,
+      success: true,
+    };
   }
 
   async downloadAttachmentViaShare(

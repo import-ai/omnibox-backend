@@ -12,6 +12,7 @@ export class ResourceMetaDto {
   parent_id: string | null;
   name: string;
   resource_type: string;
+  attrs: Record<string, any>;
   tags: TagDto[];
   created_at: string;
   updated_at: string;
@@ -22,6 +23,7 @@ export class ResourceMetaDto {
     dto.parent_id = resource.parentId;
     dto.name = resource.name;
     dto.resource_type = resource.resourceType;
+    dto.attrs = resource.attrs;
     dto.tags = tags;
     dto.created_at = resource.createdAt.toISOString();
     dto.updated_at = resource.updatedAt.toISOString();

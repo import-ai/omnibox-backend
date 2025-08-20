@@ -881,8 +881,8 @@ export class ResourcesService {
   async getResourceChildren(
     namespaceId: string,
     resourceId: string,
-  ): Promise<ResourceMetaDto[]> {
-    const children = await this.resourceRepository.find({
+  ): Promise<Resource[]> {
+    return await this.resourceRepository.find({
       where: {
         namespaceId,
         parentId: resourceId,
@@ -896,6 +896,5 @@ export class ResourcesService {
         'updatedAt',
       ],
     });
-    return children.map((child) => ResourceMetaDto.fromEntity(child, []));
   }
 }

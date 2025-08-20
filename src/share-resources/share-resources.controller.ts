@@ -1,12 +1,10 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ShareResourcesService } from './share-resources.service';
-import {
-  SharedResourceDto,
-  ResourceMetaDto,
-} from 'omniboxd/resources/dto/resource.dto';
+import { SharedResourceDto } from 'omniboxd/resources/dto/resource.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import { Cookies } from 'omniboxd/decorators/cookie.decorators';
+import { ShareResourceMetaDto } from './dto/share-resource-meta.dto';
 
 @Controller('api/v1/shares/:shareId/resources')
 export class ShareResourcesController {
@@ -35,7 +33,7 @@ export class ShareResourcesController {
     @Param('resourceId') resourceId: string,
     @Cookies('share-password') password: string,
     @UserId({ optional: true }) userId?: string,
-  ): Promise<ResourceMetaDto[]> {
+  ): Promise<ShareResourceMetaDto[]> {
     return await this.shareResourcesService.getSharedResourceChildren(
       shareId,
       resourceId,

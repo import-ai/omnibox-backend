@@ -58,6 +58,18 @@ export class ResourceAttachmentsService {
     resourceId: string,
     attachmentId: string,
   ) {
+    const existingAttachment = await this.resourceAttachmentRepository.findOne({
+      where: {
+        namespaceId,
+        resourceId,
+        attachmentId,
+      },
+    });
+
+    if (!existingAttachment) {
+      throw new NotFoundException('Attachment not found');
+    }
+
     await this.resourceAttachmentRepository.softDelete({
       namespaceId,
       resourceId,

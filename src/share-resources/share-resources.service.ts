@@ -7,10 +7,7 @@ import {
 } from '@nestjs/common';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
-import {
-  SharedResourceDto,
-  ResourceMetaDto,
-} from 'omniboxd/resources/dto/resource.dto';
+import { SharedResourceDto } from './dto/shared-resource.dto';
 import { Resource } from 'omniboxd/resources/resources.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { PublicShareInfoDto } from './dto/public-share-info.dto';

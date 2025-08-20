@@ -1,6 +1,6 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ShareResourcesService } from './share-resources.service';
-import { SharedResourceDto } from 'omniboxd/resources/dto/resource.dto';
+import { SharedResourceDto } from './dto/shared-resource.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import { Cookies } from 'omniboxd/decorators/cookie.decorators';

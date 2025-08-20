@@ -9,6 +9,7 @@ import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { NestInstrumentation } from '@opentelemetry/instrumentation-nestjs-core';
+import { TypeormInstrumentation } from '@opentelemetry/instrumentation-typeorm';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 
 const env = process.env.ENV || 'unknown';
@@ -26,8 +27,7 @@ function isTracingEnabled(): boolean {
 let sdk: NodeSDK | null = null;
 
 if (isTracingEnabled()) {
-  const otlpEndpoint =
-    process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318';
+  const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT!;
   const url = `${otlpEndpoint}/v1/traces`;
 
   const otlpTraceExporter = new OTLPTraceExporter({ url });
@@ -52,6 +52,7 @@ if (isTracingEnabled()) {
       }),
       new ExpressInstrumentation(),
       new NestInstrumentation(),
+      new TypeormInstrumentation(),
     ],
   });
 }

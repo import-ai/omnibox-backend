@@ -11,7 +11,7 @@ import { SharedResourceDto } from './dto/shared-resource.dto';
 import { Resource } from 'omniboxd/resources/resources.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { PublicShareInfoDto } from './dto/public-share-info.dto';
-import { ShareResourceMetaDto } from './dto/share-resource-meta.dto';
+import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 
 @Injectable()
 export class ShareResourcesService {
@@ -46,7 +46,7 @@ export class ShareResourcesService {
     resourceId: string,
     password?: string,
     userId?: string,
-  ): Promise<ShareResourceMetaDto[]> {
+  ): Promise<SharedResourceMetaDto[]> {
     const share = await this.getAndValidateShare(shareId, password, userId);
     const resource = await this.getAndValidateResource(share, resourceId);
     if (!share.allResources) {
@@ -56,7 +56,7 @@ export class ShareResourcesService {
       share.namespaceId,
       resource.id,
     );
-    return children.map((child) => ShareResourceMetaDto.fromEntity(child));
+    return children.map((child) => SharedResourceMetaDto.fromEntity(child));
   }
 
   private async getAndValidateResource(

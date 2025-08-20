@@ -6,6 +6,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -21,11 +22,11 @@ export class TasksController {
 
   @Get()
   async listTasks(
-    @Param('namespace') namespace: string,
+    @Param('namespaceId') namespaceId: string,
     @Query('offset') offset: number = 0,
     @Query('limit') limit: number = 10,
   ) {
-    return await this.tasksService.list(namespace, offset, limit);
+    return await this.tasksService.list(namespaceId, offset, limit);
   }
 
   @Get(':id')
@@ -37,5 +38,15 @@ export class TasksController {
   async deleteTask(@Param('id') id: string) {
     await this.tasksService.delete(id);
     return { detail: 'Task deleted' };
+  }
+
+  @Patch(':id/cancel')
+  async cancelTask(@Param('id') id: string) {
+    return await this.tasksService.cancelTask(id);
+  }
+
+  @Post(':id/rerun')
+  async rerunTask(@Param('id') id: string) {
+    return await this.tasksService.rerunTask(id);
   }
 }

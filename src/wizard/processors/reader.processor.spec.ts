@@ -24,7 +24,6 @@ describe('ReaderProcessor', () => {
       update: jest.fn(),
     };
 
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
@@ -215,10 +214,11 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        expect(task.output!.markdown).toBe('![Image](attachments/attachment-id)');
+        expect(task.output!.markdown).toBe(
+          '![Image](attachments/attachment-id)',
+        );
         expect(result).toEqual({ resourceId: 'test-resource-id' });
       });
-
     });
 
     describe('inheritance from CollectProcessor', () => {
@@ -295,7 +295,9 @@ describe('ReaderProcessor', () => {
         await processor.process(task);
 
         // Markdown should remain unchanged since no image links found
-        expect(task.output!.markdown).toBe('# Test Document\n\nNo images here.');
+        expect(task.output!.markdown).toBe(
+          '# Test Document\n\nNo images here.',
+        );
         expect(task.output!.images).toBeUndefined();
       });
 

@@ -20,6 +20,7 @@ import { ResourceType } from 'omniboxd/resources/resources.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
+import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
 
 @Injectable()
 export class WizardService {
@@ -107,6 +108,11 @@ export class WizardService {
     const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
     const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
     this.logger.debug({ taskId: task.id, cost, wait });
+
+    if (task.canceledAt) {
+      this.logger.warn(`Task ${task.id} was canceled.`);
+      return { taskId: task.id, function: task.function, status: 'canceled' };
+    }
 
     const postprocessResult = await this.postprocess(task);
 
@@ -223,7 +229,7 @@ export class WizardService {
     task.output.images = processedImages;
   }
 
-  async fetchTask(): Promise<Task | null> {
+  async fetchTask(): Promise<TaskDto | null> {
     const rawQuery = `
       WITH running_tasks_sub_query AS (SELECT namespace_id,
                                               COUNT(id) AS running_count
@@ -257,14 +263,17 @@ export class WizardService {
       await this.wizardTaskService.taskRepository.query(rawQuery);
 
     if (queryResult.length > 0) {
+      const record = queryResult[0];
       const task = this.wizardTaskService.taskRepository.create({
-        ...(queryResult[0] as Task),
+        ...(record as Task),
+        createdAt: record.created_at,
+        updatedAt: record.updated_at,
         startedAt: new Date(),
-        userId: queryResult[0].user_id,
-        namespaceId: queryResult[0].namespace_id,
+        userId: record.user_id,
+        namespaceId: record.namespace_id,
       });
-      await this.wizardTaskService.taskRepository.save(task);
-      return task;
+      const newTask = await this.wizardTaskService.taskRepository.save(task);
+      return TaskDto.fromEntity(newTask);
     }
 
     return null;

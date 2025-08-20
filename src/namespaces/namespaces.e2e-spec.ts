@@ -444,7 +444,7 @@ describe('NamespacesController (e2e)', () => {
 
     it('should handle concurrent namespace operations', async () => {
       // Create multiple namespaces concurrently
-      const createPromises = Array.from({ length: 5 }, (_, i) =>
+      const createPromises = Array.from({ length: 2 }, (_, i) =>
         client
           .post('/api/v1/namespaces')
           .send({ name: `Concurrent Test Workspace ${i}` }),

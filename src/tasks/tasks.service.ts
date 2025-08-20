@@ -7,7 +7,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { TaskDto } from './dto/task.dto';
-import { isEmpty } from 'omniboxd/utils/is-empty';
 
 @Injectable()
 export class TasksService {
@@ -33,9 +32,7 @@ export class TasksService {
       order: { createdAt: 'DESC' },
     });
 
-    return tasks.map((task) =>
-      TaskDto.fromEntity(task, this.getTaskStatus(task)),
-    );
+    return tasks.map((task) => TaskDto.fromEntity(task));
   }
 
   async get(id: string) {
@@ -58,22 +55,6 @@ export class TasksService {
     await this.taskRepository.softRemove(task);
   }
 
-  getTaskStatus(task: Task): string {
-    if (task.canceledAt) {
-      return 'canceled';
-    }
-    if (!isEmpty(task.exception)) {
-      return 'error';
-    }
-    if (task.endedAt) {
-      return 'finished';
-    }
-    if (task.startedAt) {
-      return 'running';
-    }
-    return 'pending';
-  }
-
   async cancelTask(id: string): Promise<TaskDto> {
     const task = await this.get(id);
 
@@ -87,7 +68,7 @@ export class TasksService {
     task.canceledAt = new Date();
     const updatedTask = await this.taskRepository.save(task);
 
-    return TaskDto.fromEntity(updatedTask, this.getTaskStatus(updatedTask));
+    return TaskDto.fromEntity(updatedTask);
   }
 
   async rerunTask(id: string): Promise<TaskDto> {
@@ -106,6 +87,6 @@ export class TasksService {
       payload: originalTask.payload,
     });
 
-    return TaskDto.fromEntity(newTask, this.getTaskStatus(newTask));
+    return TaskDto.fromEntity(newTask);
   }
 }

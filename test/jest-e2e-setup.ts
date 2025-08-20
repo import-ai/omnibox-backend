@@ -1,4 +1,4 @@
-import { GenericContainer, StartedTestContainer } from 'testcontainers';
+import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 
 let postgresContainer: StartedTestContainer;
 let minioContainer: StartedTestContainer;
@@ -13,6 +13,14 @@ export default async () => {
       POSTGRES_USER: 'omnibox',
       POSTGRES_PASSWORD: 'omnibox',
     })
+    .withHealthCheck({
+      test: ['CMD', 'pg_isready', '-q', '-d', 'omnibox', '-U', 'omnibox'],
+      interval: 30000,
+      timeout: 3000,
+      retries: 5,
+      startPeriod: 5000,
+    })
+    .withWaitStrategy(Wait.forHealthCheck())
     .start();
   console.log('PostgreSQL container started');
 
@@ -25,6 +33,13 @@ export default async () => {
       MINIO_ROOT_PASSWORD: 'minioadmin',
     })
     .withCommand(['server', '/data'])
+    .withHealthCheck({
+      test: ['CMD', 'curl', '-I', 'http://127.0.0.1:9000/minio/health/live'],
+      interval: 5000,
+      timeout: 3000,
+      retries: 5,
+    })
+    .withWaitStrategy(Wait.forHealthCheck())
     .start();
   console.log('MinIO container started');
 

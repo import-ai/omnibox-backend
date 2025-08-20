@@ -3,6 +3,7 @@ import { HttpStatus } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
 
 /**
  * Mock wizard worker that simulates the wizard worker service behavior
@@ -46,8 +47,10 @@ class MockWizardWorker {
   async pollOnce(): Promise<void> {
     const task = await this.fetchTask();
     if (task) {
-      const result = this.processTask(task);
-      await this.sendCallback(task.id, result);
+      if (task.namespace_id === this.client.namespace.id) {
+        const result = this.processTask(task);
+        await this.sendCallback(task.id, result);
+      }
     }
   }
 
@@ -77,7 +80,7 @@ class MockWizardWorker {
   /**
    * Fetches a task from the backend (simulates wizard worker fetching)
    */
-  private async fetchTask(): Promise<Task | null> {
+  private async fetchTask(): Promise<TaskDto | null> {
     try {
       const response = await this.makeRequest()
         .get('/internal/api/v1/wizard/task')
@@ -91,7 +94,7 @@ class MockWizardWorker {
         throw new Error(`Failed to fetch task: ${response.status}`);
       }
 
-      return response.body as Task;
+      return response.body as TaskDto;
     } catch (error) {
       if (error.code === 'ECONNRESET' || error.timeout) {
         console.warn('Connection issue when fetching task, retrying...');
@@ -104,7 +107,7 @@ class MockWizardWorker {
   /**
    * Processes a task based on its function type
    */
-  private processTask(task: Task): { output?: any; exception?: string } {
+  private processTask(task: TaskDto): { output?: any; exception?: string } {
     try {
       switch (task.function) {
         case 'collect':
@@ -130,7 +133,7 @@ class MockWizardWorker {
   /**
    * Simulates collect task processing
    */
-  private processCollectTask(task: Task): { output: any } {
+  private processCollectTask(task: TaskDto): { output: any } {
     const input = task.input as { html: string; url: string; title?: string };
 
     return {
@@ -145,7 +148,7 @@ class MockWizardWorker {
   /**
    * Simulates extract_tags task processing
    */
-  private processExtractTagsTask(task: Task): { output: any } {
+  private processExtractTagsTask(task: TaskDto): { output: any } {
     console.log({ taskId: task.id, function: 'extractTags' });
     return {
       output: {
@@ -157,7 +160,7 @@ class MockWizardWorker {
   /**
    * Simulates generate_title task processing
    */
-  private processGenerateTitleTask(task: Task): { output: any } {
+  private processGenerateTitleTask(task: TaskDto): { output: any } {
     console.log({ taskId: task.id, function: 'generateTitle' });
     return {
       output: {
@@ -170,7 +173,7 @@ class MockWizardWorker {
   /**
    * Simulates file_reader task processing
    */
-  private processFileReaderTask(task: Task): { output: any } {
+  private processFileReaderTask(task: TaskDto): { output: any } {
     const input = task.input as {
       title: string;
       original_name?: string;
@@ -194,7 +197,7 @@ class MockWizardWorker {
   /**
    * Simulates upsert_index task processing
    */
-  private processUpsertIndexTask(task: Task): { output: any } {
+  private processUpsertIndexTask(task: TaskDto): { output: any } {
     console.log({ taskId: task.id, function: 'upsertIndex' });
     return {
       output: {

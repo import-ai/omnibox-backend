@@ -90,3 +90,17 @@ export class SharedResourceDto {
     return dto;
   }
 }
+
+export class ResourceChildDto {
+  id: string;
+  name: string;
+  type: ResourceType;
+
+  static fromEntity(resource: Resource) {
+    const dto = new ResourceChildDto();
+    dto.id = resource.id;
+    dto.name = resource.name;
+    dto.type = resource.resourceType;
+    return dto;
+  }
+}

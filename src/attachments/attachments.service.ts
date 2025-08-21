@@ -22,6 +22,7 @@ import {
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import * as bcrypt from 'bcrypt';
+import { ShareResourcesService } from 'omniboxd/share-resources/share-resources.service';
 
 @Injectable()
 export class AttachmentsService {
@@ -32,7 +33,7 @@ export class AttachmentsService {
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly sharesService: SharesService,
-    private readonly resourcesService: ResourcesService,
+    private readonly shareResourcesService: ShareResourcesService,
   ) {}
 
   async checkPermission(
@@ -195,45 +196,12 @@ export class AttachmentsService {
     userId: string | undefined,
     httpResponse: Response,
   ) {
-    const share = await this.sharesService.getShareById(shareId);
-    if (!share || !share.enabled) {
-      throw new NotFoundException(`No share found with id ${shareId}`);
-    }
-
-    // Check if share has expired
-    if (share.expiresAt && share.expiresAt < new Date()) {
-      throw new NotFoundException(`No share found with id ${shareId}`);
-    }
-
-    if (share.requireLogin && !userId) {
-      throw new UnauthorizedException('This share requires login');
-    }
-
-    if (share.password) {
-      if (!password) {
-        throw new ForbiddenException(`Invalid password for share ${shareId}`);
-      }
-      const match = await bcrypt.compare(password, share.password);
-      if (!match) {
-        throw new ForbiddenException(`Invalid password for share ${shareId}`);
-      }
-    }
-
-    const resource = await this.resourcesService.get(resourceId);
-    if (!resource || resource.namespaceId != share.namespaceId) {
-      throw new NotFoundException(`No resource found with id ${resourceId}`);
-    }
-
-    if (resource.id !== share.resourceId) {
-      const parents = await this.resourcesService.getParentResources(
-        share.namespaceId,
-        resource.parentId,
-      );
-      if (!parents.map((r) => r.id).includes(share.resourceId)) {
-        throw new NotFoundException(`No resource found with id ${resourceId}`);
-      }
-    }
-
+    const share = await this.sharesService.getAndValidateShare(
+      shareId,
+      password,
+      userId,
+    );
+    await this.shareResourcesService.getAndValidateResource(share, resourceId);
     await this.resourceAttachmentsService.getResourceAttachmentOrFail(
       share.namespaceId,
       resourceId,

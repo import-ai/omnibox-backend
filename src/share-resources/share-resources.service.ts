@@ -51,7 +51,7 @@ export class ShareResourcesService {
     return children.map((child) => SharedResourceMetaDto.fromEntity(child));
   }
 
-  private async getAndValidateResource(
+  async getAndValidateResource(
     share: Share,
     resourceId: string,
   ): Promise<Resource> {

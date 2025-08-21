@@ -21,6 +21,7 @@ import { UserInvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
 import { LoginPayloadDto } from './dto/login-payload.dto';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { isEmail } from 'class-validator';
 
 @Injectable()
 export class AuthService {
@@ -40,13 +41,15 @@ export class AuthService {
   async verify(email: string, password: string): Promise<any> {
     const user = await this.userService.verify(email, password);
     if (!user) {
-      const userUseEmail = await this.userService.findByEmail(email);
-      if (userUseEmail) {
-        throw new ForbiddenException('Wrong password, please check');
+      if (isEmail(email)) {
+        const userUseEmail = await this.userService.findByEmail(email);
+        if (!userUseEmail) {
+          throw new ForbiddenException(
+            'No account found for the provided email. Please register first.',
+          );
+        }
       }
-      throw new ForbiddenException(
-        'No account found for the provided email. Please register first.',
-      );
+      throw new ForbiddenException('Wrong password, please check');
     }
     return {
       id: user.id,

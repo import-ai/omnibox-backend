@@ -2,13 +2,7 @@ import {
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
-import {
-  ForbiddenException,
-  Injectable,
-  Logger,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -20,9 +14,7 @@ import {
   UploadedAttachmentDto,
 } from './dto/upload-attachments-response.dto';
 import { SharesService } from 'omniboxd/shares/shares.service';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import * as bcrypt from 'bcrypt';
-import { ShareResourcesService } from 'omniboxd/share-resources/share-resources.service';
+import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 
 @Injectable()
 export class AttachmentsService {
@@ -33,7 +25,7 @@ export class AttachmentsService {
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly sharesService: SharesService,
-    private readonly shareResourcesService: ShareResourcesService,
+    private readonly sharedResourcesService: SharedResourcesService,
   ) {}
 
   async checkPermission(
@@ -201,7 +193,7 @@ export class AttachmentsService {
       password,
       userId,
     );
-    await this.shareResourcesService.getAndValidateResource(share, resourceId);
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
     await this.resourceAttachmentsService.getResourceAttachmentOrFail(
       share.namespaceId,
       resourceId,

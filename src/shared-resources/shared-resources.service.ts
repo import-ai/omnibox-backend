@@ -4,11 +4,10 @@ import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { Resource } from 'omniboxd/resources/resources.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
-import { PublicShareInfoDto } from './dto/public-share-info.dto';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 
 @Injectable()
-export class ShareResourcesService {
+export class SharedResourcesService {
   constructor(
     private readonly resourcesService: ResourcesService,
     private readonly sharesService: SharesService,

@@ -36,7 +36,7 @@ import { NullUserEmail1752814358259 } from 'omniboxd/migrations/1752814358259-nu
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { Shares1753866547335 } from 'omniboxd/migrations/1753866547335-shares';
 import { SharesModule } from 'omniboxd/shares/shares.module';
-import { ShareResourcesModule } from 'omniboxd/share-resources/share-resources.module';
+import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 import { ApiKeys1754550165406 } from 'omniboxd/migrations/1754550165406-api-keys';
 import { ResourceAttachments1755059371000 } from 'omniboxd/migrations/1755059371000-resource-attachments';
 import { AddTagIdsToResources1755248141570 } from 'omniboxd/migrations/1755248141570-add-tag-ids-to-resources';
@@ -87,7 +87,7 @@ export class AppModule implements NestModule {
         AttachmentsModule,
         SharesModule,
         OAuthModule,
-        ShareResourcesModule,
+        SharedResourcesModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
         //   inject: [ConfigService],

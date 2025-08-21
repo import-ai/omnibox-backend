@@ -6,7 +6,7 @@ import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { MinioModule } from 'omniboxd/minio/minio.module';
 import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
-import { ShareResourcesModule } from 'omniboxd/share-resources/share-resources.module';
+import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 
 @Module({
   exports: [AttachmentsService],
@@ -17,7 +17,7 @@ import { ShareResourcesModule } from 'omniboxd/share-resources/share-resources.m
     MinioModule,
     ResourceAttachmentsModule,
     SharesModule,
-    ShareResourcesModule,
+    SharedResourcesModule,
   ],
 })
 export class AttachmentsModule {}

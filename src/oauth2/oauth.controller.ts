@@ -1,4 +1,3 @@
-import { Response } from 'express';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { OAuthService } from 'omniboxd/oauth2/oauth.service';
@@ -8,7 +7,6 @@ import {
   Post,
   Query,
   Body,
-  Res,
   BadRequestException,
 } from '@nestjs/common';
 
@@ -23,7 +21,6 @@ export class OAuthController {
     @Query('redirect_uri') redirectUri: string,
     @Query('state') state: string,
     @UserId() userId: string,
-    @Res() res: Response,
   ) {
     if (responseType !== 'code') {
       throw new BadRequestException(
@@ -47,7 +44,10 @@ export class OAuthController {
       redirectUrl.searchParams.set('state', state);
     }
 
-    res.redirect(redirectUrl.toString());
+    // Most browsers will block automatic redirects, so we perform the redirect manually
+    return {
+      redirectUrl: redirectUrl.toString(),
+    };
   }
 
   @Public()

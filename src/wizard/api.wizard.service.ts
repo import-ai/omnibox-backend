@@ -3,11 +3,16 @@ import { Injectable } from '@nestjs/common';
 import { propagation, context } from '@opentelemetry/api';
 import { SearchRequestDto } from './dto/search-request.dto';
 import { SearchResponseDto } from './dto/search-response.dto';
-import { Span } from 'nestjs-otel';
 
 @Injectable()
 export class WizardAPIService {
   constructor(private readonly wizardBaseUrl: string) {}
+
+  getTraceHeaders(): Record<string, string> {
+    const traceHeaders: Record<string, string> = {};
+    propagation.inject(context.active(), traceHeaders);
+    return traceHeaders;
+  }
 
   async request(
     method: string,
@@ -15,16 +20,10 @@ export class WizardAPIService {
     body: Record<string, any>,
     headers: Record<string, string> = {},
   ): Promise<Record<string, any>> {
-    // Prepare headers with trace context propagation
-    const traceHeaders: Record<string, string> = {};
-
-    // Inject trace context into headers for distributed tracing
-    propagation.inject(context.active(), traceHeaders);
-
     const requestHeaders = {
       'Content-Type': 'application/json',
       ...headers,
-      ...traceHeaders,
+      ...this.getTraceHeaders(),
     };
 
     const response = await fetch(`${this.wizardBaseUrl}${url}`, {
@@ -44,7 +43,10 @@ export class WizardAPIService {
     const url = `${this.wizardBaseUrl}${req.url}`;
     const response = await fetch(url, {
       method: req.method,
-      headers: req.headers,
+      headers: {
+        ...this.getTraceHeaders(),
+        ...req.headers,
+      },
       body: JSON.stringify(req.body),
     });
     return response.json();

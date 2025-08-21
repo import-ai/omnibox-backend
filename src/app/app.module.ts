@@ -42,6 +42,7 @@ import { AddTagIdsToResources1755248141570 } from 'omniboxd/migrations/175524814
 import { CleanResourceNames1755396702021 } from 'omniboxd/migrations/1755396702021-clean-resource-names';
 import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/1755499552000-update-attachment-urls';
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
+import { OAuthModule } from 'omniboxd/oauth2/oauth.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -81,6 +82,7 @@ export class AppModule implements NestModule {
         InvitationsModule,
         AttachmentsModule,
         SharesModule,
+        OAuthModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
         //   inject: [ConfigService],

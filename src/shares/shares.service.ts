@@ -1,17 +1,74 @@
 import * as bcrypt from 'bcrypt';
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Share, ShareType } from './entities/share.entity';
 import { Repository } from 'typeorm';
 import { ShareInfoDto } from './dto/share-info.dto';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
+import { PublicShareInfoDto } from 'omniboxd/share-resources/dto/public-share-info.dto';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Injectable()
 export class SharesService {
   constructor(
     @InjectRepository(Share)
     private readonly shareRepo: Repository<Share>,
+    private readonly resourcesService: ResourcesService,
   ) {}
+
+  async getShareById(shareId: string): Promise<Share | null> {
+    return await this.shareRepo.findOne({
+      where: {
+        id: shareId,
+      },
+    });
+  }
+
+  async getAndValidateShare(
+    shareId: string,
+    password?: string,
+    userId?: string,
+  ) {
+    const share = await this.getShareById(shareId);
+    if (!share || !share.enabled) {
+      throw new NotFoundException(`No share found with id ${shareId}`);
+    }
+
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      throw new NotFoundException(`No share found with id ${shareId}`);
+    }
+
+    if (share.requireLogin && !userId) {
+      throw new UnauthorizedException('This share requires login');
+    }
+
+    if (share.password) {
+      if (!password) {
+        throw new ForbiddenException(`Invalid password for share ${shareId}`);
+      }
+      const match = await bcrypt.compare(password, share.password);
+      if (!match) {
+        throw new ForbiddenException(`Invalid password for share ${shareId}`);
+      }
+    }
+
+    return share;
+  }
+
+  async getPublicShareInfo(
+    shareId: string,
+    password?: string,
+    userId?: string,
+  ): Promise<PublicShareInfoDto> {
+    const share = await this.getAndValidateShare(shareId, password, userId);
+    const resource = await this.resourcesService.get(share.resourceId);
+    return PublicShareInfoDto.fromEntity(share, resource);
+  }
 
   async getShareInfo(
     namespaceId: string,
@@ -27,14 +84,6 @@ export class SharesService {
       return ShareInfoDto.new(namespaceId, resourceId);
     }
     return ShareInfoDto.fromEntity(share);
-  }
-
-  async getShareById(shareId: string): Promise<Share | null> {
-    return await this.shareRepo.findOne({
-      where: {
-        id: shareId,
-      },
-    });
   }
 
   async updateShareInfo(

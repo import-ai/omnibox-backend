@@ -42,22 +42,3 @@ export class ShareResourcesController {
     );
   }
 }
-
-@Controller('api/v1/shares/:shareId')
-export class SharesController {
-  constructor(private readonly shareResourcesService: ShareResourcesService) {}
-
-  @CookieAuth({ onAuthFail: 'continue' })
-  @Get()
-  async getShareInfo(
-    @Param('shareId') shareId: string,
-    @Cookies('share-password') password: string,
-    @UserId({ optional: true }) userId?: string,
-  ) {
-    return await this.shareResourcesService.getShareInfo(
-      shareId,
-      password,
-      userId,
-    );
-  }
-}

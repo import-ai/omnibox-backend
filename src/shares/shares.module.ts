@@ -2,12 +2,16 @@ import { Module } from '@nestjs/common';
 import { SharesService } from './shares.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Share } from './entities/share.entity';
-import { ResourceSharesController } from './shares.controller';
+import {
+  PublicSharesController,
+  ResourceSharesController,
+} from './shares.controller';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Share])],
+  imports: [TypeOrmModule.forFeature([Share]), ResourcesModule],
   providers: [SharesService],
   exports: [SharesService],
-  controllers: [ResourceSharesController],
+  controllers: [ResourceSharesController, PublicSharesController],
 })
 export class SharesModule {}

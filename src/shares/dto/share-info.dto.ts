@@ -5,6 +5,7 @@ export class ShareInfoDto {
   namespaceId: string;
   resourceId: string;
   enabled: boolean;
+  allResources: boolean;
   requireLogin: boolean;
   passwordEnabled: boolean;
   shareType: ShareType;
@@ -16,6 +17,7 @@ export class ShareInfoDto {
     dto.namespaceId = namespaceId;
     dto.resourceId = resourceId;
     dto.enabled = false;
+    dto.allResources = false;
     dto.requireLogin = false;
     dto.passwordEnabled = false;
     dto.shareType = ShareType.ALL;
@@ -29,6 +31,7 @@ export class ShareInfoDto {
     dto.namespaceId = share.namespaceId;
     dto.resourceId = share.resourceId;
     dto.enabled = share.enabled;
+    dto.allResources = share.allResources;
     dto.requireLogin = share.requireLogin;
     dto.passwordEnabled = !!share.password;
     dto.shareType = share.shareType;

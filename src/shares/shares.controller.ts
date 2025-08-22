@@ -1,9 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Req } from '@nestjs/common';
 import { SharesService } from './shares.service';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
+import { CookieAuth } from 'omniboxd/auth/decorators';
+import { Cookies } from 'omniboxd/decorators/cookie.decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/share')
-export class SharesController {
+export class ResourceSharesController {
   constructor(private readonly sharesService: SharesService) {}
 
   @Get()
@@ -26,6 +29,25 @@ export class SharesController {
       namespaceId,
       resourceId,
       updateReq,
+    );
+  }
+}
+
+@Controller('api/v1/shares/:shareId')
+export class PublicSharesController {
+  constructor(private readonly sharesService: SharesService) {}
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @Get()
+  async getShareInfo(
+    @Param('shareId') shareId: string,
+    @Cookies('share-password') password: string,
+    @UserId({ optional: true }) userId?: string,
+  ) {
+    return await this.sharesService.getPublicShareInfo(
+      shareId,
+      password,
+      userId,
     );
   }
 }

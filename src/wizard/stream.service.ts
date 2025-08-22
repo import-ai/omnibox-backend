@@ -16,6 +16,7 @@ import {
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Resource, ResourceType } from 'omniboxd/resources/resources.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
+import { context, propagation } from '@opentelemetry/api';
 
 interface HandlerContext {
   parentId?: string;
@@ -38,9 +39,12 @@ export class StreamService {
     requestId: string,
     callback: (data: string) => Promise<void>,
   ): Promise<void> {
+    const traceHeaders: Record<string, string> = {};
+    propagation.inject(context.active(), traceHeaders);
     const response = await fetch(`${this.wizardBaseUrl}${url}`, {
       method: 'POST',
       headers: {
+        ...traceHeaders,
         'Content-Type': 'application/json',
         'X-Request-Id': requestId,
       },

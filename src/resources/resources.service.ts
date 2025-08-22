@@ -62,18 +62,6 @@ export class ResourcesService {
     return await this.tagService.getTagsByIds(namespaceId, tagIds);
   }
 
-  private async getOrCreateTagsByNames(
-    namespaceId: string,
-    tagNames: string[],
-    manager?: EntityManager,
-  ): Promise<string[]> {
-    return await this.tagService.getOrCreateTagsByNames(
-      namespaceId,
-      tagNames,
-      manager,
-    );
-  }
-
   private async getTagsForResources(
     namespaceId: string,
     resources: Resource[],

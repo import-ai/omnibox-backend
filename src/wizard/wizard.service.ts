@@ -100,7 +100,6 @@ export class WizardService {
     task.endedAt = new Date();
     task.exception = data.exception;
     task.output = data.output;
-
     await this.preprocessTask(task);
 
     await this.wizardTaskService.taskRepository.save(task);

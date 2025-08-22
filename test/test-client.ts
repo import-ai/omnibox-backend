@@ -192,6 +192,8 @@ export class TestClient {
   }
 
   async close() {
-    await this.app.close();
+    if (this.app) {
+      await this.app.close();
+    }
   }
 }

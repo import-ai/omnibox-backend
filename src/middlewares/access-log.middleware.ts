@@ -1,5 +1,6 @@
 import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
+import { trace } from '@opentelemetry/api';
 
 @Injectable()
 export class AccessLogMiddleware implements NestMiddleware {
@@ -7,6 +8,13 @@ export class AccessLogMiddleware implements NestMiddleware {
 
   use(req: Request, res: Response, next: NextFunction) {
     const start = Date.now();
+    const requestId = req.headers['x-request-id'] as string;
+
+    const activeSpan = trace.getActiveSpan();
+    if (activeSpan) {
+      const traceId = activeSpan.spanContext().traceId;
+      res.setHeader('X-Trace-Id', traceId);
+    }
 
     res.on('finish', () => {
       const duration = Date.now() - start;
@@ -30,14 +38,17 @@ export class AccessLogMiddleware implements NestMiddleware {
           logLevel = 'debug';
         }
       }
+
       const logMessage: Record<string, any> = {
         method: req.method,
         url: req.originalUrl,
         status: res.statusCode,
         duration: duration,
-        requestId: req.headers['x-request-id'] || undefined,
+        requestId: requestId,
         userId: user?.id,
       };
+
+      // Keep existing logging unchanged
       switch (logLevel) {
         case 'error':
           this.logger.error(logMessage);

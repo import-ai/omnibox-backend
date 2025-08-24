@@ -43,8 +43,6 @@ export class ResourcesService {
   constructor(
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
-    @InjectRepository(Task)
-    private readonly taskRepository: Repository<Task>,
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
     private readonly tagService: TagService,

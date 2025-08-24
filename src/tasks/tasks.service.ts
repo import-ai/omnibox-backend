@@ -89,4 +89,18 @@ export class TasksService {
 
     return TaskDto.fromEntity(newTask);
   }
+
+  async getTasksByResourceId(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<TaskMetaDto[]> {
+    const tasks = await this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.namespaceId = :namespaceId', { namespaceId })
+      .andWhere("task.payload->>'resource_id' = :resourceId", { resourceId })
+      .orderBy('task.createdAt', 'DESC')
+      .getMany();
+
+    return tasks.map((task) => TaskMetaDto.fromEntity(task));
+  }
 }

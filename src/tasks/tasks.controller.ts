@@ -51,3 +51,19 @@ export class TasksController {
     return await this.tasksService.rerunTask(id);
   }
 }
+
+@Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/tasks')
+export class ResourceTasksController {
+  constructor(private readonly tasksService: TasksService) {}
+
+  @Get()
+  async getResourceTasks(
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return await this.tasksService.getTasksByResourceId(
+      namespaceId,
+      resourceId,
+    );
+  }
+}

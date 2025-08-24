@@ -19,7 +19,7 @@ import { ResourceType } from 'omniboxd/resources/resources.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
-import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 
 @Injectable()
 export class WizardService {
@@ -227,7 +227,7 @@ export class WizardService {
     task.output.images = processedImages;
   }
 
-  async fetchTask(): Promise<TaskDto | null> {
+  async fetchTask(): Promise<InternalTaskDto | null> {
     const rawQuery = `
       WITH running_tasks_sub_query AS (SELECT namespace_id,
                                               COUNT(id) AS running_count
@@ -271,7 +271,7 @@ export class WizardService {
         namespaceId: record.namespace_id,
       });
       const newTask = await this.wizardTaskService.taskRepository.save(task);
-      return TaskDto.fromEntity(newTask);
+      return InternalTaskDto.fromEntity(newTask);
     }
 
     return null;

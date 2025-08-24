@@ -17,13 +17,12 @@ function getTaskStatus(task: Task): string {
   return 'pending';
 }
 
-export class TaskMetaDto {
+class TaskDtoBase {
   id: string;
   namespace_id: string;
   user_id: string;
   priority: number;
   function: string;
-  attrs: Record<string, any> | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -31,12 +30,44 @@ export class TaskMetaDto {
   ended_at: string | null;
   canceled_at: string | null;
 
-  protected static setValue(obj: TaskMetaDto, task: Task) {
+  protected static setValue(obj: TaskDtoBase, task: Task) {
     obj.id = task.id;
     obj.namespace_id = task.namespaceId;
     obj.user_id = task.userId;
     obj.priority = task.priority;
     obj.function = task.function;
+    obj.status = getTaskStatus(task);
+    obj.created_at = task.createdAt.toISOString();
+    obj.updated_at = task.updatedAt.toISOString();
+    obj.started_at = task.startedAt?.toISOString() || null;
+    obj.ended_at = task.endedAt?.toISOString() || null;
+    obj.canceled_at = task.canceledAt?.toISOString() || null;
+  }
+}
+
+export class InternalTaskDto extends TaskDtoBase {
+  payload: Record<string, any> | null;
+  input: Record<string, any>;
+  output: Record<string, any> | null;
+  exception: Record<string, any> | null;
+
+  static fromEntity(task: Task): InternalTaskDto {
+    const dto = new InternalTaskDto();
+    this.setValue(dto, task);
+
+    dto.payload = task.payload;
+    dto.input = task.input;
+    dto.output = task.output;
+    dto.exception = task.exception;
+    return dto;
+  }
+}
+
+export class TaskMetaDto extends TaskDtoBase {
+  attrs: Record<string, any> | null;
+
+  protected static setValue(obj: TaskMetaDto, task: Task) {
+    super.setValue(obj, task);
 
     if (task.payload) {
       obj.attrs = {};
@@ -46,13 +77,6 @@ export class TaskMetaDto {
         }
       }
     }
-
-    obj.status = getTaskStatus(task);
-    obj.created_at = task.createdAt.toISOString();
-    obj.updated_at = task.updatedAt.toISOString();
-    obj.started_at = task.startedAt?.toISOString() || null;
-    obj.ended_at = task.endedAt?.toISOString() || null;
-    obj.canceled_at = task.canceledAt?.toISOString() || null;
   }
 
   static fromEntity(task: Task): TaskMetaDto {

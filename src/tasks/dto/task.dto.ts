@@ -41,7 +41,7 @@ export class TaskMetaDto {
     if (task.payload) {
       obj.attrs = {};
       for (const [key, value] of Object.entries(task.payload)) {
-        if (key !== 'otel_headers') {
+        if (key !== 'trace_headers') {
           obj.attrs[key] = value;
         }
       }

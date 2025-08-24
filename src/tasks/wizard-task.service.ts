@@ -178,7 +178,7 @@ export class WizardTaskService {
           message_id: message.id,
           message: message.message,
         },
-        payload: { message_id: message.id },
+        payload: { conversation_id: conversationId, message_id: message.id },
         namespaceId,
         userId,
       },

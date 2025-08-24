@@ -124,6 +124,7 @@ export class WizardTaskService {
             parent_id: resource.parentId,
           },
         },
+        payload: { resource_id: resource.id },
         namespaceId: resource.namespaceId,
         userId: userId,
       },
@@ -144,6 +145,7 @@ export class WizardTaskService {
         },
         namespaceId: resource.namespaceId,
         userId,
+        payload: { resource_id: resource.id },
       },
       repo,
     );
@@ -176,6 +178,7 @@ export class WizardTaskService {
           message_id: message.id,
           message: message.message,
         },
+        payload: { message_id: message.id },
         namespaceId,
         userId,
       },
@@ -194,9 +197,8 @@ export class WizardTaskService {
       {
         function: 'delete_conversation',
         priority,
-        input: {
-          conversation_id: conversationId,
-        },
+        input: { conversation_id: conversationId },
+        payload: { conversation_id: conversationId },
         namespaceId,
         userId,
       },

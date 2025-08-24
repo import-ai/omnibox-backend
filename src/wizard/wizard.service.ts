@@ -5,7 +5,6 @@ import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
-import { User } from 'omniboxd/user/entities/user.entity';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
@@ -60,7 +59,7 @@ export class WizardService {
   }
 
   async collect(
-    user: User,
+    userId: string,
     data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
     const { html, url, title, namespace_id, parentId } = data;
@@ -75,10 +74,10 @@ export class WizardService {
       parentId: parentId,
       attrs: { url },
     };
-    const resource = await this.resourcesService.create(user.id, resourceDto);
+    const resource = await this.resourcesService.create(userId, resourceDto);
 
     const task = await this.wizardTaskService.createCollectTask(
-      user.id,
+      userId,
       namespace_id,
       resource.id,
       { html, url, title },

@@ -17,16 +17,13 @@ function getTaskStatus(task: Task): string {
   return 'pending';
 }
 
-export class TaskDto {
+export class TaskMetaDto {
   id: string;
   namespace_id: string;
   user_id: string;
   priority: number;
   function: string;
-  input: Record<string, any>;
-  payload: Record<string, any> | null;
-  output: Record<string, any> | null;
-  exception: Record<string, any> | null;
+  attrs: Record<string, any> | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -34,23 +31,49 @@ export class TaskDto {
   ended_at: string | null;
   canceled_at: string | null;
 
+  protected static setValue(obj: TaskMetaDto, task: Task) {
+    obj.id = task.id;
+    obj.namespace_id = task.namespaceId;
+    obj.user_id = task.userId;
+    obj.priority = task.priority;
+    obj.function = task.function;
+
+    if (task.payload) {
+      obj.attrs = {};
+      for (const [key, value] of Object.entries(task.payload)) {
+        if (key !== 'otel_headers') {
+          obj.attrs[key] = value;
+        }
+      }
+    }
+
+    obj.status = getTaskStatus(task);
+    obj.created_at = task.createdAt.toISOString();
+    obj.updated_at = task.updatedAt.toISOString();
+    obj.started_at = task.startedAt?.toISOString() || null;
+    obj.ended_at = task.endedAt?.toISOString() || null;
+    obj.canceled_at = task.canceledAt?.toISOString() || null;
+  }
+
+  static fromEntity(task: Task): TaskMetaDto {
+    const dto = new TaskMetaDto();
+    this.setValue(dto, task);
+    return dto;
+  }
+}
+
+export class TaskDto extends TaskMetaDto {
+  input: Record<string, any>;
+  output: Record<string, any> | null;
+  exception: Record<string, any> | null;
+
   static fromEntity(task: Task): TaskDto {
     const dto = new TaskDto();
-    dto.id = task.id;
-    dto.namespace_id = task.namespaceId;
-    dto.user_id = task.userId;
-    dto.priority = task.priority;
-    dto.function = task.function;
+    this.setValue(dto, task);
+
     dto.input = task.input;
-    dto.payload = task.payload;
     dto.output = task.output;
     dto.exception = task.exception;
-    dto.status = getTaskStatus(task);
-    dto.created_at = task.createdAt.toISOString();
-    dto.updated_at = task.updatedAt.toISOString();
-    dto.started_at = task.startedAt?.toISOString() || null;
-    dto.ended_at = task.endedAt?.toISOString() || null;
-    dto.canceled_at = task.canceledAt?.toISOString() || null;
     return dto;
   }
 }

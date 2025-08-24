@@ -3,7 +3,7 @@ import { HttpStatus } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
-import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { TaskDto, TaskMetaDto } from 'omniboxd/tasks/dto/task.dto';
 
 /**
  * Mock wizard worker that simulates the wizard worker service behavior
@@ -515,7 +515,7 @@ describe('Task Pipeline (e2e)', () => {
       await MockWizardWorker.waitFor(async () => {
         // Check if extract_tags task was created and completed
         const tasksResponse = await client.get(
-          `/api/v1/namespaces/${client.namespace.id}/tasks?namespace=${client.namespace.id}`,
+          `/api/v1/namespaces/${client.namespace.id}/tasks`,
         );
         if (tasksResponse.status !== 200) return false;
 
@@ -537,16 +537,22 @@ describe('Task Pipeline (e2e)', () => {
 
       // Verify both tasks completed successfully
       const tasksResponse = await client.get(
-        `/api/v1/namespaces/${client.namespace.id}/tasks?namespace=${client.namespace.id}`,
+        `/api/v1/namespaces/${client.namespace.id}/tasks`,
       );
-      const tasks = tasksResponse.body;
-
-      const collectTask = tasks.find((t: any) => t.id === collectTaskId);
-      const extractTagsTask = tasks.find(
+      const taskMetaList: TaskMetaDto[] = tasksResponse.body;
+      const extractTagsTaskMeta = taskMetaList.find(
         (t: any) =>
           t.function === 'extract_tags' &&
           t.payload?.parent_task_id === collectTaskId,
-      );
+      )!;
+      const collectTask = await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/tasks/${collectTaskId}`)
+        .then((res) => res.body);
+      const extractTagsTask = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${extractTagsTaskMeta.id}`,
+        )
+        .then((res) => res.body);
 
       expect(collectTask).toBeDefined();
       expect(collectTask.ended_at).toBeDefined();
@@ -588,7 +594,7 @@ describe('Task Pipeline (e2e)', () => {
 
       await MockWizardWorker.waitFor(async () => {
         const tasksResponse = await client.get(
-          `/api/v1/namespaces/${client.namespace.id}/tasks?namespace=${client.namespace.id}`,
+          `/api/v1/namespaces/${client.namespace.id}/tasks`,
         );
         const tasks = tasksResponse.body;
         const generateTitleTask = tasks.find(

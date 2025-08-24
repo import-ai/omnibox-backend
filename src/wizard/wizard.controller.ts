@@ -4,6 +4,7 @@ import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { RequestId } from 'omniboxd/decorators/request-id.decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/wizard')
 export class WizardController {
@@ -11,10 +12,10 @@ export class WizardController {
 
   @Post('collect')
   async collect(
-    @Req() req,
+    @UserId() userId: string,
     @Body() data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
-    return await this.wizardService.collect(req.user, data);
+    return await this.wizardService.collect(userId, data);
   }
 
   @Post('ask')

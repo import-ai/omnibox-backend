@@ -114,7 +114,7 @@ describe('AttachmentsController (e2e)', () => {
           `/api/v1/namespaces/${client.namespace.id}/resources/${nonExistentResourceId}/attachments`,
         )
         .attach('file[]', Buffer.from(testContent), 'test.txt')
-        .expect(403);
+        .expect(HttpStatus.NOT_FOUND);
     });
   });
 

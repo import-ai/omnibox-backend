@@ -197,7 +197,7 @@ describe('APIKeyController (e2e)', () => {
     await client.post('/api/v1/api-keys').send(apiKeyData).expect(403);
   });
 
-  it('should return 403 when user tries to create API key with resource they do not have write access to', async () => {
+  it('should return 404 when user tries to create API key with resource they do not have write access to', async () => {
     const apiKeyData = {
       user_id: client.user.id,
       namespace_id: client.namespace.id,
@@ -212,6 +212,6 @@ describe('APIKeyController (e2e)', () => {
       },
     };
 
-    await client.post('/api/v1/api-keys').send(apiKeyData).expect(403);
+    await client.post('/api/v1/api-keys').send(apiKeyData).expect(404);
   });
 });

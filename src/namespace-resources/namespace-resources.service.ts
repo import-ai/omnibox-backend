@@ -609,12 +609,15 @@ export class NamespaceResourcesService {
   }
 
   async restore(userId: string, id: string) {
-    const resource = await this.resourceRepository.findOneOrFail({
+    const resource = await this.resourceRepository.findOne({
       withDeleted: true,
       where: {
         id,
       },
     });
+    if (!resource) {
+      throw new NotFoundException('Resource not found.');
+    }
     if (resource.parentId === null) {
       throw new BadRequestException('Cannot restore root resource.');
     }

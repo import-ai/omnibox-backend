@@ -74,12 +74,12 @@ describe('PermissionsController (e2e)', () => {
         .expect(HttpStatus.FORBIDDEN);
     });
 
-    it('should return 403 for non-existent resource', async () => {
+    it('should return 404 for non-existent resource', async () => {
       await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/nonexistent/permissions`,
         )
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.NOT_FOUND);
     });
   });
 

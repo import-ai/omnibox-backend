@@ -46,6 +46,7 @@ import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/175549955
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
 import { OAuthModule } from 'omniboxd/oauth2/oauth.module';
 import { SharesAllResources1754471311959 } from 'omniboxd/migrations/1754471311959-shares-all-resources';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -76,6 +77,7 @@ export class AppModule implements NestModule {
         APIKeyModule,
         NamespacesModule,
         NamespaceResourcesModule,
+        ResourcesModule,
         TasksModule,
         WizardModule,
         GroupsModule,

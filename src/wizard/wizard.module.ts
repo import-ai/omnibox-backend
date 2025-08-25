@@ -4,7 +4,7 @@ import { WizardController } from 'omniboxd/wizard/wizard.controller';
 import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
-import { ResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -19,7 +19,7 @@ import { MinioModule } from 'omniboxd/minio/minio.module';
   imports: [
     UserModule,
     NamespacesModule,
-    ResourcesModule,
+    NamespaceResourcesModule,
     TagModule,
     MessagesModule,
     AttachmentsModule,

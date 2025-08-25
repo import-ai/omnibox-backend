@@ -1,11 +1,11 @@
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
-import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { BadRequestException } from '@nestjs/common';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 
 export class GenerateTitleProcessor extends Processor {
-  constructor(private readonly resourcesService: ResourcesService) {
+  constructor(private readonly namespaceResourcesService: NamespaceResourcesService) {
     super();
   }
 
@@ -26,7 +26,7 @@ export class GenerateTitleProcessor extends Processor {
 
       if (typeof generatedTitle === 'string' && generatedTitle.trim()) {
         // Update the resource with generated title
-        await this.resourcesService.update(task.userId, resourceId, {
+        await this.namespaceResourcesService.update(task.userId, resourceId, {
           namespaceId: task.namespaceId,
           name: generatedTitle.trim(),
         });

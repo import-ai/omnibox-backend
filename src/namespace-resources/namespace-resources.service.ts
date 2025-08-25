@@ -39,7 +39,7 @@ import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resour
 const TASK_PRIORITY = 5;
 
 @Injectable()
-export class ResourcesService {
+export class NamespaceResourcesService {
   constructor(
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,

@@ -1,13 +1,13 @@
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
-import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { BadRequestException } from '@nestjs/common';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 
 export class ExtractTagsProcessor extends Processor {
   constructor(
-    private readonly resourcesService: ResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
   ) {
     super();
@@ -50,7 +50,7 @@ export class ExtractTagsProcessor extends Processor {
       }
 
       // Update the resource with extracted tag IDs from external service
-      await this.resourcesService.update(task.userId, resourceId, {
+      await this.namespaceResourcesService.update(task.userId, resourceId, {
         namespaceId: task.namespaceId,
         tag_ids: tagIds,
       });

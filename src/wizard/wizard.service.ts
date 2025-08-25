@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
@@ -31,17 +31,17 @@ export class WizardService {
 
   constructor(
     private readonly wizardTaskService: WizardTaskService,
-    private readonly resourcesService: ResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
   ) {
     this.processors = {
-      collect: new CollectProcessor(resourcesService),
-      file_reader: new ReaderProcessor(this.resourcesService),
-      extract_tags: new ExtractTagsProcessor(resourcesService, this.tagService),
-      generate_title: new GenerateTitleProcessor(resourcesService),
+      collect: new CollectProcessor(namespaceResourcesService),
+      file_reader: new ReaderProcessor(this.namespaceResourcesService),
+      extract_tags: new ExtractTagsProcessor(namespaceResourcesService, this.tagService),
+      generate_title: new GenerateTitleProcessor(namespaceResourcesService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -50,7 +50,7 @@ export class WizardService {
     this.streamService = new StreamService(
       baseUrl,
       this.messagesService,
-      this.resourcesService,
+      this.namespaceResourcesService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
   }
@@ -75,7 +75,7 @@ export class WizardService {
       parentId: parentId,
       attrs: { url },
     };
-    const resource = await this.resourcesService.create(user.id, resourceDto);
+    const resource = await this.namespaceResourcesService.create(user.id, resourceDto);
 
     const task = await this.wizardTaskService.createCollectTask(
       user.id,

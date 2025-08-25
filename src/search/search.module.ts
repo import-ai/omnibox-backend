@@ -5,7 +5,7 @@ import {
   SearchController,
 } from './search.controller';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
-import { ResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -18,7 +18,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
   controllers: [SearchController, InternalSearchController],
   imports: [
     PermissionsModule,
-    ResourcesModule,
+    NamespaceResourcesModule,
     MessagesModule,
     ConversationsModule,
     TasksModule,

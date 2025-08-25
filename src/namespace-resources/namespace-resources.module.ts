@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
-import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { ResourcesController } from 'omniboxd/namespace-resources/namespace-resources.controller';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { NamespaceResourcesController } from 'omniboxd/namespace-resources/namespace-resources.controller';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InternalResourcesController } from 'omniboxd/namespace-resources/internal.resource.controller';
 import { OpenResourcesController } from 'omniboxd/namespace-resources/open.resource.controller';
@@ -15,10 +15,10 @@ import { TagModule } from 'omniboxd/tag/tag.module';
 import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
 
 @Module({
-  exports: [ResourcesService],
-  providers: [ResourcesService],
+  exports: [NamespaceResourcesService],
+  providers: [NamespaceResourcesService],
   controllers: [
-    ResourcesController,
+    NamespaceResourcesController,
     InternalResourcesController,
     OpenResourcesController,
     FileResourcesController,
@@ -34,4 +34,4 @@ import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resourc
     ResourceAttachmentsModule,
   ],
 })
-export class ResourcesModule {}
+export class NamespaceResourcesModule {}

@@ -6,7 +6,7 @@ import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { NamespacesController } from 'omniboxd/namespaces/namespaces.controller';
 import { Namespace } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
-import { ResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 
 @Module({
@@ -15,7 +15,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
   controllers: [NamespacesController],
   imports: [
     UserModule,
-    ResourcesModule,
+    NamespaceResourcesModule,
     PermissionsModule,
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Namespace]),

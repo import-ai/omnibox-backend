@@ -2,13 +2,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ExtractTagsProcessor } from './extract-tags.processor';
-import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 
 describe('ExtractTagsProcessor', () => {
   let processor: ExtractTagsProcessor;
-  let resourcesService: jest.Mocked<ResourcesService>;
+  let namespaceResourcesService: jest.Mocked<NamespaceResourcesService>;
   let tagService: jest.Mocked<TagService>;
 
   beforeEach(async () => {
@@ -24,7 +24,7 @@ describe('ExtractTagsProcessor', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
-          provide: ResourcesService,
+          provide: NamespaceResourcesService,
           useValue: mockResourcesService,
         },
         {
@@ -34,9 +34,9 @@ describe('ExtractTagsProcessor', () => {
       ],
     }).compile();
 
-    resourcesService = module.get(ResourcesService);
+    namespaceResourcesService = module.get(NamespaceResourcesService);
     tagService = module.get(TagService);
-    processor = new ExtractTagsProcessor(resourcesService, tagService);
+    processor = new ExtractTagsProcessor(namespaceResourcesService, tagService);
   });
 
   afterEach(() => {
@@ -69,7 +69,7 @@ describe('ExtractTagsProcessor', () => {
       const result = await processor.process(task);
 
       expect(result).toEqual({});
-      expect(resourcesService.update).not.toHaveBeenCalled();
+      expect(namespaceResourcesService.update).not.toHaveBeenCalled();
     });
 
     it('should return empty object when task output has no tags', async () => {
@@ -78,7 +78,7 @@ describe('ExtractTagsProcessor', () => {
       const result = await processor.process(task);
 
       expect(result).toEqual({});
-      expect(resourcesService.update).not.toHaveBeenCalled();
+      expect(namespaceResourcesService.update).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException when payload is missing resource_id', async () => {
@@ -93,7 +93,7 @@ describe('ExtractTagsProcessor', () => {
       await expect(processor.process(task)).rejects.toThrow(
         'Invalid task payload: missing resource_id',
       );
-      expect(resourcesService.update).not.toHaveBeenCalled();
+      expect(namespaceResourcesService.update).not.toHaveBeenCalled();
     });
 
     it('should process tags from external service output and update resource with existing tags', async () => {
@@ -133,7 +133,7 @@ describe('ExtractTagsProcessor', () => {
         .mockResolvedValueOnce(mockTags[1])
         .mockResolvedValueOnce(mockTags[2]);
 
-      resourcesService.update.mockResolvedValue(undefined);
+      namespaceResourcesService.update.mockResolvedValue(undefined);
 
       const result = await processor.process(task);
 
@@ -157,7 +157,7 @@ describe('ExtractTagsProcessor', () => {
 
       expect(tagService.create).not.toHaveBeenCalled();
 
-      expect(resourcesService.update).toHaveBeenCalledWith(
+      expect(namespaceResourcesService.update).toHaveBeenCalledWith(
         'test-user',
         'test-resource-id',
         {
@@ -199,7 +199,7 @@ describe('ExtractTagsProcessor', () => {
         .mockResolvedValueOnce(mockNewTags[0])
         .mockResolvedValueOnce(mockNewTags[1]);
 
-      resourcesService.update.mockResolvedValue(undefined);
+      namespaceResourcesService.update.mockResolvedValue(undefined);
 
       const result = await processor.process(task);
 
@@ -216,7 +216,7 @@ describe('ExtractTagsProcessor', () => {
         name: 'another-new-tag',
       });
 
-      expect(resourcesService.update).toHaveBeenCalledWith(
+      expect(namespaceResourcesService.update).toHaveBeenCalledWith(
         'test-user',
         'test-resource-id',
         {
@@ -254,7 +254,7 @@ describe('ExtractTagsProcessor', () => {
 
       tagService.create.mockResolvedValueOnce(newTag);
 
-      resourcesService.update.mockResolvedValue(undefined);
+      namespaceResourcesService.update.mockResolvedValue(undefined);
 
       const result = await processor.process(task);
 
@@ -268,7 +268,7 @@ describe('ExtractTagsProcessor', () => {
         name: 'new-tag',
       });
 
-      expect(resourcesService.update).toHaveBeenCalledWith(
+      expect(namespaceResourcesService.update).toHaveBeenCalledWith(
         'test-user',
         'test-resource-id',
         {
@@ -283,7 +283,7 @@ describe('ExtractTagsProcessor', () => {
         output: { tags: [] },
       });
 
-      resourcesService.update.mockResolvedValue(undefined);
+      namespaceResourcesService.update.mockResolvedValue(undefined);
 
       const result = await processor.process(task);
 
@@ -294,7 +294,7 @@ describe('ExtractTagsProcessor', () => {
       expect(tagService.findByName).not.toHaveBeenCalled();
       expect(tagService.create).not.toHaveBeenCalled();
 
-      expect(resourcesService.update).toHaveBeenCalledWith(
+      expect(namespaceResourcesService.update).toHaveBeenCalledWith(
         'test-user',
         'test-resource-id',
         {
@@ -309,7 +309,7 @@ describe('ExtractTagsProcessor', () => {
         output: { tags: 'not-an-array' },
       });
 
-      resourcesService.update.mockResolvedValue(undefined);
+      namespaceResourcesService.update.mockResolvedValue(undefined);
 
       const result = await processor.process(task);
 
@@ -320,7 +320,7 @@ describe('ExtractTagsProcessor', () => {
       expect(tagService.findByName).not.toHaveBeenCalled();
       expect(tagService.create).not.toHaveBeenCalled();
 
-      expect(resourcesService.update).toHaveBeenCalledWith(
+      expect(namespaceResourcesService.update).toHaveBeenCalledWith(
         'test-user',
         'test-resource-id',
         {
@@ -377,7 +377,7 @@ describe('ExtractTagsProcessor', () => {
         .mockResolvedValueOnce(mockTags[1])
         .mockResolvedValueOnce(mockTags[2]);
 
-      resourcesService.update.mockResolvedValue(undefined);
+      namespaceResourcesService.update.mockResolvedValue(undefined);
 
       const result = await processor.process(task);
 
@@ -407,7 +407,7 @@ describe('ExtractTagsProcessor', () => {
         'another-valid',
       );
 
-      expect(resourcesService.update).toHaveBeenCalledWith(
+      expect(namespaceResourcesService.update).toHaveBeenCalledWith(
         'test-user',
         'test-resource-id',
         {
@@ -426,7 +426,7 @@ describe('ExtractTagsProcessor', () => {
       const result = await processor.process(task);
 
       expect(result).toEqual({});
-      expect(resourcesService.update).not.toHaveBeenCalled();
+      expect(namespaceResourcesService.update).not.toHaveBeenCalled();
     });
 
     it('should handle task with both output and exception (exception takes precedence)', async () => {
@@ -438,7 +438,7 @@ describe('ExtractTagsProcessor', () => {
       const result = await processor.process(task);
 
       expect(result).toEqual({});
-      expect(resourcesService.update).not.toHaveBeenCalled();
+      expect(namespaceResourcesService.update).not.toHaveBeenCalled();
     });
   });
 });

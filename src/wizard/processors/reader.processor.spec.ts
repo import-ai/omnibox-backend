@@ -2,13 +2,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ReaderProcessor } from './reader.processor';
-import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
 
 describe('ReaderProcessor', () => {
   let processor: ReaderProcessor;
-  let resourcesService: jest.Mocked<ResourcesService>;
+  let namespaceResourcesService: jest.Mocked<NamespaceResourcesService>;
 
   const mockResource: Partial<Resource> = {
     id: 'test-resource-id',
@@ -27,14 +27,14 @@ describe('ReaderProcessor', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
-          provide: ResourcesService,
+          provide: NamespaceResourcesService,
           useValue: mockResourcesService,
         },
       ],
     }).compile();
 
-    resourcesService = module.get(ResourcesService);
-    processor = new ReaderProcessor(resourcesService);
+    namespaceResourcesService = module.get(NamespaceResourcesService);
+    processor = new ReaderProcessor(namespaceResourcesService);
   });
 
   afterEach(() => {
@@ -70,7 +70,7 @@ describe('ReaderProcessor', () => {
         const result = await processor.process(task);
 
         expect(result).toEqual({});
-        expect(resourcesService.get).not.toHaveBeenCalled();
+        expect(namespaceResourcesService.get).not.toHaveBeenCalled();
       });
 
       it('should return empty object when output is null', async () => {
@@ -92,14 +92,14 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        resourcesService.get.mockResolvedValue(mockResource as Resource);
-        resourcesService.update.mockResolvedValue(undefined);
+        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
 
         expect(result).toEqual({ resourceId: 'test-resource-id' });
-        expect(resourcesService.get).toHaveBeenCalledWith('test-resource-id');
-        expect(resourcesService.update).toHaveBeenCalled();
+        expect(namespaceResourcesService.get).toHaveBeenCalledWith('test-resource-id');
+        expect(namespaceResourcesService.update).toHaveBeenCalled();
       });
     });
 
@@ -127,8 +127,8 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        resourcesService.get.mockResolvedValue(mockResource as Resource);
-        resourcesService.update.mockResolvedValue(undefined);
+        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
 
@@ -161,8 +161,8 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        resourcesService.get.mockResolvedValue(mockResource as Resource);
-        resourcesService.update.mockResolvedValue(undefined);
+        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.update.mockResolvedValue(undefined);
 
         await processor.process(task);
 
@@ -209,8 +209,8 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        resourcesService.get.mockResolvedValue(mockResource as Resource);
-        resourcesService.update.mockResolvedValue(undefined);
+        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
 
@@ -231,14 +231,14 @@ describe('ReaderProcessor', () => {
           exception: { error: 'Processing failed' },
         });
 
-        resourcesService.update.mockResolvedValue(undefined);
+        namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
 
         // Should not process images when there's an exception
 
         // Should call parent's exception handling
-        expect(resourcesService.update).toHaveBeenCalledWith(
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-user',
           'test-resource-id',
           {
@@ -265,8 +265,8 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        resourcesService.get.mockResolvedValue(mockResource as Resource);
-        resourcesService.update.mockResolvedValue(undefined);
+        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
 
@@ -289,8 +289,8 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        resourcesService.get.mockResolvedValue(mockResource as Resource);
-        resourcesService.update.mockResolvedValue(undefined);
+        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.update.mockResolvedValue(undefined);
 
         await processor.process(task);
 
@@ -309,8 +309,8 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        resourcesService.get.mockResolvedValue(mockResource as Resource);
-        resourcesService.update.mockResolvedValue(undefined);
+        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
         expect(result).toEqual({ resourceId: 'test-resource-id' });

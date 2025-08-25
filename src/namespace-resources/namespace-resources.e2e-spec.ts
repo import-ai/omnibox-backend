@@ -1,6 +1,6 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
-import { ResourceType } from 'omniboxd/resources/resources.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 describe('ResourcesController (e2e)', () => {
   let client: TestClient;
@@ -399,7 +399,7 @@ describe('ResourcesController (e2e)', () => {
           `/api/v1/namespaces/${client.namespace.id}/resources/non-existent-id`,
         )
         .send(updateData)
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should fail with missing namespaceId', async () => {
@@ -458,7 +458,7 @@ describe('ResourcesController (e2e)', () => {
         .delete(
           `/api/v1/namespaces/${client.namespace.id}/resources/non-existent-id`,
         )
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.NOT_FOUND);
     });
   });
 
@@ -774,7 +774,7 @@ describe('ResourcesController (e2e)', () => {
         .post(
           `/api/v1/namespaces/${client.namespace.id}/resources/non-existent-source/move/${targetFolderId}`,
         )
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should fail with non-existent target resource', async () => {
@@ -946,7 +946,7 @@ describe('ResourcesController (e2e)', () => {
         .post(
           `/api/v1/namespaces/${client.namespace.id}/resources/non-existent-id/restore`,
         )
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
+        .expect(HttpStatus.NOT_FOUND);
     });
   });
 

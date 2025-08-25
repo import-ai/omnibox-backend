@@ -1,30 +1,28 @@
 import {
   IsEnum,
   IsArray,
-  IsObject,
   IsString,
+  IsObject,
   IsOptional,
   IsNotEmpty,
 } from 'class-validator';
-import { ResourceType } from 'omniboxd/resources/resources.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
-export class UpdateResourceDto {
+export class CreateResourceDto {
   @IsString()
   @IsOptional()
-  name?: string;
+  name: string;
 
   @IsString()
   @IsNotEmpty()
   namespaceId: string;
 
   @IsEnum(ResourceType)
-  @IsOptional()
-  resourceType?: ResourceType;
+  resourceType: ResourceType;
 
   @IsString()
-  @IsOptional()
   @IsNotEmpty()
-  parentId?: string;
+  parentId: string;
 
   @IsArray()
   @IsOptional()

@@ -1,6 +1,6 @@
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'omniboxd/resources/dto/update-resource.dto';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
@@ -17,12 +17,12 @@ import {
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { Request } from 'express';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource.dto';
+import { ResourceMetaDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
-export class ResourcesController {
+export class NamespaceResourcesController {
   constructor(
-    private readonly resourcesService: ResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly permissionsService: PermissionsService,
   ) {}
 
@@ -38,13 +38,16 @@ export class ResourcesController {
     if (ids.length <= 0) {
       return [];
     }
-    return await this.resourcesService.findByIds(namespaceId, ids);
+    return await this.namespaceResourcesService.findByIds(namespaceId, ids);
   }
 
   @Post()
   async create(@UserId() userId: string, @Body() data: CreateResourceDto) {
-    const newResource = await this.resourcesService.create(userId, data);
-    return await this.resourcesService.getPath({
+    const newResource = await this.namespaceResourcesService.create(
+      userId,
+      data,
+    );
+    return await this.namespaceResourcesService.getPath({
       namespaceId: data.namespaceId,
       resourceId: newResource.id,
       userId: userId,
@@ -57,11 +60,11 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    const newResource = await this.resourcesService.duplicate(
+    const newResource = await this.namespaceResourcesService.duplicate(
       req.user!.id,
       resourceId,
     );
-    return await this.resourcesService.getPath({
+    return await this.namespaceResourcesService.getPath({
       namespaceId,
       userId: req.user!.id,
       resourceId: newResource.id,
@@ -75,7 +78,7 @@ export class ResourcesController {
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
   ) {
-    return await this.resourcesService.query(
+    return await this.namespaceResourcesService.query(
       namespaceId,
       parentId,
       req.user!.id,
@@ -89,7 +92,11 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ): Promise<ResourceMetaDto[]> {
-    return this.resourcesService.listChildren(namespaceId, resourceId, userId);
+    return this.namespaceResourcesService.listChildren(
+      namespaceId,
+      resourceId,
+      userId,
+    );
   }
 
   @Post(':resourceId/move/:targetId')
@@ -99,7 +106,7 @@ export class ResourcesController {
     @Param('resourceId') resourceId: string,
     @Param('targetId') targetId: string,
   ) {
-    return await this.resourcesService.move({
+    return await this.namespaceResourcesService.move({
       userId: req.user!.id,
       namespaceId,
       resourceId,
@@ -114,7 +121,7 @@ export class ResourcesController {
     @Query('exclude_resource_id') excludeResourceId: string | undefined,
     @Query('name') name: string | undefined,
   ): Promise<ResourceMetaDto[]> {
-    return await this.resourcesService.search({
+    return await this.namespaceResourcesService.search({
       namespaceId,
       excludeResourceId,
       name,
@@ -128,7 +135,7 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    return await this.resourcesService.getPath({
+    return await this.namespaceResourcesService.getPath({
       namespaceId,
       resourceId,
       userId: req.user!.id,
@@ -151,8 +158,8 @@ export class ResourcesController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    await this.resourcesService.update(req.user!.id, resourceId, data);
-    return await this.resourcesService.getPath({
+    await this.namespaceResourcesService.update(req.user!.id, resourceId, data);
+    return await this.namespaceResourcesService.getPath({
       namespaceId,
       resourceId,
       userId: req.user!.id,
@@ -174,7 +181,10 @@ export class ResourcesController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    return await this.resourcesService.delete(req.user!.id, resourceId);
+    return await this.namespaceResourcesService.delete(
+      req.user!.id,
+      resourceId,
+    );
   }
 
   @Post(':resourceId/restore')
@@ -183,8 +193,8 @@ export class ResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    await this.resourcesService.restore(req.user!.id, resourceId);
-    return await this.resourcesService.getPath({
+    await this.namespaceResourcesService.restore(req.user!.id, resourceId);
+    return await this.namespaceResourcesService.getPath({
       namespaceId,
       resourceId,
       userId: req.user!.id,

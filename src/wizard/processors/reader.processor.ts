@@ -1,11 +1,13 @@
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 
 export class ReaderProcessor extends CollectProcessor {
-  constructor(protected readonly resourcesService: ResourcesService) {
-    super(resourcesService);
+  constructor(
+    protected readonly namespaceResourcesService: NamespaceResourcesService,
+  ) {
+    super(namespaceResourcesService);
   }
 
   async process(task: Task): Promise<Record<string, any>> {

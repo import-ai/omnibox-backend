@@ -447,8 +447,8 @@ describe('WizardController (e2e)', () => {
         .post('/api/v1/wizard/collect')
         .send(collectData);
 
-      // Invalid parent_id results in permission error (403) rather than validation error (400)
-      expect([HttpStatus.BAD_REQUEST, HttpStatus.FORBIDDEN]).toContain(
+      // Invalid parent_id results in not-found error (404) rather than validation error (400)
+      expect([HttpStatus.BAD_REQUEST, HttpStatus.NOT_FOUND]).toContain(
         response.status,
       );
     });

@@ -17,7 +17,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { WizardModule } from 'omniboxd/wizard/wizard.module';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
@@ -46,6 +46,7 @@ import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/175549955
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
 import { OAuthModule } from 'omniboxd/oauth2/oauth.module';
 import { SharesAllResources1754471311959 } from 'omniboxd/migrations/1754471311959-shares-all-resources';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -75,6 +76,7 @@ export class AppModule implements NestModule {
         UserModule,
         APIKeyModule,
         NamespacesModule,
+        NamespaceResourcesModule,
         ResourcesModule,
         TasksModule,
         WizardModule,

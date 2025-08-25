@@ -1,6 +1,6 @@
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourceMetaDto } from './shared-resource-meta.dto';
-import { Resource } from 'omniboxd/resources/resources.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
 export class PublicShareInfoDto {
   id: string;

@@ -13,8 +13,11 @@ import {
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { Resource, ResourceType } from 'omniboxd/resources/resources.entity';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { context, propagation } from '@opentelemetry/api';
 
@@ -30,7 +33,7 @@ export class StreamService {
   constructor(
     private readonly wizardBaseUrl: string,
     private readonly messagesService: MessagesService,
-    private readonly resourcesService: ResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
   ) {}
 
   async stream(
@@ -221,7 +224,7 @@ export class StreamService {
           // for private_search, pass the resource with permission
           if (!tool.resources || tool.resources.length === 0) {
             const resources: Resource[] =
-              await this.resourcesService.listAllUserAccessibleResources(
+              await this.namespaceResourcesService.listAllUserAccessibleResources(
                 tool.namespace_id,
                 user.id,
               );
@@ -238,7 +241,7 @@ export class StreamService {
           } else {
             tool.visible_resources = [];
             tool.visible_resources.push(
-              ...(await this.resourcesService.permissionFilter<PrivateSearchResourceDto>(
+              ...(await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(
                 tool.namespace_id,
                 user.id,
                 tool.resources,
@@ -247,7 +250,7 @@ export class StreamService {
             for (const resource of tool.resources) {
               if (resource.type === 'folder') {
                 const resources: Resource[] =
-                  await this.resourcesService.getAllSubResources(
+                  await this.namespaceResourcesService.getAllSubResources(
                     tool.namespace_id,
                     resource.id,
                     user.id,

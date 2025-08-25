@@ -17,7 +17,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { OpenCreateResourceDto } from 'omniboxd/namespace-resources/dto/open.create-resource.dto';
-import { ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {

@@ -1,4 +1,7 @@
-import { Resource, ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 
 export class SharedResourceMetaDto {
   id: string;

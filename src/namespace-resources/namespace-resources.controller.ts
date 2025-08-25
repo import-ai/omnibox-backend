@@ -43,7 +43,10 @@ export class NamespaceResourcesController {
 
   @Post()
   async create(@UserId() userId: string, @Body() data: CreateResourceDto) {
-    const newResource = await this.namespaceResourcesService.create(userId, data);
+    const newResource = await this.namespaceResourcesService.create(
+      userId,
+      data,
+    );
     return await this.namespaceResourcesService.getPath({
       namespaceId: data.namespaceId,
       resourceId: newResource.id,
@@ -89,7 +92,11 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ): Promise<ResourceMetaDto[]> {
-    return this.namespaceResourcesService.listChildren(namespaceId, resourceId, userId);
+    return this.namespaceResourcesService.listChildren(
+      namespaceId,
+      resourceId,
+      userId,
+    );
   }
 
   @Post(':resourceId/move/:targetId')
@@ -174,7 +181,10 @@ export class NamespaceResourcesController {
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    return await this.namespaceResourcesService.delete(req.user!.id, resourceId);
+    return await this.namespaceResourcesService.delete(
+      req.user!.id,
+      resourceId,
+    );
   }
 
   @Post(':resourceId/restore')

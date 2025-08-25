@@ -4,7 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 import { ReaderProcessor } from './reader.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
 describe('ReaderProcessor', () => {
   let processor: ReaderProcessor;
@@ -92,13 +92,17 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
 
         expect(result).toEqual({ resourceId: 'test-resource-id' });
-        expect(namespaceResourcesService.get).toHaveBeenCalledWith('test-resource-id');
+        expect(namespaceResourcesService.get).toHaveBeenCalledWith(
+          'test-resource-id',
+        );
         expect(namespaceResourcesService.update).toHaveBeenCalled();
       });
     });
@@ -127,7 +131,9 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
@@ -161,7 +167,9 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         await processor.process(task);
@@ -209,7 +217,9 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
@@ -265,7 +275,9 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
@@ -289,7 +301,9 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         await processor.process(task);
@@ -309,7 +323,9 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(mockResource as Resource);
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);

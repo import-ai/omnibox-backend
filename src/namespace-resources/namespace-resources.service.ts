@@ -14,7 +14,10 @@ import {
   Not,
   Repository,
 } from 'typeorm';
-import { Resource, ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import {
@@ -35,6 +38,7 @@ import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 const TASK_PRIORITY = 5;
 
@@ -53,6 +57,7 @@ export class NamespaceResourcesService {
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   private async getTagsByIds(
@@ -435,7 +440,7 @@ export class NamespaceResourcesService {
     resourceId: string,
     userId: string,
   ): Promise<ResourceMetaDto[]> {
-    const parentResources = await this.getParentResources(
+    const parentResources = await this.resourcesService.getParentResources(
       namespaceId,
       resourceId,
     );
@@ -513,7 +518,7 @@ export class NamespaceResourcesService {
     if (resource.namespaceId !== namespaceId) {
       throw new NotFoundException('Not found');
     }
-    const parentResources = await this.getParentResources(
+    const parentResources = await this.resourcesService.getParentResources(
       namespaceId,
       resource.parentId,
     );
@@ -560,39 +565,6 @@ export class NamespaceResourcesService {
       throw new NotFoundException('Resource not found.');
     }
     return resource;
-  }
-
-  async getParentResources(
-    namespaceId: string,
-    resourceId: string | null,
-  ): Promise<Resource[]> {
-    if (!resourceId) {
-      return [];
-    }
-    const resources: Resource[] = [];
-    while (true) {
-      const resource = await this.resourceRepository.findOne({
-        where: { namespaceId, id: resourceId },
-        select: [
-          'id',
-          'name',
-          'resourceType',
-          'parentId',
-          'globalPermission',
-          'createdAt',
-          'updatedAt',
-        ],
-      });
-      if (!resource) {
-        throw new NotFoundException('Resource not found');
-      }
-      resources.push(resource);
-      if (!resource.parentId) {
-        break;
-      }
-      resourceId = resource.parentId;
-    }
-    return resources;
   }
 
   async update(userId: string, id: string, data: UpdateResourceDto) {

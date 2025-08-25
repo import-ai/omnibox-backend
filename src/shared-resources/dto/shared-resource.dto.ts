@@ -1,5 +1,5 @@
-import { ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
-import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
 export class SharedResourceDto {
   id: string;

@@ -16,7 +16,7 @@ import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
-import { ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
@@ -40,7 +40,10 @@ export class WizardService {
     this.processors = {
       collect: new CollectProcessor(namespaceResourcesService),
       file_reader: new ReaderProcessor(this.namespaceResourcesService),
-      extract_tags: new ExtractTagsProcessor(namespaceResourcesService, this.tagService),
+      extract_tags: new ExtractTagsProcessor(
+        namespaceResourcesService,
+        this.tagService,
+      ),
       generate_title: new GenerateTitleProcessor(namespaceResourcesService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
@@ -75,7 +78,10 @@ export class WizardService {
       parentId: parentId,
       attrs: { url },
     };
-    const resource = await this.namespaceResourcesService.create(user.id, resourceDto);
+    const resource = await this.namespaceResourcesService.create(
+      user.id,
+      resourceDto,
+    );
 
     const task = await this.wizardTaskService.createCollectTask(
       user.id,

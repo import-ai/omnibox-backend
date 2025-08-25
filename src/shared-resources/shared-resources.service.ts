@@ -2,15 +2,17 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourceDto } from './dto/shared-resource.dto';
-import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Injectable()
 export class SharedResourcesService {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharesService: SharesService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   async getSharedResource(
@@ -59,7 +61,7 @@ export class SharedResourcesService {
       throw new NotFoundException('Resource not found');
     }
     if (resource.id !== share.resourceId) {
-      const parents = await this.namespaceResourcesService.getParentResources(
+      const parents = await this.resourcesService.getParentResources(
         share.namespaceId,
         resource.parentId,
       );

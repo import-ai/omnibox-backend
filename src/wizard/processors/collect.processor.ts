@@ -5,7 +5,9 @@ import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 
 export class CollectProcessor extends Processor {
-  constructor(protected readonly namespaceResourcesService: NamespaceResourcesService) {
+  constructor(
+    protected readonly namespaceResourcesService: NamespaceResourcesService,
+  ) {
     super();
   }
 

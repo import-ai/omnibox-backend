@@ -4,7 +4,9 @@ import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespac
 import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 
 export class ReaderProcessor extends CollectProcessor {
-  constructor(protected readonly namespaceResourcesService: NamespaceResourcesService) {
+  constructor(
+    protected readonly namespaceResourcesService: NamespaceResourcesService,
+  ) {
     super(namespaceResourcesService);
   }
 

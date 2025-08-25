@@ -18,7 +18,9 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/files')
 export class FileResourcesController {
-  constructor(private readonly namespaceResourcesService: NamespaceResourcesService) {}
+  constructor(
+    private readonly namespaceResourcesService: NamespaceResourcesService,
+  ) {}
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))

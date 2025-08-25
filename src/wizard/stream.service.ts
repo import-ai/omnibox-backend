@@ -14,7 +14,10 @@ import {
   WizardAgentRequestDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { Resource, ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { context, propagation } from '@opentelemetry/api';
 

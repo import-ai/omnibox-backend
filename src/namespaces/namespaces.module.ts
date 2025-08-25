@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from 'omniboxd/user/user.module';
-import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { NamespacesController } from 'omniboxd/namespaces/namespaces.controller';
 import { Namespace } from './entities/namespace.entity';

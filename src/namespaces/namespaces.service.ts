@@ -1,7 +1,7 @@
 import each from 'omniboxd/utils/each';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from './entities/namespace.entity';
-import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';

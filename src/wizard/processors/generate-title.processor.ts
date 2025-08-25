@@ -5,7 +5,9 @@ import { BadRequestException } from '@nestjs/common';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 
 export class GenerateTitleProcessor extends Processor {
-  constructor(private readonly namespaceResourcesService: NamespaceResourcesService) {
+  constructor(
+    private readonly namespaceResourcesService: NamespaceResourcesService,
+  ) {
     super();
   }
 

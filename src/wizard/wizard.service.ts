@@ -5,7 +5,6 @@ import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
-import { User } from 'omniboxd/user/entities/user.entity';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
@@ -20,7 +19,7 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
-import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 
 @Injectable()
 export class WizardService {
@@ -63,7 +62,7 @@ export class WizardService {
   }
 
   async collect(
-    user: User,
+    userId: string,
     data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
     const { html, url, title, namespace_id, parentId } = data;
@@ -79,12 +78,12 @@ export class WizardService {
       attrs: { url },
     };
     const resource = await this.namespaceResourcesService.create(
-      user.id,
+      userId,
       resourceDto,
     );
 
     const task = await this.wizardTaskService.createCollectTask(
-      user.id,
+      userId,
       namespace_id,
       resource.id,
       { html, url, title },
@@ -234,7 +233,7 @@ export class WizardService {
     task.output.images = processedImages;
   }
 
-  async fetchTask(): Promise<TaskDto | null> {
+  async fetchTask(): Promise<InternalTaskDto | null> {
     const rawQuery = `
       WITH running_tasks_sub_query AS (SELECT namespace_id,
                                               COUNT(id) AS running_count
@@ -278,7 +277,7 @@ export class WizardService {
         namespaceId: record.namespace_id,
       });
       const newTask = await this.wizardTaskService.taskRepository.save(task);
-      return TaskDto.fromEntity(newTask);
+      return InternalTaskDto.fromEntity(newTask);
     }
 
     return null;

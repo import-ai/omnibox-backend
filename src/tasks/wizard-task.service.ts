@@ -10,6 +10,7 @@ import {
   Message,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
+import { context, propagation } from '@opentelemetry/api';
 
 @Injectable()
 export class WizardTaskService {
@@ -17,9 +18,16 @@ export class WizardTaskService {
     @InjectRepository(Task) public taskRepository: Repository<Task>,
   ) {}
 
+  injectTraceHeaders(task: Partial<Task>) {
+    const traceHeaders: Record<string, string> = {};
+    propagation.inject(context.active(), traceHeaders);
+    task.payload = { ...(task.payload || {}), trace_headers: traceHeaders };
+    return task;
+  }
+
   async create(data: Partial<Task>, repo?: Repository<Task>) {
     const repository = repo || this.taskRepository;
-    const task = repository.create(data);
+    const task = repository.create(this.injectTraceHeaders(data));
     return await repository.save(task);
   }
 
@@ -127,6 +135,7 @@ export class WizardTaskService {
             parent_id: resource.parentId,
           },
         },
+        payload: { resource_id: resource.id },
         namespaceId: resource.namespaceId,
         userId: userId,
       },
@@ -147,6 +156,7 @@ export class WizardTaskService {
         },
         namespaceId: resource.namespaceId,
         userId,
+        payload: { resource_id: resource.id },
       },
       repo,
     );
@@ -179,6 +189,7 @@ export class WizardTaskService {
           message_id: message.id,
           message: message.message,
         },
+        payload: { conversation_id: conversationId, message_id: message.id },
         namespaceId,
         userId,
       },
@@ -197,9 +208,8 @@ export class WizardTaskService {
       {
         function: 'delete_conversation',
         priority,
-        input: {
-          conversation_id: conversationId,
-        },
+        input: { conversation_id: conversationId },
+        payload: { conversation_id: conversationId },
         namespaceId,
         userId,
       },

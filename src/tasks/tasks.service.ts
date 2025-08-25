@@ -6,7 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TaskDto } from './dto/task.dto';
+import { TaskDto, TaskMetaDto } from './dto/task.dto';
 
 @Injectable()
 export class TasksService {
@@ -24,7 +24,7 @@ export class TasksService {
     namespaceId: string,
     offset: number,
     limit: number,
-  ): Promise<TaskDto[]> {
+  ): Promise<TaskMetaDto[]> {
     const tasks = await this.taskRepository.find({
       where: { namespaceId },
       skip: offset,
@@ -32,7 +32,7 @@ export class TasksService {
       order: { createdAt: 'DESC' },
     });
 
-    return tasks.map((task) => TaskDto.fromEntity(task));
+    return tasks.map((task) => TaskMetaDto.fromEntity(task));
   }
 
   async get(id: string) {
@@ -88,5 +88,19 @@ export class TasksService {
     });
 
     return TaskDto.fromEntity(newTask);
+  }
+
+  async getTasksByResourceId(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<TaskMetaDto[]> {
+    const tasks = await this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.namespaceId = :namespaceId', { namespaceId })
+      .andWhere("task.payload->>'resource_id' = :resourceId", { resourceId })
+      .orderBy('task.createdAt', 'DESC')
+      .getMany();
+
+    return tasks.map((task) => TaskMetaDto.fromEntity(task));
   }
 }

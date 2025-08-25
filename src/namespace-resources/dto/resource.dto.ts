@@ -1,5 +1,5 @@
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { Resource, ResourceType } from '../resources.entity';
+import { Resource, ResourceType } from '../namespace-resources.entity';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 
 export enum SpaceType {

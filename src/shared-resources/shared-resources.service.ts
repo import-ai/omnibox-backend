@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourceDto } from './dto/shared-resource.dto';
-import { Resource } from 'omniboxd/resources/resources.entity';
+import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 

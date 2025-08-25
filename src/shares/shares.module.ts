@@ -6,7 +6,7 @@ import {
   PublicSharesController,
   ResourceSharesController,
 } from './shares.controller';
-import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { ResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Share]), ResourcesModule],

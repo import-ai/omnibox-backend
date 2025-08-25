@@ -2,9 +2,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ReaderProcessor } from './reader.processor';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { Resource } from 'omniboxd/resources/resources.entity';
+import { Resource } from 'omniboxd/namespace-resources/namespace-resources.entity';
 
 describe('ReaderProcessor', () => {
   let processor: ReaderProcessor;

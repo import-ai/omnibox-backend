@@ -1,6 +1,6 @@
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { BadRequestException } from '@nestjs/common';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 

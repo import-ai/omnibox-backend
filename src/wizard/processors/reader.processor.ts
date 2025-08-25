@@ -1,6 +1,6 @@
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 
 export class ReaderProcessor extends CollectProcessor {

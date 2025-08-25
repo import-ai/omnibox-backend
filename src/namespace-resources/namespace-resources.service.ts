@@ -14,9 +14,9 @@ import {
   Not,
   Repository,
 } from 'typeorm';
-import { Resource, ResourceType } from 'omniboxd/resources/resources.entity';
-import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'omniboxd/resources/dto/update-resource.dto';
+import { Resource, ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
+import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import {
   BadRequestException,
   ForbiddenException,

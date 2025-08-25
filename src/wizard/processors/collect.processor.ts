@@ -1,4 +1,4 @@
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { BadRequestException } from '@nestjs/common';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';

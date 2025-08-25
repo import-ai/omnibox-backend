@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { Resource, ResourceType } from 'omniboxd/resources/resources.entity';
+import { Resource, ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
 import {
   Message,
   OpenAIMessageRole,

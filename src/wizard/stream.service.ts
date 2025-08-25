@@ -13,8 +13,8 @@ import {
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { Resource, ResourceType } from 'omniboxd/resources/resources.entity';
+import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { Resource, ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { context, propagation } from '@opentelemetry/api';
 

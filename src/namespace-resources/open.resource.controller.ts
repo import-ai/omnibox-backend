@@ -6,7 +6,7 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import {
@@ -16,8 +16,8 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { OpenCreateResourceDto } from 'omniboxd/resources/dto/open.create-resource.dto';
-import { ResourceType } from 'omniboxd/resources/resources.entity';
+import { OpenCreateResourceDto } from 'omniboxd/namespace-resources/dto/open.create-resource.dto';
+import { ResourceType } from 'omniboxd/namespace-resources/namespace-resources.entity';
 
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {

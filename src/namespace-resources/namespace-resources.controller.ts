@@ -1,6 +1,6 @@
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'omniboxd/resources/dto/update-resource.dto';
+import { ResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { Request } from 'express';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource.dto';
+import { ResourceMetaDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class ResourcesController {

@@ -1,6 +1,6 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
-import { uploadLanguageDatasets } from 'omniboxd/resources/file-resources.e2e-spec';
+import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
 
 describe('AttachmentsController (e2e)', () => {
   let client: TestClient;

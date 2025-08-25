@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
   Body,
   Controller,
@@ -18,7 +18,9 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/files')
 export class FileResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) {}
+  constructor(
+    private readonly namespaceResourcesService: NamespaceResourcesService,
+  ) {}
 
   @Post()
   @UseInterceptors(FileInterceptor('file'))
@@ -28,14 +30,14 @@ export class FileResourcesController {
     @Body('namespace_id') namespaceId: string,
     @Body('parent_id') parentId: string,
   ) {
-    const newResource = await this.resourcesService.uploadFile(
+    const newResource = await this.namespaceResourcesService.uploadFile(
       userId,
       namespaceId,
       file,
       parentId,
       undefined,
     );
-    return await this.resourcesService.getPath({
+    return await this.namespaceResourcesService.getPath({
       namespaceId,
       userId,
       resourceId: newResource.id,
@@ -50,7 +52,7 @@ export class FileResourcesController {
     @Body('file_hash') fileHash: string,
     @Body('namespace_id') namespaceId: string,
   ) {
-    return this.resourcesService.uploadFileChunk(
+    return this.namespaceResourcesService.uploadFileChunk(
       namespaceId,
       chunk,
       chunkNumber,
@@ -64,7 +66,7 @@ export class FileResourcesController {
     @Body('chunks_number') chunksNumber: string,
     @Body('file_hash') fileHash: string,
   ) {
-    return this.resourcesService.cleanFileChunks(
+    return this.namespaceResourcesService.cleanFileChunks(
       namespaceId,
       chunksNumber,
       fileHash,
@@ -81,7 +83,7 @@ export class FileResourcesController {
     @Body('mimetype') mimetype: string,
     @Body('parent_id') parentId: string,
   ) {
-    const newResource = await this.resourcesService.mergeFileChunks(
+    const newResource = await this.namespaceResourcesService.mergeFileChunks(
       req.user!.id,
       namespaceId,
       totalChunks,
@@ -90,7 +92,7 @@ export class FileResourcesController {
       mimetype,
       parentId,
     );
-    return await this.resourcesService.getPath({
+    return await this.namespaceResourcesService.getPath({
       namespaceId,
       userId: req.user!.id,
       resourceId: newResource.id,
@@ -105,7 +107,7 @@ export class FileResourcesController {
     @Body('namespace_id') namespaceId: string,
     @Body('resource_id') resourceId: string,
   ) {
-    return this.resourcesService.uploadFile(
+    return this.namespaceResourcesService.uploadFile(
       userId,
       namespaceId,
       file,
@@ -119,6 +121,6 @@ export class FileResourcesController {
     @Param('resourceId') resourceId: string,
     @Res() res: Response,
   ) {
-    return await this.resourcesService.fileResponse(resourceId, res);
+    return await this.namespaceResourcesService.fileResponse(resourceId, res);
   }
 }

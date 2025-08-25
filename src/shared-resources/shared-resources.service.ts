@@ -1,16 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourceDto } from './dto/shared-resource.dto';
-import { Resource } from 'omniboxd/resources/resources.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Injectable()
 export class SharedResourcesService {
   constructor(
-    private readonly resourcesService: ResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharesService: SharesService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   async getSharedResource(
@@ -43,7 +45,7 @@ export class SharedResourcesService {
     if (!share.allResources) {
       return [];
     }
-    const children = await this.resourcesService.getResourceChildren(
+    const children = await this.namespaceResourcesService.getResourceChildren(
       share.namespaceId,
       resource.id,
     );
@@ -54,7 +56,7 @@ export class SharedResourcesService {
     share: Share,
     resourceId: string,
   ): Promise<Resource> {
-    const resource = await this.resourcesService.get(resourceId);
+    const resource = await this.namespaceResourcesService.get(resourceId);
     if (!resource || resource.namespaceId != share.namespaceId) {
       throw new NotFoundException('Resource not found');
     }

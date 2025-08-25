@@ -1,11 +1,11 @@
 import each from 'omniboxd/utils/each';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from './entities/namespace.entity';
-import { Resource } from 'omniboxd/resources/resources.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -36,7 +36,7 @@ export class NamespacesService {
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
 
-    private readonly resourceService: ResourcesService,
+    private readonly resourceService: NamespaceResourcesService,
 
     private readonly permissionsService: PermissionsService,
   ) {}

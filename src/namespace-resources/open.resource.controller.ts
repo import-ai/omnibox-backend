@@ -6,7 +6,7 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import {
@@ -16,13 +16,13 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { OpenCreateResourceDto } from 'omniboxd/resources/dto/open.create-resource.dto';
-import { ResourceType } from 'omniboxd/resources/resources.entity';
+import { OpenCreateResourceDto } from 'omniboxd/namespace-resources/dto/open.create-resource.dto';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {
   constructor(
-    private readonly resourcesService: ResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly wizardTaskService: WizardTaskService,
   ) {}
 
@@ -54,7 +54,7 @@ export class OpenResourcesController {
       parentId: apiKey.attrs.root_resource_id,
     };
 
-    const newResource = await this.resourcesService.create(
+    const newResource = await this.namespaceResourcesService.create(
       userId,
       resourceData,
     );
@@ -86,7 +86,7 @@ export class OpenResourcesController {
     @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const newResource = await this.resourcesService.uploadFile(
+    const newResource = await this.namespaceResourcesService.uploadFile(
       userId,
       apiKey.namespaceId,
       file,

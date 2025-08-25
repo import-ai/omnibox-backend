@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { CreateResourceDto } from 'omniboxd/resources/dto/create-resource.dto';
+import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
@@ -15,7 +15,7 @@ import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
-import { ResourceType } from 'omniboxd/resources/resources.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
@@ -30,17 +30,20 @@ export class WizardService {
 
   constructor(
     private readonly wizardTaskService: WizardTaskService,
-    private readonly resourcesService: ResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
   ) {
     this.processors = {
-      collect: new CollectProcessor(resourcesService),
-      file_reader: new ReaderProcessor(this.resourcesService),
-      extract_tags: new ExtractTagsProcessor(resourcesService, this.tagService),
-      generate_title: new GenerateTitleProcessor(resourcesService),
+      collect: new CollectProcessor(namespaceResourcesService),
+      file_reader: new ReaderProcessor(this.namespaceResourcesService),
+      extract_tags: new ExtractTagsProcessor(
+        namespaceResourcesService,
+        this.tagService,
+      ),
+      generate_title: new GenerateTitleProcessor(namespaceResourcesService),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -49,7 +52,7 @@ export class WizardService {
     this.streamService = new StreamService(
       baseUrl,
       this.messagesService,
-      this.resourcesService,
+      this.namespaceResourcesService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
   }
@@ -74,7 +77,10 @@ export class WizardService {
       parentId: parentId,
       attrs: { url },
     };
-    const resource = await this.resourcesService.create(userId, resourceDto);
+    const resource = await this.namespaceResourcesService.create(
+      userId,
+      resourceDto,
+    );
 
     const task = await this.wizardTaskService.createCollectTask(
       userId,

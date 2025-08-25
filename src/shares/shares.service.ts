@@ -11,14 +11,14 @@ import { Repository } from 'typeorm';
 import { ShareInfoDto } from './dto/share-info.dto';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-info.dto';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 
 @Injectable()
 export class SharesService {
   constructor(
     @InjectRepository(Share)
     private readonly shareRepo: Repository<Share>,
-    private readonly resourcesService: ResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
   ) {}
 
   async getShareById(shareId: string): Promise<Share | null> {
@@ -66,7 +66,7 @@ export class SharesService {
     userId?: string,
   ): Promise<PublicShareInfoDto> {
     const share = await this.getAndValidateShare(shareId, password, userId);
-    const resource = await this.resourcesService.get(share.resourceId);
+    const resource = await this.namespaceResourcesService.get(share.resourceId);
     return PublicShareInfoDto.fromEntity(share, resource);
   }
 

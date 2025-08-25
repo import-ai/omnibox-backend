@@ -1,6 +1,6 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
-import { uploadLanguageDatasets } from 'omniboxd/resources/file-resources.e2e-spec';
+import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
 
 describe('AttachmentsController (e2e)', () => {
   let client: TestClient;
@@ -114,7 +114,7 @@ describe('AttachmentsController (e2e)', () => {
           `/api/v1/namespaces/${client.namespace.id}/resources/${nonExistentResourceId}/attachments`,
         )
         .attach('file[]', Buffer.from(testContent), 'test.txt')
-        .expect(403);
+        .expect(HttpStatus.NOT_FOUND);
     });
   });
 

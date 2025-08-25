@@ -3,7 +3,7 @@ import {
   APIKeyPermissionType,
   APIKeyPermissionTarget,
 } from 'omniboxd/api-key/api-key.entity';
-import { uploadLanguageDatasets } from 'omniboxd/resources/file-resources.e2e-spec';
+import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
 
 describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;

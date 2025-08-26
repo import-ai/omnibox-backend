@@ -33,12 +33,13 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { Response } from 'express';
-import { ResourceDto, ResourceMetaDto, SpaceType } from './dto/resource.dto';
+import { ResourceDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -406,16 +407,7 @@ export class NamespaceResourcesService {
       userId,
       resources,
     );
-
-    // Load tags for filtered resources
-    const tagsMap = await this.getTagsForResources(
-      namespaceId,
-      filteredResources,
-    );
-
-    return filteredResources.map((res) =>
-      ResourceMetaDto.fromEntity(res, tagsMap.get(res.id) || []),
-    );
+    return filteredResources.map((res) => ResourceMetaDto.fromEntity(res));
   }
 
   async getAllSubResources(
@@ -453,7 +445,7 @@ export class NamespaceResourcesService {
       return [];
     }
 
-    const children = await this.resourceRepository.find({
+    const dbChildren = await this.resourceRepository.find({
       select: [
         'id',
         'name',
@@ -469,8 +461,9 @@ export class NamespaceResourcesService {
         parentId: resourceId,
       },
     });
+    const children = dbChildren.map((r) => ResourceMetaDto.fromEntity(r));
 
-    const filteredChildren: Resource[] = [];
+    const filteredChildren: ResourceMetaDto[] = [];
     for (const child of children) {
       const permission = await this.permissionsService.getCurrentPermission(
         namespaceId,
@@ -481,15 +474,7 @@ export class NamespaceResourcesService {
         filteredChildren.push(child);
       }
     }
-    // Load tags for filtered children
-    const tagsMap = await this.getTagsForResources(
-      namespaceId,
-      filteredChildren,
-    );
-
-    return filteredChildren.map((r) =>
-      ResourceMetaDto.fromEntity(r, tagsMap.get(r.id) || []),
-    );
+    return filteredChildren;
   }
 
   async getSpaceType(
@@ -528,9 +513,10 @@ export class NamespaceResourcesService {
       : resourceId;
     const spaceType = await this.getSpaceType(namespaceId, rootResourceId);
 
+    const resourceMeta = ResourceMetaDto.fromEntity(resource);
     const curPermission = await this.permissionsService.getCurrentPermission(
       namespaceId,
-      [resource, ...parentResources],
+      [resourceMeta, ...parentResources],
       userId,
     );
 
@@ -538,14 +524,9 @@ export class NamespaceResourcesService {
       throw new ForbiddenException('Not authorized');
     }
 
-    // Load tags for resource and path
-    const allResources = [resource, ...parentResources];
-    const tagsMap = await this.getTagsForResources(namespaceId, allResources);
-
-    const path = [resource, ...parentResources]
-      .map((r) => ResourceMetaDto.fromEntity(r, tagsMap.get(r.id) || []))
-      .reverse();
-
+    // Load tags of the resource
+    const tagsMap = await this.getTagsForResources(namespaceId, [resource]);
+    const path = [resourceMeta, ...parentResources].reverse();
     return ResourceDto.fromEntity(
       resource,
       curPermission,

@@ -1,4 +1,5 @@
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   Resource,
   ResourceType,
@@ -8,30 +9,6 @@ import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 export enum SpaceType {
   PRIVATE = 'private',
   TEAM = 'teamspace',
-}
-
-export class ResourceMetaDto {
-  id: string;
-  parent_id: string | null;
-  name: string;
-  resource_type: string;
-  attrs: Record<string, any>;
-  tags: TagDto[];
-  created_at: string;
-  updated_at: string;
-
-  static fromEntity(resource: Resource, tags: TagDto[] = []) {
-    const dto = new ResourceMetaDto();
-    dto.id = resource.id;
-    dto.parent_id = resource.parentId;
-    dto.name = resource.name;
-    dto.resource_type = resource.resourceType;
-    dto.attrs = resource.attrs;
-    dto.tags = tags;
-    dto.created_at = resource.createdAt.toISOString();
-    dto.updated_at = resource.updatedAt.toISOString();
-    return dto;
-  }
 }
 
 export class ResourceDto {

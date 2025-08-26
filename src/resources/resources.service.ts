@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource } from './entities/resource.entity';
 import { Repository } from 'typeorm';
+import { ResourceMetaDto } from './dto/resource-meta.dto';
 
 @Injectable()
 export class ResourcesService {
@@ -13,7 +14,7 @@ export class ResourcesService {
   async getParentResources(
     namespaceId: string,
     resourceId: string | null,
-  ): Promise<Resource[]> {
+  ): Promise<ResourceMetaDto[]> {
     if (!resourceId) {
       return [];
     }
@@ -40,6 +41,6 @@ export class ResourcesService {
       }
       resourceId = resource.parentId;
     }
-    return resources;
+    return resources.map((r) => ResourceMetaDto.fromEntity(r));
   }
 }

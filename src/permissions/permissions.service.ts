@@ -21,6 +21,7 @@ import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
 import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 @Injectable()
 export class PermissionsService {
@@ -116,7 +117,7 @@ export class PermissionsService {
 
   async getCurrentPermission(
     namespaceId: string,
-    resources: Resource[],
+    resources: ResourceMetaDto[],
     userId: string,
   ): Promise<ResourcePermission> {
     const groups = await this.groupUserRepository.find({
@@ -309,7 +310,7 @@ export class PermissionsService {
     resourceId: string,
     userId: string,
     requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
-    resources?: Resource[],
+    resources?: ResourceMetaDto[],
   ) {
     // Check if the user is a member of the namespace
     const count = await this.namespaceMembersRepository.count({
@@ -338,7 +339,7 @@ export class PermissionsService {
 }
 
 function getGlobalPermission(
-  parentResources: Resource[],
+  parentResources: ResourceMetaDto[],
 ): ResourcePermission | null {
   for (const resource of parentResources) {
     if (resource.globalPermission) {

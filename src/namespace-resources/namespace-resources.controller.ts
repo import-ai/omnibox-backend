@@ -17,7 +17,7 @@ import {
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { Request } from 'express';
-import { ResourceMetaDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {

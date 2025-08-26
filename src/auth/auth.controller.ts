@@ -1,7 +1,9 @@
+import { Response } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import {
+  Res,
   Body,
   Post,
   Request,
@@ -20,8 +22,18 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(200)
-  login(@Request() req) {
-    return this.authService.login(req.user);
+  login(@Request() req, @Res() res: Response) {
+    const loginData = this.authService.login(req.user);
+
+    res.cookie('token', loginData.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+      maxAge: 100 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json(loginData);
   }
 
   @Public()

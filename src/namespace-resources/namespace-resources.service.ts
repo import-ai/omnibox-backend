@@ -414,7 +414,7 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-    includeParent: boolean,
+    includeParent: boolean = false,
   ): Promise<ResourceMetaDto[]> {
     const parents = await this.resourcesService.getParentResources(
       namespaceId,

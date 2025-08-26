@@ -305,17 +305,18 @@ export class NamespacesService {
 
   async getRoot(namespaceId: string, userId: string) {
     const privateRoot = await this.getPrivateRoot(userId, namespaceId);
-    const privateChildren = await this.resourceService.listChildren(
+    const privateChildren = await this.resourceService.getAndFilterSubResources(
       namespaceId,
       privateRoot.id,
       userId,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
-    const teamspaceChildren = await this.resourceService.listChildren(
-      namespaceId,
-      teamspaceRoot.id,
-      userId,
-    );
+    const teamspaceChildren =
+      await this.resourceService.getAndFilterSubResources(
+        namespaceId,
+        teamspaceRoot.id,
+        userId,
+      );
     return {
       private: { ...privateRoot, parentId: '0', children: privateChildren },
       teamspace: {

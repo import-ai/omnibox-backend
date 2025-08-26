@@ -249,8 +249,8 @@ export class StreamService {
             );
             for (const resource of tool.resources) {
               if (resource.type === 'folder') {
-                const resources: Resource[] =
-                  await this.namespaceResourcesService.getAllSubResources(
+                const resources =
+                  await this.namespaceResourcesService.getAndFilterSubResources(
                     tool.namespace_id,
                     resource.id,
                     user.id,

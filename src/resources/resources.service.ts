@@ -44,7 +44,7 @@ export class ResourcesService {
     return resources.map((r) => ResourceMetaDto.fromEntity(r));
   }
 
-  async getChildrenResources(
+  async getSubResources(
     namespaceId: string,
     resourceId: string,
   ): Promise<ResourceMetaDto[]> {

@@ -385,10 +385,10 @@ export class NamespaceResourcesService {
     };
     // Self and child exclusions
     if (excludeResourceId) {
-      const resourceChildren = await this.getAllSubResources(
+      const resourceChildren = await this.getAndFilterSubResources(
         namespaceId,
         excludeResourceId,
-        '',
+        userId,
         true,
       );
       where.id = Not(In(resourceChildren.map((children) => children.id)));
@@ -410,27 +410,11 @@ export class NamespaceResourcesService {
     return filteredResources.map((res) => ResourceMetaDto.fromEntity(res));
   }
 
-  async getAllSubResources(
-    namespaceId: string,
-    parentId: string,
-    userId?: string,
-    includeRoot: boolean = false,
-  ): Promise<Resource[]> {
-    let resources: Resource[] = [await this.get(parentId)];
-    for (const res of resources) {
-      const subResources: Resource[] = await this.query(namespaceId, res.id);
-      resources.push(...subResources);
-    }
-    resources = includeRoot ? resources : resources.slice(1);
-    return userId
-      ? await this.permissionFilter(namespaceId, userId, resources)
-      : resources;
-  }
-
-  async listChildren(
+  async getAndFilterSubResources(
     namespaceId: string,
     resourceId: string,
     userId: string,
+    includeParent: boolean,
   ): Promise<ResourceMetaDto[]> {
     const parents = await this.resourcesService.getParentResources(
       namespaceId,
@@ -444,7 +428,7 @@ export class NamespaceResourcesService {
     if (permission === ResourcePermission.NO_ACCESS) {
       return [];
     }
-    const children = await this.resourcesService.getChildrenResources(
+    const children = await this.resourcesService.getSubResources(
       namespaceId,
       resourceId,
     );
@@ -458,6 +442,9 @@ export class NamespaceResourcesService {
       if (permission !== ResourcePermission.NO_ACCESS) {
         filteredChildren.push(child);
       }
+    }
+    if (includeParent) {
+      return [parents[0], ...filteredChildren];
     }
     return filteredChildren;
   }

@@ -92,7 +92,7 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ): Promise<ResourceMetaDto[]> {
-    return this.namespaceResourcesService.listChildren(
+    return this.namespaceResourcesService.getAndFilterSubResources(
       namespaceId,
       resourceId,
       userId,

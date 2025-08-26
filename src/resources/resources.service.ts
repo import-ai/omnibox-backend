@@ -21,16 +21,16 @@ export class ResourcesService {
     const resources: Resource[] = [];
     while (true) {
       const resource = await this.resourceRepository.findOne({
-        where: { namespaceId, id: resourceId },
         select: [
           'id',
           'name',
-          'resourceType',
           'parentId',
+          'resourceType',
           'globalPermission',
           'createdAt',
           'updatedAt',
         ],
+        where: { namespaceId, id: resourceId },
       });
       if (!resource) {
         throw new NotFoundException('Resource not found');
@@ -42,5 +42,28 @@ export class ResourcesService {
       resourceId = resource.parentId;
     }
     return resources.map((r) => ResourceMetaDto.fromEntity(r));
+  }
+
+  async getChildrenResources(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<ResourceMetaDto[]> {
+    const children = await this.resourceRepository.find({
+      select: [
+        'id',
+        'name',
+        'parentId',
+        'resourceType',
+        'globalPermission',
+        'createdAt',
+        'updatedAt',
+      ],
+      where: {
+        namespaceId,
+        parentId: resourceId,
+      },
+      order: { updatedAt: 'DESC' },
+    });
+    return children.map((r) => ResourceMetaDto.fromEntity(r));
   }
 }

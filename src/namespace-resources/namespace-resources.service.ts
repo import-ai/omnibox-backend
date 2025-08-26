@@ -432,42 +432,27 @@ export class NamespaceResourcesService {
     resourceId: string,
     userId: string,
   ): Promise<ResourceMetaDto[]> {
-    const parentResources = await this.resourcesService.getParentResources(
+    const parents = await this.resourcesService.getParentResources(
       namespaceId,
       resourceId,
     );
     const permission = await this.permissionsService.getCurrentPermission(
       namespaceId,
-      parentResources,
+      parents,
       userId,
     );
     if (permission === ResourcePermission.NO_ACCESS) {
       return [];
     }
-
-    const dbChildren = await this.resourceRepository.find({
-      select: [
-        'id',
-        'name',
-        'parentId',
-        'resourceType',
-        'attrs',
-        'tagIds',
-        'createdAt',
-        'updatedAt',
-      ],
-      where: {
-        namespaceId,
-        parentId: resourceId,
-      },
-    });
-    const children = dbChildren.map((r) => ResourceMetaDto.fromEntity(r));
-
+    const children = await this.resourcesService.getChildrenResources(
+      namespaceId,
+      resourceId,
+    );
     const filteredChildren: ResourceMetaDto[] = [];
     for (const child of children) {
       const permission = await this.permissionsService.getCurrentPermission(
         namespaceId,
-        [child, ...parentResources],
+        [child, ...parents],
         userId,
       );
       if (permission !== ResourcePermission.NO_ACCESS) {

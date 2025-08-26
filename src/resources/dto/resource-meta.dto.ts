@@ -15,11 +15,11 @@ export class ResourceMetaDto {
   @Expose({ name: 'resource_type' })
   resourceType: string;
 
+  globalPermission: ResourcePermission | null;
+
   createdAt: string;
 
   updatedAt: string;
-
-  globalPermission: ResourcePermission | null;
 
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
@@ -27,9 +27,9 @@ export class ResourceMetaDto {
     dto.parentId = resource.parentId;
     dto.name = resource.name;
     dto.resourceType = resource.resourceType;
+    dto.globalPermission = resource.globalPermission;
     dto.createdAt = resource.createdAt.toISOString();
     dto.updatedAt = resource.updatedAt.toISOString();
-    dto.globalPermission = resource.globalPermission;
     return dto;
   }
 }

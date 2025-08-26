@@ -28,6 +28,11 @@ export class UserController {
     return await this.userService.findAll(start, limit, search);
   }
 
+  @Get('me')
+  current(@Req() req) {
+    return req.user;
+  }
+
   @Get(':id')
   async get(@Param('id') id: string) {
     return await this.userService.find(id);

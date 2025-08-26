@@ -1,5 +1,5 @@
 import { Resource } from '../entities/resource.entity';
-import { Expose } from 'class-transformer';
+import { Exclude, Expose } from 'class-transformer';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 export class ResourceMetaDto {
@@ -15,10 +15,13 @@ export class ResourceMetaDto {
   @Expose({ name: 'resource_type' })
   resourceType: string;
 
+  @Exclude()
   globalPermission: ResourcePermission | null;
 
+  @Exclude()
   createdAt: string;
 
+  @Exclude()
   updatedAt: string;
 
   static fromEntity(resource: Resource) {

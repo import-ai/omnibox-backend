@@ -44,7 +44,6 @@ import { TelemetryModule } from 'omniboxd/telemetry';
 import { CleanResourceNames1755396702021 } from 'omniboxd/migrations/1755396702021-clean-resource-names';
 import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/1755499552000-update-attachment-urls';
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
-import { OAuthModule } from 'omniboxd/oauth2/oauth.module';
 import { SharesAllResources1754471311959 } from 'omniboxd/migrations/1754471311959-shares-all-resources';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
@@ -88,7 +87,6 @@ export class AppModule implements NestModule {
         InvitationsModule,
         AttachmentsModule,
         SharesModule,
-        OAuthModule,
         SharedResourcesModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],

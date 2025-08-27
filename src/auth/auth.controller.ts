@@ -1,7 +1,10 @@
+import { Response } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { ConfigService } from '@nestjs/config';
 import {
+  Res,
   Body,
   Post,
   Request,
@@ -14,14 +17,31 @@ import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.ent
 
 @Controller('api/v1')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private configService: ConfigService,
+  ) {}
 
   @UseGuards(LocalAuthGuard)
   @Public()
   @Post('login')
   @HttpCode(200)
-  login(@Request() req) {
-    return this.authService.login(req.user);
+  login(@Request() req, @Res() res: Response) {
+    const loginData = this.authService.login(req.user);
+
+    const jwtExpireSeconds = parseInt(
+      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+      10,
+    );
+    res.cookie('token', loginData.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+      maxAge: jwtExpireSeconds * 1000,
+    });
+
+    return res.json(loginData);
   }
 
   @Public()
@@ -99,5 +119,14 @@ export class AuthController {
   @Post('invite/confirm')
   async inviteConfirm(@Body('token') token: string) {
     return await this.authService.inviteConfirm(token);
+  }
+
+  @Post('logout')
+  logout(@Res() res: Response) {
+    res.clearCookie('token', {
+      httpOnly: true,
+      path: '/',
+    });
+    return res.json();
   }
 }

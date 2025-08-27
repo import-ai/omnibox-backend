@@ -1,8 +1,9 @@
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { GoogleService } from 'omniboxd/auth/google/google.service';
-import { Req, Get, Body, Controller, Post } from '@nestjs/common';
+import { Req, Res, Get, Body, Controller, Post } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { ConfigService } from '@nestjs/config';
 import { SocialController } from 'omniboxd/auth/social.controller';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
@@ -11,6 +12,7 @@ export class GoogleController extends SocialController {
   constructor(
     private readonly googleService: GoogleService,
     protected readonly authService: AuthService,
+    private readonly configService: ConfigService,
   ) {
     super(authService);
   }
@@ -31,15 +33,32 @@ export class GoogleController extends SocialController {
   @Post('callback')
   async handleCallback(
     @Req() req: Request,
+    @Res() res: Response,
     @Body() body: { code: string; state: string },
   ) {
     const userId = this.findUserId(req.headers.authorization);
 
-    return await this.googleService.handleCallback(
+    const loginData = await this.googleService.handleCallback(
       body.code,
       body.state,
       userId,
     );
+
+    if (loginData && loginData.access_token) {
+      const jwtExpireSeconds = parseInt(
+        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+        10,
+      );
+      res.cookie('token', loginData.access_token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        maxAge: jwtExpireSeconds * 1000,
+      });
+    }
+
+    return res.json(loginData);
   }
 
   @Post('unbind')

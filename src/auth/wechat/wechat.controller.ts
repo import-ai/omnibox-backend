@@ -1,9 +1,10 @@
-import { Request } from 'express';
-import { Get, Post, Query, Controller, Req } from '@nestjs/common';
+import { Request, Response } from 'express';
+import { Get, Post, Query, Controller, Req, Res } from '@nestjs/common';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { WechatService } from 'omniboxd/auth/wechat/wechat.service';
 import { SocialController } from 'omniboxd/auth/social.controller';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { ConfigService } from '@nestjs/config';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/wechat')
@@ -11,6 +12,7 @@ export class WechatController extends SocialController {
   constructor(
     private readonly wechatService: WechatService,
     protected readonly authService: AuthService,
+    private readonly configService: ConfigService,
   ) {
     super(authService);
   }
@@ -37,11 +39,32 @@ export class WechatController extends SocialController {
   @Get('callback')
   async handleCallback(
     @Req() req: Request,
+    @Res() res: Response,
     @Query('code') code: string,
     @Query('state') state: string,
   ) {
     const userId = this.findUserId(req.headers.authorization);
-    return await this.wechatService.handleCallback(code, state, userId);
+    const loginData = await this.wechatService.handleCallback(
+      code,
+      state,
+      userId,
+    );
+
+    if (loginData && loginData.access_token) {
+      const jwtExpireSeconds = parseInt(
+        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+        10,
+      );
+      res.cookie('token', loginData.access_token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        maxAge: jwtExpireSeconds * 1000,
+      });
+    }
+
+    return res.json(loginData);
   }
 
   @Post('unbind')

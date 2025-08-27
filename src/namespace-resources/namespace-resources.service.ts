@@ -40,6 +40,7 @@ import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { ListChildrenRespDto } from './dto/list-children-resp.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -127,6 +128,28 @@ export class NamespaceResourcesService {
       .getMany();
 
     return resources.map((resource) => resource.id);
+  }
+
+  private async hasChildren(
+    namespaceId: string,
+    parents: ResourceMetaDto[],
+    userId: string,
+  ): Promise<boolean> {
+    const children = await this.resourcesService.getSubResources(
+      namespaceId,
+      parents[0].id,
+    );
+    for (const child of children) {
+      const permission = await this.permissionsService.getCurrentPermission(
+        namespaceId,
+        [child, ...parents],
+        userId,
+      );
+      if (permission !== ResourcePermission.NO_ACCESS) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async findByIds(namespaceId: string, ids: Array<string>) {
@@ -385,7 +408,7 @@ export class NamespaceResourcesService {
     };
     // Self and child exclusions
     if (excludeResourceId) {
-      const resourceChildren = await this.getAndFilterSubResources(
+      const resourceChildren = await this.getSubResourcesByUser(
         namespaceId,
         excludeResourceId,
         userId,
@@ -410,7 +433,7 @@ export class NamespaceResourcesService {
     return filteredResources.map((res) => ResourceMetaDto.fromEntity(res));
   }
 
-  async getAndFilterSubResources(
+  async getSubResourcesByUser(
     namespaceId: string,
     resourceId: string,
     userId: string,
@@ -420,6 +443,25 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
+    const children = await this.getSubResourcesByParents(
+      namespaceId,
+      parents,
+      userId,
+    );
+    if (includeParent) {
+      return [parents[0], ...children];
+    }
+    return children;
+  }
+
+  async getSubResourcesByParents(
+    namespaceId: string,
+    parents: ResourceMetaDto[],
+    userId: string,
+  ): Promise<ResourceMetaDto[]> {
+    if (!parents) {
+      return [];
+    }
     const permission = await this.permissionsService.getCurrentPermission(
       namespaceId,
       parents,
@@ -430,7 +472,7 @@ export class NamespaceResourcesService {
     }
     const children = await this.resourcesService.getSubResources(
       namespaceId,
-      resourceId,
+      parents[0].id,
     );
     const filteredChildren: ResourceMetaDto[] = [];
     for (const child of children) {
@@ -443,10 +485,33 @@ export class NamespaceResourcesService {
         filteredChildren.push(child);
       }
     }
-    if (includeParent) {
-      return [parents[0], ...filteredChildren];
-    }
     return filteredChildren;
+  }
+
+  async listChildren(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<ListChildrenRespDto[]> {
+    const parents = await this.resourcesService.getParentResources(
+      namespaceId,
+      resourceId,
+    );
+    const children = await this.getSubResourcesByParents(
+      namespaceId,
+      parents,
+      userId,
+    );
+    const resps: ListChildrenRespDto[] = [];
+    for (const child of children) {
+      const hasChildren = await this.hasChildren(
+        namespaceId,
+        [child, ...parents],
+        userId,
+      );
+      resps.push(new ListChildrenRespDto(child, hasChildren));
+    }
+    return resps;
   }
 
   async getSpaceType(

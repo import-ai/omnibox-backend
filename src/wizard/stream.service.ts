@@ -250,7 +250,7 @@ export class StreamService {
             for (const resource of tool.resources) {
               if (resource.type === 'folder') {
                 const resources =
-                  await this.namespaceResourcesService.getAndFilterSubResources(
+                  await this.namespaceResourcesService.getSubResourcesByUser(
                     tool.namespace_id,
                     resource.id,
                     user.id,

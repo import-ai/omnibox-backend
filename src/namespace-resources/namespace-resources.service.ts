@@ -412,9 +412,13 @@ export class NamespaceResourcesService {
         namespaceId,
         excludeResourceId,
         userId,
-        true,
       );
-      where.id = Not(In(resourceChildren.map((children) => children.id)));
+      where.id = Not(
+        In([
+          excludeResourceId,
+          ...resourceChildren.map((children) => children.id),
+        ]),
+      );
     }
     if (name) {
       where.name = Like(`%${name}%`);
@@ -437,7 +441,6 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-    includeParent: boolean = false,
   ): Promise<ResourceMetaDto[]> {
     const parents = await this.resourcesService.getParentResources(
       namespaceId,
@@ -448,9 +451,6 @@ export class NamespaceResourcesService {
       parents,
       userId,
     );
-    if (includeParent) {
-      return [parents[0], ...children];
-    }
     return children;
   }
 

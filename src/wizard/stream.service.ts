@@ -254,7 +254,6 @@ export class StreamService {
                     tool.namespace_id,
                     resource.id,
                     user.id,
-                    false,
                   );
                 resource.child_ids = resources.map((r) => r.id);
                 tool.visible_resources.push(

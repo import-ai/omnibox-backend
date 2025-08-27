@@ -305,13 +305,13 @@ export class NamespacesService {
 
   async getRoot(namespaceId: string, userId: string) {
     const privateRoot = await this.getPrivateRoot(userId, namespaceId);
-    const privateChildren = await this.resourceService.getSubResourcesByUser(
+    const privateChildren = await this.resourceService.listChildren(
       namespaceId,
       privateRoot.id,
       userId,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
-    const teamspaceChildren = await this.resourceService.getSubResourcesByUser(
+    const teamspaceChildren = await this.resourceService.listChildren(
       namespaceId,
       teamspaceRoot.id,
       userId,

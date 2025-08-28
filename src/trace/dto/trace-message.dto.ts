@@ -3,7 +3,7 @@ import { TraceEventDto } from './trace-event.dto';
 
 export class TraceMessageDto {
   @Expose()
-  timestamp: string;
+  timestamp: number;
 
   @Expose({ name: 'event_name' })
   eventName: string;
@@ -13,7 +13,7 @@ export class TraceMessageDto {
 
   static fromEvent(event: TraceEventDto, userId?: string) {
     const message = new TraceMessageDto();
-    message.timestamp = new Date().toISOString();
+    message.timestamp = Date.now();
     message.eventName = event.name;
     message.userId = userId;
     return message;

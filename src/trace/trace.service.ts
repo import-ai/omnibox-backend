@@ -7,6 +7,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer } from 'kafkajs';
 import { TraceEventDto } from './dto/trace-event.dto';
+import { instanceToPlain } from 'class-transformer';
+import { TraceMessageDto } from './dto/trace-message.dto';
 
 @Injectable()
 export class TraceService implements OnModuleInit, OnModuleDestroy {
@@ -52,13 +54,12 @@ export class TraceService implements OnModuleInit, OnModuleDestroy {
     if (!this.producer || !this.topic) {
       return;
     }
-    const messages = events.map((event) => ({
-      value: JSON.stringify({
-        event,
-        userId,
-        timestamp: new Date().toISOString(),
-      }),
-    }));
+    const messages = events.map((event) => {
+      const dto = TraceMessageDto.fromEvent(event, userId);
+      return {
+        value: JSON.stringify(instanceToPlain(dto)),
+      };
+    });
     await this.producer.send({
       topic: this.topic,
       messages,

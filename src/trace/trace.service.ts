@@ -45,13 +45,17 @@ export class TraceService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async emitTraceEvents(events: TraceEventDto[]): Promise<void> {
+  async emitTraceEvents(
+    events: TraceEventDto[],
+    userId?: string,
+  ): Promise<void> {
     if (!this.producer || !this.topic) {
       return;
     }
     const messages = events.map((event) => ({
       value: JSON.stringify({
         event,
+        userId,
         timestamp: new Date().toISOString(),
       }),
     }));

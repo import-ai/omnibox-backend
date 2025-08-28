@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer } from 'kafkajs';
+import { TraceEventDto } from './dto/trace-event.dto';
 
 @Injectable()
 export class TraceService implements OnModuleInit, OnModuleDestroy {
@@ -44,25 +45,19 @@ export class TraceService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async emitTraceEvent(
-    eventName: string,
-    eventProps: Record<string, any>,
-  ): Promise<void> {
+  async emitTraceEvents(events: TraceEventDto[]): Promise<void> {
     if (!this.producer || !this.topic) {
       return;
     }
-    const message = {
-      key: eventName,
+    const messages = events.map((event) => ({
       value: JSON.stringify({
-        event_name: eventName,
-        event_props: eventProps,
+        event,
         timestamp: new Date().toISOString(),
       }),
-    };
-
+    }));
     await this.producer.send({
       topic: this.topic,
-      messages: [message],
+      messages,
     });
   }
 }

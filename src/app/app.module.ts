@@ -1,4 +1,5 @@
 import {
+  ClassSerializerInterceptor,
   DynamicModule,
   MiddlewareConsumer,
   Module,
@@ -55,12 +56,16 @@ export class AppModule implements NestModule {
       controllers: [AppController],
       providers: [
         {
+          provide: APP_PIPE,
+          useClass: ValidationPipe,
+        },
+        {
           provide: APP_INTERCEPTOR,
           useClass: SnakeCaseInterceptor,
         },
         {
-          provide: APP_PIPE,
-          useClass: ValidationPipe,
+          provide: APP_INTERCEPTOR,
+          useClass: ClassSerializerInterceptor,
         },
       ],
       imports: [

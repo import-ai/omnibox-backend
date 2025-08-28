@@ -17,7 +17,8 @@ import {
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { Request } from 'express';
-import { ResourceMetaDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { ListChildrenRespDto } from './dto/list-children-resp.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -91,7 +92,7 @@ export class NamespaceResourcesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
-  ): Promise<ResourceMetaDto[]> {
+  ): Promise<ListChildrenRespDto[]> {
     return this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,

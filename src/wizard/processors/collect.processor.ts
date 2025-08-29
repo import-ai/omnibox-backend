@@ -26,12 +26,12 @@ export class CollectProcessor extends Processor {
       });
       return {};
     } else if (task.output) {
-      const { markdown, title, metadata, ...attrs } = task.output || {};
+      const { markdown, title, ...attrs } = task.output || {};
 
       let tagIds: string[] | undefined = undefined;
-      const tags: string[] | undefined = metadata?.tags;
+      const tags: string[] | undefined = attrs?.metadata?.tags;
       if (Array.isArray(tags) && tags.length > 0) {
-        metadata.tags = undefined;
+        attrs.metadata.tags = undefined;
         tagIds = await this.tagService.getOrCreateTagsByNames(
           task.namespaceId,
           tags,

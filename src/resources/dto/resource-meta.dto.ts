@@ -18,10 +18,10 @@ export class ResourceMetaDto {
   @Exclude()
   globalPermission: ResourcePermission | null;
 
-  @Exclude()
+  @Expose({ name: 'created_at' })
   createdAt: string;
 
-  @Exclude()
+  @Expose({ name: 'updated_at' })
   updatedAt: string;
 
   static fromEntity(resource: Resource) {

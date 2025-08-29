@@ -29,6 +29,7 @@ export interface BaseAgentRequestDto {
   conversation_id: string;
   tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
   enable_thinking: boolean;
+  lang?: '简体中文' | 'English';
 }
 
 export interface AgentRequestDto extends BaseAgentRequestDto {

@@ -20,6 +20,7 @@ import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 
 @Injectable()
 export class WizardService {
@@ -37,8 +38,14 @@ export class WizardService {
     private readonly attachmentsService: AttachmentsService,
   ) {
     this.processors = {
-      collect: new CollectProcessor(namespaceResourcesService),
-      file_reader: new ReaderProcessor(this.namespaceResourcesService),
+      collect: new CollectProcessor(
+        this.namespaceResourcesService,
+        this.tagService,
+      ),
+      file_reader: new ReaderProcessor(
+        this.namespaceResourcesService,
+        this.tagService,
+      ),
       extract_tags: new ExtractTagsProcessor(
         namespaceResourcesService,
         this.tagService,
@@ -124,7 +131,7 @@ export class WizardService {
   }
 
   async postprocess(task: Task): Promise<Record<string, any>> {
-    let result = {};
+    let result: Record<string, any> = {};
 
     if (task.function in this.processors) {
       const processor = this.processors[task.function];
@@ -134,7 +141,8 @@ export class WizardService {
     // Trigger extract_tags after collect or file_reader tasks finish
     if (
       (task.function === 'collect' || task.function === 'file_reader') &&
-      task.output?.markdown
+      !isEmpty(task.output?.markdown) &&
+      isEmpty(result.tagIds)
     ) {
       await this.triggerExtractTags(task);
     }

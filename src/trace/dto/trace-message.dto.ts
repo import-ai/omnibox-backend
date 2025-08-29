@@ -11,11 +11,19 @@ export class TraceMessageDto {
   @Expose({ name: 'user_id' })
   userId?: string;
 
-  static fromEvent(event: TraceEventDto, userId?: string) {
+  @Expose({ name: 'user_agent' })
+  userAgent?: string;
+
+  @Expose()
+  props: string;
+
+  static fromEvent(event: TraceEventDto, userId?: string, userAgent?: string) {
     const message = new TraceMessageDto();
     message.timestamp = Date.now();
     message.eventName = event.name;
     message.userId = userId;
+    message.userAgent = userAgent;
+    message.props = JSON.stringify(event.props);
     return message;
   }
 }

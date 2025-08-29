@@ -50,12 +50,13 @@ export class TraceService implements OnModuleInit, OnModuleDestroy {
   async emitTraceEvents(
     events: TraceEventDto[],
     userId?: string,
+    userAgent?: string,
   ): Promise<void> {
     if (!this.producer || !this.topic) {
       return;
     }
     const messages = events.map((event) => {
-      const dto = TraceMessageDto.fromEvent(event, userId);
+      const dto = TraceMessageDto.fromEvent(event, userId, userAgent);
       return {
         value: JSON.stringify(instanceToPlain(dto)),
       };

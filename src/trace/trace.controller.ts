@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Req } from '@nestjs/common';
 import { TraceService } from 'omniboxd/trace/trace.service';
 import { TraceReqDto } from './dto/trace-req.dto';
 import { CookieAuth } from 'omniboxd/auth/decorators';
@@ -11,9 +11,11 @@ export class TraceController {
   @Post()
   @CookieAuth({ onAuthFail: 'continue' })
   async trace(
+    @Req() req: Request,
     @Body() traceReq: TraceReqDto,
     @UserId({ optional: true }) userId?: string,
   ): Promise<void> {
-    await this.traceService.emitTraceEvents(traceReq.events, userId);
+    const userAgent = req.headers['user-agent'];
+    await this.traceService.emitTraceEvents(traceReq.events, userId, userAgent);
   }
 }

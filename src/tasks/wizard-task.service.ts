@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { UserService } from 'omniboxd/user/user.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import {
   Resource,
@@ -16,6 +17,7 @@ import { context, propagation } from '@opentelemetry/api';
 export class WizardTaskService {
   constructor(
     @InjectRepository(Task) public taskRepository: Repository<Task>,
+    private readonly userService: UserService,
   ) {}
 
   injectTraceHeaders(task: Partial<Task>) {
@@ -23,6 +25,20 @@ export class WizardTaskService {
     propagation.inject(context.active(), traceHeaders);
     task.payload = { ...(task.payload || {}), trace_headers: traceHeaders };
     return task;
+  }
+
+  private async getUserLanguage(
+    userId: string,
+  ): Promise<'简体中文' | 'English' | undefined> {
+    const languageOption = await this.userService.getOption(userId, 'language');
+    if (languageOption?.value) {
+      if (languageOption.value === 'zh-CN') {
+        return '简体中文';
+      } else if (languageOption.value === 'en-US') {
+        return 'English';
+      }
+    }
+    return undefined;
   }
 
   async create(data: Partial<Task>, repo?: Repository<Task>) {
@@ -51,10 +67,14 @@ export class WizardTaskService {
   }
 
   async createExtractTagsTask(parentTask: Task, repo?: Repository<Task>) {
+    const lang = await this.getUserLanguage(parentTask.userId);
     return this.create(
       {
         function: 'extract_tags',
-        input: { text: parentTask.output?.markdown },
+        input: {
+          text: parentTask.output?.markdown,
+          lang: parentTask.input?.lang || lang,
+        },
         namespaceId: parentTask.namespaceId,
         payload: {
           resource_id:
@@ -74,10 +94,11 @@ export class WizardTaskService {
     input: { text: string },
     repo?: Repository<Task>,
   ) {
+    const lang = await this.getUserLanguage(userId);
     return this.create(
       {
         function: 'generate_title',
-        input,
+        input: { lang, ...input },
         namespaceId,
         payload,
         userId,

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import { User } from 'omniboxd/user/entities/user.entity';
+import { UserService } from 'omniboxd/user/user.service';
 import { ConfigService } from '@nestjs/config';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
@@ -29,6 +30,7 @@ export class ConversationsService {
     private readonly conversationRepository: Repository<Conversation>,
     private readonly dataSource: DataSource,
     private readonly messagesService: MessagesService,
+    private readonly userService: UserService,
     private readonly configService: ConfigService,
     private readonly wizardTaskService: WizardTaskService,
   ) {
@@ -116,11 +118,30 @@ export class ConversationsService {
     if (summary.user_content) {
       const content = summary.user_content.trim();
       if (content.length > 0) {
+        // Get user's language preference
+        let lang: '简体中文' | 'English' | undefined;
+        try {
+          const languageOption = await this.userService.getOption(
+            userId,
+            'language',
+          );
+          if (languageOption?.value) {
+            if (languageOption.value === 'zh-CN') {
+              lang = '简体中文';
+            } else if (languageOption.value === 'en-US') {
+              lang = 'English';
+            }
+          }
+        } catch (error) {
+          // Ignore language preference errors, continue without lang
+        }
+
         const titleCreateResponse = await this.wizardApiService.request(
           'POST',
           '/internal/api/v1/wizard/title',
           {
             text: content,
+            lang,
           },
         );
         conversation.title = titleCreateResponse.title!;

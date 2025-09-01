@@ -54,7 +54,7 @@ export class CollectProcessor extends Processor {
       await this.namespaceResourcesService.update(task.userId, resourceId, {
         namespaceId: task.namespaceId,
         name: title,
-        content: markdown,
+        content: processedMarkdown,
         attrs: mergedAttrs,
         tag_ids: tagIds,
       });

@@ -3,12 +3,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ReaderProcessor } from './reader.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
 describe('ReaderProcessor', () => {
   let processor: ReaderProcessor;
   let namespaceResourcesService: jest.Mocked<NamespaceResourcesService>;
+  let tagService: jest.Mocked<TagService>;
 
   const mockResource: Partial<Resource> = {
     id: 'test-resource-id',
@@ -24,17 +26,26 @@ describe('ReaderProcessor', () => {
       update: jest.fn(),
     };
 
+    const mockTagService = {
+      getOrCreateTagsByNames: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
           provide: NamespaceResourcesService,
           useValue: mockResourcesService,
         },
+        {
+          provide: TagService,
+          useValue: mockTagService,
+        },
       ],
     }).compile();
 
     namespaceResourcesService = module.get(NamespaceResourcesService);
-    processor = new ReaderProcessor(namespaceResourcesService);
+    tagService = module.get(TagService);
+    processor = new ReaderProcessor(namespaceResourcesService, tagService);
   });
 
   afterEach(() => {
@@ -62,15 +73,33 @@ describe('ReaderProcessor', () => {
     });
 
     describe('markdown processing', () => {
-      it('should return empty object when output has no markdown', async () => {
+      it('should process task when output has no markdown', async () => {
         const task = createMockTask({
           output: { title: 'Test Document' },
         });
 
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
+        namespaceResourcesService.update.mockResolvedValue(undefined);
+
         const result = await processor.process(task);
 
-        expect(result).toEqual({});
-        expect(namespaceResourcesService.get).not.toHaveBeenCalled();
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(namespaceResourcesService.get).toHaveBeenCalled();
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-user',
+          'test-resource-id',
+          {
+            namespaceId: 'test-namespace',
+            name: 'Test Document',
+            content: '',
+            attrs: {
+              filename: 'test.pdf',
+            },
+            tag_ids: undefined,
+          },
+        );
       });
 
       it('should return empty object when output is null', async () => {
@@ -138,16 +167,34 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        // Verify markdown was updated with new image URLs
-        expect(task.output!.markdown).toBe(
-          '# Test Document\n\n![Image 1](attachments/attachment-id-1)\n\nSome text.\n\n![Image 2](attachments/attachment-id-2)',
+        // Verify parent process was called and resource updated with processed markdown
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-user',
+          'test-resource-id',
+          {
+            namespaceId: 'test-namespace',
+            name: 'Test Document',
+            content: '# Test Document\n\n![Image 1](attachments/attachment-id-1)\n\nSome text.\n\n![Image 2](attachments/attachment-id-2)',
+            attrs: {
+              filename: 'test.pdf',
+              images: [
+                {
+                  originalLink: 'temp://image1.png',
+                  attachmentId: 'attachment-id-1',
+                  name: 'image1.png',
+                  mimetype: 'image/png',
+                },
+                {
+                  originalLink: 'temp://image2.jpg',
+                  attachmentId: 'attachment-id-2',
+                  mimetype: 'image/jpeg',
+                },
+              ],
+            },
+            tag_ids: undefined,
+          },
         );
-
-        // Verify images array was cleared
-        expect(task.output!.images).toBeUndefined();
-
-        // Verify parent process was called
-        expect(result).toEqual({ resourceId: 'test-resource-id' });
       });
 
       it('should handle multiple occurrences of the same image link', async () => {
@@ -172,10 +219,29 @@ describe('ReaderProcessor', () => {
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
-        await processor.process(task);
+        const result = await processor.process(task);
 
-        expect(task.output!.markdown).toBe(
-          '![Image](attachments/attachment-id)\n\nText with ![same image](attachments/attachment-id) again.',
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-user',
+          'test-resource-id',
+          {
+            namespaceId: 'test-namespace',
+            name: undefined,
+            content: '![Image](attachments/attachment-id)\n\nText with ![same image](attachments/attachment-id) again.',
+            attrs: {
+              filename: 'test.pdf',
+              images: [
+                {
+                  originalLink: 'temp://image.png',
+                  attachmentId: 'attachment-id',
+                  name: 'image.png',
+                  mimetype: 'image/png',
+                },
+              ],
+            },
+            tag_ids: undefined,
+          },
         );
       });
 
@@ -224,10 +290,27 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        expect(task.output!.markdown).toBe(
-          '![Image](attachments/attachment-id)',
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-user',
+          'test-resource-id',
+          {
+            namespaceId: 'test-namespace',
+            name: undefined,
+            content: '![Image](attachments/attachment-id)',
+            attrs: {
+              filename: 'test.pdf',
+              images: [
+                {
+                  originalLink: 'temp://image.png',
+                  attachmentId: 'attachment-id',
+                  mimetype: 'image/png',
+                },
+              ],
+            },
+            tag_ids: undefined,
+          },
         );
-        expect(result).toEqual({ resourceId: 'test-resource-id' });
       });
     });
 
@@ -282,8 +365,21 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        expect(task.output!.images).toBeUndefined();
-        expect(result).toEqual({ resourceId: 'test-resource-id' });
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-user',
+          'test-resource-id',
+          {
+            namespaceId: 'test-namespace',
+            name: undefined,
+            content: '# Test Document',
+            attrs: {
+              filename: 'test.pdf',
+              images: [],
+            },
+            tag_ids: undefined,
+          },
+        );
       });
 
       it('should handle markdown with no image links even when images array exists', async () => {
@@ -306,13 +402,29 @@ describe('ReaderProcessor', () => {
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
-        await processor.process(task);
+        const result = await processor.process(task);
 
-        // Markdown should remain unchanged since no image links found
-        expect(task.output!.markdown).toBe(
-          '# Test Document\n\nNo images here.',
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-user',
+          'test-resource-id',
+          {
+            namespaceId: 'test-namespace',
+            name: undefined,
+            content: '# Test Document\n\nNo images here.',
+            attrs: {
+              filename: 'test.pdf',
+              images: [
+                {
+                  originalLink: 'temp://image.png',
+                  attachmentId: 'attachment-id',
+                  mimetype: 'image/png',
+                },
+              ],
+            },
+            tag_ids: undefined,
+          },
         );
-        expect(task.output!.images).toBeUndefined();
       });
 
       it('empty dict exception', async () => {

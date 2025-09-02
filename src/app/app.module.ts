@@ -58,7 +58,11 @@ export class AppModule implements NestModule {
       providers: [
         {
           provide: APP_PIPE,
-          useClass: ValidationPipe,
+          useValue: new ValidationPipe({
+            transform: true,
+            // whitelist: true,
+            // forbidNonWhitelisted: true,
+          }),
         },
         {
           provide: APP_INTERCEPTOR,

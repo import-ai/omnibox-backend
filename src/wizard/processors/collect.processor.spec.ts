@@ -3,12 +3,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { CollectProcessor } from './collect.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
 describe('CollectProcessor', () => {
   let processor: CollectProcessor;
   let namespaceResourcesService: jest.Mocked<NamespaceResourcesService>;
+  let tagService: jest.Mocked<TagService>;
 
   const mockResource: Partial<Resource> = {
     id: 'test-resource-id',
@@ -24,17 +26,26 @@ describe('CollectProcessor', () => {
       update: jest.fn(),
     };
 
+    const mockTagService = {
+      getOrCreateTagsByNames: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
           provide: NamespaceResourcesService,
           useValue: mockResourcesService,
         },
+        {
+          provide: TagService,
+          useValue: mockTagService,
+        },
       ],
     }).compile();
 
     namespaceResourcesService = module.get(NamespaceResourcesService);
-    processor = new CollectProcessor(namespaceResourcesService);
+    tagService = module.get(TagService);
+    processor = new CollectProcessor(namespaceResourcesService, tagService);
   });
 
   afterEach(() => {
@@ -291,6 +302,90 @@ describe('CollectProcessor', () => {
           },
         );
       });
+
+      it('should handle tags in metadata and return tagIds', async () => {
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          output: {
+            markdown: 'content',
+            title: 'title',
+            metadata: {
+              tags: ['tag1', 'tag2', 'tag3'],
+              otherMeta: 'value',
+            },
+          },
+        });
+
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
+        namespaceResourcesService.update.mockResolvedValue(undefined);
+        tagService.getOrCreateTagsByNames.mockResolvedValue(['id1', 'id2', 'id3']);
+
+        const result = await processor.process(task);
+
+        expect(tagService.getOrCreateTagsByNames).toHaveBeenCalledWith(
+          'test-namespace',
+          ['tag1', 'tag2', 'tag3'],
+        );
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-user',
+          'test-resource-id',
+          {
+            namespaceId: 'test-namespace',
+            name: 'title',
+            content: 'content',
+            attrs: {
+              url: 'https://example.com',
+              metadata: {
+                otherMeta: 'value',
+              },
+            },
+            tag_ids: ['id1', 'id2', 'id3'],
+          },
+        );
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: ['id1', 'id2', 'id3'] });
+      });
+
+      it('should handle images in output and replace links', async () => {
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          output: {
+            markdown: 'content with ![image](http://example.com/image.png)',
+            title: 'title',
+            images: [{
+              originalLink: 'http://example.com/image.png',
+              attachmentId: 'attachment-123',
+            }],
+          },
+        });
+
+        namespaceResourcesService.get.mockResolvedValue(
+          mockResource as Resource,
+        );
+        namespaceResourcesService.update.mockResolvedValue(undefined);
+
+        const result = await processor.process(task);
+
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-user',
+          'test-resource-id',
+          {
+            namespaceId: 'test-namespace',
+            name: 'title',
+            content: 'content with ![image](attachments/attachment-123)',
+            attrs: {
+              url: 'https://example.com',
+              images: [{
+                originalLink: 'http://example.com/image.png',
+                attachmentId: 'attachment-123',
+              }],
+            },
+            tag_ids: undefined,
+          },
+        );
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+      });
     });
 
     describe('edge cases', () => {
@@ -327,13 +422,14 @@ describe('CollectProcessor', () => {
           {
             namespaceId: 'test-namespace',
             name: undefined,
-            content: undefined,
+            content: '',
             attrs: {
               url: 'https://example.com',
             },
+            tag_ids: undefined,
           },
         );
-        expect(result).toEqual({ resourceId: 'test-resource-id' });
+        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
       });
     });
   });

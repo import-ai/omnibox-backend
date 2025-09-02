@@ -294,6 +294,7 @@ export class StreamService {
         messages,
         tools: body.tools,
         enable_thinking: body.enable_thinking,
+        lang: body.lang,
       };
 
       this.stream(

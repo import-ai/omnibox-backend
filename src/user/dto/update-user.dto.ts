@@ -5,6 +5,7 @@ import {
   MaxLength,
   IsOptional,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class UpdateUserDto {
   @IsString()
@@ -13,6 +14,7 @@ export class UpdateUserDto {
   @IsOptional()
   username?: string;
 
+  @Transform(({ value }) => value === '' ? undefined : value)
   @IsEmail()
   @IsOptional()
   email?: string;

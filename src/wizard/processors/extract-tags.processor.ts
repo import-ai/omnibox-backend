@@ -5,6 +5,7 @@ import { TagService } from 'omniboxd/tag/tag.service';
 import { BadRequestException } from '@nestjs/common';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { ExtractTagsOutputDto } from 'omniboxd/wizard/processors/dto/extract-tags.output.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 
 export class ExtractTagsProcessor extends Processor {
   constructor(
@@ -38,10 +39,14 @@ export class ExtractTagsProcessor extends Processor {
       );
 
       // Update the resource with extracted tag IDs from external service
-      await this.namespaceResourcesService.update(task.userId, resourceId, {
-        namespaceId: task.namespaceId,
-        tag_ids: tagIds,
-      });
+      await this.namespaceResourcesService.update(
+        task.userId,
+        resourceId,
+        Object.assign(new UpdateResourceDto(), {
+          namespaceId: task.namespaceId,
+          tag_ids: tagIds,
+        }),
+      );
 
       return { resourceId, tags: tagNames, tagIds };
     }

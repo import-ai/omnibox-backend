@@ -38,26 +38,30 @@ export class AppAuthorizationService {
 
   private async generateUniqueVerifyCode(): Promise<string> {
     let verifyCode = '';
-    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 100;
 
-    while (!isUnique) {
+    while (attempts < maxAttempts) {
       verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      const existingAuth = await this.appAuthorizationRepository.findOne({
-        where: {
-          appId: 'wechat_bot',
-          attrs: {
-            verify_code: verifyCode,
-          },
-        },
+      const existingAuths = await this.appAuthorizationRepository.find({
+        where: { appId: 'wechat_bot' },
       });
 
-      if (!existingAuth) {
-        isUnique = true;
+      const codeExists = existingAuths.some(
+        (auth) => auth.attrs?.verify_code === verifyCode,
+      );
+
+      if (!codeExists) {
+        return verifyCode;
       }
+
+      attempts++;
     }
 
-    return verifyCode;
+    throw new Error(
+      'Failed to generate unique verify code after maximum attempts',
+    );
   }
 
   async create(

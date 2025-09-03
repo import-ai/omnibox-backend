@@ -440,7 +440,7 @@ export class NamespaceResourcesService {
     resourceId: string,
     userId: string,
   ): Promise<ResourceMetaDto[]> {
-    const parents = await this.resourcesService.getParentResources(
+    const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
     );
@@ -491,7 +491,7 @@ export class NamespaceResourcesService {
     resourceId: string,
     userId: string,
   ): Promise<ListChildrenRespDto[]> {
-    const parents = await this.resourcesService.getParentResources(
+    const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
     );
@@ -538,7 +538,7 @@ export class NamespaceResourcesService {
     if (resource.namespaceId !== namespaceId) {
       throw new NotFoundException('Not found');
     }
-    const parentResources = await this.resourcesService.getParentResources(
+    const parentResources = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resource.parentId,
     );

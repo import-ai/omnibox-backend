@@ -61,7 +61,7 @@ export class SharedResourcesService {
       throw new NotFoundException('Resource not found');
     }
     if (resource.id !== share.resourceId) {
-      const parents = await this.resourcesService.getParentResources(
+      const parents = await this.resourcesService.getParentResourcesOrFail(
         share.namespaceId,
         resource.parentId,
       );

@@ -3,7 +3,11 @@ import { HttpStatus } from '@nestjs/common';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
-import { TaskDto, TaskMetaDto } from 'omniboxd/tasks/dto/task.dto';
+import {
+  InternalTaskDto,
+  TaskDto,
+  TaskMetaDto,
+} from 'omniboxd/tasks/dto/task.dto';
 
 /**
  * Mock wizard worker that simulates the wizard worker service behavior
@@ -198,7 +202,10 @@ class MockWizardWorker {
    * Simulates upsert_index task processing
    */
   private processUpsertIndexTask(task: TaskDto): { output: any } {
-    console.log({ taskId: task.id, function: 'upsertIndex' });
+    expect(task.input).toHaveProperty('meta_info');
+    expect(task.input.meta_info).toHaveProperty('resource_id');
+    expect(task.input.meta_info).toHaveProperty('user_id');
+    expect(task.input.meta_info).toHaveProperty('parent_id');
     return {
       output: {
         indexed: true,
@@ -290,6 +297,70 @@ describe('Task Pipeline (e2e)', () => {
   });
 
   describe('Basic Task Processing', () => {
+    it('create resource trigger upsertIndex', async () => {
+      mockWorker.startPolling();
+
+      const createResponse = (
+        await client
+          .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+          .send({
+            name: 'Test Document',
+            content: 'Sample content for the test document.',
+            parentId: client.namespace.root_resource_id,
+            namespaceId: client.namespace.id,
+            resourceType: 'doc',
+          })
+      ).body;
+
+      const taskMetas: TaskMetaDto[] = (
+        await client.get(`/api/v1/namespaces/${client.namespace.id}/tasks`)
+      ).body;
+
+      const upsertTaskMeta = taskMetas.find(
+        (t: TaskMetaDto) =>
+          t.function === 'upsert_index' &&
+          t.attrs?.resource_id === createResponse.id,
+      );
+
+      expect(upsertTaskMeta).toBeDefined();
+      const upsertTask: InternalTaskDto = (
+        await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${upsertTaskMeta?.id}`,
+        )
+      ).body;
+      expect(upsertTask).toBeDefined();
+      expect(upsertTask.input.meta_info.parent_id).toBeDefined();
+      expect(upsertTask.input.meta_info.parent_id).not.toBeNull();
+
+      const patchResponse = await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${createResponse.id}`,
+        )
+        .send({
+          namespaceId: client.namespace.id,
+          content: 'Updated content for the test document.',
+        });
+      expect(patchResponse.status).toBe(200);
+      const patchTaskMetas: TaskMetaDto[] = (
+        await client.get(`/api/v1/namespaces/${client.namespace.id}/tasks`)
+      ).body;
+      const patchUpsertTaskMeta = patchTaskMetas.find(
+        (t: TaskMetaDto) =>
+          t.function === 'upsert_index' &&
+          t.attrs?.resource_id === createResponse.id &&
+          t.id !== upsertTaskMeta?.id,
+      );
+      expect(patchUpsertTaskMeta).toBeDefined();
+      const patchUpsertTask: InternalTaskDto = (
+        await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${patchUpsertTaskMeta?.id}`,
+        )
+      ).body;
+      expect(patchUpsertTask).toBeDefined();
+      expect(patchUpsertTask.input.meta_info.parent_id).toBeDefined();
+      expect(patchUpsertTask.input.meta_info.parent_id).not.toBeNull();
+    });
+
     it('should process a collect task end-to-end', async () => {
       // Start the mock worker
       mockWorker.startPolling();
@@ -343,6 +414,19 @@ describe('Task Pipeline (e2e)', () => {
       expect(resourceResponse.status).toBe(200);
       expect(resourceResponse.body.id).toBe(resourceId);
       expect(resourceResponse.body.content).toContain('Test Page Title');
+
+      const taskMetas: TaskMetaDto[] = (
+        await client.get(`/api/v1/namespaces/${client.namespace.id}/tasks`)
+      ).body;
+      const upsertTaskMeta = taskMetas.find(
+        (t: TaskMetaDto) => t.function === 'upsert_index',
+      );
+      const upsertTask: InternalTaskDto = (
+        await client.get(
+          `/api/v1/namespaces/${client.namespace.id}/tasks/${upsertTaskMeta?.id}`,
+        )
+      ).body;
+      expect(upsertTask).toBeDefined();
     });
 
     it('should handle task exceptions properly', async () => {

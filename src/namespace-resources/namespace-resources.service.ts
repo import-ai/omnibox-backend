@@ -49,8 +49,6 @@ export class NamespaceResourcesService {
   constructor(
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
-    @InjectRepository(Task)
-    private readonly taskRepository: Repository<Task>,
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
     private readonly tagService: TagService,
@@ -586,28 +584,11 @@ export class NamespaceResourcesService {
   }
 
   async update(userId: string, id: string, data: UpdateResourceDto) {
-    const resource = await this.resourceRepository.findOne({
-      where: { id, namespaceId: data.namespaceId },
-    });
-
-    if (!resource) {
-      throw new NotFoundException('Resource not found.');
-    }
-
-    // Use provided tag_ids directly
-    const tagIds = data.tag_ids || resource.tagIds || [];
-
-    const newResource = this.resourceRepository.create({
-      ...resource,
-      ...data,
-      namespaceId: data.namespaceId,
-      tagIds: tagIds.length > 0 ? tagIds : [],
-    });
-    const savedNewResource = await this.resourceRepository.save(newResource);
-    await this.wizardTaskService.createIndexTask(
-      TASK_PRIORITY,
+    await this.resourcesService.updateResource(
+      data.namespaceId,
+      id,
       userId,
-      savedNewResource,
+      data.toUpdateReq(),
     );
   }
 

@@ -24,7 +24,7 @@ export class ResourcesService {
       return [];
     }
     const resources = await this.getParentResources(namespaceId, resourceId);
-    if (!resources) {
+    if (resources.length === 0) {
       throw new NotFoundException('Resource not found');
     }
     return resources;
@@ -34,11 +34,8 @@ export class ResourcesService {
     namespaceId: string,
     resourceId: string | null,
   ): Promise<ResourceMetaDto[]> {
-    if (!resourceId) {
-      return [];
-    }
     const resources: Resource[] = [];
-    while (true) {
+    while (resourceId) {
       const resource = await this.resourceRepository.findOne({
         select: [
           'id',
@@ -55,9 +52,6 @@ export class ResourcesService {
         return [];
       }
       resources.push(resource);
-      if (!resource.parentId) {
-        break;
-      }
       resourceId = resource.parentId;
     }
     return resources.map((r) => ResourceMetaDto.fromEntity(r));

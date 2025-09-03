@@ -17,6 +17,7 @@ import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 // Set environment variable to avoid the error in SearchService constructor
 process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8000';
@@ -109,6 +110,12 @@ describe('SearchController (e2e)', () => {
           provide: NamespaceResourcesService,
           useValue: {
             listAllResources: jest.fn().mockResolvedValue([]),
+          },
+        },
+        {
+          provide: ResourcesService,
+          useValue: {
+            getParentResources: jest.fn().mockResolvedValue([]),
           },
         },
         {

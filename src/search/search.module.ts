@@ -11,6 +11,7 @@ import { ConversationsModule } from 'omniboxd/conversations/conversations.module
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
   exports: [SearchService],
@@ -19,6 +20,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
   imports: [
     PermissionsModule,
     NamespaceResourcesModule,
+    ResourcesModule,
     MessagesModule,
     ConversationsModule,
     TasksModule,

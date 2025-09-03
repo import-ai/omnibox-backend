@@ -18,6 +18,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 const TASK_PRIORITY = 4;
 
@@ -28,6 +29,7 @@ export class SearchService {
   constructor(
     private readonly permissionsService: PermissionsService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
     private readonly configService: ConfigService,
@@ -70,12 +72,20 @@ export class SearchService {
           continue;
         }
         seenResourceIds.add(chunk.resourceId);
+        const parentResources = await this.resourcesService.getParentResources(
+          namespaceId,
+          chunk.resourceId,
+        );
+        if (!parentResources) {
+          continue;
+        }
         if (userId) {
           const hasPermission = await this.permissionsService.userHasPermission(
             namespaceId,
             chunk.resourceId,
             userId,
             ResourcePermission.CAN_VIEW,
+            parentResources,
           );
           if (!hasPermission) {
             continue;

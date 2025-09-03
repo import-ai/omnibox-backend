@@ -16,15 +16,26 @@ export class ResourcesService {
     private readonly wizardTaskService: WizardTaskService,
   ) {}
 
-  async getParentResources(
+  async getParentResourcesOrFail(
     namespaceId: string,
     resourceId: string | null,
   ): Promise<ResourceMetaDto[]> {
     if (!resourceId) {
       return [];
     }
+    const resources = await this.getParentResources(namespaceId, resourceId);
+    if (resources.length === 0) {
+      throw new NotFoundException('Resource not found');
+    }
+    return resources;
+  }
+
+  async getParentResources(
+    namespaceId: string,
+    resourceId: string | null,
+  ): Promise<ResourceMetaDto[]> {
     const resources: Resource[] = [];
-    while (true) {
+    while (resourceId) {
       const resource = await this.resourceRepository.findOne({
         select: [
           'id',
@@ -38,12 +49,9 @@ export class ResourcesService {
         where: { namespaceId, id: resourceId },
       });
       if (!resource) {
-        throw new NotFoundException('Resource not found');
+        return [];
       }
       resources.push(resource);
-      if (!resource.parentId) {
-        break;
-      }
       resourceId = resource.parentId;
     }
     return resources.map((r) => ResourceMetaDto.fromEntity(r));

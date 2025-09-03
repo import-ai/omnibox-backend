@@ -44,15 +44,13 @@ export class AppAuthorizationService {
     while (attempts < maxAttempts) {
       verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      const existingAuths = await this.appAuthorizationRepository.find({
-        where: { appId: 'wechat_bot' },
-      });
+      const existingAuth = await this.appAuthorizationRepository
+        .createQueryBuilder('auth')
+        .where('auth.appId = :appId', { appId: 'wechat_bot' })
+        .andWhere("auth.attrs->>'verify_code' = :verifyCode", { verifyCode })
+        .getOne();
 
-      const codeExists = existingAuths.some(
-        (auth) => auth.attrs?.verify_code === verifyCode,
-      );
-
-      if (!codeExists) {
+      if (!existingAuth) {
         return verifyCode;
       }
 

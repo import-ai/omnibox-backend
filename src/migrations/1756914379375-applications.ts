@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 import { BaseColumns } from './base-columns';
 
-async function createAppAuthorizationsTable(
+async function createApplicationssTable(
   queryRunner: QueryRunner,
 ): Promise<void> {
   const table = new Table({
@@ -69,9 +69,9 @@ async function createAppAuthorizationsTable(
   await queryRunner.createTable(table, true, true, true);
 }
 
-export class AppAuthorizations1756914379375 implements MigrationInterface {
+export class Applicationss1756914379375 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await createAppAuthorizationsTable(queryRunner);
+    await createApplicationssTable(queryRunner);
   }
 
   public down(): Promise<void> {

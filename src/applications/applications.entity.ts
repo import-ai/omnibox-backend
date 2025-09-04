@@ -1,9 +1,9 @@
 import { Base } from 'omniboxd/common/base.entity';
 import { Column, Entity, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
-@Entity('app_authorizations')
+@Entity('applications')
 @Unique(['userId', 'namespaceId', 'appId'])
-export class AppAuthorization extends Base {
+export class Applications extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

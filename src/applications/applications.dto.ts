@@ -1,12 +1,9 @@
 import { IsOptional, IsString, IsUUID, IsObject } from 'class-validator';
 
-export class CreateAppAuthorizationDto {
+export class CreateApplicationsDto {
   @IsString()
   user_id: string;
 
-  @IsString()
-  app_id: string;
-
   @IsUUID()
   @IsOptional()
   api_key_id?: string;
@@ -16,21 +13,7 @@ export class CreateAppAuthorizationDto {
   attrs?: Record<string, any>;
 }
 
-export class UpdateAppAuthorizationDto {
-  @IsString()
-  @IsOptional()
-  app_id?: string;
-
-  @IsUUID()
-  @IsOptional()
-  api_key_id?: string;
-
-  @IsObject()
-  @IsOptional()
-  attrs?: Record<string, any>;
-}
-
-export class AppAuthorizationResponseDto {
+export class ApplicationsResponseDto {
   @IsUUID()
   id: string;
 
@@ -53,4 +36,17 @@ export class AppAuthorizationResponseDto {
   created_at: Date;
 
   updated_at: Date;
+
+  static fromEntity(entity: any): ApplicationsResponseDto {
+    const dto = new ApplicationsResponseDto();
+    dto.id = entity.id;
+    dto.namespace_id = entity.namespaceId;
+    dto.user_id = entity.userId;
+    dto.app_id = entity.appId;
+    dto.api_key_id = entity.apiKeyId;
+    dto.attrs = entity.attrs;
+    dto.created_at = entity.createdAt;
+    dto.updated_at = entity.updatedAt;
+    return dto;
+  }
 }

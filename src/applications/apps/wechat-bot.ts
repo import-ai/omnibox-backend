@@ -12,7 +12,7 @@ import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { ApplicationsResponseDto } from 'omniboxd/applications/applications.dto';
 
 export interface WechatBotCallbackDto {
-  code: string;
+  verify_code: string;
   user_id: string;
   nickname: string;
 }
@@ -63,7 +63,7 @@ export class WechatBot extends BaseApp {
     _namespaceId: string,
     _userId: string,
     createDto: any,
-  ): Promise<Record<string, any>> {
+  ): Promise<{ verify_code: string } & Record<string, any>> {
     const attrs = createDto.attrs || {};
     return {
       ...attrs,
@@ -72,7 +72,7 @@ export class WechatBot extends BaseApp {
   }
 
   async callback(data: WechatBotCallbackDto): Promise<Record<string, any>> {
-    const entity = await this.getEntityByVerifyCode(data.code);
+    const entity = await this.getEntityByVerifyCode(data.verify_code);
 
     if (!entity) {
       return { status: 'error', message: 'Invalid verification code' };

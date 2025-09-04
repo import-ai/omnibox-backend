@@ -100,7 +100,11 @@ describe('ExtractTagsProcessor', () => {
         output: { tags: ['test', 'important', 'javascript'] },
       });
 
-      tagService.getOrCreateTagsByNames.mockResolvedValue(['tag-1', 'tag-2', 'tag-3']);
+      tagService.getOrCreateTagsByNames.mockResolvedValue([
+        'tag-1',
+        'tag-2',
+        'tag-3',
+      ]);
 
       namespaceResourcesService.update.mockResolvedValue(undefined);
 
@@ -130,7 +134,10 @@ describe('ExtractTagsProcessor', () => {
         output: { tags: ['new-tag', 'another-new-tag'] },
       });
 
-      tagService.getOrCreateTagsByNames.mockResolvedValue(['new-tag-1', 'new-tag-2']);
+      tagService.getOrCreateTagsByNames.mockResolvedValue([
+        'new-tag-1',
+        'new-tag-2',
+      ]);
 
       namespaceResourcesService.update.mockResolvedValue(undefined);
 
@@ -160,7 +167,10 @@ describe('ExtractTagsProcessor', () => {
         output: { tags: ['existing-tag', 'new-tag'] },
       });
 
-      tagService.getOrCreateTagsByNames.mockResolvedValue(['existing-1', 'new-1']);
+      tagService.getOrCreateTagsByNames.mockResolvedValue([
+        'existing-1',
+        'new-1',
+      ]);
 
       namespaceResourcesService.update.mockResolvedValue(undefined);
 
@@ -258,7 +268,11 @@ describe('ExtractTagsProcessor', () => {
         },
       });
 
-      tagService.getOrCreateTagsByNames.mockResolvedValue(['tag-1', 'tag-2', 'tag-3']);
+      tagService.getOrCreateTagsByNames.mockResolvedValue([
+        'tag-1',
+        'tag-2',
+        'tag-3',
+      ]);
 
       namespaceResourcesService.update.mockResolvedValue(undefined);
 
@@ -278,7 +292,15 @@ describe('ExtractTagsProcessor', () => {
 
       expect(tagService.getOrCreateTagsByNames).toHaveBeenCalledWith(
         'test-namespace',
-        ['valid-tag', '', null, undefined, 123, ' whitespace-only ', 'another-valid'],
+        [
+          'valid-tag',
+          '',
+          null,
+          undefined,
+          123,
+          ' whitespace-only ',
+          'another-valid',
+        ],
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(

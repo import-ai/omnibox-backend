@@ -320,7 +320,11 @@ describe('CollectProcessor', () => {
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
-        tagService.getOrCreateTagsByNames.mockResolvedValue(['id1', 'id2', 'id3']);
+        tagService.getOrCreateTagsByNames.mockResolvedValue([
+          'id1',
+          'id2',
+          'id3',
+        ]);
 
         const result = await processor.process(task);
 
@@ -344,7 +348,10 @@ describe('CollectProcessor', () => {
             tag_ids: ['id1', 'id2', 'id3'],
           },
         );
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: ['id1', 'id2', 'id3'] });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: ['id1', 'id2', 'id3'],
+        });
       });
 
       it('should handle images in output and replace links', async () => {
@@ -353,10 +360,12 @@ describe('CollectProcessor', () => {
           output: {
             markdown: 'content with ![image](http://example.com/image.png)',
             title: 'title',
-            images: [{
-              originalLink: 'http://example.com/image.png',
-              attachmentId: 'attachment-123',
-            }],
+            images: [
+              {
+                originalLink: 'http://example.com/image.png',
+                attachmentId: 'attachment-123',
+              },
+            ],
           },
         });
 
@@ -376,15 +385,20 @@ describe('CollectProcessor', () => {
             content: 'content with ![image](attachments/attachment-123)',
             attrs: {
               url: 'https://example.com',
-              images: [{
-                originalLink: 'http://example.com/image.png',
-                attachmentId: 'attachment-123',
-              }],
+              images: [
+                {
+                  originalLink: 'http://example.com/image.png',
+                  attachmentId: 'attachment-123',
+                },
+              ],
             },
             tag_ids: undefined,
           },
         );
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: undefined,
+        });
       });
     });
 
@@ -429,7 +443,10 @@ describe('CollectProcessor', () => {
             tag_ids: undefined,
           },
         );
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: undefined,
+        });
       });
     });
   });

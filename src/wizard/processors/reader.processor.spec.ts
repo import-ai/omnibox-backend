@@ -85,7 +85,10 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: undefined,
+        });
         expect(namespaceResourcesService.get).toHaveBeenCalled();
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-user',
@@ -168,14 +171,18 @@ describe('ReaderProcessor', () => {
         const result = await processor.process(task);
 
         // Verify parent process was called and resource updated with processed markdown
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: undefined,
+        });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-user',
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
             name: 'Test Document',
-            content: '# Test Document\n\n![Image 1](attachments/attachment-id-1)\n\nSome text.\n\n![Image 2](attachments/attachment-id-2)',
+            content:
+              '# Test Document\n\n![Image 1](attachments/attachment-id-1)\n\nSome text.\n\n![Image 2](attachments/attachment-id-2)',
             attrs: {
               filename: 'test.pdf',
               images: [
@@ -221,14 +228,18 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: undefined,
+        });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-user',
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
             name: undefined,
-            content: '![Image](attachments/attachment-id)\n\nText with ![same image](attachments/attachment-id) again.',
+            content:
+              '![Image](attachments/attachment-id)\n\nText with ![same image](attachments/attachment-id) again.',
             attrs: {
               filename: 'test.pdf',
               images: [
@@ -290,7 +301,10 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: undefined,
+        });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-user',
           'test-resource-id',
@@ -365,7 +379,10 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: undefined,
+        });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-user',
           'test-resource-id',
@@ -404,7 +421,10 @@ describe('ReaderProcessor', () => {
 
         const result = await processor.process(task);
 
-        expect(result).toEqual({ resourceId: 'test-resource-id', tagIds: undefined });
+        expect(result).toEqual({
+          resourceId: 'test-resource-id',
+          tagIds: undefined,
+        });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-user',
           'test-resource-id',

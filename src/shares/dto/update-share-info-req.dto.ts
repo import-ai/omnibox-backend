@@ -1,5 +1,12 @@
 import { Expose } from 'class-transformer';
-import { IsBoolean, IsEnum, IsOptional, IsString, IsDate, IsInt } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsDate,
+  IsInt,
+} from 'class-validator';
 import { ShareType } from '../entities/share.entity';
 
 export class UpdateShareInfoReqDto {

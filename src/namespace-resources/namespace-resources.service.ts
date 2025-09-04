@@ -538,10 +538,11 @@ export class NamespaceResourcesService {
     if (resource.namespaceId !== namespaceId) {
       throw new NotFoundException('Not found');
     }
-    const parentResources = await this.resourcesService.getParentResourcesOrFail(
-      namespaceId,
-      resource.parentId,
-    );
+    const parentResources =
+      await this.resourcesService.getParentResourcesOrFail(
+        namespaceId,
+        resource.parentId,
+      );
 
     const rootResourceId = parentResources
       ? parentResources[parentResources.length - 1].id

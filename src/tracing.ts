@@ -50,6 +50,9 @@ if (isTracingEnabled()) {
           if (req.user?.id) {
             span.setAttribute('user.id', req.user.id);
           }
+          console.log(
+            `resp span ${span.spanContext().spanId} user ${req.user?.id}`,
+          );
         },
       }),
       new ExpressInstrumentation(),

@@ -1,7 +1,10 @@
 import { Request, Response } from 'express';
-import { Get, Post, Query, Controller, Req, Res } from '@nestjs/common';
+import { Get, Post, Query, Body, Controller, Req, Res } from '@nestjs/common';
 import { AuthService } from 'omniboxd/auth/auth.service';
-import { WechatService } from 'omniboxd/auth/wechat/wechat.service';
+import {
+  WechatService,
+  WechatUserInfo,
+} from 'omniboxd/auth/wechat/wechat.service';
 import { SocialController } from 'omniboxd/auth/social.controller';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ConfigService } from '@nestjs/config';
@@ -25,14 +28,14 @@ export class WechatController extends SocialController {
 
   @Public()
   @Get('auth-url')
-  getAuthUrl() {
-    return this.wechatService.authUrl();
+  getAuthUrl(@Query('type') type: 'new' | 'old' = 'new') {
+    return this.wechatService.authUrl(type);
   }
 
   @Public()
   @Get('qrcode')
-  getQrCode() {
-    return this.wechatService.getQrCodeParams();
+  getQrCode(@Query('type') type: 'new' | 'old' = 'new') {
+    return this.wechatService.getQrCodeParams(type);
   }
 
   @Public()
@@ -65,6 +68,24 @@ export class WechatController extends SocialController {
     }
 
     return res.json(loginData);
+  }
+
+  @Public()
+  @Get('migration/callback')
+  async migrationCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+  ): Promise<WechatUserInfo> {
+    return await this.wechatService.migrationCallback(code, state);
+  }
+
+  @Public()
+  @Post('migration')
+  async migration(
+    @Body('oldUnionid') oldUnionid: string,
+    @Body('newUnionid') newUnionid: string,
+  ) {
+    await this.wechatService.migration(oldUnionid, newUnionid);
   }
 
   @Post('unbind')

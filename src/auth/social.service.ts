@@ -29,8 +29,8 @@ export class SocialService {
     }
   }
 
-  protected setState(type: string) {
-    const state = generateId();
+  protected setState(type: string, prefix: string = '') {
+    const state = `${prefix}_${generateId()}`;
     this.states.set(state, {
       type,
       createdAt: Date.now(),

@@ -11,15 +11,25 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 
+export interface WechatUserInfo {
+  unionid: string;
+  nickname: string;
+  openid: string;
+}
+
 @Injectable()
 export class WechatService extends SocialService {
   private readonly logger = new Logger(WechatService.name);
 
   private readonly appId: string;
   private readonly appSecret: string;
-  private readonly redirectUri: string;
   private readonly openAppId: string;
   private readonly openAppSecret: string;
+  private readonly oldAppId: string;
+  private readonly oldAppSecret: string;
+  private readonly oldOpenAppId: string;
+  private readonly oldOpenAppSecret: string;
+  private readonly redirectUri: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -34,16 +44,29 @@ export class WechatService extends SocialService {
       'OBB_WECHAT_APP_SECRET',
       '',
     );
-    this.redirectUri = this.configService.get<string>(
-      'OBB_WECHAT_REDIRECT_URI',
-      '',
-    );
     this.openAppId = this.configService.get<string>(
       'OBB_OPEN_WECHAT_APP_ID',
       '',
     );
     this.openAppSecret = this.configService.get<string>(
       'OBB_OPEN_WECHAT_APP_SECRET',
+      '',
+    );
+    this.oldAppId = this.configService.get<string>('OBB_WECHAT_OLD_APP_ID', '');
+    this.oldAppSecret = this.configService.get<string>(
+      'OBB_WECHAT_OLD_APP_SECRET',
+      '',
+    );
+    this.oldOpenAppId = this.configService.get<string>(
+      'OBB_OPEN_WECHAT_OLD_APP_ID',
+      '',
+    );
+    this.oldOpenAppSecret = this.configService.get<string>(
+      'OBB_OPEN_WECHAT_OLD_APP_SECRET',
+      '',
+    );
+    this.redirectUri = this.configService.get<string>(
+      'OBB_WECHAT_REDIRECT_URI',
       '',
     );
   }
@@ -60,21 +83,23 @@ export class WechatService extends SocialService {
     };
   }
 
-  getQrCodeParams() {
-    const state = this.setState('open_weixin');
+  getQrCodeParams(type: 'new' | 'old' = 'new') {
+    const isOld = type === 'old';
+    const state = this.setState('open_weixin', isOld ? 'old' : '');
     this.cleanExpiresState();
     return {
       state,
-      appId: this.openAppId,
+      appId: isOld ? this.oldOpenAppId : this.openAppId,
       scope: 'snsapi_login',
       redirectUri: encodeURIComponent(this.redirectUri),
     };
   }
 
-  authUrl(): string {
-    const state = this.setState('weixin');
+  authUrl(type: 'new' | 'old' = 'new'): string {
+    const isOld = type === 'old';
+    const state = this.setState('weixin', isOld ? 'old' : '');
     this.cleanExpiresState();
-    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
+    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${isOld ? this.oldAppId : this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
   async handleCallback(
@@ -171,6 +196,48 @@ export class WechatService extends SocialService {
       stateInfo.userInfo = returnValue;
       return returnValue;
     });
+  }
+
+  async migrationCallback(
+    code: string,
+    state: string,
+  ): Promise<WechatUserInfo> {
+    const stateInfo = this.getState(state);
+    if (!stateInfo) {
+      throw new UnauthorizedException('Invalid state identifier');
+    }
+    const isWeixin = stateInfo.type === 'weixin';
+    const appId = isWeixin ? this.oldAppId : this.oldOpenAppId;
+    const appSecret = isWeixin ? this.oldAppSecret : this.oldOpenAppSecret;
+    const accessTokenResponse = await fetch(
+      `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
+    );
+    if (!accessTokenResponse.ok) {
+      throw new UnauthorizedException('Failed to get WeChat access token');
+    }
+    const accessTokenData = await accessTokenResponse.json();
+
+    if (accessTokenData.errmsg) {
+      throw new BadRequestException(accessTokenData.errmsg);
+    }
+
+    const userDataResponse = await fetch(
+      `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
+    );
+    if (!userDataResponse.ok) {
+      throw new UnauthorizedException('Failed to get WeChat user info');
+    }
+    const userData = await userDataResponse.json();
+
+    if (userData.errmsg) {
+      throw new BadRequestException(userData.errmsg);
+    }
+
+    return userData;
+  }
+
+  async migration(oldUnionid: string, newUnionid: string) {
+    await this.userService.updateBinding(oldUnionid, newUnionid);
   }
 
   async unbind(userId: string) {

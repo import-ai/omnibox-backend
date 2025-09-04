@@ -8,8 +8,6 @@ import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { NestInstrumentation } from '@opentelemetry/instrumentation-nestjs-core';
 import { TypeormInstrumentation } from '@opentelemetry/instrumentation-typeorm';
 import { isEmpty } from 'omniboxd/utils/is-empty';
-import { Span } from '@opentelemetry/api';
-import { ServerResponse } from 'http';
 
 const env = process.env.ENV || 'unknown';
 const serviceName = `omnibox-backend`;
@@ -44,15 +42,6 @@ if (isTracingEnabled()) {
       new HttpInstrumentation({
         ignoreIncomingRequestHook: (req) => {
           return excludedUrls.some((url) => req.url?.includes(url)) || false;
-        },
-        responseHook: (span: Span, response: ServerResponse) => {
-          const req = response.req as any;
-          if (req.user?.id) {
-            span.setAttribute('user.id', req.user.id);
-          }
-          console.log(
-            `resp span ${span.spanContext().spanId} user ${req.user?.id}`,
-          );
         },
       }),
       new ExpressInstrumentation(),

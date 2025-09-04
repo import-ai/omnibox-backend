@@ -48,7 +48,7 @@ import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/175550
 import { SharesAllResources1754471311959 } from 'omniboxd/migrations/1754471311959-shares-all-resources';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TraceModule } from 'omniboxd/trace/trace.module';
-import { TracingUserInterceptor } from 'omniboxd/interceptor/tracing-user.interceptor';
+import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -75,7 +75,7 @@ export class AppModule implements NestModule {
         },
         {
           provide: APP_INTERCEPTOR,
-          useClass: TracingUserInterceptor,
+          useClass: UserInterceptor,
         },
       ],
       imports: [

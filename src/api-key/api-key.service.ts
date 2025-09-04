@@ -51,7 +51,7 @@ export class APIKeyService {
     });
 
     const saved = await this.apiKeyRepository.save(apiKey);
-    return this.toResponseDto(saved);
+    return APIKeyResponseDto.fromEntity(saved);
   }
 
   async findOne(id: string): Promise<APIKeyResponseDto> {
@@ -59,7 +59,7 @@ export class APIKeyService {
     if (!apiKey) {
       throw new NotFoundException('API Key not found');
     }
-    return this.toResponseDto(apiKey);
+    return APIKeyResponseDto.fromEntity(apiKey);
   }
 
   async findByValue(value: string): Promise<APIKey | null> {
@@ -75,7 +75,7 @@ export class APIKeyService {
     if (namespaceId) where.namespaceId = namespaceId;
 
     const apiKeys = await this.apiKeyRepository.find({ where });
-    return apiKeys.map((apiKey) => this.toResponseDto(apiKey));
+    return apiKeys.map((apiKey) => APIKeyResponseDto.fromEntity(apiKey));
   }
 
   async update(
@@ -116,17 +116,6 @@ export class APIKeyService {
     return value!;
   }
 
-  private toResponseDto(apiKey: APIKey): APIKeyResponseDto {
-    return {
-      id: apiKey.id,
-      value: apiKey.value,
-      user_id: apiKey.userId,
-      namespace_id: apiKey.namespaceId,
-      attrs: apiKey.attrs,
-      created_at: apiKey.createdAt,
-      updated_at: apiKey.updatedAt,
-    };
-  }
 
   private async validateUserNamespacePermission(
     userId: string,

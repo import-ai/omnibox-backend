@@ -1,6 +1,14 @@
 import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { Repository } from 'typeorm';
 import { Applications } from 'omniboxd/applications/applications.entity';
+import { APIKeyService } from 'omniboxd/api-key/api-key.service';
+import {
+  APIKeyPermissionTarget,
+  APIKeyPermissionType,
+} from 'omniboxd/api-key/api-key.entity';
+import { Injectable } from '@nestjs/common';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { ApplicationsResponseDto } from 'omniboxd/applications/applications.dto';
 
 export interface WechatBotCallbackDto {
   code: string;
@@ -8,9 +16,14 @@ export interface WechatBotCallbackDto {
   nickname: string;
 }
 
+@Injectable()
 export class WechatBot extends BaseApp {
+  public static readonly appId = 'wechat_bot';
+
   constructor(
     private readonly applicationsRepository: Repository<Applications>,
+    private readonly apiKeyService: APIKeyService,
+    private readonly namespacesService: NamespacesService,
   ) {
     super();
   }
@@ -25,7 +38,7 @@ export class WechatBot extends BaseApp {
 
       const existingAuth = await this.applicationsRepository
         .createQueryBuilder('apps')
-        .where('apps.app_id = :appId', { appId: 'wechat_bot' })
+        .where('apps.app_id = :appId', { appId: WechatBot.appId })
         .andWhere("apps.attrs->>'verify_code' = :verifyCode", { verifyCode })
         .getOne();
 
@@ -56,7 +69,7 @@ export class WechatBot extends BaseApp {
   async callback(data: WechatBotCallbackDto): Promise<Record<string, any>> {
     const entity = await this.applicationsRepository
       .createQueryBuilder('apps')
-      .where('apps.app_id = :appId', { appId: 'wechat_bot' })
+      .where('apps.app_id = :appId', { appId: WechatBot.appId })
       .andWhere("apps.attrs->>'verify_code' = :code", { code: data.code })
       .getOne();
 
@@ -70,10 +83,38 @@ export class WechatBot extends BaseApp {
       nickname: data.nickname,
     };
 
+    const private_root_resource_id: string =
+      await this.namespacesService.getPrivateRootId(
+        entity.userId,
+        entity.namespaceId,
+      );
 
+    const apiKeyResponse = await this.apiKeyService.create({
+      user_id: entity.userId,
+      namespace_id: entity.namespaceId,
+      attrs: {
+        related_app_id: entity.appId,
+        root_resource_id: private_root_resource_id,
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [
+              APIKeyPermissionType.CREATE,
+              APIKeyPermissionType.READ,
+            ],
+          },
+        ],
+      },
+    });
+
+    entity.apiKeyId = apiKeyResponse.id;
 
     await this.applicationsRepository.save(entity);
 
-    return { status: 'success', data: entity };
+    return {
+      status: 'success',
+      application: ApplicationsResponseDto.fromEntity(entity),
+      api_key: apiKeyResponse.value,
+    };
   }
 }

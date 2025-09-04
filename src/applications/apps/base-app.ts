@@ -1,6 +1,8 @@
 import { CreateApplicationsDto } from 'omniboxd/applications/applications.dto';
 
 export abstract class BaseApp {
+  protected static readonly appId: string;
+
   abstract getAttrs(
     namespaceId: string,
     userId: string,

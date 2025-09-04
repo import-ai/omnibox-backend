@@ -16,10 +16,9 @@ export class ApplicationsService {
   constructor(
     @InjectRepository(Applications)
     private readonly applicationsRepository: Repository<Applications>,
+    private readonly wechatBot: WechatBot,
   ) {
-    this.apps = {
-      wechat_bot: new WechatBot(applicationsRepository),
-    };
+    this.apps[WechatBot.appId] = this.wechatBot;
   }
 
   async create(

@@ -1,5 +1,5 @@
 import { IsOptional, IsString, IsUUID, IsObject } from 'class-validator';
-import { APIKeyAttrs } from './api-key.entity';
+import { APIKeyAttrs, APIKey } from './api-key.entity';
 
 export class CreateAPIKeyDto {
   @IsString()
@@ -38,4 +38,16 @@ export class APIKeyResponseDto {
   created_at: Date;
 
   updated_at: Date;
+
+  static fromEntity(apiKey: APIKey): APIKeyResponseDto {
+    const dto = new APIKeyResponseDto();
+    dto.id = apiKey.id;
+    dto.value = apiKey.value;
+    dto.user_id = apiKey.userId;
+    dto.namespace_id = apiKey.namespaceId;
+    dto.attrs = apiKey.attrs;
+    dto.created_at = apiKey.createdAt;
+    dto.updated_at = apiKey.updatedAt;
+    return dto;
+  }
 }

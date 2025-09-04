@@ -1,5 +1,6 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
+import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 
 describe('ApplicationsController (e2e)', () => {
   let client: TestClient;
@@ -14,6 +15,12 @@ describe('ApplicationsController (e2e)', () => {
 
   describe('Create Application (POST)', () => {
     it('should create a wechat_bot application with verify code', async () => {
+      const getAllResponse = await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/applications`)
+        .expect(200);
+
+      expect(getAllResponse.body).toEqual([{ app_id: WechatBot.appId }]);
+
       const appData = {
         user_id: client.user.id,
         attrs: {

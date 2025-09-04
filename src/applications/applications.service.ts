@@ -21,6 +21,45 @@ export class ApplicationsService {
     this.apps[WechatBot.appId] = this.wechatBot;
   }
 
+  async findOne(
+    appId: string,
+    namespaceId: string,
+    userId: string,
+  ): Promise<ApplicationsResponseDto> {
+    const entity = await this.applicationsRepository.findOne({
+      where: { appId, namespaceId, userId },
+    });
+
+    if (!entity) {
+      throw new NotFoundException('App authorization not found');
+    }
+
+    return ApplicationsResponseDto.fromEntity(entity);
+  }
+
+  async findAll(
+    namespaceId: string,
+    userId: string,
+  ): Promise<ApplicationsResponseDto[]> {
+    const entities = await this.applicationsRepository.find({
+      where: { namespaceId, userId },
+    });
+
+    const applications: ApplicationsResponseDto[] = [];
+    for (const appId of Object.keys(this.apps)) {
+      const existingApp = entities.find((app) => app.appId === appId);
+      if (existingApp) {
+        applications.push(ApplicationsResponseDto.fromEntity(existingApp));
+      } else {
+        const app = new ApplicationsResponseDto();
+        app.app_id = appId;
+        applications.push(app);
+      }
+    }
+
+    return applications;
+  }
+
   async create(
     appId: string,
     namespaceId: string,
@@ -39,7 +78,7 @@ export class ApplicationsService {
 
     const applications = this.applicationsRepository.create({
       namespaceId,
-      userId: createDto.user_id,
+      userId,
       appId,
       apiKeyId: createDto.api_key_id || null,
       attrs,

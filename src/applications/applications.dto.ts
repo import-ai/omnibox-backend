@@ -1,9 +1,7 @@
 import { IsOptional, IsString, IsUUID, IsObject } from 'class-validator';
+import { Applications } from 'omniboxd/applications/applications.entity';
 
 export class CreateApplicationsDto {
-  @IsString()
-  user_id: string;
-
   @IsUUID()
   @IsOptional()
   api_key_id?: string;
@@ -37,7 +35,7 @@ export class ApplicationsResponseDto {
 
   updated_at: Date;
 
-  static fromEntity(entity: any): ApplicationsResponseDto {
+  static fromEntity(entity: Applications): ApplicationsResponseDto {
     const dto = new ApplicationsResponseDto();
     dto.id = entity.id;
     dto.namespace_id = entity.namespaceId;

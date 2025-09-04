@@ -7,6 +7,7 @@ import {
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { ApplicationsResponseDto } from 'omniboxd/applications/applications.dto';
 
@@ -21,11 +22,20 @@ export class WechatBot extends BaseApp {
   public static readonly appId = 'wechat_bot';
 
   constructor(
+    @InjectRepository(Applications)
     private readonly applicationsRepository: Repository<Applications>,
     private readonly apiKeyService: APIKeyService,
     private readonly namespacesService: NamespacesService,
   ) {
     super();
+  }
+
+  async getEntityByVerifyCode(code: string): Promise<Applications | null> {
+    return await this.applicationsRepository
+      .createQueryBuilder()
+      .where('app_id = :appId', { appId: WechatBot.appId })
+      .andWhere("attrs->>'verify_code' = :code", { code })
+      .getOne();
   }
 
   private async generateUniqueVerifyCode(): Promise<string> {
@@ -35,12 +45,7 @@ export class WechatBot extends BaseApp {
 
     while (attempts < maxAttempts) {
       verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-      const existingAuth = await this.applicationsRepository
-        .createQueryBuilder('apps')
-        .where('apps.app_id = :appId', { appId: WechatBot.appId })
-        .andWhere("apps.attrs->>'verify_code' = :verifyCode", { verifyCode })
-        .getOne();
+      const existingAuth = await this.getEntityByVerifyCode(verifyCode);
 
       if (!existingAuth) {
         return verifyCode;
@@ -67,11 +72,7 @@ export class WechatBot extends BaseApp {
   }
 
   async callback(data: WechatBotCallbackDto): Promise<Record<string, any>> {
-    const entity = await this.applicationsRepository
-      .createQueryBuilder('apps')
-      .where('apps.app_id = :appId', { appId: WechatBot.appId })
-      .andWhere("apps.attrs->>'verify_code' = :code", { code: data.code })
-      .getOne();
+    const entity = await this.getEntityByVerifyCode(data.code);
 
     if (!entity) {
       return { status: 'error', message: 'Invalid verification code' };

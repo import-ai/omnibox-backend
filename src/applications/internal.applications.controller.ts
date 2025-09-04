@@ -1,7 +1,7 @@
 import { ApplicationsService } from './applications.service';
 import { Body, Controller, Param, Post } from '@nestjs/common';
 
-@Controller('internal/api/v1/namespaces/:namespaceId/apps')
+@Controller('internal/api/v1/namespaces/:namespaceId/applications')
 export class InternalApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
 

@@ -6,7 +6,7 @@ import {
 import { Body, Controller, Delete, Param, Post } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
-@Controller('api/v1/namespaces/:namespaceId/apps')
+@Controller('api/v1/namespaces/:namespaceId/applications')
 export class ApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
 

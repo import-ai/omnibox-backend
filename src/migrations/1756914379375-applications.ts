@@ -1,11 +1,11 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 import { BaseColumns } from './base-columns';
 
-async function createApplicationssTable(
+async function createApplicationsTable(
   queryRunner: QueryRunner,
 ): Promise<void> {
   const table = new Table({
-    name: 'app_authorizations',
+    name: 'applications',
     columns: [
       {
         name: 'id',
@@ -60,7 +60,7 @@ async function createApplicationssTable(
     ],
     indices: [
       {
-        name: 'UQ_app_authorizations_user_namespace_app',
+        name: 'UQ_applications_user_namespace_app',
         columnNames: ['user_id', 'namespace_id', 'app_id'],
         isUnique: true,
       },
@@ -69,9 +69,9 @@ async function createApplicationssTable(
   await queryRunner.createTable(table, true, true, true);
 }
 
-export class Applicationss1756914379375 implements MigrationInterface {
+export class Applications1756914379375 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await createApplicationssTable(queryRunner);
+    await createApplicationsTable(queryRunner);
   }
 
   public down(): Promise<void> {

@@ -11,7 +11,7 @@ import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 
 @Injectable()
 export class ApplicationsService {
-  private readonly apps: Record<string, BaseApp>;
+  private readonly apps: Record<string, BaseApp> = {};
 
   constructor(
     @InjectRepository(Applications)

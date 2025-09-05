@@ -233,7 +233,7 @@ export class PermissionsService {
     userId: string,
   ): Promise<ListRespDto> {
     // Get resources
-    const resources = await this.resourcesService.getParentResources(
+    const resources = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
     );
@@ -320,7 +320,7 @@ export class PermissionsService {
       return false;
     }
     if (!resources) {
-      resources = await this.resourcesService.getParentResources(
+      resources = await this.resourcesService.getParentResourcesOrFail(
         namespaceId,
         resourceId,
       );

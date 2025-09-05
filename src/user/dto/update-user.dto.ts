@@ -14,7 +14,7 @@ export class UpdateUserDto {
   @IsOptional()
   username?: string;
 
-  @Transform(({ value }) => value === '' ? undefined : value)
+  @Transform(({ value }) => (value === '' ? undefined : value))
   @IsEmail()
   @IsOptional()
   email?: string;

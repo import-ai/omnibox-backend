@@ -3,6 +3,7 @@ import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { BadRequestException } from '@nestjs/common';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 
 export class GenerateTitleProcessor extends Processor {
   constructor(
@@ -28,10 +29,14 @@ export class GenerateTitleProcessor extends Processor {
 
       if (typeof generatedTitle === 'string' && generatedTitle.trim()) {
         // Update the resource with generated title
-        await this.namespaceResourcesService.update(task.userId, resourceId, {
-          namespaceId: task.namespaceId,
-          name: generatedTitle.trim(),
-        });
+        await this.namespaceResourcesService.update(
+          task.userId,
+          resourceId,
+          Object.assign(new UpdateResourceDto(), {
+            namespaceId: task.namespaceId,
+            name: generatedTitle.trim(),
+          }),
+        );
 
         return { resourceId, title: generatedTitle.trim() };
       }

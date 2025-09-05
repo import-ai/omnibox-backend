@@ -20,7 +20,7 @@ export class ShareInfoDto {
     dto.allResources = false;
     dto.requireLogin = false;
     dto.passwordEnabled = false;
-    dto.shareType = ShareType.ALL;
+    dto.shareType = ShareType.DOC_ONLY;
     dto.expiresAt = null;
     return dto;
   }

@@ -48,6 +48,8 @@ import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/175550
 import { SharesAllResources1754471311959 } from 'omniboxd/migrations/1754471311959-shares-all-resources';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TraceModule } from 'omniboxd/trace/trace.module';
+import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
+import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -99,6 +101,7 @@ export class AppModule implements NestModule {
         SharesModule,
         SharedResourcesModule,
         TraceModule,
+        FeedbackModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
         //   inject: [ConfigService],
@@ -133,6 +136,7 @@ export class AppModule implements NestModule {
               UpdateAttachmentUrls1755499552000,
               ScanResourceAttachments1755504936756,
               SharesAllResources1754471311959,
+              Feedback1757100000000,
               ...extraMigrations,
             ],
             migrationsRun: true,

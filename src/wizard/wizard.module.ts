@@ -13,6 +13,7 @@ import { UserModule } from 'omniboxd/user/user.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { MinioModule } from 'omniboxd/minio/minio.module';
+import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 
 @Module({
   providers: [WizardService, ChunkManagerService],
@@ -27,7 +28,11 @@ import { MinioModule } from 'omniboxd/minio/minio.module';
     MinioModule,
     TypeOrmModule.forFeature([Task]),
   ],
-  controllers: [WizardController, InternalWizardController],
+  controllers: [
+    WizardController,
+    InternalWizardController,
+    OpenWizardController,
+  ],
   exports: [WizardService],
 })
 export class WizardModule {}

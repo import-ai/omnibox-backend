@@ -9,6 +9,10 @@ import {
 import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 
+export interface FindAllOptions {
+  apiKeyId?: string;
+}
+
 @Injectable()
 export class ApplicationsService {
   private readonly apps: Record<string, BaseApp> = {};
@@ -40,20 +44,31 @@ export class ApplicationsService {
   async findAll(
     namespaceId: string,
     userId: string,
+    options?: FindAllOptions,
   ): Promise<ApplicationsResponseDto[]> {
-    const entities = await this.applicationsRepository.find({
-      where: { namespaceId, userId },
-    });
-
+    const where: any = { namespaceId, userId };
+    if (options?.apiKeyId) {
+      where.apiKeyId = options.apiKeyId;
+    }
+    const entities = await this.applicationsRepository.find({ where });
     const applications: ApplicationsResponseDto[] = [];
-    for (const appId of Object.keys(this.apps)) {
-      const existingApp = entities.find((app) => app.appId === appId);
-      if (existingApp) {
-        applications.push(ApplicationsResponseDto.fromEntity(existingApp));
-      } else {
-        const app = new ApplicationsResponseDto();
-        app.app_id = appId;
-        applications.push(app);
+    
+    // If filtering by apiKeyId, only return actual database entities
+    if (options?.apiKeyId) {
+      for (const entity of entities) {
+        applications.push(ApplicationsResponseDto.fromEntity(entity));
+      }
+    } else {
+      // If not filtering, show all available apps (with or without instances)
+      for (const appId of Object.keys(this.apps)) {
+        const existingApp = entities.find((app) => app.appId === appId);
+        if (existingApp) {
+          applications.push(ApplicationsResponseDto.fromEntity(existingApp));
+        } else {
+          const app = new ApplicationsResponseDto();
+          app.app_id = appId;
+          applications.push(app);
+        }
       }
     }
 

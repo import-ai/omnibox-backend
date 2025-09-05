@@ -1,6 +1,12 @@
 import { IsOptional, IsString, IsUUID, IsObject } from 'class-validator';
 import { Applications } from 'omniboxd/applications/applications.entity';
 
+export class FindAllApplicationsDto {
+  @IsUUID()
+  @IsOptional()
+  api_key_id?: string;
+}
+
 export class CreateApplicationsDto {
   @IsUUID()
   @IsOptional()

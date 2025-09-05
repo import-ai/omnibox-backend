@@ -2,8 +2,17 @@ import { ApplicationsService } from './applications.service';
 import {
   ApplicationsResponseDto,
   CreateApplicationsDto,
+  FindAllApplicationsDto,
 } from './applications.dto';
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/applications')
@@ -14,8 +23,12 @@ export class ApplicationsController {
   async findAll(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
+    @Query() query: FindAllApplicationsDto,
   ): Promise<ApplicationsResponseDto[]> {
-    return await this.applicationsService.findAll(namespaceId, userId);
+    const options = {
+      apiKeyId: query.api_key_id,
+    };
+    return await this.applicationsService.findAll(namespaceId, userId, options);
   }
 
   @Get(':appId')

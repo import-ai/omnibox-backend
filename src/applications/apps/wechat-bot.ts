@@ -6,15 +6,21 @@ import {
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { ApplicationsResponseDto } from 'omniboxd/applications/applications.dto';
+import { APIKeyResponseDto } from 'omniboxd/api-key/api-key.dto';
 
-export interface WechatBotCallbackDto {
+export interface WechatBotCallbackRequestDto {
   verify_code: string;
   user_id: string;
   nickname: string;
+}
+
+export interface WechatBotCallbackResponseDto {
+  application: ApplicationsResponseDto;
+  api_key: APIKeyResponseDto;
 }
 
 @Injectable()
@@ -71,11 +77,13 @@ export class WechatBot extends BaseApp {
     };
   }
 
-  async callback(data: WechatBotCallbackDto): Promise<Record<string, any>> {
+  async callback(
+    data: WechatBotCallbackRequestDto,
+  ): Promise<WechatBotCallbackResponseDto> {
     const entity = await this.getEntityByVerifyCode(data.verify_code);
 
     if (!entity) {
-      return { status: 'error', message: 'Invalid verification code' };
+      throw new BadRequestException('Invalid verify code');
     }
 
     entity.attrs = {
@@ -113,9 +121,8 @@ export class WechatBot extends BaseApp {
     await this.applicationsRepository.save(entity);
 
     return {
-      status: 'success',
       application: ApplicationsResponseDto.fromEntity(entity),
-      api_key: apiKeyResponse.value,
+      api_key: apiKeyResponse,
     };
   }
 }

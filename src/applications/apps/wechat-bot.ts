@@ -14,7 +14,7 @@ import { APIKeyResponseDto } from 'omniboxd/api-key/api-key.dto';
 
 export interface WechatBotCallbackRequestDto {
   verify_code: string;
-  user_id: string;
+  wechat_user_id: string;
   nickname: string;
 }
 
@@ -88,7 +88,7 @@ export class WechatBot extends BaseApp {
 
     entity.attrs = {
       ...entity.attrs,
-      user_id: data.user_id,
+      wechat_user_id: data.wechat_user_id,
       nickname: data.nickname,
     };
 
@@ -118,11 +118,22 @@ export class WechatBot extends BaseApp {
 
     entity.apiKeyId = apiKeyResponse.id;
 
+    // Remove verify_code from attrs after successful API key creation
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { verify_code, ...attrsWithoutVerifyCode } = entity.attrs;
+    entity.attrs = attrsWithoutVerifyCode;
+
     await this.applicationsRepository.save(entity);
 
     return {
       application: ApplicationsResponseDto.fromEntity(entity),
       api_key: apiKeyResponse,
     };
+  }
+
+  async postDelete(application: Applications): Promise<void> {
+    if (application.apiKeyId) {
+      await this.apiKeyService.delete(application.apiKeyId);
+    }
   }
 }

@@ -105,5 +105,11 @@ export class ApplicationsService {
     if ((result.affected || 0) === 0) {
       throw new NotFoundException('App authorization not found');
     }
+
+    // Call postDelete hook if the app supports it
+    const app = this.apps[authorization.appId];
+    if (app?.postDelete) {
+      await app.postDelete(authorization);
+    }
   }
 }

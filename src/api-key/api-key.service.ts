@@ -116,7 +116,6 @@ export class APIKeyService {
     return value!;
   }
 
-
   private async validateUserNamespacePermission(
     userId: string,
     namespaceId: string,

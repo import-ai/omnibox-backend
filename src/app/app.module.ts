@@ -50,6 +50,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TraceModule } from 'omniboxd/trace/trace.module';
 import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
 import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
+import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -73,6 +74,10 @@ export class AppModule implements NestModule {
         {
           provide: APP_INTERCEPTOR,
           useClass: ClassSerializerInterceptor,
+        },
+        {
+          provide: APP_INTERCEPTOR,
+          useClass: UserInterceptor,
         },
       ],
       imports: [

@@ -16,12 +16,15 @@ import {
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { Applications } from 'omniboxd/applications/applications.entity';
 
 @Injectable()
 export class APIKeyService {
   constructor(
     @InjectRepository(APIKey)
     private readonly apiKeyRepository: Repository<APIKey>,
+    @InjectRepository(Applications)
+    private readonly applicationsRepository: Repository<Applications>,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesService: NamespacesService,
   ) {}
@@ -129,6 +132,12 @@ export class APIKeyService {
   }
 
   async delete(id: string): Promise<void> {
+    // Directly delete all applications that reference this API key
+    await this.applicationsRepository.softDelete({
+      apiKeyId: id,
+    });
+
+    // Then delete the API key itself
     const result = await this.apiKeyRepository.softDelete(id);
     if ((result.affected || 0) === 0) {
       throw new NotFoundException('API Key not found');

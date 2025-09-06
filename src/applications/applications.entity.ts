@@ -1,8 +1,11 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Column, Entity, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('applications')
-@Unique(['userId', 'namespaceId', 'appId'])
+@Index(['userId', 'namespaceId', 'appId'], {
+  unique: true,
+  where: '"deletedAt" IS NULL',
+})
 export class Applications extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;

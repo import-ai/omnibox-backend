@@ -52,7 +52,7 @@ export class ApplicationsService {
     }
     const entities = await this.applicationsRepository.find({ where });
     const applications: ApplicationsResponseDto[] = [];
-    
+
     // If filtering by apiKeyId, only return actual database entities
     if (options?.apiKeyId) {
       for (const entity of entities) {
@@ -116,12 +116,24 @@ export class ApplicationsService {
       throw new NotFoundException('App authorization not found');
     }
 
-    const result = await this.applicationsRepository.delete(id);
+    // If the application has an API key, null it out first to avoid foreign key constraint issues
+    if (authorization.apiKeyId) {
+      await this.applicationsRepository.update(
+        { id, userId, namespaceId },
+        { apiKeyId: null },
+      );
+    }
+
+    const result = await this.applicationsRepository.softDelete({
+      id,
+      userId,
+      namespaceId,
+    });
     if ((result.affected || 0) === 0) {
       throw new NotFoundException('App authorization not found');
     }
 
-    // Call postDelete hook if the app supports it
+    // Call postDelete hook after soft delete
     const app = this.apps[authorization.appId];
     if (app?.postDelete) {
       await app.postDelete(authorization);

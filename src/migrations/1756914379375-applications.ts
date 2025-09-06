@@ -63,6 +63,7 @@ async function createApplicationsTable(
         name: 'UQ_applications_user_namespace_app',
         columnNames: ['user_id', 'namespace_id', 'app_id'],
         isUnique: true,
+        where: '"deleted_at" IS NULL',
       },
     ],
   });

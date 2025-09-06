@@ -1,5 +1,13 @@
-import { IsOptional, IsString, IsUUID, IsObject } from 'class-validator';
-import { APIKeyAttrs, APIKey } from './api-key.entity';
+import {
+  IsOptional,
+  IsString,
+  IsUUID,
+  IsObject,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { APIKeyAttrs, APIKey, APIKeyPermission } from './api-key.entity';
 
 export class CreateAPIKeyDto {
   @IsString()
@@ -17,6 +25,18 @@ export class UpdateAPIKeyDto {
   @IsObject()
   @IsOptional()
   attrs?: APIKeyAttrs;
+}
+
+export class PatchAPIKeyDto {
+  @IsString()
+  @IsOptional()
+  root_resource_id?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => Object)
+  @IsOptional()
+  permissions?: APIKeyPermission[];
 }
 
 export class APIKeyResponseDto {

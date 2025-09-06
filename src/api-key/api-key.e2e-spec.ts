@@ -168,6 +168,129 @@ describe('APIKeyController (e2e)', () => {
     });
   });
 
+  it('should partially update an API key permissions only (PATCH)', async () => {
+    const patchData = {
+      permissions: [
+        {
+          target: 'resources',
+          permissions: [APIKeyPermissionType.READ, APIKeyPermissionType.UPDATE],
+        },
+      ],
+    };
+
+    const response = await client
+      .patch(`/api/v1/api-keys/${apiKeyId}`)
+      .send(patchData)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      id: apiKeyId,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id, // Should remain unchanged
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.UPDATE,
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('should partially update an API key root_resource_id only (PATCH)', async () => {
+    const patchData = {
+      root_resource_id: client.namespace.root_resource_id,
+    };
+
+    const response = await client
+      .patch(`/api/v1/api-keys/${apiKeyId}`)
+      .send(patchData)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      id: apiKeyId,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.UPDATE,
+            ],
+          },
+        ], // Should remain unchanged from previous test
+      },
+    });
+  });
+
+  it('should partially update both root_resource_id and permissions (PATCH)', async () => {
+    const patchData = {
+      root_resource_id: client.namespace.root_resource_id,
+      permissions: [
+        {
+          target: 'resources',
+          permissions: [
+            APIKeyPermissionType.CREATE,
+            APIKeyPermissionType.DELETE,
+          ],
+        },
+      ],
+    };
+
+    const response = await client
+      .patch(`/api/v1/api-keys/${apiKeyId}`)
+      .send(patchData)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      id: apiKeyId,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.CREATE,
+              APIKeyPermissionType.DELETE,
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('should return 404 when patching non-existent API key (PATCH)', async () => {
+    const nonExistentId = '00000000-0000-0000-0000-000000000000';
+    const patchData = {
+      permissions: [
+        {
+          target: 'resources',
+          permissions: [APIKeyPermissionType.READ],
+        },
+      ],
+    };
+
+    await client
+      .patch(`/api/v1/api-keys/${nonExistentId}`)
+      .send(patchData)
+      .expect(404);
+  });
+
+  it('should return 404 when patching API key with resource user does not have write access to (PATCH)', async () => {
+    const patchData = {
+      root_resource_id: 'non-existent-resource',
+    };
+
+    await client
+      .patch(`/api/v1/api-keys/${apiKeyId}`)
+      .send(patchData)
+      .expect(404);
+  });
+
   it('should delete an API key (DELETE)', async () => {
     await client.delete(`/api/v1/api-keys/${apiKeyId}`).expect(200);
 

@@ -11,6 +11,7 @@ import {
   APIKeyResponseDto,
   CreateAPIKeyDto,
   UpdateAPIKeyDto,
+  PatchAPIKeyDto,
 } from 'omniboxd/api-key/api-key.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
@@ -87,6 +88,43 @@ export class APIKeyService {
       updateData.attrs = updateApiKeyDto.attrs;
 
     await this.apiKeyRepository.update(id, updateData);
+    return await this.findOne(id);
+  }
+
+  async patch(
+    id: string,
+    patchApiKeyDto: PatchAPIKeyDto,
+  ): Promise<APIKeyResponseDto> {
+    // Get the existing API key
+    const existingApiKey = await this.apiKeyRepository.findOne({
+      where: { id },
+    });
+    if (!existingApiKey) {
+      throw new NotFoundException('API Key not found');
+    }
+
+    // If root_resource_id is being updated, validate user has permission to it
+    if (patchApiKeyDto.root_resource_id !== undefined) {
+      await this.validateUserResourcePermission(
+        existingApiKey.userId,
+        existingApiKey.namespaceId,
+        patchApiKeyDto.root_resource_id,
+      );
+    }
+
+    // Prepare the updated attrs by merging with existing attrs
+    const updatedAttrs = { ...existingApiKey.attrs };
+
+    // Update only the fields that are provided
+    if (patchApiKeyDto.root_resource_id !== undefined) {
+      updatedAttrs.root_resource_id = patchApiKeyDto.root_resource_id;
+    }
+    if (patchApiKeyDto.permissions !== undefined) {
+      updatedAttrs.permissions = patchApiKeyDto.permissions;
+    }
+
+    // Update the API key with the merged attrs
+    await this.apiKeyRepository.update(id, { attrs: updatedAttrs });
     return await this.findOne(id);
   }
 

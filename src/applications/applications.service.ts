@@ -116,14 +116,6 @@ export class ApplicationsService {
       throw new NotFoundException('App authorization not found');
     }
 
-    // If the application has an API key, null it out first to avoid foreign key constraint issues
-    if (authorization.apiKeyId) {
-      await this.applicationsRepository.update(
-        { id, userId, namespaceId },
-        { apiKeyId: null },
-      );
-    }
-
     const result = await this.applicationsRepository.softDelete({
       id,
       userId,

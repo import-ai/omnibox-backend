@@ -91,7 +91,7 @@ export class APIKeyService {
   }
 
   async delete(id: string): Promise<void> {
-    const result = await this.apiKeyRepository.delete(id);
+    const result = await this.apiKeyRepository.softDelete(id);
     if ((result.affected || 0) === 0) {
       throw new NotFoundException('API Key not found');
     }

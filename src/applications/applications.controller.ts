@@ -31,13 +31,13 @@ export class ApplicationsController {
     return await this.applicationsService.findAll(namespaceId, userId, options);
   }
 
-  @Get(':appId')
+  @Get(':id')
   async findOne(
-    @Param('appId') appId: string,
+    @Param('id') id: string,
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
   ): Promise<ApplicationsResponseDto> {
-    return await this.applicationsService.findOne(appId, namespaceId, userId);
+    return await this.applicationsService.findOne(id, namespaceId, userId);
   }
 
   @Post(':appId')

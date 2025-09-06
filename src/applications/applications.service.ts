@@ -26,12 +26,12 @@ export class ApplicationsService {
   }
 
   async findOne(
-    appId: string,
+    id: string,
     namespaceId: string,
     userId: string,
   ): Promise<ApplicationsResponseDto> {
     const entity = await this.applicationsRepository.findOne({
-      where: { appId, namespaceId, userId },
+      where: { id, namespaceId, userId },
     });
 
     if (!entity) {

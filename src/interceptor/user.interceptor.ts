@@ -5,6 +5,7 @@ import {
   CallHandler,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
+import { tap, finalize } from 'rxjs/operators';
 import { trace, context } from '@opentelemetry/api';
 
 @Injectable()
@@ -15,12 +16,27 @@ export class UserInterceptor implements NestInterceptor {
   ): Observable<any> {
     const req = executionContext.switchToHttp().getRequest();
     const tracer = trace.getTracer('user-interceptor');
-    tracer.startActiveSpan('UserInterceptor', {}, context.active(), (span) => {
-      if (req.user?.id) {
-        span.setAttribute('user.id', req.user.id);
-      }
-      span.end();
-    });
-    return next.handle();
+
+    return tracer.startActiveSpan(
+      'UserInterceptor',
+      {},
+      context.active(),
+      (span) => {
+        return next.handle().pipe(
+          tap((responseBody) => {
+            if (req.user?.id) {
+              span.setAttribute('user.id', req.user.id);
+            } else if (
+              req.url === '/api/v1/login' &&
+              req.method === 'POST' &&
+              responseBody?.id
+            ) {
+              span.setAttribute('user.id', responseBody.id);
+            }
+          }),
+          finalize(() => span.end()),
+        );
+      },
+    );
   }
 }

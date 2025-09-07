@@ -52,7 +52,7 @@ spec:
           livenessProbe:
             tcpSocket:
               port: {{ .Values.app.port }}
-            initialDelaySeconds: 300
+            initialDelaySeconds: 15
             periodSeconds: 10
           resources:
             requests:

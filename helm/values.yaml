@@ -1,6 +1,6 @@
 release:
   name: omnibox-backend
-  namespace: omnibox
+  namespace:
 
 image:
   repository: ghcr.io/import-ai/omnibox-backend

@@ -1,0 +1,15 @@
+release:
+  name: omnibox-backend
+  namespace: omnibox
+
+image:
+  repository: ghcr.io/import-ai/omnibox-backend
+  tag: main
+
+replicas: 1
+
+app:
+  port: 8000
+
+affinity: {}
+nodeSelector: {}

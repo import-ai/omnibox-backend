@@ -325,7 +325,9 @@ describe('APIKeyService', () => {
       const apiKeyId = 'test-api-key-id';
 
       // Mock soft delete operations (0 applications affected, 1 API key affected)
-      applicationsRepository.softDelete.mockResolvedValue({ affected: 0 } as any);
+      applicationsRepository.softDelete.mockResolvedValue({
+        affected: 0,
+      } as any);
       apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
 
       await service.delete(apiKeyId);

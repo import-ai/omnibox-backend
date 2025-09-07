@@ -50,6 +50,9 @@ import { Applications1756914379375 } from 'omniboxd/migrations/1756914379375-app
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TraceModule } from 'omniboxd/trace/trace.module';
 import { ApplicationsModule } from 'omniboxd/applications/applications.module';
+import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
+import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
+import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -73,6 +76,10 @@ export class AppModule implements NestModule {
         {
           provide: APP_INTERCEPTOR,
           useClass: ClassSerializerInterceptor,
+        },
+        {
+          provide: APP_INTERCEPTOR,
+          useClass: UserInterceptor,
         },
       ],
       imports: [
@@ -101,6 +108,7 @@ export class AppModule implements NestModule {
         SharesModule,
         SharedResourcesModule,
         TraceModule,
+        FeedbackModule,
         ApplicationsModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
@@ -137,6 +145,7 @@ export class AppModule implements NestModule {
               ScanResourceAttachments1755504936756,
               SharesAllResources1754471311959,
               Applications1756914379375,
+              Feedback1757100000000,
               ...extraMigrations,
             ],
             migrationsRun: true,

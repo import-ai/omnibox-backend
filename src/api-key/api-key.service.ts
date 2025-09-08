@@ -10,8 +10,8 @@ import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
   APIKeyResponseDto,
   CreateAPIKeyDto,
-  UpdateAPIKeyDto,
   PatchAPIKeyDto,
+  UpdateAPIKeyDto,
 } from 'omniboxd/api-key/api-key.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
@@ -119,9 +119,6 @@ export class APIKeyService {
     const updatedAttrs = { ...existingApiKey.attrs };
 
     // Update only the fields that are provided
-    if (patchApiKeyDto.related_app_id !== undefined) {
-      updatedAttrs.related_app_id = patchApiKeyDto.related_app_id;
-    }
     if (patchApiKeyDto.root_resource_id !== undefined) {
       updatedAttrs.root_resource_id = patchApiKeyDto.root_resource_id;
     }

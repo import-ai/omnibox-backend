@@ -30,10 +30,6 @@ export class UpdateAPIKeyDto {
 export class PatchAPIKeyDto {
   @IsString()
   @IsOptional()
-  related_app_id?: string;
-
-  @IsString()
-  @IsOptional()
   root_resource_id?: string;
 
   @IsArray()

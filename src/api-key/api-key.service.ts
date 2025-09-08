@@ -119,6 +119,9 @@ export class APIKeyService {
     const updatedAttrs = { ...existingApiKey.attrs };
 
     // Update only the fields that are provided
+    if (patchApiKeyDto.related_app_id !== undefined) {
+      updatedAttrs.related_app_id = patchApiKeyDto.related_app_id;
+    }
     if (patchApiKeyDto.root_resource_id !== undefined) {
       updatedAttrs.root_resource_id = patchApiKeyDto.root_resource_id;
     }

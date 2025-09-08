@@ -15,14 +15,14 @@ export class InternalWizardController {
   ) {}
 
   @Public()
-  @Get('/task')
+  @Get('task')
   async fetchTask(@Res() res: Response): Promise<void> {
     const task = await this.wizardService.fetchTask();
     res.status(task ? 200 : 204).json(transformKeysToSnakeCase(task));
   }
 
   @Public()
-  @Post('/callback')
+  @Post('callback')
   async handleTaskCallback(
     @Body() taskCallback: TaskCallbackDto,
   ): Promise<Record<string, any>> {
@@ -30,7 +30,7 @@ export class InternalWizardController {
   }
 
   @Public()
-  @Post('/callback/chunk')
+  @Post('callback/chunk')
   async handleChunkCallback(
     @Body() chunkCallback: ChunkCallbackDto,
   ): Promise<Record<string, any>> {

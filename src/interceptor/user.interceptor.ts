@@ -8,6 +8,8 @@ import { Observable } from 'rxjs';
 import { tap, finalize } from 'rxjs/operators';
 import { trace, context } from '@opentelemetry/api';
 
+const LOGIN_URLS = ['/api/v1/login', '/api/v1/sign-up/confirm'];
+
 @Injectable()
 export class UserInterceptor implements NestInterceptor {
   intercept(
@@ -27,7 +29,7 @@ export class UserInterceptor implements NestInterceptor {
             if (req.user?.id) {
               span.setAttribute('user.id', req.user.id);
             } else if (
-              req.url === '/api/v1/login' &&
+              LOGIN_URLS.includes(req.url) &&
               req.method === 'POST' &&
               responseBody?.id
             ) {

@@ -174,11 +174,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ app ]
     steps:
-      - name: PRE Webhook
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          curl "${{ secrets.DEV_WEBHOOK_URL }}/pre?module=backend" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
-
       - name: TEST Webhook
         if: github.event_name == 'pull_request'
         run: |

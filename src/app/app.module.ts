@@ -46,8 +46,10 @@ import { CleanResourceNames1755396702021 } from 'omniboxd/migrations/17553967020
 import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/1755499552000-update-attachment-urls';
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
 import { SharesAllResources1754471311959 } from 'omniboxd/migrations/1754471311959-shares-all-resources';
+import { Applications1756914379375 } from 'omniboxd/migrations/1756914379375-applications';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TraceModule } from 'omniboxd/trace/trace.module';
+import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
 import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
@@ -107,6 +109,7 @@ export class AppModule implements NestModule {
         SharedResourcesModule,
         TraceModule,
         FeedbackModule,
+        ApplicationsModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
         //   inject: [ConfigService],
@@ -141,6 +144,7 @@ export class AppModule implements NestModule {
               UpdateAttachmentUrls1755499552000,
               ScanResourceAttachments1755504936756,
               SharesAllResources1754471311959,
+              Applications1756914379375,
               Feedback1757100000000,
               ...extraMigrations,
             ],

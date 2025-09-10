@@ -12,13 +12,13 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import {
-  Injectable,
   ConflictException,
+  Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
-  NamespaceRole,
   NamespaceMember,
+  NamespaceRole,
 } from './entities/namespace-member.entity';
 
 @Injectable()
@@ -41,7 +41,7 @@ export class NamespacesService {
     private readonly permissionsService: PermissionsService,
   ) {}
 
-  async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
+  async getPrivateRootId(userId: string, namespaceId: string): Promise<string> {
     const member = await this.namespaceMemberRepository.findOne({
       where: {
         userId,
@@ -51,7 +51,12 @@ export class NamespacesService {
     if (member === null) {
       throw new NotFoundException('Root resource not found.');
     }
-    return await this.resourceService.get(member.rootResourceId);
+    return member.rootResourceId;
+  }
+
+  async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
+    const rootResourceId = await this.getPrivateRootId(userId, namespaceId);
+    return await this.resourceService.get(rootResourceId);
   }
 
   async getTeamspaceRoot(

@@ -13,10 +13,12 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { CreateAPIKeyDto } from './api-key.dto';
+import { Applications } from 'omniboxd/applications/applications.entity';
 
 describe('APIKeyService', () => {
   let service: APIKeyService;
   let apiKeyRepository: jest.Mocked<Repository<APIKey>>;
+  let applicationsRepository: jest.Mocked<Repository<Applications>>;
   let permissionsService: jest.Mocked<PermissionsService>;
   let namespacesService: jest.Mocked<NamespacesService>;
 
@@ -46,6 +48,11 @@ describe('APIKeyService', () => {
       find: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      softDelete: jest.fn(),
+    };
+
+    const mockApplicationsRepository = {
+      softDelete: jest.fn(),
     };
 
     const mockPermissionsService = {
@@ -64,6 +71,10 @@ describe('APIKeyService', () => {
           useValue: mockRepository,
         },
         {
+          provide: getRepositoryToken(Applications),
+          useValue: mockApplicationsRepository,
+        },
+        {
           provide: PermissionsService,
           useValue: mockPermissionsService,
         },
@@ -76,6 +87,7 @@ describe('APIKeyService', () => {
 
     service = module.get<APIKeyService>(APIKeyService);
     apiKeyRepository = module.get(getRepositoryToken(APIKey));
+    applicationsRepository = module.get(getRepositoryToken(Applications));
     permissionsService = module.get(PermissionsService);
     namespacesService = module.get(NamespacesService);
   });
@@ -285,6 +297,48 @@ describe('APIKeyService', () => {
 
       expect(value).toMatch(/^sk-[a-f0-9]{40}$/);
       expect(apiKeyRepository.findOne).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('delete', () => {
+    it('should delete API key and cascade delete related applications', async () => {
+      const apiKeyId = 'test-api-key-id';
+
+      // Mock successful soft delete operations
+      applicationsRepository.softDelete.mockResolvedValue({
+        affected: 2,
+      } as any);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+
+      await service.delete(apiKeyId);
+
+      // Verify applications were deleted first
+      expect(applicationsRepository.softDelete).toHaveBeenCalledWith({
+        apiKeyId: apiKeyId,
+      });
+
+      // Verify API key was deleted after
+      expect(apiKeyRepository.softDelete).toHaveBeenCalledWith(apiKeyId);
+    });
+
+    it('should delete API key and handle when no related applications exist', async () => {
+      const apiKeyId = 'test-api-key-id';
+
+      // Mock soft delete operations (0 applications affected, 1 API key affected)
+      applicationsRepository.softDelete.mockResolvedValue({
+        affected: 0,
+      } as any);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+
+      await service.delete(apiKeyId);
+
+      // Verify applications soft delete was still called (even if no applications found)
+      expect(applicationsRepository.softDelete).toHaveBeenCalledWith({
+        apiKeyId: apiKeyId,
+      });
+
+      // Verify API key was deleted
+      expect(apiKeyRepository.softDelete).toHaveBeenCalledWith(apiKeyId);
     });
   });
 });

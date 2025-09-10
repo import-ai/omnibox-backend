@@ -1,0 +1,7 @@
+apiVersion: v2
+name: OmniBox Backend
+description: OmniBox Backend Service
+
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

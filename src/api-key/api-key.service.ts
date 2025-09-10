@@ -10,17 +10,21 @@ import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
   APIKeyResponseDto,
   CreateAPIKeyDto,
+  PatchAPIKeyDto,
   UpdateAPIKeyDto,
 } from 'omniboxd/api-key/api-key.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { Applications } from 'omniboxd/applications/applications.entity';
 
 @Injectable()
 export class APIKeyService {
   constructor(
     @InjectRepository(APIKey)
     private readonly apiKeyRepository: Repository<APIKey>,
+    @InjectRepository(Applications)
+    private readonly applicationsRepository: Repository<Applications>,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesService: NamespacesService,
   ) {}
@@ -51,7 +55,7 @@ export class APIKeyService {
     });
 
     const saved = await this.apiKeyRepository.save(apiKey);
-    return this.toResponseDto(saved);
+    return APIKeyResponseDto.fromEntity(saved);
   }
 
   async findOne(id: string): Promise<APIKeyResponseDto> {
@@ -59,7 +63,7 @@ export class APIKeyService {
     if (!apiKey) {
       throw new NotFoundException('API Key not found');
     }
-    return this.toResponseDto(apiKey);
+    return APIKeyResponseDto.fromEntity(apiKey);
   }
 
   async findByValue(value: string): Promise<APIKey | null> {
@@ -75,7 +79,7 @@ export class APIKeyService {
     if (namespaceId) where.namespaceId = namespaceId;
 
     const apiKeys = await this.apiKeyRepository.find({ where });
-    return apiKeys.map((apiKey) => this.toResponseDto(apiKey));
+    return apiKeys.map((apiKey) => APIKeyResponseDto.fromEntity(apiKey));
   }
 
   async update(
@@ -90,8 +94,51 @@ export class APIKeyService {
     return await this.findOne(id);
   }
 
+  async patch(
+    id: string,
+    patchApiKeyDto: PatchAPIKeyDto,
+  ): Promise<APIKeyResponseDto> {
+    // Get the existing API key
+    const existingApiKey = await this.apiKeyRepository.findOne({
+      where: { id },
+    });
+    if (!existingApiKey) {
+      throw new NotFoundException('API Key not found');
+    }
+
+    // If root_resource_id is being updated, validate user has permission to it
+    if (patchApiKeyDto.root_resource_id !== undefined) {
+      await this.validateUserResourcePermission(
+        existingApiKey.userId,
+        existingApiKey.namespaceId,
+        patchApiKeyDto.root_resource_id,
+      );
+    }
+
+    // Prepare the updated attrs by merging with existing attrs
+    const updatedAttrs = { ...existingApiKey.attrs };
+
+    // Update only the fields that are provided
+    if (patchApiKeyDto.root_resource_id !== undefined) {
+      updatedAttrs.root_resource_id = patchApiKeyDto.root_resource_id;
+    }
+    if (patchApiKeyDto.permissions !== undefined) {
+      updatedAttrs.permissions = patchApiKeyDto.permissions;
+    }
+
+    // Update the API key with the merged attrs
+    await this.apiKeyRepository.update(id, { attrs: updatedAttrs });
+    return await this.findOne(id);
+  }
+
   async delete(id: string): Promise<void> {
-    const result = await this.apiKeyRepository.delete(id);
+    // Directly delete all applications that reference this API key
+    await this.applicationsRepository.softDelete({
+      apiKeyId: id,
+    });
+
+    // Then delete the API key itself
+    const result = await this.apiKeyRepository.softDelete(id);
     if ((result.affected || 0) === 0) {
       throw new NotFoundException('API Key not found');
     }
@@ -114,18 +161,6 @@ export class APIKeyService {
     }
 
     return value!;
-  }
-
-  private toResponseDto(apiKey: APIKey): APIKeyResponseDto {
-    return {
-      id: apiKey.id,
-      value: apiKey.value,
-      user_id: apiKey.userId,
-      namespace_id: apiKey.namespaceId,
-      attrs: apiKey.attrs,
-      created_at: apiKey.createdAt,
-      updated_at: apiKey.updatedAt,
-    };
   }
 
   private async validateUserNamespacePermission(

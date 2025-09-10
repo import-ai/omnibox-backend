@@ -132,7 +132,7 @@ export class ConversationsService {
               lang = 'English';
             }
           }
-        } catch (error) {
+        } catch {
           // Ignore language preference errors, continue without lang
         }
 

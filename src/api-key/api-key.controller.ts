@@ -3,6 +3,7 @@ import {
   APIKeyResponseDto,
   CreateAPIKeyDto,
   UpdateAPIKeyDto,
+  PatchAPIKeyDto,
 } from 'omniboxd/api-key/api-key.dto';
 import {
   BadRequestException,
@@ -11,6 +12,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -51,6 +53,14 @@ export class APIKeyController {
     @Body() updateApiKeyDto: UpdateAPIKeyDto,
   ): Promise<APIKeyResponseDto> {
     return await this.apiKeyService.update(id, updateApiKeyDto);
+  }
+
+  @Patch(':id')
+  async patch(
+    @Param('id') id: string,
+    @Body() patchApiKeyDto: PatchAPIKeyDto,
+  ): Promise<APIKeyResponseDto> {
+    return await this.apiKeyService.patch(id, patchApiKeyDto);
   }
 
   @Delete(':id')

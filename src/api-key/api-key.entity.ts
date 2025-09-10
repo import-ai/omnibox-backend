@@ -18,6 +18,7 @@ export type APIKeyPermission = {
 };
 
 export type APIKeyAttrs = {
+  related_app_id?: string;
   root_resource_id: string;
   permissions: APIKeyPermission[];
 };

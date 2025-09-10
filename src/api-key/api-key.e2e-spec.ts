@@ -1,5 +1,5 @@
 import { TestClient } from 'test/test-client';
-import { APIKeyPermissionType } from './api-key.entity';
+import { APIKeyPermissionTarget, APIKeyPermissionType } from './api-key.entity';
 
 describe('APIKeyController (e2e)', () => {
   let client: TestClient;
@@ -166,6 +166,163 @@ describe('APIKeyController (e2e)', () => {
         ],
       },
     });
+  });
+
+  it('should partially update an API key permissions only (PATCH)', async () => {
+    const patchData = {
+      permissions: [
+        {
+          target: 'resources',
+          permissions: [APIKeyPermissionType.READ, APIKeyPermissionType.UPDATE],
+        },
+      ],
+    };
+
+    const response = await client
+      .patch(`/api/v1/api-keys/${apiKeyId}`)
+      .send(patchData)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      id: apiKeyId,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id, // Should remain unchanged
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.UPDATE,
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('should partially update an API key root_resource_id only (PATCH)', async () => {
+    const patchData = {
+      root_resource_id: client.namespace.root_resource_id,
+    };
+
+    const response = await client
+      .patch(`/api/v1/api-keys/${apiKeyId}`)
+      .send(patchData)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      id: apiKeyId,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.UPDATE,
+            ],
+          },
+        ], // Should remain unchanged from previous test
+      },
+    });
+  });
+
+  it('should partially update both root_resource_id and permissions (PATCH)', async () => {
+    const patchData = {
+      root_resource_id: client.namespace.root_resource_id,
+      permissions: [
+        {
+          target: 'resources',
+          permissions: [
+            APIKeyPermissionType.CREATE,
+            APIKeyPermissionType.DELETE,
+          ],
+        },
+      ],
+    };
+
+    const response = await client
+      .patch(`/api/v1/api-keys/${apiKeyId}`)
+      .send(patchData)
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      id: apiKeyId,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: 'resources',
+            permissions: [
+              APIKeyPermissionType.CREATE,
+              APIKeyPermissionType.DELETE,
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('should return 404 when patching non-existent API key (PATCH)', async () => {
+    const nonExistentId = '00000000-0000-0000-0000-000000000000';
+    const patchData = {
+      permissions: [
+        {
+          target: 'resources',
+          permissions: [APIKeyPermissionType.READ],
+        },
+      ],
+    };
+
+    await client
+      .patch(`/api/v1/api-keys/${nonExistentId}`)
+      .send(patchData)
+      .expect(404);
+  });
+
+  it('should return 404 when patching API key with resource user does not have write access to (PATCH)', async () => {
+    const patchData = {
+      root_resource_id: 'non-existent-resource',
+    };
+
+    await client
+      .patch(`/api/v1/api-keys/${apiKeyId}`)
+      .send(patchData)
+      .expect(404);
+  });
+
+  it('should preserve related_app_id during patch operations', async () => {
+    const wechatBotCreateResponse = await client.post(
+      `/api/v1/namespaces/${client.namespace.id}/applications/wechat_bot`,
+    );
+    const verifyCode: string = wechatBotCreateResponse.body.attrs.verify_code;
+    const wechatBotCallbackResponse = await client
+      .post('/internal/api/v1/applications/wechat_bot')
+      .send({
+        verify_code: verifyCode,
+        wechat_user_id: 'wechat-user-123',
+        nickname: 'Test WeChat User',
+      });
+    const apiKey = wechatBotCallbackResponse.body.api_key;
+    const patchResponse = await client
+      .patch(`/api/v1/api-keys/${apiKey.id}`)
+      .send({
+        attrs: {
+          permissions: [
+            {
+              target: APIKeyPermissionTarget.RESOURCES,
+              permissions: [
+                APIKeyPermissionType.READ,
+                APIKeyPermissionType.CREATE,
+              ],
+            },
+          ],
+          root_resource_id: client.namespace.root_resource_id,
+        },
+      });
+    expect(patchResponse.body.attrs.related_app_id).toBe(
+      apiKey.attrs.related_app_id,
+    );
   });
 
   it('should delete an API key (DELETE)', async () => {

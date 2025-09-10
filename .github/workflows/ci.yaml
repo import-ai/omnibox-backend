@@ -182,7 +182,7 @@ jobs:
       - name: TEST Webhook
         if: github.event_name == 'pull_request'
         run: |
-          curl "${{ secrets.DEV_WEBHOOK_URL }}/test?module=backend&pr=pr-${{ github.event.number }}&commit=${{ github.sha }}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
+          curl "${{ secrets.DEV_WEBHOOK_URL }}/test?module=backend&pr=pr-${{ github.event.number }}&commit=${{ github.event.pull_request.head.sha }}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
 
       - name: PROD Webhook
         if: false && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')

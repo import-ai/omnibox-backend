@@ -5,7 +5,10 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import { Cookies } from 'omniboxd/decorators/cookie.decorators';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
-import { ValidateShare, ValidatedShare } from 'omniboxd/decorators/validate-share.decorator';
+import {
+  ValidateShare,
+  ValidatedShare,
+} from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 

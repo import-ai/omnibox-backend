@@ -15,6 +15,7 @@ import {
 } from './dto/upload-attachments-response.dto';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
+import { Share } from 'omniboxd/shares/entities/share.entity';
 
 @Injectable()
 export class AttachmentsService {
@@ -181,18 +182,11 @@ export class AttachmentsService {
   }
 
   async downloadAttachmentViaShare(
-    shareId: string,
+    share: Share,
     resourceId: string,
     attachmentId: string,
-    password: string,
-    userId: string | undefined,
     httpResponse: Response,
   ) {
-    const share = await this.sharesService.getAndValidateShare(
-      shareId,
-      password,
-      userId,
-    );
     await this.sharedResourcesService.getAndValidateResource(share, resourceId);
     await this.resourceAttachmentsService.getResourceAttachmentOrFail(
       share.namespaceId,

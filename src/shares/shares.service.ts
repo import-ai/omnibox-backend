@@ -61,11 +61,8 @@ export class SharesService {
   }
 
   async getPublicShareInfo(
-    shareId: string,
-    password?: string,
-    userId?: string,
+    share: Share,
   ): Promise<PublicShareInfoDto> {
-    const share = await this.getAndValidateShare(shareId, password, userId);
     const resource = await this.namespaceResourcesService.get(share.resourceId);
     return PublicShareInfoDto.fromEntity(share, resource);
   }

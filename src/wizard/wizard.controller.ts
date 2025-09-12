@@ -79,3 +79,8 @@ export class WizardController {
     return await this.wizardService.wizardApiService.proxy(req);
   }
 }
+
+@Controller('api/v1/shares/:shareId')
+export class SharedWizardController {
+  constructor(private readonly wizardService: WizardService) {}
+}

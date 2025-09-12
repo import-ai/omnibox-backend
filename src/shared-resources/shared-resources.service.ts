@@ -16,31 +16,17 @@ export class SharedResourcesService {
   ) {}
 
   async getSharedResource(
-    shareId: string,
+    share: Share,
     resourceId: string,
-    password?: string,
-    userId?: string,
   ): Promise<SharedResourceDto> {
-    const share = await this.sharesService.getAndValidateShare(
-      shareId,
-      password,
-      userId,
-    );
     const resource = await this.getAndValidateResource(share, resourceId);
     return SharedResourceDto.fromEntity(resource);
   }
 
   async getSharedResourceChildren(
-    shareId: string,
+    share: Share,
     resourceId: string,
-    password?: string,
-    userId?: string,
   ): Promise<SharedResourceMetaDto[]> {
-    const share = await this.sharesService.getAndValidateShare(
-      shareId,
-      password,
-      userId,
-    );
     const resource = await this.getAndValidateResource(share, resourceId);
     if (!share.allResources) {
       return [];

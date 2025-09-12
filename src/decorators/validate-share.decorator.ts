@@ -1,4 +1,9 @@
-import { createParamDecorator, ExecutionContext, SetMetadata, applyDecorators } from '@nestjs/common';
+import {
+  createParamDecorator,
+  ExecutionContext,
+  SetMetadata,
+  applyDecorators,
+} from '@nestjs/common';
 import { Request } from 'express';
 
 export const VALIDATE_SHARE_KEY = 'validate-share';
@@ -18,7 +23,5 @@ export const ValidatedShare = createParamDecorator(
  * Extracts shareId from route params, password from cookies, and userId from request
  */
 export function ValidateShare() {
-  return applyDecorators(
-    SetMetadata(VALIDATE_SHARE_KEY, true),
-  );
+  return applyDecorators(SetMetadata(VALIDATE_SHARE_KEY, true));
 }

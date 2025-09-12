@@ -17,6 +17,13 @@ import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { RequestId } from 'omniboxd/decorators/request-id.decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
+import { CookieAuth } from 'omniboxd/auth';
+import {
+  ValidatedShare,
+  ValidateShare,
+} from 'omniboxd/decorators/validate-share.decorator';
+import { Share } from 'omniboxd/shares/entities/share.entity';
 
 @Controller('api/v1/wizard')
 export class WizardController {
@@ -81,6 +88,15 @@ export class WizardController {
 }
 
 @Controller('api/v1/shares/:shareId')
+@UseInterceptors(ValidateShareInterceptor)
 export class SharedWizardController {
   constructor(private readonly wizardService: WizardService) {}
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare()
+  async ask(
+    @ValidatedShare() share: Share,
+    @RequestId() requestId: string,
+    @Body() body: AgentRequestDto,
+  ) {}
 }

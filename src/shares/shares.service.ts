@@ -60,9 +60,7 @@ export class SharesService {
     return share;
   }
 
-  async getPublicShareInfo(
-    share: Share,
-  ): Promise<PublicShareInfoDto> {
+  async getPublicShareInfo(share: Share): Promise<PublicShareInfoDto> {
     const resource = await this.namespaceResourcesService.get(share.resourceId);
     return PublicShareInfoDto.fromEntity(share, resource);
   }

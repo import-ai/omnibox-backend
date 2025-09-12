@@ -123,6 +123,52 @@ export class ResourcesService {
     return children.map((r) => ResourceMetaDto.fromEntity(r));
   }
 
+  async getAllSubResources(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<ResourceMetaDto[]> {
+    const children = await this.getSubResources(namespaceId, resourceId);
+    const allResources: ResourceMetaDto[] = [...children];
+
+    for (const child of children) {
+      const subResources = await this.getAllSubResources(namespaceId, child.id);
+      allResources.push(...subResources);
+    }
+
+    return allResources;
+  }
+
+  async getResourceMeta(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<ResourceMetaDto | null> {
+    const resource = await this.resourceRepository.findOne({
+      select: [
+        'id',
+        'name',
+        'parentId',
+        'resourceType',
+        'globalPermission',
+        'createdAt',
+        'updatedAt',
+      ],
+      where: { namespaceId, id: resourceId },
+    });
+    if (!resource) {
+      return null;
+    }
+    return ResourceMetaDto.fromEntity(resource);
+  }
+
+  async getResource(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Resource | null> {
+    return await this.resourceRepository.findOne({
+      where: { namespaceId, id: resourceId },
+    });
+  }
+
   async updateResource(
     namespaceId: string,
     resourceId: string,

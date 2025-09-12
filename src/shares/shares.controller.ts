@@ -1,10 +1,21 @@
-import { Body, Controller, Get, Param, Patch, Req, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Req,
+  UseInterceptors,
+} from '@nestjs/common';
 import { SharesService } from './shares.service';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import { Cookies } from 'omniboxd/decorators/cookie.decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { ValidateShare, ValidatedShare } from 'omniboxd/decorators/validate-share.decorator';
+import {
+  ValidateShare,
+  ValidatedShare,
+} from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
@@ -44,9 +55,7 @@ export class PublicSharesController {
   @CookieAuth({ onAuthFail: 'continue' })
   @ValidateShare()
   @Get()
-  async getShareInfo(
-    @ValidatedShare() share: Share,
-  ) {
+  async getShareInfo(@ValidatedShare() share: Share) {
     return await this.sharesService.getPublicShareInfo(share);
   }
 }

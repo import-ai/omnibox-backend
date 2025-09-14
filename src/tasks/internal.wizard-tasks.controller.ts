@@ -1,6 +1,6 @@
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { Controller, Get, Param } from '@nestjs/common';
-import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
 @Controller('internal/api/v1/wizard/tasks')
@@ -10,6 +10,6 @@ export class InternalWizardTasksController {
   @Public()
   @Get(':id')
   async getTaskById(@Param('id') id: string) {
-    return TaskDto.fromEntity(await this.tasksService.get(id));
+    return InternalTaskDto.fromEntity(await this.tasksService.get(id));
   }
 }

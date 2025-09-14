@@ -156,8 +156,12 @@ export class MinioService {
     const uuid = generateId(length);
     // Get the original filename to extract the proper extension
     const originalFilename = getOriginalFileName(filename);
+    const extIndex = originalFilename.lastIndexOf('.');
+    if (extIndex === -1) {
+      return uuid;
+    }
     const ext: string = originalFilename.substring(
-      originalFilename.lastIndexOf('.'),
+      extIndex,
       originalFilename.length,
     );
     return `${uuid}${ext}`;

@@ -247,8 +247,12 @@ export class WizardService {
     if (query.namespace_id) {
       andConditions.push(`tasks.namespace_id = '${query.namespace_id}'`);
     }
-    if (query.function) {
-      andConditions.push(`tasks.function = '${query.function}'`);
+    if (query.functions) {
+      const condition = query.functions
+        .split(',')
+        .map((x) => `'${x}'`)
+        .join(', ');
+      andConditions.push(`tasks.function IN (${condition})`);
     }
     const andCondition: string = andConditions.map((x) => `AND ${x}`).join(' ');
     const rawQuery = `

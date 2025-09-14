@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import {
   Message,
   MessageStatus,
@@ -23,50 +23,32 @@ export class MessagesService {
     private readonly wizardTaskService: WizardTaskService,
   ) {}
 
-  async index(
-    index: boolean,
-    userId: string,
-    namespaceId: string,
-    conversationId: string,
-    message: Message,
-    manager: EntityManager,
-  ) {
-    if (index) {
-      await this.wizardTaskService.createMessageIndexTask(
-        TASK_PRIORITY,
-        userId,
-        namespaceId,
-        conversationId,
-        message,
-        manager.getRepository(Task),
-      );
-    }
-  }
-
   async create(
     namespaceId: string,
     conversationId: string,
-    user: User,
+    user: User | null,
     dto: CreateMessageDto,
     index: boolean = true,
   ): Promise<Message> {
     const message = this.messageRepository.create({
       message: dto.message,
       conversationId,
-      userId: user.id,
+      userId: user?.id,
       parentId: dto.parentId,
       attrs: dto.attrs,
     });
     return await this.dataSource.transaction(async (manager) => {
       const savedMsg = await manager.save(message);
-      await this.index(
-        index,
-        user.id,
-        namespaceId,
-        conversationId,
-        savedMsg,
-        manager,
-      );
+      if (user && index) {
+        await this.wizardTaskService.createMessageIndexTask(
+          TASK_PRIORITY,
+          user.id,
+          namespaceId,
+          conversationId,
+          savedMsg,
+          manager.getRepository(Task),
+        );
+      }
       return savedMsg;
     });
   }
@@ -84,14 +66,16 @@ export class MessagesService {
     Object.assign(message, dto);
     return await this.dataSource.transaction(async (manager) => {
       const updatedMsg = await manager.save(message);
-      await this.index(
-        index,
-        message.userId,
-        namespaceId,
-        conversationId,
-        message,
-        manager,
-      );
+      if (index && message.userId) {
+        await this.wizardTaskService.createMessageIndexTask(
+          TASK_PRIORITY,
+          message.userId,
+          namespaceId,
+          conversationId,
+          message,
+          manager.getRepository(Task),
+        );
+      }
       return updatedMsg;
     });
   }

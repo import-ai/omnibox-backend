@@ -27,12 +27,11 @@ describe('InternalWizardController (e2e)', () => {
       .send(collectData)
       .expect(HttpStatus.CREATED);
 
-    console.log({ taskCreateResponse: taskCreateResponse.body });
-
     const taskId = taskCreateResponse.body.task_id;
 
-    const fetchResponse = await client.get('/internal/api/v1/wizard/task');
-    console.log({ fetchResponse: fetchResponse.body });
+    await client
+      .get(`/internal/api/v1/wizard/task?namespace_id=${client.namespace.id}`)
+      .expect(HttpStatus.OK);
 
     const response = await client
       .post('/internal/api/v1/wizard/callback')
@@ -51,7 +50,6 @@ describe('InternalWizardController (e2e)', () => {
           ] as Image[],
         },
       });
-    console.log({ body: response.body });
     expect(response.status).toBe(HttpStatus.CREATED);
   });
 });

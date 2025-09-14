@@ -5,6 +5,7 @@ import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
 import {
   decodeFileName,
+  encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 import { UploadedObjectInfo } from 'minio/dist/main/internal/type';
@@ -181,7 +182,7 @@ export class MinioService {
       buffer.length,
       {
         'Content-Type': mimetype,
-        filename,
+        filename: encodeFileName(filename),
         // Minio would convert metadata keys to lowercase
         metadata_string: JSON.stringify(metadata),
       },

@@ -9,8 +9,8 @@ export class Conversation extends Base {
   @Column()
   namespaceId: string;
 
-  @Column()
-  userId: string;
+  @Column({ nullable: true })
+  userId: string | null;
 
   @Column()
   title: string;

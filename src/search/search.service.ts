@@ -158,6 +158,9 @@ export class SearchService {
       }
       offset += conversations.length;
       for (const conversation of conversations) {
+        if (!conversation.userId) {
+          continue;
+        }
         const messages = await this.messagesService.findAll(
           conversation.userId,
           conversation.id,

@@ -33,7 +33,7 @@ spec:
       containers:
         - name: {{ $name }}
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: {{ .Values.app.port }}
           volumeMounts:

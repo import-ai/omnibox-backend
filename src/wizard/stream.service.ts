@@ -93,7 +93,7 @@ export class StreamService {
   agentHandler(
     namespaceId: string,
     conversationId: string,
-    user: User,
+    user: User | null,
     subscriber: Subscriber<MessageEvent>,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
@@ -114,7 +114,7 @@ export class StreamService {
         );
         chunk.id = message.id;
         chunk.parentId = message.parentId || undefined;
-        chunk.userId = user.id;
+        chunk.userId = user?.id;
         chunk.namespaceId = namespaceId;
 
         if (context.message?.role === OpenAIMessageRole.SYSTEM) {

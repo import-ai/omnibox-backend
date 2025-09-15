@@ -47,8 +47,12 @@ export class PermissionsService {
     namespaceId: string,
     parentResourceIds: string[],
     groupIds?: string[],
+    entityManager?: EntityManager,
   ): Promise<Map<string, ResourcePermission>> {
-    const permissions = await this.groupPermiRepo.find({
+    const groupPermiRepo = entityManager
+      ? entityManager.getRepository(GroupPermission)
+      : this.groupPermiRepo;
+    const permissions = await groupPermiRepo.find({
       where: {
         namespaceId,
         resourceId: In(parentResourceIds),
@@ -83,8 +87,12 @@ export class PermissionsService {
     namespaceId: string,
     parentResourceIds: string[],
     userIds?: string[],
+    entityManager?: EntityManager,
   ): Promise<Map<string, ResourcePermission>> {
-    const permissions = await this.userPermiRepo.find({
+    const userPermiRepo = entityManager
+      ? entityManager.getRepository(UserPermission)
+      : this.userPermiRepo;
+    const permissions = await userPermiRepo.find({
       where: {
         namespaceId,
         resourceId: In(parentResourceIds),
@@ -119,8 +127,12 @@ export class PermissionsService {
     namespaceId: string,
     resources: ResourceMetaDto[],
     userId: string,
+    entityManager?: EntityManager,
   ): Promise<ResourcePermission> {
-    const groups = await this.groupUserRepository.find({
+    const groupUserRepository = entityManager
+      ? entityManager.getRepository(GroupUser)
+      : this.groupUserRepository;
+    const groups = await groupUserRepository.find({
       where: {
         namespaceId,
         userId,
@@ -134,11 +146,13 @@ export class PermissionsService {
       namespaceId,
       resourceIds,
       [userId],
+      entityManager,
     );
     const groupPermissionMap = await this.getGroupPermissions(
       namespaceId,
       resourceIds,
       groupIds,
+      entityManager,
     );
     const curPermission = maxPermissions([
       globalPermission,
@@ -231,11 +245,13 @@ export class PermissionsService {
     namespaceId: string,
     resourceId: string,
     userId: string,
+    entityManager?: EntityManager,
   ): Promise<ListRespDto> {
     // Get resources
     const resources = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
+      entityManager,
     );
     if (resources.length === 0 || resources[resources.length - 1].parentId) {
       // Parent resource has been deleted
@@ -248,10 +264,14 @@ export class PermissionsService {
     const userPermissionMap = await this.getUserPermissions(
       namespaceId,
       resourceIds,
+      undefined,
+      entityManager,
     );
     const groupPermissionMap = await this.getGroupPermissions(
       namespaceId,
       resourceIds,
+      undefined,
+      entityManager,
     );
 
     // Get user information
@@ -311,9 +331,13 @@ export class PermissionsService {
     userId: string,
     requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
     resources?: ResourceMetaDto[],
+    entityManager?: EntityManager,
   ) {
     // Check if the user is a member of the namespace
-    const count = await this.namespaceMembersRepository.count({
+    const namespaceMembersRepository = entityManager
+      ? entityManager.getRepository(NamespaceMember)
+      : this.namespaceMembersRepository;
+    const count = await namespaceMembersRepository.count({
       where: { namespaceId, userId },
     });
     if (count == 0) {
@@ -323,6 +347,7 @@ export class PermissionsService {
       resources = await this.resourcesService.getParentResourcesOrFail(
         namespaceId,
         resourceId,
+        entityManager,
       );
     }
     if (resources.length === 0 || resources[resources.length - 1].parentId) {
@@ -333,6 +358,7 @@ export class PermissionsService {
       namespaceId,
       resources,
       userId,
+      entityManager,
     );
     return comparePermission(permission, requiredPermission) >= 0;
   }

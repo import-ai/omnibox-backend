@@ -22,6 +22,7 @@ import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
+import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 
 @Injectable()
 export class WizardService {
@@ -37,6 +38,7 @@ export class WizardService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly sharedResourcesService: SharedResourcesService,
   ) {
     this.processors = {
       collect: new CollectProcessor(
@@ -61,6 +63,7 @@ export class WizardService {
       baseUrl,
       this.messagesService,
       this.namespaceResourcesService,
+      this.sharedResourcesService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
   }

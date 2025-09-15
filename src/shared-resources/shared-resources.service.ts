@@ -72,10 +72,14 @@ export class SharedResourcesService {
     if (!rootResource) {
       return [];
     }
-    const subResources = await this.resourcesService.getAllSubResources(
-      share.namespaceId,
-      rootResource.id,
-    );
+
+    const subResources = share.allResources
+      ? await this.resourcesService.getAllSubResources(
+          share.namespaceId,
+          rootResource.id,
+        )
+      : [];
+
     const allResources = [
       ResourceMetaDto.fromEntity(rootResource),
       ...subResources,

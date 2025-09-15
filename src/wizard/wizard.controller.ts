@@ -39,7 +39,7 @@ export class WizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.agentStreamWrapper(
+    return await this.wizardService.streamService.createUserAgentStream(
       req.user,
       body,
       requestId,
@@ -54,7 +54,7 @@ export class WizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.agentStreamWrapper(
+    return await this.wizardService.streamService.createUserAgentStream(
       req.user,
       body,
       requestId,
@@ -73,11 +73,20 @@ export class WizardController {
 export class SharedWizardController {
   constructor(private readonly wizardService: WizardService) {}
 
+  @Post('ask')
+  @Sse()
   @CookieAuth({ onAuthFail: 'continue' })
   @ValidateShare()
   async ask(
     @ValidatedShare() share: Share,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
-  ) {}
+  ) {
+    return await this.wizardService.streamService.createShareAgentStream(
+      share,
+      body,
+      requestId,
+      'ask',
+    );
+  }
 }

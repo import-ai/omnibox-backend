@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import {
   Message,
   MessageStatus,
@@ -113,9 +113,9 @@ export class MessagesService {
     return await this.messageRepository.save(message);
   }
 
-  async findAll(userId: string, conversationId: string) {
+  async findAll(userId: string | undefined, conversationId: string) {
     return await this.messageRepository.find({
-      where: { conversationId, userId },
+      where: { conversationId, userId: userId ? userId : IsNull() },
       order: { createdAt: 'ASC' },
     });
   }

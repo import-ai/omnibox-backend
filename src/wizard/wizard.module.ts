@@ -16,6 +16,7 @@ import { MinioModule } from 'omniboxd/minio/minio.module';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
+import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 
 @Module({
   providers: [WizardService, ChunkManagerService, OpenWizardService],
@@ -29,6 +30,7 @@ import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
     AttachmentsModule,
     TasksModule,
     MinioModule,
+    SharedResourcesModule,
     TypeOrmModule.forFeature([Task]),
   ],
   controllers: [

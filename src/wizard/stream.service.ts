@@ -11,7 +11,6 @@ import {
   AgentRequestDto,
   PrivateSearchResourceDto,
   PrivateSearchToolDto,
-  WebSearchToolDto,
   WizardAgentRequestDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
@@ -21,6 +20,8 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { context, propagation } from '@opentelemetry/api';
+import { Share } from 'omniboxd/shares/entities/share.entity';
+import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 
 interface HandlerContext {
   parentId?: string;
@@ -35,7 +36,8 @@ export class StreamService {
     private readonly wizardBaseUrl: string,
     private readonly messagesService: MessagesService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
-  ) {}
+    private readonly sharedResourcesService: SharedResourcesService,
+  ) { }
 
   async stream(
     url: string,
@@ -202,7 +204,7 @@ export class StreamService {
     );
   }
 
-  private async computeVisibleResources(
+  private async getUserVisibleResources(
     tool: PrivateSearchToolDto,
     namespaceId: string,
     userId: string,
@@ -256,27 +258,36 @@ export class StreamService {
     }
   }
 
-  async agentStream(
-    userId: string,
-    body: AgentRequestDto,
+  private async getShareVisibleResources(
+    tool: PrivateSearchToolDto,
+    share: Share,
+  ) {
+    const sharedResources =
+      await this.sharedResourcesService.getAllSharedResources(share);
+    tool.visible_resources = sharedResources.map((r) => {
+      return {
+        id: r.id,
+        name: r.name || '',
+        type: r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
+      } as PrivateSearchResourceDto;
+    });
+  }
+
+  private async createAgentStream(
+    requestDto: AgentRequestDto,
     requestId: string,
-    mode: 'ask' | 'write' = 'ask',
+    mode: 'ask' | 'write',
+    userId: string | null,
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Message[] = [];
-    if (body.parent_message_id) {
-      parentId = body.parent_message_id;
+    if (requestDto.parent_message_id) {
+      parentId = requestDto.parent_message_id;
       const allMessages = await this.messagesService.findAll(
-        userId,
-        body.conversation_id,
+        userId || undefined,
+        requestDto.conversation_id,
       );
       messages = this.getMessages(allMessages, parentId);
-    }
-
-    for (const tool of body.tools || []) {
-      if (tool.name == 'private_search') {
-        await this.computeVisibleResources(tool, body.namespace_id, userId);
-      }
     }
 
     const handlerContext: HandlerContext = {
@@ -286,24 +297,24 @@ export class StreamService {
 
     return new Observable<MessageEvent>((subscriber) => {
       const handler = this.agentHandler(
-        body.namespace_id,
-        body.conversation_id,
+        requestDto.namespace_id,
+        requestDto.conversation_id,
         userId,
         subscriber,
       );
 
-      const wizardRequestBody: WizardAgentRequestDto = {
-        conversation_id: body.conversation_id,
-        query: body.query,
+      const wizardRequest: WizardAgentRequestDto = {
+        conversation_id: requestDto.conversation_id,
+        query: requestDto.query,
         messages,
-        tools: body.tools,
-        enable_thinking: body.enable_thinking,
-        lang: body.lang,
+        tools: requestDto.tools,
+        enable_thinking: requestDto.enable_thinking,
+        lang: requestDto.lang,
       };
 
       this.stream(
         `/api/v1/wizard/${mode}`,
-        wizardRequestBody,
+        wizardRequest,
         requestId,
         async (data) => {
           await handler(data, handlerContext);
@@ -314,14 +325,43 @@ export class StreamService {
     });
   }
 
-  async agentStreamWrapper(
+  async createUserAgentStream(
     userId: string,
-    body: AgentRequestDto,
+    requestDto: AgentRequestDto,
     requestId: string,
-    mode: 'ask' | 'write' = 'ask',
+    mode: 'ask' | 'write',
   ): Promise<Observable<MessageEvent>> {
     try {
-      return await this.agentStream(userId, body, requestId, mode);
+      for (const tool of requestDto.tools || []) {
+        if (tool.name == 'private_search') {
+          await this.getUserVisibleResources(
+            tool,
+            requestDto.namespace_id,
+            userId,
+          );
+        }
+      }
+      return this.createAgentStream(requestDto, requestId, mode, userId);
+    } catch (e) {
+      return new Observable<MessageEvent>((subscriber) =>
+        this.streamError(subscriber, e),
+      );
+    }
+  }
+
+  async createShareAgentStream(
+    share: Share,
+    requestDto: AgentRequestDto,
+    requestId: string,
+    mode: 'ask' | 'write',
+  ): Promise<Observable<MessageEvent>> {
+    try {
+      for (const tool of requestDto.tools || []) {
+        if (tool.name == 'private_search') {
+          await this.getShareVisibleResources(tool, share);
+        }
+      }
+      return this.createAgentStream(requestDto, requestId, mode, null);
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>
         this.streamError(subscriber, e),
@@ -335,7 +375,7 @@ export class StreamService {
     requestId: string,
     mode: 'ask' | 'write' = 'ask',
   ): Promise<any> {
-    const observable = await this.agentStream(userId, body, requestId, mode);
+    const observable = await this.createUserAgentStream(userId, body, requestId, mode);
 
     const chunks: ChatResponse[] = [];
 

@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { WizardController } from 'omniboxd/wizard/wizard.controller';
+import {
+  SharedWizardController,
+  WizardController,
+} from 'omniboxd/wizard/wizard.controller';
 import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -17,11 +20,13 @@ import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
+import { SharesModule } from 'omniboxd/shares/shares.module';
 
 @Module({
   providers: [WizardService, ChunkManagerService, OpenWizardService],
   imports: [
     UserModule,
+    SharesModule,
     NamespacesModule,
     NamespaceResourcesModule,
     TagModule,
@@ -35,6 +40,7 @@ import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resource
   ],
   controllers: [
     WizardController,
+    SharedWizardController,
     InternalWizardController,
     OpenWizardController,
   ],

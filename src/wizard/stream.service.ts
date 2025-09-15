@@ -350,9 +350,11 @@ export class StreamService {
     requestId: string,
     mode: 'ask' | 'write',
   ): Promise<Observable<MessageEvent>> {
+    requestDto.namespace_id = share.namespaceId;
     try {
       for (const tool of requestDto.tools || []) {
         if (tool.name == 'private_search') {
+          tool.namespace_id = share.namespaceId;
           tool.visible_resources = await this.getShareVisibleResources(share);
         }
       }

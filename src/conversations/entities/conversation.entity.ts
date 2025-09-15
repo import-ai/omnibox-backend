@@ -9,7 +9,7 @@ export class Conversation extends Base {
   @Column()
   namespaceId: string;
 
-  @Column({ nullable: true })
+  @Column('varchar', { nullable: true })
   userId: string | null;
 
   @Column()

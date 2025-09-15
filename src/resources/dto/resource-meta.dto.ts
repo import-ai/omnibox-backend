@@ -1,8 +1,5 @@
-import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
-import { Exclude, Expose } from 'class-transformer';
+import { Resource, ResourceType } from '../entities/resource.entity';
+import { Exclude, Expose, Transform } from 'class-transformer';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 export class ResourceMetaDto {
@@ -22,10 +19,12 @@ export class ResourceMetaDto {
   globalPermission: ResourcePermission | null;
 
   @Expose({ name: 'created_at' })
-  createdAt: string;
+  @Transform(({ value }) => value.toISOString())
+  createdAt: Date;
 
   @Expose({ name: 'updated_at' })
-  updatedAt: string;
+  @Transform(({ value }) => value.toISOString())
+  updatedAt: Date;
 
   @Expose({ name: 'attrs' })
   attrs: Record<string, any>;
@@ -37,8 +36,8 @@ export class ResourceMetaDto {
     dto.name = resource.name;
     dto.resourceType = resource.resourceType;
     dto.globalPermission = resource.globalPermission;
-    dto.createdAt = resource.createdAt.toISOString();
-    dto.updatedAt = resource.updatedAt.toISOString();
+    dto.createdAt = resource.createdAt;
+    dto.updatedAt = resource.updatedAt;
     dto.attrs = resource.attrs;
     return dto;
   }

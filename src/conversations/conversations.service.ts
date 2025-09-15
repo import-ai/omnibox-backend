@@ -18,6 +18,8 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
+import { ForbiddenException } from '@nestjs/common';
 
 const TASK_PRIORITY = 5;
 
@@ -45,6 +47,25 @@ export class ConversationsService {
     const conversation = this.conversationRepository.create({
       namespaceId,
       userId: user.id,
+      title: '',
+    });
+    return await this.conversationRepository.save(conversation);
+  }
+
+  async createConversationForShare(share: Share) {
+    // Validate that the share allows chat functionality
+    if (
+      share.shareType !== ShareType.CHAT_ONLY &&
+      share.shareType !== ShareType.ALL
+    ) {
+      throw new ForbiddenException(
+        'This share does not allow chat functionality',
+      );
+    }
+
+    const conversation = this.conversationRepository.create({
+      namespaceId: share.namespaceId,
+      userId: null,
       title: '',
     });
     return await this.conversationRepository.save(conversation);

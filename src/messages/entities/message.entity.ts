@@ -44,7 +44,7 @@ export class Message extends Base {
   @PrimaryGeneratedColumn()
   id: string;
 
-  @Column({ nullable: true })
+  @Column('varchar', { nullable: true })
   userId: string | null;
 
   @Column()

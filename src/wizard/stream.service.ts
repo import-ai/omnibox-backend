@@ -205,66 +205,61 @@ export class StreamService {
   }
 
   private async getUserVisibleResources(
-    tool: PrivateSearchToolDto,
+    resources: PrivateSearchResourceDto[],
     namespaceId: string,
     userId: string,
-  ): Promise<void> {
+  ): Promise<PrivateSearchResourceDto[]> {
     // for private_search, pass the resource with permission
-    if (!tool.resources || tool.resources.length === 0) {
+    if (resources.length === 0) {
       const resources: Resource[] =
         await this.namespaceResourcesService.listAllUserAccessibleResources(
           namespaceId,
           userId,
         );
-      tool.visible_resources = resources.map((r) => {
+      return resources.map((r) => {
         return {
           id: r.id,
           name: r.name || '',
           type: r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
         } as PrivateSearchResourceDto;
       });
-    } else {
-      tool.visible_resources = [];
-      tool.visible_resources.push(
-        ...(await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(
-          namespaceId,
-          userId,
-          tool.resources,
-        )),
+    }
+    const visibleResources: PrivateSearchResourceDto[] =
+      await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(
+        namespaceId,
+        userId,
+        resources,
       );
-      for (const resource of tool.resources) {
-        if (resource.type === 'folder') {
-          const resources =
-            await this.namespaceResourcesService.getSubResourcesByUser(
-              namespaceId,
-              resource.id,
-              userId,
-            );
-          resource.child_ids = resources.map((r) => r.id);
-          tool.visible_resources.push(
-            ...resources.map((r) => {
-              return {
-                id: r.id,
-                name: r.name || '',
-                type:
-                  r.resourceType === ResourceType.FOLDER
-                    ? 'folder'
-                    : 'resource',
-              } as PrivateSearchResourceDto;
-            }),
+    for (const resource of resources) {
+      if (resource.type === 'folder') {
+        const resources =
+          await this.namespaceResourcesService.getSubResourcesByUser(
+            namespaceId,
+            resource.id,
+            userId,
           );
-        }
+        resource.child_ids = resources.map((r) => r.id);
+        visibleResources.push(
+          ...resources.map((r) => {
+            return {
+              id: r.id,
+              name: r.name || '',
+              type:
+                r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
+            } as PrivateSearchResourceDto;
+          }),
+        );
       }
     }
+    return visibleResources;
   }
 
   private async getShareVisibleResources(
-    tool: PrivateSearchToolDto,
     share: Share,
-  ) {
+  ): Promise<PrivateSearchResourceDto[]> {
     const sharedResources =
       await this.sharedResourcesService.getAllSharedResources(share);
-    tool.visible_resources = sharedResources.map((r) => {
+    return sharedResources.map((r) => {
       return {
         id: r.id,
         name: r.name || '',
@@ -334,8 +329,8 @@ export class StreamService {
     try {
       for (const tool of requestDto.tools || []) {
         if (tool.name == 'private_search') {
-          await this.getUserVisibleResources(
-            tool,
+          tool.visible_resources = await this.getUserVisibleResources(
+            tool.resources || [],
             requestDto.namespace_id,
             userId,
           );
@@ -358,7 +353,7 @@ export class StreamService {
     try {
       for (const tool of requestDto.tools || []) {
         if (tool.name == 'private_search') {
-          await this.getShareVisibleResources(tool, share);
+          tool.visible_resources = await this.getShareVisibleResources(share);
         }
       }
       return this.createAgentStream(requestDto, requestId, mode, null);

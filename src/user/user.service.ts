@@ -257,7 +257,7 @@ export class UserService {
       );
     }
 
-    const code = generateId(6);
+    const code = generateId(6, '0123456789');
 
     this.emailStates.set(email, {
       code,

@@ -1,9 +1,7 @@
 import { Controller, Get, Param, UseInterceptors } from '@nestjs/common';
 import { SharedResourcesService } from './shared-resources.service';
 import { SharedResourceDto } from './dto/shared-resource.dto';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CookieAuth } from 'omniboxd/auth/decorators';
-import { Cookies } from 'omniboxd/decorators/cookie.decorators';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 import {
   ValidateShare,

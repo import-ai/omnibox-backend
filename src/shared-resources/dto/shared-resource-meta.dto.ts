@@ -23,6 +23,9 @@ export class SharedResourceMetaDto {
   @Transform(({ value }) => value.toISOString())
   updatedAt: Date;
 
+  @Expose({ name: 'has_children' })
+  hasChildren?: boolean;
+
   static fromEntity(resource: Resource): SharedResourceMetaDto {
     const dto = new SharedResourceMetaDto();
     dto.id = resource.id;
@@ -33,13 +36,17 @@ export class SharedResourceMetaDto {
     return dto;
   }
 
-  static fromResourceMeta(resource: ResourceMetaDto): SharedResourceMetaDto {
+  static fromResourceMeta(
+    resource: ResourceMetaDto,
+    hasChildren?: boolean,
+  ): SharedResourceMetaDto {
     const dto = new SharedResourceMetaDto();
     dto.id = resource.id;
     dto.name = resource.name;
     dto.resourceType = resource.resourceType;
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
+    dto.hasChildren = hasChildren;
     return dto;
   }
 }

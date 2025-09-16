@@ -11,14 +11,15 @@ import { Repository } from 'typeorm';
 import { ShareInfoDto } from './dto/share-info.dto';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-info.dto';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
 
 @Injectable()
 export class SharesService {
   constructor(
     @InjectRepository(Share)
     private readonly shareRepo: Repository<Share>,
-    private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   async getShareById(shareId: string): Promise<Share | null> {
@@ -61,8 +62,22 @@ export class SharesService {
   }
 
   async getPublicShareInfo(share: Share): Promise<PublicShareInfoDto> {
-    const resource = await this.namespaceResourcesService.get(share.resourceId);
-    return PublicShareInfoDto.fromEntity(share, resource);
+    const resource = await this.resourcesService.getResourceMeta(
+      share.namespaceId,
+      share.resourceId,
+    );
+    if (!resource) {
+      throw new NotFoundException(`No share found with id ${share.id}`);
+    }
+    const subResources = await this.resourcesService.getSubResources(
+      share.namespaceId,
+      share.resourceId,
+    );
+    const resourceMeta = SharedResourceMetaDto.fromResourceMeta(
+      resource,
+      subResources.length > 0,
+    );
+    return PublicShareInfoDto.fromResourceMeta(share, resourceMeta);
   }
 
   async getShareInfo(

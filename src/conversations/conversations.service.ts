@@ -53,20 +53,11 @@ export class ConversationsService {
   }
 
   async createConversationForShare(share: Share) {
-    // Validate that the share allows chat functionality
-    if (
-      share.shareType !== ShareType.CHAT_ONLY &&
-      share.shareType !== ShareType.ALL
-    ) {
-      throw new ForbiddenException(
-        'This share does not allow chat functionality',
-      );
-    }
-
     const conversation = this.conversationRepository.create({
       namespaceId: share.namespaceId,
       userId: null,
       title: '',
+      shareId: share.id,
     });
     return await this.conversationRepository.save(conversation);
   }
@@ -213,11 +204,10 @@ export class ConversationsService {
     };
   }
 
-  async getDetail(id: string, user: User): Promise<ConversationDetailDto> {
-    const conversation = await this.conversationRepository.findOneOrFail({
-      where: { id, userId: user.id },
-    });
-
+  private convertToConversationDetail(
+    conversation: Conversation,
+    messages: Message[],
+  ): ConversationDetailDto {
     const detail: ConversationDetailDto = {
       id: conversation.id,
       title: conversation.title,
@@ -225,10 +215,6 @@ export class ConversationsService {
       updated_at: conversation.updatedAt?.toISOString(),
       mapping: {},
     };
-    const messages = await this.messagesService.findAll(
-      user.id,
-      conversation.id,
-    );
     if (messages.length === 0) {
       return detail;
     }
@@ -270,6 +256,34 @@ export class ConversationsService {
       detail.current_node = messages[messages.length - 1].id;
     }
     return detail;
+  }
+
+  async getConversationForUser(
+    conversationId: string,
+    user: User,
+  ): Promise<ConversationDetailDto> {
+    const conversation = await this.conversationRepository.findOneOrFail({
+      where: { id: conversationId, userId: user.id },
+    });
+    const messages = await this.messagesService.findAll(
+      user.id,
+      conversation.id,
+    );
+    return this.convertToConversationDetail(conversation, messages);
+  }
+
+  async getConversationForShare(
+    conversationId: string,
+    share: Share,
+  ): Promise<ConversationDetailDto> {
+    const conversation = await this.conversationRepository.findOneOrFail({
+      where: { id: conversationId, shareId: share.id },
+    });
+    const messages = await this.messagesService.findAll(
+      undefined,
+      conversation.id,
+    );
+    return this.convertToConversationDetail(conversation, messages);
   }
 
   async findOne(id: string) {

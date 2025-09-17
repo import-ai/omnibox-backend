@@ -14,4 +14,7 @@ export class Conversation extends Base {
 
   @Column()
   title: string;
+
+  @Column('varchar', { nullable: true })
+  shareId: string | null;
 }

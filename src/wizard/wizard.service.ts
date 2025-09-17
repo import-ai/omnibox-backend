@@ -84,9 +84,9 @@ export class WizardService {
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespaceId,
+      namespaceId,
       resourceType: ResourceType.LINK,
-      parentId: parentId,
+      parentId,
       attrs: { url },
     };
     const resource = await this.namespaceResourcesService.create(

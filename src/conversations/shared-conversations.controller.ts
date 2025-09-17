@@ -1,7 +1,6 @@
 import { Controller, Get, Param, Post, UseInterceptors } from '@nestjs/common';
 import { ConversationsService } from './conversations.service';
 import { CookieAuth } from 'omniboxd/auth/decorators';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import {
   ValidateShare,
   ValidatedShare,

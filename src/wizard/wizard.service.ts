@@ -159,17 +159,18 @@ export class WizardService {
   }
 
   async collect(
+    namespaceId: string,
     userId: string,
     data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
-    const { html, url, title, namespace_id, parentId } = data;
-    if (!namespace_id || !parentId || !url || !html) {
+    const { html, url, title, parentId } = data;
+    if (!namespaceId || !parentId || !url || !html) {
       throw new BadRequestException('Missing required fields');
     }
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace_id,
+      namespaceId: namespaceId,
       resourceType: ResourceType.LINK,
       parentId: parentId,
       attrs: { url },
@@ -181,7 +182,7 @@ export class WizardService {
 
     const task = await this.wizardTaskService.createCollectTask(
       userId,
-      namespace_id,
+      namespaceId,
       resource.id,
       { html, url, title },
     );

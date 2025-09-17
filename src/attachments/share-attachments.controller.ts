@@ -1,9 +1,7 @@
 import { Controller, Get, Param, Res, UseInterceptors } from '@nestjs/common';
 import { Response } from 'express';
 import { AttachmentsService } from './attachments.service';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CookieAuth } from 'omniboxd/auth/decorators';
-import { Cookies } from 'omniboxd/decorators/cookie.decorators';
 import {
   ValidateShare,
   ValidatedShare,

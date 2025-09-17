@@ -18,8 +18,7 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
-import { ForbiddenException } from '@nestjs/common';
+import { Share } from 'omniboxd/shares/entities/share.entity';
 
 const TASK_PRIORITY = 5;
 

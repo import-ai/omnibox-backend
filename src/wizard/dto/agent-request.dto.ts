@@ -26,15 +26,21 @@ export interface WebSearchToolDto extends ToolDto {
 export interface BaseAgentRequestDto {
   query: string;
   conversation_id: string;
-  tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
   enable_thinking: boolean;
   lang?: '简体中文' | 'English';
 }
 
 export interface AgentRequestDto extends BaseAgentRequestDto {
+  tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
   parent_message_id?: string;
 }
 
+export interface WizardPrivateSearchToolDto extends PrivateSearchToolDto {
+  namespace_id: string;
+}
+
 export interface WizardAgentRequestDto extends BaseAgentRequestDto {
+  namespace_id: string;
+  tools: Array<WizardPrivateSearchToolDto | WebSearchToolDto>;
   messages: Message[];
 }

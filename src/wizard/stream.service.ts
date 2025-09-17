@@ -10,7 +10,6 @@ import {
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
-  PrivateSearchToolDto,
   WizardAgentRequestDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
@@ -205,9 +204,9 @@ export class StreamService {
   }
 
   private async getUserVisibleResources(
-    resources: PrivateSearchResourceDto[],
     namespaceId: string,
     userId: string,
+    resources: PrivateSearchResourceDto[],
   ): Promise<PrivateSearchResourceDto[]> {
     // for private_search, pass the resource with permission
     if (resources.length === 0) {
@@ -269,6 +268,7 @@ export class StreamService {
   }
 
   private async createAgentStream(
+    namespaceId: string,
     requestDto: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write',
@@ -292,7 +292,7 @@ export class StreamService {
 
     return new Observable<MessageEvent>((subscriber) => {
       const handler = this.agentHandler(
-        requestDto.namespace_id,
+        namespaceId,
         requestDto.conversation_id,
         userId,
         subscriber,
@@ -322,6 +322,7 @@ export class StreamService {
 
   async createUserAgentStream(
     userId: string,
+    namespaceId: string,
     requestDto: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write',
@@ -330,13 +331,19 @@ export class StreamService {
       for (const tool of requestDto.tools || []) {
         if (tool.name == 'private_search') {
           tool.visible_resources = await this.getUserVisibleResources(
-            tool.resources || [],
-            requestDto.namespace_id,
+            namespaceId,
             userId,
+            tool.resources || [],
           );
         }
       }
-      return this.createAgentStream(requestDto, requestId, mode, userId);
+      return this.createAgentStream(
+        namespaceId,
+        requestDto,
+        requestId,
+        mode,
+        userId,
+      );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>
         this.streamError(subscriber, e),
@@ -350,15 +357,19 @@ export class StreamService {
     requestId: string,
     mode: 'ask' | 'write',
   ): Promise<Observable<MessageEvent>> {
-    requestDto.namespace_id = share.namespaceId;
     try {
       for (const tool of requestDto.tools || []) {
         if (tool.name == 'private_search') {
-          tool.namespace_id = share.namespaceId;
           tool.visible_resources = await this.getShareVisibleResources(share);
         }
       }
-      return this.createAgentStream(requestDto, requestId, mode, null);
+      return this.createAgentStream(
+        share.namespaceId,
+        requestDto,
+        requestId,
+        mode,
+        null,
+      );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>
         this.streamError(subscriber, e),
@@ -368,11 +379,12 @@ export class StreamService {
 
   async chat(
     userId: string,
+    namespaceId: string,
     body: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write' = 'ask',
   ): Promise<any> {
-    const observable = await this.createUserAgentStream(userId, body, requestId, mode);
+    const observable = await this.createUserAgentStream(userId, namespaceId, body, requestId, mode);
 
     const chunks: ChatResponse[] = [];
 

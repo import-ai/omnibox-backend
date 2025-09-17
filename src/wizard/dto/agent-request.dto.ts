@@ -14,7 +14,6 @@ export interface PrivateSearchResourceDto {
 
 export interface PrivateSearchToolDto extends ToolDto {
   name: 'private_search';
-  namespace_id: string;
   resources?: PrivateSearchResourceDto[];
   visible_resources?: PrivateSearchResourceDto[];
 }
@@ -33,7 +32,6 @@ export interface BaseAgentRequestDto {
 }
 
 export interface AgentRequestDto extends BaseAgentRequestDto {
-  namespace_id: string;
   parent_message_id?: string;
 }
 

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Param,
   Post,
   Req,
   Sse,
@@ -20,26 +21,29 @@ import {
 } from 'omniboxd/decorators/validate-share.decorator';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
-@Controller('api/v1/wizard')
+@Controller('api/v1/namespaces/:namespaceId/wizard')
 export class WizardController {
   constructor(private readonly wizardService: WizardService) {}
 
   @Post('collect')
   async collect(
+    @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
     @Body() data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
-    return await this.wizardService.collect(userId, data);
+    return await this.wizardService.collect(namespaceId, userId, data);
   }
 
   @Post('ask')
   @Sse()
   async ask(
+    @Param('namespaceId') namespaceId: string,
     @Req() req,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
     return await this.wizardService.streamService.createUserAgentStream(
+      namespaceId,
       req.user,
       body,
       requestId,
@@ -50,11 +54,13 @@ export class WizardController {
   @Post('write')
   @Sse()
   async write(
+    @Param('namespaceId') namespaceId: string,
     @Req() req,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
     return await this.wizardService.streamService.createUserAgentStream(
+      namespaceId,
       req.user,
       body,
       requestId,
@@ -68,7 +74,7 @@ export class WizardController {
   }
 }
 
-@Controller('api/v1/shares/:shareId')
+@Controller('api/v1/shares/:shareId/wizard')
 @UseInterceptors(ValidateShareInterceptor)
 export class SharedWizardController {
   constructor(private readonly wizardService: WizardService) {}

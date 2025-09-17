@@ -15,9 +15,5 @@ export class CollectRequestDto {
 
   @IsString()
   @IsNotEmpty()
-  namespace_id: string;
-
-  @IsString()
-  @IsNotEmpty()
   parentId: string;
 }

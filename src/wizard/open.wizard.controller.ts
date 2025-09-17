@@ -29,11 +29,10 @@ export class OpenWizardController {
     @UserId() userId: string,
     @Body() data: OpenCollectRequestDto,
   ): Promise<CollectResponseDto> {
-    return await this.wizardService.collect(userId, {
+    return await this.wizardService.collect(apiKey.namespaceId, userId, {
       html: data.html,
       url: data.url,
       title: data.title,
-      namespace_id: apiKey.namespaceId,
       parentId: data.parentId || apiKey.attrs.root_resource_id,
     } as CollectRequestDto);
   }

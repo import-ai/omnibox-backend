@@ -10,8 +10,6 @@ import {
 import { SharesService } from './shares.service';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { CookieAuth } from 'omniboxd/auth/decorators';
-import { Cookies } from 'omniboxd/decorators/cookie.decorators';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import {
   ValidateShare,
   ValidatedShare,

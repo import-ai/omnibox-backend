@@ -12,6 +12,7 @@ import {
   AgentRequestDto,
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
+  WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
@@ -300,10 +301,18 @@ export class StreamService {
       );
 
       const wizardRequest: WizardAgentRequestDto = {
+        namespace_id: namespaceId,
         conversation_id: requestDto.conversation_id,
         query: requestDto.query,
         messages,
-        tools: requestDto.tools,
+        tools: requestDto.tools.map((tool) =>
+          tool.name === 'private_search'
+            ? ({
+                ...tool,
+                namespace_id: namespaceId,
+              } as WizardPrivateSearchToolDto)
+            : tool,
+        ),
         enable_thinking: requestDto.enable_thinking,
         lang: requestDto.lang,
       };

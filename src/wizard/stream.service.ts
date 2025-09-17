@@ -299,19 +299,22 @@ export class StreamService {
         subscriber,
       );
 
+      const tools = (requestDto.tools || []).map((tool) => {
+        if (tool.name === 'private_search') {
+          return {
+            ...tool,
+            namespace_id: namespaceId,
+          } as WizardPrivateSearchToolDto;
+        }
+        return tool;
+      });
+
       const wizardRequest: WizardAgentRequestDto = {
         namespace_id: namespaceId,
         conversation_id: requestDto.conversation_id,
         query: requestDto.query,
         messages,
-        tools: requestDto.tools.map((tool) =>
-          tool.name === 'private_search'
-            ? ({
-                ...tool,
-                namespace_id: namespaceId,
-              } as WizardPrivateSearchToolDto)
-            : tool,
-        ),
+        tools,
         enable_thinking: requestDto.enable_thinking,
         lang: requestDto.lang,
       };

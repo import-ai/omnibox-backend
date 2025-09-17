@@ -3,12 +3,17 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { Request } from 'express';
 import { SharesService } from 'omniboxd/shares/shares.service';
-import { VALIDATE_SHARE_KEY } from 'omniboxd/decorators/validate-share.decorator';
+import {
+  VALIDATE_SHARE_KEY,
+  ValidateShareOptions,
+} from 'omniboxd/decorators/validate-share.decorator';
+import { ShareType } from 'omniboxd/shares/entities/share.entity';
 
 @Injectable()
 export class ValidateShareInterceptor implements NestInterceptor {
@@ -21,12 +26,12 @@ export class ValidateShareInterceptor implements NestInterceptor {
     context: ExecutionContext,
     next: CallHandler,
   ): Promise<Observable<any>> {
-    const shouldValidate = this.reflector.get<boolean>(
+    const validateOptions = this.reflector.get<ValidateShareOptions>(
       VALIDATE_SHARE_KEY,
       context.getHandler(),
     );
 
-    if (!shouldValidate) {
+    if (!validateOptions) {
       return next.handle();
     }
 
@@ -47,6 +52,18 @@ export class ValidateShareInterceptor implements NestInterceptor {
       password,
       userId,
     );
+
+    // Additional chat validation if required
+    if (validateOptions.requireChat) {
+      if (
+        validatedShare.shareType !== ShareType.CHAT_ONLY &&
+        validatedShare.shareType !== ShareType.ALL
+      ) {
+        throw new ForbiddenException(
+          'This share does not allow chat functionality',
+        );
+      }
+    }
 
     // Attach the validated share to the request for the @ValidatedShare decorator
     (request as any).validatedShare = validatedShare;

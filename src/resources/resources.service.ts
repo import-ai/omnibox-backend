@@ -79,6 +79,7 @@ export class ResourcesService {
         'globalPermission',
         'createdAt',
         'updatedAt',
+        'attrs',
       ],
       where: {
         namespaceId,

@@ -13,6 +13,7 @@ import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-info.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 
 @Injectable()
 export class SharesService {
@@ -20,6 +21,7 @@ export class SharesService {
     @InjectRepository(Share)
     private readonly shareRepo: Repository<Share>,
     private readonly resourcesService: ResourcesService,
+    private readonly namespacesService: NamespacesService,
   ) {}
 
   async getShareById(shareId: string): Promise<Share | null> {
@@ -69,6 +71,7 @@ export class SharesService {
     if (!resource) {
       throw new NotFoundException(`No share found with id ${share.id}`);
     }
+    const namespace = await this.namespacesService.get(share.namespaceId);
     const subResources = await this.resourcesService.getSubResources(
       share.namespaceId,
       share.resourceId,
@@ -77,7 +80,7 @@ export class SharesService {
       resource,
       subResources.length > 0,
     );
-    return PublicShareInfoDto.fromResourceMeta(share, resourceMeta);
+    return PublicShareInfoDto.fromResourceMeta(share, resourceMeta, namespace.name);
   }
 
   async getShareInfo(

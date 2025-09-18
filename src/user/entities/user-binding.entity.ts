@@ -14,7 +14,4 @@ export class UserBinding extends Base {
 
   @Column()
   loginId: string;
-
-  @Column({ nullable: true })
-  nickname: string;
 }

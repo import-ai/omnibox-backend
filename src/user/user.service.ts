@@ -185,7 +185,6 @@ export class UserService {
 
     const newBinding = bindingRepo.create({
       userId: reset.id,
-      nickname: userData.username,
       loginId: userData.loginId,
       loginType: userData.loginType,
     });

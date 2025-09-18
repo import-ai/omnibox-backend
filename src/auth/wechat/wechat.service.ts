@@ -30,6 +30,7 @@ export class WechatService extends SocialService {
   private readonly oldOpenAppId: string;
   private readonly oldOpenAppSecret: string;
   private readonly redirectUri: string;
+  private readonly migrationRedirectUri: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -69,6 +70,10 @@ export class WechatService extends SocialService {
       'OBB_WECHAT_REDIRECT_URI',
       '',
     );
+    this.migrationRedirectUri = this.configService.get<string>(
+      'OBB_WECHAT_MIGRATION_REDIRECT_URI',
+      '',
+    );
   }
 
   available() {
@@ -83,23 +88,21 @@ export class WechatService extends SocialService {
     };
   }
 
-  getQrCodeParams(type: 'new' | 'old' = 'new') {
-    const isOld = type === 'old';
-    const state = this.setState('open_weixin', isOld ? 'old' : '');
+  getQrCodeParams() {
+    const state = this.setState('open_weixin');
     this.cleanExpiresState();
     return {
       state,
-      appId: isOld ? this.oldOpenAppId : this.openAppId,
+      appId: this.openAppId,
       scope: 'snsapi_login',
       redirectUri: encodeURIComponent(this.redirectUri),
     };
   }
 
-  authUrl(type: 'new' | 'old' = 'new'): string {
-    const isOld = type === 'old';
-    const state = this.setState('weixin', isOld ? 'old' : '');
+  authUrl(): string {
+    const state = this.setState('weixin');
     this.cleanExpiresState();
-    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${isOld ? this.oldAppId : this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
+    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
   async handleCallback(
@@ -198,6 +201,25 @@ export class WechatService extends SocialService {
     });
   }
 
+  migrationQrCode(type: 'new' | 'old' = 'new') {
+    const isOld = type === 'old';
+    const state = this.setState('open_weixin', type);
+    this.cleanExpiresState();
+    return {
+      state,
+      appId: isOld ? this.oldOpenAppId : this.openAppId,
+      scope: 'snsapi_login',
+      redirectUri: encodeURIComponent(this.migrationRedirectUri),
+    };
+  }
+
+  migrationAuthUrl(type: 'new' | 'old' = 'new'): string {
+    const isOld = type === 'old';
+    const state = this.setState('weixin', type);
+    this.cleanExpiresState();
+    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${isOld ? this.oldAppId : this.appId}&redirect_uri=${encodeURIComponent(this.migrationRedirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
+  }
+
   async migrationCallback(
     code: string,
     state: string,
@@ -206,9 +228,14 @@ export class WechatService extends SocialService {
     if (!stateInfo) {
       throw new UnauthorizedException('Invalid state identifier');
     }
+    const isOld = state.startsWith('old_');
     const isWeixin = stateInfo.type === 'weixin';
-    const appId = isWeixin ? this.oldAppId : this.oldOpenAppId;
-    const appSecret = isWeixin ? this.oldAppSecret : this.oldOpenAppSecret;
+    const rawAppid = isOld ? this.oldAppId : this.appId;
+    const rawAppsecret = isOld ? this.oldAppSecret : this.appSecret;
+    const rawOpenAppid = isOld ? this.oldOpenAppId : this.openAppId;
+    const rawOpenAppsecret = isOld ? this.oldOpenAppSecret : this.openAppSecret;
+    const appId = isWeixin ? rawAppid : rawOpenAppid;
+    const appSecret = isWeixin ? rawAppsecret : rawOpenAppsecret;
     const accessTokenResponse = await fetch(
       `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
     );

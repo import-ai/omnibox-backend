@@ -28,14 +28,14 @@ export class WechatController extends SocialController {
 
   @Public()
   @Get('auth-url')
-  getAuthUrl(@Query('type') type: 'new' | 'old' = 'new') {
-    return this.wechatService.authUrl(type);
+  getAuthUrl() {
+    return this.wechatService.authUrl();
   }
 
   @Public()
   @Get('qrcode')
-  getQrCode(@Query('type') type: 'new' | 'old' = 'new') {
-    return this.wechatService.getQrCodeParams(type);
+  getQrCode() {
+    return this.wechatService.getQrCodeParams();
   }
 
   @Public()
@@ -68,6 +68,18 @@ export class WechatController extends SocialController {
     }
 
     return res.json(loginData);
+  }
+
+  @Public()
+  @Get('migration/auth-url')
+  migrationAuthUrl(@Query('type') type: 'new' | 'old' = 'new') {
+    return this.wechatService.migrationAuthUrl(type);
+  }
+
+  @Public()
+  @Get('migration/qrcode')
+  migrationQrCode(@Query('type') type: 'new' | 'old' = 'new') {
+    return this.wechatService.migrationQrCode(type);
   }
 
   @Public()

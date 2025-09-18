@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource } from './entities/resource.entity';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { UpdateResourceReqDto } from './dto/update-resource-req.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -19,11 +19,16 @@ export class ResourcesService {
   async getParentResourcesOrFail(
     namespaceId: string,
     resourceId: string | null,
+    entityManager?: EntityManager,
   ): Promise<ResourceMetaDto[]> {
     if (!resourceId) {
       return [];
     }
-    const resources = await this.getParentResources(namespaceId, resourceId);
+    const resources = await this.getParentResources(
+      namespaceId,
+      resourceId,
+      entityManager,
+    );
     if (resources.length === 0) {
       throw new NotFoundException('Resource not found');
     }
@@ -33,10 +38,14 @@ export class ResourcesService {
   async getParentResources(
     namespaceId: string,
     resourceId: string | null,
+    entityManager?: EntityManager,
   ): Promise<ResourceMetaDto[]> {
+    const resourceRepository = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
     const resources: Resource[] = [];
     while (resourceId) {
-      const resource = await this.resourceRepository.findOne({
+      const resource = await resourceRepository.findOne({
         select: [
           'id',
           'name',

@@ -8,8 +8,11 @@ import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { NestInstrumentation } from '@opentelemetry/instrumentation-nestjs-core';
 import { TypeormInstrumentation } from '@opentelemetry/instrumentation-typeorm';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { ExpressLayerType } from '@opentelemetry/instrumentation-express/build/src/enums/ExpressLayerType';
 
 const env = process.env.ENV || 'unknown';
+const enableTypeormInstrumentation =
+  process.env.ENABLE_TYPEORM_INSTRUMENTATION === 'true';
 const serviceName = `omnibox-backend`;
 
 function isTracingEnabled(): boolean {
@@ -44,9 +47,11 @@ if (isTracingEnabled()) {
           return excludedUrls.some((url) => req.url?.includes(url)) || false;
         },
       }),
-      new ExpressInstrumentation(),
+      new ExpressInstrumentation({
+        ignoreLayersType: [ExpressLayerType.MIDDLEWARE],
+      }),
       new NestInstrumentation(),
-      new TypeormInstrumentation(),
+      ...(enableTypeormInstrumentation ? [new TypeormInstrumentation()] : []),
     ],
   });
 }

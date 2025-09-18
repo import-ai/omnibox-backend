@@ -5,6 +5,7 @@ import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
 import {
   decodeFileName,
+  encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 import { UploadedObjectInfo } from 'minio/dist/main/internal/type';
@@ -155,8 +156,12 @@ export class MinioService {
     const uuid = generateId(length);
     // Get the original filename to extract the proper extension
     const originalFilename = getOriginalFileName(filename);
+    const extIndex = originalFilename.lastIndexOf('.');
+    if (extIndex === -1) {
+      return uuid;
+    }
     const ext: string = originalFilename.substring(
-      originalFilename.lastIndexOf('.'),
+      extIndex,
       originalFilename.length,
     );
     return `${uuid}${ext}`;
@@ -181,7 +186,7 @@ export class MinioService {
       buffer.length,
       {
         'Content-Type': mimetype,
-        filename,
+        filename: encodeFileName(filename),
         // Minio would convert metadata keys to lowercase
         metadata_string: JSON.stringify(metadata),
       },

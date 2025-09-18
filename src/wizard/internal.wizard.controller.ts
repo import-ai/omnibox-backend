@@ -5,7 +5,8 @@ import { transformKeysToSnakeCase } from 'omniboxd/interceptor/utils';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
-import { Body, Controller, Get, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Res } from '@nestjs/common';
+import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
 
 @Controller('internal/api/v1/wizard')
 export class InternalWizardController {
@@ -15,14 +16,17 @@ export class InternalWizardController {
   ) {}
 
   @Public()
-  @Get('/task')
-  async fetchTask(@Res() res: Response): Promise<void> {
-    const task = await this.wizardService.fetchTask();
+  @Get('task')
+  async fetchTask(
+    @Res() res: Response,
+    @Query() query: FetchTaskRequest,
+  ): Promise<void> {
+    const task = await this.wizardService.fetchTask(query);
     res.status(task ? 200 : 204).json(transformKeysToSnakeCase(task));
   }
 
   @Public()
-  @Post('/callback')
+  @Post('callback')
   async handleTaskCallback(
     @Body() taskCallback: TaskCallbackDto,
   ): Promise<Record<string, any>> {
@@ -30,7 +34,7 @@ export class InternalWizardController {
   }
 
   @Public()
-  @Post('/callback/chunk')
+  @Post('callback/chunk')
   async handleChunkCallback(
     @Body() chunkCallback: ChunkCallbackDto,
   ): Promise<Record<string, any>> {

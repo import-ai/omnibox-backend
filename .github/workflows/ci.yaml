@@ -174,17 +174,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ app ]
     steps:
-      - name: DEV Webhook
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: TEST push webhook
+        if: github.event_name == 'push'
         run: |
-          curl "${{ secrets.DEV_WEBHOOK_URL }}/dev" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
+          curl "${{ secrets.DEV_WEBHOOK_URL }}/test?module=backend&pr=${{ github.ref_name }}&commit=${GITHUB_SHA}&tag=sha-${GITHUB_SHA::7}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
 
-      - name: PR Webhook
+      - name: TEST pull request webhook
         if: github.event_name == 'pull_request'
         run: |
-          curl "${{ secrets.DEV_WEBHOOK_URL }}/pr?module=backend&pr=pr-${{ github.event.number }}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
-
-      - name: PROD Webhook
-        if: false && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        run: |
-          curl "${{ secrets.PROD_WEBHOOK_URL }}/prod?tag=${{ github.ref }}" -H "Authorization: Bearer ${{ secrets.PROD_WEBHOOK_API_KEY }}"
+          curl "${{ secrets.DEV_WEBHOOK_URL }}/test?module=backend&pr=pr-${{ github.event.number }}&commit=${{ github.event.pull_request.head.sha }}&tag=sha-${GITHUB_SHA::7}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"

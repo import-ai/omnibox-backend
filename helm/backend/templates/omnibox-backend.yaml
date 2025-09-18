@@ -1,0 +1,88 @@
+{{- $name := default .Release.Name .Values.release.name }}
+{{- $namespace := default .Release.Namespace .Values.release.namespace }}
+
+{{- if ne $name .Release.Name }}
+{{ fail (printf "Name from command line not equal to config's: %s != %s" ($name | quote) (.Release.Name | quote)) }}
+{{- end }}
+
+{{- if ne $namespace .Release.Namespace }}
+{{ fail (printf "Namespace from command line not equal to config's: %s != %s" ($namespace | quote) (.Release.Namespace | quote)) }}
+{{- end }}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+spec:
+  replicas: {{ .Values.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: {{ $name }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ .Values.app.port }}
+          volumeMounts:
+            - name: localtime
+              mountPath: /etc/localtime
+              readOnly: true
+          envFrom:
+            - secretRef:
+                name: omnibox-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: {{ .Values.app.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.app.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 128m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+      volumes:
+        - name: localtime
+          hostPath:
+            path: /etc/localtime
+            type: File
+      {{ if .Values.nodeSelector }}
+      nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8 }}
+      {{ end }}
+      {{ if .Values.affinity }}
+      affinity: {{ toYaml .Values.affinity | nindent 8 }}
+      {{ end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+spec:
+  selector:
+    app: {{ $name }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.app.port }}
+      targetPort: {{ .Values.app.port }}
+  type: ClusterIP

@@ -4,7 +4,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
-  IsDate,
+  IsDateString,
   IsInt,
 } from 'class-validator';
 import { ShareType } from '../entities/share.entity';
@@ -36,7 +36,7 @@ export class UpdateShareInfoReqDto {
   shareType?: ShareType;
 
   @IsOptional()
-  @IsDate()
+  @IsDateString()
   @Expose({ name: 'expires_at' })
   expiresAt?: Date | null;
 

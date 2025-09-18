@@ -71,7 +71,7 @@ export class OpenResourcesController {
     return { id: newResource.id, name: newResource.name };
   }
 
-  @Post('/upload')
+  @Post('upload')
   @APIKeyAuth({
     permissions: [
       {

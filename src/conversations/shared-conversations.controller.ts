@@ -1,0 +1,35 @@
+import { Controller, Get, Param, Post, UseInterceptors } from '@nestjs/common';
+import { ConversationsService } from './conversations.service';
+import { CookieAuth } from 'omniboxd/auth/decorators';
+import {
+  ValidateShare,
+  ValidatedShare,
+} from 'omniboxd/decorators/validate-share.decorator';
+import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
+import { Share } from 'omniboxd/shares/entities/share.entity';
+
+@Controller('api/v1/shares/:shareId/conversations')
+@UseInterceptors(ValidateShareInterceptor)
+export class SharedConversationsController {
+  constructor(private readonly conversationsService: ConversationsService) {}
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare({ requireChat: true })
+  @Post()
+  async createConversationForShare(@ValidatedShare() share: Share) {
+    return await this.conversationsService.createConversationForShare(share);
+  }
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare({ requireChat: true })
+  @Get(':conversationId')
+  async getSharedConversation(
+    @Param('conversationId') conversationId: string,
+    @ValidatedShare() share: Share,
+  ) {
+    return await this.conversationsService.getConversationForShare(
+      conversationId,
+      share,
+    );
+  }
+}

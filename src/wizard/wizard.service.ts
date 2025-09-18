@@ -22,6 +22,7 @@ import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
+import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 
 @Injectable()
 export class WizardService {
@@ -37,6 +38,7 @@ export class WizardService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly sharedResourcesService: SharedResourcesService,
   ) {
     this.processors = {
       collect: new CollectProcessor(
@@ -61,6 +63,7 @@ export class WizardService {
       baseUrl,
       this.messagesService,
       this.namespaceResourcesService,
+      this.sharedResourcesService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
   }
@@ -70,19 +73,20 @@ export class WizardService {
   }
 
   async collect(
+    namespaceId: string,
     userId: string,
     data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
-    const { html, url, title, namespace_id, parentId } = data;
-    if (!namespace_id || !parentId || !url || !html) {
+    const { html, url, title, parentId } = data;
+    if (!namespaceId || !parentId || !url || !html) {
       throw new BadRequestException('Missing required fields');
     }
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace_id,
+      namespaceId,
       resourceType: ResourceType.LINK,
-      parentId: parentId,
+      parentId,
       attrs: { url },
     };
     const resource = await this.namespaceResourcesService.create(
@@ -92,7 +96,7 @@ export class WizardService {
 
     const task = await this.wizardTaskService.createCollectTask(
       userId,
-      namespace_id,
+      namespaceId,
       resource.id,
       { html, url, title },
     );

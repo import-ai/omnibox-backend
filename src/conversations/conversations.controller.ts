@@ -58,7 +58,7 @@ export class ConversationsController {
     @Param('id') id: string,
     @Req() req,
   ): Promise<ConversationDetailDto> {
-    return await this.conversationsService.getDetail(id, req.user);
+    return await this.conversationsService.getConversationForUser(id, req.user);
   }
 
   @Post(':id/title')

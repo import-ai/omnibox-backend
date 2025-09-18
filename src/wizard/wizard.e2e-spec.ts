@@ -181,7 +181,9 @@ describe('WizardController (e2e)', () => {
 
       // Note: The RequestId decorator returns undefined if header is missing,
       // but the service might handle this gracefully
-      const response = await client.post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`).send(askData);
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
+        .send(askData);
 
       // The endpoint might still work without X-Request-Id
       expect([
@@ -337,7 +339,9 @@ describe('WizardController (e2e)', () => {
       // or if the proxy path doesn't exist. In a real test environment,
       // you might want to mock the wizard service.
       const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/test-proxy-path`)
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/wizard/test-proxy-path`,
+        )
         .send({ test: 'data' });
 
       // The response status depends on the wizard service implementation

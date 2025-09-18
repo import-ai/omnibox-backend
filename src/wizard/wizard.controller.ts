@@ -7,6 +7,7 @@ import {
   Sse,
   UploadedFile,
   UseInterceptors,
+  ValidationPipe,
 } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import {
@@ -25,6 +26,20 @@ import {
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+
+@Controller('api/v1/wizard')
+export class CollectController {
+  constructor(private readonly wizardService: WizardService) {}
+
+  @Post('collect')
+  async collect(
+    @UserId() userId: string,
+    @Body() data: CollectRequestDto,
+    @Body('namespaceId', new ValidationPipe()) namespaceId: string,
+  ): Promise<CollectResponseDto> {
+    return await this.wizardService.collect(namespaceId, userId, data);
+  }
+}
 
 @Controller('api/v1/namespaces/:namespaceId/wizard')
 export class WizardController {
@@ -112,6 +127,23 @@ export class SharedWizardController {
       body,
       requestId,
       'ask',
+    );
+  }
+
+  @Post('write')
+  @Sse()
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare()
+  async write(
+    @ValidatedShare() share: Share,
+    @RequestId() requestId: string,
+    @Body() body: AgentRequestDto,
+  ) {
+    return await this.wizardService.streamService.createShareAgentStream(
+      share,
+      body,
+      requestId,
+      'write',
     );
   }
 }

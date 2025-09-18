@@ -191,6 +191,8 @@ export class NamespaceResourcesService {
       data.parentId,
       userId,
       ResourcePermission.CAN_EDIT,
+      undefined,
+      manager,
     );
     if (!ok) {
       throw new ForbiddenException('Not authorized to create resource.');

@@ -11,6 +11,7 @@ import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
 import { UserService } from 'omniboxd/user/user.service';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
   ConflictException,
   Injectable,
@@ -206,6 +207,16 @@ export class NamespacesService {
       privateRoot.id,
       userId,
       ResourcePermission.FULL_ACCESS,
+      manager,
+    );
+    await this.resourceService.create(
+      userId,
+      {
+        name: 'Uncategorized',
+        namespaceId,
+        resourceType: ResourceType.FOLDER,
+        parentId: privateRoot.id,
+      },
       manager,
     );
   }

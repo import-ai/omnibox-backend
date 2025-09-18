@@ -185,19 +185,6 @@ describe('ReaderProcessor', () => {
               '# Test Document\n\n![Image 1](attachments/attachment-id-1)\n\nSome text.\n\n![Image 2](attachments/attachment-id-2)',
             attrs: {
               filename: 'test.pdf',
-              images: [
-                {
-                  originalLink: 'temp://image1.png',
-                  attachmentId: 'attachment-id-1',
-                  name: 'image1.png',
-                  mimetype: 'image/png',
-                },
-                {
-                  originalLink: 'temp://image2.jpg',
-                  attachmentId: 'attachment-id-2',
-                  mimetype: 'image/jpeg',
-                },
-              ],
             },
             tag_ids: undefined,
           },
@@ -242,14 +229,6 @@ describe('ReaderProcessor', () => {
               '![Image](attachments/attachment-id)\n\nText with ![same image](attachments/attachment-id) again.',
             attrs: {
               filename: 'test.pdf',
-              images: [
-                {
-                  originalLink: 'temp://image.png',
-                  attachmentId: 'attachment-id',
-                  name: 'image.png',
-                  mimetype: 'image/png',
-                },
-              ],
             },
             tag_ids: undefined,
           },
@@ -314,13 +293,6 @@ describe('ReaderProcessor', () => {
             content: '![Image](attachments/attachment-id)',
             attrs: {
               filename: 'test.pdf',
-              images: [
-                {
-                  originalLink: 'temp://image.png',
-                  attachmentId: 'attachment-id',
-                  mimetype: 'image/png',
-                },
-              ],
             },
             tag_ids: undefined,
           },
@@ -392,7 +364,6 @@ describe('ReaderProcessor', () => {
             content: '# Test Document',
             attrs: {
               filename: 'test.pdf',
-              images: [],
             },
             tag_ids: undefined,
           },
@@ -434,13 +405,6 @@ describe('ReaderProcessor', () => {
             content: '# Test Document\n\nNo images here.',
             attrs: {
               filename: 'test.pdf',
-              images: [
-                {
-                  originalLink: 'temp://image.png',
-                  attachmentId: 'attachment-id',
-                  mimetype: 'image/png',
-                },
-              ],
             },
             tag_ids: undefined,
           },

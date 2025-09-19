@@ -19,6 +19,7 @@ import { MinioModule } from 'omniboxd/minio/minio.module';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
   providers: [WizardService, ChunkManagerService],
@@ -27,6 +28,7 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
     SharesModule,
     NamespacesModule,
     NamespaceResourcesModule,
+    ResourcesModule,
     TagModule,
     MessagesModule,
     AttachmentsModule,

@@ -136,15 +136,22 @@ export class UserService {
   }
 
   async updateBinding(oldUnionid: string, newUnionid: string) {
+    // Unbind the associated new account
+    const existBinding = await this.userBindingRepository.findOne({
+      where: { loginId: newUnionid },
+    });
+    if (existBinding) {
+      await this.userBindingRepository.remove(existBinding);
+    }
+    // Bind to old account
     const binding = await this.userBindingRepository.findOne({
       where: { loginId: oldUnionid },
     });
-    if (!binding) {
-      return;
+    if (binding) {
+      await this.userBindingRepository.update(binding.id, {
+        loginId: newUnionid,
+      });
     }
-    await this.userBindingRepository.update(binding.id, {
-      loginId: newUnionid,
-    });
   }
 
   async listBinding(userId: string) {

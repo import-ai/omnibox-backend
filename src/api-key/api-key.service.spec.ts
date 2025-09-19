@@ -14,6 +14,7 @@ import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { CreateAPIKeyDto } from './api-key.dto';
 import { Applications } from 'omniboxd/applications/applications.entity';
+import { UserService } from 'omniboxd/user/user.service';
 
 describe('APIKeyService', () => {
   let service: APIKeyService;
@@ -21,6 +22,7 @@ describe('APIKeyService', () => {
   let applicationsRepository: jest.Mocked<Repository<Applications>>;
   let permissionsService: jest.Mocked<PermissionsService>;
   let namespacesService: jest.Mocked<NamespacesService>;
+  let userService: jest.Mocked<UserService>;
 
   const mockApiKey = {
     id: 'test-api-key-id',
@@ -63,6 +65,10 @@ describe('APIKeyService', () => {
       getMemberByUserId: jest.fn(),
     };
 
+    const mockUserService = {
+      find: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         APIKeyService,
@@ -82,6 +88,10 @@ describe('APIKeyService', () => {
           provide: NamespacesService,
           useValue: mockNamespacesService,
         },
+        {
+          provide: UserService,
+          useValue: mockUserService,
+        },
       ],
     }).compile();
 
@@ -90,6 +100,7 @@ describe('APIKeyService', () => {
     applicationsRepository = module.get(getRepositoryToken(Applications));
     permissionsService = module.get(PermissionsService);
     namespacesService = module.get(NamespacesService);
+    userService = module.get(UserService);
   });
 
   it('should be defined', () => {

@@ -95,10 +95,7 @@ describe('UserController (e2e)', () => {
     it('should return null for non-existent user', async () => {
       const response = await client
         .get('/api/v1/user/00000000-0000-0000-0000-000000000000')
-        .expect(HttpStatus.OK);
-
-      // NestJS returns empty object instead of null for non-existent entities
-      expect(response.body).toEqual({});
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should fail without authentication', async () => {
@@ -164,7 +161,7 @@ describe('UserController (e2e)', () => {
       await client
         .patch('/api/v1/user/00000000-0000-0000-0000-000000000000')
         .send({ username: 'newname' })
-        .expect(HttpStatus.CONFLICT);
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should fail without authentication', async () => {
@@ -205,13 +202,9 @@ describe('UserController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       // User should be soft deleted and not returned by find
-      const response = await client
+      await client
         .get(`/api/v1/user/${userToDelete.user.id}`)
-        .expect(HttpStatus.OK);
-
-      // NestJS returns empty object instead of null for soft deleted entities
-      expect(response.body).toEqual({}); // Soft deleted users are not returned
-
+        .expect(HttpStatus.NOT_FOUND);
       await userToDelete.close();
     });
 

@@ -2,8 +2,8 @@ import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import {
   APIKeyResponseDto,
   CreateAPIKeyDto,
-  UpdateAPIKeyDto,
   PatchAPIKeyDto,
+  UpdateAPIKeyDto,
 } from 'omniboxd/api-key/api-key.dto';
 import {
   BadRequestException,

@@ -1,13 +1,15 @@
 import {
+  IsArray,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
-  IsObject,
-  IsArray,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { APIKeyAttrs, APIKey, APIKeyPermission } from './api-key.entity';
+import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
+import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
+import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
 
 export class CreateAPIKeyDto {
   @IsString()
@@ -70,4 +72,10 @@ export class APIKeyResponseDto {
     dto.updated_at = apiKey.updatedAt;
     return dto;
   }
+}
+
+export interface APIKeyInfoDto {
+  api_key: APIKeyResponseDto;
+  namespace: NamespaceResponseDto;
+  user: UserResponseDto;
 }

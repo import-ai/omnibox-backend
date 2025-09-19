@@ -134,14 +134,10 @@ export class GroupsService {
           .getMemberByUserId(namespaceId, groupUser.userId)
           .then((member) =>
             this.UserService.find(groupUser.userId).then((user) => {
-              if (user) {
-                return Promise.resolve({
-                  role: member ? member.role : 'member',
-                  ...user,
-                });
-              } else {
-                throw new NotFoundException('User not found.');
-              }
+              return Promise.resolve({
+                role: member ? member.role : 'member',
+                ...user,
+              });
             }),
           ),
       ),

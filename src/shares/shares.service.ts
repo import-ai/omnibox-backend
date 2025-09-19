@@ -80,7 +80,11 @@ export class SharesService {
       resource,
       subResources.length > 0,
     );
-    return PublicShareInfoDto.fromResourceMeta(share, resourceMeta, namespace.name);
+    return PublicShareInfoDto.fromResourceMeta(
+      share,
+      resourceMeta,
+      namespace.name,
+    );
   }
 
   async getShareInfo(

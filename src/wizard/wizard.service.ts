@@ -28,6 +28,7 @@ import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { createGunzip } from 'zlib';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Injectable()
 export class WizardService {
@@ -48,6 +49,7 @@ export class WizardService {
     private readonly attachmentsService: AttachmentsService,
     private readonly minioService: MinioService,
     private readonly sharedResourcesService: SharedResourcesService,
+    private readonly resourcesService: ResourcesService,
   ) {
     this.processors = {
       collect: new CollectProcessor(
@@ -77,6 +79,7 @@ export class WizardService {
       this.messagesService,
       this.namespaceResourcesService,
       this.sharedResourcesService,
+      this.resourcesService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
     const videoPrefixes: string =

@@ -21,6 +21,7 @@ import { ConversationsModule } from 'omniboxd/conversations/conversations.module
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
   providers: [WizardService, ChunkManagerService, OpenWizardService],
@@ -29,6 +30,7 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
     SharesModule,
     NamespacesModule,
     NamespaceResourcesModule,
+    ResourcesModule,
     TagModule,
     MessagesModule,
     ConversationsModule,

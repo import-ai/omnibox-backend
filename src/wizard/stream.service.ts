@@ -22,6 +22,7 @@ import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { context, propagation } from '@opentelemetry/api';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 interface HandlerContext {
   parentId?: string;
@@ -37,7 +38,8 @@ export class StreamService {
     private readonly messagesService: MessagesService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
-  ) { }
+    private readonly resourcesService: ResourcesService,
+  ) {}
 
   async stream(
     url: string,
@@ -256,16 +258,31 @@ export class StreamService {
 
   private async getShareVisibleResources(
     share: Share,
+    reqResources?: PrivateSearchResourceDto[],
   ): Promise<PrivateSearchResourceDto[]> {
-    const sharedResources =
-      await this.sharedResourcesService.getAllSharedResources(share);
-    return sharedResources.map((r) => {
-      return {
-        id: r.id,
-        name: r.name || '',
-        type: r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-      } as PrivateSearchResourceDto;
-    });
+    const resources: PrivateSearchResourceDto[] = [];
+    for (const reqResource of reqResources || []) {
+      const resource = await this.sharedResourcesService.getAndValidateResource(
+        share,
+        reqResource.id,
+      );
+      const childIds: string[] = [];
+      if (reqResource.type === 'folder') {
+        const subResources = await this.resourcesService.getSubResources(
+          share.namespaceId,
+          reqResource.id,
+        );
+        childIds.push(...subResources.map((r) => r.id));
+      }
+      resources.push({
+        id: resource.id,
+        name: resource.name,
+        type:
+          resource.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
+        child_ids: childIds,
+      });
+    }
+    return resources;
   }
 
   private async createAgentStream(
@@ -372,7 +389,12 @@ export class StreamService {
     try {
       for (const tool of requestDto.tools || []) {
         if (tool.name == 'private_search') {
-          tool.visible_resources = await this.getShareVisibleResources(share);
+          const visibleResources = await this.getShareVisibleResources(
+            share,
+            tool.resources,
+          );
+          tool.visible_resources = visibleResources;
+          tool.resources = visibleResources;
         }
       }
       return this.createAgentStream(

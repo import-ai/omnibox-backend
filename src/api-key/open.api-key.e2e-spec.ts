@@ -15,7 +15,7 @@ describe('APIKeyController (e2e)', () => {
   it('should get API key info with authenticated API key (GET)', async () => {
     const response = await client
       .request()
-      .get('/api/v1/api-keys/info')
+      .get('/open/api/v1/api-keys/info')
       .set('Authorization', `Bearer ${client.apiKey.value}`)
       .expect(200);
 

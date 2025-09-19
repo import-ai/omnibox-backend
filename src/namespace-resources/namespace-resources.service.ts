@@ -475,16 +475,22 @@ export class NamespaceResourcesService {
       parents[0].id,
     );
     const filteredChildren: ResourceMetaDto[] = [];
-    for (const child of children) {
-      const permission = await this.permissionsService.getCurrentPermission(
-        namespaceId,
-        [child, ...parents],
-        userId,
-      );
+    const permissions = await Promise.all(
+      children.map(async (child) => {
+        return await this.permissionsService.getCurrentPermission(
+          namespaceId,
+          [child, ...parents],
+          userId,
+        );
+      }),
+    );
+
+    children.forEach((child, i) => {
+      const permission = permissions[i];
       if (permission !== ResourcePermission.NO_ACCESS) {
         filteredChildren.push(child);
       }
-    }
+    });
     return filteredChildren;
   }
 
@@ -502,16 +508,16 @@ export class NamespaceResourcesService {
       parents,
       userId,
     );
-    const resps: ListChildrenRespDto[] = [];
-    for (const child of children) {
-      const hasChildren = await this.hasChildren(
-        namespaceId,
-        [child, ...parents],
-        userId,
-      );
-      resps.push(new ListChildrenRespDto(child, hasChildren));
-    }
-    return resps;
+    return await Promise.all(
+      children.map(async (child) => {
+        const hasChildren = await this.hasChildren(
+          namespaceId,
+          [child, ...parents],
+          userId,
+        );
+        return new ListChildrenRespDto(child, hasChildren);
+      }),
+    );
   }
 
   async getSpaceType(

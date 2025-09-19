@@ -320,26 +320,25 @@ export class NamespacesService {
   }
 
   async getRoot(namespaceId: string, userId: string) {
-    const privateRoot = await this.getPrivateRoot(userId, namespaceId);
-    const privateChildren = await this.resourceService.listChildren(
-      namespaceId,
-      privateRoot.id,
-      userId,
-    );
-    const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
-    const teamspaceChildren = await this.resourceService.listChildren(
-      namespaceId,
-      teamspaceRoot.id,
-      userId,
-    );
-    return {
-      private: { ...privateRoot, parentId: '0', children: privateChildren },
-      teamspace: {
-        ...teamspaceRoot,
-        parentId: '0',
-        children: teamspaceChildren,
-      },
-    };
+    const [privateTree, teamspaceTree] = await Promise.all([
+      this.getPrivateRoot(userId, namespaceId).then(async (root) => {
+        const children = await this.resourceService.listChildren(
+          namespaceId,
+          root.id,
+          userId,
+        );
+        return { ...root, parentId: '0', children };
+      }),
+      this.getTeamspaceRoot(namespaceId).then(async (root) => {
+        const children = await this.resourceService.listChildren(
+          namespaceId,
+          root.id,
+          userId,
+        );
+        return { ...root, parentId: '0', children };
+      }),
+    ]);
+    return { private: privateTree, teamspace: teamspaceTree };
   }
 
   async userIsOwner(namespaceId: string, userId: string): Promise<boolean> {

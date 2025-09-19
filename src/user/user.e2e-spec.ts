@@ -93,7 +93,7 @@ describe('UserController (e2e)', () => {
     });
 
     it('should return null for non-existent user', async () => {
-      const response = await client
+      await client
         .get('/api/v1/user/00000000-0000-0000-0000-000000000000')
         .expect(HttpStatus.NOT_FOUND);
     });

@@ -12,7 +12,12 @@ import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
-import { BadRequestException, ConflictException, Injectable, NotFoundException, } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { isUsernameBlocked } from 'omniboxd/utils/blocked-usernames';
 
 @Injectable()

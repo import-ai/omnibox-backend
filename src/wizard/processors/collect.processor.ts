@@ -32,6 +32,7 @@ export class CollectProcessor extends Processor {
       return {};
     } else if (task.output) {
       const { markdown, title, ...attrs } = task.output || {};
+      delete attrs.images; // Remove images which is only required for task
 
       let tagIds: string[] | undefined = undefined;
       const tags: string[] | undefined = attrs?.metadata?.tags;

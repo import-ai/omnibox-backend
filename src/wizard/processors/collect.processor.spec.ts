@@ -385,12 +385,6 @@ describe('CollectProcessor', () => {
             content: 'content with ![image](attachments/attachment-123)',
             attrs: {
               url: 'https://example.com',
-              images: [
-                {
-                  originalLink: 'http://example.com/image.png',
-                  attachmentId: 'attachment-123',
-                },
-              ],
             },
             tag_ids: undefined,
           },

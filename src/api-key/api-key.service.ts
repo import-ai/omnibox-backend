@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'crypto';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
+  APIKeyInfoDto,
   APIKeyResponseDto,
   CreateAPIKeyDto,
   PatchAPIKeyDto,
@@ -17,6 +18,9 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { Applications } from 'omniboxd/applications/applications.entity';
+import { UserService } from 'omniboxd/user/user.service';
+import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
+import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
 
 @Injectable()
 export class APIKeyService {
@@ -27,6 +31,7 @@ export class APIKeyService {
     private readonly applicationsRepository: Repository<Applications>,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesService: NamespacesService,
+    private readonly userService: UserService,
   ) {}
 
   async create(createApiKeyDto: CreateAPIKeyDto): Promise<APIKeyResponseDto> {
@@ -197,5 +202,24 @@ export class APIKeyService {
         `User ${userId} does not have write permission to resource ${resourceId} in namespace ${namespaceId}`,
       );
     }
+  }
+
+  async info(apiKey: APIKey): Promise<APIKeyInfoDto> {
+    // Get the namespace
+    const namespace = await this.namespacesService.get(apiKey.namespaceId);
+
+    // Get the user
+    const user = await this.userService.find(apiKey.userId);
+
+    // Convert entities to DTOs and return
+    const apiKeyDto = APIKeyResponseDto.fromEntity(apiKey);
+    const namespaceDto = NamespaceResponseDto.fromEntity(namespace);
+    const userDto = UserResponseDto.fromEntity(user);
+
+    return {
+      api_key: apiKeyDto,
+      namespace: namespaceDto,
+      user: userDto,
+    } as APIKeyInfoDto;
   }
 }

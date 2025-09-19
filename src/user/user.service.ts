@@ -12,11 +12,7 @@ import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, } from '@nestjs/common';
 import { isUsernameBlocked } from 'omniboxd/utils/blocked-usernames';
 
 @Injectable()
@@ -192,7 +188,7 @@ export class UserService {
 
     await bindingRepo.save(newBinding);
 
-    return (await this.find(userData.userId)) as User;
+    return await this.find(userData.userId);
   }
 
   async findAll(start: number, limit: number, search?: string) {
@@ -216,10 +212,14 @@ export class UserService {
   }
 
   async find(id: string) {
-    return await this.userRepository.findOne({
+    const user = await this.userRepository.findOne({
       where: { id },
       select: ['id', 'username', 'email'],
     });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
   }
 
   async findByIds(ids: string[]): Promise<User[]> {
@@ -277,9 +277,6 @@ export class UserService {
       throw new ConflictException('The account already exists');
     }
     const existUser = await this.find(id);
-    if (!existUser) {
-      throw new ConflictException('The account does not exist');
-    }
     if (account.password) {
       existUser.password = await bcrypt.hash(account.password, 10);
     }
@@ -307,14 +304,7 @@ export class UserService {
 
   async updatePassword(id: string, password: string) {
     const account = await this.find(id);
-
-    if (!account) {
-      throw new ConflictException('The account does not exist');
-    }
-
-    const hash = await bcrypt.hash(password, 10);
-
-    account.password = hash;
+    account.password = await bcrypt.hash(password, 10);
 
     return await this.userRepository.update(id, account);
   }

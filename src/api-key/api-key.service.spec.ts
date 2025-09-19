@@ -6,8 +6,8 @@ import { ForbiddenException } from '@nestjs/common';
 import { APIKeyService } from './api-key.service';
 import {
   APIKey,
-  APIKeyPermissionType,
   APIKeyPermissionTarget,
+  APIKeyPermissionType,
 } from './api-key.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
@@ -22,7 +22,6 @@ describe('APIKeyService', () => {
   let applicationsRepository: jest.Mocked<Repository<Applications>>;
   let permissionsService: jest.Mocked<PermissionsService>;
   let namespacesService: jest.Mocked<NamespacesService>;
-  let userService: jest.Mocked<UserService>;
 
   const mockApiKey = {
     id: 'test-api-key-id',
@@ -100,7 +99,6 @@ describe('APIKeyService', () => {
     applicationsRepository = module.get(getRepositoryToken(Applications));
     permissionsService = module.get(PermissionsService);
     namespacesService = module.get(NamespacesService);
-    userService = module.get(UserService);
   });
 
   it('should be defined', () => {

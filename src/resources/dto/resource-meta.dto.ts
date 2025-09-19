@@ -1,4 +1,7 @@
-import { Resource, ResourceType } from '../entities/resource.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { Exclude, Expose } from 'class-transformer';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
@@ -24,6 +27,9 @@ export class ResourceMetaDto {
   @Expose({ name: 'updated_at' })
   updatedAt: string;
 
+  @Expose({ name: 'attrs' })
+  attrs: Record<string, any>;
+
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
     dto.id = resource.id;
@@ -33,6 +39,7 @@ export class ResourceMetaDto {
     dto.globalPermission = resource.globalPermission;
     dto.createdAt = resource.createdAt.toISOString();
     dto.updatedAt = resource.updatedAt.toISOString();
+    dto.attrs = resource.attrs;
     return dto;
   }
 }

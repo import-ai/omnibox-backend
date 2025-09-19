@@ -10,6 +10,7 @@ import {
   Delete,
   Controller,
 } from '@nestjs/common';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
@@ -60,8 +61,11 @@ export class NamespacesController {
   }
 
   @Get(':namespaceId/root')
-  async getRoot(@Param('namespaceId') namespaceId: string, @Req() req) {
-    return await this.namespacesService.getRoot(namespaceId, req.user.id);
+  async getRoot(
+    @Param('namespaceId') namespaceId: string,
+    @UserId() userId: string,
+  ) {
+    return await this.namespacesService.getRoot(namespaceId, userId);
   }
 
   @Post()

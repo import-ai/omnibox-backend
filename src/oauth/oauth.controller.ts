@@ -45,6 +45,15 @@ export class OAuthController {
       code_challenge_method,
     } = query;
 
+    const client = await this.oauthService.getClient(client_id);
+    if (!client) {
+      throw new BadRequestException('Invalid client');
+    }
+
+    if (!this.oauthService.validateRedirectUri(client, redirect_uri)) {
+      throw new BadRequestException('Invalid redirect URI');
+    }
+
     if (response_type !== 'code') {
       const errorUrl = new URL(redirect_uri);
       errorUrl.searchParams.set('error', 'unsupported_response_type');
@@ -56,17 +65,15 @@ export class OAuthController {
       return res.redirect(errorUrl.toString());
     }
 
-    const client = await this.oauthService.getClient(client_id);
-    if (!client) {
+    if (!client.grants.includes('authorization_code')) {
       const errorUrl = new URL(redirect_uri);
-      errorUrl.searchParams.set('error', 'invalid_client');
-      errorUrl.searchParams.set('error_description', 'Client not found');
+      errorUrl.searchParams.set('error', 'unauthorized_client');
+      errorUrl.searchParams.set(
+        'error_description',
+        'Client is not authorized for authorization code grant',
+      );
       if (state) errorUrl.searchParams.set('state', state);
       return res.redirect(errorUrl.toString());
-    }
-
-    if (!this.oauthService.validateRedirectUri(client, redirect_uri)) {
-      throw new BadRequestException('Invalid redirect URI');
     }
 
     const requestedScopes = scope.split(' ');
@@ -212,6 +219,12 @@ export class OAuthController {
       throw new UnauthorizedException('Invalid client credentials');
     }
 
+    if (!client.grants.includes('authorization_code')) {
+      throw new UnauthorizedException(
+        'Client is not authorized for authorization code grant',
+      );
+    }
+
     const authCode = await this.oauthService.getAuthorizationCode(code);
     if (!authCode) {
       throw new BadRequestException('Invalid or expired authorization code');
@@ -227,7 +240,10 @@ export class OAuthController {
       throw new BadRequestException('Redirect URI mismatch');
     }
 
-    if (authCode.codeChallenge && code_verifier) {
+    if (authCode.codeChallenge) {
+      if (!code_verifier) {
+        throw new BadRequestException('Code verifier required');
+      }
       const isValidChallenge = this.oauthService.validateCodeChallenge(
         code_verifier,
         authCode.codeChallenge,
@@ -268,6 +284,12 @@ export class OAuthController {
     const client = await this.oauthService.getClient(client_id, client_secret);
     if (!client) {
       throw new UnauthorizedException('Invalid client credentials');
+    }
+
+    if (!client.grants.includes('refresh_token')) {
+      throw new UnauthorizedException(
+        'Client is not authorized for refresh token grant',
+      );
     }
 
     const tokenRecord = await this.oauthService.getRefreshToken(refresh_token);
@@ -316,7 +338,7 @@ export class OAuthController {
     }
 
     const accessToken = authHeader.substring(7);
-    const tokenRecord = await this.oauthService.getAccessToken(accessToken);
+    const tokenRecord = await this.oauthService.verifyAccessToken(accessToken);
 
     if (!tokenRecord) {
       throw new UnauthorizedException('Invalid or expired access token');

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -39,7 +35,10 @@ export class OAuthService {
       return null;
     }
 
-    if (clientSecret && client.isConfidential) {
+    if (client.isConfidential) {
+      if (!clientSecret) {
+        return null;
+      }
       const isValid = await bcrypt.compare(clientSecret, client.clientSecret);
       if (!isValid) {
         return null;
@@ -144,6 +143,19 @@ export class OAuthService {
       refreshToken,
       expiresIn,
     };
+  }
+
+  async verifyAccessToken(accessToken: string): Promise<OAuthToken | null> {
+    try {
+      const jwtPayload = this.jwtService.verify(accessToken);
+      if (jwtPayload.type !== 'access_token') {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+
+    return this.getAccessToken(accessToken);
   }
 
   async getAccessToken(accessToken: string): Promise<OAuthToken | null> {

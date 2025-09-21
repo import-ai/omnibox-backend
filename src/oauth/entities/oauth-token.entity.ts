@@ -23,10 +23,10 @@ export class OAuthToken extends Base {
   @Index()
   refreshToken: string;
 
-  @Column('timestamp')
+  @Column('timestamptz')
   accessTokenExpiresAt: Date;
 
-  @Column('timestamp', { nullable: true })
+  @Column('timestamptz', { nullable: true })
   refreshTokenExpiresAt: Date;
 
   @Column('jsonb', { default: [] })

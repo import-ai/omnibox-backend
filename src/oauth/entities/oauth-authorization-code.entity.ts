@@ -19,7 +19,7 @@ export class OAuthAuthorizationCode extends Base {
   @Index()
   code: string;
 
-  @Column('timestamp')
+  @Column('timestamptz')
   expiresAt: Date;
 
   @Column('varchar')

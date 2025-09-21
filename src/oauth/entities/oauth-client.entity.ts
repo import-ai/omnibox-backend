@@ -1,11 +1,8 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { User } from 'omniboxd/user/entities/user.entity';
 import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
 
 @Entity('oauth_clients')
@@ -52,10 +49,7 @@ export class OAuthClient extends Base {
   @Column('boolean', { default: true })
   isActive: boolean;
 
-  @Column('uuid')
+  @Column('uuid', { name: 'owner_id' })
   ownerId: string;
 
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'owner_id' })
-  owner: User;
 }

@@ -79,7 +79,6 @@ export class OAuthService {
   ): Promise<OAuthAuthorizationCode | null> {
     const authCode = await this.authCodeRepository.findOne({
       where: { code, isUsed: false },
-      relations: ['client', 'user'],
     });
 
     if (!authCode || authCode.expiresAt < new Date()) {
@@ -161,7 +160,6 @@ export class OAuthService {
   async getAccessToken(accessToken: string): Promise<OAuthToken | null> {
     const token = await this.tokenRepository.findOne({
       where: { accessToken, isRevoked: false },
-      relations: ['client', 'user'],
     });
 
     if (!token || token.accessTokenExpiresAt < new Date()) {
@@ -174,7 +172,6 @@ export class OAuthService {
   async getRefreshToken(refreshToken: string): Promise<OAuthToken | null> {
     const token = await this.tokenRepository.findOne({
       where: { refreshToken, isRevoked: false },
-      relations: ['client', 'user'],
     });
 
     if (!token || token.refreshTokenExpiresAt < new Date()) {

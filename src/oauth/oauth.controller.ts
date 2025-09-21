@@ -270,9 +270,15 @@ export class OAuthController {
 
     await this.oauthService.revokeAuthorizationCode(code);
 
+    const authCodeClient = await this.oauthService.getClient(authCode.clientId);
+    if (!authCodeClient) {
+      throw new BadRequestException('Client not found');
+    }
+    const user = await this.userService.find(authCode.userId);
+
     const tokens = await this.oauthService.generateTokens(
-      authCode.client,
-      authCode.user,
+      authCodeClient,
+      user,
       authCode.scopes,
       code,
     );
@@ -328,9 +334,15 @@ export class OAuthController {
       scopes = requestedScopes;
     }
 
+    const tokenClient = await this.oauthService.getClient(tokenRecord.clientId);
+    if (!tokenClient) {
+      throw new BadRequestException('Client not found');
+    }
+    const user = await this.userService.find(tokenRecord.userId);
+
     const tokens = await this.oauthService.generateTokens(
-      tokenRecord.client,
-      tokenRecord.user,
+      tokenClient,
+      user,
       scopes,
     );
 
@@ -358,7 +370,7 @@ export class OAuthController {
       throw new UnauthorizedException('Invalid or expired access token');
     }
 
-    const user = tokenRecord.user;
+    const user = await this.userService.find(tokenRecord.userId);
     const scopes = tokenRecord.scopes;
 
     const userInfo: any = {};

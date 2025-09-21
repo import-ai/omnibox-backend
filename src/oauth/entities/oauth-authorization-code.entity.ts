@@ -1,12 +1,8 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { User } from 'omniboxd/user/entities/user.entity';
-import { OAuthClient } from './oauth-client.entity';
 import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
-  ManyToOne,
-  JoinColumn,
   Index,
 } from 'typeorm';
 
@@ -28,10 +24,10 @@ export class OAuthAuthorizationCode extends Base {
   @Column('jsonb', { default: [] })
   scopes: string[];
 
-  @Column('uuid')
+  @Column('uuid', { name: 'client_id' })
   clientId: string;
 
-  @Column('uuid')
+  @Column('uuid', { name: 'user_id' })
   userId: string;
 
   @Column('varchar', { nullable: true })
@@ -43,11 +39,4 @@ export class OAuthAuthorizationCode extends Base {
   @Column('boolean', { default: false })
   isUsed: boolean;
 
-  @ManyToOne(() => OAuthClient)
-  @JoinColumn({ name: 'clientId', referencedColumnName: 'id' })
-  client: OAuthClient;
-
-  @ManyToOne(() => User)
-  @JoinColumn({ name: 'userId' })
-  user: User;
 }

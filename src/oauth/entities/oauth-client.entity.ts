@@ -56,6 +56,6 @@ export class OAuthClient extends Base {
   ownerId: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'ownerId' })
+  @JoinColumn({ name: 'owner_id' })
   owner: User;
 }

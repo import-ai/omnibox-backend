@@ -45,67 +45,81 @@ export class OAuthController {
       code_challenge_method,
     } = query;
 
-    const client = await this.oauthService.getClient(client_id);
-    if (!client) {
-      throw new BadRequestException('Invalid client');
-    }
+    try {
+      const client = await this.oauthService.getClient(client_id);
+      if (!client) {
+        throw new BadRequestException('Invalid client');
+      }
 
-    if (!this.oauthService.validateRedirectUri(client, redirect_uri)) {
-      throw new BadRequestException('Invalid redirect URI');
-    }
+      if (!this.oauthService.validateRedirectUri(client, redirect_uri)) {
+        throw new BadRequestException('Invalid redirect URI');
+      }
 
-    if (response_type !== 'code') {
-      const errorUrl = new URL(redirect_uri);
-      errorUrl.searchParams.set('error', 'unsupported_response_type');
-      errorUrl.searchParams.set(
-        'error_description',
-        'Only authorization code flow is supported',
-      );
-      if (state) errorUrl.searchParams.set('state', state);
-      return res.redirect(errorUrl.toString());
-    }
+      if (response_type !== 'code') {
+        try {
+          const errorUrl = new URL(redirect_uri);
+          errorUrl.searchParams.set('error', 'unsupported_response_type');
+          errorUrl.searchParams.set(
+            'error_description',
+            'Only authorization code flow is supported',
+          );
+          if (state) errorUrl.searchParams.set('state', state);
+          return res.redirect(errorUrl.toString());
+        } catch {
+          throw new BadRequestException('Invalid redirect URI format');
+        }
+      }
 
-    if (!client.grants.includes('authorization_code')) {
-      const errorUrl = new URL(redirect_uri);
-      errorUrl.searchParams.set('error', 'unauthorized_client');
-      errorUrl.searchParams.set(
-        'error_description',
-        'Client is not authorized for authorization code grant',
-      );
-      if (state) errorUrl.searchParams.set('state', state);
-      return res.redirect(errorUrl.toString());
-    }
+      if (!client.grants.includes('authorization_code')) {
+        const errorUrl = new URL(redirect_uri);
+        errorUrl.searchParams.set('error', 'unauthorized_client');
+        errorUrl.searchParams.set(
+          'error_description',
+          'Client is not authorized for authorization code grant',
+        );
+        if (state) errorUrl.searchParams.set('state', state);
+        return res.redirect(errorUrl.toString());
+      }
 
-    const requestedScopes = scope.split(' ');
-    if (!this.oauthService.validateScopes(client, requestedScopes)) {
-      const errorUrl = new URL(redirect_uri);
-      errorUrl.searchParams.set('error', 'invalid_scope');
-      errorUrl.searchParams.set(
-        'error_description',
-        'Invalid or unsupported scope',
-      );
-      if (state) errorUrl.searchParams.set('state', state);
-      return res.redirect(errorUrl.toString());
-    }
+      const requestedScopes = scope.split(' ');
+      if (!this.oauthService.validateScopes(client, requestedScopes)) {
+        const errorUrl = new URL(redirect_uri);
+        errorUrl.searchParams.set('error', 'invalid_scope');
+        errorUrl.searchParams.set(
+          'error_description',
+          'Invalid or unsupported scope',
+        );
+        if (state) errorUrl.searchParams.set('state', state);
+        return res.redirect(errorUrl.toString());
+      }
 
-    if (!req.user) {
-      const loginUrl = `/api/v1/login?redirect=${encodeURIComponent(req.originalUrl)}`;
-      return res.redirect(loginUrl);
-    }
+      if (!req.user) {
+        const loginUrl = `/api/v1/login?redirect=${encodeURIComponent(req.originalUrl)}`;
+        return res.redirect(loginUrl);
+      }
 
-    // For e2e testing and API usage, return JSON response with authorization info
-    return res.json({
-      client: {
-        id: client.id,
-        name: client.name,
-        description: client.description,
-      },
-      scope: requestedScopes,
-      redirect_uri,
-      state,
-      code_challenge,
-      code_challenge_method,
-    });
+      // For e2e testing and API usage, return JSON response with authorization info
+      return res.json({
+        client: {
+          id: client.id,
+          name: client.name,
+          description: client.description,
+        },
+        scope: requestedScopes,
+        redirect_uri,
+        state,
+        code_challenge,
+        code_challenge_method,
+      });
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return res.status(400).json({
+          error: 'invalid_request',
+          error_description: error.message,
+        });
+      }
+      throw error;
+    }
   }
 
   @Post('authorize')

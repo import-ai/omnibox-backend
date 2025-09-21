@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -23,7 +27,10 @@ export class OAuthService {
     private jwtService: JwtService,
   ) {}
 
-  async getClient(clientId: string, clientSecret?: string): Promise<OAuthClient | null> {
+  async getClient(
+    clientId: string,
+    clientSecret?: string,
+  ): Promise<OAuthClient | null> {
     const client = await this.clientRepository.findOne({
       where: { clientId, isActive: true },
     });
@@ -68,7 +75,9 @@ export class OAuthService {
     return code;
   }
 
-  async getAuthorizationCode(code: string): Promise<OAuthAuthorizationCode | null> {
+  async getAuthorizationCode(
+    code: string,
+  ): Promise<OAuthAuthorizationCode | null> {
     const authCode = await this.authCodeRepository.findOne({
       where: { code, isUsed: false },
       relations: ['client', 'user'],
@@ -104,12 +113,18 @@ export class OAuthService {
       type: 'refresh_token',
     };
 
-    const accessToken = this.jwtService.sign(accessTokenPayload, { expiresIn: '1h' });
-    const refreshToken = this.jwtService.sign(refreshTokenPayload, { expiresIn: '30d' });
+    const accessToken = this.jwtService.sign(accessTokenPayload, {
+      expiresIn: '1h',
+    });
+    const refreshToken = this.jwtService.sign(refreshTokenPayload, {
+      expiresIn: '30d',
+    });
 
     const expiresIn = 3600; // 1 hour in seconds
     const accessTokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
-    const refreshTokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+    const refreshTokenExpiresAt = new Date(
+      Date.now() + 30 * 24 * 60 * 60 * 1000,
+    ); // 30 days
 
     const tokenEntity = this.tokenRepository.create({
       accessToken,
@@ -166,7 +181,7 @@ export class OAuthService {
   }
 
   validateScopes(client: OAuthClient, requestedScopes: string[]): boolean {
-    return requestedScopes.every(scope => client.scopes.includes(scope));
+    return requestedScopes.every((scope) => client.scopes.includes(scope));
   }
 
   validateCodeChallenge(

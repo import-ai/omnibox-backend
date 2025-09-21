@@ -25,13 +25,13 @@ export class OAuthClient extends Base {
   @Column('text', { nullable: true })
   description: string;
 
-  @Column('json')
+  @Column('jsonb')
   redirectUris: string[];
 
-  @Column('json', { default: ['authorization_code', 'refresh_token'] })
+  @Column('jsonb', { default: ['authorization_code', 'refresh_token'] })
   grants: string[];
 
-  @Column('json', { default: ['openid', 'profile', 'email'] })
+  @Column('jsonb', { default: ['openid', 'profile', 'email'] })
   scopes: string[];
 
   @Column('boolean', { default: false })
@@ -52,7 +52,7 @@ export class OAuthClient extends Base {
   @Column('boolean', { default: true })
   isActive: boolean;
 
-  @Column('varchar')
+  @Column('uuid')
   ownerId: string;
 
   @ManyToOne(() => User)

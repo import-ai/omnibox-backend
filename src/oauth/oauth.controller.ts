@@ -86,8 +86,13 @@ export class OAuthController {
       return res.redirect(loginUrl);
     }
 
-    return res.render('oauth/authorize', {
-      client,
+    // For e2e testing and API usage, return JSON response with authorization info
+    return res.json({
+      client: {
+        id: client.id,
+        name: client.name,
+        description: client.description,
+      },
       scope: requestedScopes,
       redirect_uri,
       state,

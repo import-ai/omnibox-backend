@@ -1,4 +1,10 @@
-import { IsString, IsArray, IsOptional, IsBoolean, IsUrl } from 'class-validator';
+import {
+  IsString,
+  IsArray,
+  IsOptional,
+  IsBoolean,
+  IsUrl,
+} from 'class-validator';
 
 export class CreateClientDto {
   @IsString()
@@ -29,22 +35,18 @@ export class CreateClientDto {
 
   @IsOptional()
   @IsString()
-  @IsUrl()
   logo_url?: string;
 
   @IsOptional()
   @IsString()
-  @IsUrl()
   website_url?: string;
 
   @IsOptional()
   @IsString()
-  @IsUrl()
   privacy_policy_url?: string;
 
   @IsOptional()
   @IsString()
-  @IsUrl()
   terms_of_service_url?: string;
 }
 

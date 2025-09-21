@@ -25,13 +25,13 @@ export class OAuthAuthorizationCode extends Base {
   @Column('varchar')
   redirectUri: string;
 
-  @Column('json', { default: [] })
+  @Column('jsonb', { default: [] })
   scopes: string[];
 
-  @Column('varchar')
+  @Column('uuid')
   clientId: string;
 
-  @Column('varchar')
+  @Column('uuid')
   userId: string;
 
   @Column('varchar', { nullable: true })

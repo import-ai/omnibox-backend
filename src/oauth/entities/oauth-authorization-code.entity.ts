@@ -1,10 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  Index,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
 
 @Entity('oauth_authorization_codes')
 export class OAuthAuthorizationCode extends Base {
@@ -38,5 +33,4 @@ export class OAuthAuthorizationCode extends Base {
 
   @Column('boolean', { default: false })
   isUsed: boolean;
-
 }

@@ -18,7 +18,6 @@ import { JwtAuthGuard } from 'omniboxd/auth/jwt-auth.guard';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { AuthorizeApprovalDto, AuthorizeDto } from './dto/authorize.dto';
 import { TokenDto, TokenErrorDto, TokenResponseDto } from './dto/token.dto';
-import { ClientResponseDto, CreateClientDto } from './dto/create-client.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('oauth')
@@ -390,45 +389,5 @@ export class OAuthController {
     }
 
     return userInfo;
-  }
-
-  @Post('clients')
-  @UseGuards(JwtAuthGuard)
-  async createClient(
-    @Body() createClientDto: CreateClientDto,
-    @Request() req,
-  ): Promise<ClientResponseDto> {
-    const { clientId, clientSecret, client } =
-      await this.oauthService.createClient(
-        createClientDto.name,
-        createClientDto.redirect_uris,
-        req.user.id,
-        {
-          description: createClientDto.description,
-          scopes: createClientDto.scopes,
-          grants: createClientDto.grants,
-          isConfidential: createClientDto.is_confidential,
-          logoUrl: createClientDto.logo_url,
-          websiteUrl: createClientDto.website_url,
-          privacyPolicyUrl: createClientDto.privacy_policy_url,
-          termsOfServiceUrl: createClientDto.terms_of_service_url,
-        },
-      );
-
-    return {
-      client_id: clientId,
-      client_secret: client.isConfidential ? clientSecret : undefined,
-      name: client.name,
-      description: client.description,
-      redirect_uris: client.redirectUris,
-      scopes: client.scopes,
-      grants: client.grants,
-      is_confidential: client.isConfidential,
-      logo_url: client.logoUrl,
-      website_url: client.websiteUrl,
-      privacy_policy_url: client.privacyPolicyUrl,
-      terms_of_service_url: client.termsOfServiceUrl,
-      created_at: client.createdAt,
-    };
   }
 }

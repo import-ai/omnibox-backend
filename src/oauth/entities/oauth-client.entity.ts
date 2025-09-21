@@ -1,9 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('oauth_clients')
 export class OAuthClient extends Base {
@@ -51,5 +47,4 @@ export class OAuthClient extends Base {
 
   @Column('uuid', { name: 'owner_id' })
   ownerId: string;
-
 }

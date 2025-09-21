@@ -1,10 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  Index,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
 
 @Entity('oauth_tokens')
 export class OAuthToken extends Base {
@@ -39,5 +34,4 @@ export class OAuthToken extends Base {
 
   @Column('boolean', { default: false })
   isRevoked: boolean;
-
 }

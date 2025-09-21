@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { OAuthService } from './oauth.service';
 import { OAuthController } from './oauth.controller';
+import { InternalOAuthController } from './internal.oauth.controller';
 import { OAuthClient } from './entities/oauth-client.entity';
 import { OAuthToken } from './entities/oauth-token.entity';
 import { OAuthAuthorizationCode } from './entities/oauth-authorization-code.entity';
@@ -28,7 +29,7 @@ import { UserModule } from 'omniboxd/user/user.module';
       }),
     }),
   ],
-  controllers: [OAuthController],
+  controllers: [OAuthController, InternalOAuthController],
   providers: [OAuthService],
   exports: [OAuthService],
 })

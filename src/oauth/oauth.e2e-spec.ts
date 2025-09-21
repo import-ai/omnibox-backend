@@ -55,8 +55,21 @@ describe('OAuthModule (e2e)', () => {
         .set('Authorization', 'Invalid token')
         .expect(HttpStatus.UNAUTHORIZED);
     });
+  });
 
+  describe('Internal OAuth Endpoints', () => {
     it('should require authentication for client creation', async () => {
+      await client
+        .request()
+        .post('/internal/api/v1/oauth/clients')
+        .send({
+          name: 'Test Client',
+          redirect_uris: ['https://example.com/callback'],
+        })
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should not expose client creation on public OAuth endpoint', async () => {
       await client
         .request()
         .post('/oauth/clients')
@@ -64,7 +77,7 @@ describe('OAuthModule (e2e)', () => {
           name: 'Test Client',
           redirect_uris: ['https://example.com/callback'],
         })
-        .expect(HttpStatus.UNAUTHORIZED);
+        .expect(HttpStatus.NOT_FOUND);
     });
   });
 

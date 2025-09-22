@@ -20,7 +20,7 @@ import { AuthorizeApprovalDto, AuthorizeDto } from './dto/authorize.dto';
 import { TokenDto, TokenErrorDto, TokenResponseDto } from './dto/token.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
-@Controller('oauth')
+@Controller('api/v1/oauth')
 export class OAuthController {
   constructor(
     private readonly oauthService: OAuthService,

@@ -17,7 +17,7 @@ describe('OAuthModule (e2e)', () => {
       // Test that OAuth authorization endpoint exists (should redirect for unauthenticated)
       const authorizeResponse = await client
         .request()
-        .get('/oauth/authorize')
+        .get('/api/v1/oauth/authorize')
         .query({
           response_type: 'code',
           client_id: 'test_client',
@@ -29,7 +29,7 @@ describe('OAuthModule (e2e)', () => {
     });
 
     it('should reject invalid token requests', async () => {
-      const response = await client.request().post('/oauth/token').send({
+      const response = await client.request().post('/api/v1/oauth/token').send({
         grant_type: 'authorization_code',
         code: 'invalid_code',
         redirect_uri: 'https://example.com/callback',
@@ -44,14 +44,14 @@ describe('OAuthModule (e2e)', () => {
     it('should require authentication for userinfo', async () => {
       await client
         .request()
-        .get('/oauth/userinfo')
+        .get('/api/v1/oauth/userinfo')
         .expect(HttpStatus.UNAUTHORIZED);
     });
 
     it('should reject requests without Bearer token', async () => {
       await client
         .request()
-        .get('/oauth/userinfo')
+        .get('/api/v1/oauth/userinfo')
         .set('Authorization', 'Invalid token')
         .expect(HttpStatus.UNAUTHORIZED);
     });
@@ -72,7 +72,7 @@ describe('OAuthModule (e2e)', () => {
     it('should not expose client creation on public OAuth endpoint', async () => {
       await client
         .request()
-        .post('/oauth/clients')
+        .post('/api/v1/oauth/clients')
         .send({
           name: 'Test Client',
           redirect_uris: ['https://example.com/callback'],
@@ -83,7 +83,7 @@ describe('OAuthModule (e2e)', () => {
 
   describe('OAuth Security', () => {
     it('should validate grant_type in token requests', async () => {
-      const response = await client.request().post('/oauth/token').send({
+      const response = await client.request().post('/api/v1/oauth/token').send({
         grant_type: 'invalid_grant',
         code: 'test_code',
         client_id: 'test_client',
@@ -96,11 +96,14 @@ describe('OAuthModule (e2e)', () => {
     });
 
     it('should validate required parameters in authorization', async () => {
-      const response = await client.request().get('/oauth/authorize').query({
-        response_type: 'token', // Invalid response type
-        client_id: 'test_client',
-        redirect_uri: 'https://example.com/callback',
-      });
+      const response = await client
+        .request()
+        .get('/api/v1/oauth/authorize')
+        .query({
+          response_type: 'token', // Invalid response type
+          client_id: 'test_client',
+          redirect_uri: 'https://example.com/callback',
+        });
 
       // Should redirect with error or return error response
       expect([302, 400]).toContain(response.status);

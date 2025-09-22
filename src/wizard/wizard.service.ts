@@ -22,6 +22,8 @@ import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
+import { MinioService } from 'omniboxd/minio/minio.service';
+import { Span } from 'nestjs-otel';
 
 @Injectable()
 export class WizardService {
@@ -37,6 +39,7 @@ export class WizardService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly minioService: MinioService,
   ) {
     this.processors = {
       collect: new CollectProcessor(
@@ -90,11 +93,14 @@ export class WizardService {
       resourceDto,
     );
 
+    // Save HTML to S3
+    const htmlS3Key = await this.saveHtmlToS3(html, resource.id);
+
     const task = await this.wizardTaskService.createCollectTask(
       userId,
       namespace_id,
       resource.id,
-      { html, url, title },
+      { html: htmlS3Key, url, title },
     );
     return { task_id: task.id, resource_id: resource.id };
   }
@@ -305,9 +311,65 @@ export class WizardService {
         namespaceId: record.namespace_id,
       });
       const newTask = await this.wizardTaskService.taskRepository.save(task);
+      // Fetch HTML content from S3 for collect tasks
+      if (
+        newTask.function === 'collect' &&
+        newTask.input.html?.endsWith('.html') &&
+        newTask.input.html?.length === 37
+      ) {
+        const htmlContent = await this.getHtmlFromS3(newTask.input.html);
+        newTask.input = { ...newTask.input, html: htmlContent };
+      }
       return InternalTaskDto.fromEntity(newTask);
     }
 
     return null;
+  }
+
+  /**
+   * Save HTML content to S3 and return the S3 key
+   * @param html HTML content to save
+   * @param resourceId Associated resource ID for organization
+   * @returns S3 key for the stored HTML
+   */
+  @Span()
+  private async saveHtmlToS3(
+    html: string,
+    resourceId: string,
+  ): Promise<string> {
+    const buffer = Buffer.from(html, 'utf8');
+    const filename = `${resourceId}.html`;
+    const { id } = await this.minioService.put(filename, buffer, 'text/html', {
+      folder: 'collect/html',
+      metadata: { resourceId },
+    });
+    return id;
+  }
+
+  /**
+   * Retrieve HTML content from S3 using the S3 key
+   * @param s3Key S3 key for the HTML content
+   * @returns HTML content string
+   */
+  @Span()
+  private async getHtmlFromS3(s3Key: string): Promise<string> {
+    const objectPath = `collect/html/${s3Key}`;
+    const { stream } = await this.minioService.get(objectPath);
+
+    const chunks: Buffer[] = [];
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', () => {
+        const html = Buffer.concat(chunks).toString('utf8');
+        resolve(html);
+      });
+      stream.on('error', (error) => {
+        this.logger.error(
+          `Failed to retrieve HTML from S3 with key ${objectPath}:`,
+          error,
+        );
+        reject(error);
+      });
+    });
   }
 }

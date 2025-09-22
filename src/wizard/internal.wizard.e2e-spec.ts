@@ -29,9 +29,11 @@ describe('InternalWizardController (e2e)', () => {
 
     const taskId = taskCreateResponse.body.task_id;
 
-    await client
+    const task = await client
       .get(`/internal/api/v1/wizard/task?namespace_id=${client.namespace.id}`)
       .expect(HttpStatus.OK);
+
+    expect(task.body.input.html).toEqual(collectData.html);
 
     const response = await client
       .post('/internal/api/v1/wizard/callback')

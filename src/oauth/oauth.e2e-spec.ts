@@ -3,9 +3,29 @@ import { HttpStatus } from '@nestjs/common';
 
 describe('OAuthModule (e2e)', () => {
   let client: TestClient;
+  let oauthClient: {
+    client_id: string;
+    client_secret?: string;
+    redirect_uris: string[];
+  };
 
   beforeAll(async () => {
     client = await TestClient.create();
+
+    // Create OAuth client for testing
+    const createClientResponse = await client
+      .post('/internal/api/v1/oauth/clients')
+      .send({
+        name: 'Test OAuth Client',
+        description: 'Client for e2e testing',
+        redirect_uris: ['https://example.com/callback'],
+        scopes: ['openid', 'profile', 'email'],
+        grants: ['authorization_code'],
+        is_confidential: false,
+      })
+      .expect(201);
+
+    oauthClient = createClientResponse.body;
   });
 
   afterAll(async () => {
@@ -54,6 +74,59 @@ describe('OAuthModule (e2e)', () => {
         .get('/api/v1/oauth/userinfo')
         .set('Authorization', 'Invalid token')
         .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should successfully process OAuth authorize request with valid client', async () => {
+      const authorizeResponse = await client
+        .get('/api/v1/oauth/authorize')
+        .query({
+          response_type: 'code',
+          client_id: oauthClient.client_id,
+          redirect_uri: oauthClient.redirect_uris[0],
+          scope: 'openid profile email',
+          state: 'test_state_123',
+        });
+
+      // OAuth authorize endpoint correctly redirects to login for authentication
+      expect(authorizeResponse.status).toBe(HttpStatus.FOUND);
+      expect(authorizeResponse.headers.location).toContain('/api/v1/login');
+      expect(authorizeResponse.headers.location).toContain('redirect=');
+
+      // Verify the redirect preserves the original OAuth parameters (URL encoded)
+      const redirectUrl = decodeURIComponent(
+        authorizeResponse.headers.location,
+      );
+      expect(redirectUrl).toContain('client_id=' + oauthClient.client_id);
+      expect(redirectUrl).toContain('response_type=code');
+      expect(redirectUrl).toContain('state=test_state_123');
+    });
+
+    it('should preserve PKCE parameters in authorize redirect', async () => {
+      const authorizeResponse = await client
+        .get('/api/v1/oauth/authorize')
+        .query({
+          response_type: 'code',
+          client_id: oauthClient.client_id,
+          redirect_uri: oauthClient.redirect_uris[0],
+          scope: 'openid profile',
+          state: 'test_state_456',
+          code_challenge: 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+          code_challenge_method: 'S256',
+        });
+
+      // Should redirect to login and preserve PKCE parameters
+      expect(authorizeResponse.status).toBe(HttpStatus.FOUND);
+      expect(authorizeResponse.headers.location).toContain('/api/v1/login');
+
+      // Verify PKCE and other parameters are preserved in redirect (URL encoded)
+      const redirectUrl = decodeURIComponent(
+        authorizeResponse.headers.location,
+      );
+      expect(redirectUrl).toContain(
+        'code_challenge=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk',
+      );
+      expect(redirectUrl).toContain('code_challenge_method=S256');
+      expect(redirectUrl).toContain('state=test_state_456');
     });
   });
 

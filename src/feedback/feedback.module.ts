@@ -4,10 +4,11 @@ import { FeedbackController } from './feedback.controller';
 import { FeedbackService } from './feedback.service';
 import { Feedback } from './entities/feedback.entity';
 import { MinioModule } from 'omniboxd/minio/minio.module';
+import { InternalFeedbackController } from 'omniboxd/feedback/internal.feedback.controller';
 
 @Module({
   imports: [MinioModule, TypeOrmModule.forFeature([Feedback])],
-  controllers: [FeedbackController],
+  controllers: [FeedbackController, InternalFeedbackController],
   providers: [FeedbackService],
   exports: [FeedbackService],
 })

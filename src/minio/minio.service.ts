@@ -12,7 +12,7 @@ import { UploadedObjectInfo } from 'minio/dist/main/internal/type';
 
 export interface PutOptions {
   id?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, any>; // camel
   bucket?: string;
   folder?: string;
 }

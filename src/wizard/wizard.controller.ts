@@ -1,10 +1,22 @@
-import { Body, Controller, Post, Req, Sse } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  Sse,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
+import {
+  CollectRequestDto,
+  CollectZRequestDto,
+} from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { RequestId } from 'omniboxd/decorators/request-id.decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('api/v1/wizard')
 export class WizardController {
@@ -16,6 +28,16 @@ export class WizardController {
     @Body() data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
     return await this.wizardService.collect(userId, data);
+  }
+
+  @Post('collect/gzip')
+  @UseInterceptors(FileInterceptor('html'))
+  async collectGzip(
+    @UserId() userId: string,
+    @Body() data: CollectZRequestDto,
+    @UploadedFile() zHtml: Express.Multer.File,
+  ): Promise<CollectResponseDto> {
+    return await this.wizardService.collectZ(userId, data, zHtml);
   }
 
   @Post('ask')

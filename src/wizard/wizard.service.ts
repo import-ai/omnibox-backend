@@ -3,7 +3,10 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
-import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
+import {
+  CollectRequestDto,
+  CollectZRequestDto,
+} from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
@@ -23,7 +26,7 @@ import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
 import { MinioService } from 'omniboxd/minio/minio.service';
-import { Span } from 'nestjs-otel';
+import { createGunzip } from 'zlib';
 
 @Injectable()
 export class WizardService {
@@ -31,6 +34,8 @@ export class WizardService {
   private readonly processors: Record<string, Processor>;
   readonly streamService: StreamService;
   readonly wizardApiService: WizardAPIService;
+
+  private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
   constructor(
     private readonly wizardTaskService: WizardTaskService,
@@ -72,6 +77,51 @@ export class WizardService {
     return await this.wizardTaskService.create(partialTask);
   }
 
+  async collectZ(
+    userId: string,
+    data: CollectZRequestDto,
+    file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Missing file');
+    }
+    const { url, title, namespace_id, parentId } = data;
+    if (!namespace_id || !parentId || !url) {
+      throw new BadRequestException('Missing required fields');
+    }
+
+    const resourceDto: CreateResourceDto = {
+      name: title || url,
+      namespaceId: namespace_id,
+      resourceType: ResourceType.LINK,
+      parentId: parentId,
+      attrs: { url },
+    };
+    const resource = await this.namespaceResourcesService.create(
+      userId,
+      resourceDto,
+    );
+
+    const filename = 'html.gz';
+    const { id } = await this.minioService.put(
+      filename,
+      file.buffer,
+      file.mimetype,
+      {
+        folder: this.gzipHtmlFolder,
+        metadata: { resourceId: resource.id, url },
+      },
+    );
+
+    const task = await this.wizardTaskService.createCollectTask(
+      userId,
+      namespace_id,
+      resource.id,
+      { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+    );
+    return { task_id: task.id, resource_id: resource.id };
+  }
+
   async collect(
     userId: string,
     data: CollectRequestDto,
@@ -93,14 +143,11 @@ export class WizardService {
       resourceDto,
     );
 
-    // Save HTML to S3
-    const htmlS3Key = await this.saveHtmlToS3(html, resource.id);
-
     const task = await this.wizardTaskService.createCollectTask(
       userId,
       namespace_id,
       resource.id,
-      { html: htmlS3Key, url, title },
+      { html, url, title },
     );
     return { task_id: task.id, resource_id: resource.id };
   }
@@ -314,10 +361,12 @@ export class WizardService {
       // Fetch HTML content from S3 for collect tasks
       if (
         newTask.function === 'collect' &&
-        newTask.input.html?.endsWith('.html') &&
-        newTask.input.html?.length === 37
+        newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
+        newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
       ) {
-        const htmlContent = await this.getHtmlFromS3(newTask.input.html);
+        const htmlContent = await this.getHtmlFromMinioGzipFile(
+          newTask.input.html,
+        );
         newTask.input = { ...newTask.input, html: htmlContent };
       }
       return InternalTaskDto.fromEntity(newTask);
@@ -326,50 +375,18 @@ export class WizardService {
     return null;
   }
 
-  /**
-   * Save HTML content to S3 and return the S3 key
-   * @param html HTML content to save
-   * @param resourceId Associated resource ID for organization
-   * @returns S3 key for the stored HTML
-   */
-  @Span()
-  private async saveHtmlToS3(
-    html: string,
-    resourceId: string,
-  ): Promise<string> {
-    const buffer = Buffer.from(html, 'utf8');
-    const filename = `${resourceId}.html`;
-    const { id } = await this.minioService.put(filename, buffer, 'text/html', {
-      folder: 'collect/html',
-      metadata: { resourceId },
-    });
-    return id;
-  }
-
-  /**
-   * Retrieve HTML content from S3 using the S3 key
-   * @param s3Key S3 key for the HTML content
-   * @returns HTML content string
-   */
-  @Span()
-  private async getHtmlFromS3(s3Key: string): Promise<string> {
-    const objectPath = `collect/html/${s3Key}`;
-    const { stream } = await this.minioService.get(objectPath);
-
-    const chunks: Buffer[] = [];
-    return new Promise((resolve, reject) => {
-      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-      stream.on('end', () => {
-        const html = Buffer.concat(chunks).toString('utf8');
-        resolve(html);
-      });
-      stream.on('error', (error) => {
-        this.logger.error(
-          `Failed to retrieve HTML from S3 with key ${objectPath}:`,
-          error,
-        );
-        reject(error);
-      });
+  async getHtmlFromMinioGzipFile(path: string) {
+    const stream = await this.minioService.getObject(path);
+    const gunzip = createGunzip();
+    return new Promise<string>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream
+        .pipe(gunzip)
+        .on('data', (chunk: Buffer) => chunks.push(chunk))
+        .on('end', () => {
+          resolve(Buffer.concat(chunks).toString('utf-8'));
+        })
+        .on('error', reject);
     });
   }
 }

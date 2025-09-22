@@ -152,9 +152,6 @@ export class AuthService {
     try {
       const payload = this.jwtService.verify(token);
       const user = await this.userService.find(payload.sub);
-      if (!user) {
-        throw new NotFoundException('User not found.');
-      }
       await this.userService.updatePassword(user.id, password);
     } catch (error) {
       this.logger.error({ error });
@@ -222,9 +219,6 @@ export class AuthService {
   async inviteConfirm(token: string): Promise<void> {
     const payload: InvitePayloadDto = await this.jwtVerify(token);
     const user = await this.userService.find(payload.userId);
-    if (!user) {
-      throw new NotFoundException('User not found.');
-    }
     await this.dataSource.transaction(async (manager) => {
       await this.handleUserInvitation(user.id, payload.invitation, manager);
     });

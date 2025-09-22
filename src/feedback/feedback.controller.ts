@@ -1,20 +1,21 @@
 import {
-  Req,
-  Post,
+  BadRequestException,
   Body,
   Controller,
+  Post,
+  Req,
   UploadedFile,
   UseInterceptors,
-  BadRequestException,
 } from '@nestjs/common';
 import { encodeFileName } from 'omniboxd/utils/encode-filename';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { FeedbackService } from './feedback.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { MinioService } from 'omniboxd/minio/minio.service';
+import { CookieAuth } from 'omniboxd/auth';
+import { FeedbackResponseDto } from 'omniboxd/feedback/dto/feedback.dto';
 
 @Controller('api/v1/feedback')
 export class FeedbackController {
@@ -23,7 +24,6 @@ export class FeedbackController {
     private readonly minioService: MinioService,
   ) {}
 
-  @Public()
   @Post()
   @UseInterceptors(
     FileInterceptor('image', {
@@ -39,6 +39,7 @@ export class FeedbackController {
       },
     }),
   )
+  @CookieAuth({ onAuthFail: 'continue' })
   async createFeedback(
     @Body() createFeedbackDto: CreateFeedbackDto,
     @UploadedFile() image: Express.Multer.File,
@@ -60,11 +61,13 @@ export class FeedbackController {
 
     const userAgent = request.get('User-Agent');
 
-    return this.feedbackService.createFeedback(
-      createFeedbackDto,
-      imageUrl,
-      userAgent,
-      userId,
+    return FeedbackResponseDto.fromEntity(
+      await this.feedbackService.createFeedback(
+        createFeedbackDto,
+        imageUrl,
+        userAgent,
+        userId,
+      ),
     );
   }
 }

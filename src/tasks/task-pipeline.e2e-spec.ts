@@ -17,8 +17,11 @@ class MockWizardWorker {
   private isPolling = false;
   private pollingInterval: NodeJS.Timeout | null = null;
   private readonly pollIntervalMs = 500; // Fast polling for tests
+  private readonly namespaceId: string;
 
-  constructor(private readonly client: TestClient) {}
+  constructor(private readonly client: TestClient) {
+    this.namespaceId = client.namespace.id;
+  }
 
   /**
    * Starts polling for tasks and processing them
@@ -87,7 +90,7 @@ class MockWizardWorker {
   private async fetchTask(): Promise<TaskDto | null> {
     try {
       const response = await this.makeRequest()
-        .get('/internal/api/v1/wizard/task')
+        .get(`/internal/api/v1/wizard/task?namespace_id=${this.namespaceId}`)
         .timeout(5000); // 5 second timeout
 
       if (response.status === 204) {
@@ -282,18 +285,14 @@ describe('Task Pipeline (e2e)', () => {
   let client: TestClient;
   let mockWorker: MockWizardWorker;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     client = await TestClient.create();
     mockWorker = new MockWizardWorker(client);
   });
 
-  afterAll(async () => {
-    await mockWorker.deleteAllTasks();
+  afterEach(async () => {
+    mockWorker.stopPolling();
     await client.close();
-  });
-
-  beforeEach(async () => {
-    await mockWorker.deleteAllTasks();
   });
 
   describe('Basic Task Processing', () => {

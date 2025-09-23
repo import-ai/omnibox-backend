@@ -6,11 +6,11 @@ import { gzipSync } from 'zlib';
 describe('InternalWizardController (e2e)', () => {
   let client: TestClient;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     client = await TestClient.create();
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await client.close();
   });
 
@@ -44,7 +44,8 @@ describe('InternalWizardController (e2e)', () => {
       .get(`/internal/api/v1/wizard/task?namespace_id=${client.namespace.id}`)
       .expect(HttpStatus.OK);
 
-    expect(task.body.input.html).toEqual(html);
+    expect(task.body.id).toBe(taskId);
+    expect(task.body.input.html).toBe(html);
 
     const response = await client
       .post('/internal/api/v1/wizard/callback')
@@ -86,7 +87,8 @@ describe('InternalWizardController (e2e)', () => {
       .get(`/internal/api/v1/wizard/task?namespace_id=${client.namespace.id}`)
       .expect(HttpStatus.OK);
 
-    expect(task.body.input.html).toEqual(collectData.html);
+    expect(task.body.id).toBe(taskId);
+    expect(task.body.input.html).toBe(collectData.html);
 
     const response = await client
       .post('/internal/api/v1/wizard/callback')

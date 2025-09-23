@@ -154,22 +154,6 @@ export class ResourcesService {
     );
   }
 
-  async createFolder(
-    namespaceId: string,
-    parentId: string | null,
-    userId: string | null,
-    manager: EntityManager,
-  ) {
-    return await manager.save(
-      manager.create(Resource, {
-        resourceType: ResourceType.FOLDER,
-        namespaceId,
-        parentId,
-        userId,
-      }),
-    );
-  }
-
   async createResource(
     namespaceId: string,
     parentId: string | null,

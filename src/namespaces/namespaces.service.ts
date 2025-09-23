@@ -131,10 +131,12 @@ export class NamespacesService {
     manager: EntityManager,
   ): Promise<Namespace> {
     const namespace = await manager.save(manager.create(Namespace, { name }));
-    const publicRoot = await this.resourcesService.createFolder(
+    const publicRoot = await this.resourcesService.createResource(
       namespace.id,
       null,
       null,
+      ResourceType.FOLDER,
+      {},
       manager,
     );
     await manager.update(Namespace, namespace.id, {
@@ -182,10 +184,12 @@ export class NamespacesService {
     if (count > 0) {
       return;
     }
-    const privateRoot = await this.resourcesService.createFolder(
+    const privateRoot = await this.resourcesService.createResource(
       namespaceId,
       null,
       userId,
+      ResourceType.FOLDER,
+      {},
       manager,
     );
     await manager.save(

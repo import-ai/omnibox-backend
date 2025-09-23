@@ -49,7 +49,7 @@ export class OpenResourcesController {
       content: data.content,
       tagIds: data.tag_ids || [],
       attrs: data.attrs || {},
-      resourceType: ResourceType.FILE,
+      resourceType: ResourceType.DOC,
       namespaceId: apiKey.namespaceId,
       parentId: apiKey.attrs.root_resource_id,
     };

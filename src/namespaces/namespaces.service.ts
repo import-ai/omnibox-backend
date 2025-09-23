@@ -21,6 +21,8 @@ import {
   NamespaceMember,
   NamespaceRole,
 } from './entities/namespace-member.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 @Injectable()
 export class NamespacesService {
@@ -31,13 +33,11 @@ export class NamespacesService {
     @InjectRepository(NamespaceMember)
     private namespaceMemberRepository: Repository<NamespaceMember>,
 
-    @InjectRepository(Resource)
-    private resourceRepository: Repository<Resource>,
-
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
 
-    private readonly resourceService: NamespaceResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
 
     private readonly permissionsService: PermissionsService,
   ) {}
@@ -55,15 +55,21 @@ export class NamespacesService {
     return member.rootResourceId;
   }
 
-  async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
+  async getPrivateRoot(
+    userId: string,
+    namespaceId: string,
+  ): Promise<ResourceMetaDto> {
     const rootResourceId = await this.getPrivateRootId(userId, namespaceId);
-    return await this.resourceService.get(rootResourceId);
+    return await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      rootResourceId,
+    );
   }
 
   async getTeamspaceRoot(
     namespaceId: string,
     manager?: EntityManager,
-  ): Promise<Resource> {
+  ): Promise<ResourceMetaDto> {
     const repo = manager
       ? manager.getRepository(Namespace)
       : this.namespaceRepository;
@@ -72,20 +78,16 @@ export class NamespacesService {
         id: namespaceId,
       },
     });
-    if (namespace === null) {
+    if (!namespace) {
       throw new NotFoundException('Workspace not found');
     }
-    if (namespace.rootResourceId === null) {
+    if (!namespace.rootResourceId) {
       throw new NotFoundException('Root resource not found');
     }
-    const resourceRepo = manager
-      ? manager.getRepository(Resource)
-      : this.resourceRepository;
-    return await resourceRepo.findOneOrFail({
-      where: {
-        id: namespace.rootResourceId,
-      },
-    });
+    return await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      namespace.rootResourceId,
+    );
   }
 
   async get(id: string, manager?: EntityManager) {
@@ -129,7 +131,7 @@ export class NamespacesService {
     manager: EntityManager,
   ): Promise<Namespace> {
     const namespace = await manager.save(manager.create(Namespace, { name }));
-    const publicRoot = await this.resourceService.createFolder(
+    const publicRoot = await this.resourcesService.createFolder(
       namespace.id,
       null,
       null,
@@ -180,7 +182,7 @@ export class NamespacesService {
     if (count > 0) {
       return;
     }
-    const privateRoot = await this.resourceService.createFolder(
+    const privateRoot = await this.resourcesService.createFolder(
       namespaceId,
       null,
       userId,
@@ -209,7 +211,7 @@ export class NamespacesService {
       ResourcePermission.FULL_ACCESS,
       manager,
     );
-    await this.resourceService.create(
+    await this.namespaceResourcesService.create(
       userId,
       {
         name: 'Uncategorized',
@@ -321,13 +323,13 @@ export class NamespacesService {
 
   async getRoot(namespaceId: string, userId: string) {
     const privateRoot = await this.getPrivateRoot(userId, namespaceId);
-    const privateChildren = await this.resourceService.listChildren(
+    const privateChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       privateRoot.id,
       userId,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
-    const teamspaceChildren = await this.resourceService.listChildren(
+    const teamspaceChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       teamspaceRoot.id,
       userId,

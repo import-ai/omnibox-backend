@@ -186,6 +186,12 @@ export class NamespaceResourcesService {
     data: CreateResourceDto,
     manager?: EntityManager,
   ) {
+    if (!manager) {
+      return await this.dataSource.transaction(async (manager) => {
+        return await this.create(userId, data, manager);
+      });
+    }
+
     const ok = await this.permissionsService.userHasPermission(
       data.namespaceId,
       data.parentId,
@@ -198,49 +204,17 @@ export class NamespaceResourcesService {
       throw new ForbiddenException('Not authorized to create resource.');
     }
 
-    const transaction = async (manager: EntityManager) => {
-      const repo = manager.getRepository(Resource);
-      const parentResource = await repo.findOne({
-        where: {
-          id: data.parentId,
-          namespaceId: data.namespaceId,
-        },
-      });
-      if (!parentResource) {
-        throw new BadRequestException('Parent resource not exists.');
-      }
-      if (data.namespaceId && parentResource.namespaceId !== data.namespaceId) {
-        throw new BadRequestException(
-          "Parent resource's namespace & space must match the resource's.",
-        );
-      }
-
-      // Use provided tag_ids directly
-      const tagIds = data.tag_ids || [];
-
-      const resource = repo.create({
+    return await this.resourcesService.createResource(
+      data.namespaceId,
+      data.parentId,
+      userId,
+      data.resourceType,
+      {
         ...data,
-        userId,
-        namespaceId: data.namespaceId,
-        parentId: parentResource.id,
-        tagIds: tagIds.length > 0 ? tagIds : undefined,
-      });
-      const savedResource = await repo.save(resource);
-      await this.wizardTaskService.createIndexTask(
-        TASK_PRIORITY,
-        userId,
-        savedResource,
-        manager.getRepository(Task),
-      );
-      return savedResource;
-    };
-
-    if (manager) {
-      return await transaction(manager);
-    }
-    return await this.dataSource.transaction(async (manager) => {
-      return await transaction(manager);
-    });
+        tagIds: data.tag_ids,
+      },
+      manager,
+    );
   }
 
   async duplicate(userId: string, resourceId: string) {
@@ -790,22 +764,6 @@ export class NamespaceResourcesService {
       this.minioPath(artifactName),
     );
     return { fileStream, resource };
-  }
-
-  async createFolder(
-    namespaceId: string,
-    parentId: string | null,
-    userId: string | null,
-    manager: EntityManager,
-  ) {
-    return await manager.save(
-      manager.create(Resource, {
-        resourceType: ResourceType.FOLDER,
-        namespaceId,
-        parentId,
-        userId,
-      }),
-    );
   }
 
   async listAllUserAccessibleResources(

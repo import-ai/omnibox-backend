@@ -40,7 +40,7 @@ import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { ListChildrenRespDto } from './dto/list-children-resp.dto';
+import { ChildrenMetaDto } from './dto/list-children-resp.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -492,7 +492,7 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-  ): Promise<ListChildrenRespDto[]> {
+  ): Promise<ChildrenMetaDto[]> {
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
@@ -502,14 +502,14 @@ export class NamespaceResourcesService {
       parents,
       userId,
     );
-    const resps: ListChildrenRespDto[] = [];
+    const resps: ChildrenMetaDto[] = [];
     for (const child of children) {
       const hasChildren = await this.hasChildren(
         namespaceId,
         [child, ...parents],
         userId,
       );
-      resps.push(new ListChildrenRespDto(child, hasChildren));
+      resps.push(new ChildrenMetaDto(child, hasChildren));
     }
     return resps;
   }

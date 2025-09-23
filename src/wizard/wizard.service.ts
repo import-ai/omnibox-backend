@@ -3,7 +3,10 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
-import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
+import {
+  CollectRequestDto,
+  CollectZRequestDto,
+} from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
@@ -22,6 +25,8 @@ import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
+import { MinioService } from 'omniboxd/minio/minio.service';
+import { createGunzip } from 'zlib';
 
 @Injectable()
 export class WizardService {
@@ -30,6 +35,8 @@ export class WizardService {
   readonly streamService: StreamService;
   readonly wizardApiService: WizardAPIService;
 
+  private readonly gzipHtmlFolder: string = 'collect/html/gzip';
+
   constructor(
     private readonly wizardTaskService: WizardTaskService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
@@ -37,6 +44,7 @@ export class WizardService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly minioService: MinioService,
   ) {
     this.processors = {
       collect: new CollectProcessor(
@@ -67,6 +75,51 @@ export class WizardService {
 
   async create(partialTask: Partial<Task>) {
     return await this.wizardTaskService.create(partialTask);
+  }
+
+  async collectZ(
+    userId: string,
+    data: CollectZRequestDto,
+    file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Missing file');
+    }
+    const { url, title, namespace_id, parentId } = data;
+    if (!namespace_id || !parentId || !url) {
+      throw new BadRequestException('Missing required fields');
+    }
+
+    const resourceDto: CreateResourceDto = {
+      name: title || url,
+      namespaceId: namespace_id,
+      resourceType: ResourceType.LINK,
+      parentId: parentId,
+      attrs: { url },
+    };
+    const resource = await this.namespaceResourcesService.create(
+      userId,
+      resourceDto,
+    );
+
+    const filename = 'html.gz';
+    const { id } = await this.minioService.put(
+      filename,
+      file.buffer,
+      file.mimetype,
+      {
+        folder: this.gzipHtmlFolder,
+        metadata: { resourceId: resource.id, url },
+      },
+    );
+
+    const task = await this.wizardTaskService.createCollectTask(
+      userId,
+      namespace_id,
+      resource.id,
+      { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+    );
+    return { task_id: task.id, resource_id: resource.id };
   }
 
   async collect(
@@ -305,9 +358,35 @@ export class WizardService {
         namespaceId: record.namespace_id,
       });
       const newTask = await this.wizardTaskService.taskRepository.save(task);
+      // Fetch HTML content from S3 for collect tasks
+      if (
+        newTask.function === 'collect' &&
+        newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
+        newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
+      ) {
+        const htmlContent = await this.getHtmlFromMinioGzipFile(
+          newTask.input.html,
+        );
+        newTask.input = { ...newTask.input, html: htmlContent };
+      }
       return InternalTaskDto.fromEntity(newTask);
     }
 
     return null;
+  }
+
+  async getHtmlFromMinioGzipFile(path: string) {
+    const stream = await this.minioService.getObject(path);
+    const gunzip = createGunzip();
+    return new Promise<string>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream
+        .pipe(gunzip)
+        .on('data', (chunk: Buffer) => chunks.push(chunk))
+        .on('end', () => {
+          resolve(Buffer.concat(chunks).toString('utf-8'));
+        })
+        .on('error', reject);
+    });
   }
 }

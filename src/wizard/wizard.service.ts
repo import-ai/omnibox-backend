@@ -61,6 +61,10 @@ export class WizardService {
         this.tagService,
       ),
       generate_title: new GenerateTitleProcessor(namespaceResourcesService),
+      generate_video_note: new CollectProcessor(
+        this.namespaceResourcesService,
+        this.tagService,
+      ),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {

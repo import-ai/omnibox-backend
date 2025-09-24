@@ -19,10 +19,11 @@ import {
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
-import { context, propagation } from '@opentelemetry/api';
+import { context, propagation, trace } from '@opentelemetry/api';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { Span } from 'nestjs-otel';
 
 interface HandlerContext {
   parentId?: string;
@@ -41,12 +42,18 @@ export class StreamService {
     private readonly resourcesService: ResourcesService,
   ) {}
 
+  @Span('stream')
   async stream(
     url: string,
     body: Record<string, any>,
     requestId: string,
     callback: (data: string) => Promise<void>,
   ): Promise<void> {
+    const span = trace.getSpan(context.active());
+    if (span) {
+      span.setAttribute('agent_request', JSON.stringify(body));
+    }
+
     const traceHeaders: Record<string, string> = {};
     propagation.inject(context.active(), traceHeaders);
     const response = await fetch(`${this.wizardBaseUrl}${url}`, {

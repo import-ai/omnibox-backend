@@ -113,13 +113,23 @@ export class WizardService {
       },
     );
 
-    const task = await this.wizardTaskService.createCollectTask(
-      userId,
-      namespace_id,
-      resource.id,
-      { html: [this.gzipHtmlFolder, id].join('/'), url, title },
-    );
-    return { task_id: task.id, resource_id: resource.id };
+    if (url.startsWith('')) {
+      const task = await this.wizardTaskService.createGenerateVideoNoteTask(
+        userId,
+        namespace_id,
+        resource.id,
+        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+      );
+      return { task_id: task.id, resource_id: resource.id };
+    } else {
+      const task = await this.wizardTaskService.createCollectTask(
+        userId,
+        namespace_id,
+        resource.id,
+        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+      );
+      return { task_id: task.id, resource_id: resource.id };
+    }
   }
 
   async collect(
@@ -360,7 +370,7 @@ export class WizardService {
       const newTask = await this.wizardTaskService.taskRepository.save(task);
       // Fetch HTML content from S3 for collect tasks
       if (
-        newTask.function === 'collect' &&
+        ['collect', 'generate_video_note'].includes(newTask.function) &&
         newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
         newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
       ) {

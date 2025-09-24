@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { OpenCreateResourceDto } from 'omniboxd/namespace-resources/dto/open.create-resource.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {
@@ -59,8 +60,8 @@ export class OpenResourcesController {
       resourceData,
     );
 
-    if (newResource.content && newResource.content.trim() !== '') {
-      if (!newResource.name || newResource.name.trim() === '') {
+    if (!isEmpty(newResource.content?.trim())) {
+      if (isEmpty(newResource.name?.trim())) {
         await this.wizardTaskService.createGenerateTitleTask(
           userId,
           apiKey.namespaceId,
@@ -68,7 +69,7 @@ export class OpenResourcesController {
           { text: data.content },
         );
       }
-      if (!newResource.tagIds) {
+      if (isEmpty(newResource.tagIds)) {
         await this.wizardTaskService.createExtractTagsTask(
           userId,
           newResource.id,

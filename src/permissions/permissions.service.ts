@@ -41,7 +41,7 @@ export class PermissionsService {
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
     private readonly resourcesService: ResourcesService,
-  ) {}
+  ) { }
 
   async getGroupPermissions(
     namespaceId: string,
@@ -203,26 +203,90 @@ export class PermissionsService {
       },
     });
 
-    // resourceId -> GroupPermission[]
-    const groupPermissionMap: Map<string, GroupPermission[]> = new Map();
+    // resourceId + groupId -> GroupPermission
+    const groupPermissionKeyMap: Map<string, GroupPermission> = new Map();
     for (const permission of groupPermissions) {
-      const resourceId = permission.resourceId;
-      if (!groupPermissionMap.has(resourceId)) {
-        groupPermissionMap.set(resourceId, []);
-      }
-      groupPermissionMap.get(resourceId)!.push(permission);
+      groupPermissionKeyMap.set(
+        `${permission.resourceId}||${permission.groupId}`,
+        permission,
+      );
     }
     // resourceId -> UserPermission
     const userPermissionMap: Map<string, UserPermission> = new Map();
     for (const permission of userPermissions) {
       userPermissionMap.set(permission.resourceId, permission);
     }
+    // resourceId -> ResourceMetaDto
+    const resourceMap: Map<string, ResourceMetaDto> = new Map();
+    for (const resource of resources) {
+      resourceMap.set(resource.id, resource);
+    }
+
+    const calcUserPermission = (resource: ResourceMetaDto) => {
+      while (true) {
+        const userPermission = userPermissionMap.get(resource.id);
+        if (userPermission) {
+          return userPermission.permission;
+        }
+        if (!resource.parentId) {
+          return null;
+        }
+        const parent = resourceMap.get(resource.parentId);
+        if (!parent) {
+          return null;
+        }
+        resource = parent;
+      }
+    };
+
+    const calcGroupPermission = (resource: ResourceMetaDto, groupId: string) => {
+      while (true) {
+        const groupPermission = groupPermissionKeyMap.get(
+          `${resource.id}||${groupId}`,
+        );
+        if (groupPermission) {
+          return groupPermission.permission;
+        }
+        if (!resource.parentId) {
+          return null;
+        }
+        const parent = resourceMap.get(resource.parentId);
+        if (!parent) {
+          return null;
+        }
+        resource = parent;
+      }
+    };
+
+    const calcGlobalPermission = (resource: ResourceMetaDto) => {
+      while (true) {
+        if (resource.globalPermission) {
+          return resource.globalPermission;
+        }
+        if (!resource.parentId) {
+          return null;
+        }
+        const parent = resourceMap.get(resource.parentId);
+        if (!parent) {
+          return null;
+        }
+        resource = parent;
+      }
+    };
 
     const permissions: ResourcePermission[] = new Array(resources.length).fill(
       ResourcePermission.NO_ACCESS,
     );
     for (let i = resources.length - 1; i >= 0; i--) {
-      // todo
+      const resource = resources[i];
+      const userPermission = calcUserPermission(resource);
+      const groupPermissions = groupIds.map((groupId) =>
+        calcGroupPermission(resource, groupId),
+      );
+      const globalPermission = calcGlobalPermission(resource);
+      permissions[i] =
+        maxPermissions([globalPermission, userPermission, ...groupPermissions]) ||
+        ResourcePermission.NO_ACCESS;
     }
     return permissions;
   }

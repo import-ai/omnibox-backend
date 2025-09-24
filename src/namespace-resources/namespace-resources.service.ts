@@ -150,37 +150,6 @@ export class NamespaceResourcesService {
     return false;
   }
 
-  async findByIds(namespaceId: string, ids: Array<string>) {
-    if (ids.length <= 0) {
-      return [];
-    }
-    const resources = await this.resourceRepository.find({
-      where: {
-        namespaceId,
-        id: In(ids),
-      },
-      select: [
-        'id',
-        'name',
-        'attrs',
-        'parentId',
-        'createdAt',
-        'updatedAt',
-        'namespaceId',
-        'resourceType',
-        'tagIds',
-      ],
-    });
-
-    // Populate tags for resources
-    const tagsMap = await this.getTagsForResources(namespaceId, resources);
-
-    return resources.map((resource) => ({
-      ...resource,
-      tags: tagsMap.get(resource.id) || [],
-    }));
-  }
-
   async create(
     userId: string,
     data: CreateResourceDto,

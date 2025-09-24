@@ -35,7 +35,7 @@ export class CollectController {
   async collect(
     @UserId() userId: string,
     @Body() data: CollectRequestDto,
-    @Body('namespaceId', new ValidationPipe()) namespaceId: string,
+    @Body('namespace_id', new ValidationPipe()) namespaceId: string,
   ): Promise<CollectResponseDto> {
     return await this.wizardService.collect(namespaceId, userId, data);
   }

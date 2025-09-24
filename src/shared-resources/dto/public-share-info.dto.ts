@@ -1,17 +1,34 @@
-import { Share } from 'omniboxd/shares/entities/share.entity';
+import { Expose } from 'class-transformer';
+import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourceMetaDto } from './shared-resource-meta.dto';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
 export class PublicShareInfoDto {
+  @Expose()
   id: string;
+
+  @Expose({ name: 'all_resources' })
   allResources: boolean;
+
+  @Expose({ name: 'share_type' })
+  shareType: ShareType;
+
+  @Expose({ name: 'namespace_name' })
+  namespaceName: string;
+
+  @Expose()
   resource: SharedResourceMetaDto;
 
-  static fromEntity(share: Share, resource: Resource): PublicShareInfoDto {
+  static fromResourceMeta(
+    share: Share,
+    resource: SharedResourceMetaDto,
+    namespaceName: string,
+  ): PublicShareInfoDto {
     const dto = new PublicShareInfoDto();
     dto.id = share.id;
     dto.allResources = share.allResources;
-    dto.resource = SharedResourceMetaDto.fromEntity(resource);
+    dto.shareType = share.shareType;
+    dto.namespaceName = namespaceName;
+    dto.resource = resource;
     return dto;
   }
 }

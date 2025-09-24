@@ -27,6 +27,8 @@ import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { createGunzip } from 'zlib';
+import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Injectable()
 export class WizardService {
@@ -45,6 +47,8 @@ export class WizardService {
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
     private readonly minioService: MinioService,
+    private readonly sharedResourcesService: SharedResourcesService,
+    private readonly resourcesService: ResourcesService,
   ) {
     this.processors = {
       collect: new CollectProcessor(
@@ -69,6 +73,8 @@ export class WizardService {
       baseUrl,
       this.messagesService,
       this.namespaceResourcesService,
+      this.sharedResourcesService,
+      this.resourcesService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
   }
@@ -78,6 +84,7 @@ export class WizardService {
   }
 
   async collectZ(
+    namespaceId: string,
     userId: string,
     data: CollectZRequestDto,
     file: Express.Multer.File,
@@ -85,14 +92,14 @@ export class WizardService {
     if (!file) {
       throw new BadRequestException('Missing file');
     }
-    const { url, title, namespace_id, parentId } = data;
-    if (!namespace_id || !parentId || !url) {
+    const { url, title, parentId } = data;
+    if (!namespaceId || !parentId || !url) {
       throw new BadRequestException('Missing required fields');
     }
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace_id,
+      namespaceId,
       resourceType: ResourceType.LINK,
       parentId: parentId,
       attrs: { url },
@@ -115,7 +122,7 @@ export class WizardService {
 
     const task = await this.wizardTaskService.createCollectTask(
       userId,
-      namespace_id,
+      namespaceId,
       resource.id,
       { html: [this.gzipHtmlFolder, id].join('/'), url, title },
     );
@@ -123,19 +130,20 @@ export class WizardService {
   }
 
   async collect(
+    namespaceId: string,
     userId: string,
     data: CollectRequestDto,
   ): Promise<CollectResponseDto> {
-    const { html, url, title, namespace_id, parentId } = data;
-    if (!namespace_id || !parentId || !url || !html) {
+    const { html, url, title, parentId } = data;
+    if (!namespaceId || !parentId || !url || !html) {
       throw new BadRequestException('Missing required fields');
     }
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace_id,
+      namespaceId,
       resourceType: ResourceType.LINK,
-      parentId: parentId,
+      parentId,
       attrs: { url },
     };
     const resource = await this.namespaceResourcesService.create(
@@ -145,7 +153,7 @@ export class WizardService {
 
     const task = await this.wizardTaskService.createCollectTask(
       userId,
-      namespace_id,
+      namespaceId,
       resource.id,
       { html, url, title },
     );

@@ -77,7 +77,7 @@ describe('InternalWizardController (e2e)', () => {
     };
 
     const taskCreateResponse = await client
-      .post('/api/v1/wizard/collect')
+      .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
       .send(collectData)
       .expect(HttpStatus.CREATED);
 

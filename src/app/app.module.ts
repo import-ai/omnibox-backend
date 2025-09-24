@@ -53,6 +53,8 @@ import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
 import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
+import { NullableUserId1757844448000 } from 'omniboxd/migrations/1757844448000-nullable-user-id';
+import { AddShareIdToConversations1757844449000 } from 'omniboxd/migrations/1757844449000-add-share-id-to-conversations';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -146,6 +148,8 @@ export class AppModule implements NestModule {
               SharesAllResources1754471311959,
               Applications1756914379375,
               Feedback1757100000000,
+              NullableUserId1757844448000,
+              AddShareIdToConversations1757844449000,
               ...extraMigrations,
             ],
             migrationsRun: true,

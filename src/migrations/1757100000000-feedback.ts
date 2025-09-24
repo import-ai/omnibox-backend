@@ -82,8 +82,7 @@ export class Feedback1757100000000 implements MigrationInterface {
     await createFeedbackTable(queryRunner);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/require-await
-  public async down(_queryRunner: QueryRunner): Promise<void> {
+  public down(): Promise<void> {
     throw new Error('Not supported.');
   }
 }

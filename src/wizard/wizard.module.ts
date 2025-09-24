@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import {
+  CollectController,
   SharedWizardController,
   WizardController,
 } from 'omniboxd/wizard/wizard.controller';
@@ -42,6 +43,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
   ],
   controllers: [
     WizardController,
+    CollectController,
     SharedWizardController,
     InternalWizardController,
     OpenWizardController,

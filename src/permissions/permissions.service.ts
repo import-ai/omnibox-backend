@@ -41,7 +41,7 @@ export class PermissionsService {
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
     private readonly resourcesService: ResourcesService,
-  ) { }
+  ) {}
 
   async getGroupPermissions(
     namespaceId: string,
@@ -239,7 +239,10 @@ export class PermissionsService {
       }
     };
 
-    const calcGroupPermission = (resource: ResourceMetaDto, groupId: string) => {
+    const calcGroupPermission = (
+      resource: ResourceMetaDto,
+      groupId: string,
+    ) => {
       while (true) {
         const groupPermission = groupPermissionKeyMap.get(
           `${resource.id}||${groupId}`,
@@ -277,7 +280,7 @@ export class PermissionsService {
     const permissions: ResourcePermission[] = new Array(resources.length).fill(
       ResourcePermission.NO_ACCESS,
     );
-    for (let i = resources.length - 1; i >= 0; i--) {
+    for (let i = 0; i < resources.length; i++) {
       const resource = resources[i];
       const userPermission = calcUserPermission(resource);
       const groupPermissions = groupIds.map((groupId) =>
@@ -285,8 +288,11 @@ export class PermissionsService {
       );
       const globalPermission = calcGlobalPermission(resource);
       permissions[i] =
-        maxPermissions([globalPermission, userPermission, ...groupPermissions]) ||
-        ResourcePermission.NO_ACCESS;
+        maxPermissions([
+          globalPermission,
+          userPermission,
+          ...groupPermissions,
+        ]) || ResourcePermission.NO_ACCESS;
     }
     return permissions;
   }

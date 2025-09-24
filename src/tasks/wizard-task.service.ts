@@ -66,7 +66,32 @@ export class WizardTaskService {
     );
   }
 
-  async createExtractTagsTask(parentTask: Task, repo?: Repository<Task>) {
+  async createExtractTagsTask(
+    userId: string,
+    resourceId: string,
+    namespaceId: string,
+    text: string,
+    repo?: Repository<Task>,
+  ) {
+    const lang = await this.getUserLanguage(userId);
+    return this.create(
+      {
+        function: 'extract_tags',
+        input: { text, lang },
+        namespaceId,
+        payload: {
+          resource_id: resourceId,
+        },
+        userId,
+      },
+      repo,
+    );
+  }
+
+  async createExtractTagsTaskFromTask(
+    parentTask: Task,
+    repo?: Repository<Task>,
+  ) {
     const lang = await this.getUserLanguage(parentTask.userId);
     return this.create(
       {

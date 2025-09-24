@@ -34,6 +34,7 @@ export class WizardService {
   private readonly processors: Record<string, Processor>;
   readonly streamService: StreamService;
   readonly wizardApiService: WizardAPIService;
+  private readonly videoPrefixes: string[];
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
@@ -71,10 +72,28 @@ export class WizardService {
       this.namespaceResourcesService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
+    const videoPrefixes: string =
+      this.configService.get<string>('OB_VIDEO_PREFIXES') || '';
+    if (isEmpty(videoPrefixes)) {
+      this.videoPrefixes = [];
+    } else {
+      this.videoPrefixes = videoPrefixes
+        .split(',')
+        .map((prefix) => prefix.trim());
+    }
   }
 
   async create(partialTask: Partial<Task>) {
     return await this.wizardTaskService.create(partialTask);
+  }
+
+  isVideoUrl(url: string): boolean {
+    for (const prefix of this.videoPrefixes) {
+      if (url.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async collectZ(
@@ -113,7 +132,7 @@ export class WizardService {
       },
     );
 
-    if (url.startsWith('https://www.youtube.com/watch?v=')) {
+    if (this.isVideoUrl(url)) {
       const task = await this.wizardTaskService.createGenerateVideoNoteTask(
         userId,
         namespace_id,

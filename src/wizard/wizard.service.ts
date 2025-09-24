@@ -113,7 +113,7 @@ export class WizardService {
       },
     );
 
-    if (url.startsWith('')) {
+    if (url.startsWith('https://www.youtube.com/watch?v=')) {
       const task = await this.wizardTaskService.createGenerateVideoNoteTask(
         userId,
         namespace_id,

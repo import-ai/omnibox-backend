@@ -84,6 +84,7 @@ export class WizardService {
   }
 
   async collectZ(
+    namespaceId: string,
     userId: string,
     data: CollectZRequestDto,
     file: Express.Multer.File,
@@ -91,14 +92,14 @@ export class WizardService {
     if (!file) {
       throw new BadRequestException('Missing file');
     }
-    const { url, title, namespace_id, parentId } = data;
-    if (!namespace_id || !parentId || !url) {
+    const { url, title, parentId } = data;
+    if (!namespaceId || !parentId || !url) {
       throw new BadRequestException('Missing required fields');
     }
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace_id,
+      namespaceId,
       resourceType: ResourceType.LINK,
       parentId: parentId,
       attrs: { url },
@@ -121,7 +122,7 @@ export class WizardService {
 
     const task = await this.wizardTaskService.createCollectTask(
       userId,
-      namespace_id,
+      namespaceId,
       resource.id,
       { html: [this.gzipHtmlFolder, id].join('/'), url, title },
     );

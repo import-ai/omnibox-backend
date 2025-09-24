@@ -132,11 +132,12 @@ export class NamespacesService {
   ): Promise<Namespace> {
     const namespace = await manager.save(manager.create(Namespace, { name }));
     const publicRoot = await this.resourcesService.createResource(
-      namespace.id,
-      null,
-      null,
-      ResourceType.FOLDER,
-      {},
+      {
+        namespaceId: namespace.id,
+        parentId: null,
+        userId: null,
+        resourceType: ResourceType.FOLDER,
+      },
       manager,
     );
     await manager.update(Namespace, namespace.id, {
@@ -185,11 +186,12 @@ export class NamespacesService {
       return;
     }
     const privateRoot = await this.resourcesService.createResource(
-      namespaceId,
-      null,
-      userId,
-      ResourceType.FOLDER,
-      {},
+      {
+        namespaceId,
+        parentId: null,
+        userId,
+        resourceType: ResourceType.FOLDER,
+      },
       manager,
     );
     await manager.save(

@@ -6,7 +6,6 @@ import {
   IsOptional,
   IsNotEmpty,
 } from 'class-validator';
-import { UpdateResourceReqDto } from 'omniboxd/resources/dto/update-resource-req.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 export class UpdateResourceDto {
@@ -39,14 +38,4 @@ export class UpdateResourceDto {
   @IsObject()
   @IsOptional()
   attrs?: Record<string, any>;
-
-  toUpdateReq(): UpdateResourceReqDto {
-    const updateReq = new UpdateResourceReqDto();
-    updateReq.name = this.name;
-    updateReq.parentId = this.parentId;
-    updateReq.tagIds = this.tag_ids ? this.tag_ids : undefined;
-    updateReq.content = this.content;
-    updateReq.attrs = this.attrs;
-    return updateReq;
-  }
 }

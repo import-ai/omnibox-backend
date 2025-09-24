@@ -205,12 +205,9 @@ export class NamespaceResourcesService {
     }
 
     return await this.resourcesService.createResource(
-      data.namespaceId,
-      data.parentId,
-      userId,
-      data.resourceType,
       {
         ...data,
+        userId,
         tagIds: data.tag_ids,
       },
       manager,
@@ -344,33 +341,26 @@ export class NamespaceResourcesService {
       : resourcesWithTags;
   }
 
-  async move({ namespaceId, resourceId, targetId, userId }) {
-    const resourceHasPermission =
-      await this.permissionsService.userHasPermission(
-        namespaceId,
-        resourceId,
-        userId,
-      );
-    if (!resourceHasPermission) {
+  async move(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    targetId: string,
+  ) {
+    const ok = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    if (!ok) {
       throw new ForbiddenException('Not authorized');
     }
-    const resource = await this.resourceRepository.findOneByOrFail({
-      id: resourceId,
-    });
-
-    // Validate that the target resource exists
-    const targetResource = await this.resourceRepository.findOne({
-      where: { namespaceId, id: targetId },
-    });
-    if (!targetResource) {
-      throw new NotFoundException('Target resource not found');
-    }
-
-    const newResource = this.resourceRepository.create({
-      ...resource,
-      parentId: targetId,
-    });
-    await this.resourceRepository.save(newResource);
+    await this.resourcesService.updateResource(
+      namespaceId,
+      resourceId,
+      userId,
+      { parentId: targetId },
+    );
   }
 
   async search({ namespaceId, excludeResourceId, name, userId }) {
@@ -560,12 +550,17 @@ export class NamespaceResourcesService {
     return resource;
   }
 
-  async update(userId: string, id: string, data: UpdateResourceDto) {
+  async update(userId: string, resourceId: string, data: UpdateResourceDto) {
     await this.resourcesService.updateResource(
       data.namespaceId,
-      id,
+      resourceId,
       userId,
-      data.toUpdateReq(),
+      {
+        name: data.name,
+        tagIds: data.tag_ids,
+        content: data.content,
+        attrs: data.attrs,
+      },
     );
   }
 

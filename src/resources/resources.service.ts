@@ -1,16 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource, ResourceType } from './entities/resource.entity';
-import { EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
-import { UpdateResourceReqDto } from './dto/update-resource-req.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 
 const TASK_PRIORITY = 5;
 
 @Injectable()
 export class ResourcesService {
   constructor(
+    private readonly dataSource: DataSource,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly wizardTaskService: WizardTaskService,
@@ -126,19 +127,40 @@ export class ResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-    updateReq: UpdateResourceReqDto,
-  ) {
-    await this.resourceRepository.update(
-      { namespaceId, id: resourceId },
-      {
-        name: updateReq.name,
-        parentId: updateReq.parentId,
-        tagIds: updateReq.tagIds,
-        content: updateReq.content,
-        attrs: updateReq.attrs,
-      },
-    );
-    const resource = await this.resourceRepository.findOne({
+    props: {
+      name?: string;
+      parentId?: string;
+      tagIds?: string[];
+      content?: string;
+      attrs?: Record<string, any>;
+    },
+    entityManager?: EntityManager,
+  ): Promise<void> {
+    if (!entityManager) {
+      return await this.dataSource.transaction((entityManager) =>
+        this.updateResource(
+          namespaceId,
+          resourceId,
+          userId,
+          props,
+          entityManager,
+        ),
+      );
+    }
+
+    // Check if the parent belongs to the same namespace
+    if (props.parentId) {
+      await this.getResourceMetaOrFail(
+        namespaceId,
+        props.parentId,
+        entityManager,
+      );
+    }
+
+    const repo = entityManager.getRepository(Resource);
+    await repo.update({ namespaceId, id: resourceId }, props);
+
+    const resource = await repo.findOne({
       where: {
         namespaceId,
         id: resourceId,
@@ -147,19 +169,24 @@ export class ResourcesService {
     if (!resource) {
       throw new NotFoundException('Resource not found.');
     }
-    await this.wizardTaskService.createIndexTask(
-      TASK_PRIORITY,
-      userId,
-      resource,
-    );
+
+    // If it's not a root resource, create index task
+    if (resource.parentId) {
+      await this.wizardTaskService.createIndexTask(
+        TASK_PRIORITY,
+        userId,
+        resource,
+        entityManager.getRepository(Task),
+      );
+    }
   }
 
   async createResource(
-    namespaceId: string,
-    parentId: string | null,
-    userId: string | null,
-    resourceType: ResourceType,
-    props?: {
+    props: {
+      namespaceId: string;
+      parentId: string | null;
+      userId: string | null;
+      resourceType: ResourceType;
       name?: string;
       tagIds?: string[];
       content?: string;
@@ -167,32 +194,32 @@ export class ResourcesService {
     },
     entityManager?: EntityManager,
   ): Promise<Resource> {
-    const repo = entityManager
-      ? entityManager.getRepository(Resource)
-      : this.resourceRepository;
+    if (!entityManager) {
+      return await this.dataSource.transaction((entityManager) =>
+        this.createResource(props, entityManager),
+      );
+    }
 
     // Check if the parent belongs to the same namespace
-    if (parentId) {
-      await this.getResourceMetaOrFail(namespaceId, parentId, entityManager);
+    if (props.parentId) {
+      await this.getResourceMetaOrFail(
+        props.namespaceId,
+        props.parentId,
+        entityManager,
+      );
     }
 
     // Create the resource
-    const resource = await repo.save(
-      repo.create({
-        namespaceId,
-        parentId,
-        userId,
-        resourceType,
-        ...props,
-      }),
-    );
+    const repo = entityManager.getRepository(Resource);
+    const resource = await repo.save(repo.create(props));
 
     // If it's not a root resource, create index task
-    if (parentId) {
+    if (resource.parentId) {
       await this.wizardTaskService.createIndexTask(
         TASK_PRIORITY,
-        userId!,
+        props.userId!,
         resource,
+        entityManager.getRepository(Task),
       );
     }
 

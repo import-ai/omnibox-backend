@@ -107,12 +107,12 @@ export class NamespaceResourcesController {
     @Param('resourceId') resourceId: string,
     @Param('targetId') targetId: string,
   ) {
-    return await this.namespaceResourcesService.move({
-      userId: req.user!.id,
+    return await this.namespaceResourcesService.move(
       namespaceId,
       resourceId,
+      req.user!.id,
       targetId,
-    });
+    );
   }
 
   @Get('search')

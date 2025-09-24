@@ -265,31 +265,46 @@ export class StreamService {
 
   private async getShareVisibleResources(
     share: Share,
-    reqResources?: PrivateSearchResourceDto[],
+    reqResources: PrivateSearchResourceDto[],
   ): Promise<PrivateSearchResourceDto[]> {
-    const resources: PrivateSearchResourceDto[] = [];
-    for (const reqResource of reqResources || []) {
-      const resource = await this.sharedResourcesService.getAndValidateResource(
+    if (reqResources.length === 0) {
+      const resources =
+        await this.sharedResourcesService.getAllSharedResources(share);
+      return resources.map((r) => {
+        return {
+          id: r.id,
+          name: r.name || '',
+          type: r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
+        } as PrivateSearchResourceDto;
+      });
+    }
+
+    const visibleResources: PrivateSearchResourceDto[] = [...reqResources];
+    for (const reqResource of reqResources) {
+      // Check if the resource is in the share
+      await this.sharedResourcesService.getAndValidateResource(
         share,
         reqResource.id,
       );
-      const childIds: string[] = [];
       if (reqResource.type === 'folder') {
         const subResources = await this.resourcesService.getSubResources(
           share.namespaceId,
           reqResource.id,
         );
-        childIds.push(...subResources.map((r) => r.id));
+        reqResource.child_ids = subResources.map((r) => r.id);
+        visibleResources.push(
+          ...subResources.map((r) => {
+            return {
+              id: r.id,
+              name: r.name || '',
+              type:
+                r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
+            } as PrivateSearchResourceDto;
+          }),
+        );
       }
-      resources.push({
-        id: resource.id,
-        name: resource.name,
-        type:
-          resource.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-        child_ids: childIds,
-      });
     }
-    return resources;
+    return visibleResources;
   }
 
   private async createAgentStream(
@@ -396,12 +411,10 @@ export class StreamService {
     try {
       for (const tool of requestDto.tools || []) {
         if (tool.name == 'private_search') {
-          const visibleResources = await this.getShareVisibleResources(
+          tool.visible_resources = await this.getShareVisibleResources(
             share,
-            tool.resources,
+            tool.resources || [],
           );
-          tool.visible_resources = visibleResources;
-          tool.resources = visibleResources;
         }
       }
       return this.createAgentStream(

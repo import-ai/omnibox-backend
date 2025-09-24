@@ -216,7 +216,7 @@ export class WizardService {
   private async triggerExtractTags(parentTask: Task): Promise<void> {
     try {
       const extractTagsTask =
-        await this.wizardTaskService.createExtractTagsTask(parentTask);
+        await this.wizardTaskService.createExtractTagsTaskFromTask(parentTask);
 
       this.logger.debug(
         `Triggered extract_tags task ${extractTagsTask.id} for parent task ${parentTask.id}`,

@@ -59,13 +59,23 @@ export class OpenResourcesController {
       resourceData,
     );
 
-    if (!newResource.name || newResource.name.trim() === '') {
-      await this.wizardTaskService.createGenerateTitleTask(
-        userId,
-        apiKey.namespaceId,
-        { resource_id: newResource.id },
-        { text: data.content },
-      );
+    if (newResource.content && newResource.content.trim() !== '') {
+      if (!newResource.name || newResource.name.trim() === '') {
+        await this.wizardTaskService.createGenerateTitleTask(
+          userId,
+          apiKey.namespaceId,
+          { resource_id: newResource.id },
+          { text: data.content },
+        );
+      }
+      if (!newResource.tagIds) {
+        await this.wizardTaskService.createExtractTagsTask(
+          userId,
+          newResource.id,
+          apiKey.namespaceId,
+          newResource.content,
+        );
+      }
     }
 
     return { id: newResource.id, name: newResource.name };

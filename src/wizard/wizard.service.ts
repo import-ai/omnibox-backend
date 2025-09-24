@@ -227,7 +227,9 @@ export class WizardService {
 
     // Trigger extract_tags after collect or file_reader tasks finish
     if (
-      (task.function === 'collect' || task.function === 'file_reader') &&
+      ['collect', 'file_reader', 'generate_video_note'].includes(
+        task.function,
+      ) &&
       !isEmpty(task.output?.markdown) &&
       isEmpty(result.tagIds)
     ) {

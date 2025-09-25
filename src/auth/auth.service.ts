@@ -113,9 +113,9 @@ export class AuthService {
         },
         manager,
       );
-      await this.namespaceService.createAndJoinNamespace(
+      await this.namespaceService.createUserNamespace(
         user.id,
-        `${user.username}'s Namespace`,
+        user.username,
         manager,
       );
       if (payload.invitation) {

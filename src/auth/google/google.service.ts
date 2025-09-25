@@ -197,9 +197,9 @@ export class GoogleService extends SocialService {
         manager,
       );
 
-      await this.namespaceService.createAndJoinNamespace(
+      await this.namespaceService.createUserNamespace(
         googleUser.id,
-        `${googleUser.username}'s Namespace`,
+        googleUser.username,
         manager,
       );
 

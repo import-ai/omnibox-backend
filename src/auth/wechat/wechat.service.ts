@@ -187,9 +187,9 @@ export class WechatService extends SocialService {
         },
         manager,
       );
-      await this.namespaceService.createAndJoinNamespace(
+      await this.namespaceService.createUserNamespace(
         wechatUser.id,
-        `${wechatUser.username}'s Namespace`,
+        wechatUser.username,
         manager,
       );
       const returnValue = {

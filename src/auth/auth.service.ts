@@ -89,6 +89,7 @@ export class AuthService {
     data: {
       username: string;
       password: string;
+      lang?: string;
     },
   ) {
     const payload: SignUpPayloadDto = await this.jwtVerify(token);

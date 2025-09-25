@@ -34,7 +34,7 @@ export class GoogleController extends SocialController {
   async handleCallback(
     @Req() req: Request,
     @Res() res: Response,
-    @Body() body: { code: string; state: string },
+    @Body() body: { code: string; state: string; lang?: string },
   ) {
     const userId = this.findUserId(req.headers.authorization);
 
@@ -42,6 +42,7 @@ export class GoogleController extends SocialController {
       body.code,
       body.state,
       userId,
+      body.lang,
     );
 
     if (loginData && loginData.access_token) {

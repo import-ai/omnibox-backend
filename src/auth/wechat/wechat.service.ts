@@ -109,6 +109,7 @@ export class WechatService extends SocialService {
     code: string,
     state: string,
     userId: string,
+    lang?: string,
   ): Promise<any> {
     const stateInfo = this.getState(state);
     if (!stateInfo) {
@@ -182,6 +183,7 @@ export class WechatService extends SocialService {
           username,
           loginType: 'wechat',
           loginId: userData.unionid,
+          lang,
         },
         manager,
       );

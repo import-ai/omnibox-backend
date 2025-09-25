@@ -56,10 +56,12 @@ export class AuthController {
     @Body('token') token: string,
     @Body('username') username: string,
     @Body('password') password: string,
+    @Body('lang') lang?: string,
   ) {
     return await this.authService.signUpConfirm(token, {
       username,
       password,
+      lang,
     });
   }
 

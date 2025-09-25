@@ -1,4 +1,4 @@
-import { IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateUserBindingDto {
   @IsString()
@@ -9,4 +9,8 @@ export class CreateUserBindingDto {
 
   @IsString()
   username: string;
+
+  @IsString()
+  @IsOptional()
+  lang?: string;
 }

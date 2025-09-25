@@ -102,6 +102,15 @@ export class UserService {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...reset } = await repo.save(newUser);
+
+    if (account.lang) {
+      await this.createOptionIfNotSet(
+        reset.id,
+        'language',
+        account.lang,
+        manager,
+      );
+    }
     return reset;
   }
 
@@ -186,6 +195,14 @@ export class UserService {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...reset } = await repo.save(newUser);
+    if (userData.lang) {
+      await this.createOptionIfNotSet(
+        reset.id,
+        'language',
+        userData.lang,
+        manager,
+      );
+    }
 
     const bindingRepo = manager
       ? manager.getRepository(UserBinding)
@@ -343,6 +360,22 @@ export class UserService {
       ...createOptionDto,
     });
     await this.userOptionRepository.save(option);
+  }
+
+  async createOptionIfNotSet(
+    userId: string,
+    name: string,
+    value: string,
+    entityManager?: EntityManager,
+  ) {
+    const repo = entityManager
+      ? entityManager.getRepository(UserOption)
+      : this.userOptionRepository;
+    const count = await repo.countBy({ userId, name });
+    if (count > 0) {
+      return;
+    }
+    await repo.save(repo.create({ userId, name, value }));
   }
 
   async getOption(userId: string, name: string) {

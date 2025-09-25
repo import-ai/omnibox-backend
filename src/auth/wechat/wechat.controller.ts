@@ -45,12 +45,14 @@ export class WechatController extends SocialController {
     @Res() res: Response,
     @Query('code') code: string,
     @Query('state') state: string,
+    @Query('lang') lang?: string,
   ) {
     const userId = this.findUserId(req.headers.authorization);
     const loginData = await this.wechatService.handleCallback(
       code,
       state,
       userId,
+      lang,
     );
 
     if (loginData && loginData.access_token) {

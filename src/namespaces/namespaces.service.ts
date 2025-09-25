@@ -369,14 +369,20 @@ export class NamespacesService {
       teamspaceRoot.id,
       userId,
     );
-    return {
+    const spaces: any = {
       private: { ...privateRoot, parentId: '0', children: privateChildren },
-      teamspace: {
+    };
+    const memberCount = await this.namespaceMemberRepository.countBy({
+      namespaceId,
+    });
+    if (memberCount > 1 || teamspaceChildren.length > 0) {
+      spaces.teamspace = {
         ...teamspaceRoot,
         parentId: '0',
         children: teamspaceChildren,
-      },
-    };
+      };
+    }
+    return spaces;
   }
 
   async userIsOwner(namespaceId: string, userId: string): Promise<boolean> {

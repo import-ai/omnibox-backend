@@ -128,26 +128,36 @@ export class NamespaceResourcesService {
     return resources.map((resource) => resource.id);
   }
 
-  // private async hasChildren(
-  //   namespaceId: string,
-  //   parents: ResourceMetaDto[],
-  //   userId: string,
-  // ): Promise<boolean> {
-  //   const children = await this.resourcesService.getSubResources(namespaceId, [
-  //     parents[0].id,
-  //   ]);
-  //   for (const child of children) {
-  //     const permission = await this.permissionsService.getCurrentPermission(
-  //       namespaceId,
-  //       [child, ...parents],
-  //       userId,
-  //     );
-  //     if (permission !== ResourcePermission.NO_ACCESS) {
-  //       return true;
-  //     }
-  //   }
-  //   return false;
-  // }
+  async findByIds(namespaceId: string, ids: Array<string>) {
+    if (ids.length <= 0) {
+      return [];
+    }
+    const resources = await this.resourceRepository.find({
+      where: {
+        namespaceId,
+        id: In(ids),
+      },
+      select: [
+        'id',
+        'name',
+        'attrs',
+        'parentId',
+        'createdAt',
+        'updatedAt',
+        'namespaceId',
+        'resourceType',
+        'tagIds',
+      ],
+    });
+
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    return resources.map((resource) => ({
+      ...resource,
+      tags: tagsMap.get(resource.id) || [],
+    }));
+  }
 
   async create(
     userId: string,

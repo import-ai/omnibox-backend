@@ -27,6 +27,21 @@ export class NamespaceResourcesController {
     private readonly permissionsService: PermissionsService,
   ) {}
 
+  @Get()
+  async findById(
+    @Param('namespaceId') namespaceId: string,
+    @Query('id') id: string,
+  ) {
+    if (!id) {
+      return [];
+    }
+    const ids = id.split(',');
+    if (ids.length <= 0) {
+      return [];
+    }
+    return await this.namespaceResourcesService.findByIds(namespaceId, ids);
+  }
+
   @Post()
   async create(@UserId() userId: string, @Body() data: CreateResourceDto) {
     const newResource = await this.namespaceResourcesService.create(

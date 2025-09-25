@@ -144,6 +144,109 @@ describe('ResourcesController (e2e)', () => {
     });
   });
 
+  describe('GET /api/v1/namespaces/:namespaceId/resources', () => {
+    let resourceId: string;
+    const testAttrs = {
+      custom: 'attribute',
+      nested: { key: 'value' },
+      number: 42,
+    };
+
+    beforeEach(async () => {
+      // Create a resource for testing
+      const resourceData = {
+        name: 'Test Resource for Query',
+        namespaceId: client.namespace.id,
+        resourceType: ResourceType.DOC,
+        parentId: client.namespace.root_resource_id,
+        content: 'Test content',
+        tags: ['test'],
+        attrs: testAttrs,
+      };
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send(resourceData)
+        .expect(HttpStatus.CREATED);
+      resourceId = response.body.id;
+    });
+
+    it('should find resource by single ID and validate attrs match source', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources?id=${resourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].id).toBe(resourceId);
+      expect(response.body[0].attrs).toEqual(testAttrs);
+    });
+
+    it('should find resources by multiple IDs and validate attrs match source', async () => {
+      // Create another resource with different attrs
+      const testAttrs2 = {
+        different: 'attrs',
+        array: [1, 2, 3],
+        boolean: true,
+      };
+      const resourceData2 = {
+        name: 'Second Test Resource',
+        namespaceId: client.namespace.id,
+        resourceType: ResourceType.DOC,
+        parentId: client.namespace.root_resource_id,
+        content: 'Second test content',
+        tags: ['test2'],
+        attrs: testAttrs2,
+      };
+
+      const response2 = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send(resourceData2)
+        .expect(HttpStatus.CREATED);
+      const resourceId2 = response2.body.id;
+
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources?id=${resourceId},${resourceId2}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(2);
+      const ids = response.body.map((r: any) => r.id);
+      expect(ids).toContain(resourceId);
+      expect(ids).toContain(resourceId2);
+
+      // Validate attrs for both resources
+      const resource1 = response.body.find((r: any) => r.id === resourceId);
+      const resource2 = response.body.find((r: any) => r.id === resourceId2);
+      expect(resource1.attrs).toEqual(testAttrs);
+      expect(resource2.attrs).toEqual(testAttrs2);
+    });
+
+    it('should return empty array when no ID provided', async () => {
+      const response = await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(0);
+    });
+
+    it('should return empty array for non-existent IDs', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources?id=non-existent-id`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(0);
+    });
+  });
+
   describe('GET /api/v1/namespaces/:namespaceId/resources/:resourceId', () => {
     let resourceId: string;
 
@@ -838,14 +941,14 @@ describe('ResourcesController (e2e)', () => {
     it('should fail without authentication token', async () => {
       await client
         .request()
-        .get(`/api/v1/namespaces/${client.namespace.id}/root`)
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources`)
         .expect(HttpStatus.UNAUTHORIZED);
     });
 
     it('should fail with invalid authentication token', async () => {
       await client
         .request()
-        .get(`/api/v1/namespaces/${client.namespace.id}/root`)
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources`)
         .set('Authorization', 'Bearer invalid-token')
         .expect(HttpStatus.UNAUTHORIZED);
     });
@@ -913,6 +1016,18 @@ describe('ResourcesController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(response.body.attrs).toEqual(complexAttrs);
+    });
+
+    it('should preserve attrs in GET multiple resources endpoint', async () => {
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources?id=${testResourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].attrs).toEqual(complexAttrs);
     });
 
     it('should preserve attrs in query endpoint', async () => {

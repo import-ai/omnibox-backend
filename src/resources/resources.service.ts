@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource, ResourceType } from './entities/resource.entity';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -101,7 +101,7 @@ export class ResourcesService {
 
   async getSubResources(
     namespaceId: string,
-    resourceId: string,
+    parentIds: string[],
   ): Promise<ResourceMetaDto[]> {
     const children = await this.resourceRepository.find({
       select: [
@@ -116,7 +116,7 @@ export class ResourcesService {
       ],
       where: {
         namespaceId,
-        parentId: resourceId,
+        parentId: In(parentIds),
       },
       order: { updatedAt: 'DESC' },
     });

@@ -167,7 +167,7 @@ export class PermissionsService {
     userId: string,
     resources: ResourceMetaDto[],
     entityManager?: EntityManager,
-  ): Promise<ResourcePermission[]> {
+  ): Promise<Map<string, ResourcePermission>> {
     if (!entityManager) {
       return await this.dataSource.transaction((entityManager) =>
         this.getCurrentPermissions(
@@ -277,9 +277,7 @@ export class PermissionsService {
       }
     };
 
-    const permissions: ResourcePermission[] = new Array(resources.length).fill(
-      ResourcePermission.NO_ACCESS,
-    );
+    const permissions: Map<string, ResourcePermission> = new Map();
     for (let i = 0; i < resources.length; i++) {
       const resource = resources[i];
       const userPermission = calcUserPermission(resource);
@@ -287,12 +285,12 @@ export class PermissionsService {
         calcGroupPermission(resource, groupId),
       );
       const globalPermission = calcGlobalPermission(resource);
-      permissions[i] =
-        maxPermissions([
-          globalPermission,
-          userPermission,
-          ...groupPermissions,
-        ]) || ResourcePermission.NO_ACCESS;
+      const permission = maxPermissions([
+        globalPermission,
+        userPermission,
+        ...groupPermissions,
+      ]);
+      permissions.set(resource.id, permission || ResourcePermission.NO_ACCESS);
     }
     return permissions;
   }

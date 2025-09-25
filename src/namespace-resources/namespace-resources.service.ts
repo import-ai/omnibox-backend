@@ -128,27 +128,26 @@ export class NamespaceResourcesService {
     return resources.map((resource) => resource.id);
   }
 
-  private async hasChildren(
-    namespaceId: string,
-    parents: ResourceMetaDto[],
-    userId: string,
-  ): Promise<boolean> {
-    const children = await this.resourcesService.getSubResources(
-      namespaceId,
-      parents[0].id,
-    );
-    for (const child of children) {
-      const permission = await this.permissionsService.getCurrentPermission(
-        namespaceId,
-        [child, ...parents],
-        userId,
-      );
-      if (permission !== ResourcePermission.NO_ACCESS) {
-        return true;
-      }
-    }
-    return false;
-  }
+  // private async hasChildren(
+  //   namespaceId: string,
+  //   parents: ResourceMetaDto[],
+  //   userId: string,
+  // ): Promise<boolean> {
+  //   const children = await this.resourcesService.getSubResources(namespaceId, [
+  //     parents[0].id,
+  //   ]);
+  //   for (const child of children) {
+  //     const permission = await this.permissionsService.getCurrentPermission(
+  //       namespaceId,
+  //       [child, ...parents],
+  //       userId,
+  //     );
+  //     if (permission !== ResourcePermission.NO_ACCESS) {
+  //       return true;
+  //     }
+  //   }
+  //   return false;
+  // }
 
   async create(
     userId: string,
@@ -403,10 +402,9 @@ export class NamespaceResourcesService {
     if (permission === ResourcePermission.NO_ACCESS) {
       return [];
     }
-    const children = await this.resourcesService.getSubResources(
-      namespaceId,
+    const children = await this.resourcesService.getSubResources(namespaceId, [
       parents[0].id,
-    );
+    ]);
     const filteredChildren: ResourceMetaDto[] = [];
     for (const child of children) {
       const permission = await this.permissionsService.getCurrentPermission(
@@ -430,21 +428,42 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    const children = await this.getSubResourcesByParents(
+    const children = await this.resourcesService.getSubResources(namespaceId, [
+      resourceId,
+    ]);
+    const subChildren = await this.resourcesService.getSubResources(
       namespaceId,
-      parents,
-      userId,
+      children.map((child) => child.id),
     );
-    const resps: ChildrenMetaDto[] = [];
-    for (const child of children) {
-      const hasChildren = await this.hasChildren(
-        namespaceId,
-        [child, ...parents],
-        userId,
-      );
-      resps.push(new ChildrenMetaDto(child, hasChildren));
+    const resources = [...parents, ...children, ...subChildren];
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      namespaceId,
+      userId,
+      resources,
+    );
+
+    const hasChildrenMap = new Map<string, boolean>();
+    for (const subChild of subChildren) {
+      if (!subChild.parentId) {
+        continue;
+      }
+      const permission = permissionMap.get(subChild.id);
+      if (!permission || permission === ResourcePermission.NO_ACCESS) {
+        continue;
+      }
+      hasChildrenMap.set(subChild.parentId, true);
     }
-    return resps;
+
+    const childrenDtos: ChildrenMetaDto[] = [];
+    for (const child of children) {
+      const permission = permissionMap.get(child.id);
+      if (!permission || permission === ResourcePermission.NO_ACCESS) {
+        continue;
+      }
+      const hasChildren = hasChildrenMap.get(child.id) || false;
+      childrenDtos.push(new ChildrenMetaDto(child, hasChildren));
+    }
+    return childrenDtos;
   }
 
   async getSpaceType(

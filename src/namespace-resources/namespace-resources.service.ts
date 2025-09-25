@@ -40,7 +40,7 @@ import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { ListChildrenRespDto } from './dto/list-children-resp.dto';
+import { ChildrenMetaDto } from './dto/list-children-resp.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -128,28 +128,6 @@ export class NamespaceResourcesService {
     return resources.map((resource) => resource.id);
   }
 
-  private async hasChildren(
-    namespaceId: string,
-    parents: ResourceMetaDto[],
-    userId: string,
-  ): Promise<boolean> {
-    const children = await this.resourcesService.getSubResources(
-      namespaceId,
-      parents[0].id,
-    );
-    for (const child of children) {
-      const permission = await this.permissionsService.getCurrentPermission(
-        namespaceId,
-        [child, ...parents],
-        userId,
-      );
-      if (permission !== ResourcePermission.NO_ACCESS) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   async findByIds(namespaceId: string, ids: Array<string>) {
     if (ids.length <= 0) {
       return [];
@@ -186,6 +164,12 @@ export class NamespaceResourcesService {
     data: CreateResourceDto,
     manager?: EntityManager,
   ) {
+    if (!manager) {
+      return await this.dataSource.transaction(async (manager) => {
+        return await this.create(userId, data, manager);
+      });
+    }
+
     const ok = await this.permissionsService.userHasPermission(
       data.namespaceId,
       data.parentId,
@@ -198,49 +182,14 @@ export class NamespaceResourcesService {
       throw new ForbiddenException('Not authorized to create resource.');
     }
 
-    const transaction = async (manager: EntityManager) => {
-      const repo = manager.getRepository(Resource);
-      const parentResource = await repo.findOne({
-        where: {
-          id: data.parentId,
-          namespaceId: data.namespaceId,
-        },
-      });
-      if (!parentResource) {
-        throw new BadRequestException('Parent resource not exists.');
-      }
-      if (data.namespaceId && parentResource.namespaceId !== data.namespaceId) {
-        throw new BadRequestException(
-          "Parent resource's namespace & space must match the resource's.",
-        );
-      }
-
-      // Use provided tag_ids directly
-      const tagIds = data.tag_ids || [];
-
-      const resource = repo.create({
+    return await this.resourcesService.createResource(
+      {
         ...data,
         userId,
-        namespaceId: data.namespaceId,
-        parentId: parentResource.id,
-        tagIds: tagIds.length > 0 ? tagIds : undefined,
-      });
-      const savedResource = await repo.save(resource);
-      await this.wizardTaskService.createIndexTask(
-        TASK_PRIORITY,
-        userId,
-        savedResource,
-        manager.getRepository(Task),
-      );
-      return savedResource;
-    };
-
-    if (manager) {
-      return await transaction(manager);
-    }
-    return await this.dataSource.transaction(async (manager) => {
-      return await transaction(manager);
-    });
+        tagIds: data.tag_ids,
+      },
+      manager,
+    );
   }
 
   async duplicate(userId: string, resourceId: string) {
@@ -370,33 +319,26 @@ export class NamespaceResourcesService {
       : resourcesWithTags;
   }
 
-  async move({ namespaceId, resourceId, targetId, userId }) {
-    const resourceHasPermission =
-      await this.permissionsService.userHasPermission(
-        namespaceId,
-        resourceId,
-        userId,
-      );
-    if (!resourceHasPermission) {
+  async move(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    targetId: string,
+  ) {
+    const ok = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    if (!ok) {
       throw new ForbiddenException('Not authorized');
     }
-    const resource = await this.resourceRepository.findOneByOrFail({
-      id: resourceId,
-    });
-
-    // Validate that the target resource exists
-    const targetResource = await this.resourceRepository.findOne({
-      where: { namespaceId, id: targetId },
-    });
-    if (!targetResource) {
-      throw new NotFoundException('Target resource not found');
-    }
-
-    const newResource = this.resourceRepository.create({
-      ...resource,
-      parentId: targetId,
-    });
-    await this.resourceRepository.save(newResource);
+    await this.resourcesService.updateResource(
+      namespaceId,
+      resourceId,
+      userId,
+      { parentId: targetId },
+    );
   }
 
   async search({ namespaceId, excludeResourceId, name, userId }) {
@@ -470,10 +412,9 @@ export class NamespaceResourcesService {
     if (permission === ResourcePermission.NO_ACCESS) {
       return [];
     }
-    const children = await this.resourcesService.getSubResources(
-      namespaceId,
+    const children = await this.resourcesService.getSubResources(namespaceId, [
       parents[0].id,
-    );
+    ]);
     const filteredChildren: ResourceMetaDto[] = [];
     for (const child of children) {
       const permission = await this.permissionsService.getCurrentPermission(
@@ -492,26 +433,47 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-  ): Promise<ListChildrenRespDto[]> {
+  ): Promise<ChildrenMetaDto[]> {
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
     );
-    const children = await this.getSubResourcesByParents(
+    const children = await this.resourcesService.getSubResources(namespaceId, [
+      resourceId,
+    ]);
+    const subChildren = await this.resourcesService.getSubResources(
       namespaceId,
-      parents,
-      userId,
+      children.map((child) => child.id),
     );
-    const resps: ListChildrenRespDto[] = [];
-    for (const child of children) {
-      const hasChildren = await this.hasChildren(
-        namespaceId,
-        [child, ...parents],
-        userId,
-      );
-      resps.push(new ListChildrenRespDto(child, hasChildren));
+    const resources = [...parents, ...children, ...subChildren];
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      namespaceId,
+      userId,
+      resources,
+    );
+
+    const hasChildrenMap = new Map<string, boolean>();
+    for (const subChild of subChildren) {
+      if (!subChild.parentId) {
+        continue;
+      }
+      const permission = permissionMap.get(subChild.id);
+      if (!permission || permission === ResourcePermission.NO_ACCESS) {
+        continue;
+      }
+      hasChildrenMap.set(subChild.parentId, true);
     }
-    return resps;
+
+    const childrenDtos: ChildrenMetaDto[] = [];
+    for (const child of children) {
+      const permission = permissionMap.get(child.id);
+      if (!permission || permission === ResourcePermission.NO_ACCESS) {
+        continue;
+      }
+      const hasChildren = hasChildrenMap.get(child.id) || false;
+      childrenDtos.push(new ChildrenMetaDto(child, hasChildren));
+    }
+    return childrenDtos;
   }
 
   async getSpaceType(
@@ -586,12 +548,17 @@ export class NamespaceResourcesService {
     return resource;
   }
 
-  async update(userId: string, id: string, data: UpdateResourceDto) {
+  async update(userId: string, resourceId: string, data: UpdateResourceDto) {
     await this.resourcesService.updateResource(
       data.namespaceId,
-      id,
+      resourceId,
       userId,
-      data.toUpdateReq(),
+      {
+        name: data.name,
+        tagIds: data.tag_ids,
+        content: data.content,
+        attrs: data.attrs,
+      },
     );
   }
 
@@ -790,22 +757,6 @@ export class NamespaceResourcesService {
       this.minioPath(artifactName),
     );
     return { fileStream, resource };
-  }
-
-  async createFolder(
-    namespaceId: string,
-    parentId: string | null,
-    userId: string | null,
-    manager: EntityManager,
-  ) {
-    return await manager.save(
-      manager.create(Resource, {
-        resourceType: ResourceType.FOLDER,
-        namespaceId,
-        parentId,
-        userId,
-      }),
-    );
   }
 
   async listAllUserAccessibleResources(

@@ -8,6 +8,7 @@ import { Namespace } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
   exports: [NamespacesService],
@@ -16,6 +17,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
   imports: [
     UserModule,
     NamespaceResourcesModule,
+    ResourcesModule,
     PermissionsModule,
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Namespace]),

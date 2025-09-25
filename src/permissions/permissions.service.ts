@@ -142,7 +142,7 @@ export class PermissionsService {
     const resourceIds = resources.map((resource) => resource.id);
 
     const globalPermission = getGlobalPermission(resources);
-    const userPermission = await this.getUserPermissions(
+    const userPermissionMap = await this.getUserPermissions(
       namespaceId,
       resourceIds,
       [userId],
@@ -156,10 +156,143 @@ export class PermissionsService {
     );
     const curPermission = maxPermissions([
       globalPermission,
-      userPermission.get(userId) || null,
+      userPermissionMap.get(userId) || null,
       ...groupPermissionMap.values(),
     ]);
     return curPermission || ResourcePermission.NO_ACCESS;
+  }
+
+  async getCurrentPermissions(
+    namespaceId: string,
+    userId: string,
+    resources: ResourceMetaDto[],
+    entityManager?: EntityManager,
+  ): Promise<Map<string, ResourcePermission>> {
+    if (!entityManager) {
+      return await this.dataSource.transaction((entityManager) =>
+        this.getCurrentPermissions(
+          namespaceId,
+          userId,
+          resources,
+          entityManager,
+        ),
+      );
+    }
+
+    const groups = await entityManager.find(GroupUser, {
+      where: {
+        namespaceId,
+        userId,
+      },
+    });
+    const groupIds = groups.map((group) => group.groupId);
+    const resourceIds = resources.map((resource) => resource.id);
+
+    const groupPermissions = await entityManager.find(GroupPermission, {
+      where: {
+        namespaceId,
+        groupId: In(groupIds),
+        resourceId: In(resourceIds),
+      },
+    });
+    const userPermissions = await entityManager.find(UserPermission, {
+      where: {
+        namespaceId,
+        userId,
+        resourceId: In(resourceIds),
+      },
+    });
+
+    // resourceId + groupId -> GroupPermission
+    const groupPermissionKeyMap: Map<string, GroupPermission> = new Map();
+    for (const permission of groupPermissions) {
+      groupPermissionKeyMap.set(
+        `${permission.resourceId}||${permission.groupId}`,
+        permission,
+      );
+    }
+    // resourceId -> UserPermission
+    const userPermissionMap: Map<string, UserPermission> = new Map();
+    for (const permission of userPermissions) {
+      userPermissionMap.set(permission.resourceId, permission);
+    }
+    // resourceId -> ResourceMetaDto
+    const resourceMap: Map<string, ResourceMetaDto> = new Map();
+    for (const resource of resources) {
+      resourceMap.set(resource.id, resource);
+    }
+
+    const calcUserPermission = (resource: ResourceMetaDto) => {
+      while (true) {
+        const userPermission = userPermissionMap.get(resource.id);
+        if (userPermission) {
+          return userPermission.permission;
+        }
+        if (!resource.parentId) {
+          return null;
+        }
+        const parent = resourceMap.get(resource.parentId);
+        if (!parent) {
+          return null;
+        }
+        resource = parent;
+      }
+    };
+
+    const calcGroupPermission = (
+      resource: ResourceMetaDto,
+      groupId: string,
+    ) => {
+      while (true) {
+        const groupPermission = groupPermissionKeyMap.get(
+          `${resource.id}||${groupId}`,
+        );
+        if (groupPermission) {
+          return groupPermission.permission;
+        }
+        if (!resource.parentId) {
+          return null;
+        }
+        const parent = resourceMap.get(resource.parentId);
+        if (!parent) {
+          return null;
+        }
+        resource = parent;
+      }
+    };
+
+    const calcGlobalPermission = (resource: ResourceMetaDto) => {
+      while (true) {
+        if (resource.globalPermission) {
+          return resource.globalPermission;
+        }
+        if (!resource.parentId) {
+          return null;
+        }
+        const parent = resourceMap.get(resource.parentId);
+        if (!parent) {
+          return null;
+        }
+        resource = parent;
+      }
+    };
+
+    const permissions: Map<string, ResourcePermission> = new Map();
+    for (let i = 0; i < resources.length; i++) {
+      const resource = resources[i];
+      const userPermission = calcUserPermission(resource);
+      const groupPermissions = groupIds.map((groupId) =>
+        calcGroupPermission(resource, groupId),
+      );
+      const globalPermission = calcGlobalPermission(resource);
+      const permission = maxPermissions([
+        globalPermission,
+        userPermission,
+        ...groupPermissions,
+      ]);
+      permissions.set(resource.id, permission || ResourcePermission.NO_ACCESS);
+    }
+    return permissions;
   }
 
   async updateGlobalPermission(

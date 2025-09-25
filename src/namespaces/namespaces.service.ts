@@ -21,6 +21,8 @@ import {
   NamespaceMember,
   NamespaceRole,
 } from './entities/namespace-member.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 @Injectable()
 export class NamespacesService {
@@ -31,13 +33,11 @@ export class NamespacesService {
     @InjectRepository(NamespaceMember)
     private namespaceMemberRepository: Repository<NamespaceMember>,
 
-    @InjectRepository(Resource)
-    private resourceRepository: Repository<Resource>,
-
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
 
-    private readonly resourceService: NamespaceResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
 
     private readonly permissionsService: PermissionsService,
   ) {}
@@ -55,15 +55,21 @@ export class NamespacesService {
     return member.rootResourceId;
   }
 
-  async getPrivateRoot(userId: string, namespaceId: string): Promise<Resource> {
+  async getPrivateRoot(
+    userId: string,
+    namespaceId: string,
+  ): Promise<ResourceMetaDto> {
     const rootResourceId = await this.getPrivateRootId(userId, namespaceId);
-    return await this.resourceService.get(rootResourceId);
+    return await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      rootResourceId,
+    );
   }
 
   async getTeamspaceRoot(
     namespaceId: string,
     manager?: EntityManager,
-  ): Promise<Resource> {
+  ): Promise<ResourceMetaDto> {
     const repo = manager
       ? manager.getRepository(Namespace)
       : this.namespaceRepository;
@@ -72,29 +78,26 @@ export class NamespacesService {
         id: namespaceId,
       },
     });
-    if (namespace === null) {
+    if (!namespace) {
       throw new NotFoundException('Workspace not found');
     }
-    if (namespace.rootResourceId === null) {
+    if (!namespace.rootResourceId) {
       throw new NotFoundException('Root resource not found');
     }
-    const resourceRepo = manager
-      ? manager.getRepository(Resource)
-      : this.resourceRepository;
-    return await resourceRepo.findOneOrFail({
-      where: {
-        id: namespace.rootResourceId,
-      },
-    });
+    return await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      namespace.rootResourceId,
+      manager,
+    );
   }
 
-  async get(id: string, manager?: EntityManager) {
+  async getNamespace(namespaceId: string, manager?: EntityManager) {
     const repo = manager
       ? manager.getRepository(Namespace)
       : this.namespaceRepository;
     const namespace = await repo.findOne({
       where: {
-        id,
+        id: namespaceId,
       },
     });
     if (!namespace) {
@@ -106,22 +109,22 @@ export class NamespacesService {
   async createAndJoinNamespace(
     ownerId: string,
     name: string,
-    manager?: EntityManager,
+    entityManager?: EntityManager,
   ): Promise<Namespace> {
-    const transaction = async (manager: EntityManager) => {
-      const namespace = await this.createNamespace(name, manager);
-      await this.addMember(
-        namespace.id,
-        ownerId,
-        NamespaceRole.OWNER,
-        ResourcePermission.FULL_ACCESS,
-        manager,
+    if (!entityManager) {
+      return await this.dataSource.transaction((entityManager) =>
+        this.createAndJoinNamespace(ownerId, name, entityManager),
       );
-      return namespace;
-    };
-    return manager
-      ? await transaction(manager)
-      : await this.dataSource.transaction(transaction);
+    }
+    const namespace = await this.createNamespace(name, entityManager);
+    await this.addMember(
+      namespace.id,
+      ownerId,
+      NamespaceRole.OWNER,
+      ResourcePermission.FULL_ACCESS,
+      entityManager,
+    );
+    return namespace;
   }
 
   async createNamespace(
@@ -129,10 +132,13 @@ export class NamespacesService {
     manager: EntityManager,
   ): Promise<Namespace> {
     const namespace = await manager.save(manager.create(Namespace, { name }));
-    const publicRoot = await this.resourceService.createFolder(
-      namespace.id,
-      null,
-      null,
+    const publicRoot = await this.resourcesService.createResource(
+      {
+        namespaceId: namespace.id,
+        parentId: null,
+        userId: null,
+        resourceType: ResourceType.FOLDER,
+      },
       manager,
     );
     await manager.update(Namespace, namespace.id, {
@@ -149,7 +155,7 @@ export class NamespacesService {
     const repo = manager
       ? manager.getRepository(Namespace)
       : this.namespaceRepository;
-    const existNamespace = await this.get(id, manager);
+    const existNamespace = await this.getNamespace(id, manager);
     if (!existNamespace) {
       throw new ConflictException('The current namespace does not exist');
     }
@@ -168,9 +174,9 @@ export class NamespacesService {
     userId: string,
     role: NamespaceRole,
     permission: ResourcePermission,
-    manager: EntityManager,
+    entityManager: EntityManager,
   ) {
-    const count = await manager.count(NamespaceMember, {
+    const count = await entityManager.count(NamespaceMember, {
       where: {
         namespaceId,
         userId,
@@ -180,44 +186,50 @@ export class NamespacesService {
     if (count > 0) {
       return;
     }
-    const privateRoot = await this.resourceService.createFolder(
-      namespaceId,
-      null,
-      userId,
-      manager,
+    const privateRoot = await this.resourcesService.createResource(
+      {
+        namespaceId,
+        parentId: null,
+        userId,
+        resourceType: ResourceType.FOLDER,
+      },
+      entityManager,
     );
-    await manager.save(
-      manager.create(NamespaceMember, {
+    await entityManager.save(
+      entityManager.create(NamespaceMember, {
         namespaceId,
         userId,
         role,
         rootResourceId: privateRoot.id,
       }),
     );
-    const teamspaceRoot = await this.getTeamspaceRoot(namespaceId, manager);
+    const teamspaceRoot = await this.getTeamspaceRoot(
+      namespaceId,
+      entityManager,
+    );
     await this.permissionsService.updateUserPermission(
       namespaceId,
       teamspaceRoot.id,
       userId,
       permission,
-      manager,
+      entityManager,
     );
     await this.permissionsService.updateUserPermission(
       namespaceId,
       privateRoot.id,
       userId,
       ResourcePermission.FULL_ACCESS,
-      manager,
+      entityManager,
     );
-    await this.resourceService.create(
-      userId,
+    await this.resourcesService.createResource(
       {
-        name: 'Uncategorized',
         namespaceId,
-        resourceType: ResourceType.FOLDER,
         parentId: privateRoot.id,
+        userId,
+        resourceType: ResourceType.FOLDER,
+        name: 'Uncategorized',
       },
-      manager,
+      entityManager,
     );
   }
 
@@ -321,13 +333,13 @@ export class NamespacesService {
 
   async getRoot(namespaceId: string, userId: string) {
     const privateRoot = await this.getPrivateRoot(userId, namespaceId);
-    const privateChildren = await this.resourceService.listChildren(
+    const privateChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       privateRoot.id,
       userId,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
-    const teamspaceChildren = await this.resourceService.listChildren(
+    const teamspaceChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       teamspaceRoot.id,
       userId,

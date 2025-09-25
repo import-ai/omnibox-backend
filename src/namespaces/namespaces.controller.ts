@@ -23,7 +23,7 @@ export class NamespacesController {
 
   @Get(':namespaceId')
   async get(@Param('namespaceId') namespaceId: string) {
-    return await this.namespacesService.get(namespaceId);
+    return await this.namespacesService.getNamespace(namespaceId);
   }
 
   @Get(':namespaceId/members')

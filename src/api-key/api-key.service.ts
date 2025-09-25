@@ -206,7 +206,9 @@ export class APIKeyService {
 
   async info(apiKey: APIKey): Promise<APIKeyInfoDto> {
     // Get the namespace
-    const namespace = await this.namespacesService.get(apiKey.namespaceId);
+    const namespace = await this.namespacesService.getNamespace(
+      apiKey.namespaceId,
+    );
 
     // Get the user
     const user = await this.userService.find(apiKey.userId);

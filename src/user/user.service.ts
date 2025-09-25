@@ -102,6 +102,15 @@ export class UserService {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...reset } = await repo.save(newUser);
+
+    if (account.lang) {
+      await this.createOptionIfNotSet(
+        reset.id,
+        'language',
+        account.lang,
+        manager,
+      );
+    }
     return reset;
   }
 
@@ -186,6 +195,14 @@ export class UserService {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...reset } = await repo.save(newUser);
+    if (userData.lang) {
+      await this.createOptionIfNotSet(
+        reset.id,
+        'language',
+        userData.lang,
+        manager,
+      );
+    }
 
     const bindingRepo = manager
       ? manager.getRepository(UserBinding)
@@ -345,8 +362,42 @@ export class UserService {
     await this.userOptionRepository.save(option);
   }
 
-  async getOption(userId: string, name: string) {
-    const option = await this.userOptionRepository.findOneBy({
+  async createOptionIfNotSet(
+    userId: string,
+    name: string,
+    value: string,
+    entityManager?: EntityManager,
+  ) {
+    const repo = entityManager
+      ? entityManager.getRepository(UserOption)
+      : this.userOptionRepository;
+    const count = await repo.countBy({ userId, name });
+    if (count > 0) {
+      return;
+    }
+    await repo.save(repo.create({ userId, name, value }));
+  }
+
+  async getNamespaceName(
+    userId: string,
+    userName: string | null,
+    entityManager?: EntityManager,
+  ) {
+    if (!userName) {
+      userName = 'User';
+    }
+    const option = await this.getOption(userId, 'language', entityManager);
+    if (option && option.value === 'zh-CN') {
+      return `${userName}的空间`;
+    }
+    return `${userName}'s Namespace`;
+  }
+
+  async getOption(userId: string, name: string, entityManager?: EntityManager) {
+    const repo = entityManager
+      ? entityManager.getRepository(UserOption)
+      : this.userOptionRepository;
+    const option = await repo.findOneBy({
       name,
       userId,
     });

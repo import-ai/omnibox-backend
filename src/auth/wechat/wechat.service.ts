@@ -109,6 +109,7 @@ export class WechatService extends SocialService {
     code: string,
     state: string,
     userId: string,
+    lang?: string,
   ): Promise<any> {
     const stateInfo = this.getState(state);
     if (!stateInfo) {
@@ -182,12 +183,13 @@ export class WechatService extends SocialService {
           username,
           loginType: 'wechat',
           loginId: userData.unionid,
+          lang,
         },
         manager,
       );
-      await this.namespaceService.createAndJoinNamespace(
+      await this.namespaceService.createUserNamespace(
         wechatUser.id,
-        `${wechatUser.username}'s Namespace`,
+        wechatUser.username,
         manager,
       );
       const returnValue = {

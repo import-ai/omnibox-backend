@@ -106,17 +106,34 @@ export class NamespacesService {
     return namespace;
   }
 
+  async createUserNamespace(
+    userId: string,
+    userName: string | null,
+    entityManager?: EntityManager,
+  ): Promise<Namespace> {
+    const namespaceName = await this.userService.getNamespaceName(
+      userId,
+      userName,
+      entityManager,
+    );
+    return await this.createAndJoinNamespace(
+      userId,
+      namespaceName,
+      entityManager,
+    );
+  }
+
   async createAndJoinNamespace(
     ownerId: string,
-    name: string,
+    namespaceName: string,
     entityManager?: EntityManager,
   ): Promise<Namespace> {
     if (!entityManager) {
       return await this.dataSource.transaction((entityManager) =>
-        this.createAndJoinNamespace(ownerId, name, entityManager),
+        this.createAndJoinNamespace(ownerId, namespaceName, entityManager),
       );
     }
-    const namespace = await this.createNamespace(name, entityManager);
+    const namespace = await this.createNamespace(namespaceName, entityManager);
     await this.addMember(
       namespace.id,
       ownerId,
@@ -227,10 +244,25 @@ export class NamespacesService {
         parentId: privateRoot.id,
         userId,
         resourceType: ResourceType.FOLDER,
-        name: 'Uncategorized',
+        name: await this.getUncategorizedName(userId, entityManager),
       },
       entityManager,
     );
+  }
+
+  private async getUncategorizedName(
+    userId: string,
+    entityManager?: EntityManager,
+  ): Promise<string> {
+    const option = await this.userService.getOption(
+      userId,
+      'language',
+      entityManager,
+    );
+    if (option && option.value == 'zh-CN') {
+      return '未分类';
+    }
+    return 'Uncategorized';
   }
 
   async updateMemberRole(
@@ -344,14 +376,20 @@ export class NamespacesService {
       teamspaceRoot.id,
       userId,
     );
-    return {
+    const spaces: any = {
       private: { ...privateRoot, parentId: '0', children: privateChildren },
-      teamspace: {
+    };
+    const memberCount = await this.namespaceMemberRepository.countBy({
+      namespaceId,
+    });
+    if (memberCount > 1 || teamspaceChildren.length > 0) {
+      spaces.teamspace = {
         ...teamspaceRoot,
         parentId: '0',
         children: teamspaceChildren,
-      },
-    };
+      };
+    }
+    return spaces;
   }
 
   async userIsOwner(namespaceId: string, userId: string): Promise<boolean> {

@@ -89,6 +89,7 @@ export class AuthService {
     data: {
       username: string;
       password: string;
+      lang?: string;
     },
   ) {
     const payload: SignUpPayloadDto = await this.jwtVerify(token);
@@ -112,9 +113,9 @@ export class AuthService {
         },
         manager,
       );
-      await this.namespaceService.createAndJoinNamespace(
+      await this.namespaceService.createUserNamespace(
         user.id,
-        `${user.username}'s Namespace`,
+        user.username,
         manager,
       );
       if (payload.invitation) {

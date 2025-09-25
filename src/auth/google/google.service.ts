@@ -93,6 +93,7 @@ export class GoogleService extends SocialService {
     code: string,
     state: string,
     userId: string,
+    lang?: string,
   ): Promise<any> {
     const stateInfo = this.getState(state);
     if (!stateInfo) {
@@ -191,13 +192,14 @@ export class GoogleService extends SocialService {
           username,
           loginType: 'google',
           loginId: userData.sub,
+          lang,
         },
         manager,
       );
 
-      await this.namespaceService.createAndJoinNamespace(
+      await this.namespaceService.createUserNamespace(
         googleUser.id,
-        `${googleUser.username}'s Namespace`,
+        googleUser.username,
         manager,
       );
 

@@ -35,9 +35,13 @@ export class WizardController {
   async collectGzip(
     @UserId() userId: string,
     @Body() data: CollectZRequestDto,
-    @UploadedFile() zHtml: Express.Multer.File,
+    @UploadedFile() compressedHtml: Express.Multer.File,
   ): Promise<CollectResponseDto> {
-    return await this.wizardService.collectZ(userId, data, zHtml);
+    return await this.wizardService.compressedCollect(
+      userId,
+      data,
+      compressedHtml,
+    );
   }
 
   @Post('ask')

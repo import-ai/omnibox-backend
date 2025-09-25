@@ -38,7 +38,7 @@ export class OpenWizardController {
     @Body() data: OpenCollectRequestDto,
     @UploadedFile() compressedHtml: Express.Multer.File,
   ): Promise<CollectResponseDto> {
-    return await this.wizardService.collectZ(
+    return await this.wizardService.compressedCollect(
       userId,
       {
         html: data.html,

@@ -87,6 +87,7 @@ export class NamespacesService {
     return await this.resourcesService.getResourceMetaOrFail(
       namespaceId,
       namespace.rootResourceId,
+      manager,
     );
   }
 

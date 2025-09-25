@@ -142,7 +142,7 @@ describe('CollectProcessor', () => {
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
-            content: 'Processing failed',
+            content: 'error',
           },
         );
         expect(result).toEqual({});

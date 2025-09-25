@@ -244,14 +244,21 @@ export class NamespacesService {
         parentId: privateRoot.id,
         userId,
         resourceType: ResourceType.FOLDER,
-        name: await this.getUncategorizedName(userId),
+        name: await this.getUncategorizedName(userId, entityManager),
       },
       entityManager,
     );
   }
 
-  private async getUncategorizedName(userId: string): Promise<string> {
-    const option = await this.userService.getOption(userId, 'language');
+  private async getUncategorizedName(
+    userId: string,
+    entityManager?: EntityManager,
+  ): Promise<string> {
+    const option = await this.userService.getOption(
+      userId,
+      'language',
+      entityManager,
+    );
     if (option && option.value == 'zh-CN') {
       return '未分类';
     }

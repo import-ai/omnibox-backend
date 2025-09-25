@@ -34,6 +34,7 @@ export class WizardService {
   private readonly processors: Record<string, Processor>;
   readonly streamService: StreamService;
   readonly wizardApiService: WizardAPIService;
+  private readonly videoPrefixes: string[];
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
@@ -60,6 +61,10 @@ export class WizardService {
         this.tagService,
       ),
       generate_title: new GenerateTitleProcessor(namespaceResourcesService),
+      generate_video_note: new CollectProcessor(
+        this.namespaceResourcesService,
+        this.tagService,
+      ),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
@@ -71,10 +76,28 @@ export class WizardService {
       this.namespaceResourcesService,
     );
     this.wizardApiService = new WizardAPIService(baseUrl);
+    const videoPrefixes: string =
+      this.configService.get<string>('OB_VIDEO_PREFIXES') || '';
+    if (isEmpty(videoPrefixes)) {
+      this.videoPrefixes = [];
+    } else {
+      this.videoPrefixes = videoPrefixes
+        .split(',')
+        .map((prefix) => prefix.trim());
+    }
   }
 
   async create(partialTask: Partial<Task>) {
     return await this.wizardTaskService.create(partialTask);
+  }
+
+  isVideoUrl(url: string): boolean {
+    for (const prefix of this.videoPrefixes) {
+      if (url.startsWith(prefix)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async collectZ(
@@ -113,13 +136,23 @@ export class WizardService {
       },
     );
 
-    const task = await this.wizardTaskService.createCollectTask(
-      userId,
-      namespace_id,
-      resource.id,
-      { html: [this.gzipHtmlFolder, id].join('/'), url, title },
-    );
-    return { task_id: task.id, resource_id: resource.id };
+    if (this.isVideoUrl(url)) {
+      const task = await this.wizardTaskService.createGenerateVideoNoteTask(
+        userId,
+        namespace_id,
+        resource.id,
+        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+      );
+      return { task_id: task.id, resource_id: resource.id };
+    } else {
+      const task = await this.wizardTaskService.createCollectTask(
+        userId,
+        namespace_id,
+        resource.id,
+        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+      );
+      return { task_id: task.id, resource_id: resource.id };
+    }
   }
 
   async collect(
@@ -194,7 +227,9 @@ export class WizardService {
 
     // Trigger extract_tags after collect or file_reader tasks finish
     if (
-      (task.function === 'collect' || task.function === 'file_reader') &&
+      ['collect', 'file_reader', 'generate_video_note'].includes(
+        task.function,
+      ) &&
       !isEmpty(task.output?.markdown) &&
       isEmpty(result.tagIds)
     ) {
@@ -360,7 +395,7 @@ export class WizardService {
       const newTask = await this.wizardTaskService.taskRepository.save(task);
       // Fetch HTML content from S3 for collect tasks
       if (
-        newTask.function === 'collect' &&
+        ['collect', 'generate_video_note'].includes(newTask.function) &&
         newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
         newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
       ) {

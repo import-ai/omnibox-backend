@@ -26,7 +26,7 @@ export class CollectProcessor extends Processor {
         resourceId,
         Object.assign(new UpdateResourceDto(), {
           namespaceId: task.namespaceId,
-          content: task.exception.error,
+          content: 'error',
         }),
       );
       return {};

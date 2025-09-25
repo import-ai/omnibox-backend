@@ -66,6 +66,25 @@ export class WizardTaskService {
     );
   }
 
+  async createGenerateVideoNoteTask(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    input: { html: string; url: string; title?: string },
+    repo?: Repository<Task>,
+  ) {
+    return this.create(
+      {
+        function: 'generate_video_note',
+        input,
+        namespaceId,
+        payload: { resource_id: resourceId },
+        userId,
+      },
+      repo,
+    );
+  }
+
   async createExtractTagsTask(
     userId: string,
     resourceId: string,

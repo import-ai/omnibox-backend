@@ -256,13 +256,12 @@ describe('NamespacesController (e2e)', () => {
   });
 
   describe('GET /api/v1/namespaces/:namespaceId/root', () => {
-    it('should return both private and teamspace roots', async () => {
+    it('should return private root and conditionally teamspace root', async () => {
       const response = await client
         .get(`/api/v1/namespaces/${testNamespaceId}/root`)
         .expect(HttpStatus.OK);
 
       expect(response.body).toHaveProperty('private');
-      expect(response.body).toHaveProperty('teamspace');
 
       const { private: privateRoot, teamspace: teamspaceRoot } = response.body;
 
@@ -272,11 +271,14 @@ describe('NamespacesController (e2e)', () => {
       expect(privateRoot).toHaveProperty('children');
       expect(Array.isArray(privateRoot.children)).toBe(true);
 
-      // Validate teamspace root structure
-      expect(teamspaceRoot).toHaveProperty('id');
-      expect(teamspaceRoot).toHaveProperty('parent_id', '0');
-      expect(teamspaceRoot).toHaveProperty('children');
-      expect(Array.isArray(teamspaceRoot.children)).toBe(true);
+      // Teamspace is conditionally returned (only when memberCount > 1 or has children)
+      // For a single-user namespace with no teamspace children, teamspace may not be present
+      if (teamspaceRoot) {
+        expect(teamspaceRoot).toHaveProperty('id');
+        expect(teamspaceRoot).toHaveProperty('parent_id', '0');
+        expect(teamspaceRoot).toHaveProperty('children');
+        expect(Array.isArray(teamspaceRoot.children)).toBe(true);
+      }
     });
 
     it('should fail for non-member', async () => {
@@ -482,7 +484,8 @@ describe('NamespacesController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(rootResponse.body).toHaveProperty('private');
-      expect(rootResponse.body).toHaveProperty('teamspace');
+      // Teamspace may not be present for single-user namespaces without teamspace children
+      // expect(rootResponse.body).toHaveProperty('teamspace');
 
       // Delete the namespace
       await client

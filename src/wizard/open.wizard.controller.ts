@@ -6,7 +6,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { CollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
+import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
@@ -41,12 +41,11 @@ export class OpenWizardController {
     return await this.wizardService.compressedCollect(
       userId,
       {
-        html: data.html,
         url: data.url,
         title: data.title,
         namespace_id: apiKey.namespaceId,
         parentId: data.parentId || apiKey.attrs.root_resource_id,
-      } as CollectRequestDto,
+      } as CompressedCollectRequestDto,
       compressedHtml,
     );
   }

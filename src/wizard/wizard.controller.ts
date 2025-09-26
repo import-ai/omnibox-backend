@@ -10,7 +10,7 @@ import {
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import {
   CollectRequestDto,
-  CollectZRequestDto,
+  CompressedCollectRequestDto,
 } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
@@ -34,10 +34,14 @@ export class WizardController {
   @UseInterceptors(FileInterceptor('html'))
   async collectGzip(
     @UserId() userId: string,
-    @Body() data: CollectZRequestDto,
-    @UploadedFile() zHtml: Express.Multer.File,
+    @Body() data: CompressedCollectRequestDto,
+    @UploadedFile() compressedHtml: Express.Multer.File,
   ): Promise<CollectResponseDto> {
-    return await this.wizardService.collectZ(userId, data, zHtml);
+    return await this.wizardService.compressedCollect(
+      userId,
+      data,
+      compressedHtml,
+    );
   }
 
   @Post('ask')

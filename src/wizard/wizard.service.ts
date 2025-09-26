@@ -5,7 +5,7 @@ import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import {
   CollectRequestDto,
-  CollectZRequestDto,
+  CompressedCollectRequestDto,
 } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
@@ -100,12 +100,12 @@ export class WizardService {
     return false;
   }
 
-  async collectZ(
+  async compressedCollect(
     userId: string,
-    data: CollectZRequestDto,
-    file: Express.Multer.File,
+    data: CompressedCollectRequestDto,
+    compressedHtml: Express.Multer.File,
   ) {
-    if (!file) {
+    if (!compressedHtml) {
       throw new BadRequestException('Missing file');
     }
     const { url, title, namespace_id, parentId } = data;
@@ -128,8 +128,8 @@ export class WizardService {
     const filename = 'html.gz';
     const { id } = await this.minioService.put(
       filename,
-      file.buffer,
-      file.mimetype,
+      compressedHtml.buffer,
+      compressedHtml.mimetype,
       {
         folder: this.gzipHtmlFolder,
         metadata: { resourceId: resource.id, url },

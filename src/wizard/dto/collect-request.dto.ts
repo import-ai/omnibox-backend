@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsString } from 'class-validator';
 
-export class CollectZRequestDto {
+export class CompressedCollectRequestDto {
   @IsString()
   @IsNotEmpty()
   url: string;
@@ -18,7 +18,7 @@ export class CollectZRequestDto {
   parentId: string;
 }
 
-export class CollectRequestDto extends CollectZRequestDto {
+export class CollectRequestDto extends CompressedCollectRequestDto {
   @IsString()
   @IsNotEmpty()
   html: string;

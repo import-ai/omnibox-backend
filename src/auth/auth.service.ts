@@ -110,6 +110,7 @@ export class AuthService {
           email: payload.email,
           username: data.username,
           password: data.password,
+          lang: data.lang,
         },
         manager,
       );

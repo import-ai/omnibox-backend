@@ -145,7 +145,12 @@ export class AuthService {
       expiresIn: '1h',
     });
     const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendPasswordEmail(user.email!, mailSendUri);
+    const lang = await this.userService.getOption(user.id, 'language');
+    await this.mailService.sendPasswordEmail(
+      user.email!,
+      mailSendUri,
+      lang?.value,
+    );
     // return { url: mailSendUri };
   }
 
@@ -161,7 +166,7 @@ export class AuthService {
   }
 
   async invite(
-    user_id: string,
+    userId: string,
     email: string,
     data: {
       inviteUrl: string;
@@ -199,9 +204,11 @@ export class AuthService {
       const token = this.jwtService.sign(payload, {
         expiresIn: '1h',
       });
+      const lang = await this.userService.getOption(account.id, 'language');
       await this.mailService.sendInviteEmail(
         email,
-        `${data.inviteUrl}?user=${user_id}&namespace=${data.namespaceId}&token=${token}`,
+        `${data.inviteUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`,
+        lang?.value,
       );
       return;
     }
@@ -212,8 +219,9 @@ export class AuthService {
     const token = this.jwtService.sign(payload, {
       expiresIn: '1h',
     });
-    const mailSendUri = `${data.registerUrl}?user=${user_id}&namespace=${data.namespaceId}&token=${token}`;
-    await this.mailService.sendInviteEmail(email, mailSendUri);
+    const mailSendUri = `${data.registerUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`;
+    const lang = await this.userService.getOption(userId, 'language');
+    await this.mailService.sendInviteEmail(email, mailSendUri, lang?.value);
     // return { url: mailSendUri };
   }
 

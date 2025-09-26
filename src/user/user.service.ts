@@ -286,7 +286,7 @@ export class UserService {
     }
   }
 
-  async validateEmail(email: string) {
+  async validateEmail(userId: string, email: string) {
     if (!isEmail(email)) {
       throw new BadRequestException('Invalid email format');
     }
@@ -308,7 +308,8 @@ export class UserService {
 
     this.cleanExpiresState();
 
-    await this.mailService.validateEmail(email, code);
+    const lang = await this.getOption(userId, 'language');
+    await this.mailService.validateEmail(email, code, lang?.value);
 
     return { code, email };
   }

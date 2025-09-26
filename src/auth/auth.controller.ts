@@ -46,8 +46,12 @@ export class AuthController {
 
   @Public()
   @Post('sign-up')
-  async signUp(@Body('url') url: string, @Body('email') email: string) {
-    return await this.authService.signUp(url, email);
+  async signUp(
+    @Body('url') url: string,
+    @Body('email') email: string,
+    @Body('lang') lang?: string,
+  ) {
+    return await this.authService.signUp(url, email, lang);
   }
 
   @Public()

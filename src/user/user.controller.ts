@@ -39,8 +39,8 @@ export class UserController {
   }
 
   @Post('email/validate')
-  async validateEmail(@Body('email') email: string) {
-    return await this.userService.validateEmail(email);
+  async validateEmail(@Req() req, @Body('email') email: string) {
+    return await this.userService.validateEmail(req.user.id, email);
   }
 
   @Patch(':id')

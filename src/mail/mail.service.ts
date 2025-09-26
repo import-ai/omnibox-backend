@@ -7,12 +7,22 @@ export class MailService {
 
   constructor(private readonly mailerService: MailerService) {}
 
-  async sendSignUpEmail(email: string, resetUrl: string): Promise<void> {
+  async sendSignUpEmail(
+    email: string,
+    resetUrl: string,
+    lang?: string,
+  ): Promise<void> {
+    let subject = 'Continue completing account registration';
+    let template = 'sign-up';
+    if (lang?.split('-')?.at(0) === 'zh') {
+      subject = '继续完成账号注册';
+      template = 'sign-up-zh';
+    }
     try {
       await this.mailerService.sendMail({
         to: email,
-        subject: 'Continue completing account registration',
-        template: 'sign-up',
+        subject,
+        template,
         context: {
           resetUrl,
         },
@@ -23,12 +33,22 @@ export class MailService {
     }
   }
 
-  async sendPasswordEmail(email: string, resetUrl: string): Promise<void> {
+  async sendPasswordEmail(
+    email: string,
+    resetUrl: string,
+    lang?: string,
+  ): Promise<void> {
+    let subject = 'Password Reset Request';
+    let template = 'password';
+    if (lang?.split('-')?.at(0) === 'zh') {
+      subject = '密码重置请求';
+      template = 'password-zh';
+    }
     try {
       await this.mailerService.sendMail({
         to: email,
-        subject: 'Password Reset Request',
-        template: 'password',
+        subject,
+        template,
         context: {
           resetUrl,
         },
@@ -39,12 +59,22 @@ export class MailService {
     }
   }
 
-  async validateEmail(email: string, code: string): Promise<void> {
+  async validateEmail(
+    email: string,
+    code: string,
+    lang?: string,
+  ): Promise<void> {
+    let subject = 'Email Verification';
+    let template = 'email-verification';
+    if (lang?.split('-')?.at(0) === 'zh') {
+      subject = '邮箱验证';
+      template = 'email-verification-zh';
+    }
     try {
       await this.mailerService.sendMail({
         to: email,
-        subject: 'Email Verification',
-        template: 'email-verification',
+        subject,
+        template,
         context: {
           code,
         },
@@ -55,12 +85,22 @@ export class MailService {
     }
   }
 
-  async sendInviteEmail(email: string, resetUrl: string): Promise<void> {
+  async sendInviteEmail(
+    email: string,
+    resetUrl: string,
+    lang?: string,
+  ): Promise<void> {
+    let subject = 'Invite you to join the space';
+    let template = 'invite';
+    if (lang?.split('-')?.at(0) === 'zh') {
+      subject = '邀请您加入空间';
+      template = 'invite-zh';
+    }
     try {
       await this.mailerService.sendMail({
         to: email,
-        subject: 'Invite you to join the space',
-        template: 'invite',
+        subject,
+        template,
         context: {
           resetUrl,
         },

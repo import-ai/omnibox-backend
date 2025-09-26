@@ -7,12 +7,22 @@ export class MailService {
 
   constructor(private readonly mailerService: MailerService) {}
 
-  async sendSignUpEmail(email: string, resetUrl: string): Promise<void> {
+  async sendSignUpEmail(
+    email: string,
+    resetUrl: string,
+    lang?: string,
+  ): Promise<void> {
+    let subject = 'Continue completing account registration';
+    let template = 'sign-up';
+    if (lang?.split('-')?.at(0) === 'zh') {
+      subject = '继续完成账号注册';
+      template = 'sign-up-zh';
+    }
     try {
       await this.mailerService.sendMail({
         to: email,
-        subject: 'Continue completing account registration',
-        template: 'sign-up',
+        subject,
+        template,
         context: {
           resetUrl,
         },

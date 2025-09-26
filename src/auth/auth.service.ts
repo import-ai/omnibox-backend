@@ -78,10 +78,10 @@ export class AuthService {
     return this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
-  async signUp(url: string, email: string) {
+  async signUp(url: string, email: string, lang?: string) {
     const token: string = await this.getSignUpToken(email);
     const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendSignUpEmail(email, mailSendUri);
+    await this.mailService.sendSignUpEmail(email, mailSendUri, lang);
   }
 
   async signUpConfirm(

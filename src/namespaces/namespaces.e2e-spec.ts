@@ -63,16 +63,10 @@ describe('NamespacesController (e2e)', () => {
         name: '',
       };
 
-      const response = await client
+      await client
         .post('/api/v1/namespaces')
         .send(createNamespaceDto)
-        .expect(HttpStatus.CREATED);
-
-      expect(response.body).toHaveProperty('id');
-      expect(response.body.name).toBe('');
-
-      // Clean up
-      await client.delete(`/api/v1/namespaces/${response.body.id}`);
+        .expect(HttpStatus.BAD_REQUEST);
     });
 
     it('should fail to create namespace without name', async () => {
@@ -81,7 +75,31 @@ describe('NamespacesController (e2e)', () => {
       await client
         .post('/api/v1/namespaces')
         .send(createNamespaceDto)
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
+        .expect(HttpStatus.BAD_REQUEST);
+    });
+
+    it('should fail to create namespace with duplicate name', async () => {
+      const createNamespaceDto = {
+        name: 'Duplicate Test Workspace',
+      };
+
+      // First, create a namespace
+      const firstResponse = await client
+        .post('/api/v1/namespaces')
+        .send(createNamespaceDto)
+        .expect(HttpStatus.CREATED);
+
+      // Try to create another namespace with the same name
+      const response = await client
+        .post('/api/v1/namespaces')
+        .send(createNamespaceDto)
+        .expect(HttpStatus.CONFLICT);
+
+      expect(response.body).toHaveProperty('code');
+      expect(response.body.code).toBe('namespace_conflict');
+
+      // Clean up the first namespace
+      await client.delete(`/api/v1/namespaces/${firstResponse.body.id}`);
     });
   });
 
@@ -349,7 +367,7 @@ describe('NamespacesController (e2e)', () => {
       await client
         .patch(`/api/v1/namespaces/${updateTestNamespaceId}`)
         .send(updateNamespaceDto)
-        .expect(HttpStatus.OK); // Empty name might be allowed, depending on validation
+        .expect(HttpStatus.BAD_REQUEST); // Empty name might be allowed, depending on validation
     });
   });
 
@@ -503,19 +521,19 @@ describe('NamespacesController (e2e)', () => {
       await client
         .post('/api/v1/namespaces')
         .send({ name: null })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
-
-      // Test update with null name
-      await client
-        .patch(`/api/v1/namespaces/${edgeTestNamespaceId}`)
-        .send({ name: null })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
+        .expect(HttpStatus.BAD_REQUEST);
 
       // Test with undefined in request body
       await client
         .post('/api/v1/namespaces')
         .send({ name: undefined })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
+        .expect(HttpStatus.BAD_REQUEST);
+
+      // Test update with null name
+      await client
+        .patch(`/api/v1/namespaces/${edgeTestNamespaceId}`)
+        .send({ name: null })
+        .expect(HttpStatus.OK);
     });
   });
 });

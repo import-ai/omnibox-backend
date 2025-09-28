@@ -9,8 +9,11 @@ import {
   Patch,
   Delete,
   Controller,
+  ValidationPipe,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { CreateNamespaceDto } from './dto/create-namespace.dto';
+import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
@@ -69,19 +72,19 @@ export class NamespacesController {
   }
 
   @Post()
-  async create(@Req() req, @Body('name') name: string) {
+  async create(@Req() req, @Body() createDto: CreateNamespaceDto) {
     return await this.namespacesService.createAndJoinNamespace(
       req.user.id,
-      name,
+      createDto.name,
     );
   }
 
   @Patch(':namespaceId')
   async update(
     @Param('namespaceId') namespaceId: string,
-    @Body('name') name: string,
+    @Body() updateDto: UpdateNamespaceDto,
   ) {
-    return await this.namespacesService.update(namespaceId, { name });
+    return await this.namespacesService.update(namespaceId, updateDto);
   }
 
   @Delete(':namespaceId')

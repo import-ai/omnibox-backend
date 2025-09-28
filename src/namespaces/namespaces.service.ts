@@ -148,6 +148,9 @@ export class NamespacesService {
     name: string,
     manager: EntityManager,
   ): Promise<Namespace> {
+    if ((await manager.countBy(Namespace, { name })) > 0) {
+      throw new ConflictException({ code: 'namespace_conflict' });
+    }
     const namespace = await manager.save(manager.create(Namespace, { name }));
     const publicRoot = await this.resourcesService.createResource(
       {
@@ -166,20 +169,20 @@ export class NamespacesService {
 
   async update(
     id: string,
-    updateNamespace: UpdateNamespaceDto,
+    updateDto: UpdateNamespaceDto,
     manager?: EntityManager,
   ) {
     const repo = manager
       ? manager.getRepository(Namespace)
       : this.namespaceRepository;
-    const existNamespace = await this.getNamespace(id, manager);
-    if (!existNamespace) {
-      throw new ConflictException('The current namespace does not exist');
+    const namespace = await this.getNamespace(id, manager);
+    if (updateDto.name && updateDto.name !== namespace.name) {
+      if ((await repo.countBy({ name: updateDto.name })) > 0) {
+        throw new ConflictException({ code: 'namespace_conflict' });
+      }
+      namespace.name = updateDto.name;
     }
-    each(updateNamespace, (value, key) => {
-      existNamespace[key] = value;
-    });
-    return await repo.update(id, existNamespace);
+    return await repo.update(id, namespace);
   }
 
   async delete(id: string) {

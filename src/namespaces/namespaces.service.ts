@@ -148,6 +148,9 @@ export class NamespacesService {
     name: string,
     manager: EntityManager,
   ): Promise<Namespace> {
+    if ((await manager.countBy(Namespace, { name })) > 0) {
+      throw new ConflictException('Namespace already exists');
+    }
     const namespace = await manager.save(manager.create(Namespace, { name }));
     const publicRoot = await this.resourcesService.createResource(
       {
@@ -175,6 +178,11 @@ export class NamespacesService {
     const existNamespace = await this.getNamespace(id, manager);
     if (!existNamespace) {
       throw new ConflictException('The current namespace does not exist');
+    }
+    if (updateNamespace.name && updateNamespace.name !== existNamespace.name) {
+      if ((await repo.countBy({ name: updateNamespace.name })) > 0) {
+        throw new ConflictException('Namespace already exists');
+      }
     }
     each(updateNamespace, (value, key) => {
       existNamespace[key] = value;

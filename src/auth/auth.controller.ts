@@ -60,13 +60,28 @@ export class AuthController {
     @Body('token') token: string,
     @Body('username') username: string,
     @Body('password') password: string,
+    @Res() res: Response,
     @Body('lang') lang?: string,
   ) {
-    return await this.authService.signUpConfirm(token, {
+    const signUpData = await this.authService.signUpConfirm(token, {
       username,
       password,
       lang,
     });
+
+    const jwtExpireSeconds = parseInt(
+      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+      10,
+    );
+    res.cookie('token', signUpData.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+      maxAge: jwtExpireSeconds * 1000,
+    });
+
+    return res.json(signUpData);
   }
 
   @Public()
@@ -80,8 +95,14 @@ export class AuthController {
   async resetPassword(
     @Body('token') token: string,
     @Body('password') password: string,
+    @Res() res: Response,
   ) {
-    return this.authService.resetPassword(token, password);
+    const result = await this.authService.resetPassword(token, password);
+    res.clearCookie('token', {
+      httpOnly: true,
+      path: '/',
+    });
+    return res.json(result);
   }
 
   @Post('invite')

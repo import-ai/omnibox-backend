@@ -311,7 +311,7 @@ export class UserService {
     const lang = await this.getOption(userId, 'language');
     await this.mailService.validateEmail(email, code, lang?.value);
 
-    return { code, email };
+    return { email };
   }
 
   async update(id: string, account: UpdateUserDto) {

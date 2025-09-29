@@ -6,10 +6,15 @@ import {
   PublicSharesController,
   ResourceSharesController,
 } from './shares.controller';
-import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Share]), NamespaceResourcesModule],
+  imports: [
+    TypeOrmModule.forFeature([Share]),
+    ResourcesModule,
+    NamespacesModule,
+  ],
   providers: [SharesService],
   exports: [SharesService],
   controllers: [ResourceSharesController, PublicSharesController],

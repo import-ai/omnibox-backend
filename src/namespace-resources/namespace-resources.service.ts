@@ -128,7 +128,7 @@ export class NamespaceResourcesService {
     return resources.map((resource) => resource.id);
   }
 
-  async findByIds(namespaceId: string, ids: Array<string>) {
+  async findByIds(namespaceId: string, userId: string, ids: Array<string>) {
     if (ids.length <= 0) {
       return [];
     }
@@ -150,10 +150,19 @@ export class NamespaceResourcesService {
       ],
     });
 
-    // Populate tags for resources
-    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+    const filteredResources = await this.permissionFilter(
+      namespaceId,
+      userId,
+      resources,
+    );
 
-    return resources.map((resource) => ({
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(
+      namespaceId,
+      filteredResources,
+    );
+
+    return filteredResources.map((resource) => ({
       ...resource,
       tags: tagsMap.get(resource.id) || [],
     }));

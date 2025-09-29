@@ -107,6 +107,7 @@ export class WizardService {
   }
 
   async compressedCollect(
+    namespaceId: string,
     userId: string,
     data: CompressedCollectRequestDto,
     compressedHtml: Express.Multer.File,
@@ -114,14 +115,14 @@ export class WizardService {
     if (!compressedHtml) {
       throw new BadRequestException('Missing file');
     }
-    const { url, title, namespace_id, parentId } = data;
-    if (!namespace_id || !parentId || !url) {
+    const { url, title, parentId } = data;
+    if (!namespaceId || !parentId || !url) {
       throw new BadRequestException('Missing required fields');
     }
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace_id,
+      namespaceId,
       resourceType: ResourceType.LINK,
       parentId: parentId,
       attrs: { url },
@@ -145,7 +146,7 @@ export class WizardService {
     if (this.isVideoUrl(url)) {
       const task = await this.wizardTaskService.createGenerateVideoNoteTask(
         userId,
-        namespace_id,
+        namespaceId,
         resource.id,
         { html: [this.gzipHtmlFolder, id].join('/'), url, title },
       );
@@ -153,7 +154,7 @@ export class WizardService {
     } else {
       const task = await this.wizardTaskService.createCollectTask(
         userId,
-        namespace_id,
+        namespaceId,
         resource.id,
         { html: [this.gzipHtmlFolder, id].join('/'), url, title },
       );

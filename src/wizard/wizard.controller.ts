@@ -39,6 +39,22 @@ export class CollectController {
   ): Promise<CollectResponseDto> {
     return await this.wizardService.collect(namespaceId, userId, data);
   }
+
+  @Post('collect/gzip')
+  @UseInterceptors(FileInterceptor('html'))
+  async collectGzip(
+    @UserId() userId: string,
+    @Body() data: CompressedCollectRequestDto,
+    @Body('namespaceId', new ValidationPipe()) namespaceId: string,
+    @UploadedFile() zHtml: Express.Multer.File,
+  ): Promise<CollectResponseDto> {
+    return await this.wizardService.compressedCollect(
+      namespaceId,
+      userId,
+      data,
+      zHtml,
+    );
+  }
 }
 
 @Controller('api/v1/namespaces/:namespaceId/wizard')
@@ -57,11 +73,13 @@ export class WizardController {
   @Post('collect/gzip')
   @UseInterceptors(FileInterceptor('html'))
   async collectGzip(
+    @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
     @Body() data: CompressedCollectRequestDto,
     @UploadedFile() compressedHtml: Express.Multer.File,
   ): Promise<CollectResponseDto> {
     return await this.wizardService.compressedCollect(
+      namespaceId,
       userId,
       data,
       compressedHtml,

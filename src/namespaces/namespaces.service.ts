@@ -285,6 +285,7 @@ export class NamespacesService {
         userId,
       },
       select: ['namespaceId'],
+      order: { createdAt: 'DESC' },
     });
     const namespaceIds = memberRecords.map((v) => v.namespaceId);
     return await this.namespaceRepository.find({

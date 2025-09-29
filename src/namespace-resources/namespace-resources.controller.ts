@@ -29,6 +29,7 @@ export class NamespaceResourcesController {
 
   @Get()
   async findById(
+    @Req() req: Request,
     @Param('namespaceId') namespaceId: string,
     @Query('id') id: string,
   ) {
@@ -39,7 +40,11 @@ export class NamespaceResourcesController {
     if (ids.length <= 0) {
       return [];
     }
-    return await this.namespaceResourcesService.findByIds(namespaceId, ids);
+    return await this.namespaceResourcesService.findByIds(
+      namespaceId,
+      req.user!.id,
+      ids,
+    );
   }
 
   @Post()

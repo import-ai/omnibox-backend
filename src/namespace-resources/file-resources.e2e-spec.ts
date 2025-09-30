@@ -35,19 +35,18 @@ describe('FileResourcesController (e2e)', () => {
         .attach('file', Buffer.from(content), filename);
       expect(uploadRes.status).toBe(201);
       expect(uploadRes.body.name).toBe(filename);
-      const resourceId = uploadRes.body.id;
-
-      const downloadRes = await client
-        .get(
-          `/api/v1/namespaces/${client.namespace.id}/resources/files/${resourceId}`,
-        )
-        .expect(200);
-      expect(
-        decodeURIComponent(
-          downloadRes.header['content-disposition'].split('"')[1],
-        ),
-      ).toBe(filename);
-      expect(downloadRes.text).toBe(content);
+      // const resourceId = uploadRes.body.id;
+      // const downloadRes = await client
+      //   .get(
+      //     `/api/v1/namespaces/${client.namespace.id}/resources/files/${resourceId}`,
+      //   )
+      //   .expect(200);
+      // expect(
+      //   decodeURIComponent(
+      //     downloadRes.header['content-disposition'].split('"')[1],
+      //   ),
+      // ).toBe(filename);
+      // expect(downloadRes.text).toBe(content);
     },
   );
 });

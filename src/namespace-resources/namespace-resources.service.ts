@@ -205,12 +205,12 @@ export class NamespaceResourcesService {
       tagIds: createReq.tagIds,
     };
     if (createReq.resourceType === ResourceType.FILE) {
-      const ossPath = resource.attrs?.oss_path;
-      if (!ossPath || typeof ossPath !== 'string') {
-        throw new BadRequestException(
-          'oss_path is required for file resource.',
-        );
-      }
+      // const ossPath = resource.attrs?.oss_path;
+      // if (!ossPath || typeof ossPath !== 'string') {
+      //   throw new BadRequestException(
+      //     'oss_path is required for file resource.',
+      //   );
+      // }
       const originalFilename = getOriginalFileName(resource.name);
       const encodedFilename = encodeFileName(resource.name);
       resource.name = originalFilename;
@@ -246,16 +246,11 @@ export class NamespaceResourcesService {
       resourceType: resource.resourceType,
       parentId: resource.parentId,
     };
-    ['content', 'attrs'].forEach((key) => {
+    ['content', 'attrs', 'tagIds'].forEach((key) => {
       if (resource[key]) {
         (newResource as any)[key] = resource[key];
       }
     });
-
-    // Handle tagIds separately since DTO expects tag_ids
-    if (resource.tagIds) {
-      (newResource as any).tag_ids = resource.tagIds;
-    }
 
     return await this.dataSource.transaction(async (entityManager) => {
       // Create the duplicated resource within the transaction

@@ -41,6 +41,7 @@ import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resour
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
+import { ObjectsService } from 'omniboxd/objects/objects.service';
 
 const TASK_PRIORITY = 5;
 
@@ -54,6 +55,7 @@ export class NamespaceResourcesService {
     private readonly tagService: TagService,
     private readonly dataSource: DataSource,
     private readonly minioService: MinioService,
+    private readonly objectsService: ObjectsService,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
@@ -787,7 +789,7 @@ export class NamespaceResourcesService {
     }
     const artifactName = resource.id;
 
-    const fileStream = await this.minioService.getObject(
+    const fileStream = await this.objectsService.getObject(
       this.minioPath(artifactName),
     );
     return { fileStream, resource };

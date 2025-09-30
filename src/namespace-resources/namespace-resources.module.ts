@@ -7,13 +7,14 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InternalResourcesController } from 'omniboxd/namespace-resources/internal.resource.controller';
 import { OpenResourcesController } from 'omniboxd/namespace-resources/open.resource.controller';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
-import { FileResourcesController } from 'omniboxd/namespace-resources/file-resources.controller';
 import { MinioModule } from 'omniboxd/minio/minio.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { FileResourcesController } from './file-resources.controller';
+import { ObjectsModule } from 'omniboxd/objects/objects.module';
 
 @Module({
   exports: [NamespaceResourcesService],
@@ -31,6 +32,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     TagModule,
     PermissionsModule,
     MinioModule,
+    ObjectsModule,
     TasksModule,
     ResourceAttachmentsModule,
     ResourcesModule,

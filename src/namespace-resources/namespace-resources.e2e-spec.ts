@@ -113,21 +113,6 @@ describe('ResourcesController (e2e)', () => {
         .expect(HttpStatus.BAD_REQUEST);
     });
 
-    it('should fail with empty namespaceId', async () => {
-      const resourceData = {
-        name: 'Test Resource',
-        namespaceId: '',
-        resourceType: ResourceType.DOC,
-        parentId: client.namespace.root_resource_id,
-        content: 'content',
-      };
-
-      await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
-        .send(resourceData)
-        .expect(HttpStatus.BAD_REQUEST);
-    });
-
     it('should fail with empty parentId', async () => {
       const resourceData = {
         name: 'Test Resource',

@@ -4,6 +4,7 @@ import { Credentials, STS } from 'ali-oss';
 import * as OSS from 'ali-oss';
 import { UploadInfoDto } from './dto/upload-info.dto';
 import { Readable } from 'stream';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ObjectsService {
@@ -32,14 +33,14 @@ export class ObjectsService {
     this.bucket = bucket;
   }
 
-  private async getUploadCredentials(): Promise<Credentials> {
+  private async createUploadCredentials(path: string): Promise<Credentials> {
     const policy = {
       Version: '1',
       Statement: [
         {
           Effect: 'Allow',
           Action: 'oss:PutObject',
-          Resource: [`acs:oss:*:*:${this.bucket}/uploads/*`],
+          Resource: [`acs:oss:*:*:${this.bucket}/${path}`],
         },
       ],
     };
@@ -47,13 +48,14 @@ export class ObjectsService {
   }
 
   async getUploadInfo(): Promise<UploadInfoDto> {
-    const credentials = await this.getUploadCredentials();
+    const path = `uploads/${randomUUID()}`;
+    const credentials = await this.createUploadCredentials(path);
     const uploadInfo: UploadInfoDto = {
       accessKeyId: credentials.AccessKeyId,
       accessKeySecret: credentials.AccessKeySecret,
       securityToken: credentials.SecurityToken,
       bucket: this.bucket,
-      directory: 'uploads',
+      path,
     };
     return uploadInfo;
   }

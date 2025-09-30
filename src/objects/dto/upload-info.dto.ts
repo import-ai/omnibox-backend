@@ -14,5 +14,5 @@ export class UploadInfoDto {
   bucket: string;
 
   @Expose()
-  directory: string;
+  path: string;
 }

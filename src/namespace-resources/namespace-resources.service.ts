@@ -60,7 +60,7 @@ export class NamespaceResourcesService {
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly resourcesService: ResourcesService,
-  ) {}
+  ) { }
 
   private async getTagsByIds(
     namespaceId: string,
@@ -205,8 +205,11 @@ export class NamespaceResourcesService {
       tagIds: createReq.tagIds,
     };
     if (createReq.resourceType === ResourceType.FILE) {
-      if (!createReq.ossPath) {
-        throw new BadRequestException('Empty oss path.');
+      const ossPath = resource.attrs?.oss_path;
+      if (!ossPath || typeof ossPath !== 'string') {
+        throw new BadRequestException(
+          'oss_path is required for file resource.',
+        );
       }
       const originalFilename = getOriginalFileName(resource.name);
       const encodedFilename = encodeFileName(resource.name);
@@ -215,7 +218,6 @@ export class NamespaceResourcesService {
         ...resource.attrs,
         original_name: originalFilename,
         encoded_name: encodedFilename,
-        oss_path: createReq.ossPath,
       };
     }
     const savedResource = await this.resourcesService.createResource(

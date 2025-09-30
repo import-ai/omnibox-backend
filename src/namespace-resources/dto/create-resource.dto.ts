@@ -39,9 +39,4 @@ export class CreateResourceDto {
   @IsObject()
   @IsOptional()
   attrs?: Record<string, any>;
-
-  @Expose({ name: 'oss_path' })
-  @IsString()
-  @IsOptional()
-  ossPath?: string;
 }

@@ -1,6 +1,6 @@
 import { Expose } from 'class-transformer';
 
-export class UploadInfoDto {
+export class UploadSessionDto {
   @Expose({ name: 'access_key_id' })
   accessKeyId: string;
 

@@ -60,7 +60,7 @@ export class NamespaceResourcesService {
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly resourcesService: ResourcesService,
-  ) { }
+  ) {}
 
   private async getTagsByIds(
     namespaceId: string,

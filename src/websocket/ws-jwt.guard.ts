@@ -36,24 +36,9 @@ export class WsJwtGuard implements CanActivate {
   }
 
   private extractTokenFromHeader(client: Socket): string | undefined {
-    // Debug logging
-
-    // Try to get token from authorization header
-    const authHeader = client.handshake.headers.authorization;
-    if (authHeader) {
-      const [type, token] = authHeader.split(' ');
-      if (type === 'Bearer') {
-        return token;
-      }
-    }
-
-    // Fallback to auth object
     const authToken = client.handshake.auth?.token;
-    if (authToken) {
-      if (authToken.startsWith('Bearer ')) {
-        return authToken.substring(7);
-      }
-      return authToken;
+    if (authToken?.startsWith('Bearer ')) {
+      return authToken.substring(7);
     }
     return undefined;
   }

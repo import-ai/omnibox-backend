@@ -11,7 +11,6 @@ import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { Inject, forwardRef } from '@nestjs/common';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { User } from 'omniboxd/user/entities/user.entity';
 
@@ -28,10 +27,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new Logger(WizardGateway.name);
 
-  constructor(
-    @Inject(forwardRef(() => WizardService))
-    private readonly wizardService: WizardService,
-  ) {}
+  constructor(private readonly wizardService: WizardService) {}
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);

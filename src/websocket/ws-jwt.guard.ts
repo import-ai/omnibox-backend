@@ -1,34 +1,21 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { WsException } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
-import { UserService } from 'omniboxd/user/user.service';
+import { AuthService } from 'omniboxd/auth/auth.service';
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
-  constructor(
-    private readonly jwtService: JwtService,
-    private readonly userService: UserService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     try {
       const client: Socket = context.switchToWs().getClient<Socket>();
       const token = this.extractTokenFromHeader(client);
-
       if (!token) {
         throw new WsException('Unauthorized: No token');
       }
-
-      const payload = await this.jwtService.verifyAsync(token);
-
-      const user = await this.userService.find(payload.sub);
-
-      if (!user) {
-        throw new WsException('Unauthorized: User not found');
-      }
-
-      client.data.user = user;
+      const payload = this.authService.jwtVerify(token);
+      client.data.userId = payload.sub;
       return true;
     } catch (error) {
       throw new WsException('Unauthorized: ' + error.message);

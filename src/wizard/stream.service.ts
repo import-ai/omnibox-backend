@@ -1,5 +1,4 @@
 import { MessagesService } from 'omniboxd/messages/messages.service';
-import { User } from 'omniboxd/user/entities/user.entity';
 import { Observable, Subscriber } from 'rxjs';
 import { Logger, MessageEvent } from '@nestjs/common';
 import {
@@ -91,7 +90,7 @@ export class StreamService {
   agentHandler(
     namespaceId: string,
     conversationId: string,
-    user: User,
+    userId: string,
     subscriber: Subscriber<MessageEvent>,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
@@ -101,7 +100,7 @@ export class StreamService {
         const message: Message = await this.messagesService.create(
           namespaceId,
           conversationId,
-          user,
+          userId,
           {
             message: {
               role: chunk.role,
@@ -112,7 +111,7 @@ export class StreamService {
         );
         chunk.id = message.id;
         chunk.parentId = message.parentId || undefined;
-        chunk.userId = user.id;
+        chunk.userId = userId;
         chunk.namespaceId = namespaceId;
 
         if (context.message?.role === OpenAIMessageRole.SYSTEM) {
@@ -202,7 +201,7 @@ export class StreamService {
   }
 
   async agentStream(
-    user: User,
+    userId: string,
     body: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write' = 'ask',
@@ -212,7 +211,7 @@ export class StreamService {
     if (body.parent_message_id) {
       parentId = body.parent_message_id;
       const allMessages = await this.messagesService.findAll(
-        user.id,
+        userId,
         body.conversation_id,
       );
       messages = this.getMessages(allMessages, parentId);
@@ -226,7 +225,7 @@ export class StreamService {
             const resources: Resource[] =
               await this.namespaceResourcesService.listAllUserAccessibleResources(
                 tool.namespace_id,
-                user.id,
+                userId,
               );
             tool.visible_resources = resources.map((r) => {
               return {
@@ -243,7 +242,7 @@ export class StreamService {
             tool.visible_resources.push(
               ...(await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(
                 tool.namespace_id,
-                user.id,
+                userId,
                 tool.resources,
               )),
             );
@@ -253,7 +252,7 @@ export class StreamService {
                   await this.namespaceResourcesService.getSubResourcesByUser(
                     tool.namespace_id,
                     resource.id,
-                    user.id,
+                    userId,
                   );
                 resource.child_ids = resources.map((r) => r.id);
                 tool.visible_resources.push(
@@ -284,7 +283,7 @@ export class StreamService {
       const handler = this.agentHandler(
         body.namespace_id,
         body.conversation_id,
-        user,
+        userId,
         subscriber,
       );
 
@@ -311,13 +310,13 @@ export class StreamService {
   }
 
   async agentStreamWrapper(
-    user: User,
+    userId: string,
     body: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write' = 'ask',
   ): Promise<Observable<MessageEvent>> {
     try {
-      return await this.agentStream(user, body, requestId, mode);
+      return await this.agentStream(userId, body, requestId, mode);
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>
         this.streamError(subscriber, e),

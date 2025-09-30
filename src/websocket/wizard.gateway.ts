@@ -1,18 +1,17 @@
 import {
-  WebSocketGateway,
-  WebSocketServer,
-  SubscribeMessage,
+  ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
-  MessageBody,
-  ConnectedSocket,
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
-import { User } from 'omniboxd/user/entities/user.entity';
 
 @WebSocketGateway({
   cors: {
@@ -43,12 +42,12 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: AgentRequestDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const user = client.data.user as User;
+    const userId = client.data.userId;
     const requestId = client.handshake.headers['x-request-id'] as string;
 
     try {
       const observable = await this.wizardService.streamService.agentStream(
-        user,
+        userId,
         data,
         requestId,
         'ask',
@@ -78,12 +77,12 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: AgentRequestDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const user = client.data.user as User;
+    const userId = client.data.userId;
     const requestId = client.handshake.headers['x-request-id'] as string;
 
     try {
       const observable = await this.wizardService.streamService.agentStream(
-        user,
+        userId,
         data,
         requestId,
         'write',

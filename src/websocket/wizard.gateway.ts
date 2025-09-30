@@ -28,13 +28,11 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(private readonly wizardService: WizardService) {}
 
-  handleConnection(client: Socket) {
-    this.logger.log(`Client connected: ${client.id}`);
-  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  handleConnection(client: Socket) {}
 
-  handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
-  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  handleDisconnect(client: Socket) {}
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('ask')
@@ -42,33 +40,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: AgentRequestDto,
     @ConnectedSocket() client: Socket,
   ) {
-    const userId = client.data.userId;
-    const requestId = client.handshake.headers['x-request-id'] as string;
-
-    try {
-      const observable = await this.wizardService.streamService.agentStream(
-        userId,
-        data,
-        requestId,
-        'ask',
-      );
-
-      observable.subscribe({
-        next: (message) => {
-          client.emit('message', message.data);
-        },
-        error: (error) => {
-          this.logger.error('Error in ask stream', error);
-          client.emit('error', { error: error.message });
-        },
-        complete: () => {
-          client.emit('complete');
-        },
-      });
-    } catch (error) {
-      this.logger.error('Error handling ask', error);
-      client.emit('error', { error: error.message });
-    }
+    await this.handleAgentStream(client, data, 'ask');
   }
 
   @UseGuards(WsJwtGuard)
@@ -77,6 +49,14 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: AgentRequestDto,
     @ConnectedSocket() client: Socket,
   ) {
+    await this.handleAgentStream(client, data, 'write');
+  }
+
+  private async handleAgentStream(
+    client: Socket,
+    data: AgentRequestDto,
+    eventType: 'ask' | 'write',
+  ) {
     const userId = client.data.userId;
     const requestId = client.handshake.headers['x-request-id'] as string;
 
@@ -85,7 +65,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         userId,
         data,
         requestId,
-        'write',
+        eventType,
       );
 
       observable.subscribe({
@@ -93,7 +73,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
           client.emit('message', message.data);
         },
         error: (error) => {
-          this.logger.error('Error in write stream', error);
+          this.logger.error(`Error in ${eventType} stream`, error);
           client.emit('error', { error: error.message });
         },
         complete: () => {
@@ -101,7 +81,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         },
       });
     } catch (error) {
-      this.logger.error('Error handling write', error);
+      this.logger.error(`Error handling ${eventType}`, error);
       client.emit('error', { error: error.message });
     }
   }

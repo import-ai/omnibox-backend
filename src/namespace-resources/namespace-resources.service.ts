@@ -205,6 +205,9 @@ export class NamespaceResourcesService {
       tagIds: createReq.tagIds,
     };
     if (createReq.resourceType === ResourceType.FILE) {
+      if (!createReq.ossPath) {
+        throw new BadRequestException('Empty oss path.');
+      }
       const originalFilename = getOriginalFileName(resource.name);
       const encodedFilename = encodeFileName(resource.name);
       resource.name = originalFilename;
@@ -212,6 +215,7 @@ export class NamespaceResourcesService {
         ...resource.attrs,
         original_name: originalFilename,
         encoded_name: encodedFilename,
+        oss_path: createReq.ossPath,
       };
     }
     const savedResource = await this.resourcesService.createResource(
@@ -784,14 +788,11 @@ export class NamespaceResourcesService {
     const resource = await this.resourceRepository.findOne({
       where: { id: resourceId },
     });
-    if (!resource || resource.resourceType !== ResourceType.FILE) {
+    const ossPath = resource?.attrs?.oss_path;
+    if (!resource || resource.resourceType !== ResourceType.FILE || !ossPath) {
       throw new NotFoundException('File resource not found.');
     }
-    const artifactName = resource.id;
-
-    const fileStream = await this.objectsService.getObject(
-      this.minioPath(artifactName),
-    );
+    const fileStream = await this.objectsService.getObject(ossPath);
     return { fileStream, resource };
   }
 

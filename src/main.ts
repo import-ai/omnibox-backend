@@ -8,7 +8,6 @@ async function bootstrap() {
   // Start OpenTelemetry SDK before creating the NestJS app
   if (otelSDK) {
     otelSDK.start();
-    console.log('OpenTelemetry tracing initialized');
   }
   const app = await NestFactory.create(AppModule.forRoot([]), {
     cors: true,

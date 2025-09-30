@@ -110,7 +110,7 @@ jobs:
         env:
           OBB_POSTGRES_URL: postgres://omnibox:omnibox@postgres:5432/omnibox
           OBB_MINIO_URL: http://username:password@minio:9000/omnibox
-          OBB_LOG_LEVELS:
+          OBB_LOG_LEVELS: ""
 
       - name: Print coverage report
         run: |

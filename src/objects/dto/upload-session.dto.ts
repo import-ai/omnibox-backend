@@ -14,5 +14,8 @@ export class UploadSessionDto {
   bucket: string;
 
   @Expose()
+  region: string;
+
+  @Expose()
   path: string;
 }

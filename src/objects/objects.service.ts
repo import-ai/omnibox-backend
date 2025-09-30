@@ -12,6 +12,7 @@ export class ObjectsService {
   private readonly oss?: OSS;
   private readonly arn?: string;
   private readonly bucket?: string;
+  private readonly region?: string;
 
   constructor(configService: ConfigService) {
     const accessKeyId = configService.get('OBB_ALIYUN_ACCESS_KEY_ID');
@@ -34,6 +35,7 @@ export class ObjectsService {
     });
     this.arn = arn;
     this.bucket = bucket;
+    this.region = region;
   }
 
   private async createUploadCredentials(path: string): Promise<Credentials> {
@@ -54,7 +56,7 @@ export class ObjectsService {
   }
 
   async createUploadSession(): Promise<UploadSessionDto> {
-    if (!this.bucket) {
+    if (!this.bucket || !this.region) {
       throw Error('Not configured');
     }
     const path = `uploads/${randomUUID()}`;
@@ -64,6 +66,7 @@ export class ObjectsService {
       accessKeySecret: credentials.AccessKeySecret,
       securityToken: credentials.SecurityToken,
       bucket: this.bucket,
+      region: this.region,
       path,
     };
     return uploadInfo;

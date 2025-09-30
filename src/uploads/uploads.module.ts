@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { UploadsController } from 'omniboxd/uploads/uploads.controller';
 import { UploadsService } from 'omniboxd/uploads/uploads.service';
 
@@ -6,6 +7,6 @@ import { UploadsService } from 'omniboxd/uploads/uploads.service';
   exports: [UploadsService],
   providers: [UploadsService],
   controllers: [UploadsController],
-  imports: [],
+  imports: [ConfigModule],
 })
 export class UploadsModule {}

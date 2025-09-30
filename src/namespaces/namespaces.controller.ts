@@ -9,7 +9,6 @@ import {
   Patch,
   Delete,
   Controller,
-  ValidationPipe,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateNamespaceDto } from './dto/create-namespace.dto';

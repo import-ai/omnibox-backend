@@ -1,4 +1,3 @@
-import each from 'omniboxd/utils/each';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from './entities/namespace.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';

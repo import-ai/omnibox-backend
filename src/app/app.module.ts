@@ -54,6 +54,7 @@ import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
 import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WebSocketModule } from 'omniboxd/websocket/websocket.module';
+import { UploadsModule } from 'omniboxd/uploads/uploads.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -112,6 +113,7 @@ export class AppModule implements NestModule {
         FeedbackModule,
         ApplicationsModule,
         WebSocketModule,
+        UploadsModule,
         // CacheModule.registerAsync({
         //   imports: [ConfigModule],
         //   inject: [ConfigService],

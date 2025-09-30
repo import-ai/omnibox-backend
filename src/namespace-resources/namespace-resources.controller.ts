@@ -48,13 +48,18 @@ export class NamespaceResourcesController {
   }
 
   @Post()
-  async create(@UserId() userId: string, @Body() data: CreateResourceDto) {
+  async create(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() createReq: CreateResourceDto,
+  ) {
     const newResource = await this.namespaceResourcesService.create(
       userId,
-      data,
+      namespaceId,
+      createReq,
     );
     return await this.namespaceResourcesService.getPath({
-      namespaceId: data.namespaceId,
+      namespaceId,
       resourceId: newResource.id,
       userId: userId,
     });
@@ -68,6 +73,7 @@ export class NamespaceResourcesController {
   ) {
     const newResource = await this.namespaceResourcesService.duplicate(
       req.user!.id,
+      namespaceId,
       resourceId,
     );
     return await this.namespaceResourcesService.getPath({

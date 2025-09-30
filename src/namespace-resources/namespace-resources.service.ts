@@ -170,18 +170,19 @@ export class NamespaceResourcesService {
 
   async create(
     userId: string,
-    data: CreateResourceDto,
+    namespaceId: string,
+    createReq: CreateResourceDto,
     manager?: EntityManager,
   ) {
     if (!manager) {
       return await this.dataSource.transaction(async (manager) => {
-        return await this.create(userId, data, manager);
+        return await this.create(userId, namespaceId, createReq, manager);
       });
     }
 
     const ok = await this.permissionsService.userHasPermission(
-      data.namespaceId,
-      data.parentId,
+      namespaceId,
+      createReq.parentId,
       userId,
       ResourcePermission.CAN_EDIT,
       undefined,
@@ -191,17 +192,42 @@ export class NamespaceResourcesService {
       throw new ForbiddenException('Not authorized to create resource.');
     }
 
-    return await this.resourcesService.createResource(
-      {
-        ...data,
-        userId,
-        tagIds: data.tag_ids,
-      },
+    const resource = {
+      userId,
+      namespaceId,
+      name: createReq.name,
+      resourceType: createReq.resourceType,
+      parentId: createReq.parentId,
+      content: createReq.content,
+      attrs: createReq.attrs,
+      tagIds: createReq.tagIds,
+    };
+    if (createReq.resourceType === ResourceType.FILE) {
+      const originalFilename = getOriginalFileName(resource.name);
+      const encodedFilename = encodeFileName(resource.name);
+      resource.name = originalFilename;
+      resource.attrs = {
+        ...resource.attrs,
+        original_name: originalFilename,
+        encoded_name: encodedFilename,
+      };
+    }
+    const savedResource = await this.resourcesService.createResource(
+      resource,
       manager,
     );
+    if (createReq.resourceType === ResourceType.FILE) {
+      await this.wizardTaskService.createFileReaderTask(
+        userId,
+        savedResource,
+        undefined,
+        manager.getRepository(Task),
+      );
+    }
+    return savedResource;
   }
 
-  async duplicate(userId: string, resourceId: string) {
+  async duplicate(userId: string, namespaceId: string, resourceId: string) {
     const resource = await this.get(resourceId);
     if (!resource.parentId) {
       throw new BadRequestException('Cannot duplicate root resource.');
@@ -227,6 +253,7 @@ export class NamespaceResourcesService {
       // Create the duplicated resource within the transaction
       const duplicatedResource = await this.create(
         userId,
+        namespaceId,
         newResource,
         entityManager,
       );
@@ -667,10 +694,9 @@ export class NamespaceResourcesService {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
-      resource = await this.create(userId, {
+      resource = await this.create(userId, namespaceId, {
         name: originalName,
         resourceType: ResourceType.FILE,
-        namespaceId,
         parentId,
         attrs: {
           original_name: originalName,
@@ -722,10 +748,9 @@ export class NamespaceResourcesService {
         throw new BadRequestException('Resource is not a file.');
       }
     } else if (parentId) {
-      resource = await this.create(userId, {
+      resource = await this.create(userId, namespaceId, {
         name: originalFilename, // Use original filename for display
         resourceType: ResourceType.FILE,
-        namespaceId,
         parentId,
         attrs: {
           original_name: originalFilename,

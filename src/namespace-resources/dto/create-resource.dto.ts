@@ -1,3 +1,4 @@
+import { Expose } from 'class-transformer';
 import {
   IsEnum,
   IsArray,
@@ -9,31 +10,38 @@ import {
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 export class CreateResourceDto {
-  @IsString()
-  @IsOptional()
-  name: string;
-
-  @IsString()
-  @IsNotEmpty()
-  namespaceId: string;
-
+  @Expose()
   @IsEnum(ResourceType)
   resourceType: ResourceType;
 
+  @Expose()
   @IsString()
   @IsNotEmpty()
   parentId: string;
 
+  @Expose()
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @Expose({ name: 'tag_ids' })
   @IsArray()
   @IsOptional()
   @IsString({ each: true })
-  tag_ids?: string[];
+  tagIds?: string[];
 
+  @Expose()
   @IsString()
   @IsOptional()
   content?: string;
 
+  @Expose()
   @IsObject()
   @IsOptional()
   attrs?: Record<string, any>;
+
+  @Expose({ name: 'oss_path' })
+  @IsString()
+  @IsOptional()
+  ossPath?: string;
 }

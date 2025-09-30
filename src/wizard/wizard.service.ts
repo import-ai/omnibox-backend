@@ -115,13 +115,13 @@ export class WizardService {
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace_id,
       resourceType: ResourceType.LINK,
       parentId: parentId,
       attrs: { url },
     };
     const resource = await this.namespaceResourcesService.create(
       userId,
+      namespace_id,
       resourceDto,
     );
 
@@ -166,13 +166,13 @@ export class WizardService {
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId: namespace_id,
       resourceType: ResourceType.LINK,
       parentId: parentId,
       attrs: { url },
     };
     const resource = await this.namespaceResourcesService.create(
       userId,
+      namespace_id,
       resourceDto,
     );
 

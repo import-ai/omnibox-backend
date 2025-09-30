@@ -10,10 +10,10 @@ export class UploadsService {
   private readonly bucket: string | undefined;
 
   constructor(configService: ConfigService) {
-    const accessKeyId = configService.get('ALIYUN_ACCESS_KEY_ID');
-    const accessKeySecret = configService.get('ALIYUN_ACCESS_KEY_SECRET');
-    this.arn = configService.get('ALIYUN_OSS_ARN');
-    this.bucket = configService.get('ALIYUN_OSS_BUCKET');
+    const accessKeyId = configService.get('OBB_ALIYUN_ACCESS_KEY_ID');
+    const accessKeySecret = configService.get('OBB_ALIYUN_ACCESS_KEY_SECRET');
+    this.arn = configService.get('OBB_ALIYUN_OSS_ARN');
+    this.bucket = configService.get('OBB_ALIYUN_OSS_BUCKET');
     if (accessKeyId && accessKeySecret) {
       this.sts = new STS({
         accessKeyId,

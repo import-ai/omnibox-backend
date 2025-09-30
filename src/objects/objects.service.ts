@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import OSS, { Credentials, STS } from 'ali-oss';
+import { Credentials, STS } from 'ali-oss';
+import * as OSS from 'ali-oss';
 import { UploadInfoDto } from './dto/upload-info.dto';
 import { Readable } from 'stream';
 

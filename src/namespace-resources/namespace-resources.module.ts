@@ -13,6 +13,8 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { FileResourcesController } from './file-resources.controller';
+import { ObjectsModule } from 'omniboxd/objects/objects.module';
 
 @Module({
   exports: [NamespaceResourcesService],
@@ -21,7 +23,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     NamespaceResourcesController,
     InternalResourcesController,
     OpenResourcesController,
-    // FileResourcesController,
+    FileResourcesController,
   ],
   imports: [
     TypeOrmModule.forFeature([Resource]),
@@ -30,6 +32,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     TagModule,
     PermissionsModule,
     MinioModule,
+    ObjectsModule,
     TasksModule,
     ResourceAttachmentsModule,
     ResourcesModule,

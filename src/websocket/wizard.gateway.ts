@@ -19,6 +19,7 @@ import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
     credentials: true,
   },
   namespace: '/wizard',
+  path: '/api/v1/socket.io',
 })
 export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()

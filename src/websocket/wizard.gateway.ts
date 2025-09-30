@@ -12,6 +12,7 @@ import { Logger, UseGuards } from '@nestjs/common';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
+import { Span } from 'nestjs-otel';
 
 @WebSocketGateway({
   cors: {
@@ -37,6 +38,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('ask')
+  @Span('SOCKET /api/v1/socket.io/wizard/ask')
   async handleAsk(
     @MessageBody() data: AgentRequestDto,
     @ConnectedSocket() client: Socket,
@@ -46,6 +48,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('write')
+  @Span('SOCKET /api/v1/socket.io/wizard/write')
   async handleWrite(
     @MessageBody() data: AgentRequestDto,
     @ConnectedSocket() client: Socket,

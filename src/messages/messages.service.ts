@@ -46,14 +46,14 @@ export class MessagesService {
   async create(
     namespaceId: string,
     conversationId: string,
-    user: User,
+    userId: string,
     dto: CreateMessageDto,
     index: boolean = true,
   ): Promise<Message> {
     const message = this.messageRepository.create({
       message: dto.message,
       conversationId,
-      userId: user.id,
+      userId: userId,
       parentId: dto.parentId,
       attrs: dto.attrs,
     });
@@ -61,7 +61,7 @@ export class MessagesService {
       const savedMsg = await manager.save(message);
       await this.index(
         index,
-        user.id,
+        userId,
         namespaceId,
         conversationId,
         savedMsg,

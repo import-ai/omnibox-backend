@@ -47,12 +47,12 @@ export class WizardController {
   @Post('ask')
   @Sse()
   async ask(
-    @Req() req,
+    @UserId() userId: string,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
     return await this.wizardService.streamService.agentStreamWrapper(
-      req.user,
+      userId,
       body,
       requestId,
       'ask',
@@ -62,12 +62,12 @@ export class WizardController {
   @Post('write')
   @Sse()
   async write(
-    @Req() req,
+    @UserId() userId: string,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
     return await this.wizardService.streamService.agentStreamWrapper(
-      req.user,
+      userId,
       body,
       requestId,
       'write',

@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Param, Post, Req } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { CreateMessageDto } from './dto/create-message.dto';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller(
   'api/v1/namespaces/:namespaceId/conversations/:conversationId/messages',
@@ -10,7 +11,7 @@ export class MessagesController {
 
   @Post()
   async create(
-    @Req() req,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('conversationId') conversationId: string,
     @Body() dto: CreateMessageDto,
@@ -18,7 +19,7 @@ export class MessagesController {
     return await this.messagesService.create(
       namespaceId,
       conversationId,
-      req.user,
+      userId,
       dto,
     );
   }

@@ -112,6 +112,10 @@ export class WechatBot extends BaseApp {
               APIKeyPermissionType.READ,
             ],
           },
+          {
+            target: APIKeyPermissionTarget.CHAT,
+            permissions: [APIKeyPermissionType.CREATE],
+          },
         ],
       },
     });

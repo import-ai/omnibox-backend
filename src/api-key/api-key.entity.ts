@@ -10,6 +10,7 @@ export enum APIKeyPermissionType {
 
 export enum APIKeyPermissionTarget {
   RESOURCES = 'resources',
+  CHAT = 'chat',
 }
 
 export type APIKeyPermission = {

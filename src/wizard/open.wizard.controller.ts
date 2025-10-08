@@ -5,6 +5,7 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { RequestId } from 'omniboxd/decorators/request-id.decorators';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
@@ -16,11 +17,16 @@ import {
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
 import { OpenCollectRequestDto } from 'omniboxd/wizard/dto/open-collect-request.dto';
+import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 
 @Controller('open/api/v1/wizard')
 export class OpenWizardController {
-  constructor(private readonly wizardService: WizardService) {}
+  constructor(
+    private readonly wizardService: WizardService,
+    private readonly openWizardService: OpenWizardService,
+  ) {}
 
   @Post('collect')
   @APIKeyAuth({
@@ -47,6 +53,29 @@ export class OpenWizardController {
         parentId: data.parentId || apiKey.attrs.root_resource_id,
       } as CompressedCollectRequestDto,
       compressedHtml,
+    );
+  }
+
+  @Post('ask')
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.CHAT,
+        permissions: [APIKeyPermissionType.CREATE],
+      },
+    ],
+  })
+  async ask(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @RequestId() requestId: string,
+    @Body() data: OpenAgentRequestDto,
+  ): Promise<any> {
+    return await this.openWizardService.ask(
+      userId,
+      apiKey.namespaceId,
+      requestId,
+      data,
     );
   }
 }

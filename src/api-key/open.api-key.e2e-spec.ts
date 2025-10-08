@@ -1,7 +1,7 @@
 import { TestClient } from 'test/test-client';
 import { APIKeyPermissionType } from './api-key.entity';
 
-describe('APIKeyController (e2e)', () => {
+describe('OpenAPIKeyController (e2e)', () => {
   let client: TestClient;
 
   beforeAll(async () => {

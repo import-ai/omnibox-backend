@@ -106,6 +106,10 @@ export class OpenWizardService {
       } else if (chunk.response_type === 'eos' && currentMessage) {
         messages.push(currentMessage);
         currentMessage = null;
+      } else if (chunk.response_type === 'done') {
+        // Done
+      } else {
+        throw new Error(`Invalid response_type = ${chunk.response_type}`);
       }
     }
 

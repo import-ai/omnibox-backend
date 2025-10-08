@@ -1,7 +1,6 @@
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import {
   PrivateSearchToolDto,
-  ToolDto,
   WebSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 

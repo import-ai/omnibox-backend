@@ -343,7 +343,7 @@ export class StreamService {
         complete: () => {
           resolve(chunks);
         },
-        error: (error) => {
+        error: (error: Error) => {
           reject(error);
         },
       });

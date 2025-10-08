@@ -323,4 +323,30 @@ export class StreamService {
       );
     }
   }
+
+  async chat(
+    userId: string,
+    body: AgentRequestDto,
+    requestId: string,
+    mode: 'ask' | 'write' = 'ask',
+  ): Promise<any> {
+    const observable = await this.agentStream(userId, body, requestId, mode);
+
+    const chunks: ChatResponse[] = [];
+
+    return new Promise((resolve, reject) => {
+      observable.subscribe({
+        next: (event: MessageEvent) => {
+          const chunk: ChatResponse = JSON.parse(event.data as string);
+          chunks.push(chunk);
+        },
+        complete: () => {
+          resolve(chunks);
+        },
+        error: (error) => {
+          reject(error);
+        },
+      });
+    });
+  }
 }

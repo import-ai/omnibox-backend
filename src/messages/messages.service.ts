@@ -138,6 +138,12 @@ export class MessagesService {
     });
   }
 
+  async findOne(id: string) {
+    return await this.messageRepository.findOneOrFail({
+      where: { id },
+    });
+  }
+
   async remove(conversationId: string, messageId: string, user: User) {
     return await this.messageRepository.softDelete({
       id: messageId,

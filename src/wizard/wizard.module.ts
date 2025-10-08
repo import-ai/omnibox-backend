@@ -14,15 +14,18 @@ import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { MinioModule } from 'omniboxd/minio/minio.module';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
+import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
+import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 
 @Module({
-  providers: [WizardService, ChunkManagerService],
+  providers: [WizardService, ChunkManagerService, OpenWizardService],
   imports: [
     UserModule,
     NamespacesModule,
     NamespaceResourcesModule,
     TagModule,
     MessagesModule,
+    ConversationsModule,
     AttachmentsModule,
     TasksModule,
     MinioModule,

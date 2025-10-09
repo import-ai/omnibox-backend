@@ -289,7 +289,7 @@ export class StreamService {
       if (reqResource.type === 'folder') {
         const subResources = await this.resourcesService.getSubResources(
           share.namespaceId,
-          reqResource.id,
+          [reqResource.id],
         );
         reqResource.child_ids = subResources.map((r) => r.id);
         visibleResources.push(
@@ -380,7 +380,7 @@ export class StreamService {
   ): Promise<Observable<MessageEvent>> {
     try {
       for (const tool of requestDto.tools || []) {
-        if (tool.name == 'private_search') {
+        if (tool.name === 'private_search') {
           tool.visible_resources = await this.getUserVisibleResources(
             namespaceId,
             userId,
@@ -438,7 +438,13 @@ export class StreamService {
     requestId: string,
     mode: 'ask' | 'write' = 'ask',
   ): Promise<any> {
-    const observable = await this.createUserAgentStream(userId, namespaceId, body, requestId, mode);
+    const observable = await this.createUserAgentStream(
+      userId,
+      namespaceId,
+      body,
+      requestId,
+      mode,
+    );
 
     const chunks: ChatResponse[] = [];
 

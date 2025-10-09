@@ -8,7 +8,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, UseGuards } from '@nestjs/common';
+import { Logger, UseGuards, ValidationPipe } from '@nestjs/common';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
@@ -41,9 +41,10 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @Span('SOCKET /api/v1/socket.io/wizard/ask')
   async handleAsk(
     @MessageBody() data: AgentRequestDto,
+    @MessageBody('namespace_id', new ValidationPipe()) namespaceId: string,
     @ConnectedSocket() client: Socket,
   ) {
-    await this.handleAgentStream(client, data, 'ask');
+    await this.handleAgentStream(client, namespaceId, data, 'ask');
   }
 
   @UseGuards(WsJwtGuard)
@@ -51,26 +52,30 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @Span('SOCKET /api/v1/socket.io/wizard/write')
   async handleWrite(
     @MessageBody() data: AgentRequestDto,
+    @MessageBody('namespace_id', new ValidationPipe()) namespaceId: string,
     @ConnectedSocket() client: Socket,
   ) {
-    await this.handleAgentStream(client, data, 'write');
+    await this.handleAgentStream(client, namespaceId, data, 'write');
   }
 
   private async handleAgentStream(
     client: Socket,
-    data: AgentRequestDto,
+    namespaceId: string,
+    agentRequest: AgentRequestDto,
     eventType: 'ask' | 'write',
   ) {
     const userId = client.data.userId;
     const requestId = client.handshake.headers['x-request-id'] as string;
 
     try {
-      const observable = await this.wizardService.streamService.agentStream(
-        userId,
-        data,
-        requestId,
-        eventType,
-      );
+      const observable =
+        await this.wizardService.streamService.createUserAgentStream(
+          userId,
+          namespaceId,
+          agentRequest,
+          requestId,
+          eventType,
+        );
 
       observable.subscribe({
         next: (message) => {

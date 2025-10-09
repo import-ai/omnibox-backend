@@ -71,10 +71,12 @@ export class SharesService {
     if (!resource) {
       throw new NotFoundException(`No share found with id ${share.id}`);
     }
-    const namespace = await this.namespacesService.get(share.namespaceId);
+    const namespace = await this.namespacesService.getNamespace(
+      share.namespaceId,
+    );
     const subResources = await this.resourcesService.getSubResources(
       share.namespaceId,
-      share.resourceId,
+      [share.resourceId],
     );
     const resourceMeta = SharedResourceMetaDto.fromResourceMeta(
       resource,

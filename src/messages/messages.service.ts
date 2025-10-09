@@ -39,14 +39,16 @@ export class MessagesService {
     });
     return await this.dataSource.transaction(async (manager) => {
       const savedMsg = await manager.save(message);
-      await this.index(
-        index,
-        userId,
-        namespaceId,
-        conversationId,
-        savedMsg,
-        manager,
-      );
+      if (index && userId) {
+        await this.wizardTaskService.createMessageIndexTask(
+          TASK_PRIORITY,
+          userId,
+          namespaceId,
+          conversationId,
+          savedMsg,
+          manager.getRepository(Task),
+        );
+      }
       return savedMsg;
     });
   }

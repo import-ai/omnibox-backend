@@ -127,7 +127,7 @@ export class ResourcesService {
     namespaceId: string,
     resourceId: string,
   ): Promise<ResourceMetaDto[]> {
-    const children = await this.getSubResources(namespaceId, resourceId);
+    const children = await this.getSubResources(namespaceId, [resourceId]);
     const allResources: ResourceMetaDto[] = [...children];
 
     for (const child of children) {
@@ -136,28 +136,6 @@ export class ResourcesService {
     }
 
     return allResources;
-  }
-
-  async getResourceMeta(
-    namespaceId: string,
-    resourceId: string,
-  ): Promise<ResourceMetaDto | null> {
-    const resource = await this.resourceRepository.findOne({
-      select: [
-        'id',
-        'name',
-        'parentId',
-        'resourceType',
-        'globalPermission',
-        'createdAt',
-        'updatedAt',
-      ],
-      where: { namespaceId, id: resourceId },
-    });
-    if (!resource) {
-      return null;
-    }
-    return ResourceMetaDto.fromEntity(resource);
   }
 
   async getResource(

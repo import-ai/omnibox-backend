@@ -45,7 +45,7 @@ export class CollectController {
   async collectGzip(
     @UserId() userId: string,
     @Body() data: CompressedCollectRequestDto,
-    @Body('namespaceId', new ValidationPipe()) namespaceId: string,
+    @Body('namespace_id', new ValidationPipe()) namespaceId: string,
     @UploadedFile() zHtml: Express.Multer.File,
   ): Promise<CollectResponseDto> {
     return await this.wizardService.compressedCollect(

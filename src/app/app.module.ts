@@ -56,6 +56,7 @@ import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WebSocketModule } from 'omniboxd/websocket/websocket.module';
 import { NullableUserId1757844448000 } from 'omniboxd/migrations/1757844448000-nullable-user-id';
 import { AddShareIdToConversations1757844449000 } from 'omniboxd/migrations/1757844449000-add-share-id-to-conversations';
+import { ShareUser1760171824000 } from 'omniboxd/migrations/1760171824000-share-user';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -152,6 +153,7 @@ export class AppModule implements NestModule {
               Feedback1757100000000,
               NullableUserId1757844448000,
               AddShareIdToConversations1757844449000,
+              ShareUser1760171824000,
               ...extraMigrations,
             ],
             migrationsRun: true,

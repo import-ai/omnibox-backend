@@ -30,12 +30,12 @@ export class OpenWizardService {
     const agentRequest: AgentRequestDto = {
       ...data,
       conversation_id: conversationId,
-      namespace_id: namespaceId,
       enable_thinking: data.enable_thinking ?? false,
     };
 
     const chunks: ChatResponse[] = await this.wizardService.streamService.chat(
       userId,
+      namespaceId,
       agentRequest,
       requestId,
       'ask',

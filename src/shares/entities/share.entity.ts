@@ -24,6 +24,9 @@ export class Share extends Base {
   @Column()
   resourceId: string;
 
+  @Column('uuid', { nullable: true })
+  userId: string | null;
+
   @Column()
   enabled: boolean;
 

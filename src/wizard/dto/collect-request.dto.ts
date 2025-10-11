@@ -11,10 +11,6 @@ export class CompressedCollectRequestDto {
 
   @IsString()
   @IsNotEmpty()
-  namespace_id: string;
-
-  @IsString()
-  @IsNotEmpty()
   parentId: string;
 }
 

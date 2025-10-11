@@ -11,14 +11,19 @@ import { Repository } from 'typeorm';
 import { ShareInfoDto } from './dto/share-info.dto';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-info.dto';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { UserService } from 'omniboxd/user/user.service';
 
 @Injectable()
 export class SharesService {
   constructor(
     @InjectRepository(Share)
     private readonly shareRepo: Repository<Share>,
-    private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
+    private readonly namespacesService: NamespacesService,
+    private readonly userService: UserService,
   ) {}
 
   async getShareById(shareId: string): Promise<Share | null> {
@@ -35,7 +40,7 @@ export class SharesService {
     userId?: string,
   ) {
     const share = await this.getShareById(shareId);
-    if (!share || !share.enabled) {
+    if (!share || !share.enabled || !share.userId) {
       throw new NotFoundException(`No share found with id ${shareId}`);
     }
 
@@ -60,14 +65,28 @@ export class SharesService {
     return share;
   }
 
-  async getPublicShareInfo(
-    shareId: string,
-    password?: string,
-    userId?: string,
-  ): Promise<PublicShareInfoDto> {
-    const share = await this.getAndValidateShare(shareId, password, userId);
-    const resource = await this.namespaceResourcesService.get(share.resourceId);
-    return PublicShareInfoDto.fromEntity(share, resource);
+  async getPublicShareInfo(share: Share): Promise<PublicShareInfoDto> {
+    const resource = await this.resourcesService.getResourceMeta(
+      share.namespaceId,
+      share.resourceId,
+    );
+    if (!resource) {
+      throw new NotFoundException(`No share found with id ${share.id}`);
+    }
+    const subResources = await this.resourcesService.getSubResources(
+      share.namespaceId,
+      [share.resourceId],
+    );
+    const resourceMeta = SharedResourceMetaDto.fromResourceMeta(
+      resource,
+      subResources.length > 0,
+    );
+    const user = await this.userService.find(share.userId!);
+    return PublicShareInfoDto.fromResourceMeta(
+      share,
+      resourceMeta,
+      user.username!,
+    );
   }
 
   async getShareInfo(
@@ -87,6 +106,7 @@ export class SharesService {
   }
 
   async updateShareInfo(
+    userId: string,
     namespaceId: string,
     resourceId: string,
     req: UpdateShareInfoReqDto,
@@ -111,6 +131,7 @@ export class SharesService {
     }
     if (req.enabled !== undefined) {
       share.enabled = req.enabled;
+      share.userId = userId;
     }
     if (req.allResources !== undefined) {
       share.allResources = req.allResources;

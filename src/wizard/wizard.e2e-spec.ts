@@ -33,7 +33,7 @@ describe('WizardController (e2e)', () => {
     await client.close();
   });
 
-  describe('POST /api/v1/wizard/collect', () => {
+  describe('POST /api/v1/namespaces/:namespaceId/wizard/collect', () => {
     it('should collect web content successfully', async () => {
       const collectData = {
         html: '<html><body><h1>Test Page</h1><p>This is test content.</p></body></html>',
@@ -44,7 +44,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -62,7 +62,7 @@ describe('WizardController (e2e)', () => {
       };
 
       await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(incompleteData)
         .expect(HttpStatus.BAD_REQUEST);
     });
@@ -77,7 +77,7 @@ describe('WizardController (e2e)', () => {
       };
 
       await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(emptyData)
         .expect(HttpStatus.BAD_REQUEST);
     });
@@ -92,7 +92,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -101,7 +101,7 @@ describe('WizardController (e2e)', () => {
     });
   });
 
-  describe('POST /api/v1/wizard/ask', () => {
+  describe('POST /api/v1/namespaces/:namespaceId/wizard/ask', () => {
     it('should handle ask request with valid data', async () => {
       const askData = {
         query: 'What is the meaning of life?',
@@ -117,7 +117,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/ask')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
         .set('X-Request-Id', 'test-request-123')
         .send(askData);
 
@@ -140,7 +140,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/ask')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
         .set('X-Request-Id', 'test-request-456')
         .send(askData);
 
@@ -163,7 +163,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/ask')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
         .set('X-Request-Id', 'test-request-789')
         .send(askData);
 
@@ -181,7 +181,9 @@ describe('WizardController (e2e)', () => {
 
       // Note: The RequestId decorator returns undefined if header is missing,
       // but the service might handle this gracefully
-      const response = await client.post('/api/v1/wizard/ask').send(askData);
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
+        .send(askData);
 
       // The endpoint might still work without X-Request-Id
       expect([
@@ -192,7 +194,7 @@ describe('WizardController (e2e)', () => {
     });
   });
 
-  describe('POST /api/v1/wizard/write', () => {
+  describe('POST /api/v1/namespaces/:namespaceId/wizard/write', () => {
     it('should handle write request with valid data', async () => {
       const writeData = {
         query: 'Write a summary of the uploaded document',
@@ -208,7 +210,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/write')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/write`)
         .set('X-Request-Id', 'test-write-request-123')
         .send(writeData);
 
@@ -233,7 +235,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/write')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/write`)
         .set('X-Request-Id', 'test-write-request-456')
         .send(writeData);
 
@@ -253,7 +255,7 @@ describe('WizardController (e2e)', () => {
 
       await client
         .request()
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.UNAUTHORIZED);
     });
@@ -269,7 +271,7 @@ describe('WizardController (e2e)', () => {
 
       await client
         .request()
-        .post('/api/v1/wizard/ask')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
         .send(askData)
         .expect(HttpStatus.UNAUTHORIZED);
     });
@@ -285,7 +287,7 @@ describe('WizardController (e2e)', () => {
 
       await client
         .request()
-        .post('/api/v1/wizard/write')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/write`)
         .send(writeData)
         .expect(HttpStatus.UNAUTHORIZED);
     });
@@ -302,7 +304,7 @@ describe('WizardController (e2e)', () => {
       };
 
       await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(invalidData)
         .expect(HttpStatus.BAD_REQUEST);
     });
@@ -317,7 +319,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/ask')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
         .set('X-Request-Id', 'test-request')
         .send(invalidData);
 
@@ -331,13 +333,15 @@ describe('WizardController (e2e)', () => {
     });
   });
 
-  describe('POST /api/v1/wizard/*path (proxy)', () => {
+  describe('POST /api/v1/namespaces/:namespaceId/wizard/*path (proxy)', () => {
     it('should handle proxy requests', async () => {
       // Note: This test might fail if the wizard service is not running
       // or if the proxy path doesn't exist. In a real test environment,
       // you might want to mock the wizard service.
       const response = await client
-        .post('/api/v1/wizard/test-proxy-path')
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/wizard/test-proxy-path`,
+        )
         .send({ test: 'data' });
 
       // The response status depends on the wizard service implementation
@@ -364,7 +368,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData);
 
       // Should either succeed or fail gracefully
@@ -385,7 +389,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -403,7 +407,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/ask')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
         .set('X-Request-Id', 'test-empty-query-request')
         .send(askData);
 
@@ -420,16 +424,16 @@ describe('WizardController (e2e)', () => {
         html: '<html><body>Test</body></html>',
         url: 'https://example.com',
         title: 'Test',
-        namespace_id: 'invalid-namespace-id',
+        namespace_id: client.namespace.id,
         parentId: client.namespace.root_resource_id,
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/invalid-namespace-id/wizard/collect`)
         .send(collectData);
 
-      // Invalid namespace_id results in permission error (403) rather than validation error (400)
-      expect([HttpStatus.BAD_REQUEST, HttpStatus.FORBIDDEN]).toContain(
+      // Invalid namespace_id in URL results in not found error (404) or forbidden error (403)
+      expect([HttpStatus.NOT_FOUND, HttpStatus.FORBIDDEN]).toContain(
         response.status,
       );
     });
@@ -444,7 +448,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData);
 
       // Invalid parent_id results in not-found error (404) rather than validation error (400)
@@ -477,7 +481,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/ask')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
         .set('X-Request-Id', 'test-specific-resources-request')
         .send(askData);
 
@@ -502,7 +506,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/ask')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/ask`)
         .set('X-Request-Id', 'test-time-constraints-request')
         .send(askData);
 
@@ -538,7 +542,7 @@ describe('WizardController (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/write')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/write`)
         .set('X-Request-Id', 'test-mixed-tools-request')
         .send(writeData);
 

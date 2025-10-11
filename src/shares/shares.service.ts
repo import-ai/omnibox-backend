@@ -14,6 +14,7 @@ import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-i
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { UserService } from 'omniboxd/user/user.service';
 
 @Injectable()
 export class SharesService {
@@ -22,6 +23,7 @@ export class SharesService {
     private readonly shareRepo: Repository<Share>,
     private readonly resourcesService: ResourcesService,
     private readonly namespacesService: NamespacesService,
+    private readonly userService: UserService,
   ) {}
 
   async getShareById(shareId: string): Promise<Share | null> {
@@ -82,10 +84,18 @@ export class SharesService {
       resource,
       subResources.length > 0,
     );
+    let username: string | undefined = undefined;
+    if (share.userId) {
+      const user = await this.userService.find(share.userId);
+      if (user.username) {
+        username = user.username;
+      }
+    }
     return PublicShareInfoDto.fromResourceMeta(
       share,
       resourceMeta,
       namespace.name,
+      username,
     );
   }
 
@@ -106,6 +116,7 @@ export class SharesService {
   }
 
   async updateShareInfo(
+    userId: string,
     namespaceId: string,
     resourceId: string,
     req: UpdateShareInfoReqDto,
@@ -130,6 +141,7 @@ export class SharesService {
     }
     if (req.enabled !== undefined) {
       share.enabled = req.enabled;
+      share.userId = userId;
     }
     if (req.allResources !== undefined) {
       share.allResources = req.allResources;

@@ -16,6 +16,7 @@ import {
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/share')
 export class ResourceSharesController {
@@ -23,7 +24,6 @@ export class ResourceSharesController {
 
   @Get()
   async getShareInfo(
-    @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
@@ -32,12 +32,13 @@ export class ResourceSharesController {
 
   @Patch()
   async updateShareInfo(
-    @Req() req,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Body() updateReq: UpdateShareInfoReqDto,
   ) {
     return await this.sharesService.updateShareInfo(
+      userId,
       namespaceId,
       resourceId,
       updateReq,

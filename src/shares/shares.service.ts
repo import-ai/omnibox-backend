@@ -40,7 +40,7 @@ export class SharesService {
     userId?: string,
   ) {
     const share = await this.getShareById(shareId);
-    if (!share || !share.enabled) {
+    if (!share || !share.enabled || !share.userId) {
       throw new NotFoundException(`No share found with id ${shareId}`);
     }
 
@@ -73,9 +73,6 @@ export class SharesService {
     if (!resource) {
       throw new NotFoundException(`No share found with id ${share.id}`);
     }
-    const namespace = await this.namespacesService.getNamespace(
-      share.namespaceId,
-    );
     const subResources = await this.resourcesService.getSubResources(
       share.namespaceId,
       [share.resourceId],
@@ -84,18 +81,11 @@ export class SharesService {
       resource,
       subResources.length > 0,
     );
-    let username: string | undefined = undefined;
-    if (share.userId) {
-      const user = await this.userService.find(share.userId);
-      if (user.username) {
-        username = user.username;
-      }
-    }
+    const user = await this.userService.find(share.userId!);
     return PublicShareInfoDto.fromResourceMeta(
       share,
       resourceMeta,
-      namespace.name,
-      username,
+      user.username!,
     );
   }
 

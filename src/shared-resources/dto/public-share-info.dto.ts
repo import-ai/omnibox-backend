@@ -12,26 +12,21 @@ export class PublicShareInfoDto {
   @Expose({ name: 'share_type' })
   shareType: ShareType;
 
-  @Expose({ name: 'namespace_name' })
-  namespaceName: string;
-
   @Expose()
   resource: SharedResourceMetaDto;
 
   @Expose()
-  username?: string;
+  username: string;
 
   static fromResourceMeta(
     share: Share,
     resource: SharedResourceMetaDto,
-    namespaceName: string,
-    username?: string,
+    username: string,
   ): PublicShareInfoDto {
     const dto = new PublicShareInfoDto();
     dto.id = share.id;
     dto.allResources = share.allResources;
     dto.shareType = share.shareType;
-    dto.namespaceName = namespaceName;
     dto.resource = resource;
     dto.username = username;
     return dto;

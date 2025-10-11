@@ -1,10 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
 import {
-  encodeFileName,
-  getOriginalFileName,
-} from 'omniboxd/utils/encode-filename';
-import {
   DataSource,
   EntityManager,
   FindOptionsWhere,
@@ -658,8 +654,9 @@ export class NamespaceResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    const originalName = getOriginalFileName(fileName);
-    const encodedName = encodeFileName(fileName);
+    const originalName = decodeURIComponent(fileName);
+    const encodedName = fileName;
+
     let resource: Resource;
     if (resourceId) {
       resource = await this.get(resourceId);
@@ -708,12 +705,13 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     file: Express.Multer.File,
+    fileName: string,
     parentId?: string,
     resourceId?: string,
     source?: string,
   ) {
-    const originalFilename = getOriginalFileName(file.originalname);
-    const encodedFilename = encodeFileName(file.originalname);
+    const originalFilename = decodeURIComponent(fileName);
+    const encodedFilename = fileName;
 
     let resource: Resource;
     if (resourceId) {

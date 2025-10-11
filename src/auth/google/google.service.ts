@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { SocialService } from 'omniboxd/auth/social.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import {
   BadRequestException,
   Injectable,
@@ -192,8 +193,9 @@ export class GoogleService extends SocialService {
           username,
           loginType: 'google',
           loginId: userData.sub,
+          email: userData.email,
           lang,
-        },
+        } as CreateUserBindingDto,
         manager,
       );
 

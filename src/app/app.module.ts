@@ -42,6 +42,7 @@ import { ApiKeys1754550165406 } from 'omniboxd/migrations/1754550165406-api-keys
 import { ResourceAttachments1755059371000 } from 'omniboxd/migrations/1755059371000-resource-attachments';
 import { AddTagIdsToResources1755248141570 } from 'omniboxd/migrations/1755248141570-add-tag-ids-to-resources';
 import { TelemetryModule } from 'omniboxd/telemetry';
+import { SeoModule } from 'omniboxd/seo/seo.module';
 import { CleanResourceNames1755396702021 } from 'omniboxd/migrations/1755396702021-clean-resource-names';
 import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/1755499552000-update-attachment-urls';
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
@@ -108,6 +109,7 @@ export class AppModule implements NestModule {
         AttachmentsModule,
         SharesModule,
         SharedResourcesModule,
+        SeoModule,
         TraceModule,
         FeedbackModule,
         ApplicationsModule,

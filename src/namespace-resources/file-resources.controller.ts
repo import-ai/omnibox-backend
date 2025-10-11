@@ -27,6 +27,7 @@ export class FileResourcesController {
   async uploadFile(
     @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
+    @Body('file_name') fileName: string,
     @Body('namespace_id') namespaceId: string,
     @Body('parent_id') parentId: string,
   ) {
@@ -34,6 +35,7 @@ export class FileResourcesController {
       userId,
       namespaceId,
       file,
+      fileName,
       parentId,
       undefined,
     );
@@ -104,6 +106,7 @@ export class FileResourcesController {
   async patchFile(
     @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
+    @Body('file_name') fileName: string,
     @Body('namespace_id') namespaceId: string,
     @Body('resource_id') resourceId: string,
   ) {
@@ -111,6 +114,7 @@ export class FileResourcesController {
       userId,
       namespaceId,
       file,
+      fileName,
       undefined,
       resourceId,
     );

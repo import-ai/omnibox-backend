@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { UserService } from 'omniboxd/user/user.service';
 import { SocialService } from 'omniboxd/auth/social.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import {
   Logger,
   Injectable,
@@ -184,7 +185,7 @@ export class WechatService extends SocialService {
           loginType: 'wechat',
           loginId: userData.unionid,
           lang,
-        },
+        } as CreateUserBindingDto,
         manager,
       );
       await this.namespaceService.createUserNamespace(

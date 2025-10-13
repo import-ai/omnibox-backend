@@ -1,11 +1,11 @@
 import {
-  ClassSerializerInterceptor,
   DynamicModule,
   MiddlewareConsumer,
   Module,
   NestModule,
   ValidationPipe,
 } from '@nestjs/common';
+import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.interceptor';
 import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omniboxd/tag/tag.module';
@@ -77,7 +77,7 @@ export class AppModule implements NestModule {
         },
         {
           provide: APP_INTERCEPTOR,
-          useClass: ClassSerializerInterceptor,
+          useClass: SerializerInterceptor,
         },
         {
           provide: APP_INTERCEPTOR,

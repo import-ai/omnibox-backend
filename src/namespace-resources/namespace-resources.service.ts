@@ -37,6 +37,10 @@ import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resour
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
+import {
+  encodeFileName,
+  getOriginalFileName,
+} from 'omniboxd/utils/encode-filename';
 
 const TASK_PRIORITY = 5;
 
@@ -654,8 +658,8 @@ export class NamespaceResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    const originalName = decodeURIComponent(fileName);
-    const encodedName = fileName;
+    const originalName = getOriginalFileName(fileName);
+    const encodedName = encodeFileName(fileName);
 
     let resource: Resource;
     if (resourceId) {
@@ -705,13 +709,12 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     file: Express.Multer.File,
-    fileName: string,
     parentId?: string,
     resourceId?: string,
     source?: string,
   ) {
-    const originalFilename = decodeURIComponent(fileName);
-    const encodedFilename = fileName;
+    const originalFilename = getOriginalFileName(file.originalname);
+    const encodedFilename = encodeFileName(file.originalname);
 
     let resource: Resource;
     if (resourceId) {

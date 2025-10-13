@@ -9,9 +9,12 @@ export class Conversation extends Base {
   @Column()
   namespaceId: string;
 
-  @Column()
-  userId: string;
+  @Column('varchar', { nullable: true })
+  userId: string | null;
 
   @Column()
   title: string;
+
+  @Column('varchar', { nullable: true })
+  shareId: string | null;
 }

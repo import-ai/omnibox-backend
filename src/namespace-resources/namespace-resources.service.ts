@@ -814,24 +814,4 @@ export class NamespaceResourcesService {
     );
     fileStream.pipe(response);
   }
-
-  async getResourceChildren(
-    namespaceId: string,
-    resourceId: string,
-  ): Promise<Resource[]> {
-    return await this.resourceRepository.find({
-      where: {
-        namespaceId,
-        parentId: resourceId,
-      },
-      select: [
-        'id',
-        'name',
-        'parentId',
-        'resourceType',
-        'createdAt',
-        'updatedAt',
-      ],
-    });
-  }
 }

@@ -374,7 +374,7 @@ describe('Task Pipeline (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -439,7 +439,7 @@ describe('Task Pipeline (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -496,12 +496,12 @@ describe('Task Pipeline (e2e)', () => {
 
       // Create two tasks
       const response1 = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData1)
         .expect(HttpStatus.CREATED);
 
       const response2 = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData2)
         .expect(HttpStatus.CREATED);
 
@@ -553,7 +553,7 @@ describe('Task Pipeline (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -587,7 +587,7 @@ describe('Task Pipeline (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -726,12 +726,12 @@ describe('Task Pipeline (e2e)', () => {
 
       // Create tasks in sequence
       const response1 = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData1)
         .expect(HttpStatus.CREATED);
 
       const response2 = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData2)
         .expect(HttpStatus.CREATED);
 
@@ -770,7 +770,7 @@ describe('Task Pipeline (e2e)', () => {
         };
 
         const response = await client
-          .post('/api/v1/wizard/collect')
+          .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
           .send(collectData)
           .expect(HttpStatus.CREATED);
 
@@ -817,7 +817,7 @@ describe('Task Pipeline (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -858,7 +858,7 @@ describe('Task Pipeline (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 
@@ -908,7 +908,7 @@ describe('Task Pipeline (e2e)', () => {
       };
 
       const response = await client
-        .post('/api/v1/wizard/collect')
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
         .send(collectData)
         .expect(HttpStatus.CREATED);
 

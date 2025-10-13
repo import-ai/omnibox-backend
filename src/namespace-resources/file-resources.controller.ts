@@ -37,7 +37,7 @@ export class FileResourcesController {
       parentId,
       undefined,
     );
-    return await this.namespaceResourcesService.getPath({
+    return await this.namespaceResourcesService.getResource({
       namespaceId,
       userId,
       resourceId: newResource.id,
@@ -92,7 +92,7 @@ export class FileResourcesController {
       mimetype,
       parentId,
     );
-    return await this.namespaceResourcesService.getPath({
+    return await this.namespaceResourcesService.getResource({
       namespaceId,
       userId: req.user!.id,
       resourceId: newResource.id,

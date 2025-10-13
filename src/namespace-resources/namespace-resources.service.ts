@@ -202,8 +202,11 @@ export class NamespaceResourcesService {
     );
   }
 
-  async duplicate(userId: string, resourceId: string) {
-    const resource = await this.get(resourceId);
+  async duplicate(userId: string, namespaceId: string, resourceId: string) {
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
     if (!resource.parentId) {
       throw new BadRequestException('Cannot duplicate root resource.');
     }
@@ -494,7 +497,7 @@ export class NamespaceResourcesService {
     return count > 0 ? SpaceType.TEAM : SpaceType.PRIVATE;
   }
 
-  async getPath({
+  async getResource({
     userId,
     namespaceId,
     resourceId,
@@ -503,7 +506,10 @@ export class NamespaceResourcesService {
     namespaceId: string;
     resourceId: string;
   }): Promise<ResourceDto> {
-    const resource = await this.get(resourceId);
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
     if (resource.namespaceId !== namespaceId) {
       throw new NotFoundException('Not found');
     }
@@ -541,18 +547,6 @@ export class NamespaceResourcesService {
     );
   }
 
-  async get(id: string) {
-    const resource = await this.resourceRepository.findOne({
-      where: {
-        id,
-      },
-    });
-    if (!resource) {
-      throw new NotFoundException('Resource not found.');
-    }
-    return resource;
-  }
-
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {
     await this.resourcesService.updateResource(
       data.namespaceId,
@@ -567,8 +561,11 @@ export class NamespaceResourcesService {
     );
   }
 
-  async delete(userId: string, id: string) {
-    const resource = await this.get(id);
+  async delete(userId: string, namespaceId: string, id: string) {
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      id,
+    );
     if (!resource.parentId) {
       throw new BadRequestException('Cannot delete root resource.');
     }
@@ -658,7 +655,10 @@ export class NamespaceResourcesService {
     const encodedName = encodeFileName(fileName);
     let resource: Resource;
     if (resourceId) {
-      resource = await this.get(resourceId);
+      resource = await this.resourcesService.getResourceOrFail(
+        namespaceId,
+        resourceId,
+      );
       if (resource.resourceType !== ResourceType.FILE) {
         throw new BadRequestException('Resource is not a file.');
       }
@@ -714,7 +714,10 @@ export class NamespaceResourcesService {
 
     let resource: Resource;
     if (resourceId) {
-      resource = await this.get(resourceId);
+      resource = await this.resourcesService.getResourceOrFail(
+        namespaceId,
+        resourceId,
+      );
       if (resource.resourceType !== ResourceType.FILE) {
         throw new BadRequestException('Resource is not a file.');
       }

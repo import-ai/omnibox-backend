@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ReaderProcessor } from './reader.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
@@ -10,6 +11,7 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
 describe('ReaderProcessor', () => {
   let processor: ReaderProcessor;
   let namespaceResourcesService: jest.Mocked<NamespaceResourcesService>;
+  let resourcesService: jest.Mocked<ResourcesService>;
   let tagService: jest.Mocked<TagService>;
 
   const mockResource: Partial<Resource> = {
@@ -21,9 +23,12 @@ describe('ReaderProcessor', () => {
   };
 
   beforeEach(async () => {
-    const mockResourcesService = {
-      get: jest.fn(),
+    const mockNamespaceResourcesService = {
       update: jest.fn(),
+    };
+
+    const mockResourcesService = {
+      getResourceOrFail: jest.fn(),
     };
 
     const mockTagService = {
@@ -34,6 +39,10 @@ describe('ReaderProcessor', () => {
       providers: [
         {
           provide: NamespaceResourcesService,
+          useValue: mockNamespaceResourcesService,
+        },
+        {
+          provide: ResourcesService,
           useValue: mockResourcesService,
         },
         {
@@ -44,8 +53,13 @@ describe('ReaderProcessor', () => {
     }).compile();
 
     namespaceResourcesService = module.get(NamespaceResourcesService);
+    resourcesService = module.get(ResourcesService);
     tagService = module.get(TagService);
-    processor = new ReaderProcessor(namespaceResourcesService, tagService);
+    processor = new ReaderProcessor(
+      namespaceResourcesService,
+      resourcesService,
+      tagService,
+    );
   });
 
   afterEach(() => {
@@ -78,7 +92,7 @@ describe('ReaderProcessor', () => {
           output: { title: 'Test Document' },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -89,7 +103,7 @@ describe('ReaderProcessor', () => {
           resourceId: 'test-resource-id',
           tagIds: undefined,
         });
-        expect(namespaceResourcesService.get).toHaveBeenCalled();
+        expect(resourcesService.getResourceOrFail).toHaveBeenCalled();
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-user',
           'test-resource-id',
@@ -124,7 +138,7 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -132,7 +146,8 @@ describe('ReaderProcessor', () => {
         const result = await processor.process(task);
 
         expect(result).toEqual({ resourceId: 'test-resource-id' });
-        expect(namespaceResourcesService.get).toHaveBeenCalledWith(
+        expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
+          'test-namespace',
           'test-resource-id',
         );
         expect(namespaceResourcesService.update).toHaveBeenCalled();
@@ -163,7 +178,7 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -208,7 +223,7 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -273,7 +288,7 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -344,7 +359,7 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -385,7 +400,7 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -419,7 +434,7 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);

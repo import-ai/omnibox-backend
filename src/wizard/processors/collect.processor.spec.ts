@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { CollectProcessor } from './collect.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
@@ -10,6 +11,7 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
 describe('CollectProcessor', () => {
   let processor: CollectProcessor;
   let namespaceResourcesService: jest.Mocked<NamespaceResourcesService>;
+  let resourcesService: jest.Mocked<ResourcesService>;
   let tagService: jest.Mocked<TagService>;
 
   const mockResource: Partial<Resource> = {
@@ -21,9 +23,12 @@ describe('CollectProcessor', () => {
   };
 
   beforeEach(async () => {
-    const mockResourcesService = {
-      get: jest.fn(),
+    const mockNamespaceResourcesService = {
       update: jest.fn(),
+    };
+
+    const mockResourcesService = {
+      getResourceOrFail: jest.fn(),
     };
 
     const mockTagService = {
@@ -34,6 +39,10 @@ describe('CollectProcessor', () => {
       providers: [
         {
           provide: NamespaceResourcesService,
+          useValue: mockNamespaceResourcesService,
+        },
+        {
+          provide: ResourcesService,
           useValue: mockResourcesService,
         },
         {
@@ -44,8 +53,13 @@ describe('CollectProcessor', () => {
     }).compile();
 
     namespaceResourcesService = module.get(NamespaceResourcesService);
+    resourcesService = module.get(ResourcesService);
     tagService = module.get(TagService);
-    processor = new CollectProcessor(namespaceResourcesService, tagService);
+    processor = new CollectProcessor(
+      namespaceResourcesService,
+      resourcesService,
+      tagService,
+    );
   });
 
   afterEach(() => {
@@ -101,7 +115,7 @@ describe('CollectProcessor', () => {
           output: { markdown: 'test content' },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -116,7 +130,7 @@ describe('CollectProcessor', () => {
           output: { markdown: 'test content' },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -148,7 +162,7 @@ describe('CollectProcessor', () => {
         expect(result).toEqual({});
       });
 
-      it('should not call namespaceResourcesService.get when task has exception', async () => {
+      it('should not call resourcesService.getResourceOrFail when task has exception', async () => {
         const task = createMockTask({
           payload: { resource_id: 'test-resource-id' },
           exception: { error: 'Processing failed' },
@@ -158,7 +172,7 @@ describe('CollectProcessor', () => {
 
         await processor.process(task);
 
-        expect(namespaceResourcesService.get).not.toHaveBeenCalled();
+        expect(resourcesService.getResourceOrFail).not.toHaveBeenCalled();
       });
     });
 
@@ -173,14 +187,15 @@ describe('CollectProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
 
-        expect(namespaceResourcesService.get).toHaveBeenCalledWith(
+        expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
+          'test-namespace',
           'test-resource-id',
         );
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
@@ -215,7 +230,7 @@ describe('CollectProcessor', () => {
           attrs: { url: 'https://example.com', existingAttr: 'existing value' },
         };
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           resourceWithAttrs as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -253,7 +268,7 @@ describe('CollectProcessor', () => {
           attrs: null,
         };
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           resourceWithNullAttrs as unknown as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -282,7 +297,7 @@ describe('CollectProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -316,7 +331,7 @@ describe('CollectProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -369,7 +384,7 @@ describe('CollectProcessor', () => {
           },
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);
@@ -407,7 +422,7 @@ describe('CollectProcessor', () => {
         const result = await processor.process(task);
 
         expect(result).toEqual({});
-        expect(namespaceResourcesService.get).not.toHaveBeenCalled();
+        expect(resourcesService.getResourceOrFail).not.toHaveBeenCalled();
         expect(namespaceResourcesService.update).not.toHaveBeenCalled();
       });
 
@@ -417,7 +432,7 @@ describe('CollectProcessor', () => {
           output: {},
         });
 
-        namespaceResourcesService.get.mockResolvedValue(
+        resourcesService.getResourceOrFail.mockResolvedValue(
           mockResource as Resource,
         );
         namespaceResourcesService.update.mockResolvedValue(undefined);

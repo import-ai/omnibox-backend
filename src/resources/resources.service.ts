@@ -147,6 +147,17 @@ export class ResourcesService {
     });
   }
 
+  async getResourceOrFail(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Resource> {
+    const resource = await this.getResource(namespaceId, resourceId);
+    if (!resource) {
+      throw new NotFoundException('Resource not found');
+    }
+    return resource;
+  }
+
   async updateResource(
     namespaceId: string,
     resourceId: string,

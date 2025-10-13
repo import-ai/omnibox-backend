@@ -45,11 +45,11 @@ export class OpenWizardController {
     @UploadedFile() compressedHtml: Express.Multer.File,
   ): Promise<CollectResponseDto> {
     return await this.wizardService.compressedCollect(
+      apiKey.namespaceId,
       userId,
       {
         url: data.url,
         title: data.title,
-        namespace_id: apiKey.namespaceId,
         parentId: data.parentId || apiKey.attrs.root_resource_id,
       } as CompressedCollectRequestDto,
       compressedHtml,

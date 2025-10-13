@@ -14,7 +14,6 @@ export interface PrivateSearchResourceDto {
 
 export interface PrivateSearchToolDto extends ToolDto {
   name: 'private_search';
-  namespace_id: string;
   resources?: PrivateSearchResourceDto[];
   visible_resources?: PrivateSearchResourceDto[];
 }
@@ -27,16 +26,21 @@ export interface WebSearchToolDto extends ToolDto {
 export interface BaseAgentRequestDto {
   query: string;
   conversation_id: string;
-  tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
   enable_thinking: boolean;
   lang?: '简体中文' | 'English';
 }
 
 export interface AgentRequestDto extends BaseAgentRequestDto {
-  namespace_id: string;
+  tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
   parent_message_id?: string;
 }
 
+export interface WizardPrivateSearchToolDto extends PrivateSearchToolDto {
+  namespace_id: string;
+}
+
 export interface WizardAgentRequestDto extends BaseAgentRequestDto {
+  namespace_id: string;
+  tools: Array<WizardPrivateSearchToolDto | WebSearchToolDto>;
   messages: Message[];
 }

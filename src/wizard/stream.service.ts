@@ -410,7 +410,7 @@ export class StreamService {
   ): Promise<Observable<MessageEvent>> {
     try {
       for (const tool of requestDto.tools || []) {
-        if (tool.name == 'private_search') {
+        if (tool.name === 'private_search') {
           tool.visible_resources = await this.getShareVisibleResources(
             share,
             tool.resources || [],

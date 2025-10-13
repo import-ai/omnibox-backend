@@ -6,6 +6,12 @@ import { Controller, Get, Param, Req, Res } from '@nestjs/common';
 export class SeoController {
   constructor(private readonly seoService: SeoService) {}
 
+  private send(res: Response, html: string) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
+    res.send(html);
+  }
+
   @Get('shares/:shareId')
   async getShareSeoHtml(
     @Param('shareId') shareId: string,
@@ -13,10 +19,7 @@ export class SeoController {
     @Res() res: Response,
   ) {
     const html = await this.seoService.generateShareHtml(shareId, null, req);
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
-    res.send(html);
+    this.send(res, html);
   }
 
   @Get('shares/:shareId/:resourceId')
@@ -31,10 +34,7 @@ export class SeoController {
       resourceId,
       req,
     );
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.send(html);
+    this.send(res, html);
   }
 
   @Get('namespaces/:namespaceId/resources/:resourceId')
@@ -49,9 +49,6 @@ export class SeoController {
       resourceId,
       req,
     );
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.send(html);
+    this.send(res, html);
   }
 }

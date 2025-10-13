@@ -3,6 +3,7 @@ import { Repository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { UserOption } from 'omniboxd/user/entities/user-option.entity';
 import { generateHTML, loadHtmlTemplate } from 'omniboxd/seo/utils';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
@@ -13,6 +14,8 @@ export class SeoService {
     private readonly shareRepository: Repository<Share>,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
+    @InjectRepository(UserOption)
+    private readonly userOptionRepository: Repository<UserOption>,
   ) {}
 
   async generateShareHtml(
@@ -60,13 +63,22 @@ export class SeoService {
   ): Promise<string> {
     const resource = await this.resourceRepository.findOne({
       where: { namespaceId, id: resourceId },
-      select: ['id', 'name', 'content', 'attrs'],
+      select: ['id', 'name', 'content', 'userId'],
     });
 
     if (!resource) {
       return loadHtmlTemplate('Resource not found');
     }
 
-    return generateHTML(resource, req);
+    if (resource.userId) {
+      const option = await this.userOptionRepository.findOne({
+        where: { userId: resource.userId, name: 'indexed' },
+      });
+      if (option && option.value) {
+        return generateHTML(resource, req);
+      }
+    }
+
+    return loadHtmlTemplate('This content is protected');
   }
 }

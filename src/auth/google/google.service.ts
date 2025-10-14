@@ -175,6 +175,24 @@ export class GoogleService extends SocialService {
       stateInfo.userInfo = returnValue;
       return returnValue;
     }
+    // The email has already been used https://wqjowq8l2hl.feishu.cn/record/T8zVrlZjReK0HeceZ7icyh8qnze
+    const linkedAccount = await this.userService.findByEmail(userData.email);
+    if (linkedAccount) {
+      const existingUser = await this.userService.bindingExistUser({
+        userId: linkedAccount.id,
+        loginType: 'google',
+        loginId: userData.sub,
+      });
+      const returnValue = {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+        }),
+      };
+      stateInfo.userInfo = returnValue;
+      return returnValue;
+    }
+
     return await this.dataSource.transaction(async (manager) => {
       let nickname = userData.name;
       if (!nickname) {

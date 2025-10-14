@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { SeoService } from 'omniboxd/seo/seo.service';
 import { Controller, Get, Param, Req, Res } from '@nestjs/common';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
+@Public()
 @Controller('api/v1/seo')
 export class SeoController {
   constructor(private readonly seoService: SeoService) {}

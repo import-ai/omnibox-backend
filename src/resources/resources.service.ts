@@ -148,7 +148,7 @@ export class ResourcesService {
   }
 
   async getAllResources(namespaceId: string): Promise<ResourceMetaDto[]> {
-    const resources = await this.resourceRepository.find({
+    const dbResources = await this.resourceRepository.find({
       select: [
         'id',
         'name',
@@ -163,7 +163,34 @@ export class ResourcesService {
         namespaceId,
       },
     });
-    return resources.map((r) => ResourceMetaDto.fromEntity(r));
+
+    const resources = dbResources.map((r) => ResourceMetaDto.fromEntity(r));
+    const resourcesMap: Map<string, ResourceMetaDto> = new Map();
+    for (const resource of resources) {
+      resourcesMap.set(resource.id, resource);
+    }
+
+    // Filter deleted resources.
+    // Every resource should be reachable from a root, otherwise it's considered deleted.
+    const reachableMap: Map<string, boolean> = new Map();
+    const isReachable = (resourceId: string): boolean => {
+      let reachable = reachableMap.get(resourceId);
+      if (reachable !== undefined) {
+        return reachable;
+      }
+      reachableMap.set(resourceId, false);
+      const resource = resourcesMap.get(resourceId);
+      if (!resource) {
+        return false;
+      }
+      // If it's a root, or its parent is reachable
+      if (!resource.parentId || isReachable(resource.parentId)) {
+        reachableMap.set(resourceId, true);
+        return true;
+      }
+      return false;
+    };
+    return resources.filter((r) => isReachable(r.id));
   }
 
   async getResource(

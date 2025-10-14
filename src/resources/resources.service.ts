@@ -174,7 +174,7 @@ export class ResourcesService {
     // Every resource should be reachable from a root, otherwise it's considered deleted.
     const reachableMap: Map<string, boolean> = new Map();
     const isReachable = (resourceId: string): boolean => {
-      let reachable = reachableMap.get(resourceId);
+      const reachable = reachableMap.get(resourceId);
       if (reachable !== undefined) {
         return reachable;
       }

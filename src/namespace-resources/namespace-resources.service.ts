@@ -41,6 +41,7 @@ import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resour
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 
 const TASK_PRIORITY = 5;
 
@@ -397,12 +398,7 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    const children = await this.getSubResourcesByParents(
-      namespaceId,
-      parents,
-      userId,
-    );
-    return children;
+    return await this.getSubResourcesByParents(namespaceId, parents, userId);
   }
 
   async getSubResourcesByParents(
@@ -711,6 +707,7 @@ export class NamespaceResourcesService {
     parentId?: string,
     resourceId?: string,
     source?: string,
+    parsedContent?: string,
   ) {
     const originalFilename = getOriginalFileName(file.originalname);
     const encodedFilename = encodeFileName(file.originalname);
@@ -746,9 +743,22 @@ export class NamespaceResourcesService {
     );
 
     resource.attrs = { ...resource.attrs, url: artifactName };
+
+    const hasParsedContent = !isEmpty(parsedContent);
+
+    if (hasParsedContent) {
+      resource.content = parsedContent!;
+    }
+
     await this.resourceRepository.save(resource);
 
-    await this.wizardTaskService.createFileReaderTask(userId, resource, source);
+    if (!hasParsedContent) {
+      await this.wizardTaskService.createFileReaderTask(
+        userId,
+        resource,
+        source,
+      );
+    }
 
     return resource;
   }

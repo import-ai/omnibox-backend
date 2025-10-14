@@ -364,9 +364,9 @@ export class NamespaceResourcesService {
     // Self and child exclusions
     if (excludeResourceId) {
       const resourceChildren = await this.getSubResourcesByUser(
+        userId,
         namespaceId,
         excludeResourceId,
-        userId,
       );
       where.id = Not(
         In([
@@ -393,9 +393,9 @@ export class NamespaceResourcesService {
   }
 
   async getSubResourcesByUser(
+    userId: string,
     namespaceId: string,
     resourceId: string,
-    userId: string,
   ): Promise<ResourceMetaDto[]> {
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
@@ -455,8 +455,8 @@ export class NamespaceResourcesService {
     );
     const resources = [...parents, ...children, ...subChildren];
     const permissionMap = await this.permissionsService.getCurrentPermissions(
-      namespaceId,
       userId,
+      namespaceId,
       resources,
     );
 
@@ -781,30 +781,17 @@ export class NamespaceResourcesService {
     return { fileStream, resource };
   }
 
-  async listAllUserAccessibleResources(
-    namespaceId: string,
+  async getAllResourcesByUser(
     userId: string,
+    namespaceId: string,
     includeRoot: boolean = false,
-  ) {
-    const resources = await this.resourceRepository.find({
-      where: { namespaceId, deletedAt: IsNull() },
-    });
-    const filteredResources = await this.permissionFilter(
-      namespaceId,
+  ): Promise<ResourceMetaDto[]> {
+    const resources = await this.permissionsService.filterResourcesByPermission(
       userId,
-      resources.filter((res) => res.parentId !== null || includeRoot),
-    );
-
-    // Load tags for filtered resources
-    const tagsMap = await this.getTagsForResources(
       namespaceId,
-      filteredResources,
+      await this.resourcesService.getAllResources(namespaceId),
     );
-
-    return filteredResources.map((resource) => ({
-      ...resource,
-      tags: tagsMap.get(resource.id) || [],
-    }));
+    return resources.filter((res) => res.parentId !== null || includeRoot);
   }
 
   async listAllResources(offset: number, limit: number) {

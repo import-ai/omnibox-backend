@@ -147,6 +147,25 @@ export class ResourcesService {
     return allResources;
   }
 
+  async getAllResources(namespaceId: string): Promise<ResourceMetaDto[]> {
+    const resources = await this.resourceRepository.find({
+      select: [
+        'id',
+        'name',
+        'parentId',
+        'resourceType',
+        'globalPermission',
+        'createdAt',
+        'updatedAt',
+        'attrs',
+      ],
+      where: {
+        namespaceId,
+      },
+    });
+    return resources.map((r) => ResourceMetaDto.fromEntity(r));
+  }
+
   async getResource(
     namespaceId: string,
     resourceId: string,

@@ -162,17 +162,21 @@ export class PermissionsService {
     return curPermission || ResourcePermission.NO_ACCESS;
   }
 
+  /**
+   * Get the current permissions for each specified resource.
+   * For each non-root resource specified, it's required that all its parents are also specified.
+   */
   async getCurrentPermissions(
-    namespaceId: string,
     userId: string,
+    namespaceId: string,
     resources: ResourceMetaDto[],
     entityManager?: EntityManager,
   ): Promise<Map<string, ResourcePermission>> {
     if (!entityManager) {
       return await this.dataSource.transaction((entityManager) =>
         this.getCurrentPermissions(
-          namespaceId,
           userId,
+          namespaceId,
           resources,
           entityManager,
         ),
@@ -494,6 +498,31 @@ export class PermissionsService {
       entityManager,
     );
     return comparePermission(permission, requiredPermission) >= 0;
+  }
+
+  /**
+   * Filter resources by permission.
+   * For each non-root resource specified, it's required that all its parents are also specified.
+   */
+  async filterResourcesByPermission(
+    userId: string,
+    namespaceId: string,
+    resources: ResourceMetaDto[],
+    requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
+    entityManager?: EntityManager,
+  ): Promise<ResourceMetaDto[]> {
+    const permissions = await this.getCurrentPermissions(
+      userId,
+      namespaceId,
+      resources,
+      entityManager,
+    );
+    return resources.filter((res) => {
+      const permission = permissions.get(res.id);
+      return (
+        permission && comparePermission(permission, requiredPermission) >= 0
+      );
+    });
   }
 }
 

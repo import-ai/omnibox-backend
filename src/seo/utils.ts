@@ -1,4 +1,3 @@
-import { Request } from 'express';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
 function escapeHtml(text: string): string {
@@ -112,7 +111,7 @@ export function loadHtmlTemplate(
 </html>`;
 }
 
-function getImageUrl(content: string, req: Request) {
+function getImageUrl(url: string, content: string) {
   let imagePath = '';
   // Try to match markdown image syntax: ![alt](url)
   const markdownImageMatch = content.match(/!\[.*?\]\((.*?)\)/);
@@ -133,19 +132,14 @@ function getImageUrl(content: string, req: Request) {
     if (imagePath.startsWith('http')) {
       return imagePath;
     }
-
-    // Convert relative path to absolute URL
-    const protocol = req.protocol;
-    const host = req.get('host');
-    return `${protocol}://${host}${imagePath}`;
+    return `${url}/${imagePath}`;
   }
 }
 
-export function generateHTML(resource: Resource, req: Request): string {
+export function generateHTML(url: string, resource: Resource): string {
   const title = resource.name || 'Untitled';
   const description = extractPlainText(resource.content, 200);
-  const url = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-  const imageUrl = getImageUrl(resource.content, req);
+  const imageUrl = getImageUrl(url, resource.content);
 
   const metaTags = generateMetaTags({
     title,

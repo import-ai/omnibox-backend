@@ -17,10 +17,9 @@ export class SeoController {
   @Get('shares/:shareId')
   async getShareSeoHtml(
     @Param('shareId') shareId: string,
-    @Req() req: Request,
     @Res() res: Response,
   ) {
-    const html = await this.seoService.generateShareHtml(shareId, null, req);
+    const html = await this.seoService.generateShareHtml(shareId, null);
     this.send(res, html);
   }
 
@@ -28,14 +27,9 @@ export class SeoController {
   async getShareResourceSeoHtml(
     @Param('shareId') shareId: string,
     @Param('resourceId') resourceId: string,
-    @Req() req: Request,
     @Res() res: Response,
   ) {
-    const html = await this.seoService.generateShareHtml(
-      shareId,
-      resourceId,
-      req,
-    );
+    const html = await this.seoService.generateShareHtml(shareId, resourceId);
     this.send(res, html);
   }
 
@@ -43,14 +37,9 @@ export class SeoController {
   async getResourceHtml(
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
-    @Req() req: Request,
     @Res() res: Response,
   ) {
-    const html = await this.seoService.getResourceHtml(
-      namespaceId,
-      resourceId,
-      req,
-    );
+    const html = await this.seoService.getResourceHtml(namespaceId, resourceId);
     this.send(res, html);
   }
 }

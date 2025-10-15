@@ -1,6 +1,6 @@
-import { Request } from 'express';
 import { Repository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
@@ -9,6 +9,8 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
 @Injectable()
 export class SeoService {
+  private readonly baseUrl: string;
+
   constructor(
     @InjectRepository(Share)
     private readonly shareRepository: Repository<Share>,
@@ -16,12 +18,17 @@ export class SeoService {
     private readonly resourceRepository: Repository<Resource>,
     @InjectRepository(UserOption)
     private readonly userOptionRepository: Repository<UserOption>,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.baseUrl = this.configService.get<string>(
+      'OBB_BASE_URL',
+      'https://www.omnibox.pro',
+    );
+  }
 
   async generateShareHtml(
     shareId: string,
     resourceId: string | null,
-    req: Request,
   ): Promise<string> {
     const share = await this.shareRepository.findOne({
       where: { id: shareId },
@@ -53,13 +60,14 @@ export class SeoService {
       return loadHtmlTemplate('Resource not found');
     }
 
-    return generateHTML(resource, req);
+    const baseUrl = `${this.baseUrl}/s/${shareId}/${targetResourceId}`;
+
+    return generateHTML(baseUrl, resource);
   }
 
   async getResourceHtml(
     namespaceId: string,
     resourceId: string,
-    req: Request,
   ): Promise<string> {
     const resource = await this.resourceRepository.findOne({
       where: { namespaceId, id: resourceId },
@@ -75,7 +83,9 @@ export class SeoService {
         where: { userId: resource.userId, name: 'indexed' },
       });
       if (option && option.value) {
-        return generateHTML(resource, req);
+        const baseUrl = `${this.baseUrl}/${namespaceId}/${resourceId}`;
+
+        return generateHTML(baseUrl, resource);
       }
     }
 

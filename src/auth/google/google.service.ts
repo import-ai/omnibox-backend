@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { SocialService } from 'omniboxd/auth/social.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import {
   BadRequestException,
   Injectable,
@@ -174,6 +175,24 @@ export class GoogleService extends SocialService {
       stateInfo.userInfo = returnValue;
       return returnValue;
     }
+    // The email has already been used https://wqjowq8l2hl.feishu.cn/record/T8zVrlZjReK0HeceZ7icyh8qnze
+    const linkedAccount = await this.userService.findByEmail(userData.email);
+    if (linkedAccount) {
+      const existingUser = await this.userService.bindingExistUser({
+        userId: linkedAccount.id,
+        loginType: 'google',
+        loginId: userData.sub,
+      });
+      const returnValue = {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+        }),
+      };
+      stateInfo.userInfo = returnValue;
+      return returnValue;
+    }
+
     return await this.dataSource.transaction(async (manager) => {
       let nickname = userData.name;
       if (!nickname) {
@@ -192,8 +211,9 @@ export class GoogleService extends SocialService {
           username,
           loginType: 'google',
           loginId: userData.sub,
+          email: userData.email,
           lang,
-        },
+        } as CreateUserBindingDto,
         manager,
       );
 

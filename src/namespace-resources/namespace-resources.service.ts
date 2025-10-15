@@ -1,10 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
 import {
-  encodeFileName,
-  getOriginalFileName,
-} from 'omniboxd/utils/encode-filename';
-import {
   DataSource,
   EntityManager,
   FindOptionsWhere,
@@ -41,6 +37,10 @@ import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resour
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
+import {
+  encodeFileName,
+  getOriginalFileName,
+} from 'omniboxd/utils/encode-filename';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 
 const TASK_PRIORITY = 5;
@@ -653,6 +653,7 @@ export class NamespaceResourcesService {
   ) {
     const originalName = getOriginalFileName(fileName);
     const encodedName = encodeFileName(fileName);
+
     let resource: Resource;
     if (resourceId) {
       resource = await this.resourcesService.getResourceOrFail(

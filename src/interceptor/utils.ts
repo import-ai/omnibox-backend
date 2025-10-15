@@ -15,6 +15,7 @@ export function transformKeysToSnakeCase(data: any): any {
     return Object.keys(data).reduce((acc, key) => {
       const snakeKey = camelToSnake(key);
       acc[snakeKey] = transformKeysToSnakeCase(data[key]);
+
       return acc;
     }, {});
   }

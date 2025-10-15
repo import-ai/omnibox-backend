@@ -68,7 +68,7 @@ describe('AuthModule (e2e)', () => {
             email: 'nonexistent@example.com',
             password: client.user.password,
           })
-          .expect(HttpStatus.FORBIDDEN);
+          .expect(HttpStatus.NOT_FOUND);
       });
 
       it('should fail with invalid password', async () => {

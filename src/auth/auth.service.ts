@@ -44,7 +44,7 @@ export class AuthService {
       if (isEmail(email)) {
         const userUseEmail = await this.userService.findByEmail(email);
         if (!userUseEmail) {
-          throw new ForbiddenException(
+          throw new NotFoundException(
             'No account found for the provided email. Please register first.',
           );
         }
@@ -63,6 +63,7 @@ export class AuthService {
       id: user.id,
       access_token: this.jwtService.sign({
         sub: user.id,
+        username: user.username,
       }),
     };
   }

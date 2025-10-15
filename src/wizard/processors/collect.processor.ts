@@ -1,4 +1,5 @@
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { BadRequestException } from '@nestjs/common';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
@@ -10,6 +11,7 @@ import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resou
 export class CollectProcessor extends Processor {
   constructor(
     protected readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
     private readonly tagService: TagService,
   ) {
     super();
@@ -55,7 +57,10 @@ export class CollectProcessor extends Processor {
         }
       }
 
-      const resource = await this.namespaceResourcesService.get(resourceId);
+      const resource = await this.resourcesService.getResourceOrFail(
+        task.namespaceId,
+        resourceId,
+      );
       const mergedAttrs = { ...(resource?.attrs || {}), ...attrs };
       await this.namespaceResourcesService.update(
         task.userId,

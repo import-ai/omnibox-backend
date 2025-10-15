@@ -202,8 +202,11 @@ export class NamespaceResourcesService {
     );
   }
 
-  async duplicate(userId: string, resourceId: string) {
-    const resource = await this.get(resourceId);
+  async duplicate(userId: string, namespaceId: string, resourceId: string) {
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
     if (!resource.parentId) {
       throw new BadRequestException('Cannot duplicate root resource.');
     }
@@ -361,9 +364,9 @@ export class NamespaceResourcesService {
     // Self and child exclusions
     if (excludeResourceId) {
       const resourceChildren = await this.getSubResourcesByUser(
+        userId,
         namespaceId,
         excludeResourceId,
-        userId,
       );
       where.id = Not(
         In([
@@ -390,9 +393,9 @@ export class NamespaceResourcesService {
   }
 
   async getSubResourcesByUser(
+    userId: string,
     namespaceId: string,
     resourceId: string,
-    userId: string,
   ): Promise<ResourceMetaDto[]> {
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
@@ -452,8 +455,8 @@ export class NamespaceResourcesService {
     );
     const resources = [...parents, ...children, ...subChildren];
     const permissionMap = await this.permissionsService.getCurrentPermissions(
-      namespaceId,
       userId,
+      namespaceId,
       resources,
     );
 
@@ -494,7 +497,7 @@ export class NamespaceResourcesService {
     return count > 0 ? SpaceType.TEAM : SpaceType.PRIVATE;
   }
 
-  async getPath({
+  async getResource({
     userId,
     namespaceId,
     resourceId,
@@ -503,7 +506,10 @@ export class NamespaceResourcesService {
     namespaceId: string;
     resourceId: string;
   }): Promise<ResourceDto> {
-    const resource = await this.get(resourceId);
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
     if (resource.namespaceId !== namespaceId) {
       throw new NotFoundException('Not found');
     }
@@ -541,18 +547,6 @@ export class NamespaceResourcesService {
     );
   }
 
-  async get(id: string) {
-    const resource = await this.resourceRepository.findOne({
-      where: {
-        id,
-      },
-    });
-    if (!resource) {
-      throw new NotFoundException('Resource not found.');
-    }
-    return resource;
-  }
-
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {
     await this.resourcesService.updateResource(
       data.namespaceId,
@@ -567,8 +561,11 @@ export class NamespaceResourcesService {
     );
   }
 
-  async delete(userId: string, id: string) {
-    const resource = await this.get(id);
+  async delete(userId: string, namespaceId: string, id: string) {
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      id,
+    );
     if (!resource.parentId) {
       throw new BadRequestException('Cannot delete root resource.');
     }
@@ -659,7 +656,10 @@ export class NamespaceResourcesService {
 
     let resource: Resource;
     if (resourceId) {
-      resource = await this.get(resourceId);
+      resource = await this.resourcesService.getResourceOrFail(
+        namespaceId,
+        resourceId,
+      );
       if (resource.resourceType !== ResourceType.FILE) {
         throw new BadRequestException('Resource is not a file.');
       }
@@ -715,7 +715,10 @@ export class NamespaceResourcesService {
 
     let resource: Resource;
     if (resourceId) {
-      resource = await this.get(resourceId);
+      resource = await this.resourcesService.getResourceOrFail(
+        namespaceId,
+        resourceId,
+      );
       if (resource.resourceType !== ResourceType.FILE) {
         throw new BadRequestException('Resource is not a file.');
       }
@@ -779,30 +782,17 @@ export class NamespaceResourcesService {
     return { fileStream, resource };
   }
 
-  async listAllUserAccessibleResources(
-    namespaceId: string,
+  async getAllResourcesByUser(
     userId: string,
+    namespaceId: string,
     includeRoot: boolean = false,
-  ) {
-    const resources = await this.resourceRepository.find({
-      where: { namespaceId, deletedAt: IsNull() },
-    });
-    const filteredResources = await this.permissionFilter(
-      namespaceId,
+  ): Promise<ResourceMetaDto[]> {
+    const resources = await this.permissionsService.filterResourcesByPermission(
       userId,
-      resources.filter((res) => res.parentId !== null || includeRoot),
-    );
-
-    // Load tags for filtered resources
-    const tagsMap = await this.getTagsForResources(
       namespaceId,
-      filteredResources,
+      await this.resourcesService.getAllResources(namespaceId),
     );
-
-    return filteredResources.map((resource) => ({
-      ...resource,
-      tags: tagsMap.get(resource.id) || [],
-    }));
+    return resources.filter((res) => res.parentId !== null || includeRoot);
   }
 
   async listAllResources(offset: number, limit: number) {

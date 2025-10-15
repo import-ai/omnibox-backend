@@ -54,10 +54,12 @@ export class WizardService {
     this.processors = {
       collect: new CollectProcessor(
         this.namespaceResourcesService,
+        this.resourcesService,
         this.tagService,
       ),
       file_reader: new ReaderProcessor(
         this.namespaceResourcesService,
+        this.resourcesService,
         this.tagService,
       ),
       extract_tags: new ExtractTagsProcessor(
@@ -67,6 +69,7 @@ export class WizardService {
       generate_title: new GenerateTitleProcessor(namespaceResourcesService),
       generate_video_note: new CollectProcessor(
         this.namespaceResourcesService,
+        this.resourcesService,
         this.tagService,
       ),
     };

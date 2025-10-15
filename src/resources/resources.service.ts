@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource, ResourceType } from './entities/resource.entity';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -93,6 +97,11 @@ export class ResourcesService {
       if (!resource) {
         return [];
       }
+      if (resources.find((r) => r.id === resource.id)) {
+        throw new UnprocessableEntityException(
+          'Cycle detected in the resource tree',
+        );
+      }
       resources.push(resource);
       resourceId = resource.parentId;
     }
@@ -138,6 +147,52 @@ export class ResourcesService {
     return allResources;
   }
 
+  async getAllResources(namespaceId: string): Promise<ResourceMetaDto[]> {
+    const dbResources = await this.resourceRepository.find({
+      select: [
+        'id',
+        'name',
+        'parentId',
+        'resourceType',
+        'globalPermission',
+        'createdAt',
+        'updatedAt',
+        'attrs',
+      ],
+      where: {
+        namespaceId,
+      },
+    });
+
+    const resources = dbResources.map((r) => ResourceMetaDto.fromEntity(r));
+    const resourcesMap: Map<string, ResourceMetaDto> = new Map();
+    for (const resource of resources) {
+      resourcesMap.set(resource.id, resource);
+    }
+
+    // Filter deleted resources.
+    // Every resource should be reachable from a root, otherwise it's considered deleted.
+    const reachableMap: Map<string, boolean> = new Map();
+    const isReachable = (resourceId: string): boolean => {
+      const reachable = reachableMap.get(resourceId);
+      if (reachable !== undefined) {
+        return reachable;
+      }
+      reachableMap.set(resourceId, false);
+      const resource = resourcesMap.get(resourceId);
+      if (!resource) {
+        return false;
+      }
+      // If it's a root, or its parent is reachable
+      if (!resource.parentId || isReachable(resource.parentId)) {
+        reachableMap.set(resourceId, true);
+        return true;
+      }
+      return false;
+    };
+    return resources.filter((r) => isReachable(r.id));
+  }
+
   async getResource(
     namespaceId: string,
     resourceId: string,
@@ -145,6 +200,17 @@ export class ResourcesService {
     return await this.resourceRepository.findOne({
       where: { namespaceId, id: resourceId },
     });
+  }
+
+  async getResourceOrFail(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Resource> {
+    const resource = await this.getResource(namespaceId, resourceId);
+    if (!resource) {
+      throw new NotFoundException('Resource not found');
+    }
+    return resource;
   }
 
   async updateResource(
@@ -172,13 +238,25 @@ export class ResourcesService {
       );
     }
 
-    // Check if the parent belongs to the same namespace
     if (props.parentId) {
+      // Check if the parent belongs to the same namespace
       await this.getResourceMetaOrFail(
         namespaceId,
         props.parentId,
         entityManager,
       );
+
+      // Check if there are any cycles
+      const parents = await this.getParentResources(
+        namespaceId,
+        props.parentId,
+        entityManager,
+      );
+      if (parents.find((resource) => resource.id === resourceId)) {
+        throw new UnprocessableEntityException(
+          'Cannot set parent to a sub-resource',
+        );
+      }
     }
 
     const repo = entityManager.getRepository(Resource);

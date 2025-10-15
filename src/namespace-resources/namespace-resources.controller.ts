@@ -53,7 +53,7 @@ export class NamespaceResourcesController {
       userId,
       data,
     );
-    return await this.namespaceResourcesService.getPath({
+    return await this.namespaceResourcesService.getResource({
       namespaceId: data.namespaceId,
       resourceId: newResource.id,
       userId: userId,
@@ -68,9 +68,10 @@ export class NamespaceResourcesController {
   ) {
     const newResource = await this.namespaceResourcesService.duplicate(
       req.user!.id,
+      namespaceId,
       resourceId,
     );
-    return await this.namespaceResourcesService.getPath({
+    return await this.namespaceResourcesService.getResource({
       namespaceId,
       userId: req.user!.id,
       resourceId: newResource.id,
@@ -141,7 +142,7 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    return await this.namespaceResourcesService.getPath({
+    return await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,
       userId: req.user!.id,
@@ -165,7 +166,7 @@ export class NamespaceResourcesController {
       throw new ForbiddenException('Not authorized');
     }
     await this.namespaceResourcesService.update(req.user!.id, resourceId, data);
-    return await this.namespaceResourcesService.getPath({
+    return await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,
       userId: req.user!.id,
@@ -189,6 +190,7 @@ export class NamespaceResourcesController {
     }
     return await this.namespaceResourcesService.delete(
       req.user!.id,
+      namespaceId,
       resourceId,
     );
   }
@@ -200,7 +202,7 @@ export class NamespaceResourcesController {
     @Param('resourceId') resourceId: string,
   ) {
     await this.namespaceResourcesService.restore(req.user!.id, resourceId);
-    return await this.namespaceResourcesService.getPath({
+    return await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,
       userId: req.user!.id,

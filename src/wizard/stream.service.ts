@@ -14,10 +14,7 @@ import {
   WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { context, propagation, trace } from '@opentelemetry/api';
 import { Share } from 'omniboxd/shares/entities/share.entity';
@@ -220,10 +217,10 @@ export class StreamService {
   ): Promise<PrivateSearchResourceDto[]> {
     // for private_search, pass the resource with permission
     if (resources.length === 0) {
-      const resources: Resource[] =
-        await this.namespaceResourcesService.listAllUserAccessibleResources(
-          namespaceId,
+      const resources =
+        await this.namespaceResourcesService.getAllResourcesByUser(
           userId,
+          namespaceId,
         );
       return resources.map((r) => {
         return {
@@ -243,9 +240,9 @@ export class StreamService {
       if (resource.type === 'folder') {
         const resources =
           await this.namespaceResourcesService.getSubResourcesByUser(
+            userId,
             namespaceId,
             resource.id,
-            userId,
           );
         resource.child_ids = resources.map((r) => r.id);
         visibleResources.push(

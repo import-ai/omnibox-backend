@@ -12,15 +12,17 @@ import {
   ForbiddenException,
   Logger,
   UseGuards,
+  UseInterceptors,
   ValidationPipe,
 } from '@nestjs/common';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
-import { Span } from 'nestjs-otel';
 import { WsAuthOptions } from 'omniboxd/auth';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
+import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
+import { WsSpanInterceptor } from 'omniboxd/interceptor/ws-span.interceptor';
 
 @WebSocketGateway({
   cors: {
@@ -30,6 +32,7 @@ import { ShareType } from 'omniboxd/shares/entities/share.entity';
   namespace: '/wizard',
   path: '/api/v1/socket.io',
 })
+@UseInterceptors(WsSpanInterceptor, UserInterceptor)
 export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -49,7 +52,6 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('ask')
-  @Span('SOCKET /api/v1/socket.io/wizard/ask')
   async handleAsk(
     @MessageBody() data: AgentRequestDto,
     @MessageBody('namespace_id', new ValidationPipe()) namespaceId: string,
@@ -60,7 +62,6 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('write')
-  @Span('SOCKET /api/v1/socket.io/wizard/write')
   async handleWrite(
     @MessageBody() data: AgentRequestDto,
     @MessageBody('namespace_id', new ValidationPipe()) namespaceId: string,
@@ -72,7 +73,6 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WsAuthOptions({ optional: true })
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('share_ask')
-  @Span('SOCKET /api/v1/socket.io/wizard/share_ask')
   async handleShareAsk(
     @MessageBody() data: AgentRequestDto,
     @MessageBody('share_id', new ValidationPipe()) shareId: string,
@@ -92,7 +92,6 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WsAuthOptions({ optional: true })
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('share_write')
-  @Span('SOCKET /api/v1/socket.io/wizard/share_write')
   async handleShareWrite(
     @MessageBody() data: AgentRequestDto,
     @MessageBody('share_id', new ValidationPipe()) shareId: string,

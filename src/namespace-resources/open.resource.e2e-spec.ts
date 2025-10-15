@@ -1,9 +1,10 @@
 import { TestClient } from 'test/test-client';
 import {
-  APIKeyPermissionType,
   APIKeyPermissionTarget,
+  APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
 import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
+import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 
 describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;
@@ -101,6 +102,35 @@ describe('OpenResourcesController (e2e)', () => {
       expect(response.body).toHaveProperty('id');
       expect(typeof response.body.id).toBe('string');
       expect(response.body).toHaveProperty('name');
+    });
+
+    it('create_resource_with_tags', async () => {
+      const resourceData = {
+        content: 'Minimal content for the resource #tag1 #tag2',
+      };
+
+      const response = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send(resourceData)
+        .expect(201);
+
+      expect(response.body).toHaveProperty('id');
+      expect(typeof response.body.id).toBe('string');
+      expect(response.body).toHaveProperty('name');
+
+      const resourceId = response.body.id;
+
+      const resourceResponse = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .send()
+        .expect(200);
+
+      const resource: ResourceDto = resourceResponse.body;
+      expect(resource.tags).toHaveLength(2);
     });
 
     it('should create resources with different content types', async () => {

@@ -4,7 +4,6 @@ import {
   Get,
   Param,
   Patch,
-  Req,
   UseInterceptors,
 } from '@nestjs/common';
 import { SharesService } from './shares.service';

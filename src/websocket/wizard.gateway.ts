@@ -12,6 +12,7 @@ import {
   ForbiddenException,
   Logger,
   UseGuards,
+  UseInterceptors,
   ValidationPipe,
 } from '@nestjs/common';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
@@ -21,6 +22,7 @@ import { Span } from 'nestjs-otel';
 import { WsAuthOptions } from 'omniboxd/auth';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
+import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 
 @WebSocketGateway({
   cors: {
@@ -30,6 +32,7 @@ import { ShareType } from 'omniboxd/shares/entities/share.entity';
   namespace: '/wizard',
   path: '/api/v1/socket.io',
 })
+@UseInterceptors(UserInterceptor)
 export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;

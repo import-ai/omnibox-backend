@@ -651,8 +651,8 @@ export class NamespaceResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    const originalName = getOriginalFileName(fileName);
-    const encodedName = encodeFileName(fileName);
+    const originalName = decodeURIComponent(fileName);
+    const encodedName = encodeFileName(originalName);
 
     let resource: Resource;
     if (resourceId) {

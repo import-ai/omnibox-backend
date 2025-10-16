@@ -27,7 +27,10 @@ import { MinioService } from 'omniboxd/minio/minio.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import {
+  comparePermission,
+  ResourcePermission,
+} from 'omniboxd/permissions/resource-permission.enum';
 import { Response } from 'express';
 import { ResourceDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
@@ -435,6 +438,33 @@ export class NamespaceResourcesService {
       }
     }
     return filteredChildren;
+  }
+
+  async getAllSubResourcesByUser(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<ResourceMetaDto[]> {
+    const parents = await this.resourcesService.getParentResources(
+      namespaceId,
+      resourceId,
+    );
+    const subResources = await this.resourcesService.getAllSubResources(
+      namespaceId,
+      resourceId,
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...parents, ...subResources],
+    );
+    return subResources.filter((res) => {
+      const permission = permissionMap.get(res.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      );
+    });
   }
 
   async listChildren(

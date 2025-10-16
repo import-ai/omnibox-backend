@@ -134,17 +134,23 @@ export class ResourcesService {
 
   async getAllSubResources(
     namespaceId: string,
-    resourceId: string,
+    parentId: string,
   ): Promise<ResourceMetaDto[]> {
-    const children = await this.getSubResources(namespaceId, [resourceId]);
-    const allResources: ResourceMetaDto[] = [...children];
-
-    for (const child of children) {
-      const subResources = await this.getAllSubResources(namespaceId, child.id);
-      allResources.push(...subResources);
+    const resourcesMap: Map<string, ResourceMetaDto> = new Map();
+    let parentIds = [parentId];
+    while (parentIds.length > 0) {
+      const resources = await this.getSubResources(namespaceId, parentIds);
+      for (const resource of resources) {
+        if (resourcesMap.has(resource.id)) {
+          throw new UnprocessableEntityException(
+            'Cycle detected in the resource tree',
+          );
+        }
+        resourcesMap.set(resource.id, resource);
+      }
+      parentIds = resources.map((r) => r.id);
     }
-
-    return allResources;
+    return [...resourcesMap.values()];
   }
 
   async getAllResources(namespaceId: string): Promise<ResourceMetaDto[]> {

@@ -82,4 +82,13 @@ export class SocialService {
       'Unable to generate a valid username',
     );
   }
+
+  protected async canUnBinding(userId: string) {
+    const user = await this.userService.find(userId);
+    if (user.email) {
+      return true;
+    }
+    const binding = await this.userService.listBinding(userId);
+    return binding.length > 1;
+  }
 }

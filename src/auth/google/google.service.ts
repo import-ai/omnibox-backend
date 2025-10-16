@@ -7,6 +7,7 @@ import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -235,6 +236,10 @@ export class GoogleService extends SocialService {
   }
 
   async unbind(userId: string) {
+    const canDo = await this.canUnBinding(userId);
+    if (!canDo) {
+      throw new ForbiddenException('Unbinding is not allowed');
+    }
     await this.userService.unbindByLoginType(userId, 'google');
   }
 }

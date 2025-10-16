@@ -8,6 +8,7 @@ import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto'
 import {
   Logger,
   Injectable,
+  ForbiddenException,
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -271,6 +272,10 @@ export class WechatService extends SocialService {
   }
 
   async unbind(userId: string) {
+    const canDo = await this.canUnBinding(userId);
+    if (!canDo) {
+      throw new ForbiddenException('Unbinding is not allowed');
+    }
     await this.userService.unbindByLoginType(userId, 'wechat');
   }
 }

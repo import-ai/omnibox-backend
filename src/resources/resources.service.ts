@@ -82,6 +82,9 @@ export class ResourcesService {
     return resource;
   }
 
+  /**
+   * Return the parents of a resource, including the resource itself.
+   */
   async getParentResources(
     namespaceId: string,
     resourceId: string | null,
@@ -134,10 +137,9 @@ export class ResourcesService {
 
   async getAllSubResources(
     namespaceId: string,
-    parentId: string,
+    parentIds: string[],
   ): Promise<ResourceMetaDto[]> {
     const resourcesMap: Map<string, ResourceMetaDto> = new Map();
-    let parentIds = [parentId];
     while (parentIds.length > 0) {
       const resources = await this.getSubResources(namespaceId, parentIds);
       for (const resource of resources) {
@@ -245,15 +247,7 @@ export class ResourcesService {
     }
 
     if (props.parentId) {
-      // Check if the parent belongs to the same namespace
-      await this.getResourceMetaOrFail(
-        namespaceId,
-        props.parentId,
-        entityManager,
-      );
-
-      // Check if there are any cycles
-      const parents = await this.getParentResources(
+      const parents = await this.getParentResourcesOrFail(
         namespaceId,
         props.parentId,
         entityManager,

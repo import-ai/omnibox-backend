@@ -188,19 +188,22 @@ export class NamespacesService {
     await this.namespaceRepository.softDelete(id);
   }
 
-  async createOrRestorePrivateRoot(
-    userId: string,
+  async addMember(
     namespaceId: string,
-    namespaceMember: NamespaceMember | null,
+    userId: string,
+    role: NamespaceRole,
+    permission: ResourcePermission,
     entityManager: EntityManager,
-  ): Promise<string> {
-    if (namespaceMember) {
-      await this.resourcesService.restoreResource(
+  ) {
+    const count = await entityManager.count(NamespaceMember, {
+      where: {
         namespaceId,
-        namespaceMember.rootResourceId,
-        entityManager,
-      );
-      return namespaceMember.rootResourceId;
+        userId,
+        deletedAt: IsNull(),
+      },
+    });
+    if (count > 0) {
+      return;
     }
     const privateRoot = await this.resourcesService.createResource(
       {
@@ -211,45 +214,12 @@ export class NamespacesService {
       },
       entityManager,
     );
-    await this.resourcesService.createResource(
-      {
-        namespaceId,
-        parentId: privateRoot.id,
-        userId,
-        resourceType: ResourceType.FOLDER,
-        name: await this.getUncategorizedName(userId, entityManager),
-      },
-      entityManager,
-    );
-    return privateRoot.id;
-  }
-
-  async addMember(
-    namespaceId: string,
-    userId: string,
-    role: NamespaceRole,
-    permission: ResourcePermission,
-    entityManager: EntityManager,
-  ) {
-    const namespaceMember = await entityManager.findOne(NamespaceMember, {
-      where: { namespaceId, userId },
-      withDeleted: true,
-    });
-    if (namespaceMember && !namespaceMember.deletedAt) {
-      return;
-    }
-    const privateRootId = await this.createOrRestorePrivateRoot(
-      userId,
-      namespaceId,
-      namespaceMember,
-      entityManager,
-    );
     await entityManager.save(
       entityManager.create(NamespaceMember, {
         namespaceId,
         userId,
         role,
-        rootResourceId: privateRootId,
+        rootResourceId: privateRoot.id,
       }),
     );
     const teamspaceRoot = await this.getTeamspaceRoot(
@@ -265,9 +235,19 @@ export class NamespacesService {
     );
     await this.permissionsService.updateUserPermission(
       namespaceId,
-      privateRootId,
+      privateRoot.id,
       userId,
       ResourcePermission.FULL_ACCESS,
+      entityManager,
+    );
+    await this.resourcesService.createResource(
+      {
+        namespaceId,
+        parentId: privateRoot.id,
+        userId,
+        resourceType: ResourceType.FOLDER,
+        name: await this.getUncategorizedName(userId, entityManager),
+      },
       entityManager,
     );
   }
@@ -367,11 +347,10 @@ export class NamespacesService {
         return;
       }
       // Delete private root
-      await this.resourcesService.deleteResource(
+      await manager.softDelete(Resource, {
         namespaceId,
-        member.rootResourceId,
-        manager,
-      );
+        id: member.rootResourceId,
+      });
       // Clear user permissions
       await manager.softDelete(UserPermission, {
         namespaceId,

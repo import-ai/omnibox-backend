@@ -239,7 +239,7 @@ export class StreamService {
     for (const resource of resources) {
       if (resource.type === 'folder') {
         const resources =
-          await this.namespaceResourcesService.getSubResourcesByUser(
+          await this.namespaceResourcesService.getAllSubResourcesByUser(
             userId,
             namespaceId,
             resource.id,

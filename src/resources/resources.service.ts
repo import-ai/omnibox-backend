@@ -82,6 +82,9 @@ export class ResourcesService {
     return resource;
   }
 
+  /**
+   * Return the parents of a resource, including the resource itself.
+   */
   async getParentResources(
     namespaceId: string,
     resourceId: string | null,
@@ -134,17 +137,22 @@ export class ResourcesService {
 
   async getAllSubResources(
     namespaceId: string,
-    resourceId: string,
+    parentIds: string[],
   ): Promise<ResourceMetaDto[]> {
-    const children = await this.getSubResources(namespaceId, [resourceId]);
-    const allResources: ResourceMetaDto[] = [...children];
-
-    for (const child of children) {
-      const subResources = await this.getAllSubResources(namespaceId, child.id);
-      allResources.push(...subResources);
+    const resourcesMap: Map<string, ResourceMetaDto> = new Map();
+    while (parentIds.length > 0) {
+      const resources = await this.getSubResources(namespaceId, parentIds);
+      for (const resource of resources) {
+        if (resourcesMap.has(resource.id)) {
+          throw new UnprocessableEntityException(
+            'Cycle detected in the resource tree',
+          );
+        }
+        resourcesMap.set(resource.id, resource);
+      }
+      parentIds = resources.map((r) => r.id);
     }
-
-    return allResources;
+    return [...resourcesMap.values()];
   }
 
   async getAllResources(namespaceId: string): Promise<ResourceMetaDto[]> {
@@ -239,15 +247,7 @@ export class ResourcesService {
     }
 
     if (props.parentId) {
-      // Check if the parent belongs to the same namespace
-      await this.getResourceMetaOrFail(
-        namespaceId,
-        props.parentId,
-        entityManager,
-      );
-
-      // Check if there are any cycles
-      const parents = await this.getParentResources(
+      const parents = await this.getParentResourcesOrFail(
         namespaceId,
         props.parentId,
         entityManager,

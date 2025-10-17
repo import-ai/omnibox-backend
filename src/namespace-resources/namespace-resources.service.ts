@@ -437,32 +437,11 @@ export class NamespaceResourcesService {
     return filteredChildren;
   }
 
-  async hasChildren(
-    namespaceId: string,
-    resourceId: string,
-    userId: string,
-  ): Promise<boolean> {
+  async hasChildren(namespaceId: string, resourceId: string): Promise<boolean> {
     const children = await this.resourcesService.getSubResources(namespaceId, [
       resourceId,
     ]);
-    const permissionMap = await this.permissionsService.getCurrentPermissions(
-      userId,
-      namespaceId,
-      children,
-    );
-    let hasChildren = false;
-    for (const subChild of children) {
-      if (!subChild.parentId) {
-        continue;
-      }
-      const permission = permissionMap.get(subChild.id);
-      if (!permission || permission === ResourcePermission.NO_ACCESS) {
-        continue;
-      }
-      hasChildren = true;
-      break;
-    }
-    return hasChildren;
+    return children.length > 0;
   }
 
   async listChildren(

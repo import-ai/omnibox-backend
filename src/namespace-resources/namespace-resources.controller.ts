@@ -46,7 +46,7 @@ export class NamespaceResourcesController {
     return Promise.all(
       resources.map((resource) =>
         this.namespaceResourcesService
-          .hasChildren(namespaceId, resource.id, userId)
+          .hasChildren(namespaceId, resource.id)
           .then((hasChildren) =>
             Promise.resolve({
               ...resource,
@@ -220,7 +220,6 @@ export class NamespaceResourcesController {
     const hasChildren = await this.namespaceResourcesService.hasChildren(
       namespaceId,
       resourceId,
-      userId,
     );
     return {
       ...resource,

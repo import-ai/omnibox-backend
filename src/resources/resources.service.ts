@@ -351,7 +351,7 @@ export class ResourcesService {
   ): Promise<void> {
     if (!entityManager) {
       return await this.dataSource.transaction((entityManager) =>
-        this.restoreResource(namespaceId, resourceId, entityManager),
+        this.deleteResource(namespaceId, resourceId, entityManager),
       );
     }
     await entityManager.softDelete(Resource, {

@@ -78,10 +78,9 @@ export class SharedResourcesService {
     }
 
     const subResources = share.allResources
-      ? await this.resourcesService.getAllSubResources(
-          share.namespaceId,
+      ? await this.resourcesService.getAllSubResources(share.namespaceId, [
           rootResource.id,
-        )
+        ])
       : [];
 
     const allResources = [

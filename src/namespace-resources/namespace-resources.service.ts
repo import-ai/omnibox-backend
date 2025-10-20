@@ -27,7 +27,10 @@ import { MinioService } from 'omniboxd/minio/minio.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import {
+  comparePermission,
+  ResourcePermission,
+} from 'omniboxd/permissions/resource-permission.enum';
 import { Response } from 'express';
 import { ResourceDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
@@ -401,40 +404,49 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    return await this.getSubResourcesByParents(namespaceId, parents, userId);
+    const subResources = await this.resourcesService.getSubResources(
+      namespaceId,
+      [resourceId],
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...parents, ...subResources],
+    );
+    return subResources.filter((res) => {
+      const permission = permissionMap.get(res.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      );
+    });
   }
 
-  async getSubResourcesByParents(
-    namespaceId: string,
-    parents: ResourceMetaDto[],
+  async getAllSubResourcesByUser(
     userId: string,
+    namespaceId: string,
+    resourceId: string,
   ): Promise<ResourceMetaDto[]> {
-    if (!parents) {
-      return [];
-    }
-    const permission = await this.permissionsService.getCurrentPermission(
+    const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
-      parents,
-      userId,
+      resourceId,
     );
-    if (permission === ResourcePermission.NO_ACCESS) {
-      return [];
-    }
-    const children = await this.resourcesService.getSubResources(namespaceId, [
-      parents[0].id,
-    ]);
-    const filteredChildren: ResourceMetaDto[] = [];
-    for (const child of children) {
-      const permission = await this.permissionsService.getCurrentPermission(
-        namespaceId,
-        [child, ...parents],
-        userId,
+    const allSubResources = await this.resourcesService.getAllSubResources(
+      namespaceId,
+      [resourceId],
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...parents, ...allSubResources],
+    );
+    return allSubResources.filter((res) => {
+      const permission = permissionMap.get(res.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
       );
-      if (permission !== ResourcePermission.NO_ACCESS) {
-        filteredChildren.push(child);
-      }
-    }
-    return filteredChildren;
+    });
   }
 
   async hasChildren(namespaceId: string, resourceId: string): Promise<boolean> {
@@ -453,42 +465,45 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    const children = await this.resourcesService.getSubResources(namespaceId, [
+    let children = await this.resourcesService.getSubResources(namespaceId, [
       resourceId,
     ]);
-    const subChildren = await this.resourcesService.getSubResources(
+    let subChildren = await this.resourcesService.getSubResources(
       namespaceId,
       children.map((child) => child.id),
     );
-    const resources = [...parents, ...children, ...subChildren];
     const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,
-      resources,
+      [...parents, ...children, ...subChildren],
     );
 
+    children = children.filter((res) => {
+      const permission = permissionMap.get(res.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      );
+    });
+
+    subChildren = subChildren.filter((res) => {
+      const permission = permissionMap.get(res.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      );
+    });
+
     const hasChildrenMap = new Map<string, boolean>();
-    for (const subChild of subChildren) {
-      if (!subChild.parentId) {
-        continue;
+    for (const resource of subChildren) {
+      if (resource.parentId) {
+        hasChildrenMap.set(resource.parentId, true);
       }
-      const permission = permissionMap.get(subChild.id);
-      if (!permission || permission === ResourcePermission.NO_ACCESS) {
-        continue;
-      }
-      hasChildrenMap.set(subChild.parentId, true);
     }
 
-    const childrenDtos: ChildrenMetaDto[] = [];
-    for (const child of children) {
-      const permission = permissionMap.get(child.id);
-      if (!permission || permission === ResourcePermission.NO_ACCESS) {
-        continue;
-      }
-      const hasChildren = hasChildrenMap.get(child.id) || false;
-      childrenDtos.push(new ChildrenMetaDto(child, hasChildren));
-    }
-    return childrenDtos;
+    return children.map(
+      (res) => new ChildrenMetaDto(res, !!hasChildrenMap.get(res.id)),
+    );
   }
 
   async getSpaceType(

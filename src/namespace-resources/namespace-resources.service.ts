@@ -449,10 +449,16 @@ export class NamespaceResourcesService {
     });
   }
 
-  async hasChildren(namespaceId: string, resourceId: string): Promise<boolean> {
-    const children = await this.resourcesService.getSubResources(namespaceId, [
+  async hasChildren(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<boolean> {
+    const children = await this.getSubResourcesByUser(
+      userId,
+      namespaceId,
       resourceId,
-    ]);
+    );
     return children.length > 0;
   }
 

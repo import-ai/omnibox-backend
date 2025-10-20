@@ -449,6 +449,19 @@ export class NamespaceResourcesService {
     });
   }
 
+  async hasChildren(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<boolean> {
+    const children = await this.getSubResourcesByUser(
+      userId,
+      namespaceId,
+      resourceId,
+    );
+    return children.length > 0;
+  }
+
   async listChildren(
     namespaceId: string,
     resourceId: string,
@@ -666,8 +679,8 @@ export class NamespaceResourcesService {
     parentId?: string,
     resourceId?: string,
   ) {
-    const originalName = getOriginalFileName(fileName);
-    const encodedName = encodeFileName(fileName);
+    const originalName = decodeURIComponent(fileName);
+    const encodedName = encodeFileName(originalName);
 
     let resource: Resource;
     if (resourceId) {

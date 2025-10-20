@@ -13,10 +13,8 @@ import {
   Patch,
   Post,
   Query,
-  Req,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { Request } from 'express';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
 
@@ -29,7 +27,7 @@ export class NamespaceResourcesController {
 
   @Get()
   async findById(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Query('id') id: string,
   ) {
@@ -40,10 +38,22 @@ export class NamespaceResourcesController {
     if (ids.length <= 0) {
       return [];
     }
-    return await this.namespaceResourcesService.findByIds(
+    const resources = await this.namespaceResourcesService.findByIds(
       namespaceId,
-      req.user!.id,
+      userId,
       ids,
+    );
+    return Promise.all(
+      resources.map((resource) =>
+        this.namespaceResourcesService
+          .hasChildren(userId, namespaceId, resource.id)
+          .then((hasChildren) =>
+            Promise.resolve({
+              ...resource,
+              hasChildren,
+            }),
+          ),
+      ),
     );
   }
 
@@ -62,25 +72,25 @@ export class NamespaceResourcesController {
 
   @Post(':resourceId/duplicate')
   async duplicate(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
     const newResource = await this.namespaceResourcesService.duplicate(
-      req.user!.id,
+      userId,
       namespaceId,
       resourceId,
     );
     return await this.namespaceResourcesService.getResource({
       namespaceId,
-      userId: req.user!.id,
+      userId,
       resourceId: newResource.id,
     });
   }
 
   @Get('query')
   async query(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
@@ -88,7 +98,7 @@ export class NamespaceResourcesController {
     return await this.namespaceResourcesService.query(
       namespaceId,
       parentId,
-      req.user!.id,
+      userId,
       tags,
     );
   }
@@ -108,7 +118,7 @@ export class NamespaceResourcesController {
 
   @Post(':resourceId/move/:targetId')
   async move(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('targetId') targetId: string,
@@ -116,7 +126,7 @@ export class NamespaceResourcesController {
     return await this.namespaceResourcesService.move(
       namespaceId,
       resourceId,
-      req.user!.id,
+      userId,
       targetId,
     );
   }
@@ -138,20 +148,20 @@ export class NamespaceResourcesController {
 
   @Get(':resourceId')
   async get(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
     return await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,
-      userId: req.user!.id,
+      userId,
     });
   }
 
   @Patch(':resourceId')
   async update(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Body() data: UpdateResourceDto,
@@ -159,37 +169,37 @@ export class NamespaceResourcesController {
     const hasPermission = await this.permissionsService.userHasPermission(
       namespaceId,
       resourceId,
-      req.user!.id,
+      userId,
       ResourcePermission.CAN_EDIT,
     );
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
-    await this.namespaceResourcesService.update(req.user!.id, resourceId, data);
+    await this.namespaceResourcesService.update(userId, resourceId, data);
     return await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,
-      userId: req.user!.id,
+      userId,
     });
   }
 
   @Delete(':resourceId')
   async delete(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
     const hasPermission = await this.permissionsService.userHasPermission(
       namespaceId,
       resourceId,
-      req.user!.id,
+      userId,
       ResourcePermission.CAN_EDIT,
     );
     if (!hasPermission) {
       throw new ForbiddenException('Not authorized');
     }
     return await this.namespaceResourcesService.delete(
-      req.user!.id,
+      userId,
       namespaceId,
       resourceId,
     );
@@ -197,15 +207,24 @@ export class NamespaceResourcesController {
 
   @Post(':resourceId/restore')
   async restore(
-    @Req() req: Request,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    await this.namespaceResourcesService.restore(req.user!.id, resourceId);
-    return await this.namespaceResourcesService.getResource({
+    await this.namespaceResourcesService.restore(userId, resourceId);
+    const resource = await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,
-      userId: req.user!.id,
+      userId,
     });
+    const hasChildren = await this.namespaceResourcesService.hasChildren(
+      userId,
+      namespaceId,
+      resourceId,
+    );
+    return {
+      ...resource,
+      hasChildren,
+    };
   }
 }

@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { DocType } from './doc-type.enum';
 import {
   IndexedDocDto,
@@ -19,6 +20,7 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { I18nService } from 'nestjs-i18n';
 
 const TASK_PRIORITY = 4;
 
@@ -36,12 +38,14 @@ export class SearchService {
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
     private readonly wizardTaskService: WizardTaskService,
+    private readonly i18n: I18nService,
   ) {
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
-      throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
+      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
+      throw new AppException(message, 'MISSING_WIZARD_BASE_URL', HttpStatus.INTERNAL_SERVER_ERROR);
     }
-    this.wizardApiService = new WizardAPIService(baseUrl);
+    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
   }
 
   async search(

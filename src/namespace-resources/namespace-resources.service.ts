@@ -16,12 +16,9 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -62,6 +59,7 @@ export class NamespaceResourcesService {
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly resourcesService: ResourcesService,
+    private readonly i18n: I18nService,
   ) {}
 
   private async getTagsByIds(
@@ -192,7 +190,8 @@ export class NamespaceResourcesService {
       manager,
     );
     if (!ok) {
-      throw new ForbiddenException('Not authorized to create resource.');
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
     return await this.resourcesService.createResource(
@@ -211,7 +210,12 @@ export class NamespaceResourcesService {
       resourceId,
     );
     if (!resource.parentId) {
-      throw new BadRequestException('Cannot duplicate root resource.');
+      const message = this.i18n.t('resource.errors.cannotDuplicateRoot');
+      throw new AppException(
+        message,
+        'CANNOT_DUPLICATE_ROOT',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     const newResource = {
       name: duplicateName(resource.name),
@@ -347,7 +351,8 @@ export class NamespaceResourcesService {
       userId,
     );
     if (!ok) {
-      throw new ForbiddenException('Not authorized');
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
     await this.resourcesService.updateResource(
       namespaceId,
@@ -539,7 +544,12 @@ export class NamespaceResourcesService {
       resourceId,
     );
     if (resource.namespaceId !== namespaceId) {
-      throw new NotFoundException('Not found');
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     const parentResources =
       await this.resourcesService.getParentResourcesOrFail(
@@ -560,7 +570,8 @@ export class NamespaceResourcesService {
     );
 
     if (curPermission === ResourcePermission.NO_ACCESS) {
-      throw new ForbiddenException('Not authorized');
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
     // Load tags of the resource
@@ -595,7 +606,12 @@ export class NamespaceResourcesService {
       id,
     );
     if (!resource.parentId) {
-      throw new BadRequestException('Cannot delete root resource.');
+      const message = this.i18n.t('resource.errors.cannotDeleteRoot');
+      throw new AppException(
+        message,
+        'CANNOT_DELETE_ROOT',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.softDelete(Resource, id);
@@ -615,10 +631,20 @@ export class NamespaceResourcesService {
       },
     });
     if (!resource) {
-      throw new NotFoundException('Resource not found.');
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     if (resource.parentId === null) {
-      throw new BadRequestException('Cannot restore root resource.');
+      const message = this.i18n.t('resource.errors.cannotRestoreRoot');
+      throw new AppException(
+        message,
+        'CANNOT_RESTORE_ROOT',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.restore(Resource, id);
@@ -689,7 +715,12 @@ export class NamespaceResourcesService {
         resourceId,
       );
       if (resource.resourceType !== ResourceType.FILE) {
-        throw new BadRequestException('Resource is not a file.');
+        const message = this.i18n.t('resource.errors.resourceNotFile');
+        throw new AppException(
+          message,
+          'RESOURCE_NOT_FILE',
+          HttpStatus.BAD_REQUEST,
+        );
       }
     } else if (parentId) {
       resource = await this.create(userId, {
@@ -704,7 +735,12 @@ export class NamespaceResourcesService {
         },
       });
     } else {
-      throw new BadRequestException('parent_id or resource_id is required.');
+      const message = this.i18n.t('resource.errors.parentOrResourceIdRequired');
+      throw new AppException(
+        message,
+        'PARENT_OR_RESOURCE_ID_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const artifactName = resource.id;
@@ -748,7 +784,12 @@ export class NamespaceResourcesService {
         resourceId,
       );
       if (resource.resourceType !== ResourceType.FILE) {
-        throw new BadRequestException('Resource is not a file.');
+        const message = this.i18n.t('resource.errors.resourceNotFile');
+        throw new AppException(
+          message,
+          'RESOURCE_NOT_FILE',
+          HttpStatus.BAD_REQUEST,
+        );
       }
     } else if (parentId) {
       resource = await this.create(userId, {
@@ -763,7 +804,12 @@ export class NamespaceResourcesService {
         },
       });
     } else {
-      throw new BadRequestException('parent_id or resource_id is required.');
+      const message = this.i18n.t('resource.errors.parentOrResourceIdRequired');
+      throw new AppException(
+        message,
+        'PARENT_OR_RESOURCE_ID_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const artifactName = resource.id;
@@ -800,7 +846,12 @@ export class NamespaceResourcesService {
       where: { id: resourceId },
     });
     if (!resource || resource.resourceType !== ResourceType.FILE) {
-      throw new NotFoundException('File resource not found.');
+      const message = this.i18n.t('resource.errors.fileResourceNotFound');
+      throw new AppException(
+        message,
+        'FILE_RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     const artifactName = resource.id;
 

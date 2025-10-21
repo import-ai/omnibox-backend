@@ -1,11 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { MailerService } from '@nestjs-modules/mailer';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
 
-  constructor(private readonly mailerService: MailerService) {}
+  constructor(
+    private readonly mailerService: MailerService,
+    private readonly i18n: I18nService,
+  ) {}
 
   async sendSignUpEmail(
     email: string,
@@ -29,7 +34,12 @@ export class MailService {
       });
     } catch (error) {
       this.logger.error({ error });
-      throw new Error('Unable to send email');
+      const message = this.i18n.t('mail.errors.unableToSendEmail');
+      throw new AppException(
+        message,
+        'UNABLE_TO_SEND_EMAIL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -55,7 +65,12 @@ export class MailService {
       });
     } catch (error) {
       this.logger.error({ error });
-      throw new Error('Unable to send email');
+      const message = this.i18n.t('mail.errors.unableToSendEmail');
+      throw new AppException(
+        message,
+        'UNABLE_TO_SEND_EMAIL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -81,7 +96,12 @@ export class MailService {
       });
     } catch (error) {
       this.logger.error({ error });
-      throw new Error('Unable to send email');
+      const message = this.i18n.t('mail.errors.unableToSendEmail');
+      throw new AppException(
+        message,
+        'UNABLE_TO_SEND_EMAIL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -107,7 +127,12 @@ export class MailService {
       });
     } catch (error) {
       this.logger.error({ error });
-      throw new Error('Unable to send email');
+      const message = this.i18n.t('mail.errors.unableToSendEmail');
+      throw new AppException(
+        message,
+        'UNABLE_TO_SEND_EMAIL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 }

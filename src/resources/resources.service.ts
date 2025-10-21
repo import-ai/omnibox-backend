@@ -1,8 +1,6 @@
-import {
-  Injectable,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource, ResourceType } from './entities/resource.entity';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -19,6 +17,7 @@ export class ResourcesService {
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly wizardTaskService: WizardTaskService,
+    private readonly i18n: I18nService,
   ) {}
 
   async getParentResourcesOrFail(
@@ -35,7 +34,12 @@ export class ResourcesService {
       entityManager,
     );
     if (resources.length === 0) {
-      throw new NotFoundException('Resource not found');
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return resources;
   }
@@ -77,7 +81,12 @@ export class ResourcesService {
       entityManager,
     );
     if (!resource) {
-      throw new NotFoundException('Resource not found');
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return resource;
   }
@@ -101,8 +110,11 @@ export class ResourcesService {
         return [];
       }
       if (resources.find((r) => r.id === resource.id)) {
-        throw new UnprocessableEntityException(
-          'Cycle detected in the resource tree',
+        const message = this.i18n.t('resource.errors.cycleDetected');
+        throw new AppException(
+          message,
+          'CYCLE_DETECTED',
+          HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
       resources.push(resource);
@@ -144,8 +156,11 @@ export class ResourcesService {
       const resources = await this.getSubResources(namespaceId, parentIds);
       for (const resource of resources) {
         if (resourcesMap.has(resource.id)) {
-          throw new UnprocessableEntityException(
-            'Cycle detected in the resource tree',
+          const message = this.i18n.t('resource.errors.cycleDetected');
+          throw new AppException(
+            message,
+            'CYCLE_DETECTED',
+            HttpStatus.UNPROCESSABLE_ENTITY,
           );
         }
         resourcesMap.set(resource.id, resource);
@@ -216,7 +231,12 @@ export class ResourcesService {
   ): Promise<Resource> {
     const resource = await this.getResource(namespaceId, resourceId);
     if (!resource) {
-      throw new NotFoundException('Resource not found');
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return resource;
   }
@@ -253,8 +273,13 @@ export class ResourcesService {
         entityManager,
       );
       if (parents.find((resource) => resource.id === resourceId)) {
-        throw new UnprocessableEntityException(
-          'Cannot set parent to a sub-resource',
+        const message = this.i18n.t(
+          'resource.errors.cannotSetParentToSubResource',
+        );
+        throw new AppException(
+          message,
+          'CANNOT_SET_PARENT_TO_SUB_RESOURCE',
+          HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
     }
@@ -269,7 +294,12 @@ export class ResourcesService {
       },
     });
     if (!resource) {
-      throw new NotFoundException('Resource not found.');
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     // If it's not a root resource, create index task

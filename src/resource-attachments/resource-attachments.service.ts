@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
@@ -8,6 +10,7 @@ export class ResourceAttachmentsService {
   constructor(
     @InjectRepository(ResourceAttachment)
     private readonly resourceAttachmentRepository: Repository<ResourceAttachment>,
+    private readonly i18n: I18nService,
   ) {}
 
   async getResourceAttachment(
@@ -35,7 +38,12 @@ export class ResourceAttachmentsService {
       attachmentId,
     );
     if (!relation) {
-      throw new NotFoundException(attachmentId);
+      const message = this.i18n.t('attachment.errors.attachmentNotFound');
+      throw new AppException(
+        message,
+        'ATTACHMENT_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return relation;
   }
@@ -67,7 +75,12 @@ export class ResourceAttachmentsService {
     });
 
     if (!existingAttachment) {
-      throw new NotFoundException('Attachment not found');
+      const message = this.i18n.t('attachment.errors.attachmentNotFound');
+      throw new AppException(
+        message,
+        'ATTACHMENT_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     await this.resourceAttachmentRepository.softDelete({

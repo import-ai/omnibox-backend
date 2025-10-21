@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
@@ -34,12 +36,18 @@ export class ConversationsService {
     private readonly userService: UserService,
     private readonly configService: ConfigService,
     private readonly wizardTaskService: WizardTaskService,
+    private readonly i18n: I18nService,
   ) {
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
-      throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
+      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
+      throw new AppException(
+        message,
+        'MISSING_WIZARD_BASE_URL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
-    this.wizardApiService = new WizardAPIService(baseUrl);
+    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
   }
 
   async create(namespaceId: string, user: User) {
@@ -110,7 +118,12 @@ export class ConversationsService {
     while (lastMessageId) {
       const message = messages.find((message) => message.id === lastMessageId);
       if (!message) {
-        throw new Error('message not found');
+        const errorMessage = this.i18n.t('system.errors.messageNotFound');
+        throw new AppException(
+          errorMessage,
+          'MESSAGE_NOT_FOUND',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
       }
       composed.unshift(message);
       lastMessageId = message.parentId;
@@ -160,7 +173,12 @@ export class ConversationsService {
         return titleCreateResponse as { title: string };
       }
     }
-    throw new Error('No query content found to create title');
+    const message = this.i18n.t('system.errors.noQueryContent');
+    throw new AppException(
+      message,
+      'NO_QUERY_CONTENT',
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
   }
 
   async getSummary(
@@ -203,10 +221,10 @@ export class ConversationsService {
     };
   }
 
-  private convertToConversationDetail(
+  private async convertToConversationDetail(
     conversation: Conversation,
     messages: Message[],
-  ): ConversationDetailDto {
+  ): Promise<ConversationDetailDto> {
     const detail: ConversationDetailDto = {
       id: conversation.id,
       title: conversation.title,
@@ -220,7 +238,12 @@ export class ConversationsService {
 
     const system_message: Message = messages[0];
     if (system_message.message.role !== OpenAIMessageRole.SYSTEM) {
-      throw new Error('first message is not system message');
+      const message = this.i18n.t('system.errors.firstMessageNotSystem');
+      throw new AppException(
+        message,
+        'FIRST_MESSAGE_NOT_SYSTEM',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
     const childrenMap: Record<string, string[]> = {};
     for (const msg of messages) {
@@ -268,7 +291,7 @@ export class ConversationsService {
       user.id,
       conversation.id,
     );
-    return this.convertToConversationDetail(conversation, messages);
+    return await this.convertToConversationDetail(conversation, messages);
   }
 
   async getConversationForShare(
@@ -282,7 +305,7 @@ export class ConversationsService {
       undefined,
       conversation.id,
     );
-    return this.convertToConversationDetail(conversation, messages);
+    return await this.convertToConversationDetail(conversation, messages);
   }
 
   async findOne(id: string) {

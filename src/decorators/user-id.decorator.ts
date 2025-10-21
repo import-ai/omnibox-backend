@@ -1,8 +1,9 @@
 import {
   createParamDecorator,
   ExecutionContext,
-  UnauthorizedException,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Request } from 'express';
 
 interface UserIdOptions {
@@ -16,7 +17,8 @@ export const UserId = createParamDecorator(
     const { optional = false } = data;
 
     if (!userId && !optional) {
-      throw new UnauthorizedException('Not authorized');
+      // Note: Decorators cannot easily inject I18nService, using static message
+      throw new AppException('Not authorized', 'NOT_AUTHORIZED', HttpStatus.UNAUTHORIZED);
     }
 
     return userId;

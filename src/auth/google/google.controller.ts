@@ -36,7 +36,7 @@ export class GoogleController extends SocialController {
     @Res() res: Response,
     @Body() body: { code: string; state: string; lang?: string },
   ) {
-    const userId = this.findUserId(req.headers.authorization);
+    const userId = await this.findUserId(req.headers.authorization);
 
     const loginData = await this.googleService.handleCallback(
       body.code,

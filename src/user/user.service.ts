@@ -12,13 +12,10 @@ import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { isUsernameBlocked } from 'omniboxd/utils/blocked-usernames';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class UserService {
@@ -42,6 +39,7 @@ export class UserService {
     @InjectRepository(UserBinding)
     private userBindingRepository: Repository<UserBinding>,
     private readonly mailService: MailService,
+    private readonly i18n: I18nService,
   ) {}
 
   async verify(email: string, password: string) {
@@ -65,15 +63,21 @@ export class UserService {
     return account;
   }
 
-  validatePassword(password: string) {
+  async validatePassword(password: string) {
     if (!password || password.length < 8) {
-      throw new BadRequestException(
-        'Password must be at least 6 characters long',
+      const message = this.i18n.t('user.errors.passwordTooShort');
+      throw new AppException(
+        message,
+        'PASSWORD_TOO_SHORT',
+        HttpStatus.BAD_REQUEST,
       );
     }
     if (!this.alphaRegex.test(password) || !this.numberRegex.test(password)) {
-      throw new BadRequestException(
-        'Password must contain at least one letter and one number',
+      const message = this.i18n.t('user.errors.passwordRequirements');
+      throw new AppException(
+        message,
+        'PASSWORD_REQUIREMENTS',
+        HttpStatus.BAD_REQUEST,
       );
     }
     return true;
@@ -81,7 +85,12 @@ export class UserService {
 
   async create(account: CreateUserDto, manager?: EntityManager) {
     if (account.username && isUsernameBlocked(account.username)) {
-      throw new ConflictException('The account already exists');
+      const message = this.i18n.t('user.errors.accountAlreadyExists');
+      throw new AppException(
+        message,
+        'ACCOUNT_ALREADY_EXISTS',
+        HttpStatus.CONFLICT,
+      );
     }
     const repo = manager ? manager.getRepository(User) : this.userRepository;
     const existingUser = await repo.findOne({
@@ -89,10 +98,15 @@ export class UserService {
     });
 
     if (existingUser) {
-      throw new ConflictException('The account already exists');
+      const message = this.i18n.t('user.errors.accountAlreadyExists');
+      throw new AppException(
+        message,
+        'ACCOUNT_ALREADY_EXISTS',
+        HttpStatus.CONFLICT,
+      );
     }
 
-    this.validatePassword(account.password);
+    await this.validatePassword(account.password);
 
     const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({
@@ -259,7 +273,8 @@ export class UserService {
       select: ['id', 'username', 'email'],
     });
     if (!user) {
-      throw new NotFoundException('User not found');
+      const message = this.i18n.t('user.errors.userNotFound');
+      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
     return user;
   }
@@ -289,13 +304,21 @@ export class UserService {
 
   async validateEmail(userId: string, email: string) {
     if (!isEmail(email)) {
-      throw new BadRequestException('Invalid email format');
+      const message = this.i18n.t('user.errors.invalidEmailFormat');
+      throw new AppException(
+        message,
+        'INVALID_EMAIL_FORMAT',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const userExists = await this.findByEmail(email);
     if (userExists) {
-      throw new BadRequestException(
-        'This email is already in use, please use a different email',
+      const message = this.i18n.t('user.errors.emailAlreadyInUse');
+      throw new AppException(
+        message,
+        'EMAIL_ALREADY_IN_USE',
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -317,7 +340,12 @@ export class UserService {
 
   async update(id: string, account: UpdateUserDto) {
     if (account.username && isUsernameBlocked(account.username)) {
-      throw new ConflictException('The account already exists');
+      const message = this.i18n.t('user.errors.accountAlreadyExists');
+      throw new AppException(
+        message,
+        'ACCOUNT_ALREADY_EXISTS',
+        HttpStatus.CONFLICT,
+      );
     }
     const existUser = await this.find(id);
     if (account.password) {
@@ -328,16 +356,29 @@ export class UserService {
     }
     if (account.email && existUser.email !== account.email) {
       if (!account.code) {
-        throw new BadRequestException(
-          'Please provide the email verification code',
+        const message = this.i18n.t('user.errors.provideVerificationCode');
+        throw new AppException(
+          message,
+          'VERIFICATION_CODE_REQUIRED',
+          HttpStatus.BAD_REQUEST,
         );
       }
       const emailState = this.emailStates.get(account.email);
       if (!emailState) {
-        throw new BadRequestException('Please verify your email first');
+        const message = this.i18n.t('user.errors.pleaseVerifyEmail');
+        throw new AppException(
+          message,
+          'EMAIL_NOT_VERIFIED',
+          HttpStatus.BAD_REQUEST,
+        );
       }
       if (emailState.code !== account.code) {
-        throw new BadRequestException('Incorrect email verification code');
+        const message = this.i18n.t('user.errors.incorrectVerificationCode');
+        throw new AppException(
+          message,
+          'INCORRECT_VERIFICATION_CODE',
+          HttpStatus.BAD_REQUEST,
+        );
       }
       this.emailStates.delete(account.email);
       existUser.email = account.email;

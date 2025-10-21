@@ -5,14 +5,9 @@ import { MailService } from 'omniboxd/mail/mail.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  Logger,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { GroupsService } from 'omniboxd/groups/groups.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -36,6 +31,7 @@ export class AuthService {
     private readonly groupsService: GroupsService,
     private readonly permissionsService: PermissionsService,
     private readonly dataSource: DataSource,
+    private readonly i18n: I18nService,
   ) {}
 
   async verify(email: string, password: string): Promise<any> {
@@ -44,12 +40,20 @@ export class AuthService {
       if (isEmail(email)) {
         const userUseEmail = await this.userService.findByEmail(email);
         if (!userUseEmail) {
-          throw new NotFoundException(
-            'No account found for the provided email. Please register first.',
+          const message = this.i18n.t('auth.errors.userNotFound');
+          throw new AppException(
+            message,
+            'USER_NOT_FOUND',
+            HttpStatus.NOT_FOUND,
           );
         }
       }
-      throw new ForbiddenException('Wrong password, please check');
+      const message = this.i18n.t('auth.errors.invalidCredentials');
+      throw new AppException(
+        message,
+        'INVALID_CREDENTIALS',
+        HttpStatus.FORBIDDEN,
+      );
     }
     return {
       id: user.id,
@@ -71,9 +75,8 @@ export class AuthService {
   private async getSignUpToken(email: string) {
     const account = await this.userService.findByEmail(email);
     if (account) {
-      throw new BadRequestException(
-        'The email is already registered. Please log in directly.',
-      );
+      const message = this.i18n.t('auth.errors.emailAlreadyExists');
+      throw new AppException(message, 'EMAIL_EXISTS', HttpStatus.BAD_REQUEST);
     }
     const payload: SignUpPayloadDto = { email };
     return this.jwtService.sign(payload, { expiresIn: '1h' });
@@ -96,13 +99,15 @@ export class AuthService {
     const payload: SignUpPayloadDto = await this.jwtVerify(token);
     const account = await this.userService.findByEmail(payload.email);
     if (account) {
-      throw new BadRequestException(
-        'The email is already registered. Please log in directly.',
-      );
+      const message = this.i18n.t('auth.errors.emailAlreadyExists');
+      throw new AppException(message, 'EMAIL_EXISTS', HttpStatus.BAD_REQUEST);
     }
     if (data.username.length < 2 || data.username.length > 32) {
-      throw new BadRequestException(
-        'Username must be between 2 and 32 characters.',
+      const message = this.i18n.t('auth.errors.usernameLength');
+      throw new AppException(
+        message,
+        'INVALID_USERNAME_LENGTH',
+        HttpStatus.BAD_REQUEST,
       );
     }
     return await this.dataSource.transaction(async (manager) => {
@@ -140,7 +145,8 @@ export class AuthService {
   async password(url: string, email: string) {
     const user = await this.userService.findByEmail(email);
     if (!user) {
-      throw new NotFoundException('User not found.');
+      const message = this.i18n.t('auth.errors.userNotFound');
+      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
     const payload: LoginPayloadDto = { email: user.email!, sub: user.id };
     const token = this.jwtService.sign(payload, {
@@ -163,7 +169,8 @@ export class AuthService {
       await this.userService.updatePassword(user.id, password);
     } catch (error) {
       this.logger.error({ error });
-      throw new UnauthorizedException('Invalid or expired token.');
+      const message = this.i18n.t('auth.errors.tokenInvalid');
+      throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
   }
 
@@ -289,9 +296,10 @@ export class AuthService {
     }
   }
 
-  jwtVerify(token: string) {
+  async jwtVerify(token: string) {
     if (!token) {
-      throw new UnauthorizedException('No token provided.');
+      const message = this.i18n.t('auth.errors.noToken');
+      throw new AppException(message, 'NO_TOKEN', HttpStatus.UNAUTHORIZED);
     }
     try {
       return this.jwtService.verify(token);
@@ -299,7 +307,8 @@ export class AuthService {
       if (!this.knownErrors.some((cls) => error instanceof cls)) {
         this.logger.error({ error });
       }
-      throw new UnauthorizedException('Invalid or expired token.');
+      const message = this.i18n.t('auth.errors.tokenInvalid');
+      throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
   }
 }

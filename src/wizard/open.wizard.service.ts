@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
@@ -6,6 +6,8 @@ import { User } from 'omniboxd/user/entities/user.entity';
 import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class OpenWizardService {
@@ -13,6 +15,7 @@ export class OpenWizardService {
     private readonly wizardService: WizardService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
+    private readonly i18n: I18nService,
   ) {}
 
   async ask(
@@ -41,7 +44,7 @@ export class OpenWizardService {
       'ask',
     );
 
-    return this.mergeChunks(chunks);
+    return await this.mergeChunks(chunks);
   }
 
   private async resolveConversationId(
@@ -64,7 +67,7 @@ export class OpenWizardService {
     }
   }
 
-  private mergeChunks(chunks: ChatResponse[]): any {
+  private async mergeChunks(chunks: ChatResponse[]): Promise<any> {
     const messages: any[] = [];
     let currentMessage: any = null;
 
@@ -109,7 +112,14 @@ export class OpenWizardService {
       } else if (chunk.response_type === 'done') {
         // Done
       } else {
-        throw new Error(`Invalid response_type = ${chunk.response_type}`);
+        const message = this.i18n.t('system.errors.invalidResponseType', {
+          args: { responseType: chunk.response_type },
+        });
+        throw new AppException(
+          message,
+          'INVALID_RESPONSE_TYPE',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
       }
     }
 

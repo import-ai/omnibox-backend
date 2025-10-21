@@ -1,0 +1,12 @@
+{
+  "errors": {
+    "accountAlreadyExists": "Account already exists",
+    "invalidEmailFormat": "Invalid email format",
+    "pleaseVerifyEmail": "Please verify your email first",
+    "incorrectVerificationCode": "Incorrect verification code",
+    "passwordTooShort": "Password must be at least 8 characters long",
+    "passwordRequirements": "Password must contain at least one letter and one number",
+    "emailAlreadyInUse": "Email already in use",
+    "provideVerificationCode": "Please provide verification code"
+  }
+}

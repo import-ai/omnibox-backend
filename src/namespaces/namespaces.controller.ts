@@ -9,6 +9,7 @@ import {
   Patch,
   Delete,
   Controller,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateNamespaceDto } from './dto/create-namespace.dto';
@@ -29,24 +30,44 @@ export class NamespacesController {
   }
 
   @Get(':namespaceId/members')
-  async listMembers(@Req() req, @Param('namespaceId') namespaceId: string) {
+  async listMembers(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+  ) {
+    if (!(await this.namespacesService.userIsOwner(namespaceId, userId))) {
+      throw new ForbiddenException(
+        'current user is not owner of this namespace',
+      );
+    }
     return await this.namespacesService.listMembers(namespaceId);
   }
 
   @Get(':namespaceId/members/:userId')
   async getMemberByUserId(
+    @UserId() loginUserId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
   ) {
+    if (!(await this.namespacesService.userIsOwner(namespaceId, loginUserId))) {
+      throw new ForbiddenException(
+        'current user is not owner of this namespace',
+      );
+    }
     return await this.namespacesService.getMemberByUserId(namespaceId, userId);
   }
 
   @Patch(':namespaceId/members/:userId')
   async UpdateMemberRole(
+    @UserId() loginUserId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
     @Body('role') role: NamespaceRole,
   ) {
+    if (!(await this.namespacesService.userIsOwner(namespaceId, loginUserId))) {
+      throw new ForbiddenException(
+        'current user is not owner of this namespace',
+      );
+    }
     return await this.namespacesService.updateMemberRole(
       namespaceId,
       userId,
@@ -56,9 +77,15 @@ export class NamespacesController {
 
   @Delete(':namespaceId/members/:userId')
   async deleteMember(
+    @UserId() loginUserId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
   ) {
+    if (!(await this.namespacesService.userIsOwner(namespaceId, loginUserId))) {
+      throw new ForbiddenException(
+        'current user is not owner of this namespace',
+      );
+    }
     return await this.namespacesService.deleteMember(namespaceId, userId);
   }
 
@@ -80,14 +107,28 @@ export class NamespacesController {
 
   @Patch(':namespaceId')
   async update(
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Body() updateDto: UpdateNamespaceDto,
   ) {
+    if (!(await this.namespacesService.userIsOwner(namespaceId, userId))) {
+      throw new ForbiddenException(
+        'current user is not owner of this namespace',
+      );
+    }
     return await this.namespacesService.update(namespaceId, updateDto);
   }
 
   @Delete(':namespaceId')
-  async delete(@Param('namespaceId') namespaceId: string) {
+  async delete(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+  ) {
+    if (!(await this.namespacesService.userIsOwner(namespaceId, userId))) {
+      throw new ForbiddenException(
+        'current user is not owner of this namespace',
+      );
+    }
     return await this.namespacesService.delete(namespaceId);
   }
 }

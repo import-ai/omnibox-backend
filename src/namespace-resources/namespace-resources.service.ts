@@ -400,6 +400,27 @@ export class NamespaceResourcesService {
     return filteredResources.map((res) => ResourceMetaDto.fromEntity(res));
   }
 
+  async recent(
+    namespaceId: string,
+    userId: string,
+    limit: number = 10,
+  ): Promise<ResourceMetaDto[]> {
+    const allVisible = await this.getUserVisibleResources(userId, namespaceId);
+    const sorted = allVisible
+      .filter((r) => r.parentId !== null)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    const take = Math.max(1, Math.min(100, limit));
+    return sorted.slice(0, take);
+  }
+
+  // Alias for clarity and reuse across modules
+  async getUserVisibleResources(
+    userId: string,
+    namespaceId: string,
+  ): Promise<ResourceMetaDto[]> {
+    return await this.getAllResourcesByUser(userId, namespaceId);
+  }
+
   async getSubResourcesByUser(
     userId: string,
     namespaceId: string,

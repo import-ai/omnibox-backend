@@ -148,6 +148,20 @@ export class NamespaceResourcesController {
     });
   }
 
+  @Get('recent')
+  async recent(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Query('limit') limit?: string,
+  ): Promise<ResourceMetaDto[]> {
+    const take = Number.isFinite(Number(limit)) ? Number(limit) : 10;
+    return await this.namespaceResourcesService.recent(
+      namespaceId,
+      userId,
+      take,
+    );
+  }
+
   @Get(':resourceId')
   async get(
     @UserId() userId: string,

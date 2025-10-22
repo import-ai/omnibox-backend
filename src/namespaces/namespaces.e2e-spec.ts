@@ -213,10 +213,10 @@ describe('NamespacesController (e2e)', () => {
         .send({ role: NamespaceRole.MEMBER })
         .expect(HttpStatus.OK);
 
-      // Clean up
+      // Members are not allowed to delete the namespace.
       await client
         .delete(`/api/v1/namespaces/${tempNamespaceId}`)
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.FORBIDDEN);
     });
 
     it('should fail for non-existent member', async () => {
@@ -264,12 +264,9 @@ describe('NamespacesController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       // Verify member was removed by checking if they can still access the namespace
-      // This might still work due to business logic allowing owner access
-
-      // Clean up
       await client
         .delete(`/api/v1/namespaces/${tempNamespaceId}`)
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 
@@ -356,7 +353,7 @@ describe('NamespacesController (e2e)', () => {
       await client
         .patch('/api/v1/namespaces/nonexistent')
         .send(updateNamespaceDto)
-        .expect(HttpStatus.NOT_FOUND);
+        .expect(HttpStatus.FORBIDDEN);
     });
 
     it('should validate update fields', async () => {
@@ -375,7 +372,7 @@ describe('NamespacesController (e2e)', () => {
     it('should succeed even if already deleted (soft delete behavior)', async () => {
       await client
         .delete('/api/v1/namespaces/nonexistent')
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.FORBIDDEN);
     });
 
     it('should soft delete namespace', async () => {
@@ -455,11 +452,11 @@ describe('NamespacesController (e2e)', () => {
 
       await client
         .get('/api/v1/namespaces/invalid-uuid/members')
-        .expect(HttpStatus.NOT_FOUND);
+        .expect(HttpStatus.FORBIDDEN);
 
       await client
         .get('/api/v1/namespaces/invalid-uuid/members/also-invalid')
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
+        .expect(HttpStatus.FORBIDDEN);
     });
 
     it('should handle concurrent namespace operations', async () => {

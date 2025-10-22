@@ -10,11 +10,13 @@ import {
 } from '@nestjs/common';
 import { InvitationsService } from './invitations.service';
 import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
+import { NamespaceOwner } from 'omniboxd/namespaces/decorators/namespace-owner.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId')
 export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
 
+  @NamespaceOwner()
   @Get('invitations')
   async listInvitations(
     @Param('namespaceId') namespaceId: string,
@@ -23,6 +25,7 @@ export class InvitationsController {
     return await this.invitationsService.listInvitations(namespaceId, type);
   }
 
+  @NamespaceOwner()
   @Post('invitations')
   async createInvitation(
     @Param('namespaceId') namespaceId: string,
@@ -31,6 +34,7 @@ export class InvitationsController {
     return await this.invitationsService.createInvitation(namespaceId, req);
   }
 
+  @NamespaceOwner()
   @Delete('invitations/:invitationId')
   async deleteInvitation(
     @Param('namespaceId') namespaceId: string,

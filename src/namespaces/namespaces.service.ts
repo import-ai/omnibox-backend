@@ -1,6 +1,5 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { Namespace } from './entities/namespace.entity';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceMemberDto } from './dto/namespace-member.dto';
 import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';

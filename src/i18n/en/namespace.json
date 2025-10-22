@@ -1,4 +1,6 @@
 {
+  "userNamespaceName": "{userName}'s Namespace",
+  "uncategorized": "Uncategorized",
   "errors": {
     "workspaceNotFound": "Workspace not found",
     "rootResourceNotFound": "Root resource not found",

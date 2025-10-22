@@ -128,11 +128,9 @@ export class NamespacesService {
     userName: string | null,
     entityManager?: EntityManager,
   ): Promise<Namespace> {
-    const namespaceName = await this.userService.getNamespaceName(
-      userId,
-      userName,
-      entityManager,
-    );
+    const namespaceName = this.i18n.t('namespace.userNamespaceName', {
+      args: { userName },
+    });
     return await this.createAndJoinNamespace(
       userId,
       namespaceName,
@@ -245,7 +243,7 @@ export class NamespacesService {
         parentId: privateRoot.id,
         userId,
         resourceType: ResourceType.FOLDER,
-        name: await this.getUncategorizedName(userId, entityManager),
+        name: this.i18n.t('namespace.uncategorized'),
       },
       entityManager,
     );
@@ -298,21 +296,6 @@ export class NamespacesService {
       ResourcePermission.FULL_ACCESS,
       entityManager,
     );
-  }
-
-  private async getUncategorizedName(
-    userId: string,
-    entityManager?: EntityManager,
-  ): Promise<string> {
-    const option = await this.userService.getOption(
-      userId,
-      'language',
-      entityManager,
-    );
-    if (option && option.value == 'zh-CN') {
-      return '未分类';
-    }
-    return 'Uncategorized';
   }
 
   async updateMemberRole(

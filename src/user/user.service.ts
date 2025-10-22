@@ -420,21 +420,6 @@ export class UserService {
     await repo.save(repo.create({ userId, name, value }));
   }
 
-  async getNamespaceName(
-    userId: string,
-    userName: string | null,
-    entityManager?: EntityManager,
-  ) {
-    if (!userName) {
-      userName = 'User';
-    }
-    const option = await this.getOption(userId, 'language', entityManager);
-    if (option && option.value === 'zh-CN') {
-      return `${userName}的空间`;
-    }
-    return `${userName}'s Namespace`;
-  }
-
   async getOption(userId: string, name: string, entityManager?: EntityManager) {
     const repo = entityManager
       ? entityManager.getRepository(UserOption)

@@ -1,6 +1,6 @@
 import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { I18nContext, I18nService } from 'nestjs-i18n';
 import { MailerService } from '@nestjs-modules/mailer';
 
 @Injectable()
@@ -22,6 +22,7 @@ export class MailService {
         template: 'sign-up',
         context: {
           resetUrl,
+          i18nLang: I18nContext.current()?.lang,
         },
       });
     } catch (error) {
@@ -44,6 +45,7 @@ export class MailService {
         template: 'password',
         context: {
           resetUrl,
+          i18nLang: I18nContext.current()?.lang,
         },
       });
     } catch (error) {
@@ -67,6 +69,7 @@ export class MailService {
         template: 'email-verification',
         context: {
           code,
+          i18nLang: I18nContext.current()?.lang,
         },
       });
     } catch (error) {
@@ -90,6 +93,7 @@ export class MailService {
         template: 'invite',
         context: {
           resetUrl,
+          i18nLang: I18nContext.current()?.lang,
         },
       });
     } catch (error) {

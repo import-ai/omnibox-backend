@@ -1,6 +1,6 @@
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { I18nService, I18nContext } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
@@ -142,24 +142,8 @@ export class ConversationsService {
     if (summary.user_content) {
       const content = summary.user_content.trim();
       if (content.length > 0) {
-        // Get user's language preference
-        let lang: '简体中文' | 'English' | undefined;
-        try {
-          const languageOption = await this.userService.getOption(
-            userId,
-            'language',
-          );
-          if (languageOption?.value) {
-            if (languageOption.value === 'zh-CN') {
-              lang = '简体中文';
-            } else if (languageOption.value === 'en-US') {
-              lang = 'English';
-            }
-          }
-        } catch {
-          // Ignore language preference errors, continue without lang
-        }
-
+        const currentLanguage = I18nContext.current()?.lang;
+        const lang = currentLanguage?.includes('zh') ? '简体中文' : 'English';
         const titleCreateResponse = await this.wizardApiService.request(
           'POST',
           '/internal/api/v1/wizard/title',

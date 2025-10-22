@@ -107,8 +107,8 @@ export class AppModule implements NestModule {
           },
           resolvers: [
             { use: QueryResolver, options: ['lang'] },
-            AcceptLanguageResolver,
             new HeaderResolver(['x-lang']),
+            AcceptLanguageResolver,
           ],
         }),
         TelemetryModule,

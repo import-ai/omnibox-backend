@@ -126,16 +126,18 @@ export class WechatService extends SocialService {
       `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
     );
     if (!accessTokenResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.oauthFailed', {
-        args: { provider: 'WeChat' },
+        args: { provider: providerName },
       });
       throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
     }
     const accessTokenData = await accessTokenResponse.json();
 
     if (accessTokenData.errmsg) {
+      const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.invalidProviderData', {
-        args: { provider: 'WeChat' },
+        args: { provider: providerName },
       });
       throw new AppException(
         `${message}: ${accessTokenData.errmsg}`,
@@ -148,8 +150,9 @@ export class WechatService extends SocialService {
       `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
     );
     if (!userDataResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.failedToGetUserInfo', {
-        args: { provider: 'WeChat' },
+        args: { provider: providerName },
       });
       throw new AppException(
         message,
@@ -160,8 +163,9 @@ export class WechatService extends SocialService {
     const userData = await userDataResponse.json();
 
     if (userData.errmsg) {
+      const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.invalidProviderData', {
-        args: { provider: 'WeChat' },
+        args: { provider: providerName },
       });
       throw new AppException(
         `${message}: ${userData.errmsg}`,
@@ -173,8 +177,9 @@ export class WechatService extends SocialService {
     if (userId) {
       const wechatUser = await this.userService.findByLoginId(userData.unionid);
       if (wechatUser && wechatUser.id !== userId) {
+        const providerName = this.i18n.t('auth.providers.wechat');
         const message = this.i18n.t('auth.errors.invalidProviderData', {
-          args: { provider: 'wechat' },
+          args: { provider: providerName },
         });
         throw new AppException(
           message,
@@ -280,16 +285,18 @@ export class WechatService extends SocialService {
       `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
     );
     if (!accessTokenResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.oauthFailed', {
-        args: { provider: 'WeChat' },
+        args: { provider: providerName },
       });
       throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
     }
     const accessTokenData = await accessTokenResponse.json();
 
     if (accessTokenData.errmsg) {
+      const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.invalidProviderData', {
-        args: { provider: 'WeChat' },
+        args: { provider: providerName },
       });
       throw new AppException(
         `${message}: ${accessTokenData.errmsg}`,
@@ -302,8 +309,9 @@ export class WechatService extends SocialService {
       `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
     );
     if (!userDataResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.failedToGetUserInfo', {
-        args: { provider: 'WeChat' },
+        args: { provider: providerName },
       });
       throw new AppException(
         message,
@@ -314,8 +322,9 @@ export class WechatService extends SocialService {
     const userData = await userDataResponse.json();
 
     if (userData.errmsg) {
+      const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.invalidProviderData', {
-        args: { provider: 'WeChat' },
+        args: { provider: providerName },
       });
       throw new AppException(
         `${message}: ${userData.errmsg}`,

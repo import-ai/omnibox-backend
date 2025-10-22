@@ -40,7 +40,7 @@ export class AuthService {
       if (isEmail(email)) {
         const userUseEmail = await this.userService.findByEmail(email);
         if (!userUseEmail) {
-          const message = this.i18n.t('auth.errors.userNotFound');
+          const message = this.i18n.t('auth.errors.userNotFoundToSignUp');
           throw new AppException(
             message,
             'USER_NOT_FOUND',
@@ -82,10 +82,10 @@ export class AuthService {
     return this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
-  async signUp(url: string, email: string, lang?: string) {
+  async signUp(url: string, email: string) {
     const token: string = await this.getSignUpToken(email);
     const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendSignUpEmail(email, mailSendUri, lang);
+    await this.mailService.sendSignUpEmail(email, mailSendUri);
   }
 
   async signUpConfirm(
@@ -153,12 +153,7 @@ export class AuthService {
       expiresIn: '1h',
     });
     const mailSendUri = `${url}?token=${token}`;
-    const lang = await this.userService.getOption(user.id, 'language');
-    await this.mailService.sendPasswordEmail(
-      user.email!,
-      mailSendUri,
-      lang?.value,
-    );
+    await this.mailService.sendPasswordEmail(user.email!, mailSendUri);
     // return { url: mailSendUri };
   }
 
@@ -213,11 +208,9 @@ export class AuthService {
       const token = this.jwtService.sign(payload, {
         expiresIn: '1h',
       });
-      const lang = await this.userService.getOption(account.id, 'language');
       await this.mailService.sendInviteEmail(
         email,
         `${data.inviteUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`,
-        lang?.value,
       );
       return;
     }
@@ -229,8 +222,7 @@ export class AuthService {
       expiresIn: '1h',
     });
     const mailSendUri = `${data.registerUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`;
-    const lang = await this.userService.getOption(userId, 'language');
-    await this.mailService.sendInviteEmail(email, mailSendUri, lang?.value);
+    await this.mailService.sendInviteEmail(email, mailSendUri);
     // return { url: mailSendUri };
   }
 

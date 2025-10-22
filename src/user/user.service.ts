@@ -332,8 +332,7 @@ export class UserService {
 
     this.cleanExpiresState();
 
-    const lang = await this.getOption(userId, 'language');
-    await this.mailService.validateEmail(email, code, lang?.value);
+    await this.mailService.validateEmail(email, code);
 
     return { email };
   }

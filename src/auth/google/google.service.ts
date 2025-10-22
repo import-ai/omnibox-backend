@@ -119,8 +119,9 @@ export class GoogleService extends SocialService {
     });
 
     if (!tokenResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.google');
       const message = this.i18n.t('auth.errors.oauthFailed', {
-        args: { provider: 'Google' },
+        args: { provider: providerName },
       });
       throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
     }
@@ -128,8 +129,9 @@ export class GoogleService extends SocialService {
     const tokenData: GoogleTokenResponse = await tokenResponse.json();
 
     if (!tokenData.id_token) {
+      const providerName = this.i18n.t('auth.providers.google');
       const message = this.i18n.t('auth.errors.invalidTokenResponse', {
-        args: { provider: 'Google' },
+        args: { provider: providerName },
       });
       throw new AppException(
         message,
@@ -146,8 +148,9 @@ export class GoogleService extends SocialService {
     );
 
     if (!userInfoResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.google');
       const message = this.i18n.t('auth.errors.failedToGetUserInfo', {
-        args: { provider: 'Google' },
+        args: { provider: providerName },
       });
       throw new AppException(
         message,
@@ -159,8 +162,9 @@ export class GoogleService extends SocialService {
     const userData: GoogleUserInfo = await userInfoResponse.json();
 
     if (!userData.sub || !userData.email) {
+      const providerName = this.i18n.t('auth.providers.google');
       const message = this.i18n.t('auth.errors.invalidUserData', {
-        args: { provider: 'Google' },
+        args: { provider: providerName },
       });
       throw new AppException(
         message,
@@ -172,8 +176,9 @@ export class GoogleService extends SocialService {
     if (userId) {
       const wechatUser = await this.userService.findByLoginId(userData.sub);
       if (wechatUser && wechatUser.id !== userId) {
+        const providerName = this.i18n.t('auth.providers.google');
         const message = this.i18n.t('auth.errors.invalidProviderData', {
-          args: { provider: 'google' },
+          args: { provider: providerName },
         });
         throw new AppException(
           message,

@@ -5,11 +5,14 @@ import { ExtractTagsProcessor } from './extract-tags.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 describe('ExtractTagsProcessor', () => {
   let processor: ExtractTagsProcessor;
   let namespaceResourcesService: jest.Mocked<NamespaceResourcesService>;
   let tagService: jest.Mocked<TagService>;
+  let i18nService: jest.Mocked<I18nService>;
 
   beforeEach(async () => {
     const mockResourcesService = {
@@ -18,6 +21,16 @@ describe('ExtractTagsProcessor', () => {
 
     const mockTagService = {
       getOrCreateTagsByNames: jest.fn(),
+    };
+
+    const mockI18nService = {
+      t: jest.fn((key: string) => {
+        // Return mock translations for test purposes
+        const translations: Record<string, string> = {
+          'wizard.errors.invalidTaskPayload': 'Invalid task payload: missing resource_id',
+        };
+        return translations[key] || key;
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -30,12 +43,17 @@ describe('ExtractTagsProcessor', () => {
           provide: TagService,
           useValue: mockTagService,
         },
+        {
+          provide: I18nService,
+          useValue: mockI18nService,
+        },
       ],
     }).compile();
 
     namespaceResourcesService = module.get(NamespaceResourcesService);
     tagService = module.get(TagService);
-    processor = new ExtractTagsProcessor(namespaceResourcesService, tagService);
+    i18nService = module.get(I18nService);
+    processor = new ExtractTagsProcessor(namespaceResourcesService, tagService, i18nService);
   });
 
   afterEach(() => {
@@ -80,14 +98,14 @@ describe('ExtractTagsProcessor', () => {
       expect(namespaceResourcesService.update).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException when payload is missing resource_id', async () => {
+    it('should throw AppException when payload is missing resource_id', async () => {
       const task = createMockTask({
         payload: {},
         output: { tags: ['test'] },
       });
 
       await expect(processor.process(task as any)).rejects.toThrow(
-        BadRequestException,
+        AppException,
       );
       await expect(processor.process(task as any)).rejects.toThrow(
         'Invalid task payload: missing resource_id',

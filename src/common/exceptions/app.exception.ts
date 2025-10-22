@@ -24,7 +24,7 @@ export class AppException extends HttpException {
   override getResponse() {
     return {
       statusCode: this.getStatus(),
-      code: this.code,
+      code: this.code.toLowerCase(),
       message: this.message,
       timestamp: new Date().toISOString(),
     };

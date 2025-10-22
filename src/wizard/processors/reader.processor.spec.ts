@@ -7,12 +7,15 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 describe('ReaderProcessor', () => {
   let processor: ReaderProcessor;
   let namespaceResourcesService: jest.Mocked<NamespaceResourcesService>;
   let resourcesService: jest.Mocked<ResourcesService>;
   let tagService: jest.Mocked<TagService>;
+  let i18nService: jest.Mocked<I18nService>;
 
   const mockResource: Partial<Resource> = {
     id: 'test-resource-id',
@@ -35,6 +38,16 @@ describe('ReaderProcessor', () => {
       getOrCreateTagsByNames: jest.fn(),
     };
 
+    const mockI18nService = {
+      t: jest.fn((key: string) => {
+        // Return mock translations for test purposes
+        const translations: Record<string, string> = {
+          'wizard.errors.invalidTaskPayload': 'Invalid task payload',
+        };
+        return translations[key] || key;
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
@@ -49,16 +62,22 @@ describe('ReaderProcessor', () => {
           provide: TagService,
           useValue: mockTagService,
         },
+        {
+          provide: I18nService,
+          useValue: mockI18nService,
+        },
       ],
     }).compile();
 
     namespaceResourcesService = module.get(NamespaceResourcesService);
     resourcesService = module.get(ResourcesService);
     tagService = module.get(TagService);
+    i18nService = module.get(I18nService);
     processor = new ReaderProcessor(
       namespaceResourcesService,
       resourcesService,
       tagService,
+      i18nService,
     );
   });
 
@@ -250,7 +269,7 @@ describe('ReaderProcessor', () => {
         );
       });
 
-      it('should throw BadRequestException when payload has no resource_id', async () => {
+      it('should throw AppException when payload has no resource_id', async () => {
         const task = createMockTask({
           payload: {},
           output: {
@@ -266,7 +285,7 @@ describe('ReaderProcessor', () => {
         });
 
         await expect(processor.process(task)).rejects.toThrow(
-          BadRequestException,
+          AppException,
         );
         await expect(processor.process(task)).rejects.toThrow(
           'Invalid task payload',

@@ -69,6 +69,11 @@ export class UserController {
     return await this.userService.createOption(req.user.id, createOptionDto);
   }
 
+  @Get('option/list')
+  async listOption(@Req() req) {
+    return await this.userService.listOption(req.user.id);
+  }
+
   @Get('option/:name')
   async getOption(@Req() req, @Param('name') name: string) {
     return await this.userService.getOption(req.user.id, name);

@@ -4,6 +4,7 @@ import {
   IsObject,
   IsOptional,
   IsNotEmpty,
+  IsBoolean,
 } from 'class-validator';
 
 export class OpenCreateResourceDto {
@@ -23,4 +24,8 @@ export class OpenCreateResourceDto {
   @IsObject()
   @IsOptional()
   attrs?: Record<string, any>;
+
+  @IsBoolean()
+  @IsOptional()
+  skip_parsing_tags_from_content?: boolean;
 }

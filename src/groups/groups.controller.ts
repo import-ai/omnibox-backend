@@ -6,11 +6,7 @@ import {
   Param,
   Patch,
   Post,
-  Req,
-  HttpStatus,
 } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18n, I18nContext } from 'nestjs-i18n';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { plainToInstance } from 'class-transformer';
@@ -26,7 +22,7 @@ export class GroupsController {
 
   @NamespaceOwner()
   @Get()
-  async list(@Req() req, @Param('namespaceId') namespaceId: string) {
+  async list(@Param('namespaceId') namespaceId: string) {
     const groups = await this.groupsService.listGroups(namespaceId);
     const invitations =
       await this.groupsService.listGroupInvitations(namespaceId);
@@ -46,10 +42,8 @@ export class GroupsController {
   @NamespaceOwner()
   @Post()
   async create(
-    @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Body() createGroupDto: CreateGroupDto,
-    @I18n() i18n: I18nContext,
   ) {
     const group = await this.groupsService.createGroup(
       namespaceId,
@@ -61,11 +55,9 @@ export class GroupsController {
   @NamespaceOwner()
   @Patch(':groupId')
   async update(
-    @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
     @Body() updateGroupDto: UpdateGroupDto,
-    @I18n() i18n: I18nContext,
   ) {
     const group = await this.groupsService.updateGroup(
       namespaceId,
@@ -78,10 +70,8 @@ export class GroupsController {
   @NamespaceOwner()
   @Delete(':groupId')
   async delete(
-    @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
-    @I18n() i18n: I18nContext,
   ) {
     await this.groupsService.deleteGroup(namespaceId, groupId);
   }
@@ -89,10 +79,8 @@ export class GroupsController {
   @NamespaceOwner()
   @Get(':groupId/users')
   async listGroupUsers(
-    @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
-    @I18n() i18n: I18nContext,
   ) {
     const users = await this.groupsService.listGroupUsers(namespaceId, groupId);
     return plainToInstance(GroupUserDto, users, {
@@ -103,11 +91,9 @@ export class GroupsController {
   @NamespaceOwner()
   @Post(':groupId/users')
   async addGroupUser(
-    @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
     @Body() addGroupUserDto: AddGroupUserDto,
-    @I18n() i18n: I18nContext,
   ) {
     const actions: Array<Promise<any>> = [];
     addGroupUserDto.userIds.forEach((userId) => {
@@ -123,11 +109,9 @@ export class GroupsController {
   @NamespaceOwner()
   @Delete(':groupId/users/:userId')
   async deleteGroupUser(
-    @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
     @Param('userId') userId: string,
-    @I18n() i18n: I18nContext,
   ) {
     await this.groupsService.deleteGroupUser(namespaceId, groupId, userId);
   }

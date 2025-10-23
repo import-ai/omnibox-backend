@@ -1,16 +1,21 @@
 import {
   CallHandler,
   ExecutionContext,
-  ForbiddenException,
+  HttpStatus,
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Observable } from 'rxjs';
 import { NamespacesService } from '../namespaces.service';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class NamespaceOwnerInterceptor implements NestInterceptor {
-  constructor(private readonly namespacesService: NamespacesService) {}
+  constructor(
+    private readonly namespacesService: NamespacesService,
+    private readonly i18n: I18nService,
+  ) {}
 
   async intercept(
     context: ExecutionContext,
@@ -21,9 +26,8 @@ export class NamespaceOwnerInterceptor implements NestInterceptor {
     const userId = request.user?.id;
 
     if (!namespaceId || !userId) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = this.i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
 
     const isOwner = await this.namespacesService.userIsOwner(
@@ -32,9 +36,8 @@ export class NamespaceOwnerInterceptor implements NestInterceptor {
     );
 
     if (!isOwner) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = this.i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
 
     return next.handle();

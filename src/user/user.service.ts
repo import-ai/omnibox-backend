@@ -420,6 +420,16 @@ export class UserService {
     await repo.save(repo.create({ userId, name, value }));
   }
 
+  async listOption(userId: string, entityManager?: EntityManager) {
+    const repo = entityManager
+      ? entityManager.getRepository(UserOption)
+      : this.userOptionRepository;
+    const optionList = await repo.findBy({
+      userId,
+    });
+    return optionList;
+  }
+
   async getOption(userId: string, name: string, entityManager?: EntityManager) {
     const repo = entityManager
       ? entityManager.getRepository(UserOption)

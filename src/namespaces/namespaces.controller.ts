@@ -13,6 +13,7 @@ import {
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateNamespaceDto } from './dto/create-namespace.dto';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
+import { NamespaceOwner } from './decorators/namespace-owner.decorator';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
@@ -28,11 +29,13 @@ export class NamespacesController {
     return await this.namespacesService.getNamespace(namespaceId);
   }
 
+  @NamespaceOwner()
   @Get(':namespaceId/members')
-  async listMembers(@Req() req, @Param('namespaceId') namespaceId: string) {
+  async listMembers(@Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.listMembers(namespaceId);
   }
 
+  @NamespaceOwner()
   @Get(':namespaceId/members/:userId')
   async getMemberByUserId(
     @Param('namespaceId') namespaceId: string,
@@ -41,6 +44,7 @@ export class NamespacesController {
     return await this.namespacesService.getMemberByUserId(namespaceId, userId);
   }
 
+  @NamespaceOwner()
   @Patch(':namespaceId/members/:userId')
   async UpdateMemberRole(
     @Param('namespaceId') namespaceId: string,
@@ -54,6 +58,7 @@ export class NamespacesController {
     );
   }
 
+  @NamespaceOwner()
   @Delete(':namespaceId/members/:userId')
   async deleteMember(
     @Param('namespaceId') namespaceId: string,
@@ -78,6 +83,7 @@ export class NamespacesController {
     );
   }
 
+  @NamespaceOwner()
   @Patch(':namespaceId')
   async update(
     @Param('namespaceId') namespaceId: string,
@@ -86,6 +92,7 @@ export class NamespacesController {
     return await this.namespacesService.update(namespaceId, updateDto);
   }
 
+  @NamespaceOwner()
   @Delete(':namespaceId')
   async delete(@Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.delete(namespaceId);

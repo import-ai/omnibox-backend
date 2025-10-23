@@ -4,15 +4,16 @@ import { UserModule } from 'omniboxd/user/user.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { NamespacesController } from 'omniboxd/namespaces/namespaces.controller';
-import { Namespace } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { Namespace } from './entities/namespace.entity';
+import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interceptor';
 
 @Module({
   exports: [NamespacesService],
-  providers: [NamespacesService],
+  providers: [NamespacesService, NamespaceOwnerInterceptor],
   controllers: [NamespacesController],
   imports: [
     UserModule,

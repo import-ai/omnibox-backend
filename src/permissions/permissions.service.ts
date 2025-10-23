@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from 'omniboxd/groups/entities/group.entity';
 import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
@@ -41,6 +43,7 @@ export class PermissionsService {
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
     private readonly resourcesService: ResourcesService,
+    private readonly i18n: I18nService,
   ) {}
 
   async getGroupPermissions(
@@ -392,7 +395,12 @@ export class PermissionsService {
     );
     if (resources.length === 0 || resources[resources.length - 1].parentId) {
       // Parent resource has been deleted
-      throw new NotFoundException('Resource not found');
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     const resourceIds = resources.map((resource) => resource.id);
 

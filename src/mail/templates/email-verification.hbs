@@ -1,15 +1,12 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-  <title>Verify Your Email Address</title>
+  <title>{{t "mail.templates.emailVerification.title"}}</title>
 </head>
-
 <body>
-  <h1>Email Verification</h1>
-  <p>Please use the following code to verify your email address:</p>
-  <p><strong>{{code}}</strong></p>
-  <p>This code will expire in 5 minutes.</p>
+  <h1>{{t "mail.templates.emailVerification.heading"}}</h1>
+  <p>{{t "mail.templates.emailVerification.body"}}</p>
+  <p><strong>{{t "mail.templates.emailVerification.codeLabel"}} {{code}}</strong></p>
+  <p>{{t "mail.templates.emailVerification.expireText"}}</p>
 </body>
-
 </html>

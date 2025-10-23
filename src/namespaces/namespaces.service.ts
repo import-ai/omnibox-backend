@@ -10,17 +10,15 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import {
   NamespaceMember,
   NamespaceRole,
 } from './entities/namespace-member.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class NamespacesService {
@@ -38,6 +36,7 @@ export class NamespacesService {
     private readonly resourcesService: ResourcesService,
 
     private readonly permissionsService: PermissionsService,
+    private readonly i18n: I18nService,
   ) {}
 
   async getPrivateRootId(userId: string, namespaceId: string): Promise<string> {
@@ -48,7 +47,12 @@ export class NamespacesService {
       },
     });
     if (member === null) {
-      throw new NotFoundException('Root resource not found.');
+      const message = this.i18n.t('namespace.errors.rootResourceNotFound');
+      throw new AppException(
+        message,
+        'ROOT_RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return member.rootResourceId;
   }
@@ -77,10 +81,20 @@ export class NamespacesService {
       },
     });
     if (!namespace) {
-      throw new NotFoundException('Workspace not found');
+      const message = this.i18n.t('namespace.errors.workspaceNotFound');
+      throw new AppException(
+        message,
+        'WORKSPACE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     if (!namespace.rootResourceId) {
-      throw new NotFoundException('Root resource not found');
+      const message = this.i18n.t('namespace.errors.rootResourceNotFound');
+      throw new AppException(
+        message,
+        'ROOT_RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return await this.resourcesService.getResourceMetaOrFail(
       namespaceId,
@@ -99,7 +113,12 @@ export class NamespacesService {
       },
     });
     if (!namespace) {
-      throw new NotFoundException('Workspace not found');
+      const message = this.i18n.t('namespace.errors.workspaceNotFound');
+      throw new AppException(
+        message,
+        'WORKSPACE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return namespace;
   }
@@ -109,11 +128,9 @@ export class NamespacesService {
     userName: string | null,
     entityManager?: EntityManager,
   ): Promise<Namespace> {
-    const namespaceName = await this.userService.getNamespaceName(
-      userId,
-      userName,
-      entityManager,
-    );
+    const namespaceName = this.i18n.t('namespace.userNamespaceName', {
+      args: { userName },
+    });
     return await this.createAndJoinNamespace(
       userId,
       namespaceName,
@@ -147,7 +164,12 @@ export class NamespacesService {
     manager: EntityManager,
   ): Promise<Namespace> {
     if ((await manager.countBy(Namespace, { name })) > 0) {
-      throw new ConflictException({ code: 'namespace_conflict' });
+      const message = this.i18n.t('namespace.errors.namespaceConflict');
+      throw new AppException(
+        message,
+        'NAMESPACE_CONFLICT',
+        HttpStatus.CONFLICT,
+      );
     }
     const namespace = await manager.save(manager.create(Namespace, { name }));
     const publicRoot = await this.resourcesService.createResource(
@@ -176,7 +198,12 @@ export class NamespacesService {
     const namespace = await this.getNamespace(id, manager);
     if (updateDto.name && updateDto.name !== namespace.name) {
       if ((await repo.countBy({ name: updateDto.name })) > 0) {
-        throw new ConflictException({ code: 'namespace_conflict' });
+        const message = this.i18n.t('namespace.errors.namespaceConflict');
+        throw new AppException(
+          message,
+          'NAMESPACE_CONFLICT',
+          HttpStatus.CONFLICT,
+        );
       }
       namespace.name = updateDto.name;
     }
@@ -216,7 +243,7 @@ export class NamespacesService {
         parentId: privateRoot.id,
         userId,
         resourceType: ResourceType.FOLDER,
-        name: await this.getUncategorizedName(userId, entityManager),
+        name: this.i18n.t('namespace.uncategorized'),
       },
       entityManager,
     );
@@ -269,21 +296,6 @@ export class NamespacesService {
       ResourcePermission.FULL_ACCESS,
       entityManager,
     );
-  }
-
-  private async getUncategorizedName(
-    userId: string,
-    entityManager?: EntityManager,
-  ): Promise<string> {
-    const option = await this.userService.getOption(
-      userId,
-      'language',
-      entityManager,
-    );
-    if (option && option.value == 'zh-CN') {
-      return '未分类';
-    }
-    return 'Uncategorized';
   }
 
   async updateMemberRole(

@@ -1,18 +1,17 @@
 import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { TaskDto, TaskMetaDto } from './dto/task.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class TasksService {
   constructor(
     @InjectRepository(Task)
     private taskRepository: Repository<Task>,
+    private readonly i18n: I18nService,
   ) {}
 
   async create(data: Partial<Task>) {
@@ -40,7 +39,8 @@ export class TasksService {
       where: { id },
     });
     if (!task) {
-      throw new NotFoundException(`Task ${id} not found`);
+      const message = this.i18n.t('task.errors.taskNotFound', { args: { id } });
+      throw new AppException(message, 'TASK_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
     return task;
   }
@@ -50,7 +50,8 @@ export class TasksService {
       where: { id },
     });
     if (!task) {
-      throw new NotFoundException(`Task ${id} not found`);
+      const message = this.i18n.t('task.errors.taskNotFound', { args: { id } });
+      throw new AppException(message, 'TASK_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
     await this.taskRepository.softRemove(task);
   }
@@ -59,10 +60,20 @@ export class TasksService {
     const task = await this.get(id);
 
     if (task.canceledAt) {
-      throw new BadRequestException('Task is already canceled');
+      const message = this.i18n.t('task.errors.taskAlreadyCanceled');
+      throw new AppException(
+        message,
+        'TASK_ALREADY_CANCELED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     if (task.endedAt) {
-      throw new BadRequestException('Cannot cancel a finished task');
+      const message = this.i18n.t('task.errors.cannotCancelFinished');
+      throw new AppException(
+        message,
+        'CANNOT_CANCEL_FINISHED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     task.canceledAt = new Date();
@@ -75,7 +86,12 @@ export class TasksService {
     const originalTask = await this.get(id);
 
     if (!originalTask.canceledAt) {
-      throw new BadRequestException('Can only rerun canceled tasks');
+      const message = this.i18n.t('task.errors.canOnlyRerunCanceled');
+      throw new AppException(
+        message,
+        'CAN_ONLY_RERUN_CANCELED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const newTask = await this.create({

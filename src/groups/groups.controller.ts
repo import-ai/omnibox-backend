@@ -2,13 +2,15 @@ import {
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   Param,
   Patch,
   Post,
   Req,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18n, I18nContext } from 'nestjs-i18n';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { plainToInstance } from 'class-transformer';
@@ -26,11 +28,10 @@ export class GroupsController {
   ) {}
 
   @Get()
-  async list(@Req() req, @Param('namespaceId') namespaceId: string) {
+  async list(@Req() req, @Param('namespaceId') namespaceId: string, @I18n() i18n: I18nContext) {
     if (!(await this.namespacesService.userIsOwner(namespaceId, req.user.id))) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
 
     const groups = await this.groupsService.listGroups(namespaceId);
@@ -54,11 +55,11 @@ export class GroupsController {
     @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Body() createGroupDto: CreateGroupDto,
+    @I18n() i18n: I18nContext,
   ) {
     if (!(await this.namespacesService.userIsOwner(namespaceId, req.user.id))) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
     const group = await this.groupsService.createGroup(
       namespaceId,
@@ -73,11 +74,11 @@ export class GroupsController {
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
     @Body() updateGroupDto: UpdateGroupDto,
+    @I18n() i18n: I18nContext,
   ) {
     if (!(await this.namespacesService.userIsOwner(namespaceId, req.user.id))) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
     const group = await this.groupsService.updateGroup(
       namespaceId,
@@ -92,11 +93,11 @@ export class GroupsController {
     @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
+    @I18n() i18n: I18nContext,
   ) {
     if (!(await this.namespacesService.userIsOwner(namespaceId, req.user.id))) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
     await this.groupsService.deleteGroup(namespaceId, groupId);
   }
@@ -106,11 +107,11 @@ export class GroupsController {
     @Req() req,
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
+    @I18n() i18n: I18nContext,
   ) {
     if (!(await this.namespacesService.userIsOwner(namespaceId, req.user.id))) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
     const users = await this.groupsService.listGroupUsers(namespaceId, groupId);
     return plainToInstance(GroupUserDto, users, {
@@ -124,11 +125,11 @@ export class GroupsController {
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
     @Body() addGroupUserDto: AddGroupUserDto,
+    @I18n() i18n: I18nContext,
   ) {
     if (!(await this.namespacesService.userIsOwner(namespaceId, req.user.id))) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
     const actions: Array<Promise<any>> = [];
     addGroupUserDto.userIds.forEach((userId) => {
@@ -147,11 +148,11 @@ export class GroupsController {
     @Param('namespaceId') namespaceId: string,
     @Param('groupId') groupId: string,
     @Param('userId') userId: string,
+    @I18n() i18n: I18nContext,
   ) {
     if (!(await this.namespacesService.userIsOwner(namespaceId, req.user.id))) {
-      throw new ForbiddenException(
-        'current user is not owner of this namespace',
-      );
+      const message = i18n.t('namespace.errors.userNotOwner');
+      throw new AppException(message, 'USER_NOT_OWNER', HttpStatus.FORBIDDEN);
     }
     await this.groupsService.deleteGroupUser(namespaceId, groupId, userId);
   }

@@ -7,13 +7,15 @@ import {
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   Param,
   Patch,
   Post,
   Query,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18n, I18nContext } from 'nestjs-i18n';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
@@ -179,6 +181,7 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Body() data: UpdateResourceDto,
+    @I18n() i18n: I18nContext,
   ) {
     const hasPermission = await this.permissionsService.userHasPermission(
       namespaceId,
@@ -187,7 +190,8 @@ export class NamespaceResourcesController {
       ResourcePermission.CAN_EDIT,
     );
     if (!hasPermission) {
-      throw new ForbiddenException('Not authorized');
+      const message = i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
     await this.namespaceResourcesService.update(userId, resourceId, data);
     return await this.namespaceResourcesService.getResource({
@@ -202,6 +206,7 @@ export class NamespaceResourcesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
+    @I18n() i18n: I18nContext,
   ) {
     const hasPermission = await this.permissionsService.userHasPermission(
       namespaceId,
@@ -210,7 +215,8 @@ export class NamespaceResourcesController {
       ResourcePermission.CAN_EDIT,
     );
     if (!hasPermission) {
-      throw new ForbiddenException('Not authorized');
+      const message = i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
     return await this.namespaceResourcesService.delete(
       userId,

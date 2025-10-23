@@ -1,4 +1,4 @@
-import { Injectable, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Invitation } from './entities/invitation.entity';
 import { FindOptionsWhere, IsNull, Not, Repository } from 'typeorm';
@@ -9,6 +9,8 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { UserInvitationDto as AuthInvitationDto } from 'omniboxd/auth/dto/invitation.dto';
 import { GroupsService } from '../groups/groups.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class InvitationsService {
@@ -17,6 +19,7 @@ export class InvitationsService {
     private readonly invitationsRepository: Repository<Invitation>,
     private readonly authService: AuthService,
     private readonly groupsService: GroupsService,
+    private readonly i18n: I18nService,
   ) {}
 
   async listInvitations(
@@ -92,15 +95,25 @@ export class InvitationsService {
     req: CreateInvitationReqDto,
   ): Promise<InvitationDto> {
     if (await this.getInvitation(namespaceId, req.groupId)) {
-      throw new UnprocessableEntityException('Invitation already exists');
+      const message = this.i18n.t('invitation.errors.invitationAlreadyExists');
+      throw new AppException(
+        message,
+        'INVITATION_ALREADY_EXISTS',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
     if (req.groupId) {
       req.namespaceRole = NamespaceRole.MEMBER;
       req.rootPermission = ResourcePermission.NO_ACCESS;
     }
     if (!req.namespaceRole || !req.rootPermission) {
-      throw new UnprocessableEntityException(
-        'Namespace role and root permission level are required',
+      const message = this.i18n.t(
+        'invitation.errors.roleAndPermissionRequired',
+      );
+      throw new AppException(
+        message,
+        'ROLE_PERMISSION_REQUIRED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
     const invitation = await this.invitationsRepository.save(
@@ -141,7 +154,12 @@ export class InvitationsService {
       },
     });
     if (!invitation) {
-      throw new UnprocessableEntityException('Invitation not found');
+      const message = this.i18n.t('invitation.errors.invitationNotFound');
+      throw new AppException(
+        message,
+        'INVITATION_NOT_FOUND',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
     const invitationDto: AuthInvitationDto = {
       namespaceId,

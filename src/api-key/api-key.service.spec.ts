@@ -15,6 +15,8 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 import { CreateAPIKeyDto } from './api-key.dto';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { UserService } from 'omniboxd/user/user.service';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 describe('APIKeyService', () => {
   let service: APIKeyService;
@@ -68,6 +70,23 @@ describe('APIKeyService', () => {
       find: jest.fn(),
     };
 
+    const mockI18nService = {
+      t: jest.fn((key: string, options?: any) => {
+        // Return mock translations for test purposes
+        const translations: Record<string, string> = {
+          'apikey.errors.noPermissionForNamespace': 'User {{userId}} does not have permission to namespace {{namespaceId}}',
+          'apikey.errors.noWritePermission': 'User {{userId}} does not have write permission to resource {{resourceId}} in namespace {{namespaceId}}',
+        };
+        let translation = translations[key] || key;
+        if (options?.args) {
+          Object.entries(options.args).forEach(([param, value]) => {
+            translation = translation.replace(`{{${param}}}`, String(value));
+          });
+        }
+        return translation;
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         APIKeyService,
@@ -90,6 +109,10 @@ describe('APIKeyService', () => {
         {
           provide: UserService,
           useValue: mockUserService,
+        },
+        {
+          provide: I18nService,
+          useValue: mockI18nService,
         },
       ],
     }).compile();
@@ -161,12 +184,12 @@ describe('APIKeyService', () => {
       });
     });
 
-    it('should throw ForbiddenException when user is not a namespace member', async () => {
+    it('should throw AppException when user is not a namespace member', async () => {
       // Mock namespace membership check to return null (not a member)
       namespacesService.getMemberByUserId.mockResolvedValue(null);
 
       await expect(service.create(createApiKeyDto)).rejects.toThrow(
-        ForbiddenException,
+        AppException,
       );
       await expect(service.create(createApiKeyDto)).rejects.toThrow(
         'User test-user-id does not have permission to namespace test-namespace-id',
@@ -181,7 +204,7 @@ describe('APIKeyService', () => {
       expect(apiKeyRepository.create).not.toHaveBeenCalled();
     });
 
-    it('should throw ForbiddenException when user lacks write permission to resource', async () => {
+    it('should throw AppException when user lacks write permission to resource', async () => {
       // Mock namespace membership check
       namespacesService.getMemberByUserId.mockResolvedValue({
         id: 1,
@@ -195,7 +218,7 @@ describe('APIKeyService', () => {
       permissionsService.userHasPermission.mockResolvedValue(false);
 
       await expect(service.create(createApiKeyDto)).rejects.toThrow(
-        ForbiddenException,
+        AppException,
       );
       await expect(service.create(createApiKeyDto)).rejects.toThrow(
         'User test-user-id does not have write permission to resource test-resource-id in namespace test-namespace-id',

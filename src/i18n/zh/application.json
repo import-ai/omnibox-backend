@@ -1,0 +1,8 @@
+{
+  "errors": {
+    "appAuthNotFound": "应用授权未找到",
+    "appNotFound": "应用 {appId} 未找到",
+    "invalidVerifyCode": "无效的验证码",
+    "failedToGenerateVerifyCode": "达到最大尝试次数后仍无法生成唯一验证码"
+  }
+}

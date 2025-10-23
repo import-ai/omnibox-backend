@@ -3,8 +3,10 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
-  ForbiddenException,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { Request } from 'express';
@@ -20,6 +22,7 @@ export class ValidateShareInterceptor implements NestInterceptor {
   constructor(
     private readonly reflector: Reflector,
     private readonly sharesService: SharesService,
+    private readonly i18n: I18nService,
   ) {}
 
   async intercept(
@@ -43,7 +46,12 @@ export class ValidateShareInterceptor implements NestInterceptor {
     const userId = request.user?.id; // Assuming user is attached to request by auth middleware
 
     if (!shareId) {
-      throw new Error(`Share ID parameter 'shareId' not found in request`);
+      const message = this.i18n.t('share.errors.shareIdNotFound');
+      throw new AppException(
+        message,
+        'SHARE_ID_NOT_FOUND',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
 
     // Validate the share
@@ -59,8 +67,11 @@ export class ValidateShareInterceptor implements NestInterceptor {
         validatedShare.shareType !== ShareType.CHAT_ONLY &&
         validatedShare.shareType !== ShareType.ALL
       ) {
-        throw new ForbiddenException(
-          'This share does not allow chat functionality',
+        const message = this.i18n.t('share.errors.chatNotAllowed');
+        throw new AppException(
+          message,
+          'CHAT_NOT_ALLOWED',
+          HttpStatus.FORBIDDEN,
         );
       }
     }

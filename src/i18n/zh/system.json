@@ -1,0 +1,16 @@
+{
+  "errors": {
+    "missingWizardBaseUrl": "需要环境变量 OBB_WIZARD_BASE_URL",
+    "firstMessageNotSystem": "首条消息不是系统消息",
+    "invalidResponseType": "无效的 response_type = {responseType}",
+    "noQueryContent": "未找到查询内容以创建标题",
+    "unknownResponseType": "未知的响应类型: {type}",
+    "envVariableRequired": "需要环境变量 {variable}",
+    "wizardBaseUrlRequired": "需要环境变量 OBB_WIZARD_BASE_URL",
+    "wizardRequestFailed": "从 wizard 获取数据失败",
+    "responseBodyNotReadable": "响应体不可读",
+    "messageIdNotSet": "上下文中未设置消息ID",
+    "messageNotFound": "消息未找到",
+    "requestFailed": "请求失败，状态码 {status}"
+  }
+}

@@ -1,10 +1,5 @@
 import * as bcrypt from 'bcrypt';
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Share, ShareType } from './entities/share.entity';
 import { Repository } from 'typeorm';
@@ -15,6 +10,8 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { UserService } from 'omniboxd/user/user.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class SharesService {
@@ -24,6 +21,7 @@ export class SharesService {
     private readonly resourcesService: ResourcesService,
     private readonly namespacesService: NamespacesService,
     private readonly userService: UserService,
+    private readonly i18n: I18nService,
   ) {}
 
   async getShareById(shareId: string): Promise<Share | null> {
@@ -41,24 +39,49 @@ export class SharesService {
   ) {
     const share = await this.getShareById(shareId);
     if (!share || !share.enabled || !share.userId) {
-      throw new NotFoundException(`No share found with id ${shareId}`);
+      const message = this.i18n.t('share.errors.shareNotFound', {
+        args: { shareId },
+      });
+      throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
     if (share.expiresAt && share.expiresAt < new Date()) {
-      throw new NotFoundException(`No share found with id ${shareId}`);
+      const message = this.i18n.t('share.errors.shareNotFound', {
+        args: { shareId },
+      });
+      throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
     if (share.requireLogin && !userId) {
-      throw new UnauthorizedException('This share requires login');
+      const message = this.i18n.t('share.errors.shareRequiresLogin');
+      throw new AppException(
+        message,
+        'SHARE_REQUIRES_LOGIN',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     if (share.password) {
       if (!password) {
-        throw new ForbiddenException(`Invalid password for share ${shareId}`);
+        const message = this.i18n.t('share.errors.invalidPassword', {
+          args: { shareId },
+        });
+        throw new AppException(
+          message,
+          'INVALID_SHARE_PASSWORD',
+          HttpStatus.FORBIDDEN,
+        );
       }
       const match = await bcrypt.compare(password, share.password);
       if (!match) {
-        throw new ForbiddenException(`Invalid password for share ${shareId}`);
+        const message = this.i18n.t('share.errors.invalidPassword', {
+          args: { shareId },
+        });
+        throw new AppException(
+          message,
+          'INVALID_SHARE_PASSWORD',
+          HttpStatus.FORBIDDEN,
+        );
       }
     }
 
@@ -71,7 +94,10 @@ export class SharesService {
       share.resourceId,
     );
     if (!resource) {
-      throw new NotFoundException(`No share found with id ${share.id}`);
+      const message = this.i18n.t('share.errors.shareNotFound', {
+        args: { shareId: share.id },
+      });
+      throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
     const subResources = await this.resourcesService.getSubResources(
       share.namespaceId,

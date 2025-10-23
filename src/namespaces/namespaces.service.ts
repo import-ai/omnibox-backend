@@ -257,13 +257,17 @@ export class NamespacesService {
     permission: ResourcePermission,
     entityManager: EntityManager,
   ) {
-    const namespaceMember = await entityManager.findOne(NamespaceMember, {
+    const count = await entityManager.count(NamespaceMember, {
       where: { namespaceId, userId },
-      withDeleted: true,
     });
-    if (namespaceMember && !namespaceMember.deletedAt) {
+    if (count > 0) {
       return;
     }
+    const namespaceMember = await entityManager.findOne(NamespaceMember, {
+      where: { namespaceId, userId },
+      order: { updatedAt: 'DESC' },
+      withDeleted: true,
+    });
     const privateRootId = await this.createOrRestorePrivateRoot(
       userId,
       namespaceId,

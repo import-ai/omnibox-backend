@@ -6,11 +6,13 @@ import {
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { ApplicationsResponseDto } from 'omniboxd/applications/applications.dto';
 import { APIKeyResponseDto } from 'omniboxd/api-key/api-key.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 export interface WechatBotCallbackRequestDto {
   verify_code: string;
@@ -32,6 +34,7 @@ export class WechatBot extends BaseApp {
     private readonly applicationsRepository: Repository<Applications>,
     private readonly apiKeyService: APIKeyService,
     private readonly namespacesService: NamespacesService,
+    private readonly i18n: I18nService,
   ) {
     super();
   }
@@ -60,8 +63,13 @@ export class WechatBot extends BaseApp {
       attempts++;
     }
 
-    throw new Error(
-      'Failed to generate unique verify code after maximum attempts',
+    const message = this.i18n.t(
+      'application.errors.failedToGenerateVerifyCode',
+    );
+    throw new AppException(
+      message,
+      'FAILED_TO_GENERATE_VERIFY_CODE',
+      HttpStatus.INTERNAL_SERVER_ERROR,
     );
   }
 
@@ -83,7 +91,12 @@ export class WechatBot extends BaseApp {
     const entity = await this.getEntityByVerifyCode(data.verify_code);
 
     if (!entity) {
-      throw new BadRequestException('Invalid verify code');
+      const message = this.i18n.t('application.errors.invalidVerifyCode');
+      throw new AppException(
+        message,
+        'INVALID_VERIFY_CODE',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     entity.attrs = {

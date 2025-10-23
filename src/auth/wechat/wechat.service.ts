@@ -5,13 +5,9 @@ import { UserService } from 'omniboxd/user/user.service';
 import { SocialService } from 'omniboxd/auth/social.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
-import {
-  Logger,
-  Injectable,
-  ForbiddenException,
-  BadRequestException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Logger, Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 export interface WechatUserInfo {
   unionid: string;
@@ -40,8 +36,9 @@ export class WechatService extends SocialService {
     protected readonly userService: UserService,
     private readonly namespaceService: NamespacesService,
     private readonly dataSource: DataSource,
+    protected readonly i18n: I18nService,
   ) {
-    super(userService);
+    super(userService, i18n);
     this.appId = this.configService.get<string>('OBB_WECHAT_APP_ID', '');
     this.appSecret = this.configService.get<string>(
       'OBB_WECHAT_APP_SECRET',
@@ -115,7 +112,12 @@ export class WechatService extends SocialService {
   ): Promise<any> {
     const stateInfo = this.getState(state);
     if (!stateInfo) {
-      throw new UnauthorizedException('Invalid state identifier');
+      const message = this.i18n.t('auth.errors.invalidStateIdentifier');
+      throw new AppException(
+        message,
+        'INVALID_STATE_IDENTIFIER',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
     const isWeixin = stateInfo.type === 'weixin';
     const appId = isWeixin ? this.appId : this.openAppId;
@@ -124,31 +126,65 @@ export class WechatService extends SocialService {
       `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
     );
     if (!accessTokenResponse.ok) {
-      throw new UnauthorizedException('Failed to get WeChat access token');
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.oauthFailed', {
+        args: { provider: providerName },
+      });
+      throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
     }
     const accessTokenData = await accessTokenResponse.json();
 
     if (accessTokenData.errmsg) {
-      throw new BadRequestException(accessTokenData.errmsg);
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: ${accessTokenData.errmsg}`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const userDataResponse = await fetch(
       `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
     );
     if (!userDataResponse.ok) {
-      throw new UnauthorizedException('Failed to get WeChat user info');
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.failedToGetUserInfo', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'FAILED_TO_GET_USER_INFO',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
     const userData = await userDataResponse.json();
 
     if (userData.errmsg) {
-      throw new BadRequestException(userData.errmsg);
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: ${userData.errmsg}`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     if (userId) {
       const wechatUser = await this.userService.findByLoginId(userData.unionid);
       if (wechatUser && wechatUser.id !== userId) {
-        throw new BadRequestException(
-          'This wechat account is already bound to another user',
+        const providerName = this.i18n.t('auth.providers.wechat');
+        const message = this.i18n.t('auth.errors.invalidProviderData', {
+          args: { provider: providerName },
+        });
+        throw new AppException(
+          message,
+          'ACCOUNT_ALREADY_BOUND',
+          HttpStatus.BAD_REQUEST,
         );
       }
       const existingUser = await this.userService.bindingExistUser({
@@ -230,7 +266,12 @@ export class WechatService extends SocialService {
   ): Promise<WechatUserInfo> {
     const stateInfo = this.getState(state);
     if (!stateInfo) {
-      throw new UnauthorizedException('Invalid state identifier');
+      const message = this.i18n.t('auth.errors.invalidStateIdentifier');
+      throw new AppException(
+        message,
+        'INVALID_STATE_IDENTIFIER',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
     const isOld = state.startsWith('old_');
     const isWeixin = stateInfo.type === 'weixin';
@@ -244,24 +285,52 @@ export class WechatService extends SocialService {
       `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
     );
     if (!accessTokenResponse.ok) {
-      throw new UnauthorizedException('Failed to get WeChat access token');
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.oauthFailed', {
+        args: { provider: providerName },
+      });
+      throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
     }
     const accessTokenData = await accessTokenResponse.json();
 
     if (accessTokenData.errmsg) {
-      throw new BadRequestException(accessTokenData.errmsg);
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: ${accessTokenData.errmsg}`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const userDataResponse = await fetch(
       `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
     );
     if (!userDataResponse.ok) {
-      throw new UnauthorizedException('Failed to get WeChat user info');
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.failedToGetUserInfo', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'FAILED_TO_GET_USER_INFO',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
     const userData = await userDataResponse.json();
 
     if (userData.errmsg) {
-      throw new BadRequestException(userData.errmsg);
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: ${userData.errmsg}`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return userData;
@@ -274,7 +343,12 @@ export class WechatService extends SocialService {
   async unbind(userId: string) {
     const canDo = await this.canUnBinding(userId);
     if (!canDo) {
-      throw new ForbiddenException('Unbinding is not allowed');
+      const message = this.i18n.t('auth.errors.unbindingNotAllowed');
+      throw new AppException(
+        message,
+        'UNBINDING_NOT_ALLOWED',
+        HttpStatus.FORBIDDEN,
+      );
     }
     await this.userService.unbindByLoginType(userId, 'wechat');
   }

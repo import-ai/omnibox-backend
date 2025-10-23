@@ -5,13 +5,9 @@ import { SocialService } from 'omniboxd/auth/social.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -50,8 +46,9 @@ export class GoogleService extends SocialService {
     protected readonly userService: UserService,
     private readonly namespaceService: NamespacesService,
     private readonly dataSource: DataSource,
+    protected readonly i18n: I18nService,
   ) {
-    super(userService);
+    super(userService, i18n);
     this.clientId = this.configService.get<string>('OBB_GOOGLE_CLIENT_ID', '');
     this.clientSecret = this.configService.get<string>(
       'OBB_GOOGLE_CLIENT_SECRET',
@@ -99,7 +96,12 @@ export class GoogleService extends SocialService {
   ): Promise<any> {
     const stateInfo = this.getState(state);
     if (!stateInfo) {
-      throw new UnauthorizedException('Invalid state identifier');
+      const message = this.i18n.t('auth.errors.invalidStateIdentifier');
+      throw new AppException(
+        message,
+        'INVALID_STATE_IDENTIFIER',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const tokenResponse = await fetch(`${this.googleOAuthAPIBaseUrl}/token`, {
@@ -117,13 +119,25 @@ export class GoogleService extends SocialService {
     });
 
     if (!tokenResponse.ok) {
-      throw new UnauthorizedException('Failed to get Google access token');
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.oauthFailed', {
+        args: { provider: providerName },
+      });
+      throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
     }
 
     const tokenData: GoogleTokenResponse = await tokenResponse.json();
 
     if (!tokenData.id_token) {
-      throw new BadRequestException('Invalid token response from Google');
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.invalidTokenResponse', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'INVALID_TOKEN_RESPONSE',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const userInfoResponse = await fetch(
@@ -134,20 +148,42 @@ export class GoogleService extends SocialService {
     );
 
     if (!userInfoResponse.ok) {
-      throw new UnauthorizedException('Failed to get Google user info');
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.failedToGetUserInfo', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'FAILED_TO_GET_USER_INFO',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const userData: GoogleUserInfo = await userInfoResponse.json();
 
     if (!userData.sub || !userData.email) {
-      throw new BadRequestException('Invalid user data from Google');
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.invalidUserData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'INVALID_USER_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     if (userId) {
       const wechatUser = await this.userService.findByLoginId(userData.sub);
       if (wechatUser && wechatUser.id !== userId) {
-        throw new BadRequestException(
-          'This google account is already bound to another user',
+        const providerName = this.i18n.t('auth.providers.google');
+        const message = this.i18n.t('auth.errors.invalidProviderData', {
+          args: { provider: providerName },
+        });
+        throw new AppException(
+          message,
+          'ACCOUNT_ALREADY_BOUND',
+          HttpStatus.BAD_REQUEST,
         );
       }
       const existingUser = await this.userService.bindingExistUser({
@@ -238,7 +274,12 @@ export class GoogleService extends SocialService {
   async unbind(userId: string) {
     const canDo = await this.canUnBinding(userId);
     if (!canDo) {
-      throw new ForbiddenException('Unbinding is not allowed');
+      const message = this.i18n.t('auth.errors.unbindingNotAllowed');
+      throw new AppException(
+        message,
+        'UNBINDING_NOT_ALLOWED',
+        HttpStatus.FORBIDDEN,
+      );
     }
     await this.userService.unbindByLoginType(userId, 'google');
   }

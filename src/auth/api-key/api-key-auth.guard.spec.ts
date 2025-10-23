@@ -13,11 +13,14 @@ import {
   APIKeyPermissionTarget,
   APIKeyPermission,
 } from 'omniboxd/api-key/api-key.entity';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 describe('APIKeyAuthGuard', () => {
   let guard: APIKeyAuthGuard;
   let apiKeyService: jest.Mocked<APIKeyService>;
   let reflector: jest.Mocked<Reflector>;
+  let i18nService: jest.Mocked<I18nService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -35,12 +38,29 @@ describe('APIKeyAuthGuard', () => {
             getAllAndOverride: jest.fn(),
           },
         },
+        {
+          provide: I18nService,
+          useValue: {
+            t: jest.fn((key: string) => {
+              // Return mock translations for test purposes
+              const translations: Record<string, string> = {
+                'apikey.errors.authorizationHeaderRequired': 'Authorization header is required',
+                'apikey.errors.invalidApiKeyFormat': 'Invalid API key format',
+                'apikey.errors.invalidApiKey': 'Invalid API key',
+                'apikey.errors.noPermissionForTarget': 'No permission for target {{target}}',
+                'apikey.errors.noSpecificPermission': 'No {{permission}} permission for target {{target}}',
+              };
+              return translations[key] || key;
+            }),
+          },
+        },
       ],
     }).compile();
 
     guard = module.get<APIKeyAuthGuard>(APIKeyAuthGuard);
     apiKeyService = module.get(APIKeyService);
     reflector = module.get(Reflector);
+    i18nService = module.get(I18nService);
   });
 
   const createMockExecutionContext = (
@@ -85,29 +105,29 @@ describe('APIKeyAuthGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('should throw UnauthorizedException when no authorization header', async () => {
+  it('should throw AppException when no authorization header', async () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // apiKeyAuthOptions = { enabled: true }
     const context = createMockExecutionContext();
 
     await expect(guard.canActivate(context)).rejects.toThrow(
-      UnauthorizedException,
+      AppException,
     );
   });
 
-  it('should throw UnauthorizedException when API key does not start with sk-', async () => {
+  it('should throw AppException when API key does not start with sk-', async () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // apiKeyAuthOptions = { enabled: true }
     const context = createMockExecutionContext('Bearer invalid-key');
 
     await expect(guard.canActivate(context)).rejects.toThrow(
-      UnauthorizedException,
+      AppException,
     );
   });
 
-  it('should throw UnauthorizedException when API key is not found', async () => {
+  it('should throw AppException when API key is not found', async () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // apiKeyAuthOptions = { enabled: true }
@@ -115,7 +135,7 @@ describe('APIKeyAuthGuard', () => {
     apiKeyService.findByValue.mockResolvedValue(null);
 
     await expect(guard.canActivate(context)).rejects.toThrow(
-      UnauthorizedException,
+      AppException,
     );
   });
 
@@ -197,7 +217,7 @@ describe('APIKeyAuthGuard', () => {
     expect(request.user).toEqual({ id: 'user-123' });
   });
 
-  it('should throw ForbiddenException when API key lacks required target permission', async () => {
+  it('should throw AppException when API key lacks required target permission', async () => {
     const mockApiKey: APIKey = {
       id: 'test-id',
       value: 'sk-validkey',
@@ -226,11 +246,11 @@ describe('APIKeyAuthGuard', () => {
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
 
     await expect(guard.canActivate(context)).rejects.toThrow(
-      ForbiddenException,
+      AppException,
     );
   });
 
-  it('should throw ForbiddenException when API key lacks specific permission type', async () => {
+  it('should throw AppException when API key lacks specific permission type', async () => {
     const mockApiKey: APIKey = {
       id: 'test-id',
       value: 'sk-validkey',
@@ -264,7 +284,7 @@ describe('APIKeyAuthGuard', () => {
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
 
     await expect(guard.canActivate(context)).rejects.toThrow(
-      ForbiddenException,
+      AppException,
     );
   });
 

@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -50,32 +52,41 @@ export class WizardService {
     private readonly minioService: MinioService,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
+    private readonly i18n: I18nService,
   ) {
     this.processors = {
       collect: new CollectProcessor(
         this.namespaceResourcesService,
         this.resourcesService,
         this.tagService,
+        this.i18n,
       ),
       file_reader: new ReaderProcessor(
         this.namespaceResourcesService,
         this.resourcesService,
         this.tagService,
+        this.i18n,
       ),
       extract_tags: new ExtractTagsProcessor(
         namespaceResourcesService,
         this.tagService,
+        this.i18n,
       ),
-      generate_title: new GenerateTitleProcessor(namespaceResourcesService),
+      generate_title: new GenerateTitleProcessor(
+        namespaceResourcesService,
+        this.i18n,
+      ),
       generate_video_note: new CollectProcessor(
         this.namespaceResourcesService,
         this.resourcesService,
         this.tagService,
+        this.i18n,
       ),
     };
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
-      throw new Error('Environment variable OBB_WIZARD_BASE_URL is required');
+      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
+      throw new AppException(message, 'MISSING_WIZARD_BASE_URL', HttpStatus.INTERNAL_SERVER_ERROR);
     }
     this.streamService = new StreamService(
       baseUrl,
@@ -83,8 +94,9 @@ export class WizardService {
       this.namespaceResourcesService,
       this.sharedResourcesService,
       this.resourcesService,
+      this.i18n,
     );
-    this.wizardApiService = new WizardAPIService(baseUrl);
+    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
     const videoPrefixes: string =
       this.configService.get<string>('OB_VIDEO_PREFIXES') || '';
     if (isEmpty(videoPrefixes)) {
@@ -116,11 +128,17 @@ export class WizardService {
     compressedHtml: Express.Multer.File,
   ) {
     if (!compressedHtml) {
-      throw new BadRequestException('Missing file');
+      const message = this.i18n.t('wizard.errors.missingFile');
+      throw new AppException(message, 'MISSING_FILE', HttpStatus.BAD_REQUEST);
     }
     const { url, title, parentId } = data;
     if (!namespaceId || !parentId || !url) {
-      throw new BadRequestException('Missing required fields');
+      const message = this.i18n.t('wizard.errors.missingRequiredFields');
+      throw new AppException(
+        message,
+        'MISSING_REQUIRED_FIELDS',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const resourceDto: CreateResourceDto = {
@@ -172,7 +190,12 @@ export class WizardService {
   ): Promise<CollectResponseDto> {
     const { html, url, title, parentId } = data;
     if (!namespaceId || !parentId || !url || !html) {
-      throw new BadRequestException('Missing required fields');
+      const message = this.i18n.t('wizard.errors.missingRequiredFields');
+      throw new AppException(
+        message,
+        'MISSING_REQUIRED_FIELDS',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const resourceDto: CreateResourceDto = {
@@ -202,8 +225,13 @@ export class WizardService {
     });
 
     if (!task.startedAt) {
-      throw new BadRequestException(
-        `Task ${task.id} has not been started yet.`,
+      const message = this.i18n.t('wizard.errors.taskNotStarted', {
+        args: { taskId: task.id },
+      });
+      throw new AppException(
+        message,
+        'TASK_NOT_STARTED',
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -318,7 +346,12 @@ export class WizardService {
       const stream = Buffer.from(image.data, 'base64');
       const resourceId = task.payload?.resource_id || task.payload?.resourceId;
       if (!resourceId) {
-        throw new BadRequestException('Invalid task payload');
+        const message = this.i18n.t('wizard.errors.invalidTaskPayload');
+        throw new AppException(
+          message,
+          'INVALID_TASK_PAYLOAD',
+          HttpStatus.BAD_REQUEST,
+        );
       }
       const attachmentId = await this.attachmentsService.uploadAttachment(
         task.namespaceId,

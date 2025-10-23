@@ -1,7 +1,9 @@
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { BadRequestException } from '@nestjs/common';
+import { HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -13,6 +15,7 @@ export class CollectProcessor extends Processor {
     protected readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly tagService: TagService,
+    private readonly i18n: I18nService,
   ) {
     super();
   }
@@ -20,7 +23,12 @@ export class CollectProcessor extends Processor {
   async process(task: Task): Promise<Record<string, any>> {
     const resourceId = task.payload?.resource_id || task.payload?.resourceId;
     if (!resourceId) {
-      throw new BadRequestException('Invalid task payload');
+      const message = this.i18n.t('wizard.errors.invalidTaskPayload');
+      throw new AppException(
+        message,
+        'INVALID_TASK_PAYLOAD',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     if (task.exception && !isEmpty(task.exception)) {
       await this.namespaceResourcesService.update(

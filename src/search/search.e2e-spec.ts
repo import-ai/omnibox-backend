@@ -18,6 +18,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { I18nService } from 'nestjs-i18n';
 
 // Set environment variable to avoid the error in SearchService constructor
 process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8000';
@@ -142,6 +143,19 @@ describe('SearchController (e2e)', () => {
           useValue: {
             createIndexTask: jest.fn().mockResolvedValue({}),
             createMessageIndexTask: jest.fn().mockResolvedValue({}),
+          },
+        },
+        {
+          provide: I18nService,
+          useValue: {
+            t: jest.fn((key: string) => {
+              // Return mock translations for test purposes
+              const translations: Record<string, string> = {
+                'search.errors.invalidQuery': 'Invalid search query',
+                'search.errors.searchFailed': 'Search operation failed',
+              };
+              return translations[key] || key;
+            }),
           },
         },
       ],

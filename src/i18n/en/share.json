@@ -1,0 +1,9 @@
+{
+  "errors": {
+    "chatNotAllowed": "This share does not allow chat functionality",
+    "shareIdNotFound": "Share ID parameter 'shareId' not found in request",
+    "shareNotFound": "No share found with id {shareId}",
+    "shareRequiresLogin": "This share requires login",
+    "invalidPassword": "Invalid password for share {shareId}"
+  }
+}

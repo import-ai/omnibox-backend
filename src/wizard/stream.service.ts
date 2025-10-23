@@ -1,6 +1,6 @@
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { Observable, Subscriber } from 'rxjs';
-import { Logger, MessageEvent } from '@nestjs/common';
+import { HttpStatus, Logger, MessageEvent } from '@nestjs/common';
 import {
   Message,
   MessageStatus,
@@ -21,6 +21,8 @@ import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Span } from 'nestjs-otel';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 interface HandlerContext {
   parentId?: string;
@@ -37,6 +39,7 @@ export class StreamService {
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
+    private readonly i18n: I18nService,
   ) {}
 
   @Span('stream')
@@ -63,11 +66,21 @@ export class StreamService {
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      throw new Error('Failed to fetch from wizard');
+      const message = this.i18n.t('system.errors.wizardRequestFailed');
+      throw new AppException(
+        message,
+        'WIZARD_REQUEST_FAILED',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new Error('Response body is not readable');
+      const message = this.i18n.t('system.errors.responseBodyNotReadable');
+      throw new AppException(
+        message,
+        'RESPONSE_BODY_NOT_READABLE',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
     const decoder = new TextDecoder();
     let buffer: string = '';
@@ -132,7 +145,12 @@ export class StreamService {
         context.message = message.message;
       } else if (chunk.response_type === 'delta') {
         if (!context.messageId) {
-          throw new Error('Message ID is not set in context');
+          const message = this.i18n.t('system.errors.messageIdNotSet');
+          throw new AppException(
+            message,
+            'MESSAGE_ID_NOT_SET',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
         }
         const message: Message = await this.messagesService.updateDelta(
           context.messageId,
@@ -173,7 +191,14 @@ export class StreamService {
         err.name = 'AgentError';
         throw err;
       } else {
-        throw new Error(`Unknown response type: ${data}`);
+        const message = this.i18n.t('system.errors.unknownResponseType', {
+          args: { type: data },
+        });
+        throw new AppException(
+          message,
+          'UNKNOWN_RESPONSE_TYPE',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
       }
       if (context?.message?.role !== OpenAIMessageRole.SYSTEM) {
         subscriber.next({ data: JSON.stringify(chunk) });
@@ -181,19 +206,30 @@ export class StreamService {
     };
   }
 
-  findOneOrFail(messages: Message[], messageId: string): Message {
+  async findOneOrFail(
+    messages: Message[],
+    messageId: string,
+  ): Promise<Message> {
     const message = messages.find((m) => m.id === messageId);
     if (!message) {
-      throw new Error('Message not found');
+      const errorMessage = this.i18n.t('system.errors.messageNotFound');
+      throw new AppException(
+        errorMessage,
+        'MESSAGE_NOT_FOUND',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
     return message;
   }
 
-  getMessages(allMessages: Message[], parentMessageId: string): Message[] {
+  async getMessages(
+    allMessages: Message[],
+    parentMessageId: string,
+  ): Promise<Message[]> {
     const messages: Message[] = [];
     let parentId: string | null = parentMessageId;
     while (parentId) {
-      const message = this.findOneOrFail(allMessages, parentId);
+      const message = await this.findOneOrFail(allMessages, parentId);
       messages.unshift(message);
       parentId = message.parentId;
     }
@@ -319,7 +355,7 @@ export class StreamService {
         userId || undefined,
         requestDto.conversation_id,
       );
-      messages = this.getMessages(allMessages, parentId);
+      messages = await this.getMessages(allMessages, parentId);
     }
 
     const handlerContext: HandlerContext = {

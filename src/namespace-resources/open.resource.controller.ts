@@ -1,11 +1,13 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Post,
   UploadedFile,
   UseInterceptors,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18n, I18nContext } from 'nestjs-i18n';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
@@ -44,23 +46,30 @@ export class OpenResourcesController {
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
     @Body() data: OpenCreateResourceDto,
+    @I18n() i18n: I18nContext,
   ) {
     if (!data.content) {
-      throw new BadRequestException('Content is required for the resource.');
+      const message = i18n.t('resource.errors.contentRequired');
+      throw new AppException(
+        message,
+        'CONTENT_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    // Parse hashtags from content
-    const hashtagNames = parseHashtags(data.content);
-    let tagIds: string[] = data.tag_ids || [];
-
-    // If hashtags found, get or create tags and merge with provided tag_ids
-    if (hashtagNames.length > 0) {
-      const hashtagIds = await this.tagService.getOrCreateTagsByNames(
-        apiKey.namespaceId,
-        hashtagNames,
-      );
-      // Merge and deduplicate tag IDs
-      tagIds = Array.from(new Set([...tagIds, ...hashtagIds]));
+    // Optionally parse hashtags from content
+    let tagIds: string[] | undefined = data.tag_ids;
+    if (!data.skip_parsing_tags_from_content) {
+      const hashtagNames = parseHashtags(data.content);
+      // If hashtags found, get or create tags and merge with provided tag_ids
+      if (hashtagNames.length > 0) {
+        const hashtagIds = await this.tagService.getOrCreateTagsByNames(
+          apiKey.namespaceId,
+          hashtagNames,
+        );
+        // Merge and deduplicate tag IDs
+        tagIds = Array.from(new Set([...(tagIds || []), ...hashtagIds]));
+      }
     }
 
     const createResourceDto = {
@@ -87,8 +96,8 @@ export class OpenResourcesController {
           { text: data.content },
         );
       }
-      // Skip extract tags task if we already have tags from hashtags or user input
-      if (isEmpty(newResource.tagIds)) {
+      // Skip extract tags task if user requested or we already have tags
+      if (!data.skip_parsing_tags_from_content && isEmpty(newResource.tagIds)) {
         await this.wizardTaskService.createExtractTagsTask(
           userId,
           newResource.id,

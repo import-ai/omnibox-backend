@@ -1,15 +1,13 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-  <title>Invite You to Join the Space</title>
+  <title>{{t "mail.templates.invite.title"}}</title>
 </head>
-
 <body>
-  <h1>Invitation to Join the Space</h1>
-  <p>Please click the link below to join the space:</p>
-  <p><a href="{{resetUrl}}">Join</a></p>
-  <p>This link will expire in 1 hour.</p>
+  <h1>{{t "mail.templates.invite.heading"}}</h1>
+  <p>{{t "mail.templates.invite.body"}}</p>
+  <p><a href="{{resetUrl}}">{{t "mail.templates.invite.buttonText"}}</a></p>
+  <p>{{t "mail.templates.invite.ignoreText"}}</p>
+  <p>{{t "mail.templates.invite.expireText"}}</p>
 </body>
-
 </html>

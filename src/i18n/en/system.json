@@ -1,0 +1,16 @@
+{
+  "errors": {
+    "missingWizardBaseUrl": "Environment variable OBB_WIZARD_BASE_URL is required",
+    "firstMessageNotSystem": "First message is not system message",
+    "invalidResponseType": "Invalid response_type = {responseType}",
+    "noQueryContent": "No query content found to create title",
+    "unknownResponseType": "Unknown response type: {type}",
+    "envVariableRequired": "Environment variable {variable} is required",
+    "wizardBaseUrlRequired": "Environment variable OBB_WIZARD_BASE_URL is required",
+    "wizardRequestFailed": "Failed to fetch from wizard",
+    "responseBodyNotReadable": "Response body is not readable",
+    "messageIdNotSet": "Message ID is not set in context",
+    "messageNotFound": "Message not found",
+    "requestFailed": "Request failed with status {status}"
+  }
+}

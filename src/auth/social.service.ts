@@ -2,7 +2,9 @@ import { EntityManager } from 'typeorm';
 import generateId from 'omniboxd/utils/generate-id';
 import { UserService } from 'omniboxd/user/user.service';
 import { WechatCheckResponseDto } from 'omniboxd/auth/dto/wechat-login.dto';
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class SocialService {
@@ -18,7 +20,10 @@ export class SocialService {
     }
   >();
 
-  constructor(protected readonly userService: UserService) {}
+  constructor(
+    protected readonly userService: UserService,
+    protected readonly i18n: I18nService,
+  ) {}
 
   protected cleanExpiresState() {
     const now = Date.now();
@@ -78,8 +83,11 @@ export class SocialService {
       }
     }
 
-    throw new InternalServerErrorException(
-      'Unable to generate a valid username',
+    const message = this.i18n.t('auth.errors.unableToGenerateUsername');
+    throw new AppException(
+      message,
+      'UNABLE_TO_GENERATE_USERNAME',
+      HttpStatus.INTERNAL_SERVER_ERROR,
     );
   }
 

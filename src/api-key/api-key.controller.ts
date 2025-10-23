@@ -6,7 +6,6 @@ import {
   UpdateAPIKeyDto,
 } from 'omniboxd/api-key/api-key.dto';
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -16,7 +15,10 @@ import {
   Post,
   Put,
   Query,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18n, I18nContext } from 'nestjs-i18n';
 
 @Controller('api/v1/api-keys')
 export class APIKeyController {
@@ -31,12 +33,16 @@ export class APIKeyController {
 
   @Get()
   async findAll(
+    @I18n() i18n: I18nContext,
     @Query('user_id') userId?: string,
     @Query('namespace_id') namespaceId?: string,
   ): Promise<APIKeyResponseDto[]> {
     if (!userId && !namespaceId) {
-      throw new BadRequestException(
-        'Either user_id or namespace_id must be provided',
+      const message = i18n.t('apikey.errors.userOrNamespaceRequired');
+      throw new AppException(
+        message,
+        'USER_OR_NAMESPACE_REQUIRED',
+        HttpStatus.BAD_REQUEST,
       );
     }
     return await this.apiKeyService.findAll(userId, namespaceId);

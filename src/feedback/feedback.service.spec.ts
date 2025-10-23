@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { FeedbackService } from './feedback.service';
 import { Feedback, FeedbackType } from './entities/feedback.entity';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
+import { I18nService } from 'nestjs-i18n';
 
 const mockFeedbackRepository = {
   create: jest.fn(),
@@ -19,6 +20,12 @@ describe('FeedbackService', () => {
         {
           provide: getRepositoryToken(Feedback),
           useValue: mockFeedbackRepository,
+        },
+        {
+          provide: I18nService,
+          useValue: {
+            t: jest.fn(),
+          },
         },
       ],
     }).compile();

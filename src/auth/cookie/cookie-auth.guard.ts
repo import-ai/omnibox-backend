@@ -2,21 +2,24 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
-  UnauthorizedException,
+  HttpStatus,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { IS_COOKIE_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
 import { CookieAuthOptions } from 'omniboxd/auth/cookie/cookie.auth.decorator';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class CookieAuthGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private authService: AuthService,
+    private i18n: I18nService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -42,19 +45,27 @@ export class CookieAuthGuard implements CanActivate {
       if (onAuthFail === 'continue') {
         return true; // Continue without authentication
       }
-      throw new UnauthorizedException(
-        'Authentication token cookie is required',
+      const message = this.i18n.t('auth.errors.tokenCookieRequired');
+      throw new AppException(
+        message,
+        'TOKEN_COOKIE_REQUIRED',
+        HttpStatus.UNAUTHORIZED,
       );
     }
 
     try {
-      const payload = this.authService.jwtVerify(token);
+      const payload = await this.authService.jwtVerify(token);
 
       if (!payload.sub) {
         if (onAuthFail === 'continue') {
           return true; // Continue without authentication
         }
-        throw new UnauthorizedException('Invalid token payload');
+        const message = this.i18n.t('auth.errors.invalidTokenPayload');
+        throw new AppException(
+          message,
+          'INVALID_TOKEN_PAYLOAD',
+          HttpStatus.UNAUTHORIZED,
+        );
       }
 
       // Set user data on request (same structure as JWT authentication)
@@ -70,12 +81,13 @@ export class CookieAuthGuard implements CanActivate {
         return true; // Continue without authentication
       }
 
-      // Re-throw UnauthorizedException with original message
-      if (error instanceof UnauthorizedException) {
+      // Re-throw AppException with original message
+      if (error instanceof AppException) {
         throw error;
       }
       // For other errors (like JWT verification errors), throw generic message
-      throw new UnauthorizedException('Invalid or expired token');
+      const message = this.i18n.t('auth.errors.tokenExpired');
+      throw new AppException(message, 'TOKEN_EXPIRED', HttpStatus.UNAUTHORIZED);
     }
   }
 }

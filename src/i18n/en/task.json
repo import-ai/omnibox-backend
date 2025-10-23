@@ -1,0 +1,9 @@
+{
+  "errors": {
+    "taskNotFound": "Task {id} not found",
+    "taskAlreadyCanceled": "Task is already canceled",
+    "cannotCancelFinished": "Cannot cancel a finished task",
+    "canOnlyRerunCanceled": "Can only rerun canceled tasks",
+    "invalidTaskPayload": "Invalid task payload"
+  }
+}

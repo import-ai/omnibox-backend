@@ -1,0 +1,10 @@
+{
+  "userNamespaceName": "{userName}'s Namespace",
+  "uncategorized": "Uncategorized",
+  "errors": {
+    "workspaceNotFound": "Workspace not found",
+    "rootResourceNotFound": "Root resource not found",
+    "namespaceConflict": "Namespace conflict",
+    "userNotOwner": "Current user is not owner of this namespace"
+  }
+}

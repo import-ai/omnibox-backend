@@ -1,11 +1,13 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Post,
   UploadedFile,
   UseInterceptors,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18n, I18nContext } from 'nestjs-i18n';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
@@ -44,9 +46,15 @@ export class OpenResourcesController {
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
     @Body() data: OpenCreateResourceDto,
+    @I18n() i18n: I18nContext,
   ) {
     if (!data.content) {
-      throw new BadRequestException('Content is required for the resource.');
+      const message = i18n.t('resource.errors.contentRequired');
+      throw new AppException(
+        message,
+        'CONTENT_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     // Optionally parse hashtags from content

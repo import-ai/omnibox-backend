@@ -1,10 +1,8 @@
 import { Repository } from 'typeorm';
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { randomBytes } from 'crypto';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
@@ -32,6 +30,7 @@ export class APIKeyService {
     private readonly permissionsService: PermissionsService,
     private readonly namespacesService: NamespacesService,
     private readonly userService: UserService,
+    private readonly i18n: I18nService,
   ) {}
 
   async create(createApiKeyDto: CreateAPIKeyDto): Promise<APIKeyResponseDto> {
@@ -66,7 +65,12 @@ export class APIKeyService {
   async findOne(id: string): Promise<APIKeyResponseDto> {
     const apiKey = await this.apiKeyRepository.findOne({ where: { id } });
     if (!apiKey) {
-      throw new NotFoundException('API Key not found');
+      const message = this.i18n.t('apikey.errors.apiKeyNotFound');
+      throw new AppException(
+        message,
+        'API_KEY_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return APIKeyResponseDto.fromEntity(apiKey);
   }
@@ -108,7 +112,12 @@ export class APIKeyService {
       where: { id },
     });
     if (!existingApiKey) {
-      throw new NotFoundException('API Key not found');
+      const message = this.i18n.t('apikey.errors.apiKeyNotFound');
+      throw new AppException(
+        message,
+        'API_KEY_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     // If root_resource_id is being updated, validate user has permission to it
@@ -145,7 +154,12 @@ export class APIKeyService {
     // Then delete the API key itself
     const result = await this.apiKeyRepository.softDelete(id);
     if ((result.affected || 0) === 0) {
-      throw new NotFoundException('API Key not found');
+      const message = this.i18n.t('apikey.errors.apiKeyNotFound');
+      throw new AppException(
+        message,
+        'API_KEY_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
   }
 
@@ -179,8 +193,13 @@ export class APIKeyService {
     );
 
     if (!member) {
-      throw new ForbiddenException(
-        `User ${userId} does not have permission to namespace ${namespaceId}`,
+      const message = this.i18n.t('apikey.errors.noPermissionForNamespace', {
+        args: { userId, namespaceId },
+      });
+      throw new AppException(
+        message,
+        'NO_NAMESPACE_PERMISSION',
+        HttpStatus.FORBIDDEN,
       );
     }
   }
@@ -198,8 +217,13 @@ export class APIKeyService {
     );
 
     if (!hasWritePermission) {
-      throw new ForbiddenException(
-        `User ${userId} does not have write permission to resource ${resourceId} in namespace ${namespaceId}`,
+      const message = this.i18n.t('apikey.errors.noWritePermission', {
+        args: { userId, resourceId, namespaceId },
+      });
+      throw new AppException(
+        message,
+        'NO_WRITE_PERMISSION',
+        HttpStatus.FORBIDDEN,
       );
     }
   }

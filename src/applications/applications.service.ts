@@ -1,6 +1,8 @@
 import { Repository } from 'typeorm';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { Applications } from './applications.entity';
 import {
   ApplicationsResponseDto,
@@ -21,6 +23,7 @@ export class ApplicationsService {
     @InjectRepository(Applications)
     private readonly applicationsRepository: Repository<Applications>,
     private readonly wechatBot: WechatBot,
+    private readonly i18n: I18nService,
   ) {
     this.apps[WechatBot.appId] = this.wechatBot;
   }
@@ -35,7 +38,12 @@ export class ApplicationsService {
     });
 
     if (!entity) {
-      throw new NotFoundException('App authorization not found');
+      const message = this.i18n.t('application.errors.appAuthNotFound');
+      throw new AppException(
+        message,
+        'APP_AUTHORIZATION_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return ApplicationsResponseDto.fromEntity(entity);
@@ -82,7 +90,10 @@ export class ApplicationsService {
     createDto: CreateApplicationsDto,
   ): Promise<ApplicationsResponseDto> {
     if (!this.apps[appId]) {
-      throw new NotFoundException(`App ${appId} not found`);
+      const message = this.i18n.t('application.errors.appNotFound', {
+        args: { appId },
+      });
+      throw new AppException(message, 'APP_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
     const attrs = await this.apps[appId].getAttrs(
@@ -113,7 +124,12 @@ export class ApplicationsService {
     });
 
     if (!authorization) {
-      throw new NotFoundException('App authorization not found');
+      const message = this.i18n.t('application.errors.appAuthNotFound');
+      throw new AppException(
+        message,
+        'APP_AUTHORIZATION_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const result = await this.applicationsRepository.softDelete({
@@ -122,7 +138,12 @@ export class ApplicationsService {
       namespaceId,
     });
     if ((result.affected || 0) === 0) {
-      throw new NotFoundException('App authorization not found');
+      const message = this.i18n.t('application.errors.appAuthNotFound');
+      throw new AppException(
+        message,
+        'APP_AUTHORIZATION_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     // Call postDelete hook after soft delete

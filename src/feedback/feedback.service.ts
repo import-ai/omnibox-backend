@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Feedback } from './entities/feedback.entity';
@@ -9,6 +11,7 @@ export class FeedbackService {
   constructor(
     @InjectRepository(Feedback)
     private readonly feedbackRepository: Repository<Feedback>,
+    private readonly i18n: I18nService,
   ) {}
 
   async createFeedback(
@@ -40,7 +43,14 @@ export class FeedbackService {
   async findOne(id: number): Promise<Feedback> {
     const feedback = await this.feedbackRepository.findOne({ where: { id } });
     if (!feedback) {
-      throw new NotFoundException(`Feedback with ID ${id} not found`);
+      const message = this.i18n.t('feedback.errors.feedbackNotFound', {
+        args: { id },
+      });
+      throw new AppException(
+        message,
+        'FEEDBACK_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return feedback;
   }

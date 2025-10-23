@@ -1,12 +1,17 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer';
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { propagation, context } from '@opentelemetry/api';
 import { SearchRequestDto } from './dto/search-request.dto';
 import { SearchResponseDto } from './dto/search-response.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class WizardAPIService {
-  constructor(private readonly wizardBaseUrl: string) {}
+  constructor(
+    private readonly wizardBaseUrl: string,
+    private readonly i18n: I18nService,
+  ) {}
 
   getTraceHeaders(): Record<string, string> {
     const traceHeaders: Record<string, string> = {};
@@ -33,7 +38,14 @@ export class WizardAPIService {
     });
 
     if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
+      const message = this.i18n.t('system.errors.requestFailed', {
+        args: { status: response.status },
+      });
+      throw new AppException(
+        message,
+        'REQUEST_FAILED',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
 
     return await response.json();

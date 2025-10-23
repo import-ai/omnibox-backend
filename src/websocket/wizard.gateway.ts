@@ -9,12 +9,14 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import {
-  ForbiddenException,
   Logger,
   UseGuards,
   UseInterceptors,
   ValidationPipe,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
@@ -42,6 +44,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private readonly wizardService: WizardService,
     private readonly sharesService: SharesService,
+    private readonly i18n: I18nService,
   ) {}
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -165,9 +168,8 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
       share.shareType !== ShareType.CHAT_ONLY &&
       share.shareType !== ShareType.ALL
     ) {
-      throw new ForbiddenException(
-        'This share does not allow chat functionality',
-      );
+      const message = this.i18n.t('share.errors.chatNotAllowed');
+      throw new AppException(message, 'CHAT_NOT_ALLOWED', HttpStatus.FORBIDDEN);
     }
 
     try {

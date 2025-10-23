@@ -1,0 +1,9 @@
+{
+  "errors": {
+    "chatNotAllowed": "此分享不允许聊天功能",
+    "shareIdNotFound": "请求中未找到分享ID参数 'shareId'",
+    "shareNotFound": "未找到ID为 {shareId} 的分享",
+    "shareRequiresLogin": "此分享需要登录",
+    "invalidPassword": "分享 {shareId} 的密码无效"
+  }
+}

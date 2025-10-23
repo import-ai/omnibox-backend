@@ -2,7 +2,9 @@ import {
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { Response } from 'express';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -27,6 +29,7 @@ export class AttachmentsService {
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly sharesService: SharesService,
     private readonly sharedResourcesService: SharedResourcesService,
+    private readonly i18n: I18nService,
   ) {}
 
   async checkPermission(
@@ -42,7 +45,8 @@ export class AttachmentsService {
       permission,
     );
     if (!hasPermission) {
-      throw new ForbiddenException('Not authorized');
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
   }
 

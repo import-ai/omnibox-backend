@@ -1,7 +1,7 @@
 import {
-  BadRequestException,
   Body,
   Controller,
+  HttpStatus,
   Post,
   Req,
   UploadedFile,
@@ -16,6 +16,7 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { CookieAuth } from 'omniboxd/auth';
 import { FeedbackResponseDto } from 'omniboxd/feedback/dto/feedback.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 @Controller('api/v1/feedback')
 export class FeedbackController {
@@ -34,7 +35,7 @@ export class FeedbackController {
         if (file.mimetype.startsWith('image/')) {
           cb(null, true);
         } else {
-          cb(new BadRequestException('Only image files are allowed'), false);
+          cb(new AppException('Only image files are allowed', 'ONLY_IMAGE_FILES_ALLOWED', HttpStatus.BAD_REQUEST), false);
         }
       },
     }),

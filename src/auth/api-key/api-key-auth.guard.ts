@@ -2,20 +2,22 @@ import {
   Injectable,
   CanActivate,
   ExecutionContext,
-  UnauthorizedException,
-  ForbiddenException,
+  HttpStatus,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { IS_API_KEY_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
 import { APIKeyAuthOptions } from 'omniboxd/auth/api-key/api-key.auth.decorator';
 import { APIKeyPermission } from 'omniboxd/api-key/api-key.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class APIKeyAuthGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private apiKeyService: APIKeyService,
+    private i18n: I18nService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -40,19 +42,34 @@ export class APIKeyAuthGuard implements CanActivate {
     const authHeader = request.headers.authorization;
 
     if (!authHeader) {
-      throw new UnauthorizedException('Authorization header is required');
+      const message = this.i18n.t('apikey.errors.authorizationHeaderRequired');
+      throw new AppException(
+        message,
+        'AUTHORIZATION_HEADER_REQUIRED',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const token = authHeader.replace('Bearer ', '');
 
     if (!token.startsWith('sk-')) {
-      throw new UnauthorizedException('Invalid API key format');
+      const message = this.i18n.t('apikey.errors.invalidApiKeyFormat');
+      throw new AppException(
+        message,
+        'INVALID_API_KEY_FORMAT',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     const apiKey = await this.apiKeyService.findByValue(token);
 
     if (!apiKey) {
-      throw new UnauthorizedException('Invalid API key');
+      const message = this.i18n.t('apikey.errors.invalidApiKey');
+      throw new AppException(
+        message,
+        'INVALID_API_KEY',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     // Check required permissions if specified
@@ -60,7 +77,7 @@ export class APIKeyAuthGuard implements CanActivate {
       apiKeyAuthOptions.permissions &&
       apiKeyAuthOptions.permissions.length > 0
     ) {
-      this.validatePermissions(
+      await this.validatePermissions(
         apiKey.attrs.permissions || [],
         apiKeyAuthOptions.permissions,
       );
@@ -73,26 +90,36 @@ export class APIKeyAuthGuard implements CanActivate {
     return true;
   }
 
-  private validatePermissions(
+  private async validatePermissions(
     apiKeyPermissions: APIKeyPermission[],
     requiredPermissions: APIKeyPermission[],
-  ): void {
+  ): Promise<void> {
     for (const required of requiredPermissions) {
       const apiKeyPermission = apiKeyPermissions.find(
         (p) => p.target === required.target,
       );
 
       if (!apiKeyPermission) {
-        throw new ForbiddenException(
-          `API key does not have permission for target: ${required.target}`,
+        const message = this.i18n.t('apikey.errors.noPermissionForTarget', {
+          args: { target: required.target },
+        });
+        throw new AppException(
+          message,
+          'NO_PERMISSION_FOR_TARGET',
+          HttpStatus.FORBIDDEN,
         );
       }
 
       // Check if API key has all required permissions for this target
       for (const requiredPerm of required.permissions) {
         if (!apiKeyPermission.permissions.includes(requiredPerm)) {
-          throw new ForbiddenException(
-            `API key does not have ${requiredPerm} permission for target: ${required.target}`,
+          const message = this.i18n.t('apikey.errors.noSpecificPermission', {
+            args: { permission: requiredPerm, target: required.target },
+          });
+          throw new AppException(
+            message,
+            'NO_SPECIFIC_PERMISSION',
+            HttpStatus.FORBIDDEN,
           );
         }
       }

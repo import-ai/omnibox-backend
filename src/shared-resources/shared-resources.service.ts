@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
@@ -8,7 +10,10 @@ import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 @Injectable()
 export class SharedResourcesService {
-  constructor(private readonly resourcesService: ResourcesService) {}
+  constructor(
+    private readonly resourcesService: ResourcesService,
+    private readonly i18n: I18nService,
+  ) {}
 
   async getSharedResource(
     share: Share,
@@ -54,7 +59,12 @@ export class SharedResourcesService {
       resourceId,
     );
     if (!resource) {
-      throw new NotFoundException('Resource not found');
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
     if (resource.id !== share.resourceId) {
       const parents = await this.resourcesService.getParentResourcesOrFail(
@@ -62,7 +72,12 @@ export class SharedResourcesService {
         resource.parentId,
       );
       if (!parents.map((r) => r.id).includes(share.resourceId)) {
-        throw new NotFoundException('Resource not found');
+        const message = this.i18n.t('resource.errors.resourceNotFound');
+        throw new AppException(
+          message,
+          'RESOURCE_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
       }
     }
     return resource;

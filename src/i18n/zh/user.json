@@ -1,0 +1,12 @@
+{
+  "errors": {
+    "accountAlreadyExists": "账户已存在",
+    "invalidEmailFormat": "邮箱格式无效",
+    "pleaseVerifyEmail": "请先验证您的邮箱",
+    "incorrectVerificationCode": "邮箱验证码不正确",
+    "passwordTooShort": "密码长度至少为 8 个字符",
+    "passwordRequirements": "密码必须包含至少一个字母和一个数字",
+    "emailAlreadyInUse": "邮箱已被使用",
+    "provideVerificationCode": "请提供邮箱验证码"
+  }
+}

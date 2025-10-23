@@ -205,10 +205,10 @@ export class ConversationsService {
     };
   }
 
-  private async convertToConversationDetail(
+  private convertToConversationDetail(
     conversation: Conversation,
     messages: Message[],
-  ): Promise<ConversationDetailDto> {
+  ): ConversationDetailDto {
     const detail: ConversationDetailDto = {
       id: conversation.id,
       title: conversation.title,
@@ -275,7 +275,7 @@ export class ConversationsService {
       user.id,
       conversation.id,
     );
-    return await this.convertToConversationDetail(conversation, messages);
+    return this.convertToConversationDetail(conversation, messages);
   }
 
   async getConversationForShare(
@@ -289,7 +289,7 @@ export class ConversationsService {
       undefined,
       conversation.id,
     );
-    return await this.convertToConversationDetail(conversation, messages);
+    return this.convertToConversationDetail(conversation, messages);
   }
 
   async findOne(id: string) {

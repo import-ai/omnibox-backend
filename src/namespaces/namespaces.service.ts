@@ -39,6 +39,16 @@ export class NamespacesService {
     private readonly i18n: I18nService,
   ) {}
 
+  private async hasOwner(
+    namespaceId: string,
+    entityManager: EntityManager,
+  ): Promise<boolean> {
+    const count = await entityManager.count(NamespaceMember, {
+      where: { namespaceId, role: NamespaceRole.OWNER },
+    });
+    return count > 0;
+  }
+
   async getPrivateRootId(userId: string, namespaceId: string): Promise<string> {
     const member = await this.namespaceMemberRepository.findOne({
       where: {
@@ -307,10 +317,17 @@ export class NamespacesService {
     userId: string,
     role: NamespaceRole,
   ) {
-    await this.namespaceMemberRepository.update(
-      { namespaceId, userId },
-      { role },
-    );
+    await this.dataSource.transaction(async (manager) => {
+      await manager.update(NamespaceMember, { namespaceId, userId }, { role });
+      const hasOwner = await this.hasOwner(namespaceId, manager);
+      if (!hasOwner) {
+        throw new AppException(
+          '',
+          'NO_OWNER_AFTERWARDS',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+    });
   }
 
   async listNamespaces(userId: string): Promise<Namespace[]> {
@@ -403,6 +420,14 @@ export class NamespacesService {
       });
       // Delete namespace member record
       await manager.softDelete(NamespaceMember, { id: member.id });
+      const hasOwner = await this.hasOwner(namespaceId, manager);
+      if (!hasOwner) {
+        throw new AppException(
+          '',
+          'NO_OWNER_AFTERWARDS',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
     });
   }
 

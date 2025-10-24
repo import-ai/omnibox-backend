@@ -35,6 +35,12 @@ export class NamespacesController {
     return await this.namespacesService.listMembers(namespaceId);
   }
 
+  @Get(':namespaceId/members/count')
+  async countMembers(@Param('namespaceId') namespaceId: string) {
+    const count = await this.namespacesService.countMembers(namespaceId);
+    return { count };
+  }
+
   @NamespaceOwner()
   @Get(':namespaceId/members/:userId')
   async getMemberByUserId(

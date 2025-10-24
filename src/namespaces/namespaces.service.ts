@@ -329,6 +329,10 @@ export class NamespacesService {
     });
   }
 
+  async countMembers(namespaceId: string): Promise<number> {
+    return await this.namespaceMemberRepository.countBy({ namespaceId });
+  }
+
   async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
       where: { namespaceId },

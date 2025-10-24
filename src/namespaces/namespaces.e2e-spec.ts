@@ -204,19 +204,13 @@ describe('NamespacesController (e2e)', () => {
 
       const tempNamespaceId = tempNamespace.body.id;
 
-      // Test updating role (this will test the endpoint but may fail due to business logic)
-      // The actual implementation might prevent changing the last owner's role
+      // Should fail because user is the only owner in the namespace.
       await client
         .patch(
           `/api/v1/namespaces/${tempNamespaceId}/members/${client.user.id}`,
         )
         .send({ role: NamespaceRole.MEMBER })
-        .expect(HttpStatus.OK);
-
-      // Members are not allowed to delete the namespace.
-      await client
-        .delete(`/api/v1/namespaces/${tempNamespaceId}`)
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });
 
     it('should fail for non-existent member', async () => {
@@ -256,17 +250,16 @@ describe('NamespacesController (e2e)', () => {
 
       const tempNamespaceId = tempNamespace.body.id;
 
-      // For this test, we'll try to remove the owner (should work but may have business logic constraints)
+      // Should fail because user is the only owner in the namespace.
       await client
         .delete(
           `/api/v1/namespaces/${tempNamespaceId}/members/${client.user.id}`,
         )
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
 
-      // Verify member was removed by checking if they can still access the namespace
       await client
         .delete(`/api/v1/namespaces/${tempNamespaceId}`)
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.OK);
     });
   });
 

@@ -5,6 +5,7 @@
     "workspaceNotFound": "Workspace not found",
     "rootResourceNotFound": "Root resource not found",
     "namespaceConflict": "Namespace conflict",
-    "userNotOwner": "Current user is not owner of this namespace"
+    "userNotOwner": "Current user is not owner of this namespace",
+    "noOwnerAfterwards": "The namespace requires at least one owner"
   }
 }

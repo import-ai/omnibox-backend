@@ -5,6 +5,7 @@
     "workspaceNotFound": "工作空间未找到",
     "rootResourceNotFound": "根资源未找到",
     "namespaceConflict": "命名空间冲突",
-    "userNotOwner": "当前用户不是该命名空间的所有者"
+    "userNotOwner": "当前用户不是该命名空间的所有者",
+    "noOwnerAfterwards": "需要保留至少一个所有者"
   }
 }

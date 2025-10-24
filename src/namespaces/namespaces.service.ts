@@ -322,7 +322,7 @@ export class NamespacesService {
       const hasOwner = await this.hasOwner(namespaceId, manager);
       if (!hasOwner) {
         throw new AppException(
-          '',
+          this.i18n.t('namespace.errors.noOwnerAfterwards'),
           'NO_OWNER_AFTERWARDS',
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
@@ -423,7 +423,7 @@ export class NamespacesService {
       const hasOwner = await this.hasOwner(namespaceId, manager);
       if (!hasOwner) {
         throw new AppException(
-          '',
+          this.i18n.t('namespace.errors.noOwnerAfterwards'),
           'NO_OWNER_AFTERWARDS',
           HttpStatus.UNPROCESSABLE_ENTITY,
         );

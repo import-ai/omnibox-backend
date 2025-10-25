@@ -2,50 +2,69 @@ import { EntityManager } from 'typeorm';
 import generateId from 'omniboxd/utils/generate-id';
 import { UserService } from 'omniboxd/user/user.service';
 import { WechatCheckResponseDto } from 'omniboxd/auth/dto/wechat-login.dto';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import { KVStore } from 'omniboxd/common/kv-store';
+import { ConfigService } from '@nestjs/config';
+
+export interface UserSocialState {
+  type: string;
+  createdAt: number;
+  expiresIn: number;
+  userInfo?: WechatCheckResponseDto['user'];
+}
 
 @Injectable()
 export class SocialService {
   private readonly minUsernameLength = 2;
   private readonly maxUsernameLength = 32;
-  private readonly states = new Map<
-    string,
-    {
-      type: string;
-      createdAt: number;
-      expiresIn: number;
-      userInfo?: WechatCheckResponseDto['user'];
-    }
-  >();
+  private readonly kvStore: KVStore<UserSocialState>;
 
   constructor(
-    protected readonly userService: UserService,
-    protected readonly i18n: I18nService,
-  ) {}
+    private readonly userService: UserService,
+    private readonly i18n: I18nService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly configService: ConfigService,
+  ) {
+    this.kvStore = new KVStore(
+      this.cacheManager,
+      '/social/states',
+      this.configService,
+    );
+  }
 
-  protected cleanExpiresState() {
-    const now = Date.now();
-    for (const [state, info] of this.states.entries()) {
-      if (now - info.createdAt > info.expiresIn) {
-        this.states.delete(state);
-      }
+  /**
+   * Generate a kv state, return a kv key
+   * @param type
+   * @param prefix
+   * @return key
+   */
+  async generateState(type: string, prefix: string = ''): Promise<string> {
+    const key = `${prefix ? prefix + '_' : ''}${generateId()}`;
+    const expiresIn = 5 * 60 * 1000; // Expires in 5 minutes
+    await this.kvStore.set(
+      key,
+      {
+        type,
+        createdAt: Date.now(),
+        expiresIn,
+      },
+      expiresIn,
+    );
+    return key;
+  }
+
+  async getState(state: string) {
+    return await this.kvStore.get(state);
+  }
+
+  async updateState(state: string, data: UserSocialState) {
+    const ttl = data.expiresIn - (Date.now() - data.createdAt);
+    if (ttl > 0) {
+      await this.kvStore.set(state, data, ttl);
     }
-  }
-
-  protected setState(type: string, prefix: string = '') {
-    const state = `${prefix ? prefix + '_' : ''}${generateId()}`;
-    this.states.set(state, {
-      type,
-      createdAt: Date.now(),
-      expiresIn: 5 * 60 * 1000, // Expires in 5 minutes
-    });
-    return state;
-  }
-
-  protected getState(state: string) {
-    return this.states.get(state);
   }
 
   private generateSuffix(): string {
@@ -55,7 +74,7 @@ export class SocialService {
     );
   }
 
-  protected async getValidUsername(
+  async getValidUsername(
     nickname: string,
     manager: EntityManager,
   ): Promise<string> {
@@ -91,7 +110,7 @@ export class SocialService {
     );
   }
 
-  protected async canUnBinding(userId: string) {
+  async canUnBinding(userId: string) {
     const user = await this.userService.find(userId);
     if (user.email) {
       return true;

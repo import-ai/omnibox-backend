@@ -16,7 +16,7 @@ export interface WechatUserInfo {
 }
 
 @Injectable()
-export class WechatService extends SocialService {
+export class WechatService {
   private readonly logger = new Logger(WechatService.name);
 
   private readonly appId: string;
@@ -33,12 +33,12 @@ export class WechatService extends SocialService {
   constructor(
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
-    protected readonly userService: UserService,
+    private readonly userService: UserService,
     private readonly namespaceService: NamespacesService,
     private readonly dataSource: DataSource,
-    protected readonly i18n: I18nService,
+    private readonly i18n: I18nService,
+    private readonly socialService: SocialService,
   ) {
-    super(userService, i18n);
     this.appId = this.configService.get<string>('OBB_WECHAT_APP_ID', '');
     this.appSecret = this.configService.get<string>(
       'OBB_WECHAT_APP_SECRET',
@@ -87,9 +87,8 @@ export class WechatService extends SocialService {
     };
   }
 
-  getQrCodeParams() {
-    const state = this.setState('open_weixin');
-    this.cleanExpiresState();
+  async getQrCodeParams() {
+    const state = await this.socialService.generateState('open_weixin');
     return {
       state,
       appId: this.openAppId,
@@ -98,9 +97,8 @@ export class WechatService extends SocialService {
     };
   }
 
-  authUrl(): string {
-    const state = this.setState('weixin');
-    this.cleanExpiresState();
+  async authUrl(): Promise<string> {
+    const state = await this.socialService.generateState('weixin');
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
@@ -110,7 +108,7 @@ export class WechatService extends SocialService {
     userId: string,
     lang?: string,
   ): Promise<any> {
-    const stateInfo = this.getState(state);
+    const stateInfo = await this.socialService.getState(state);
     if (!stateInfo) {
       const message = this.i18n.t('auth.errors.invalidStateIdentifier');
       throw new AppException(
@@ -199,6 +197,7 @@ export class WechatService extends SocialService {
         }),
       };
       stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
       return returnValue;
     }
     const wechatUser = await this.userService.findByLoginId(userData.unionid);
@@ -210,11 +209,15 @@ export class WechatService extends SocialService {
         }),
       };
       stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
       return returnValue;
     }
     return await this.dataSource.transaction(async (manager) => {
       const nickname: string = userData.nickname;
-      const username: string = await this.getValidUsername(nickname, manager);
+      const username: string = await this.socialService.getValidUsername(
+        nickname,
+        manager,
+      );
       this.logger.debug({ nickname, username });
       const wechatUser = await this.userService.createUserBinding(
         {
@@ -237,14 +240,14 @@ export class WechatService extends SocialService {
         }),
       };
       stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
       return returnValue;
     });
   }
 
-  migrationQrCode(type: 'new' | 'old' = 'new') {
+  async migrationQrCode(type: 'new' | 'old' = 'new') {
     const isOld = type === 'old';
-    const state = this.setState('open_weixin', type);
-    this.cleanExpiresState();
+    const state = await this.socialService.generateState('open_weixin', type);
     return {
       state,
       appId: isOld ? this.oldOpenAppId : this.openAppId,
@@ -253,10 +256,9 @@ export class WechatService extends SocialService {
     };
   }
 
-  migrationAuthUrl(type: 'new' | 'old' = 'new'): string {
+  async migrationAuthUrl(type: 'new' | 'old' = 'new'): Promise<string> {
     const isOld = type === 'old';
-    const state = this.setState('weixin', type);
-    this.cleanExpiresState();
+    const state = await this.socialService.generateState('weixin', type);
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${isOld ? this.oldAppId : this.appId}&redirect_uri=${encodeURIComponent(this.migrationRedirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
@@ -264,7 +266,7 @@ export class WechatService extends SocialService {
     code: string,
     state: string,
   ): Promise<WechatUserInfo> {
-    const stateInfo = this.getState(state);
+    const stateInfo = await this.socialService.getState(state);
     if (!stateInfo) {
       const message = this.i18n.t('auth.errors.invalidStateIdentifier');
       throw new AppException(
@@ -341,7 +343,7 @@ export class WechatService extends SocialService {
   }
 
   async unbind(userId: string) {
-    const canDo = await this.canUnBinding(userId);
+    const canDo = await this.socialService.canUnBinding(userId);
     if (!canDo) {
       const message = this.i18n.t('auth.errors.unbindingNotAllowed');
       throw new AppException(

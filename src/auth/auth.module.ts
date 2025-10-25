@@ -19,12 +19,13 @@ import { WechatService } from 'omniboxd/auth/wechat/wechat.service';
 import { WechatController } from 'omniboxd/auth/wechat/wechat.controller';
 import { GoogleService } from 'omniboxd/auth/google/google.service';
 import { GoogleController } from 'omniboxd/auth/google/google.controller';
+import { SocialService } from 'omniboxd/auth/social.service';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
 import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
 
 @Module({
-  exports: [AuthService, WechatService, GoogleService],
+  exports: [AuthService, WechatService, GoogleService, SocialService],
   controllers: [
     AuthController,
     InternalAuthController,
@@ -33,6 +34,7 @@ import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
   ],
   providers: [
     AuthService,
+    SocialService,
     WechatService,
     GoogleService,
     JwtStrategy,

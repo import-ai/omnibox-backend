@@ -31,7 +31,7 @@ interface GoogleUserInfo {
 }
 
 @Injectable()
-export class GoogleService extends SocialService {
+export class GoogleService {
   private readonly logger = new Logger(GoogleService.name);
 
   private readonly clientId: string;
@@ -43,12 +43,12 @@ export class GoogleService extends SocialService {
   constructor(
     private readonly configService: ConfigService,
     private readonly jwtService: JwtService,
-    protected readonly userService: UserService,
+    private readonly userService: UserService,
     private readonly namespaceService: NamespacesService,
     private readonly dataSource: DataSource,
-    protected readonly i18n: I18nService,
+    private readonly i18n: I18nService,
+    private readonly socialService: SocialService,
   ) {
-    super(userService, i18n);
     this.clientId = this.configService.get<string>('OBB_GOOGLE_CLIENT_ID', '');
     this.clientSecret = this.configService.get<string>(
       'OBB_GOOGLE_CLIENT_SECRET',
@@ -74,9 +74,8 @@ export class GoogleService extends SocialService {
     };
   }
 
-  authUrl(): string {
-    const state = this.setState('google');
-    this.cleanExpiresState();
+  async authUrl(): Promise<string> {
+    const state = await this.socialService.generateState('google');
 
     const params = new URLSearchParams({
       client_id: this.clientId,
@@ -94,7 +93,7 @@ export class GoogleService extends SocialService {
     userId: string,
     lang?: string,
   ): Promise<any> {
-    const stateInfo = this.getState(state);
+    const stateInfo = await this.socialService.getState(state);
     if (!stateInfo) {
       const message = this.i18n.t('auth.errors.invalidStateIdentifier');
       throw new AppException(
@@ -198,6 +197,7 @@ export class GoogleService extends SocialService {
         }),
       };
       stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
       return returnValue;
     }
 
@@ -210,6 +210,7 @@ export class GoogleService extends SocialService {
         }),
       };
       stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
       return returnValue;
     }
     // The email has already been used https://wqjowq8l2hl.feishu.cn/record/T8zVrlZjReK0HeceZ7icyh8qnze
@@ -227,6 +228,7 @@ export class GoogleService extends SocialService {
         }),
       };
       stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
       return returnValue;
     }
 
@@ -241,7 +243,10 @@ export class GoogleService extends SocialService {
       if (!nickname) {
         nickname = userData.sub;
       }
-      const username = await this.getValidUsername(nickname, manager);
+      const username = await this.socialService.getValidUsername(
+        nickname,
+        manager,
+      );
       this.logger.debug({ nickname, username });
       const googleUser = await this.userService.createUserBinding(
         {
@@ -267,12 +272,13 @@ export class GoogleService extends SocialService {
         }),
       };
       stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
       return returnValue;
     });
   }
 
   async unbind(userId: string) {
-    const canDo = await this.canUnBinding(userId);
+    const canDo = await this.socialService.canUnBinding(userId);
     if (!canDo) {
       const message = this.i18n.t('auth.errors.unbindingNotAllowed');
       throw new AppException(

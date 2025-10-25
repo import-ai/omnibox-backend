@@ -50,6 +50,7 @@
     "typescript-eslint": "^8.45.0"
   },
   "dependencies": {
+    "@keyv/redis": "^5.1.3",
     "@nestjs-modules/mailer": "^2.0.2",
     "@nestjs/cache-manager": "^3.0.1",
     "@nestjs/common": "^11.1.6",
@@ -74,12 +75,14 @@
     "@opentelemetry/semantic-conventions": "^1.37.0",
     "bcrypt": "^5.1.1",
     "cache-manager": "^6.4.3",
+    "cacheable": "^2.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
     "express": "^5.1.0",
     "handlebars": "^4.7.8",
     "kafkajs": "^2.2.4",
+    "keyv": "^5.5.3",
     "lodash": "^4.17.21",
     "meilisearch": "^0.50.0",
     "minio": "^8.0.6",

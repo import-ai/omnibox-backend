@@ -9,7 +9,7 @@ import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.intercept
 import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omniboxd/tag/tag.module';
-// import { CacheModule } from '@nestjs/cache-manager';
+import { CacheModule } from '@nestjs/cache-manager';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { UserModule } from 'omniboxd/user/user.module';
 import { AppController } from 'omniboxd/app/app.controller';
@@ -19,10 +19,10 @@ import { WizardModule } from 'omniboxd/wizard/wizard.module';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
-  I18nModule,
   AcceptLanguageResolver,
-  QueryResolver,
   HeaderResolver,
+  I18nModule,
+  QueryResolver,
 } from 'nestjs-i18n';
 import * as path from 'path';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
@@ -65,6 +65,10 @@ import { WebSocketModule } from 'omniboxd/websocket/websocket.module';
 import { NullableUserId1757844448000 } from 'omniboxd/migrations/1757844448000-nullable-user-id';
 import { AddShareIdToConversations1757844449000 } from 'omniboxd/migrations/1757844449000-add-share-id-to-conversations';
 import { ShareUser1760171824000 } from 'omniboxd/migrations/1760171824000-share-user';
+import KeyvRedis from '@keyv/redis';
+import { Keyv } from 'keyv';
+import { CacheableMemory } from 'cacheable';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -136,16 +140,24 @@ export class AppModule implements NestModule {
         FeedbackModule,
         ApplicationsModule,
         WebSocketModule,
-        // CacheModule.registerAsync({
-        //   imports: [ConfigModule],
-        //   inject: [ConfigService],
-        //   useFactory: (config: ConfigService) => ({
-        //     store: 'redis',
-        //     host: config.get('REDIS_URL'),
-        //     port: config.get('REDIS_PORT'),
-        //     ttl: config.get('REDIS_TTL'),
-        //   }),
-        // }),
+        CacheModule.registerAsync({
+          isGlobal: true,
+          imports: [ConfigModule],
+          inject: [ConfigService],
+          useFactory: (config: ConfigService) => {
+            const redisUrl = config.get<string>('OBB_REDIS_URL');
+
+            return {
+              stores: [
+                new Keyv({
+                  store: isEmpty(redisUrl)
+                    ? new CacheableMemory({ ttl: 60000, lruSize: 5000 })
+                    : new KeyvRedis(redisUrl),
+                }),
+              ],
+            };
+          },
+        }),
         TypeOrmModule.forRootAsync({
           imports: [ConfigModule],
           inject: [ConfigService],

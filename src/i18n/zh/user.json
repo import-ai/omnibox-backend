@@ -8,6 +8,6 @@
     "passwordRequirements": "密码必须包含至少一个字母和一个数字",
     "emailAlreadyInUse": "邮箱已被使用",
     "provideVerificationCode": "请提供邮箱验证码",
-    "userCannotbeEmptyStr": "用户名不能为空字符串"
+    "userCannotbeEmptyStr": "请输入有效用户名，不能仅输入空格"
   }
 }

@@ -8,6 +8,6 @@
     "passwordRequirements": "Password must contain at least one letter and one number",
     "emailAlreadyInUse": "Email already in use",
     "provideVerificationCode": "Please provide verification code",
-    "userCannotbeEmptyStr": "Username cannot be empty"
+    "userCannotbeEmptyStr": "Username cannot be emptyStr"
   }
 }

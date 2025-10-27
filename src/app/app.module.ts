@@ -69,6 +69,8 @@ import KeyvRedis from '@keyv/redis';
 import { Keyv } from 'keyv';
 import { CacheableMemory } from 'cacheable';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
+import { FilesModule } from 'omniboxd/files/files.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -140,6 +142,7 @@ export class AppModule implements NestModule {
         FeedbackModule,
         ApplicationsModule,
         WebSocketModule,
+        FilesModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],
@@ -187,6 +190,7 @@ export class AppModule implements NestModule {
               NullableUserId1757844448000,
               AddShareIdToConversations1757844449000,
               ShareUser1760171824000,
+              Files1761556143000,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -6,5 +6,8 @@ export class File extends Base {
   id: string;
 
   @Column()
+  namespaceId: string;
+
+  @Column()
   userId: string;
 }

@@ -14,9 +14,11 @@ export class FilesService {
     configService: ConfigService,
     private readonly fileRepo: Repository<File>,
   ) {
-    const accessKeyId = configService.get<string>('AWS_ACCESS_KEY_ID');
-    const secretAccessKey = configService.get<string>('AWS_SECRET_ACCESS_KEY');
-    const s3Url = configService.get<string>('S3_URL');
+    const accessKeyId = configService.get<string>('OBB_S3_ACCESS_KEY_ID');
+    const secretAccessKey = configService.get<string>(
+      'OBB_S3_SECRET_ACCESS_KEY',
+    );
+    const s3Url = configService.get<string>('OBB_S3_URL');
     if (!accessKeyId || !secretAccessKey) {
       throw new Error('AWS credentials not set');
     }
@@ -27,8 +29,10 @@ export class FilesService {
     this.s3Url = new URL(s3Url);
   }
 
-  async createUploadSession(userId: string): Promise<FileUrlDto> {
-    const file = await this.fileRepo.save(this.fileRepo.create({ userId }));
+  async createFile(userId: string, namespaceId: string): Promise<FileUrlDto> {
+    const file = await this.fileRepo.save(
+      this.fileRepo.create({ namespaceId, userId }),
+    );
     const fileUrl = new URL(file.id, this.s3Url);
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'PUT',

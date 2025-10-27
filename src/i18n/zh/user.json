@@ -7,6 +7,7 @@
     "passwordTooShort": "密码长度至少为 8 个字符",
     "passwordRequirements": "密码必须包含至少一个字母和一个数字",
     "emailAlreadyInUse": "邮箱已被使用",
-    "provideVerificationCode": "请提供邮箱验证码"
+    "provideVerificationCode": "请提供邮箱验证码",
+    "userCannotbeEmptyStr": "用户名不能为空字符串"
   }
 }

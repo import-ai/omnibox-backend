@@ -338,6 +338,14 @@ export class UserService {
   }
 
   async update(id: string, account: UpdateUserDto) {
+    if (account.username && !account.username.trim().length) {
+      const message = this.i18n.t('user.errors.userCannotbeEmptyStr');
+      throw new AppException(
+        message,
+        'USERNAME_CANNOT_BE_EMPTY',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     if (account.username && isUsernameBlocked(account.username)) {
       const message = this.i18n.t('user.errors.accountAlreadyExists');
       throw new AppException(

@@ -86,7 +86,11 @@ export class WizardService {
     const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
     if (!baseUrl) {
       const message = this.i18n.t('system.errors.missingWizardBaseUrl');
-      throw new AppException(message, 'MISSING_WIZARD_BASE_URL', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new AppException(
+        message,
+        'MISSING_WIZARD_BASE_URL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
     this.streamService = new StreamService(
       baseUrl,

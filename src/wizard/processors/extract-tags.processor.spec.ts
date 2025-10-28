@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
 import { ExtractTagsProcessor } from './extract-tags.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -27,7 +26,8 @@ describe('ExtractTagsProcessor', () => {
       t: jest.fn((key: string) => {
         // Return mock translations for test purposes
         const translations: Record<string, string> = {
-          'wizard.errors.invalidTaskPayload': 'Invalid task payload: missing resource_id',
+          'wizard.errors.invalidTaskPayload':
+            'Invalid task payload: missing resource_id',
         };
         return translations[key] || key;
       }),
@@ -53,7 +53,11 @@ describe('ExtractTagsProcessor', () => {
     namespaceResourcesService = module.get(NamespaceResourcesService);
     tagService = module.get(TagService);
     i18nService = module.get(I18nService);
-    processor = new ExtractTagsProcessor(namespaceResourcesService, tagService, i18nService);
+    processor = new ExtractTagsProcessor(
+      namespaceResourcesService,
+      tagService,
+      i18nService,
+    );
   });
 
   afterEach(() => {

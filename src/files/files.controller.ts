@@ -1,16 +1,13 @@
-import { Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { FilesService } from './files.service';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { CreateFileReqDto } from './dtos/create-file-req.dto';
 
-@Controller('api/v1/namespaces/:namespaceId/files')
+@Controller('api/v1/files')
 export class FilesController {
   constructor(private readonly filesService: FilesService) {}
 
   @Post()
-  async createFile(
-    @UserId() userId: string,
-    @Param('namespaceId') namespaceId: string,
-  ) {
-    return await this.filesService.createFile(userId, namespaceId);
+  async createFile(@Body() createFileReq: CreateFileReqDto) {
+    return await this.filesService.createFile(createFileReq.sha256);
   }
 }

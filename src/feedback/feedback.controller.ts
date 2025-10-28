@@ -35,7 +35,14 @@ export class FeedbackController {
         if (file.mimetype.startsWith('image/')) {
           cb(null, true);
         } else {
-          cb(new AppException('Only image files are allowed', 'ONLY_IMAGE_FILES_ALLOWED', HttpStatus.BAD_REQUEST), false);
+          cb(
+            new AppException(
+              'Only image files are allowed',
+              'ONLY_IMAGE_FILES_ALLOWED',
+              HttpStatus.BAD_REQUEST,
+            ),
+            false,
+          );
         }
       },
     }),

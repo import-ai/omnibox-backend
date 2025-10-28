@@ -2,7 +2,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ForbiddenException } from '@nestjs/common';
 import { APIKeyService } from './api-key.service';
 import {
   APIKey,
@@ -74,8 +73,10 @@ describe('APIKeyService', () => {
       t: jest.fn((key: string, options?: any) => {
         // Return mock translations for test purposes
         const translations: Record<string, string> = {
-          'apikey.errors.noPermissionForNamespace': 'User {{userId}} does not have permission to namespace {{namespaceId}}',
-          'apikey.errors.noWritePermission': 'User {{userId}} does not have write permission to resource {{resourceId}} in namespace {{namespaceId}}',
+          'apikey.errors.noPermissionForNamespace':
+            'User {{userId}} does not have permission to namespace {{namespaceId}}',
+          'apikey.errors.noWritePermission':
+            'User {{userId}} does not have write permission to resource {{resourceId}} in namespace {{namespaceId}}',
         };
         let translation = translations[key] || key;
         if (options?.args) {

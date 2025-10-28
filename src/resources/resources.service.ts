@@ -7,10 +7,6 @@ import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import {
-  encodeFileName,
-  getOriginalFileName,
-} from 'omniboxd/utils/encode-filename';
 
 const TASK_PRIORITY = 5;
 
@@ -349,8 +345,20 @@ export class ResourcesService {
     const repo = entityManager.getRepository(Resource);
     const resource = await repo.save(repo.create(props));
 
-    // If it's not a root resource, create index task
-    if (resource.parentId) {
+    if (
+      resource.resourceType === ResourceType.FILE &&
+      !resource.content &&
+      resource.userId
+    ) {
+      // If it's a user-uploaded file, create file reader task
+      await this.wizardTaskService.createFileReaderTask(
+        resource.userId,
+        resource,
+        'default',
+        entityManager.getRepository(Task),
+      );
+    } else if (resource.parentId) {
+      // If it's not a root resource, create index task
       await this.wizardTaskService.createIndexTask(
         TASK_PRIORITY,
         props.userId!,

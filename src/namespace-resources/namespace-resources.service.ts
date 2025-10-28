@@ -213,8 +213,7 @@ export class NamespaceResourcesService {
       }
       attrs.file_id = file.id;
       attrs.mimetype = createReq.file_type;
-      attrs.original_name = getOriginalFileName(createReq.name);
-      attrs.encoded_name = encodeFileName(createReq.name);
+      attrs.original_name = createReq.name;
     }
 
     return await this.resourcesService.createResource(

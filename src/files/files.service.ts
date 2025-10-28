@@ -1,10 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { AwsClient } from 'aws4fetch';
 import { ConfigService } from '@nestjs/config';
 import { FileInfoDto } from './dtos/file-info.dto';
 import { Repository } from 'typeorm';
 import { File } from './entities/file.entity';
 import { InjectRepository } from '@nestjs/typeorm';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class FilesService {
@@ -16,6 +19,8 @@ export class FilesService {
 
     @InjectRepository(File)
     private readonly fileRepo: Repository<File>,
+    private readonly namespacesService: NamespacesService,
+    private readonly i18n: I18nService,
   ) {
     const accessKeyId = configService.get<string>('OBB_S3_ACCESS_KEY_ID');
     const secretAccessKey = configService.get<string>(
@@ -38,10 +43,15 @@ export class FilesService {
   }
 
   async createFile(userId: string, namespaceId: string): Promise<FileInfoDto> {
+    const ok = this.namespacesService.userInNamespace(userId, namespaceId);
+    if (!ok) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
     const file = await this.fileRepo.save(
       this.fileRepo.create({ namespaceId, userId }),
     );
-    const fileUrl = new URL(file.id, this.s3Url);
+    const fileUrl = new URL(`${namespaceId}/${file.id}`, this.s3Url);
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'PUT',
       headers: {
@@ -56,7 +66,17 @@ export class FilesService {
     return await this.fileRepo.findOne({ where: { namespaceId, id: fileId } });
   }
 
-  async generateDownloadUrl(fileId: string) {
-    // todo
+  async generateDownloadUrl(
+    namespaceId: string,
+    fileId: string,
+  ): Promise<FileInfoDto> {
+    const fileUrl = new URL(`${namespaceId}/${fileId}`, this.s3Url);
+    const signedReq = await this.awsClient.sign(fileUrl.toString(), {
+      method: 'GET',
+      headers: {
+        'x-amz-expires': '900', // 900 seconds
+      },
+    });
+    return FileInfoDto.new(fileId, fileUrl.toString(), signedReq.headers);
   }
 }

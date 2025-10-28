@@ -4,9 +4,10 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { File } from './entities/file.entity';
 import { FilesController } from './files.controller';
+import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 
 @Module({
-  imports: [ConfigModule, TypeOrmModule.forFeature([File])],
+  imports: [ConfigModule, NamespacesModule, TypeOrmModule.forFeature([File])],
   providers: [FilesService],
   exports: [FilesService],
   controllers: [FilesController],

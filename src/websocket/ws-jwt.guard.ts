@@ -17,7 +17,7 @@ export class WsJwtGuard implements CanActivate {
     private readonly i18n: I18nService,
   ) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const wsAuthConfig = this.reflector.getAllAndOverride<WsAuthConfig>(
       WS_AUTH_CONFIG_KEY,
       [context.getHandler(), context.getClass()],
@@ -30,7 +30,7 @@ export class WsJwtGuard implements CanActivate {
         const message = this.i18n.t('auth.errors.noToken');
         throw new WsException(`Unauthorized: ${message}`);
       }
-      const payload = await this.authService.jwtVerify(token);
+      const payload = this.authService.jwtVerify(token);
       client.data.userId = payload.sub;
       return true;
     } catch (error) {

@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-require-imports */
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
 import { ReaderProcessor } from './reader.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
@@ -284,9 +283,7 @@ describe('ReaderProcessor', () => {
           },
         });
 
-        await expect(processor.process(task)).rejects.toThrow(
-          AppException,
-        );
+        await expect(processor.process(task)).rejects.toThrow(AppException);
         await expect(processor.process(task)).rejects.toThrow(
           'Invalid task payload',
         );

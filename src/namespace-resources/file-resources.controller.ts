@@ -27,7 +27,7 @@ export class FileResourcesController {
   async uploadFile(
     @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
     @Body('parent_id') parentId: string,
   ) {
     const newResource = await this.namespaceResourcesService.uploadFile(
@@ -50,7 +50,7 @@ export class FileResourcesController {
     @UploadedFile() chunk: Express.Multer.File,
     @Body('chunk_number') chunkNumber: string,
     @Body('file_hash') fileHash: string,
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
   ) {
     return this.namespaceResourcesService.uploadFileChunk(
       namespaceId,
@@ -62,7 +62,7 @@ export class FileResourcesController {
 
   @Post('chunk/clean')
   async cleanFileChunks(
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
     @Body('chunks_number') chunksNumber: string,
     @Body('file_hash') fileHash: string,
   ) {
@@ -76,7 +76,7 @@ export class FileResourcesController {
   @Post('merge')
   async mergeFileChunks(
     @Req() req: Request,
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
     @Body('total_chunks', ParseIntPipe) totalChunks: number,
     @Body('file_hash') fileHash: string,
     @Body('file_name') fileName: string,
@@ -104,7 +104,7 @@ export class FileResourcesController {
   async patchFile(
     @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
     @Body('resource_id') resourceId: string,
   ) {
     return this.namespaceResourcesService.uploadFile(

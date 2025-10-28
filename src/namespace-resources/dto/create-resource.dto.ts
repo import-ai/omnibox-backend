@@ -13,10 +13,6 @@ export class CreateResourceDto {
   @IsOptional()
   name: string;
 
-  @IsString()
-  @IsNotEmpty()
-  namespaceId: string;
-
   @IsEnum(ResourceType)
   resourceType: ResourceType;
 

@@ -172,17 +172,18 @@ export class NamespaceResourcesService {
 
   async create(
     userId: string,
+    namespaceId: string,
     data: CreateResourceDto,
     manager?: EntityManager,
   ) {
     if (!manager) {
       return await this.dataSource.transaction(async (manager) => {
-        return await this.create(userId, data, manager);
+        return await this.create(userId, namespaceId, data, manager);
       });
     }
 
     const ok = await this.permissionsService.userHasPermission(
-      data.namespaceId,
+      namespaceId,
       data.parentId,
       userId,
       ResourcePermission.CAN_EDIT,
@@ -197,6 +198,7 @@ export class NamespaceResourcesService {
     return await this.resourcesService.createResource(
       {
         ...data,
+        namespaceId,
         userId,
         tagIds: data.tag_ids,
       },
@@ -238,6 +240,7 @@ export class NamespaceResourcesService {
       // Create the duplicated resource within the transaction
       const duplicatedResource = await this.create(
         userId,
+        namespaceId,
         newResource,
         entityManager,
       );
@@ -744,10 +747,9 @@ export class NamespaceResourcesService {
         );
       }
     } else if (parentId) {
-      resource = await this.create(userId, {
+      resource = await this.create(userId, namespaceId, {
         name: originalName,
         resourceType: ResourceType.FILE,
-        namespaceId,
         parentId,
         attrs: {
           original_name: originalName,
@@ -813,10 +815,9 @@ export class NamespaceResourcesService {
         );
       }
     } else if (parentId) {
-      resource = await this.create(userId, {
+      resource = await this.create(userId, namespaceId, {
         name: originalFilename, // Use original filename for display
         resourceType: ResourceType.FILE,
-        namespaceId,
         parentId,
         attrs: {
           original_name: originalFilename,

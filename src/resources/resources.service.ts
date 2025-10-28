@@ -7,6 +7,10 @@ import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import {
+  encodeFileName,
+  getOriginalFileName,
+} from 'omniboxd/utils/encode-filename';
 
 const TASK_PRIORITY = 5;
 
@@ -339,6 +343,15 @@ export class ResourcesService {
         props.parentId,
         entityManager,
       );
+    }
+
+    if (props.resourceType === ResourceType.FILE) {
+      const originalName = props.attrs?.original_name;
+      props.attrs = {
+        ...props.attrs,
+        original_name: getOriginalFileName(originalName),
+        encoded_name: encodeFileName(originalName),
+      };
     }
 
     // Create the resource

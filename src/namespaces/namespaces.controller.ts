@@ -81,6 +81,14 @@ export class NamespacesController {
     return await this.namespacesService.getRoot(namespaceId, userId);
   }
 
+  @Get(':namespaceId/private')
+  async getPrivateRoot(
+    @Param('namespaceId') namespaceId: string,
+    @UserId() userId: string,
+  ) {
+    return await this.namespacesService.getPrivateRoot(userId, namespaceId);
+  }
+
   @Post()
   async create(@Req() req, @Body() createDto: CreateNamespaceDto) {
     return await this.namespacesService.createAndJoinNamespace(

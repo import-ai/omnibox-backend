@@ -42,6 +42,7 @@ import {
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { FilesService } from 'omniboxd/files/files.service';
 
 const TASK_PRIORITY = 5;
 
@@ -59,6 +60,7 @@ export class NamespaceResourcesService {
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly resourcesService: ResourcesService,
+    private readonly filesService: FilesService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -173,18 +175,18 @@ export class NamespaceResourcesService {
   async create(
     userId: string,
     namespaceId: string,
-    data: CreateResourceDto,
+    createReq: CreateResourceDto,
     manager?: EntityManager,
   ) {
     if (!manager) {
       return await this.dataSource.transaction(async (manager) => {
-        return await this.create(userId, namespaceId, data, manager);
+        return await this.create(userId, namespaceId, createReq, manager);
       });
     }
 
     const ok = await this.permissionsService.userHasPermission(
       namespaceId,
-      data.parentId,
+      createReq.parentId,
       userId,
       ResourcePermission.CAN_EDIT,
       undefined,
@@ -195,12 +197,33 @@ export class NamespaceResourcesService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
+    const attrs = { ...createReq.attrs };
+    if (createReq.resourceType === ResourceType.FILE) {
+      const file = await this.filesService.getFile(
+        namespaceId,
+        createReq.file_id!,
+      );
+      if (!file || file.userId !== userId) {
+        const message = this.i18n.t('resource.errors.fileNotFound');
+        throw new AppException(
+          message,
+          'FILE_NOT_FOUND',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      attrs.file_id = file.id;
+      attrs.mimetype = createReq.file_type;
+      attrs.original_name = getOriginalFileName(createReq.name);
+      attrs.encoded_name = encodeFileName(createReq.name);
+    }
+
     return await this.resourcesService.createResource(
       {
-        ...data,
+        ...createReq,
         namespaceId,
         userId,
-        tagIds: data.tag_ids,
+        attrs,
+        tagIds: createReq.tag_ids,
       },
       manager,
     );

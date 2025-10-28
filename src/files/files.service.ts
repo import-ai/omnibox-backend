@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { FileInfoDto } from './dtos/file-info.dto';
 import { Repository } from 'typeorm';
 import { File } from './entities/file.entity';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class FilesService {
@@ -12,19 +13,26 @@ export class FilesService {
 
   constructor(
     configService: ConfigService,
+
+    @InjectRepository(File)
     private readonly fileRepo: Repository<File>,
   ) {
     const accessKeyId = configService.get<string>('OBB_S3_ACCESS_KEY_ID');
     const secretAccessKey = configService.get<string>(
       'OBB_S3_SECRET_ACCESS_KEY',
     );
-    const s3Url = configService.get<string>('OBB_S3_URL');
     if (!accessKeyId || !secretAccessKey) {
-      throw new Error('AWS credentials not set');
+      throw new Error('S3 credentials not set');
     }
+
+    let s3Url = configService.get<string>('OBB_S3_URL');
     if (!s3Url) {
       throw new Error('S3 URL not set');
     }
+    if (!s3Url.endsWith('/')) {
+      s3Url += '/';
+    }
+
     this.awsClient = new AwsClient({ accessKeyId, secretAccessKey });
     this.s3Url = new URL(s3Url);
   }
@@ -42,6 +50,10 @@ export class FilesService {
       },
     });
     return FileInfoDto.new(file.id, fileUrl.toString(), signedReq.headers);
+  }
+
+  async getFile(namespaceId: string, fileId: string): Promise<File | null> {
+    return await this.fileRepo.findOne({ where: { namespaceId, id: fileId } });
   }
 
   async generateDownloadUrl(fileId: string) {

@@ -5,6 +5,7 @@ import {
   IsObject,
   IsOptional,
   IsNotEmpty,
+  ValidateIf,
 } from 'class-validator';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
@@ -32,4 +33,14 @@ export class CreateResourceDto {
   @IsObject()
   @IsOptional()
   attrs?: Record<string, any>;
+
+  @ValidateIf((o) => o.resourceType === ResourceType.FILE)
+  @IsString()
+  @IsNotEmpty()
+  file_id?: string;
+
+  @ValidateIf((o) => o.resourceType === ResourceType.FILE)
+  @IsString()
+  @IsNotEmpty()
+  file_type?: string;
 }

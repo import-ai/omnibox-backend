@@ -1,6 +1,7 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
+@Entity('files')
 export class File extends Base {
   @PrimaryGeneratedColumn()
   id: string;

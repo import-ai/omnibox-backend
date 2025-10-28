@@ -345,15 +345,6 @@ export class ResourcesService {
       );
     }
 
-    if (props.resourceType === ResourceType.FILE) {
-      const originalName = props.attrs?.original_name;
-      props.attrs = {
-        ...props.attrs,
-        original_name: getOriginalFileName(originalName),
-        encoded_name: encodeFileName(originalName),
-      };
-    }
-
     // Create the resource
     const repo = entityManager.getRepository(Resource);
     const resource = await repo.save(repo.create(props));

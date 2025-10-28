@@ -1,16 +1,16 @@
 import { Expose } from 'class-transformer';
 
-export class FileUrlDto {
+export class FileInfoDto {
   @Expose()
   url: string;
 
-  @Expose()
-  headers: Record<string, string>;
+  @Expose({ name: 'upload_headers' })
+  uploadHeaders: Record<string, string>;
 
   static new(url: string, headers: Headers) {
-    const dto = new FileUrlDto();
+    const dto = new FileInfoDto();
     dto.url = url;
-    dto.headers = {};
+    dto.uploadHeaders = {};
     for (const [key, val] of headers.entries()) {
       headers[key] = val;
     }

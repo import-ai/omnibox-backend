@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AwsClient } from 'aws4fetch';
 import { ConfigService } from '@nestjs/config';
-import { FileUrlDto } from './dtos/file-url.dto';
+import { FileInfoDto } from './dtos/file-info.dto';
 import { Repository } from 'typeorm';
 import { File } from './entities/file.entity';
 
@@ -29,7 +29,7 @@ export class FilesService {
     this.s3Url = new URL(s3Url);
   }
 
-  async createFile(userId: string, namespaceId: string): Promise<FileUrlDto> {
+  async createFile(userId: string, namespaceId: string): Promise<FileInfoDto> {
     const file = await this.fileRepo.save(
       this.fileRepo.create({ namespaceId, userId }),
     );
@@ -42,7 +42,7 @@ export class FilesService {
       },
     });
     console.log(signedReq);
-    return FileUrlDto.new(fileUrl.toString(), signedReq.headers);
+    return FileInfoDto.new(fileUrl.toString(), signedReq.headers);
   }
 
   async generateDownloadUrl(fileId: string) {

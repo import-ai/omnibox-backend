@@ -7,16 +7,16 @@ export class FileInfoDto {
   @Expose()
   url: string;
 
-  @Expose({ name: 'put_headers' })
-  putHeaders: Record<string, string>;
+  @Expose()
+  headers: Record<string, string>;
 
-  static new(id: string, url: string, putHeaders: Headers) {
+  static new(id: string, url: string, headers: Headers) {
     const dto = new FileInfoDto();
     dto.id = id;
     dto.url = url;
-    dto.putHeaders = {};
-    for (const [key, val] of putHeaders.entries()) {
-      dto.putHeaders[key] = val;
+    dto.headers = {};
+    for (const [key, val] of headers.entries()) {
+      dto.headers[key] = val;
     }
     return dto;
   }

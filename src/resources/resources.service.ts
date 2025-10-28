@@ -59,6 +59,7 @@ export class ResourcesService {
         'parentId',
         'resourceType',
         'globalPermission',
+        'attrs',
         'createdAt',
         'updatedAt',
       ],

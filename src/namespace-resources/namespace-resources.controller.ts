@@ -180,6 +180,19 @@ export class NamespaceResourcesController {
     });
   }
 
+  @Get(':resourceId/file')
+  async getResourceFile(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return await this.namespaceResourcesService.getResourceFile(
+      userId,
+      namespaceId,
+      resourceId,
+    );
+  }
+
   @Patch(':resourceId')
   async update(
     @UserId() userId: string,

@@ -43,6 +43,7 @@ import {
 } from 'omniboxd/utils/encode-filename';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FilesService } from 'omniboxd/files/files.service';
+import { FileInfoDto } from 'omniboxd/files/dtos/file-info.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -630,6 +631,32 @@ export class NamespaceResourcesService {
       spaceType,
       tagsMap.get(resource.id) || [],
     );
+  }
+
+  async getResourceFile(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<FileInfoDto> {
+    const ok = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    if (!ok) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const resource = await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      resourceId,
+    );
+    const fileId = resource.attrs?.file_id;
+    if (resource.resourceType !== ResourceType.FILE || !fileId) {
+      const message = this.i18n.t('resource.errors.fileNotFound');
+      throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    return await this.filesService.generateDownloadUrl(namespaceId, fileId);
   }
 
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {

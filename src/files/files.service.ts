@@ -41,7 +41,7 @@ export class FilesService {
         'x-amz-expires': '900', // 900 seconds
       },
     });
-    return FileInfoDto.new(sha256, fileUrl.toString(), signedReq.headers);
+    return FileInfoDto.new(file.id, fileUrl.toString(), signedReq.headers);
   }
 
   async generateDownloadUrl(fileId: string) {

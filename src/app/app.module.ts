@@ -71,6 +71,7 @@ import { CacheableMemory } from 'cacheable';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
 import { FilesModule } from 'omniboxd/files/files.module';
+import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -191,6 +192,7 @@ export class AppModule implements NestModule {
               AddShareIdToConversations1757844449000,
               ShareUser1760171824000,
               Files1761556143000,
+              AddFileIdToResources1761726974942,
               ...extraMigrations,
             ],
             migrationsRun: true,

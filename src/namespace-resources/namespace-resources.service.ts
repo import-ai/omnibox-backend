@@ -199,10 +199,18 @@ export class NamespaceResourcesService {
     }
 
     const attrs = { ...createReq.attrs };
-    if (createReq.resourceType === ResourceType.FILE) {
+    if (createReq.file_id) {
+      if (createReq.resourceType !== ResourceType.FILE) {
+        const message = this.i18n.t('resource.errors.invalidResourceType');
+        throw new AppException(
+          message,
+          'INVALID_RESOURCE_TYPE',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
       const file = await this.filesService.getFile(
         namespaceId,
-        createReq.file_id!,
+        createReq.file_id,
       );
       if (!file || file.userId !== userId) {
         const message = this.i18n.t('resource.errors.fileNotFound');
@@ -212,9 +220,8 @@ export class NamespaceResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      attrs.file_id = file.id;
-      attrs.mimetype = createReq.file_type;
-      attrs.original_name = createReq.name;
+      attrs.original_name = file.name;
+      attrs.mimetype = file.mimetype;
     }
 
     return await this.resourcesService.createResource(
@@ -224,6 +231,7 @@ export class NamespaceResourcesService {
         userId,
         attrs,
         tagIds: createReq.tag_ids,
+        fileId: createReq.file_id,
       },
       manager,
     );
@@ -651,12 +659,14 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    const fileId = resource.attrs?.file_id;
-    if (resource.resourceType !== ResourceType.FILE || !fileId) {
+    if (resource.resourceType !== ResourceType.FILE || !resource.fileId) {
       const message = this.i18n.t('resource.errors.fileNotFound');
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
-    return await this.filesService.generateDownloadUrl(namespaceId, fileId);
+    return await this.filesService.generateDownloadUrl(
+      namespaceId,
+      resource.fileId,
+    );
   }
 
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {

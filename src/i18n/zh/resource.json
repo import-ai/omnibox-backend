@@ -10,6 +10,7 @@
     "contentRequired": "资源需要内容",
     "fileResourceNotFound": "文件资源未找到",
     "cycleDetected": "资源树中检测到循环引用",
-    "cannotSetParentToSubResource": "无法将父资源设置为子资源"
+    "cannotSetParentToSubResource": "无法将父资源设置为子资源",
+    "invalidResourceType": "资源类型无效"
   }
 }

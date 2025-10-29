@@ -38,9 +38,4 @@ export class CreateResourceDto {
   @IsString()
   @IsNotEmpty()
   file_id?: string;
-
-  @ValidateIf((o) => o.resourceType === ResourceType.FILE)
-  @IsString()
-  @IsNotEmpty()
-  file_type?: string;
 }

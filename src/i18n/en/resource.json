@@ -10,6 +10,7 @@
     "contentRequired": "Content is required for the resource",
     "fileResourceNotFound": "File resource not found",
     "cycleDetected": "Cycle detected in the resource tree",
-    "cannotSetParentToSubResource": "Cannot set parent to a sub-resource"
+    "cannotSetParentToSubResource": "Cannot set parent to a sub-resource",
+    "invalidResourceType": "Invalid resource type"
   }
 }

@@ -60,6 +60,7 @@ export class ResourcesService {
         'resourceType',
         'globalPermission',
         'attrs',
+        'fileId',
         'createdAt',
         'updatedAt',
       ],
@@ -324,6 +325,7 @@ export class ResourcesService {
       tagIds?: string[];
       content?: string;
       attrs?: Record<string, any>;
+      fileId?: string;
     },
     entityManager?: EntityManager,
   ): Promise<Resource> {
@@ -349,7 +351,8 @@ export class ResourcesService {
     if (
       resource.resourceType === ResourceType.FILE &&
       !resource.content &&
-      resource.userId
+      resource.userId &&
+      resource.fileId
     ) {
       // If it's a user-uploaded file, create file reader task
       await this.wizardTaskService.createFileReaderTask(

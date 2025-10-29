@@ -18,7 +18,11 @@ export const UserId = createParamDecorator(
 
     if (!userId && !optional) {
       // Note: Decorators cannot easily inject I18nService, using static message
-      throw new AppException('Not authorized', 'NOT_AUTHORIZED', HttpStatus.UNAUTHORIZED);
+      throw new AppException(
+        'Not authorized',
+        'NOT_AUTHORIZED',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
 
     return userId;

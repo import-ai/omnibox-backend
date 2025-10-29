@@ -23,6 +23,7 @@ import { SocialService } from 'omniboxd/auth/social.service';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
 import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
+import { CacheService } from 'omniboxd/common/cache.service';
 
 @Module({
   exports: [AuthService, WechatService, GoogleService, SocialService],
@@ -39,6 +40,7 @@ import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
     GoogleService,
     JwtStrategy,
     LocalStrategy,
+    CacheService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

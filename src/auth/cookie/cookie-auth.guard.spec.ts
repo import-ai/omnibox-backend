@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
 import { AuthService } from 'omniboxd/auth/auth.service';
@@ -10,7 +10,6 @@ describe('CookieAuthGuard', () => {
   let guard: CookieAuthGuard;
   let reflector: jest.Mocked<Reflector>;
   let authService: jest.Mocked<AuthService>;
-  let i18nService: jest.Mocked<I18nService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -34,7 +33,8 @@ describe('CookieAuthGuard', () => {
             t: jest.fn((key: string) => {
               // Return mock translations for test purposes
               const translations: Record<string, string> = {
-                'auth.errors.tokenCookieRequired': 'Authentication token cookie is required',
+                'auth.errors.tokenCookieRequired':
+                  'Authentication token cookie is required',
                 'auth.errors.tokenInvalid': 'Invalid or expired token',
                 'auth.errors.invalidTokenPayload': 'Invalid token payload',
               };
@@ -48,7 +48,6 @@ describe('CookieAuthGuard', () => {
     guard = module.get<CookieAuthGuard>(CookieAuthGuard);
     reflector = module.get(Reflector);
     authService = module.get(AuthService);
-    i18nService = module.get(I18nService);
   });
 
   const createMockExecutionContext = (cookies: any = {}): ExecutionContext => {
@@ -94,9 +93,7 @@ describe('CookieAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext();
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      AppException,
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 
   it('should throw AppException when token is invalid', async () => {
@@ -106,9 +103,7 @@ describe('CookieAuthGuard', () => {
     const context = createMockExecutionContext({ token: 'invalid-token' });
     authService.jwtVerify.mockRejectedValue(new Error('Invalid token'));
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      AppException,
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 
   it('should throw AppException when token payload is invalid', async () => {
@@ -118,9 +113,7 @@ describe('CookieAuthGuard', () => {
     const context = createMockExecutionContext({ token: 'valid-token' });
     authService.jwtVerify.mockResolvedValue({}); // No sub field
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      AppException,
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 
   it('should successfully authenticate with valid token and set cookie auth data', async () => {

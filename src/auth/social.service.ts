@@ -2,12 +2,10 @@ import { EntityManager } from 'typeorm';
 import generateId from 'omniboxd/utils/generate-id';
 import { UserService } from 'omniboxd/user/user.service';
 import { WechatCheckResponseDto } from 'omniboxd/auth/dto/wechat-login.dto';
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
-import { KVStore } from 'omniboxd/common/kv-store';
-import { ConfigService } from '@nestjs/config';
+import { CacheService } from 'omniboxd/common/cache.service';
 
 export interface UserSocialState {
   type: string;
@@ -18,22 +16,15 @@ export interface UserSocialState {
 
 @Injectable()
 export class SocialService {
+  private readonly namespace = '/social/states';
   private readonly minUsernameLength = 2;
   private readonly maxUsernameLength = 32;
-  private readonly kvStore: KVStore<UserSocialState>;
 
   constructor(
     private readonly userService: UserService,
     private readonly i18n: I18nService,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-    private readonly configService: ConfigService,
-  ) {
-    this.kvStore = new KVStore(
-      this.cacheManager,
-      '/social/states',
-      this.configService,
-    );
-  }
+    private readonly cacheService: CacheService,
+  ) {}
 
   /**
    * Generate a kv state, return a kv key
@@ -44,7 +35,8 @@ export class SocialService {
   async generateState(type: string, prefix: string = ''): Promise<string> {
     const key = `${prefix ? prefix + '_' : ''}${generateId()}`;
     const expiresIn = 5 * 60 * 1000; // Expires in 5 minutes
-    await this.kvStore.set(
+    await this.cacheService.set<UserSocialState>(
+      this.namespace,
       key,
       {
         type,
@@ -57,13 +49,18 @@ export class SocialService {
   }
 
   async getState(state: string) {
-    return await this.kvStore.get(state);
+    return await this.cacheService.get<UserSocialState>(this.namespace, state);
   }
 
   async updateState(state: string, data: UserSocialState) {
     const ttl = data.expiresIn - (Date.now() - data.createdAt);
     if (ttl > 0) {
-      await this.kvStore.set(state, data, ttl);
+      await this.cacheService.set<UserSocialState>(
+        this.namespace,
+        state,
+        data,
+        ttl,
+      );
     }
   }
 

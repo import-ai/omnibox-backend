@@ -16,18 +16,17 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { isUsernameBlocked } from 'omniboxd/utils/blocked-usernames';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { CacheService } from 'omniboxd/common/cache.service';
+
+interface EmailVerificationState {
+  code: string;
+  createdAt: number;
+  expiresIn: number;
+}
 
 @Injectable()
 export class UserService {
-  private readonly emailStates = new Map<
-    string,
-    {
-      code: string;
-      createdAt: number;
-      expiresIn: number;
-    }
-  >();
-
+  private readonly namespace = '/user/email-verification';
   private readonly alphaRegex = /[a-zA-Z]/;
   private readonly numberRegex = /\d/;
 
@@ -40,6 +39,7 @@ export class UserService {
     private userBindingRepository: Repository<UserBinding>,
     private readonly mailService: MailService,
     private readonly i18n: I18nService,
+    private readonly cacheService: CacheService,
   ) {}
 
   async verify(email: string, password: string) {
@@ -63,7 +63,7 @@ export class UserService {
     return account;
   }
 
-  async validatePassword(password: string) {
+  validatePassword(password: string) {
     if (!password || password.length < 8) {
       const message = this.i18n.t('user.errors.passwordTooShort');
       throw new AppException(
@@ -106,7 +106,7 @@ export class UserService {
       );
     }
 
-    await this.validatePassword(account.password);
+    this.validatePassword(account.password);
 
     const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({
@@ -293,15 +293,6 @@ export class UserService {
     });
   }
 
-  private cleanExpiresState() {
-    const now = Date.now();
-    for (const [state, info] of this.emailStates.entries()) {
-      if (now - info.createdAt > info.expiresIn) {
-        this.emailStates.delete(state);
-      }
-    }
-  }
-
   async validateEmail(userId: string, email: string) {
     if (!isEmail(email)) {
       const message = this.i18n.t('user.errors.invalidEmailFormat');
@@ -323,14 +314,18 @@ export class UserService {
     }
 
     const code = generateId(6, '0123456789');
+    const expiresIn = 5 * 60 * 1000;
 
-    this.emailStates.set(email, {
-      code,
-      createdAt: Date.now(),
-      expiresIn: 5 * 60 * 1000,
-    });
-
-    this.cleanExpiresState();
+    await this.cacheService.set<EmailVerificationState>(
+      this.namespace,
+      email,
+      {
+        code,
+        createdAt: Date.now(),
+        expiresIn,
+      },
+      expiresIn,
+    );
 
     await this.mailService.validateEmail(email, code);
 
@@ -338,6 +333,14 @@ export class UserService {
   }
 
   async update(id: string, account: UpdateUserDto) {
+    if (account.username && !account.username.trim().length) {
+      const message = this.i18n.t('user.errors.userCannotbeEmptyStr');
+      throw new AppException(
+        message,
+        'USERNAME_CANNOT_BE_EMPTY',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     if (account.username && isUsernameBlocked(account.username)) {
       const message = this.i18n.t('user.errors.accountAlreadyExists');
       throw new AppException(
@@ -362,7 +365,10 @@ export class UserService {
           HttpStatus.BAD_REQUEST,
         );
       }
-      const emailState = this.emailStates.get(account.email);
+      const emailState = await this.cacheService.get<EmailVerificationState>(
+        this.namespace,
+        account.email,
+      );
       if (!emailState) {
         const message = this.i18n.t('user.errors.pleaseVerifyEmail');
         throw new AppException(
@@ -379,7 +385,7 @@ export class UserService {
           HttpStatus.BAD_REQUEST,
         );
       }
-      this.emailStates.delete(account.email);
+      await this.cacheService.delete(this.namespace, account.email);
       existUser.email = account.email;
     }
     return await this.userRepository.update(id, existUser);

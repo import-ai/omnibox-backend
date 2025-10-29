@@ -288,7 +288,7 @@ export class AuthService {
     }
   }
 
-  async jwtVerify(token: string) {
+  jwtVerify(token: string) {
     if (!token) {
       const message = this.i18n.t('auth.errors.noToken');
       throw new AppException(message, 'NO_TOKEN', HttpStatus.UNAUTHORIZED);

@@ -52,14 +52,15 @@ export class FilesService {
       this.fileRepo.create({ namespaceId, userId }),
     );
     const fileUrl = new URL(`${namespaceId}/${file.id}`, this.s3Url);
+    fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'PUT',
-      headers: {
-        'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
-        'x-amz-expires': '900', // 900 seconds
+      aws: {
+        service: 's3',
+        signQuery: true,
       },
     });
-    return FileInfoDto.new(file.id, fileUrl.toString(), signedReq.headers);
+    return FileInfoDto.new(file.id, signedReq.url);
   }
 
   async getFile(namespaceId: string, fileId: string): Promise<File | null> {
@@ -71,12 +72,14 @@ export class FilesService {
     fileId: string,
   ): Promise<FileInfoDto> {
     const fileUrl = new URL(`${namespaceId}/${fileId}`, this.s3Url);
+    fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'GET',
-      headers: {
-        'x-amz-expires': '900', // 900 seconds
+      aws: {
+        service: 's3',
+        signQuery: true,
       },
     });
-    return FileInfoDto.new(fileId, fileUrl.toString(), signedReq.headers);
+    return FileInfoDto.new(fileId, signedReq.url);
   }
 }

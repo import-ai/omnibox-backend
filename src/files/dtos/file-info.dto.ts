@@ -7,17 +7,10 @@ export class FileInfoDto {
   @Expose()
   url: string;
 
-  @Expose()
-  headers: Record<string, string>;
-
-  static new(id: string, url: string, headers: Headers) {
+  static new(id: string, url: string) {
     const dto = new FileInfoDto();
     dto.id = id;
     dto.url = url;
-    dto.headers = {};
-    for (const [key, val] of headers.entries()) {
-      dto.headers[key] = val;
-    }
     return dto;
   }
 }

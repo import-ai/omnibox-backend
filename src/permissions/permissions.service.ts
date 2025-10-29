@@ -532,6 +532,13 @@ export class PermissionsService {
       );
     });
   }
+
+  async userInNamespace(userId: string, namespaceId: string): Promise<boolean> {
+    const count = await this.namespaceMembersRepository.count({
+      where: { namespaceId, userId },
+    });
+    return count > 0;
+  }
 }
 
 function getGlobalPermission(

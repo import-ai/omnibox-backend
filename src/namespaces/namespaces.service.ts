@@ -113,13 +113,6 @@ export class NamespacesService {
     );
   }
 
-  async userInNamespace(userId: string, namespaceId: string): Promise<boolean> {
-    const count = await this.namespaceMemberRepository.count({
-      where: { namespaceId, userId },
-    });
-    return count > 0;
-  }
-
   async getNamespace(namespaceId: string, manager?: EntityManager) {
     const repo = manager
       ? manager.getRepository(Namespace)

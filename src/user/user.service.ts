@@ -63,7 +63,7 @@ export class UserService {
     return account;
   }
 
-  async validatePassword(password: string) {
+  validatePassword(password: string) {
     if (!password || password.length < 8) {
       const message = this.i18n.t('user.errors.passwordTooShort');
       throw new AppException(
@@ -106,7 +106,7 @@ export class UserService {
       );
     }
 
-    await this.validatePassword(account.password);
+    this.validatePassword(account.password);
 
     const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({

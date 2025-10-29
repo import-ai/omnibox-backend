@@ -44,7 +44,7 @@ export class OpenWizardService {
       'ask',
     );
 
-    return await this.mergeChunks(chunks);
+    return this.mergeChunks(chunks);
   }
 
   private async resolveConversationId(
@@ -67,7 +67,7 @@ export class OpenWizardService {
     }
   }
 
-  private async mergeChunks(chunks: ChatResponse[]): Promise<any> {
+  private mergeChunks(chunks: ChatResponse[]): any {
     const messages: any[] = [];
     let currentMessage: any = null;
 

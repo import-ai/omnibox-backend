@@ -77,6 +77,25 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  lint:
+    runs-on: ubuntu-latest
+    needs: [ runtime ]
+    container:
+      image: ghcr.io/import-ai/omnibox-backend-runtime:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint
+        run: pnpm lint
+
   test:
     runs-on: ubuntu-latest
     needs: [ runtime ]

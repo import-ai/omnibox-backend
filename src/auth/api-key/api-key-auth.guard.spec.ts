@@ -1,9 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  ExecutionContext,
-  UnauthorizedException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { APIKeyAuthGuard } from 'omniboxd/auth';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
@@ -20,7 +16,6 @@ describe('APIKeyAuthGuard', () => {
   let guard: APIKeyAuthGuard;
   let apiKeyService: jest.Mocked<APIKeyService>;
   let reflector: jest.Mocked<Reflector>;
-  let i18nService: jest.Mocked<I18nService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -44,11 +39,14 @@ describe('APIKeyAuthGuard', () => {
             t: jest.fn((key: string) => {
               // Return mock translations for test purposes
               const translations: Record<string, string> = {
-                'apikey.errors.authorizationHeaderRequired': 'Authorization header is required',
+                'apikey.errors.authorizationHeaderRequired':
+                  'Authorization header is required',
                 'apikey.errors.invalidApiKeyFormat': 'Invalid API key format',
                 'apikey.errors.invalidApiKey': 'Invalid API key',
-                'apikey.errors.noPermissionForTarget': 'No permission for target {{target}}',
-                'apikey.errors.noSpecificPermission': 'No {{permission}} permission for target {{target}}',
+                'apikey.errors.noPermissionForTarget':
+                  'No permission for target {{target}}',
+                'apikey.errors.noSpecificPermission':
+                  'No {{permission}} permission for target {{target}}',
               };
               return translations[key] || key;
             }),
@@ -111,9 +109,7 @@ describe('APIKeyAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true }); // apiKeyAuthOptions = { enabled: true }
     const context = createMockExecutionContext();
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      AppException,
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 
   it('should throw AppException when API key does not start with sk-', async () => {
@@ -122,9 +118,7 @@ describe('APIKeyAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true }); // apiKeyAuthOptions = { enabled: true }
     const context = createMockExecutionContext('Bearer invalid-key');
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      AppException,
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 
   it('should throw AppException when API key is not found', async () => {
@@ -134,9 +128,7 @@ describe('APIKeyAuthGuard', () => {
     const context = createMockExecutionContext('Bearer sk-validformat');
     apiKeyService.findByValue.mockResolvedValue(null);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      AppException,
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 
   it('should allow valid API key and set apiKey and user on request', async () => {
@@ -245,9 +237,7 @@ describe('APIKeyAuthGuard', () => {
     const context = createMockExecutionContext('Bearer sk-validkey');
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      AppException,
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 
   it('should throw AppException when API key lacks specific permission type', async () => {
@@ -283,9 +273,7 @@ describe('APIKeyAuthGuard', () => {
     const context = createMockExecutionContext('Bearer sk-validkey');
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      AppException,
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 
   it('should allow API key with multiple matching permissions', async () => {

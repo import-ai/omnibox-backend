@@ -15,9 +15,7 @@ import { PermissionDto } from './dto/permission.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')
 export class PermissionsController {
-  constructor(
-    private readonly permissionsService: PermissionsService,
-  ) {}
+  constructor(private readonly permissionsService: PermissionsService) {}
 
   @Get()
   async listPermissions(

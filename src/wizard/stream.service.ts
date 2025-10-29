@@ -206,13 +206,11 @@ export class StreamService {
     };
   }
 
-  async findOneOrFail(
-    messages: Message[],
-    messageId: string,
-  ): Promise<Message> {
+  findOneOrFail(messages: Message[], messageId: string): Message {
     const message = messages.find((m) => m.id === messageId);
     if (!message) {
       const errorMessage = this.i18n.t('system.errors.messageNotFound');
+
       throw new AppException(
         errorMessage,
         'MESSAGE_NOT_FOUND',
@@ -222,14 +220,11 @@ export class StreamService {
     return message;
   }
 
-  async getMessages(
-    allMessages: Message[],
-    parentMessageId: string,
-  ): Promise<Message[]> {
+  getMessages(allMessages: Message[], parentMessageId: string): Message[] {
     const messages: Message[] = [];
     let parentId: string | null = parentMessageId;
     while (parentId) {
-      const message = await this.findOneOrFail(allMessages, parentId);
+      const message = this.findOneOrFail(allMessages, parentId);
       messages.unshift(message);
       parentId = message.parentId;
     }
@@ -355,7 +350,7 @@ export class StreamService {
         userId || undefined,
         requestDto.conversation_id,
       );
-      messages = await this.getMessages(allMessages, parentId);
+      messages = this.getMessages(allMessages, parentId);
     }
 
     const handlerContext: HandlerContext = {

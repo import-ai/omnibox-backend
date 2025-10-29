@@ -58,7 +58,6 @@ describe('APIKeyAuthGuard', () => {
     guard = module.get<APIKeyAuthGuard>(APIKeyAuthGuard);
     apiKeyService = module.get(APIKeyService);
     reflector = module.get(Reflector);
-    i18nService = module.get(I18nService);
   });
 
   const createMockExecutionContext = (

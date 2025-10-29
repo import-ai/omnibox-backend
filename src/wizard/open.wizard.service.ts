@@ -67,7 +67,7 @@ export class OpenWizardService {
     }
   }
 
-  private mergeChunks(chunks: ChatResponse[]): any {
+  private mergeChunks(chunks: ChatResponse[]) {
     const messages: any[] = [];
     let currentMessage: any = null;
 

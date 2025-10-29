@@ -48,7 +48,6 @@ describe('CookieAuthGuard', () => {
     guard = module.get<CookieAuthGuard>(CookieAuthGuard);
     reflector = module.get(Reflector);
     authService = module.get(AuthService);
-    i18nService = module.get(I18nService);
   });
 
   const createMockExecutionContext = (cookies: any = {}): ExecutionContext => {

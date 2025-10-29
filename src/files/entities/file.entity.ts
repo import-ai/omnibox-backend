@@ -11,4 +11,10 @@ export class File extends Base {
 
   @Column()
   userId: string;
+
+  @Column()
+  name: string;
+
+  @Column()
+  mimetype: string;
 }

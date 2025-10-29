@@ -22,6 +22,16 @@ export class Files1761556143000 implements MigrationInterface {
           type: 'uuid',
           isNullable: false,
         },
+        {
+          name: 'name',
+          type: 'character varying',
+          isNullable: false,
+        },
+        {
+          name: 'mimetype',
+          type: 'character varying',
+          isNullable: false,
+        },
         ...BaseColumns(),
       ],
       foreignKeys: [

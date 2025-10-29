@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { CreateFileReqDto } from './dtos/create-file-req.dto';
 
 @Injectable()
 export class FilesService {
@@ -42,7 +43,11 @@ export class FilesService {
     this.s3Url = new URL(s3Url);
   }
 
-  async createFile(userId: string, namespaceId: string): Promise<FileInfoDto> {
+  async createFile(
+    userId: string,
+    namespaceId: string,
+    createReq: CreateFileReqDto,
+  ): Promise<FileInfoDto> {
     const ok = await this.permissionsService.userInNamespace(
       userId,
       namespaceId,
@@ -51,11 +56,19 @@ export class FilesService {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
+
     const file = await this.fileRepo.save(
-      this.fileRepo.create({ namespaceId, userId }),
+      this.fileRepo.create({
+        namespaceId,
+        userId,
+        name: createReq.name,
+        mimetype: createReq.mimetype,
+      }),
     );
+
     const fileUrl = new URL(`${namespaceId}/${file.id}`, this.s3Url);
     fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
+
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'PUT',
       aws: {
@@ -74,8 +87,19 @@ export class FilesService {
     namespaceId: string,
     fileId: string,
   ): Promise<FileInfoDto> {
+    const file = await this.getFile(namespaceId, fileId);
+    if (!file) {
+      const message = this.i18n.t('resource.errors.fileNotFound');
+      throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+
     const fileUrl = new URL(`${namespaceId}/${fileId}`, this.s3Url);
     fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
+    fileUrl.searchParams.set(
+      'response-content-disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+    );
+
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'GET',
       aws: {

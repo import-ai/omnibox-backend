@@ -93,7 +93,7 @@ describe('CookieAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext();
 
-    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
+    expect(() => guard.canActivate(context)).toThrow(AppException);
   });
 
   it('should throw AppException when token is invalid', () => {
@@ -101,9 +101,11 @@ describe('CookieAuthGuard', () => {
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext({ token: 'invalid-token' });
-    authService.jwtVerify.mockRejectedValue(new Error('Invalid token'));
+    authService.jwtVerify.mockImplementation(() => {
+      throw new Error('Invalid token');
+    });
 
-    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
+    expect(() => guard.canActivate(context)).toThrow(AppException);
   });
 
   it('should throw AppException when token payload is invalid', () => {
@@ -111,9 +113,9 @@ describe('CookieAuthGuard', () => {
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext({ token: 'valid-token' });
-    authService.jwtVerify.mockResolvedValue({}); // No sub field
+    authService.jwtVerify.mockReturnValue({}); // No sub field
 
-    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
+    expect(() => guard.canActivate(context)).toThrow(AppException);
   });
 
   it('should successfully authenticate with valid token and set cookie auth data', () => {
@@ -121,7 +123,7 @@ describe('CookieAuthGuard', () => {
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext({ token: 'valid-token' });
-    authService.jwtVerify.mockResolvedValue({
+    authService.jwtVerify.mockReturnValue({
       sub: 'user-123',
       namespaceId: 'namespace-123',
       email: 'test@example.com',
@@ -144,7 +146,7 @@ describe('CookieAuthGuard', () => {
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext({ token: 'valid-token' });
-    authService.jwtVerify.mockResolvedValue({
+    authService.jwtVerify.mockReturnValue({
       sub: 'user-123',
       // Missing namespaceId, email, username
     });
@@ -176,7 +178,9 @@ describe('CookieAuthGuard', () => {
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true, onAuthFail: 'continue' }); // cookieAuthOptions with onAuthFail = 'continue'
     const context = createMockExecutionContext({ token: 'invalid-token' });
-    authService.jwtVerify.mockRejectedValue(new Error('Invalid token'));
+    authService.jwtVerify.mockImplementation(() => {
+      throw new Error('Invalid token');
+    });
 
     const result = guard.canActivate(context);
 
@@ -188,7 +192,7 @@ describe('CookieAuthGuard', () => {
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true, onAuthFail: 'continue' }); // cookieAuthOptions with onAuthFail = 'continue'
     const context = createMockExecutionContext({ token: 'valid-token' });
-    authService.jwtVerify.mockResolvedValue({}); // No sub field
+    authService.jwtVerify.mockReturnValue({}); // No sub field
 
     const result = guard.canActivate(context);
 

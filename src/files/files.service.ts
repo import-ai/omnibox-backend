@@ -38,9 +38,8 @@ export class FilesService {
 
     let s3InternalUrl = configService.get<string>('OBB_S3_INTERNAL_URL');
     if (!s3InternalUrl) {
-      throw new Error('S3 internal URL not set');
-    }
-    if (!s3InternalUrl.endsWith('/')) {
+      s3InternalUrl = s3Url;
+    } else if (!s3InternalUrl.endsWith('/')) {
       s3InternalUrl += '/';
     }
 

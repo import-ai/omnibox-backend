@@ -96,7 +96,7 @@ export class AuthService {
       lang?: string;
     },
   ) {
-    const payload: SignUpPayloadDto = await this.jwtVerify(token);
+    const payload: SignUpPayloadDto = this.jwtVerify(token);
     const account = await this.userService.findByEmail(payload.email);
     if (account) {
       const message = this.i18n.t('auth.errors.emailAlreadyExists');
@@ -227,7 +227,7 @@ export class AuthService {
   }
 
   async inviteConfirm(token: string): Promise<void> {
-    const payload: InvitePayloadDto = await this.jwtVerify(token);
+    const payload: InvitePayloadDto = this.jwtVerify(token);
     const user = await this.userService.find(payload.userId);
     await this.dataSource.transaction(async (manager) => {
       await this.handleUserInvitation(user.id, payload.invitation, manager);

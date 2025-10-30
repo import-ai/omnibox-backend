@@ -19,7 +19,7 @@ export class CookieAuthGuard implements CanActivate {
     private i18n: I18nService,
   ) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -54,7 +54,7 @@ export class CookieAuthGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.authService.jwtVerify(token);
+      const payload = this.authService.jwtVerify(token);
 
       if (!payload.sub) {
         if (onAuthFail === 'continue') {

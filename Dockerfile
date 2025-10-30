@@ -10,7 +10,7 @@ FROM ghcr.io/import-ai/omnibox-backend-runtime:latest
 
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --prod
+RUN HUSKY=0 pnpm install --prod
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000

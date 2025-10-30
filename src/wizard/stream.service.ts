@@ -210,6 +210,7 @@ export class StreamService {
     const message = messages.find((m) => m.id === messageId);
     if (!message) {
       const errorMessage = this.i18n.t('system.errors.messageNotFound');
+
       throw new AppException(
         errorMessage,
         'MESSAGE_NOT_FOUND',

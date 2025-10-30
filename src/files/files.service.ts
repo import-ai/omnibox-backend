@@ -1,7 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AwsClient } from 'aws4fetch';
 import { ConfigService } from '@nestjs/config';
-import { FileInfoDto } from './dtos/file-info.dto';
 import { Repository } from 'typeorm';
 import { File } from './entities/file.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -55,8 +54,8 @@ export class FilesService {
     namespaceId: string,
     filename: string,
     mimetype: string,
-  ): Promise<FileInfoDto> {
-    const file = await this.fileRepo.save(
+  ): Promise<File> {
+    return await this.fileRepo.save(
       this.fileRepo.create({
         namespaceId,
         userId,
@@ -64,10 +63,18 @@ export class FilesService {
         mimetype,
       }),
     );
+  }
 
-    const fileUrl = new URL(`${namespaceId}/${file.id}`, this.s3Url);
+  async getFile(namespaceId: string, fileId: string): Promise<File | null> {
+    return await this.fileRepo.findOne({ where: { namespaceId, id: fileId } });
+  }
+
+  async generateUploadUrl(
+    namespaceId: string,
+    fileId: string,
+  ): Promise<string> {
+    const fileUrl = new URL(`${namespaceId}/${fileId}`, this.s3Url);
     fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
-
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'PUT',
       aws: {
@@ -75,18 +82,13 @@ export class FilesService {
         signQuery: true,
       },
     });
-    return FileInfoDto.new(file.id, signedReq.url);
+    return signedReq.url;
   }
-
-  async getFile(namespaceId: string, fileId: string): Promise<File | null> {
-    return await this.fileRepo.findOne({ where: { namespaceId, id: fileId } });
-  }
-
   async generateDownloadUrl(
     namespaceId: string,
     fileId: string,
     internal: boolean,
-  ): Promise<FileInfoDto> {
+  ): Promise<string> {
     const file = await this.getFile(namespaceId, fileId);
     if (!file) {
       const message = this.i18n.t('resource.errors.fileNotFound');
@@ -108,6 +110,6 @@ export class FilesService {
         signQuery: true,
       },
     });
-    return FileInfoDto.new(fileId, signedReq.url);
+    return signedReq.url;
   }
 }

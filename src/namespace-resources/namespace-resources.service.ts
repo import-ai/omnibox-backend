@@ -43,8 +43,8 @@ import {
 } from 'omniboxd/utils/encode-filename';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FilesService } from 'omniboxd/files/files.service';
-import { FileInfoDto } from 'omniboxd/files/dtos/file-info.dto';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
+import { FileInfoDto } from './dto/file-info.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -664,11 +664,12 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('resource.errors.fileNotFound');
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
-    return await this.filesService.generateDownloadUrl(
+    const url = await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
       false,
     );
+    return FileInfoDto.new(resource.fileId, url);
   }
 
   async createResourceFile(
@@ -684,13 +685,14 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
-
-    return await this.filesService.createFile(
+    const file = await this.filesService.createFile(
       userId,
       namespaceId,
       createReq.name,
       createReq.mimetype,
     );
+    const url = await this.filesService.generateUploadUrl(namespaceId, file.id);
+    return FileInfoDto.new(file.id, url);
   }
 
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {

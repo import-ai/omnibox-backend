@@ -44,6 +44,7 @@ import {
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FilesService } from 'omniboxd/files/files.service';
 import { FileInfoDto } from 'omniboxd/files/dtos/file-info.dto';
+import { CreateFileReqDto } from './dto/create-file-req.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -666,6 +667,28 @@ export class NamespaceResourcesService {
     return await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
+    );
+  }
+
+  async createResourceFile(
+    userId: string,
+    namespaceId: string,
+    createReq: CreateFileReqDto,
+  ): Promise<FileInfoDto> {
+    const ok = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!ok) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    return await this.filesService.createFile(
+      userId,
+      namespaceId,
+      createReq.name,
+      createReq.mimetype,
     );
   }
 

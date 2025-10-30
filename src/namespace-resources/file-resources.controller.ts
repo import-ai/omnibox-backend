@@ -15,6 +15,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { CreateFileReqDto } from './dto/create-file-req.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/files')
 export class FileResourcesController {
@@ -23,25 +24,16 @@ export class FileResourcesController {
   ) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(
+  async createResourceFile(
     @UserId() userId: string,
-    @UploadedFile() file: Express.Multer.File,
     @Param('namespaceId') namespaceId: string,
-    @Body('parent_id') parentId: string,
+    @Body() createReq: CreateFileReqDto,
   ) {
-    const newResource = await this.namespaceResourcesService.uploadFile(
+    return await this.namespaceResourcesService.createResourceFile(
       userId,
       namespaceId,
-      file,
-      parentId,
-      undefined,
+      createReq,
     );
-    return await this.namespaceResourcesService.getResource({
-      namespaceId,
-      userId,
-      resourceId: newResource.id,
-    });
   }
 
   @Post('chunk')

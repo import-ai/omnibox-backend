@@ -7,8 +7,6 @@ import { File } from './entities/file.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { CreateFileReqDto } from './dtos/create-file-req.dto';
 
 @Injectable()
 export class FilesService {
@@ -20,7 +18,6 @@ export class FilesService {
 
     @InjectRepository(File)
     private readonly fileRepo: Repository<File>,
-    private readonly permissionsService: PermissionsService,
     private readonly i18n: I18nService,
   ) {
     const accessKeyId = configService.get<string>('OBB_S3_ACCESS_KEY_ID');
@@ -46,23 +43,15 @@ export class FilesService {
   async createFile(
     userId: string,
     namespaceId: string,
-    createReq: CreateFileReqDto,
+    filename: string,
+    mimetype: string,
   ): Promise<FileInfoDto> {
-    const ok = await this.permissionsService.userInNamespace(
-      userId,
-      namespaceId,
-    );
-    if (!ok) {
-      const message = this.i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
-
     const file = await this.fileRepo.save(
       this.fileRepo.create({
         namespaceId,
         userId,
-        name: createReq.name,
-        mimetype: createReq.mimetype,
+        name: filename,
+        mimetype,
       }),
     );
 

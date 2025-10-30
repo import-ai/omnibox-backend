@@ -221,6 +221,7 @@ export class NamespaceResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
+      attrs.filename = file.name;
       attrs.original_name = file.name;
       attrs.mimetype = file.mimetype;
     }

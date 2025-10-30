@@ -75,10 +75,19 @@ import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
+import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
 
 @Module({})
 export class AppModule implements NestModule {
-  static forRoot(extraMigrations: Array<() => void>): DynamicModule {
+  static forRoot(
+    options: {
+      envFilePath: string[];
+      extraMigrations: Array<new () => any>;
+    } = {
+      envFilePath: ['.env'],
+      extraMigrations: [],
+    },
+  ): DynamicModule {
     return {
       module: AppModule,
       controllers: [AppController],
@@ -114,6 +123,7 @@ export class AppModule implements NestModule {
         ConfigModule.forRoot({
           cache: true,
           isGlobal: true,
+          envFilePath: options.envFilePath,
         }),
         I18nModule.forRoot({
           fallbackLanguage: 'en',
@@ -204,7 +214,8 @@ export class AppModule implements NestModule {
               Files1761556143000,
               AddFileIdToResources1761726974942,
               UserUsernameNotNull1763533615604,
-              ...extraMigrations,
+              AddMetadataToUserBindings1762847685000,
+              ...options.extraMigrations,
             ],
             migrationsRun: true,
             namingStrategy: new SnakeNamingStrategy(),

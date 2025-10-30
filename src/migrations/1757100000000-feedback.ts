@@ -1,5 +1,5 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
-import { BaseColumns } from './base-columns';
+import { BaseColumns } from 'omniboxd/migrations/base-columns';
 
 async function createFeedbackTypeEnum(queryRunner: QueryRunner): Promise<void> {
   await queryRunner.query(`

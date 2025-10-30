@@ -276,7 +276,7 @@ describe('ConversationsController (e2e)', () => {
         .post(
           `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}/title`,
         )
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // This endpoint seems to have issues
+        .expect(HttpStatus.BAD_REQUEST);
 
       // Skip the body check since it returns 500
     });

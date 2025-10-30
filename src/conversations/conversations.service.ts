@@ -158,11 +158,7 @@ export class ConversationsService {
       }
     }
     const message = this.i18n.t('system.errors.noQueryContent');
-    throw new AppException(
-      message,
-      'NO_QUERY_CONTENT',
-      HttpStatus.INTERNAL_SERVER_ERROR,
-    );
+    throw new AppException(message, 'NO_QUERY_CONTENT', HttpStatus.BAD_REQUEST);
   }
 
   async getSummary(

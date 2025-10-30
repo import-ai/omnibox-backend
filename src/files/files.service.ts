@@ -68,11 +68,8 @@ export class FilesService {
     return await this.fileRepo.findOne({ where: { namespaceId, id: fileId } });
   }
 
-  async generateUploadUrl(
-    namespaceId: string,
-    fileId: string,
-  ): Promise<string> {
-    const fileUrl = new URL(`${namespaceId}/${fileId}`, this.s3Url);
+  async generateUploadUrl(fileId: string): Promise<string> {
+    const fileUrl = new URL(fileId, this.s3Url);
     fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'PUT',
@@ -95,7 +92,7 @@ export class FilesService {
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
-    const fileUrl = new URL(`${namespaceId}/${fileId}`, s3Url);
+    const fileUrl = new URL(fileId, s3Url);
     fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
     fileUrl.searchParams.set(
       'response-content-disposition',

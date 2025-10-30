@@ -713,7 +713,7 @@ export class NamespaceResourcesService {
       createReq.name,
       createReq.mimetype,
     );
-    const url = await this.filesService.generateUploadUrl(namespaceId, file.id);
+    const url = await this.filesService.generateUploadUrl(file.id);
     return FileInfoDto.new(file.id, url);
   }
 

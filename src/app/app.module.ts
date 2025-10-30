@@ -1,3 +1,4 @@
+import fs from 'fs';
 import {
   DynamicModule,
   MiddlewareConsumer,
@@ -5,6 +6,7 @@ import {
   NestModule,
   ValidationPipe,
 } from '@nestjs/common';
+import { WeChatPayModule } from 'nest-wechatpay-node-v3';
 import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.interceptor';
 import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -191,6 +193,22 @@ export class AppModule implements NestModule {
             ],
             migrationsRun: true,
             namingStrategy: new SnakeNamingStrategy(),
+          }),
+        }),
+        WeChatPayModule.registerAsync({
+          imports: [ConfigModule],
+          inject: [ConfigService],
+          useFactory: (config: ConfigService) => ({
+            key: config.get<string>('OBB_WECHAT_APP_KEY', ''),
+            appid: config.get<string>('OBB_WECHAT_PAY_APPID', ''),
+            mchid: config.get<string>('OBB_WECHAT_PAY_MCHID', ''),
+            serial_no: config.get<string>('OBB_WECHAT_PAY_SERIAL', ''),
+            publicKey: fs.readFileSync(
+              config.get<string>('OBB_WECHAT_PAY_CERT_PATH', ''),
+            ),
+            privateKey: fs.readFileSync(
+              config.get<string>('OBB_WECHAT_PAY_KEY_PATH', ''),
+            ),
           }),
         }),
       ],

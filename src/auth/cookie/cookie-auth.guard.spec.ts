@@ -67,68 +67,70 @@ describe('CookieAuthGuard', () => {
     expect(guard).toBeDefined();
   });
 
-  it('should return true for public routes', async () => {
+  it('should return true for public routes', () => {
     reflector.getAllAndOverride.mockReturnValue(true); // isPublic = true
     const context = createMockExecutionContext();
 
-    const result = await guard.canActivate(context);
+    const result = guard.canActivate(context);
 
     expect(result).toBe(true);
   });
 
-  it('should return true for non-cookie auth routes', async () => {
+  it('should return true for non-cookie auth routes', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce(null); // cookieAuthOptions = null
     const context = createMockExecutionContext();
 
-    const result = await guard.canActivate(context);
+    const result = guard.canActivate(context);
 
     expect(result).toBe(true);
   });
 
-  it('should throw AppException when no token cookie is provided', async () => {
+  it('should throw AppException when no token cookie is provided', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext();
 
-    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
+    expect(() => guard.canActivate(context)).toThrow(AppException);
   });
 
-  it('should throw AppException when token is invalid', async () => {
+  it('should throw AppException when token is invalid', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext({ token: 'invalid-token' });
-    authService.jwtVerify.mockRejectedValue(new Error('Invalid token'));
+    authService.jwtVerify.mockImplementation(() => {
+      throw new Error('Invalid token');
+    });
 
-    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
+    expect(() => guard.canActivate(context)).toThrow(AppException);
   });
 
-  it('should throw AppException when token payload is invalid', async () => {
+  it('should throw AppException when token payload is invalid', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext({ token: 'valid-token' });
-    authService.jwtVerify.mockResolvedValue({}); // No sub field
+    authService.jwtVerify.mockReturnValue({}); // No sub field
 
-    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
+    expect(() => guard.canActivate(context)).toThrow(AppException);
   });
 
-  it('should successfully authenticate with valid token and set cookie auth data', async () => {
+  it('should successfully authenticate with valid token and set cookie auth data', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext({ token: 'valid-token' });
-    authService.jwtVerify.mockResolvedValue({
+    authService.jwtVerify.mockReturnValue({
       sub: 'user-123',
       namespaceId: 'namespace-123',
       email: 'test@example.com',
       username: 'testuser',
     });
 
-    const result = await guard.canActivate(context);
+    const result = guard.canActivate(context);
     const request = context.switchToHttp().getRequest();
 
     expect(result).toBe(true);
@@ -139,17 +141,17 @@ describe('CookieAuthGuard', () => {
     });
   });
 
-  it('should handle token with missing optional fields', async () => {
+  it('should handle token with missing optional fields', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true }); // cookieAuthOptions with default onAuthFail = 'reject'
     const context = createMockExecutionContext({ token: 'valid-token' });
-    authService.jwtVerify.mockResolvedValue({
+    authService.jwtVerify.mockReturnValue({
       sub: 'user-123',
       // Missing namespaceId, email, username
     });
 
-    const result = await guard.canActivate(context);
+    const result = guard.canActivate(context);
     const request = context.switchToHttp().getRequest();
 
     expect(result).toBe(true);
@@ -160,37 +162,39 @@ describe('CookieAuthGuard', () => {
     });
   });
 
-  it('should continue without authentication when onAuthFail is continue and no token', async () => {
+  it('should continue without authentication when onAuthFail is continue and no token', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true, onAuthFail: 'continue' }); // cookieAuthOptions with onAuthFail = 'continue'
     const context = createMockExecutionContext();
 
-    const result = await guard.canActivate(context);
+    const result = guard.canActivate(context);
 
     expect(result).toBe(true);
   });
 
-  it('should continue without authentication when onAuthFail is continue and token is invalid', async () => {
+  it('should continue without authentication when onAuthFail is continue and token is invalid', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true, onAuthFail: 'continue' }); // cookieAuthOptions with onAuthFail = 'continue'
     const context = createMockExecutionContext({ token: 'invalid-token' });
-    authService.jwtVerify.mockRejectedValue(new Error('Invalid token'));
+    authService.jwtVerify.mockImplementation(() => {
+      throw new Error('Invalid token');
+    });
 
-    const result = await guard.canActivate(context);
+    const result = guard.canActivate(context);
 
     expect(result).toBe(true);
   });
 
-  it('should continue without authentication when onAuthFail is continue and token payload is invalid', async () => {
+  it('should continue without authentication when onAuthFail is continue and token payload is invalid', () => {
     reflector.getAllAndOverride
       .mockReturnValueOnce(false) // isPublic = false
       .mockReturnValueOnce({ enabled: true, onAuthFail: 'continue' }); // cookieAuthOptions with onAuthFail = 'continue'
     const context = createMockExecutionContext({ token: 'valid-token' });
-    authService.jwtVerify.mockResolvedValue({}); // No sub field
+    authService.jwtVerify.mockReturnValue({}); // No sub field
 
-    const result = await guard.canActivate(context);
+    const result = guard.canActivate(context);
 
     expect(result).toBe(true);
   });

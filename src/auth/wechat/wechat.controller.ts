@@ -47,7 +47,7 @@ export class WechatController extends SocialController {
     @Query('state') state: string,
     @Query('lang') lang?: string,
   ) {
-    const userId = await this.findUserId(req.headers.authorization);
+    const userId = this.findUserId(req.headers.authorization);
     const loginData = await this.wechatService.handleCallback(
       code,
       state,

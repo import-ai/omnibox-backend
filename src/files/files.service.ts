@@ -12,6 +12,7 @@ import { I18nService } from 'nestjs-i18n';
 export class FilesService {
   private readonly awsClient: AwsClient;
   private readonly s3Url: URL;
+  private readonly s3InternalUrl: URL;
 
   constructor(
     configService: ConfigService,
@@ -36,8 +37,17 @@ export class FilesService {
       s3Url += '/';
     }
 
+    let s3InternalUrl = configService.get<string>('OBB_S3_INTERNAL_URL');
+    if (!s3InternalUrl) {
+      throw new Error('S3 internal URL not set');
+    }
+    if (!s3InternalUrl.endsWith('/')) {
+      s3InternalUrl += '/';
+    }
+
     this.awsClient = new AwsClient({ accessKeyId, secretAccessKey });
     this.s3Url = new URL(s3Url);
+    this.s3InternalUrl = new URL(s3InternalUrl);
   }
 
   async createFile(
@@ -75,6 +85,7 @@ export class FilesService {
   async generateDownloadUrl(
     namespaceId: string,
     fileId: string,
+    internal: boolean,
   ): Promise<FileInfoDto> {
     const file = await this.getFile(namespaceId, fileId);
     if (!file) {
@@ -82,7 +93,8 @@ export class FilesService {
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
-    const fileUrl = new URL(`${namespaceId}/${fileId}`, this.s3Url);
+    const s3Url = internal ? this.s3InternalUrl : this.s3Url;
+    const fileUrl = new URL(`${namespaceId}/${fileId}`, s3Url);
     fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
     fileUrl.searchParams.set(
       'response-content-disposition',

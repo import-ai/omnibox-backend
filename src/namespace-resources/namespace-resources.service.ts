@@ -667,6 +667,7 @@ export class NamespaceResourcesService {
     return await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
+      false,
     );
   }
 

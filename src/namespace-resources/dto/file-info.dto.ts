@@ -14,3 +14,18 @@ export class FileInfoDto {
     return dto;
   }
 }
+
+export class InternalFileInfoDto {
+  @Expose({ name: 'public_url' })
+  publicUrl: string;
+
+  @Expose({ name: 'internal_url' })
+  internalUrl: string;
+
+  static new(publicUrl: string, internalUrl: string) {
+    const dto = new InternalFileInfoDto();
+    dto.publicUrl = publicUrl;
+    dto.internalUrl = internalUrl;
+    return dto;
+  }
+}

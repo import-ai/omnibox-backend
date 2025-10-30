@@ -186,7 +186,7 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    return await this.namespaceResourcesService.getResourceFile(
+    return await this.namespaceResourcesService.getResourceFileForUser(
       userId,
       namespaceId,
       resourceId,

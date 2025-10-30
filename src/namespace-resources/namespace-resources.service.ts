@@ -44,7 +44,7 @@ import {
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
-import { FileInfoDto } from './dto/file-info.dto';
+import { FileInfoDto, InternalFileInfoDto } from './dto/file-info.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -642,7 +642,7 @@ export class NamespaceResourcesService {
     );
   }
 
-  async getResourceFile(
+  async getResourceFileForUser(
     userId: string,
     namespaceId: string,
     resourceId: string,
@@ -664,12 +664,34 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('resource.errors.fileNotFound');
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
-    const url = await this.filesService.generateDownloadUrl(
+    const url = await this.filesService.generatePublicDownloadUrl(
       namespaceId,
       resource.fileId,
-      false,
     );
     return FileInfoDto.new(resource.fileId, url);
+  }
+
+  async getResourceFileForInternal(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<InternalFileInfoDto> {
+    const resource = await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      resourceId,
+    );
+    if (resource.resourceType !== ResourceType.FILE || !resource.fileId) {
+      const message = this.i18n.t('resource.errors.fileNotFound');
+      throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    const publicUrl = await this.filesService.generatePublicDownloadUrl(
+      namespaceId,
+      resource.fileId,
+    );
+    const internalUrl = await this.filesService.generateInternalDownloadUrl(
+      namespaceId,
+      resource.fileId,
+    );
+    return InternalFileInfoDto.new(publicUrl, internalUrl);
   }
 
   async createResourceFile(

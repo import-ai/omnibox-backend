@@ -83,10 +83,11 @@ export class FilesService {
     });
     return signedReq.url;
   }
-  async generateDownloadUrl(
+
+  private async generateDownloadUrl(
     namespaceId: string,
     fileId: string,
-    internal: boolean,
+    s3Url: URL,
   ): Promise<string> {
     const file = await this.getFile(namespaceId, fileId);
     if (!file) {
@@ -94,7 +95,6 @@ export class FilesService {
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
-    const s3Url = internal ? this.s3InternalUrl : this.s3Url;
     const fileUrl = new URL(`${namespaceId}/${fileId}`, s3Url);
     fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
     fileUrl.searchParams.set(
@@ -110,5 +110,19 @@ export class FilesService {
       },
     });
     return signedReq.url;
+  }
+
+  async generatePublicDownloadUrl(
+    namespaceId: string,
+    fileId: string,
+  ): Promise<string> {
+    return this.generateDownloadUrl(namespaceId, fileId, this.s3Url);
+  }
+
+  async generateInternalDownloadUrl(
+    namespaceId: string,
+    fileId: string,
+  ): Promise<string> {
+    return this.generateDownloadUrl(namespaceId, fileId, this.s3InternalUrl);
   }
 }

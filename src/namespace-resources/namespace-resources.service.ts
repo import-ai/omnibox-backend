@@ -42,6 +42,9 @@ import {
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { FilesService } from 'omniboxd/files/files.service';
+import { CreateFileReqDto } from './dto/create-file-req.dto';
+import { FileInfoDto, InternalFileInfoDto } from './dto/file-info.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -59,6 +62,7 @@ export class NamespaceResourcesService {
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly resourcesService: ResourcesService,
+    private readonly filesService: FilesService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -172,18 +176,19 @@ export class NamespaceResourcesService {
 
   async create(
     userId: string,
-    data: CreateResourceDto,
+    namespaceId: string,
+    createReq: CreateResourceDto,
     manager?: EntityManager,
   ) {
     if (!manager) {
       return await this.dataSource.transaction(async (manager) => {
-        return await this.create(userId, data, manager);
+        return await this.create(userId, namespaceId, createReq, manager);
       });
     }
 
     const ok = await this.permissionsService.userHasPermission(
-      data.namespaceId,
-      data.parentId,
+      namespaceId,
+      createReq.parentId,
       userId,
       ResourcePermission.CAN_EDIT,
       undefined,
@@ -194,11 +199,41 @@ export class NamespaceResourcesService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
+    const attrs = { ...createReq.attrs };
+    if (createReq.file_id) {
+      if (createReq.resourceType !== ResourceType.FILE) {
+        const message = this.i18n.t('resource.errors.invalidResourceType');
+        throw new AppException(
+          message,
+          'INVALID_RESOURCE_TYPE',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      const file = await this.filesService.getFile(
+        namespaceId,
+        createReq.file_id,
+      );
+      if (!file || file.userId !== userId) {
+        const message = this.i18n.t('resource.errors.fileNotFound');
+        throw new AppException(
+          message,
+          'FILE_NOT_FOUND',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      attrs.filename = file.name;
+      attrs.original_name = file.name;
+      attrs.mimetype = file.mimetype;
+    }
+
     return await this.resourcesService.createResource(
       {
-        ...data,
+        ...createReq,
+        namespaceId,
         userId,
-        tagIds: data.tag_ids,
+        attrs,
+        tagIds: createReq.tag_ids,
+        fileId: createReq.file_id,
       },
       manager,
     );
@@ -238,6 +273,7 @@ export class NamespaceResourcesService {
       // Create the duplicated resource within the transaction
       const duplicatedResource = await this.create(
         userId,
+        namespaceId,
         newResource,
         entityManager,
       );
@@ -607,6 +643,81 @@ export class NamespaceResourcesService {
     );
   }
 
+  async getResourceFileForUser(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<FileInfoDto> {
+    const ok = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    if (!ok) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const resource = await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      resourceId,
+    );
+    if (resource.resourceType !== ResourceType.FILE || !resource.fileId) {
+      const message = this.i18n.t('resource.errors.fileNotFound');
+      throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    const url = await this.filesService.generatePublicDownloadUrl(
+      namespaceId,
+      resource.fileId,
+    );
+    return FileInfoDto.new(resource.fileId, url);
+  }
+
+  async getResourceFileForInternal(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<InternalFileInfoDto> {
+    const resource = await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      resourceId,
+    );
+    if (resource.resourceType !== ResourceType.FILE || !resource.fileId) {
+      const message = this.i18n.t('resource.errors.fileNotFound');
+      throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    const publicUrl = await this.filesService.generatePublicDownloadUrl(
+      namespaceId,
+      resource.fileId,
+    );
+    const internalUrl = await this.filesService.generateInternalDownloadUrl(
+      namespaceId,
+      resource.fileId,
+    );
+    return InternalFileInfoDto.new(publicUrl, internalUrl);
+  }
+
+  async createResourceFile(
+    userId: string,
+    namespaceId: string,
+    createReq: CreateFileReqDto,
+  ): Promise<FileInfoDto> {
+    const ok = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!ok) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const file = await this.filesService.createFile(
+      userId,
+      namespaceId,
+      createReq.name,
+      createReq.mimetype,
+    );
+    const url = await this.filesService.generateUploadUrl(file.id);
+    return FileInfoDto.new(file.id, url);
+  }
+
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {
     await this.resourcesService.updateResource(
       data.namespaceId,
@@ -744,10 +855,9 @@ export class NamespaceResourcesService {
         );
       }
     } else if (parentId) {
-      resource = await this.create(userId, {
+      resource = await this.create(userId, namespaceId, {
         name: originalName,
         resourceType: ResourceType.FILE,
-        namespaceId,
         parentId,
         attrs: {
           original_name: originalName,
@@ -813,10 +923,9 @@ export class NamespaceResourcesService {
         );
       }
     } else if (parentId) {
-      resource = await this.create(userId, {
+      resource = await this.create(userId, namespaceId, {
         name: originalFilename, // Use original filename for display
         resourceType: ResourceType.FILE,
-        namespaceId,
         parentId,
         attrs: {
           original_name: originalFilename,

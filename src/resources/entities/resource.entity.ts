@@ -41,6 +41,9 @@ export class Resource extends Base {
   @Column('jsonb')
   attrs: Record<string, any>;
 
+  @Column('uuid', { nullable: true })
+  fileId: string | null;
+
   @Column('text', { array: true, default: '{}' })
   tagIds: string[];
 

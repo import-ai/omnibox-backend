@@ -76,6 +76,7 @@
     "@opentelemetry/sdk-node": "^0.203.0",
     "@opentelemetry/sdk-trace-base": "^2.1.0",
     "@opentelemetry/semantic-conventions": "^1.37.0",
+    "aws4fetch": "^1.0.20",
     "bcrypt": "^5.1.1",
     "cache-manager": "^6.4.3",
     "cacheable": "^2.1.1",

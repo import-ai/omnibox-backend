@@ -15,6 +15,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { CreateFileReqDto } from './dto/create-file-req.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/files')
 export class FileResourcesController {
@@ -23,25 +24,16 @@ export class FileResourcesController {
   ) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(
+  async createResourceFile(
     @UserId() userId: string,
-    @UploadedFile() file: Express.Multer.File,
-    @Body('namespace_id') namespaceId: string,
-    @Body('parent_id') parentId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() createReq: CreateFileReqDto,
   ) {
-    const newResource = await this.namespaceResourcesService.uploadFile(
+    return await this.namespaceResourcesService.createResourceFile(
       userId,
       namespaceId,
-      file,
-      parentId,
-      undefined,
+      createReq,
     );
-    return await this.namespaceResourcesService.getResource({
-      namespaceId,
-      userId,
-      resourceId: newResource.id,
-    });
   }
 
   @Post('chunk')
@@ -50,7 +42,7 @@ export class FileResourcesController {
     @UploadedFile() chunk: Express.Multer.File,
     @Body('chunk_number') chunkNumber: string,
     @Body('file_hash') fileHash: string,
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
   ) {
     return this.namespaceResourcesService.uploadFileChunk(
       namespaceId,
@@ -62,7 +54,7 @@ export class FileResourcesController {
 
   @Post('chunk/clean')
   async cleanFileChunks(
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
     @Body('chunks_number') chunksNumber: string,
     @Body('file_hash') fileHash: string,
   ) {
@@ -76,7 +68,7 @@ export class FileResourcesController {
   @Post('merge')
   async mergeFileChunks(
     @Req() req: Request,
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
     @Body('total_chunks', ParseIntPipe) totalChunks: number,
     @Body('file_hash') fileHash: string,
     @Body('file_name') fileName: string,
@@ -104,7 +96,7 @@ export class FileResourcesController {
   async patchFile(
     @UserId() userId: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body('namespace_id') namespaceId: string,
+    @Param('namespaceId') namespaceId: string,
     @Body('resource_id') resourceId: string,
   ) {
     return this.namespaceResourcesService.uploadFile(

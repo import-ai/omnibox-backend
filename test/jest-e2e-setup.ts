@@ -52,6 +52,9 @@ export default async () => {
   process.env.OBB_MINIO_URL = minioUrl;
   process.env.OBB_DB_SYNC = 'false';
   process.env.OBB_DB_LOGGING = 'false';
+  process.env.OBB_S3_ACCESS_KEY_ID = 'minioadmin';
+  process.env.OBB_S3_SECRET_ACCESS_KEY = 'minioadmin';
+  process.env.OBB_S3_URL = `http://${minioContainer.getHost()}:${minioContainer.getMappedPort(9000)}`;
 
   (global as any).__POSTGRES_CONTAINER__ = postgresContainer;
   (global as any).__MINIO_CONTAINER__ = minioContainer;

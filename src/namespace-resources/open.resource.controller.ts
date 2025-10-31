@@ -78,12 +78,12 @@ export class OpenResourcesController {
       tag_ids: tagIds,
       attrs: data.attrs || {},
       resourceType: ResourceType.DOC,
-      namespaceId: apiKey.namespaceId,
       parentId: apiKey.attrs.root_resource_id,
     } as CreateResourceDto;
 
     const newResource = await this.namespaceResourcesService.create(
       userId,
+      apiKey.namespaceId,
       createResourceDto,
     );
 

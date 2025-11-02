@@ -220,22 +220,10 @@ export class ConversationsService {
       return detail;
     }
 
-    const system_message: Message = messages[0];
-    if (system_message.message.role !== OpenAIMessageRole.SYSTEM) {
-      const message = this.i18n.t('system.errors.firstMessageNotSystem');
-      throw new AppException(
-        message,
-        'FIRST_MESSAGE_NOT_SYSTEM',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
     const childrenMap: Record<string, string[]> = {};
     for (const msg of messages) {
-      if (msg.id === system_message.id) {
+      if (msg.message.role === OpenAIMessageRole.SYSTEM) {
         continue;
-      }
-      if (msg.parentId === system_message.id) {
-        msg.parentId = null;
       }
       if (msg.parentId) {
         if (!childrenMap[msg.parentId]) {
@@ -245,7 +233,7 @@ export class ConversationsService {
       }
     }
     for (const msg of messages) {
-      if (msg.id === system_message.id) {
+      if (msg.message.role === OpenAIMessageRole.SYSTEM) {
         continue;
       }
       detail.mapping[msg.id] = {

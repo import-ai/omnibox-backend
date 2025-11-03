@@ -201,6 +201,16 @@ export class NamespacesService {
     return namespace;
   }
 
+  async getNamespaceByName(
+    name: string,
+    entityManager?: EntityManager,
+  ): Promise<Namespace | null> {
+    const repo = entityManager
+      ? entityManager.getRepository(Namespace)
+      : this.namespaceRepository;
+    return repo.findOne({ where: { name } });
+  }
+
   async update(
     id: string,
     updateDto: UpdateNamespaceDto,

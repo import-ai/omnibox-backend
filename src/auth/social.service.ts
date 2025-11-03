@@ -6,6 +6,8 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { CacheService } from 'omniboxd/common/cache.service';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 
 export interface UserSocialState {
   type: string;
@@ -24,6 +26,7 @@ export class SocialService {
     private readonly userService: UserService,
     private readonly i18n: I18nService,
     private readonly cacheService: CacheService,
+    private readonly namespacesService: NamespacesService,
   ) {}
 
   /**
@@ -71,6 +74,33 @@ export class SocialService {
     );
   }
 
+  private async isUsernameValid(
+    username: string,
+    manager: EntityManager,
+  ): Promise<boolean> {
+    if (isNameBlocked(username)) {
+      return false;
+    }
+
+    const user = await this.userService.findByUsername(username, manager);
+    if (user) {
+      return false;
+    }
+
+    const namespaceName = this.i18n.t('namespace.userNamespaceName', {
+      args: { userName: username },
+    });
+    const namespace = await this.namespacesService.getNamespaceByName(
+      namespaceName,
+      manager,
+    );
+    if (namespace) {
+      return false;
+    }
+
+    return true;
+  }
+
   async getValidUsername(
     nickname: string,
     manager: EntityManager,
@@ -81,21 +111,18 @@ export class SocialService {
       username = nickname.slice(0, this.maxUsernameLength);
     }
     if (username.length >= this.minUsernameLength) {
-      const user = await this.userService.findByUsername(username, manager);
-      if (!user) {
+      const ok = await this.isUsernameValid(username, manager);
+      if (ok) {
         return username;
       }
     }
 
     username = nickname.slice(0, this.maxUsernameLength - 5);
     for (let i = 0; i < 5; i++) {
-      const suffix = this.generateSuffix();
-      const user = await this.userService.findByUsername(
-        username + suffix,
-        manager,
-      );
-      if (!user) {
-        return username + suffix;
+      const curUsername = username + this.generateSuffix();
+      const ok = await this.isUsernameValid(curUsername, manager);
+      if (ok) {
+        return curUsername;
       }
     }
 

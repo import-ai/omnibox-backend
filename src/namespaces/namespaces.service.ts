@@ -221,7 +221,10 @@ export class NamespacesService {
       : this.namespaceRepository;
     const namespace = await this.getNamespace(id, manager);
     if (updateDto.name && updateDto.name !== namespace.name) {
-      if ((await repo.countBy({ name: updateDto.name })) > 0) {
+      if (
+        isNameBlocked(updateDto.name) ||
+        (await repo.countBy({ name: updateDto.name })) > 0
+      ) {
         const message = this.i18n.t('namespace.errors.namespaceConflict');
         throw new AppException(
           message,

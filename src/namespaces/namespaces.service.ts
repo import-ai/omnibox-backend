@@ -19,6 +19,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 
 @Injectable()
 export class NamespacesService {
@@ -173,7 +174,10 @@ export class NamespacesService {
     name: string,
     manager: EntityManager,
   ): Promise<Namespace> {
-    if ((await manager.countBy(Namespace, { name })) > 0) {
+    if (
+      isNameBlocked(name) ||
+      (await manager.countBy(Namespace, { name })) > 0
+    ) {
       const message = this.i18n.t('namespace.errors.namespaceConflict');
       throw new AppException(
         message,

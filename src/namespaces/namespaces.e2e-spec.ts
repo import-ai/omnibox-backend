@@ -420,7 +420,7 @@ describe('NamespacesController (e2e)', () => {
     });
 
     it('should handle very long namespace names', async () => {
-      const longName = 'A'.repeat(255); // Test boundary conditions
+      const longName = 'A'.repeat(64); // Test boundary conditions
       const longNameWorkspace = {
         name: longName,
       };

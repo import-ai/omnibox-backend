@@ -19,6 +19,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 
 @Injectable()
 export class NamespacesService {
@@ -173,7 +174,10 @@ export class NamespacesService {
     name: string,
     manager: EntityManager,
   ): Promise<Namespace> {
-    if ((await manager.countBy(Namespace, { name })) > 0) {
+    if (
+      isNameBlocked(name) ||
+      (await manager.countBy(Namespace, { name })) > 0
+    ) {
       const message = this.i18n.t('namespace.errors.namespaceConflict');
       throw new AppException(
         message,
@@ -197,6 +201,16 @@ export class NamespacesService {
     return namespace;
   }
 
+  async getNamespaceByName(
+    name: string,
+    entityManager?: EntityManager,
+  ): Promise<Namespace | null> {
+    const repo = entityManager
+      ? entityManager.getRepository(Namespace)
+      : this.namespaceRepository;
+    return repo.findOne({ where: { name } });
+  }
+
   async update(
     id: string,
     updateDto: UpdateNamespaceDto,
@@ -207,7 +221,10 @@ export class NamespacesService {
       : this.namespaceRepository;
     const namespace = await this.getNamespace(id, manager);
     if (updateDto.name && updateDto.name !== namespace.name) {
-      if ((await repo.countBy({ name: updateDto.name })) > 0) {
+      if (
+        isNameBlocked(updateDto.name) ||
+        (await repo.countBy({ name: updateDto.name })) > 0
+      ) {
         const message = this.i18n.t('namespace.errors.namespaceConflict');
         throw new AppException(
           message,

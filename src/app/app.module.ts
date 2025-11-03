@@ -3,10 +3,9 @@ import {
   MiddlewareConsumer,
   Module,
   NestModule,
-  ValidationPipe,
 } from '@nestjs/common';
 import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.interceptor';
-import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { CacheModule } from '@nestjs/cache-manager';
@@ -22,6 +21,8 @@ import {
   AcceptLanguageResolver,
   HeaderResolver,
   I18nModule,
+  I18nValidationExceptionFilter,
+  I18nValidationPipe,
   QueryResolver,
 } from 'nestjs-i18n';
 import * as path from 'path';
@@ -82,7 +83,7 @@ export class AppModule implements NestModule {
       providers: [
         {
           provide: APP_PIPE,
-          useValue: new ValidationPipe({
+          useValue: new I18nValidationPipe({
             transform: true,
             // whitelist: true,
             // forbidNonWhitelisted: true,
@@ -99,6 +100,12 @@ export class AppModule implements NestModule {
         {
           provide: APP_INTERCEPTOR,
           useClass: UserInterceptor,
+        },
+        {
+          provide: APP_FILTER,
+          useValue: new I18nValidationExceptionFilter({
+            detailedErrors: false,
+          }),
         },
       ],
       imports: [

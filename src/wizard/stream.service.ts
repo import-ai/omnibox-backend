@@ -137,10 +137,6 @@ export class StreamService {
         chunk.userId = userId || undefined;
         chunk.namespaceId = namespaceId;
 
-        if (context.message?.role === OpenAIMessageRole.SYSTEM) {
-          chunk.parentId = undefined;
-        }
-
         context.messageId = message.id;
         context.message = message.message;
       } else if (chunk.response_type === 'delta') {

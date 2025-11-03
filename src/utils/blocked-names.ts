@@ -1,4 +1,4 @@
-const BLOCKED_USERNAMES = [
+const BLOCKED_NAMES = [
   '.git',
   '.htaccess',
   '.htpasswd',
@@ -543,10 +543,10 @@ const BLOCKED_USERNAMES = [
   'zlib',
 ];
 
-const BLOCKED_USERNAME_SET = new Set(
-  BLOCKED_USERNAMES.map((name) => name.toLowerCase()),
+const BLOCKED_NAME_SET = new Set(
+  BLOCKED_NAMES.map((name) => name.toLowerCase()),
 );
 
-export function isUsernameBlocked(username: string): boolean {
-  return BLOCKED_USERNAME_SET.has(username.toLowerCase());
+export function isNameBlocked(name: string): boolean {
+  return BLOCKED_NAME_SET.has(name.trim().toLowerCase());
 }

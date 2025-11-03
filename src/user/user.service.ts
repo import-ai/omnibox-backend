@@ -13,7 +13,7 @@ import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import { Injectable, HttpStatus } from '@nestjs/common';
-import { isUsernameBlocked } from 'omniboxd/utils/blocked-usernames';
+import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { CacheService } from 'omniboxd/common/cache.service';
@@ -84,7 +84,7 @@ export class UserService {
   }
 
   async create(account: CreateUserDto, manager?: EntityManager) {
-    if (account.username && isUsernameBlocked(account.username)) {
+    if (account.username && isNameBlocked(account.username)) {
       const message = this.i18n.t('user.errors.accountAlreadyExists');
       throw new AppException(
         message,
@@ -341,7 +341,7 @@ export class UserService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    if (account.username && isUsernameBlocked(account.username)) {
+    if (account.username && isNameBlocked(account.username)) {
       const message = this.i18n.t('user.errors.accountAlreadyExists');
       throw new AppException(
         message,

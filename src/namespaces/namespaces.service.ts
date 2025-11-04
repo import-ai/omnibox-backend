@@ -273,16 +273,6 @@ export class NamespacesService {
       },
       entityManager,
     );
-    await this.resourcesService.createResource(
-      {
-        namespaceId,
-        parentId: privateRoot.id,
-        userId,
-        resourceType: ResourceType.FOLDER,
-        name: this.i18n.t('namespace.uncategorized'),
-      },
-      entityManager,
-    );
     return privateRoot.id;
   }
 

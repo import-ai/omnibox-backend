@@ -39,8 +39,8 @@ export class UserController {
   }
 
   @Post('email/validate')
-  async validateEmail(@Req() req, @Body('email') email: string) {
-    return await this.userService.validateEmail(req.user.id, email);
+  async validateEmail(@UserId() userId: string, @Body('email') email: string) {
+    return await this.userService.validateEmail(userId, email);
   }
 
   @Patch(':id')
@@ -54,29 +54,32 @@ export class UserController {
   }
 
   @Post('option')
-  async createOption(@Req() req, @Body() createOptionDto: CreateUserOptionDto) {
+  async createOption(
+    @UserId() userId: string,
+    @Body() createOptionDto: CreateUserOptionDto,
+  ) {
     const option = await this.userService.getOption(
-      req.user.id,
+      userId,
       createOptionDto.name,
     );
     if (option && option.name) {
       return await this.userService.updateOption(
-        req.user.id,
+        userId,
         option.name,
         createOptionDto.value,
       );
     }
-    return await this.userService.createOption(req.user.id, createOptionDto);
+    return await this.userService.createOption(userId, createOptionDto);
   }
 
   @Get('option/list')
-  async listOption(@Req() req) {
-    return await this.userService.listOption(req.user.id);
+  async listOption(@UserId() userId: string) {
+    return await this.userService.listOption(userId);
   }
 
   @Get('option/:name')
-  async getOption(@Req() req, @Param('name') name: string) {
-    return await this.userService.getOption(req.user.id, name);
+  async getOption(@UserId() userId: string, @Param('name') name: string) {
+    return await this.userService.getOption(userId, name);
   }
 
   @Get('binding/list')

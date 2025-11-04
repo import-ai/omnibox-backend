@@ -125,9 +125,10 @@ describe('UserController (e2e)', () => {
     });
 
     it('should fail with existing email', async () => {
+      // Use secondClient's email to test email already in use by another user
       await client
         .post('/api/v1/user/email/validate')
-        .send({ email: client.user.email })
+        .send({ email: secondClient.user.email })
         .expect(HttpStatus.BAD_REQUEST);
     });
 

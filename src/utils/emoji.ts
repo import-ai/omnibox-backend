@@ -26,5 +26,6 @@ export function isEmoji(char: string) {
 export function filterEmoji(data: string) {
   return Array.from(data)
     .filter((char) => !isEmoji(char))
-    .join('');
+    .join('')
+    .trim();
 }

@@ -411,7 +411,10 @@ describe('NamespacesController (e2e)', () => {
         .send(specialNameWorkspace)
         .expect(HttpStatus.CREATED);
 
-      expect(response.body.name).toBe(specialNameWorkspace.name);
+      // Emojis should be filtered out
+      expect(response.body.name).toBe(
+        'Test Workspace with 特殊字符 and émojis',
+      );
 
       // Clean up
       await client

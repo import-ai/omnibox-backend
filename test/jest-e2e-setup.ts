@@ -2,6 +2,7 @@ import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 
 let postgresContainer: StartedTestContainer;
 let minioContainer: StartedTestContainer;
+let mailhogContainer: StartedTestContainer;
 
 // https://node.testcontainers.org/supported-container-runtimes
 export default async () => {
@@ -43,10 +44,18 @@ export default async () => {
     .start();
   console.log('MinIO container started');
 
+  mailhogContainer = await new GenericContainer('mailhog/mailhog:latest')
+    .withExposedPorts(1025, 8025)
+    .withWaitStrategy(Wait.forListeningPorts())
+    .start();
+  console.log('MailHog container started');
+
   const postgresUrl = `postgres://omnibox:omnibox@${postgresContainer.getHost()}:${postgresContainer.getMappedPort(5432)}/omnibox`;
   const minioUrl = `http://minioadmin:minioadmin@${minioContainer.getHost()}:${minioContainer.getMappedPort(9000)}/omnibox`;
+  const mailTransport = `smtp://${mailhogContainer.getHost()}:${mailhogContainer.getMappedPort(1025)}`;
   console.log(`PostgreSQL URL: ${postgresUrl}`);
   console.log(`MinIO URL: ${minioUrl}`);
+  console.log(`Mail Transport: ${mailTransport}`);
 
   process.env.OBB_POSTGRES_URL = postgresUrl;
   process.env.OBB_MINIO_URL = minioUrl;
@@ -55,7 +64,10 @@ export default async () => {
   process.env.OBB_S3_ACCESS_KEY_ID = 'minioadmin';
   process.env.OBB_S3_SECRET_ACCESS_KEY = 'minioadmin';
   process.env.OBB_S3_URL = `http://${minioContainer.getHost()}:${minioContainer.getMappedPort(9000)}`;
+  process.env.OBB_MAIL_TRANSPORT = mailTransport;
+  process.env.OBB_MAIL_FROM = '"Test <test@example.com>"';
 
   (global as any).__POSTGRES_CONTAINER__ = postgresContainer;
   (global as any).__MINIO_CONTAINER__ = minioContainer;
+  (global as any).__MAILHOG_CONTAINER__ = mailhogContainer;
 };

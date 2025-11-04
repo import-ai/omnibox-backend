@@ -23,30 +23,36 @@ export class UserInterceptor implements NestInterceptor {
       {},
       context.active(),
       (span) => {
+        const ctxType = executionContext.getType();
+        let userId: string | null = null;
+        if (ctxType === 'http') {
+          const httpReq = executionContext.switchToHttp().getRequest();
+          if (httpReq.user?.id) {
+            userId = httpReq.user.id;
+          }
+        } else if (ctxType === 'ws') {
+          const client = executionContext.switchToWs().getClient<Socket>();
+          userId = client.data?.userId ?? null;
+        }
         return next.handle().pipe(
           tap((responseBody) => {
-            const ctxType = executionContext.getType();
-            let userId: string | null = null;
-            if (ctxType === 'http') {
+            if (!userId && ctxType === 'http') {
               const httpReq = executionContext.switchToHttp().getRequest();
-              if (httpReq.user?.id) {
-                userId = httpReq.user.id;
-              } else if (
+              if (
                 LOGIN_URLS.includes(httpReq.url) &&
                 httpReq.method === 'POST' &&
                 responseBody?.id
               ) {
                 userId = responseBody.id;
               }
-            } else if (ctxType === 'ws') {
-              const client = executionContext.switchToWs().getClient<Socket>();
-              userId = client.data.userId;
             }
+          }),
+          finalize(() => {
             if (userId) {
               span.setAttribute('user.id', userId);
             }
+            span.end();
           }),
-          finalize(() => span.end()),
         );
       },
     );

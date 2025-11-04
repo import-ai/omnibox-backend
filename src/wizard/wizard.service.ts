@@ -147,13 +147,13 @@ export class WizardService {
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId,
       resourceType: ResourceType.LINK,
       parentId: parentId,
       attrs: { url },
     };
     const resource = await this.namespaceResourcesService.create(
       userId,
+      namespaceId,
       resourceDto,
     );
 
@@ -204,13 +204,13 @@ export class WizardService {
 
     const resourceDto: CreateResourceDto = {
       name: title || url,
-      namespaceId,
       resourceType: ResourceType.LINK,
       parentId,
       attrs: { url },
     };
     const resource = await this.namespaceResourcesService.create(
       userId,
+      namespaceId,
       resourceDto,
     );
 
@@ -393,12 +393,17 @@ export class WizardService {
     const andCondition: string = andConditions.map((x) => `AND ${x}`).join(' ');
     const rawQuery = `
       WITH
+        cutoff_time AS (
+          SELECT NOW() - INTERVAL '10 minutes' AS time
+        ),
         running_tasks_sub_query AS (
           SELECT
             namespace_id,
             COUNT(id) AS running_count
           FROM tasks
+          CROSS JOIN cutoff_time
           WHERE started_at IS NOT NULL
+          AND started_at > cutoff_time.time
           AND ended_at IS NULL
           AND canceled_at IS NULL
           AND deleted_at IS NULL
@@ -407,11 +412,13 @@ export class WizardService {
         id_subquery AS (
           SELECT tasks.id
           FROM tasks
+          CROSS JOIN cutoff_time
           LEFT OUTER JOIN running_tasks_sub_query
           ON tasks.namespace_id = running_tasks_sub_query.namespace_id
           LEFT OUTER JOIN namespaces
           ON tasks.namespace_id = namespaces.id
-          WHERE tasks.started_at IS NULL
+          WHERE (tasks.started_at IS NULL OR tasks.started_at <= cutoff_time.time)
+          AND tasks.ended_at IS NULL
           AND tasks.canceled_at IS NULL
           AND tasks.deleted_at IS NULL
           AND COALESCE(running_tasks_sub_query.running_count, 0) < COALESCE(namespaces.max_running_tasks, 0)
@@ -423,8 +430,7 @@ export class WizardService {
       )
       SELECT *
       FROM tasks
-      WHERE id IN (SELECT id FROM id_subquery)
-        FOR UPDATE SKIP LOCKED;
+      WHERE id IN (SELECT id FROM id_subquery);
     `;
 
     const queryResult =

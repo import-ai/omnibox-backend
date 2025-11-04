@@ -3,10 +3,9 @@ import {
   MiddlewareConsumer,
   Module,
   NestModule,
-  ValidationPipe,
 } from '@nestjs/common';
 import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.interceptor';
-import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { PayModule } from 'omniboxd/pay/pay.module';
@@ -25,6 +24,8 @@ import {
   AcceptLanguageResolver,
   HeaderResolver,
   I18nModule,
+  I18nValidationExceptionFilter,
+  I18nValidationPipe,
   QueryResolver,
 } from 'nestjs-i18n';
 import * as path from 'path';
@@ -72,6 +73,9 @@ import KeyvRedis from '@keyv/redis';
 import { Keyv } from 'keyv';
 import { CacheableMemory } from 'cacheable';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
+import { FilesModule } from 'omniboxd/files/files.module';
+import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -82,7 +86,7 @@ export class AppModule implements NestModule {
       providers: [
         {
           provide: APP_PIPE,
-          useValue: new ValidationPipe({
+          useValue: new I18nValidationPipe({
             transform: true,
             // whitelist: true,
             // forbidNonWhitelisted: true,
@@ -99,6 +103,12 @@ export class AppModule implements NestModule {
         {
           provide: APP_INTERCEPTOR,
           useClass: UserInterceptor,
+        },
+        {
+          provide: APP_FILTER,
+          useValue: new I18nValidationExceptionFilter({
+            detailedErrors: false,
+          }),
         },
       ],
       imports: [
@@ -146,6 +156,7 @@ export class AppModule implements NestModule {
         FeedbackModule,
         ApplicationsModule,
         WebSocketModule,
+        FilesModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],
@@ -193,6 +204,8 @@ export class AppModule implements NestModule {
               NullableUserId1757844448000,
               AddShareIdToConversations1757844449000,
               ShareUser1760171824000,
+              Files1761556143000,
+              AddFileIdToResources1761726974942,
               ...extraMigrations,
             ],
             migrationsRun: true,

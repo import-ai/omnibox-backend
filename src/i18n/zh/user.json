@@ -1,6 +1,7 @@
 {
   "errors": {
     "accountAlreadyExists": "账户已存在",
+    "usernameAlreadyExists": "用户名已存在",
     "invalidEmailFormat": "邮箱格式无效",
     "pleaseVerifyEmail": "请先验证您的邮箱",
     "incorrectVerificationCode": "邮箱验证码不正确",

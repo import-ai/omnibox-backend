@@ -32,7 +32,7 @@ export class UserInterceptor implements NestInterceptor {
           }
         } else if (ctxType === 'ws') {
           const client = executionContext.switchToWs().getClient<Socket>();
-          userId = client.data.userId;
+          userId = client.data?.userId ?? null;
         }
         return next.handle().pipe(
           tap((responseBody) => {

@@ -8,6 +8,7 @@ import { I18nService } from 'nestjs-i18n';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { isNameBlocked } from 'omniboxd/utils/blocked-names';
+import { filterEmoji } from 'omniboxd/utils/emoji';
 
 export interface UserSocialState {
   type: string;
@@ -105,10 +106,12 @@ export class SocialService {
     nickname: string,
     manager: EntityManager,
   ): Promise<string> {
-    let username = nickname;
+    // Filter out emoji characters from nickname
+    const filteredNickname = filterEmoji(nickname);
+    let username = filteredNickname;
 
     if (username.length > this.maxUsernameLength) {
-      username = nickname.slice(0, this.maxUsernameLength);
+      username = filteredNickname.slice(0, this.maxUsernameLength);
     }
     if (username.length >= this.minUsernameLength) {
       const ok = await this.isUsernameValid(username, manager);
@@ -117,7 +120,7 @@ export class SocialService {
       }
     }
 
-    username = nickname.slice(0, this.maxUsernameLength - 5);
+    username = filteredNickname.slice(0, this.maxUsernameLength - 5);
     for (let i = 0; i < 5; i++) {
       const curUsername = username + this.generateSuffix();
       const ok = await this.isUsernameValid(curUsername, manager);

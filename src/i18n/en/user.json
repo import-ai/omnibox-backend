@@ -1,6 +1,7 @@
 {
   "errors": {
     "accountAlreadyExists": "Account already exists",
+    "usernameAlreadyExists": "Username already exists",
     "invalidEmailFormat": "Invalid email format",
     "pleaseVerifyEmail": "Please verify your email first",
     "incorrectVerificationCode": "Incorrect verification code",

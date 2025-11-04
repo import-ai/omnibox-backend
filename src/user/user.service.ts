@@ -314,7 +314,7 @@ export class UserService {
     }
 
     const userExists = await this.findByEmail(email);
-    if (userExists) {
+    if (userExists && userExists.id !== userId) {
       const message = this.i18n.t('user.errors.emailAlreadyInUse');
       throw new AppException(
         message,
@@ -369,6 +369,20 @@ export class UserService {
       existUser.password = await bcrypt.hash(account.password, 10);
     }
     if (account.username && existUser.username !== account.username) {
+      // Check if the new username is already taken by another user
+      const duplicateUser = await this.userRepository.findOne({
+        where: { username: account.username },
+      });
+
+      if (duplicateUser && duplicateUser.id !== id) {
+        const message = this.i18n.t('user.errors.usernameAlreadyExists');
+        throw new AppException(
+          message,
+          'USERNAME_ALREADY_EXISTS',
+          HttpStatus.CONFLICT,
+        );
+      }
+
       existUser.username = account.username;
     }
     if (account.email && existUser.email !== account.email) {

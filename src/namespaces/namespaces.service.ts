@@ -20,6 +20,7 @@ import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { isNameBlocked } from 'omniboxd/utils/blocked-names';
+import { filterEmoji } from 'omniboxd/utils/emoji';
 
 @Injectable()
 export class NamespacesService {
@@ -174,9 +175,12 @@ export class NamespacesService {
     name: string,
     manager: EntityManager,
   ): Promise<Namespace> {
+    // Filter emoji from namespace name
+    const filteredName = filterEmoji(name);
+
     if (
-      isNameBlocked(name) ||
-      (await manager.countBy(Namespace, { name })) > 0
+      isNameBlocked(filteredName) ||
+      (await manager.countBy(Namespace, { name: filteredName })) > 0
     ) {
       const message = this.i18n.t('namespace.errors.namespaceConflict');
       throw new AppException(
@@ -185,7 +189,9 @@ export class NamespacesService {
         HttpStatus.CONFLICT,
       );
     }
-    const namespace = await manager.save(manager.create(Namespace, { name }));
+    const namespace = await manager.save(
+      manager.create(Namespace, { name: filteredName }),
+    );
     const publicRoot = await this.resourcesService.createResource(
       {
         namespaceId: namespace.id,
@@ -221,9 +227,12 @@ export class NamespacesService {
       : this.namespaceRepository;
     const namespace = await this.getNamespace(id, manager);
     if (updateDto.name && updateDto.name !== namespace.name) {
+      // Filter emoji from namespace name
+      const filteredName = filterEmoji(updateDto.name);
+
       if (
-        isNameBlocked(updateDto.name) ||
-        (await repo.countBy({ name: updateDto.name })) > 0
+        isNameBlocked(filteredName) ||
+        (await repo.countBy({ name: filteredName })) > 0
       ) {
         const message = this.i18n.t('namespace.errors.namespaceConflict');
         throw new AppException(
@@ -232,7 +241,7 @@ export class NamespacesService {
           HttpStatus.CONFLICT,
         );
       }
-      namespace.name = updateDto.name;
+      namespace.name = filteredName;
     }
     return await repo.update(id, namespace);
   }

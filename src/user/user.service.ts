@@ -17,6 +17,7 @@ import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { CacheService } from 'omniboxd/common/cache.service';
+import { filterEmoji } from 'omniboxd/utils/emoji';
 
 interface EmailVerificationState {
   code: string;
@@ -84,6 +85,11 @@ export class UserService {
   }
 
   async create(account: CreateUserDto, manager?: EntityManager) {
+    // Filter emoji from username if provided
+    if (account.username) {
+      account.username = filterEmoji(account.username);
+    }
+
     if (account.username && isNameBlocked(account.username)) {
       const message = this.i18n.t('user.errors.accountAlreadyExists');
       throw new AppException(
@@ -202,10 +208,14 @@ export class UserService {
   ) {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
     const hash = await bcrypt.hash(Math.random().toString(36), 10);
+
+    // Filter emoji from username
+    const username = filterEmoji(userData.username);
+
     const newUser = repo.create({
       password: hash,
       email: userData.email,
-      username: userData.username,
+      username: username,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -304,7 +314,7 @@ export class UserService {
     }
 
     const userExists = await this.findByEmail(email);
-    if (userExists) {
+    if (userExists && userExists.id !== userId) {
       const message = this.i18n.t('user.errors.emailAlreadyInUse');
       throw new AppException(
         message,
@@ -333,6 +343,11 @@ export class UserService {
   }
 
   async update(id: string, account: UpdateUserDto) {
+    // Filter emoji from username if provided
+    if (account.username) {
+      account.username = filterEmoji(account.username);
+    }
+
     if (account.username && !account.username.trim().length) {
       const message = this.i18n.t('user.errors.userCannotbeEmptyStr');
       throw new AppException(
@@ -354,6 +369,20 @@ export class UserService {
       existUser.password = await bcrypt.hash(account.password, 10);
     }
     if (account.username && existUser.username !== account.username) {
+      // Check if the new username is already taken by another user
+      const duplicateUser = await this.userRepository.findOne({
+        where: { username: account.username },
+      });
+
+      if (duplicateUser && duplicateUser.id !== id) {
+        const message = this.i18n.t('user.errors.usernameAlreadyExists');
+        throw new AppException(
+          message,
+          'USERNAME_ALREADY_EXISTS',
+          HttpStatus.CONFLICT,
+        );
+      }
+
       existUser.username = account.username;
     }
     if (account.email && existUser.email !== account.email) {

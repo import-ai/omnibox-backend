@@ -263,7 +263,7 @@ describe('AuthModule (e2e)', () => {
           url: 'http://localhost:3000/signup',
           email: 'test-signup@example.com',
         })
-        .expect(500); // Expected to fail due to email service configuration in tests
+        .expect(201);
     });
 
     it('should access WeChat QR code endpoint without authentication', async () => {
@@ -520,7 +520,7 @@ describe('AuthModule (e2e)', () => {
             url: 'http://localhost:3000/reset-password',
             email: client.user.email,
           })
-          .expect(500); // Expected to fail due to email service configuration in tests
+          .expect(201);
       });
 
       it('should fail for non-existent user', async () => {

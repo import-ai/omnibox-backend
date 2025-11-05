@@ -296,9 +296,11 @@ export class WizardService {
       const extractTagsTask =
         await this.wizardTaskService.createExtractTagsTaskFromTask(parentTask);
 
-      this.logger.debug(
-        `Triggered extract_tags task ${extractTagsTask.id} for parent task ${parentTask.id}`,
-      );
+      if (extractTagsTask) {
+        this.logger.debug(
+          `Triggered extract_tags task ${extractTagsTask.id} for parent task ${parentTask.id}`,
+        );
+      }
     } catch (error) {
       this.logger.error(
         `Failed to trigger extract_tags task for parent task ${parentTask.id}:`,

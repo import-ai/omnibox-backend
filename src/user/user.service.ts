@@ -483,4 +483,19 @@ export class UserService {
     option.value = value;
     return await this.userOptionRepository.save(option);
   }
+
+  async isAutoTagEnabled(
+    userId: string,
+    entityManager?: EntityManager,
+  ): Promise<boolean> {
+    const option = await this.getOption(
+      userId,
+      'enable_ai_tag_extraction',
+      entityManager,
+    );
+    if (!option) {
+      return true; // Default: enabled
+    }
+    return option.value === 'true';
+  }
 }

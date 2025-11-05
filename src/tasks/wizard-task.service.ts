@@ -92,6 +92,12 @@ export class WizardTaskService {
     text: string,
     repo?: Repository<Task>,
   ) {
+    // Check if auto-tag is enabled for this user
+    const isEnabled = await this.userService.isAutoTagEnabled(userId);
+    if (!isEnabled) {
+      return null;
+    }
+
     const lang = await this.getUserLanguage(userId);
     return this.create(
       {
@@ -111,6 +117,14 @@ export class WizardTaskService {
     parentTask: Task,
     repo?: Repository<Task>,
   ) {
+    // Check if auto-tag is enabled for this user
+    const isEnabled = await this.userService.isAutoTagEnabled(
+      parentTask.userId,
+    );
+    if (!isEnabled) {
+      return null;
+    }
+
     const lang = await this.getUserLanguage(parentTask.userId);
     return this.create(
       {

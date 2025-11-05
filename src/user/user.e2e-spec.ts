@@ -265,7 +265,7 @@ describe('UserController (e2e)', () => {
         await client
           .post('/api/v1/user/option')
           .send({
-            name: 'a'.repeat(21), // Too long
+            name: 'a'.repeat(65), // Too long
             value: 'test',
           })
           .expect(HttpStatus.BAD_REQUEST);

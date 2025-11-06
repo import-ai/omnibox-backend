@@ -1,0 +1,95 @@
+{
+  "errors": {
+    "isNotEmpty": "$property 不能为空",
+    "isString": "$property 必须是字符串",
+    "isEmail": "$property 必须是有效的邮箱地址",
+    "isNumber": "$property 必须是数字",
+    "isBoolean": "$property 必须是布尔值",
+    "isArray": "$property 必须是数组",
+    "isObject": "$property 必须是对象",
+    "isUUID": "$property 必须是有效的 UUID",
+    "isDateString": "$property 必须是有效的日期字符串",
+    "isInt": "$property 必须是整数",
+    "isEnum": "$property 必须是有效的值",
+    "minLength": "$property 长度至少为 $constraint1 个字符",
+    "maxLength": "$property 长度不能超过 $constraint1 个字符",
+    "min": "$property 不能小于 $constraint1",
+    "email": {
+      "isString": "邮箱必须是字符串",
+      "isNotEmpty": "邮箱不能为空",
+      "isEmail": "邮箱必须是有效的邮箱地址"
+    },
+    "password": {
+      "isString": "密码必须是字符串",
+      "isNotEmpty": "密码不能为空"
+    },
+    "username": {
+      "isString": "用户名必须是字符串",
+      "minLength": "用户名至少 2 个字符",
+      "maxLength": "用户名不能超过 32 个字符"
+    },
+    "name": {
+      "isString": "名称必须是字符串",
+      "isNotEmpty": "名称不能为空",
+      "minLength": "名称至少 2 个字符",
+      "maxLength": "名称不能超过 64 个字符"
+    },
+    "title": {
+      "isString": "标题必须是字符串",
+      "isNotEmpty": "标题不能为空"
+    },
+    "description": {
+      "isString": "描述必须是字符串",
+      "isNotEmpty": "描述不能为空",
+      "maxLength": "描述不能超过 $constraint1 个字符"
+    },
+    "content": {
+      "isString": "内容必须是字符串",
+      "isNotEmpty": "内容不能为空"
+    },
+    "mimetype": {
+      "isString": "文件类型必须是字符串",
+      "isNotEmpty": "文件类型不能为空"
+    },
+    "parentId": {
+      "isString": "父级 ID 必须是字符串",
+      "isNotEmpty": "父级 ID 不能为空"
+    },
+    "resourceType": {
+      "isEnum": "资源类型必须是有效的值"
+    },
+    "namespaceId": {
+      "isString": "命名空间 ID 必须是字符串",
+      "isNotEmpty": "命名空间 ID 不能为空"
+    },
+    "userId": {
+      "isString": "用户 ID 必须是字符串",
+      "isNotEmpty": "用户 ID 不能为空"
+    },
+    "permission": {
+      "isEnum": "权限必须是有效的值",
+      "isNotEmpty": "权限不能为空"
+    },
+    "url": {
+      "isString": "URL 必须是字符串",
+      "isNotEmpty": "URL 不能为空"
+    },
+    "query": {
+      "isString": "查询必须是字符串",
+      "isNotEmpty": "查询不能为空"
+    },
+    "type": {
+      "isEnum": "类型必须是有效的值",
+      "isNotEmpty": "类型不能为空"
+    },
+    "enabled": {
+      "isBoolean": "启用状态必须是布尔值"
+    },
+    "requireLogin": {
+      "isBoolean": "需要登录必须是布尔值"
+    },
+    "allResources": {
+      "isBoolean": "所有资源必须是布尔值"
+    }
+  }
+}

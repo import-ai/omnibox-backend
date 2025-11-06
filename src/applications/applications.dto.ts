@@ -1,40 +1,53 @@
 import { IsOptional, IsString, IsUUID, IsObject } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 import { Applications } from 'omniboxd/applications/applications.entity';
 
 export class FindAllApplicationsDto {
-  @IsUUID()
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
   @IsOptional()
   api_key_id?: string;
 }
 
 export class CreateApplicationsDto {
-  @IsUUID()
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
   @IsOptional()
   api_key_id?: string;
 
-  @IsObject()
+  @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   @IsOptional()
   attrs?: Record<string, any>;
 }
 
 export class ApplicationsResponseDto {
-  @IsUUID()
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
   id: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.namespaceId.isString'),
+  })
   namespace_id: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.userId.isString'),
+  })
   user_id: string;
 
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   app_id: string;
 
-  @IsUUID()
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
   @IsOptional()
   api_key_id: string | null;
 
-  @IsObject()
+  @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   attrs: Record<string, any>;
 
   created_at: Date;

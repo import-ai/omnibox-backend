@@ -1,12 +1,15 @@
 import { IsString } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class UpdateUserBindingDto {
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   loginId: string;
 
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   loginType: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.userId.isString'),
+  })
   userId: string;
 }

@@ -61,6 +61,16 @@ export class AuthController {
   }
 
   @Public()
+  @Post('auth/send-signup-otp')
+  @HttpCode(200)
+  async sendSignupOtp(
+    @Body() dto: SendEmailOtpDto,
+    @Body('url') url: string,
+  ): Promise<SendEmailOtpResponseDto> {
+    return await this.authService.sendSignupOTP(dto.email, url);
+  }
+
+  @Public()
   @Post('auth/verify-otp')
   @HttpCode(200)
   async verifyEmailOtp(

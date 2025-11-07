@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { CacheService } from 'omniboxd/common/cache.service';
 
 interface OtpRecord {
   code: string;
@@ -15,8 +16,9 @@ interface RateLimitRecord {
 
 @Injectable()
 export class OtpService {
-  private otpStore = new Map<string, OtpRecord>();
-  private rateLimitStore = new Map<string, RateLimitRecord>();
+  // Namespaces for cache keys
+  private readonly otpNamespace = '/otp/codes';
+  private readonly rateLimitNamespace = '/otp/rate-limits';
 
   // Configuration
   private readonly OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
@@ -25,10 +27,10 @@ export class OtpService {
   private readonly RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
   private readonly MAGIC_LINK_EXPIRY = '5m'; // JWT expiry
 
-  constructor(private jwtService: JwtService) {
-    // Clean up expired entries every minute
-    setInterval(() => this.cleanup(), 60 * 1000);
-  }
+  constructor(
+    private jwtService: JwtService,
+    private cacheService: CacheService,
+  ) {}
 
   /**
    * Generate a 6-digit numeric OTP code
@@ -40,16 +42,25 @@ export class OtpService {
   /**
    * Check rate limiting for email
    */
-  private checkRateLimit(email: string): void {
+  private async checkRateLimit(email: string): Promise<void> {
     const now = Date.now();
-    const record = this.rateLimitStore.get(email);
+    const record = await this.cacheService.get<RateLimitRecord>(
+      this.rateLimitNamespace,
+      email,
+    );
 
     if (!record || now > record.resetAt) {
       // Create new rate limit window
-      this.rateLimitStore.set(email, {
+      const newRecord: RateLimitRecord = {
         count: 1,
         resetAt: now + this.RATE_LIMIT_WINDOW_MS,
-      });
+      };
+      await this.cacheService.set(
+        this.rateLimitNamespace,
+        email,
+        newRecord,
+        this.RATE_LIMIT_WINDOW_MS,
+      );
       return;
     }
 
@@ -60,26 +71,37 @@ export class OtpService {
       );
     }
 
+    // Increment count
     record.count++;
+    const ttl = record.resetAt - now;
+    await this.cacheService.set(this.rateLimitNamespace, email, record, ttl);
   }
 
   /**
    * Generate and store OTP for email
    * Returns the OTP code and magic link token
    */
-  generateOtp(email: string): { code: string; magicToken: string } {
-    this.checkRateLimit(email);
+  async generateOtp(
+    email: string,
+  ): Promise<{ code: string; magicToken: string }> {
+    await this.checkRateLimit(email);
 
     const code = this.generateCode();
     const now = Date.now();
 
-    // Store OTP
-    this.otpStore.set(email, {
+    // Store OTP with TTL
+    const otpRecord: OtpRecord = {
       code,
       email,
       expiresAt: now + this.OTP_EXPIRY_MS,
       attempts: 0,
-    });
+    };
+    await this.cacheService.set(
+      this.otpNamespace,
+      email,
+      otpRecord,
+      this.OTP_EXPIRY_MS,
+    );
 
     // Generate magic link JWT token
     const magicToken = this.jwtService.sign(
@@ -94,8 +116,11 @@ export class OtpService {
    * Verify OTP code for email
    * Returns true if valid, throws error if invalid
    */
-  verifyOtp(email: string, code: string): boolean {
-    const record = this.otpStore.get(email);
+  async verifyOtp(email: string, code: string): Promise<boolean> {
+    const record = await this.cacheService.get<OtpRecord>(
+      this.otpNamespace,
+      email,
+    );
 
     if (!record) {
       throw new BadRequestException('Invalid or expired verification code');
@@ -105,13 +130,13 @@ export class OtpService {
 
     // Check expiration
     if (now > record.expiresAt) {
-      this.otpStore.delete(email);
+      await this.cacheService.delete(this.otpNamespace, email);
       throw new BadRequestException('Verification code has expired');
     }
 
     // Check max attempts
     if (record.attempts >= this.MAX_ATTEMPTS) {
-      this.otpStore.delete(email);
+      await this.cacheService.delete(this.otpNamespace, email);
       throw new BadRequestException(
         'Too many failed attempts. Please request a new code.',
       );
@@ -120,13 +145,15 @@ export class OtpService {
     // Verify code
     if (record.code !== code) {
       record.attempts++;
+      const ttl = record.expiresAt - now;
+      await this.cacheService.set(this.otpNamespace, email, record, ttl);
       throw new BadRequestException(
         `Invalid verification code. ${this.MAX_ATTEMPTS - record.attempts} attempts remaining.`,
       );
     }
 
     // Success - remove the OTP (one-time use)
-    this.otpStore.delete(email);
+    await this.cacheService.delete(this.otpNamespace, email);
     return true;
   }
 
@@ -134,7 +161,7 @@ export class OtpService {
    * Verify magic link token
    * Returns email if valid, throws error if invalid
    */
-  verifyMagicToken(token: string): string {
+  async verifyMagicToken(token: string): Promise<string> {
     const payload = this.jwtService.verify(token);
 
     if (payload.type !== 'otp-magic') {
@@ -142,7 +169,10 @@ export class OtpService {
     }
 
     // Verify the code still exists and matches
-    const record = this.otpStore.get(payload.email);
+    const record = await this.cacheService.get<OtpRecord>(
+      this.otpNamespace,
+      payload.email,
+    );
     if (!record || record.code !== payload.code) {
       throw new BadRequestException(
         'Magic link has already been used or expired',
@@ -150,39 +180,7 @@ export class OtpService {
     }
 
     // Success - remove the OTP (one-time use)
-    this.otpStore.delete(payload.email);
+    await this.cacheService.delete(this.otpNamespace, payload.email);
     return payload.email;
-  }
-
-  /**
-   * Clean up expired OTP records and rate limits
-   */
-  private cleanup(): void {
-    const now = Date.now();
-
-    // Clean expired OTPs
-    for (const [email, record] of this.otpStore.entries()) {
-      if (now > record.expiresAt) {
-        this.otpStore.delete(email);
-      }
-    }
-
-    // Clean expired rate limits
-    for (const [email, record] of this.rateLimitStore.entries()) {
-      if (now > record.resetAt) {
-        this.rateLimitStore.delete(email);
-      }
-    }
-  }
-
-  /**
-   * Get remaining time for OTP in seconds
-   */
-  getRemainingTime(email: string): number {
-    const record = this.otpStore.get(email);
-    if (!record) return 0;
-
-    const remaining = Math.max(0, record.expiresAt - Date.now());
-    return Math.ceil(remaining / 1000);
   }
 }

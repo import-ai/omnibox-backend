@@ -78,7 +78,8 @@ export class AuthService {
   }
 
   /**
-   * Send OTP to email for registration or login
+   * Send OTP to email for login only
+   * Does NOT send email if user doesn't exist
    */
   async sendOTP(
     email: string,
@@ -87,8 +88,13 @@ export class AuthService {
     const account = await this.userService.findByEmail(email);
     const exists = !!account;
 
+    // Don't send email for unregistered users (login only)
+    if (!exists) {
+      return { exists: false, sent: false };
+    }
+
     // Generate OTP code and magic link token
-    const { code, magicToken } = this.otpService.generateOtp(email);
+    const { code, magicToken } = await this.otpService.generateOtp(email);
 
     // Build magic link URL
     const magicLink = `${baseUrl}?token=${magicToken}`;
@@ -96,7 +102,33 @@ export class AuthService {
     // Send email with both code and link
     await this.mailService.sendOTPEmail(email, code, magicLink);
 
-    return { exists, sent: true };
+    return { exists: true, sent: true };
+  }
+
+  /**
+   * Send OTP to email for signup only
+   */
+  async sendSignupOTP(
+    email: string,
+    baseUrl: string,
+  ): Promise<SendEmailOtpResponseDto> {
+    const account = await this.userService.findByEmail(email);
+
+    if (account) {
+      // User already exists, should login instead
+      return { exists: true, sent: false };
+    }
+
+    // Generate OTP code and magic link token for new user
+    const { code, magicToken } = await this.otpService.generateOtp(email);
+
+    // Build magic link URL
+    const magicLink = `${baseUrl}?token=${magicToken}`;
+
+    // Send email with both code and link
+    await this.mailService.sendOTPEmail(email, code, magicLink);
+
+    return { exists: false, sent: true };
   }
 
   /**
@@ -104,7 +136,7 @@ export class AuthService {
    */
   async verifyOTP(email: string, code: string, lang?: string) {
     // Verify the OTP code
-    this.otpService.verifyOtp(email, code);
+    await this.otpService.verifyOtp(email, code);
 
     // Check if user already exists
     const existingUser = await this.userService.findByEmail(email);
@@ -167,7 +199,7 @@ export class AuthService {
    */
   async verifyMagicLink(token: string, lang?: string) {
     // Verify the magic link token and get email
-    const email = this.otpService.verifyMagicToken(token);
+    const email = await this.otpService.verifyMagicToken(token);
 
     // Check if user already exists
     const existingUser = await this.userService.findByEmail(email);

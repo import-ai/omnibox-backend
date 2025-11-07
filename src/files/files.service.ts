@@ -119,11 +119,11 @@ export class FilesService {
 
   async generatePostForm(
     fileId: string,
-    fileSize: number,
+    fileSize: number | undefined,
     filename: string,
     mimetype: string,
   ): Promise<PresignedPost> {
-    if (fileSize > this.s3MaxFileSize) {
+    if (fileSize && fileSize > this.s3MaxFileSize) {
       const message = this.i18n.t('resource.errors.fileTooLarge');
       throw new AppException(message, 'FILE_TOO_LARGE', HttpStatus.BAD_REQUEST);
     }

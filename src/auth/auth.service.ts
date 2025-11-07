@@ -17,6 +17,9 @@ import { SignUpPayloadDto } from './dto/signup-payload.dto';
 import { LoginPayloadDto } from './dto/login-payload.dto';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { isEmail } from 'class-validator';
+import { OtpService } from './otp.service';
+import { SocialService } from './social.service';
+import { SendEmailOtpResponseDto } from './dto/email-otp.dto';
 
 @Injectable()
 export class AuthService {
@@ -32,6 +35,8 @@ export class AuthService {
     private readonly permissionsService: PermissionsService,
     private readonly dataSource: DataSource,
     private readonly i18n: I18nService,
+    private readonly otpService: OtpService,
+    private readonly socialService: SocialService,
   ) {}
 
   async verify(email: string, password: string): Promise<any> {
@@ -70,6 +75,154 @@ export class AuthService {
         username: user.username,
       }),
     };
+  }
+
+  /**
+   * Send OTP to email for registration or login
+   */
+  async sendOTP(
+    email: string,
+    baseUrl: string,
+  ): Promise<SendEmailOtpResponseDto> {
+    const account = await this.userService.findByEmail(email);
+    const exists = !!account;
+
+    // Generate OTP code and magic link token
+    const { code, magicToken } = this.otpService.generateOtp(email);
+
+    // Build magic link URL
+    const magicLink = `${baseUrl}?token=${magicToken}`;
+
+    // Send email with both code and link
+    await this.mailService.sendOTPEmail(email, code, magicLink);
+
+    return { exists, sent: true };
+  }
+
+  /**
+   * Verify OTP and complete registration or login
+   */
+  async verifyOTP(email: string, code: string, lang?: string) {
+    // Verify the OTP code
+    this.otpService.verifyOtp(email, code);
+
+    // Check if user already exists
+    const existingUser = await this.userService.findByEmail(email);
+
+    if (existingUser) {
+      // User exists - login
+      return {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    // User doesn't exist - register
+    return await this.dataSource.transaction(async (manager) => {
+      // Extract username from email (e.g., foo@example.com -> foo)
+      const emailUsername = email.split('@')[0];
+
+      // Generate valid username (handles conflicts)
+      const username = await this.socialService.getValidUsername(
+        emailUsername,
+        manager,
+      );
+
+      // Generate a random password for OTP-registered users
+      const randomPassword = Math.random().toString(36).slice(-12) + 'Aa1';
+
+      // Create user with generated username and random password
+      const user = await this.userService.create(
+        {
+          email,
+          username,
+          password: randomPassword,
+          lang,
+        },
+        manager,
+      );
+
+      // Create user namespace
+      await this.namespaceService.createUserNamespace(
+        user.id,
+        user.username,
+        manager,
+      );
+
+      return {
+        id: user.id,
+        access_token: this.jwtService.sign({
+          sub: user.id,
+          username: user.username,
+        }),
+      };
+    });
+  }
+
+  /**
+   * Verify magic link token and complete registration or login
+   */
+  async verifyMagicLink(token: string, lang?: string) {
+    // Verify the magic link token and get email
+    const email = this.otpService.verifyMagicToken(token);
+
+    // Check if user already exists
+    const existingUser = await this.userService.findByEmail(email);
+
+    if (existingUser) {
+      // User exists - login
+      return {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    // User doesn't exist - register
+    return await this.dataSource.transaction(async (manager) => {
+      // Extract username from email
+      const emailUsername = email.split('@')[0];
+
+      // Generate valid username (handles conflicts)
+      const username = await this.socialService.getValidUsername(
+        emailUsername,
+        manager,
+      );
+
+      // Generate a random password for OTP-registered users
+      const randomPassword = Math.random().toString(36).slice(-12) + 'Aa1';
+
+      // Create user
+      const user = await this.userService.create(
+        {
+          email,
+          username,
+          password: randomPassword,
+          lang,
+        },
+        manager,
+      );
+
+      // Create user namespace
+      await this.namespaceService.createUserNamespace(
+        user.id,
+        user.username,
+        manager,
+      );
+
+      return {
+        id: user.id,
+        access_token: this.jwtService.sign({
+          sub: user.id,
+          username: user.username,
+        }),
+      };
+    });
   }
 
   private async getSignUpToken(email: string) {

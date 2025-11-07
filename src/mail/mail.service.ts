@@ -12,6 +12,35 @@ export class MailService {
     private readonly i18n: I18nService,
   ) {}
 
+  async sendOTPEmail(
+    email: string,
+    code: string,
+    magicLink: string,
+  ): Promise<void> {
+    const subject = this.i18n.t('mail.subjects.emailOtp');
+
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject,
+        template: 'email-otp',
+        context: {
+          code,
+          magicLink,
+          i18nLang: I18nContext.current()?.lang,
+        },
+      });
+    } catch (error) {
+      this.logger.error({ error });
+      const message = this.i18n.t('mail.errors.unableToSendEmail');
+      throw new AppException(
+        message,
+        'UNABLE_TO_SEND_EMAIL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   async sendSignUpEmail(email: string, resetUrl: string): Promise<void> {
     const subject = this.i18n.t('mail.subjects.signUp');
 

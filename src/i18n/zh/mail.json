@@ -6,6 +6,7 @@
     "signUp": "继续完成账号注册",
     "passwordReset": "密码重置请求",
     "emailVerification": "邮箱验证",
+    "emailOtp": "您的验证码",
     "invite": "邀请您加入空间"
   },
   "templates": {
@@ -32,6 +33,15 @@
       "codeLabel": "验证码：",
       "ignoreText": "如果您没有请求此验证，请忽略此邮件。",
       "expireText": "此验证码将在10分钟后过期。"
+    },
+    "emailOtp": {
+      "title": "邮箱验证",
+      "heading": "验证您的邮箱",
+      "body": "输入此验证码以完成登录：",
+      "expireText": "此验证码将在5分钟后过期",
+      "dividerText": "或",
+      "buttonText": "一键登录",
+      "ignoreText": "如果您没有请求此验证码，可以安全地忽略此邮件。"
     },
     "invite": {
       "title": "空间邀请",

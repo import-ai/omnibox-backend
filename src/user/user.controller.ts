@@ -1,5 +1,6 @@
 import { UserService } from 'omniboxd/user/user.service';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
+import { SetPasswordDto } from 'omniboxd/user/dto/set-password.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {
@@ -13,6 +14,7 @@ import {
   Post,
   Controller,
   ParseIntPipe,
+  HttpCode,
 } from '@nestjs/common';
 
 @Controller('api/v1/user')
@@ -46,6 +48,13 @@ export class UserController {
   @Patch(':id')
   async update(@Param('id') id: string, @Body() account: UpdateUserDto) {
     return await this.userService.update(id, account);
+  }
+
+  @Post('set-password')
+  @HttpCode(200)
+  async setPassword(@UserId() userId: string, @Body() dto: SetPasswordDto) {
+    await this.userService.updatePassword(userId, dto.password);
+    return { success: true };
   }
 
   @Delete(':id')

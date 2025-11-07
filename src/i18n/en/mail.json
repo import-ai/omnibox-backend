@@ -6,6 +6,7 @@
     "signUp": "Continue completing account registration",
     "passwordReset": "Password Reset Request",
     "emailVerification": "Email Verification",
+    "emailOtp": "Your verification code",
     "invite": "Invite you to join the space"
   },
   "templates": {
@@ -32,6 +33,15 @@
       "codeLabel": "Verification Code:",
       "ignoreText": "If you did not request this verification, please ignore this email.",
       "expireText": "This code will expire in 10 minutes."
+    },
+    "emailOtp": {
+      "title": "Email Verification",
+      "heading": "Verify your email",
+      "body": "Enter this code to complete your sign in:",
+      "expireText": "This code expires in 5 minutes",
+      "dividerText": "or",
+      "buttonText": "Sign in with one click",
+      "ignoreText": "If you didn't request this code, you can safely ignore this email."
     },
     "invite": {
       "title": "Space Invitation",

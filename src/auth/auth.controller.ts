@@ -11,9 +11,15 @@ import {
   UseGuards,
   Controller,
   HttpCode,
+  Query,
 } from '@nestjs/common';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import {
+  SendEmailOtpDto,
+  VerifyEmailOtpDto,
+  SendEmailOtpResponseDto,
+} from './dto/email-otp.dto';
 
 @Controller('api/v1')
 export class AuthController {
@@ -45,31 +51,34 @@ export class AuthController {
   }
 
   @Public()
-  @Post('sign-up')
-  async signUp(@Body('url') url: string, @Body('email') email: string) {
-    return await this.authService.signUp(url, email);
+  @Post('auth/send-otp')
+  @HttpCode(200)
+  async sendEmailOtp(
+    @Body() dto: SendEmailOtpDto,
+    @Body('url') url: string,
+  ): Promise<SendEmailOtpResponseDto> {
+    return await this.authService.sendOTP(dto.email, url);
   }
 
   @Public()
-  @Post('sign-up/confirm')
-  async signUpConfirm(
-    @Body('token') token: string,
-    @Body('username') username: string,
-    @Body('password') password: string,
+  @Post('auth/verify-otp')
+  @HttpCode(200)
+  async verifyEmailOtp(
+    @Body() dto: VerifyEmailOtpDto,
     @Res() res: Response,
     @Body('lang') lang?: string,
   ) {
-    const signUpData = await this.authService.signUpConfirm(token, {
-      username,
-      password,
+    const authData = await this.authService.verifyOTP(
+      dto.email,
+      dto.code,
       lang,
-    });
+    );
 
     const jwtExpireSeconds = parseInt(
       this.configService.get('OBB_JWT_EXPIRE', '2678400'),
       10,
     );
-    res.cookie('token', signUpData.access_token, {
+    res.cookie('token', authData.access_token, {
       httpOnly: true,
       secure: true,
       sameSite: 'none',
@@ -77,7 +86,32 @@ export class AuthController {
       maxAge: jwtExpireSeconds * 1000,
     });
 
-    return res.json(signUpData);
+    return res.json(authData);
+  }
+
+  @Public()
+  @Post('auth/verify-magic')
+  @HttpCode(200)
+  async verifyMagicLink(
+    @Query('token') token: string,
+    @Res() res: Response,
+    @Body('lang') lang?: string,
+  ) {
+    const authData = await this.authService.verifyMagicLink(token, lang);
+
+    const jwtExpireSeconds = parseInt(
+      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+      10,
+    );
+    res.cookie('token', authData.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+      maxAge: jwtExpireSeconds * 1000,
+    });
+
+    return res.json(authData);
   }
 
   @Public()

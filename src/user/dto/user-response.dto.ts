@@ -1,15 +1,22 @@
 import { IsOptional, IsString } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 import { User } from '../entities/user.entity';
 
 export class UserResponseDto {
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.id.isString'),
+  })
   id: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.username.isString'),
+  })
   @IsOptional()
   username: string | null;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.email.isString'),
+  })
   @IsOptional()
   email: string | null;
 

@@ -1,17 +1,31 @@
 import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 import { Namespace } from '../entities/namespace.entity';
 
 export class NamespaceResponseDto {
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.id.isString'),
+  })
   id: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.name.isString'),
+  })
   name: string;
 
-  @IsNumber()
+  @IsNumber(
+    {},
+    {
+      message: i18nValidationMessage(
+        'validation.errors.maxRunningTasks.isNumber',
+      ),
+    },
+  )
   maxRunningTasks: number;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.rootResourceId.isString'),
+  })
   @IsOptional()
   rootResourceId: string | null;
 

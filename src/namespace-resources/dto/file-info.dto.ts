@@ -8,14 +8,25 @@ export class FileInfoDto {
   @Expose()
   url: string;
 
-  @Expose()
-  headers?: Record<string, string>;
+  @Expose({ name: 'post_url' })
+  postUrl?: string;
 
-  static new(id: string, url: string, headers?: Record<string, string>) {
+  @Expose({ name: 'post_fields' })
+  postFields?: [string, string][];
+
+  static new(
+    id: string,
+    url: string,
+    postUrl?: string,
+    postFields?: Record<string, string>,
+  ) {
     const dto = new FileInfoDto();
     dto.id = id;
     dto.url = url;
-    dto.headers = headers;
+    dto.postUrl = postUrl;
+    if (postFields) {
+      dto.postFields = Object.entries(postFields);
+    }
     return dto;
   }
 }

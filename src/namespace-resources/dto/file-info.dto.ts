@@ -1,5 +1,4 @@
 import { Expose } from 'class-transformer';
-import { Record } from 'openai/core';
 
 export class FileInfoDto {
   @Expose()

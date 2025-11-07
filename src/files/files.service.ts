@@ -71,8 +71,9 @@ export class FilesService {
       'OBB_S3_MAX_FILE_SIZE',
       20 * 1024 * 1024,
     );
+    const s3Region = configService.get<string>('OBB_S3_REGION', 'us-east-1');
     this.s3Client = new S3Client({
-      region: 'us-east-1',
+      region: s3Region,
       credentials: {
         accessKeyId,
         secretAccessKey,

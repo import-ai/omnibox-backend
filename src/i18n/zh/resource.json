@@ -4,6 +4,7 @@
     "parentOrResourceIdRequired": "需要 parent_id 或 resource_id",
     "resourceNotFound": "资源未找到",
     "fileNotFound": "文件未找到",
+    "fileTooLarge": "您的文件（{userSize}）超过最大限制 {limitSize}",
     "cannotDeleteRoot": "无法删除根资源",
     "cannotDuplicateRoot": "无法复制根资源",
     "cannotRestoreRoot": "无法恢复根资源",

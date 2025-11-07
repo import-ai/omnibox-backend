@@ -1,5 +1,11 @@
 import { Expose } from 'class-transformer';
-import { IsNotEmpty, IsString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class CreateFileReqDto {
   @Expose()
@@ -11,4 +17,10 @@ export class CreateFileReqDto {
   @IsString()
   @IsNotEmpty()
   mimetype: string;
+
+  @Expose()
+  @IsNumber()
+  @Min(1)
+  @IsOptional()
+  size?: number;
 }

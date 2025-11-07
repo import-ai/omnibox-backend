@@ -26,12 +26,13 @@ describe('FileResourcesController (e2e)', () => {
 
   test.each(uploadLanguageDatasets)(
     'upload and download file: $filename',
-    async ({ filename }) => {
+    async ({ filename, content }) => {
       const uploadRes = await client
         .post(`/api/v1/namespaces/${client.namespace.id}/resources/files`)
         .send({
           name: filename,
           mimetype: 'text/plain',
+          size: content.length,
         });
       expect(uploadRes.status).toBe(201);
     },

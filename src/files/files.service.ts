@@ -8,6 +8,7 @@ import { I18nService } from 'nestjs-i18n';
 import { S3Client } from '@aws-sdk/client-s3';
 import { createPresignedPost, PresignedPost } from '@aws-sdk/s3-presigned-post';
 import { AwsClient } from 'aws4fetch';
+import { formatFileSize } from '../utils/format-file-size';
 
 @Injectable()
 export class FilesService {
@@ -124,7 +125,9 @@ export class FilesService {
     mimetype: string,
   ): Promise<PresignedPost> {
     if (fileSize && fileSize > this.s3MaxFileSize) {
-      const message = this.i18n.t('resource.errors.fileTooLarge');
+      const message = this.i18n.t('resource.errors.fileTooLarge', {
+        args: { maxSize: formatFileSize(this.s3MaxFileSize) },
+      });
       throw new AppException(message, 'FILE_TOO_LARGE', HttpStatus.BAD_REQUEST);
     }
     const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;

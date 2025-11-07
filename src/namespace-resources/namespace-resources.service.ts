@@ -714,8 +714,13 @@ export class NamespaceResourcesService {
       createReq.name,
       createReq.mimetype,
     );
-    const url = await this.filesService.generateUploadUrl(file.id);
-    return FileInfoDto.new(file.id, url);
+    const { url, headers } = await this.filesService.generateUploadUrl(
+      file.id,
+      createReq.size,
+      createReq.name,
+      createReq.mimetype,
+    );
+    return FileInfoDto.new(file.id, url, headers);
   }
 
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {

@@ -68,17 +68,30 @@ export class FilesService {
     return await this.fileRepo.findOne({ where: { namespaceId, id: fileId } });
   }
 
-  async generateUploadUrl(fileId: string): Promise<string> {
+  async generateUploadUrl(
+    fileId: string,
+    fileSize: number,
+    filename: string,
+    mimetype: string,
+  ): Promise<{ url: string; headers: Record<string, string> }> {
     const fileUrl = new URL(fileId, this.s3Url);
     fileUrl.searchParams.set('X-Amz-Expires', '900'); // 900 seconds
+
+    const headers = {
+      'content-type': mimetype,
+      'content-length': fileSize.toString(),
+      'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    };
+
     const signedReq = await this.awsClient.sign(fileUrl.toString(), {
       method: 'PUT',
       aws: {
         service: 's3',
         signQuery: true,
       },
+      headers,
     });
-    return signedReq.url;
+    return { url: signedReq.url, headers };
   }
 
   private async generateDownloadUrl(

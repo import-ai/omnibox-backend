@@ -1,4 +1,5 @@
 import { Expose } from 'class-transformer';
+import { Record } from 'openai/core';
 
 export class FileInfoDto {
   @Expose()
@@ -7,10 +8,14 @@ export class FileInfoDto {
   @Expose()
   url: string;
 
-  static new(id: string, url: string) {
+  @Expose()
+  headers?: Record<string, string>;
+
+  static new(id: string, url: string, headers?: Record<string, string>) {
     const dto = new FileInfoDto();
     dto.id = id;
     dto.url = url;
+    dto.headers = headers;
     return dto;
   }
 }

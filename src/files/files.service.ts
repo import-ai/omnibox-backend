@@ -126,7 +126,10 @@ export class FilesService {
   ): Promise<PresignedPost> {
     if (fileSize && fileSize > this.s3MaxFileSize) {
       const message = this.i18n.t('resource.errors.fileTooLarge', {
-        args: { maxSize: formatFileSize(this.s3MaxFileSize) },
+        args: {
+          userSize: formatFileSize(fileSize),
+          limitSize: formatFileSize(this.s3MaxFileSize),
+        },
       });
       throw new AppException(message, 'FILE_TOO_LARGE', HttpStatus.BAD_REQUEST);
     }

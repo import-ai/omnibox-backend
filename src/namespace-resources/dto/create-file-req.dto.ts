@@ -28,8 +28,15 @@ export class CreateFileReqDto {
   mimetype: string;
 
   @Expose()
-  @IsNumber()
-  @Min(1)
+  @IsNumber(
+    {},
+    {
+      message: i18nValidationMessage(
+        'validation.errors.maxRunningTasks.isNumber',
+      ),
+    },
+  )
+  @Min(1, { message: i18nValidationMessage('validation.errors.min') })
   @IsOptional()
   size?: number;
 }

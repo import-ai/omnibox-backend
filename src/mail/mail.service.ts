@@ -95,6 +95,7 @@ export class MailService {
     namespaceName: string,
     receiverUsername?: string,
     isExistingUser?: boolean,
+    receiverLang?: string,
   ): Promise<void> {
     const subject = this.i18n.t('mail.subjects.invite');
 
@@ -109,7 +110,7 @@ export class MailService {
           namespaceName,
           receiverUsername,
           isExistingUser: isExistingUser || false,
-          i18nLang: I18nContext.current()?.lang,
+          i18nLang: receiverLang || I18nContext.current()?.lang,
         },
       });
     } catch (error) {

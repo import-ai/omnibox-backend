@@ -412,6 +412,13 @@ export class AuthService {
         expiresIn: '1h',
       });
 
+      // Get receiver's language preference
+      const receiverLangOption = await this.userService.getOption(
+        account.id,
+        'language',
+      );
+      const receiverLang = receiverLangOption?.value;
+
       await this.mailService.sendInviteEmail(
         email,
         `${data.inviteUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`,
@@ -419,6 +426,7 @@ export class AuthService {
         namespaceName,
         account.username!,
         true,
+        receiverLang,
       );
       return;
     }

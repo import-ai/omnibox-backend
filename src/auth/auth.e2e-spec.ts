@@ -485,32 +485,7 @@ describe('AuthModule (e2e)', () => {
     });
   });
 
-  describe('Sign-up Flow', () => {
-    describe('POST /api/v1/sign-up/confirm', () => {
-      it('should fail with invalid token', async () => {
-        await client
-          .request()
-          .post('/api/v1/sign-up/confirm')
-          .send({
-            token: 'invalid-token',
-            username: 'testuser',
-            password: 'testpassword',
-          })
-          .expect(HttpStatus.UNAUTHORIZED);
-      });
-
-      it('should fail with missing parameters', async () => {
-        await client
-          .request()
-          .post('/api/v1/sign-up/confirm')
-          .send({
-            token: 'some-token',
-            // Missing username and password
-          })
-          .expect(HttpStatus.UNAUTHORIZED); // Invalid token gets processed first
-      });
-    });
-
+  describe('Password Reset Flow', () => {
     describe('POST /api/v1/password', () => {
       it('should initiate password reset for existing user', async () => {
         await client

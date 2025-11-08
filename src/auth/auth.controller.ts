@@ -188,6 +188,31 @@ export class AuthController {
     return await this.authService.inviteConfirm(token);
   }
 
+  @Public()
+  @Post('auth/accept-invite')
+  @HttpCode(200)
+  async acceptInvite(
+    @Query('token') token: string,
+    @Res() res: Response,
+    @Body('lang') lang?: string,
+  ) {
+    const authData = await this.authService.acceptInvite(token, lang);
+
+    const jwtExpireSeconds = parseInt(
+      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+      10,
+    );
+    res.cookie('token', authData.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+      maxAge: jwtExpireSeconds * 1000,
+    });
+
+    return res.json(authData);
+  }
+
   @Post('logout')
   logout(@Res() res: Response) {
     res.clearCookie('token', {

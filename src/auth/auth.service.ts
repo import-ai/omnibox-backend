@@ -269,12 +269,6 @@ export class AuthService {
     return this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
-  async signUp(url: string, email: string) {
-    const token: string = await this.getSignUpToken(email);
-    const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendSignUpEmail(email, mailSendUri);
-  }
-
   async signUpConfirm(
     token: string,
     data: {
@@ -406,11 +400,10 @@ export class AuthService {
       invitation,
     };
     const token = this.jwtService.sign(payload, {
-      expiresIn: '1h',
+      expiresIn: '7d',
     });
-    const mailSendUri = `${data.registerUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`;
+    const mailSendUri = `${data.registerUrl}?token=${token}`;
     await this.mailService.sendInviteEmail(email, mailSendUri);
-    // return { url: mailSendUri };
   }
 
   async inviteConfirm(token: string): Promise<void> {
@@ -418,6 +411,82 @@ export class AuthService {
     const user = await this.userService.find(payload.userId);
     await this.dataSource.transaction(async (manager) => {
       await this.handleUserInvitation(user.id, payload.invitation, manager);
+    });
+  }
+
+  async acceptInvite(token: string, lang?: string) {
+    // Verify and decode the JWT token
+    const payload: SignUpPayloadDto = this.jwtVerify(token);
+
+    if (!payload.email || !payload.invitation) {
+      const message = this.i18n.t('auth.errors.tokenInvalid');
+      throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
+    }
+
+    const { email, invitation } = payload;
+
+    // Check if user already exists
+    const existingUser = await this.userService.findByEmail(email);
+
+    if (existingUser) {
+      // User exists - just add to namespace
+      await this.dataSource.transaction(async (manager) => {
+        await this.handleUserInvitation(existingUser.id, invitation, manager);
+      });
+
+      return {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+        namespaceId: invitation.namespaceId,
+      };
+    }
+
+    // User doesn't exist - create account and add to namespace
+    return await this.dataSource.transaction(async (manager) => {
+      // Extract username from email (e.g., foo@example.com -> foo)
+      const emailUsername = email.split('@')[0];
+
+      // Generate valid username (handles conflicts)
+      const username = await this.socialService.getValidUsername(
+        emailUsername,
+        manager,
+      );
+
+      // Generate a random password for invited users
+      const randomPassword = Math.random().toString(36).slice(-12) + 'Aa1';
+
+      // Create user with generated username and random password
+      const user = await this.userService.create(
+        {
+          email,
+          username,
+          password: randomPassword,
+          lang,
+        },
+        manager,
+      );
+
+      // Create user's personal namespace
+      await this.namespaceService.createUserNamespace(
+        user.id,
+        user.username,
+        manager,
+      );
+
+      // Add user to the invited namespace
+      await this.handleUserInvitation(user.id, invitation, manager);
+
+      return {
+        id: user.id,
+        access_token: this.jwtService.sign({
+          sub: user.id,
+          username: user.username,
+        }),
+        namespaceId: invitation.namespaceId,
+      };
     });
   }
 

@@ -97,7 +97,8 @@ export class AuthService {
     const { code, magicToken } = await this.otpService.generateOtp(email);
 
     // Build magic link URL
-    const magicLink = `${baseUrl}?token=${magicToken}`;
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const magicLink = `${baseUrl}${separator}token=${magicToken}`;
 
     // Send email with both code and link
     await this.mailService.sendOTPEmail(email, code, magicLink);
@@ -123,7 +124,8 @@ export class AuthService {
     const { code, magicToken } = await this.otpService.generateOtp(email);
 
     // Build magic link URL
-    const magicLink = `${baseUrl}?token=${magicToken}`;
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const magicLink = `${baseUrl}${separator}token=${magicToken}`;
 
     // Send email with both code and link
     await this.mailService.sendOTPEmail(email, code, magicLink);

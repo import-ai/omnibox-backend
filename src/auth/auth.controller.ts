@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ConfigService } from '@nestjs/config';
 import {
   Res,
@@ -184,8 +185,8 @@ export class AuthController {
   }
 
   @Post('invite/confirm')
-  async inviteConfirm(@Body('token') token: string) {
-    return await this.authService.inviteConfirm(token);
+  async inviteConfirm(@UserId() userId: string, @Body('token') token: string) {
+    return await this.authService.inviteConfirm(token, userId);
   }
 
   @Public()

@@ -440,8 +440,22 @@ export class AuthService {
     );
   }
 
-  async inviteConfirm(token: string): Promise<void> {
+  async inviteConfirm(token: string, currentUserId: string): Promise<void> {
     const payload: InvitePayloadDto = this.jwtVerify(token);
+
+    // Validate that the logged-in user matches the invited user
+    if (payload.userId !== currentUserId) {
+      const invitedUser = await this.userService.find(payload.userId);
+      const message = this.i18n.t('auth.errors.inviteUserMismatch', {
+        args: { username: invitedUser.username },
+      });
+      throw new AppException(
+        message,
+        'INVITE_USER_MISMATCH',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const user = await this.userService.find(payload.userId);
     await this.dataSource.transaction(async (manager) => {
       await this.handleUserInvitation(user.id, payload.invitation, manager);

@@ -7,7 +7,7 @@
     "passwordReset": "Password Reset Request",
     "emailVerification": "Email Verification",
     "emailOtp": "Your verification code",
-    "invite": "Invite you to join the space"
+    "invite": "{senderUsername} invites you to join the space {namespaceName}"
   },
   "templates": {
     "signUp": {

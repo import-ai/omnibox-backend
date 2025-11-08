@@ -7,7 +7,7 @@
     "passwordReset": "密码重置请求",
     "emailVerification": "邮箱验证",
     "emailOtp": "您的验证码",
-    "invite": "邀请您加入空间"
+    "invite": "{senderUsername} 邀请您加入空间 {namespaceName}"
   },
   "templates": {
     "signUp": {

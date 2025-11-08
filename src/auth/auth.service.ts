@@ -5,7 +5,7 @@ import { MailService } from 'omniboxd/mail/mail.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';

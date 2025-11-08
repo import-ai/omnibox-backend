@@ -97,7 +97,11 @@ export class MailService {
     isExistingUser?: boolean,
     receiverLang?: string,
   ): Promise<void> {
-    const subject = this.i18n.t('mail.subjects.invite');
+    const lang = receiverLang || I18nContext.current()?.lang;
+    const subject = this.i18n.t('mail.subjects.invite', {
+      lang,
+      args: { senderUsername, namespaceName },
+    });
 
     try {
       await this.mailerService.sendMail({
@@ -110,7 +114,7 @@ export class MailService {
           namespaceName,
           receiverUsername,
           isExistingUser: isExistingUser || false,
-          i18nLang: receiverLang || I18nContext.current()?.lang,
+          i18nLang: lang,
         },
       });
     } catch (error) {

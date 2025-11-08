@@ -88,7 +88,14 @@ export class MailService {
     }
   }
 
-  async sendInviteEmail(email: string, resetUrl: string): Promise<void> {
+  async sendInviteEmail(
+    email: string,
+    resetUrl: string,
+    senderUsername: string,
+    namespaceName: string,
+    receiverUsername?: string,
+    isExistingUser?: boolean,
+  ): Promise<void> {
     const subject = this.i18n.t('mail.subjects.invite');
 
     try {
@@ -98,6 +105,10 @@ export class MailService {
         template: 'invite',
         context: {
           resetUrl,
+          senderUsername,
+          namespaceName,
+          receiverUsername,
+          isExistingUser: isExistingUser || false,
           i18nLang: I18nContext.current()?.lang,
         },
       });

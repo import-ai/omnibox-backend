@@ -370,6 +370,28 @@ export class AuthService {
       permission: data.permission,
       groupId: data.groupId,
     };
+
+    // Fetch sender and namespace information
+    const senders = await this.userService.findByIds([userId]);
+    const sender = senders[0];
+    const namespace = await this.namespaceService.getNamespace(
+      data.namespaceId,
+    );
+
+    if (!sender || !namespace) {
+      this.logger.error(
+        `Failed to fetch sender or namespace: sender=${!!sender}, namespace=${!!namespace}`,
+      );
+      throw new AppException(
+        'Failed to fetch sender or namespace information',
+        'INVITE_INFO_FETCH_FAILED',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    const senderUsername = sender.username;
+    const namespaceName = namespace.name;
+
     const account = await this.userService.findByEmail(email);
     if (account) {
       const namespaceMembers = await this.namespaceService.listMembers(
@@ -389,9 +411,14 @@ export class AuthService {
       const token = this.jwtService.sign(payload, {
         expiresIn: '1h',
       });
+
       await this.mailService.sendInviteEmail(
         email,
         `${data.inviteUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`,
+        senderUsername!,
+        namespaceName,
+        account.username!,
+        true,
       );
       return;
     }
@@ -403,7 +430,14 @@ export class AuthService {
       expiresIn: '7d',
     });
     const mailSendUri = `${data.registerUrl}?token=${token}`;
-    await this.mailService.sendInviteEmail(email, mailSendUri);
+    await this.mailService.sendInviteEmail(
+      email,
+      mailSendUri,
+      senderUsername!,
+      namespaceName,
+      undefined,
+      false,
+    );
   }
 
   async inviteConfirm(token: string): Promise<void> {

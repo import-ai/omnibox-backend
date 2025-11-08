@@ -46,7 +46,12 @@
     "invite": {
       "title": "空间邀请",
       "heading": "您被邀请加入一个空间",
-      "body": "您已被邀请加入一个空间。点击下方链接创建账户并加入空间：",
+      "bodyNewUserPrefix": "邀请您加入空间",
+      "bodyNewUserSuffix": "点击下方链接创建账户并加入空间：",
+      "bodyExistingUserPrefix": "您好",
+      "bodyExistingUserMiddle": "邀请您加入空间",
+      "bodyExistingUserAction": "点击下方链接接受邀请：",
+      "bodyExistingUserNoUsernamePrefix": "邀请您加入空间",
       "buttonText": "接受邀请",
       "ignoreText": "如果您不想加入此空间，请忽略此邮件。",
       "expireText": "此邀请将在7天后过期。"

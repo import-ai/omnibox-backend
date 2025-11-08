@@ -33,7 +33,16 @@
 </head>
 <body>
   <h1>{{t "mail.templates.invite.heading"}}</h1>
-  <p>{{t "mail.templates.invite.body"}}</p>
+
+  {{#if isExistingUser}}
+    {{#if receiverUsername}}
+      <p>{{t "mail.templates.invite.bodyExistingUserPrefix"}} <strong>{{receiverUsername}}</strong>, <strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyExistingUserMiddle"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
+    {{else}}
+      <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyExistingUserNoUsernamePrefix"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
+    {{/if}}
+  {{else}}
+    <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyNewUserPrefix"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyNewUserSuffix"}}</p>
+  {{/if}}
 
   <div class="magic-link">
     <a href="{{resetUrl}}">{{t "mail.templates.invite.buttonText"}}</a>

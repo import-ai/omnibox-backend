@@ -21,6 +21,12 @@ export class CacheService {
     return await this.cacheManager.get<T>(this.getKey(namespace, key));
   }
 
+  /**
+   * @param namespace
+   * @param key
+   * @param value
+   * @param ttl Expiration time in milliseconds
+   */
   async set<T>(
     namespace: string,
     key: string,

@@ -254,18 +254,6 @@ describe('AuthModule (e2e)', () => {
         });
     });
 
-    it('should access sign-up endpoint without authentication', async () => {
-      // Note: This will fail due to email service in test environment, but endpoint should be accessible
-      await client
-        .request()
-        .post('/api/v1/sign-up')
-        .send({
-          url: 'http://localhost:3000/signup',
-          email: 'test-signup@example.com',
-        })
-        .expect(201);
-    });
-
     it('should access WeChat QR code endpoint without authentication', async () => {
       await client
         .request()

@@ -116,12 +116,16 @@ export class UserService {
       );
     }
 
-    this.validatePassword(account.password);
+    // Only validate and hash password if provided (skip for OTP-only users)
+    let passwordHash = account.password;
+    if (account.password) {
+      this.validatePassword(account.password);
+      passwordHash = await bcrypt.hash(account.password, 10);
+    }
 
-    const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({
       ...account,
-      password: hash,
+      password: passwordHash,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

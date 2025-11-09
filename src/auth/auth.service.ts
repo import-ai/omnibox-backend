@@ -137,58 +137,7 @@ export class AuthService {
   async verifyOTP(email: string, code: string, lang?: string) {
     // Verify the OTP code
     await this.otpService.verifyOtp(email, code);
-
-    // Check if user already exists
-    const existingUser = await this.userService.findByEmail(email);
-
-    if (existingUser) {
-      // User exists - login
-      return {
-        id: existingUser.id,
-        access_token: this.jwtService.sign({
-          sub: existingUser.id,
-          username: existingUser.username,
-        }),
-      };
-    }
-
-    // User doesn't exist - register
-    return await this.dataSource.transaction(async (manager) => {
-      // Extract username from email (e.g., foo@example.com -> foo)
-      const emailUsername = email.split('@')[0];
-
-      // Generate valid username (handles conflicts)
-      const username = await this.socialService.getValidUsername(
-        emailUsername,
-        manager,
-      );
-
-      // Create user with empty password (OTP-registered users)
-      const user = await this.userService.create(
-        {
-          email,
-          username,
-          password: '',
-          lang,
-        },
-        manager,
-      );
-
-      // Create user namespace
-      await this.namespaceService.createUserNamespace(
-        user.id,
-        user.username,
-        manager,
-      );
-
-      return {
-        id: user.id,
-        access_token: this.jwtService.sign({
-          sub: user.id,
-          username: user.username,
-        }),
-      };
-    });
+    return this.handleAuthenticationOrRegistration(email, lang);
   }
 
   /**
@@ -197,7 +146,17 @@ export class AuthService {
   async verifyMagicLink(token: string, lang?: string) {
     // Verify the magic link token and get email
     const email = await this.otpService.verifyMagicToken(token);
+    return this.handleAuthenticationOrRegistration(email, lang);
+  }
 
+  /**
+   * Handle authentication for existing users or registration for new users
+   * Used by both OTP and magic link authentication flows
+   */
+  private async handleAuthenticationOrRegistration(
+    email: string,
+    lang?: string,
+  ) {
     // Check if user already exists
     const existingUser = await this.userService.findByEmail(email);
 
@@ -223,7 +182,7 @@ export class AuthService {
         manager,
       );
 
-      // Create user with empty password (OTP-registered users)
+      // Create user with empty password
       const user = await this.userService.create(
         {
           email,

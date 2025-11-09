@@ -14,7 +14,6 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
 import { UserInvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
-import { LoginPayloadDto } from './dto/login-payload.dto';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { isEmail } from 'class-validator';
 import { OtpService } from './otp.service';
@@ -314,33 +313,6 @@ export class AuthService {
   async signUpWithoutConfirm(createUser: CreateUserDto) {
     const token: string = await this.getSignUpToken(createUser.email);
     return this.signUpConfirm(token, createUser);
-  }
-
-  async password(url: string, email: string) {
-    const user = await this.userService.findByEmail(email);
-    if (!user) {
-      const message = this.i18n.t('auth.errors.userNotFound');
-      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
-    }
-    const payload: LoginPayloadDto = { email: user.email!, sub: user.id };
-    const token = this.jwtService.sign(payload, {
-      expiresIn: '1h',
-    });
-    const mailSendUri = appendTokenToUrl(url, token);
-    await this.mailService.sendPasswordEmail(user.email!, mailSendUri);
-    // return { url: mailSendUri };
-  }
-
-  async resetPassword(token: string, password: string): Promise<void> {
-    try {
-      const payload = this.jwtService.verify(token);
-      const user = await this.userService.find(payload.sub);
-      await this.userService.updatePassword(user.id, password);
-    } catch (error) {
-      this.logger.error({ error });
-      const message = this.i18n.t('auth.errors.tokenInvalid');
-      throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
-    }
   }
 
   async invite(

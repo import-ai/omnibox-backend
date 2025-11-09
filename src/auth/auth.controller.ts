@@ -125,27 +125,6 @@ export class AuthController {
     return res.json(authData);
   }
 
-  @Public()
-  @Post('password')
-  async password(@Body('url') url: string, @Body('email') email: string) {
-    return await this.authService.password(url, email);
-  }
-
-  @Public()
-  @Post('password/confirm')
-  async resetPassword(
-    @Body('token') token: string,
-    @Body('password') password: string,
-    @Res() res: Response,
-  ) {
-    const result = await this.authService.resetPassword(token, password);
-    res.clearCookie('token', {
-      httpOnly: true,
-      path: '/',
-    });
-    return res.json(result);
-  }
-
   @Post('invite')
   async invite(
     @Request() req,

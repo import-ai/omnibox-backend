@@ -472,30 +472,4 @@ describe('AuthModule (e2e)', () => {
         .expect(HttpStatus.UNAUTHORIZED);
     });
   });
-
-  describe('Password Reset Flow', () => {
-    describe('POST /api/v1/password', () => {
-      it('should initiate password reset for existing user', async () => {
-        await client
-          .request()
-          .post('/api/v1/password')
-          .send({
-            url: 'http://localhost:3000/reset-password',
-            email: client.user.email,
-          })
-          .expect(201);
-      });
-
-      it('should fail for non-existent user', async () => {
-        await client
-          .request()
-          .post('/api/v1/password')
-          .send({
-            url: 'http://localhost:3000/reset-password',
-            email: 'nonexistent@example.com',
-          })
-          .expect(HttpStatus.NOT_FOUND);
-      });
-    });
-  });
 });

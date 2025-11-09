@@ -20,6 +20,7 @@ import { isEmail } from 'class-validator';
 import { OtpService } from './otp.service';
 import { SocialService } from './social.service';
 import { SendEmailOtpResponseDto } from './dto/email-otp.dto';
+import { appendQueryParams, appendTokenToUrl } from 'omniboxd/utils/url-utils';
 
 @Injectable()
 export class AuthService {
@@ -97,8 +98,7 @@ export class AuthService {
     const { code, magicToken } = await this.otpService.generateOtp(email);
 
     // Build magic link URL
-    const separator = baseUrl.includes('?') ? '&' : '?';
-    const magicLink = `${baseUrl}${separator}token=${magicToken}`;
+    const magicLink = appendTokenToUrl(baseUrl, magicToken);
 
     // Send email with both code and link
     await this.mailService.sendOTPEmail(email, code, magicLink);
@@ -124,8 +124,7 @@ export class AuthService {
     const { code, magicToken } = await this.otpService.generateOtp(email);
 
     // Build magic link URL
-    const separator = baseUrl.includes('?') ? '&' : '?';
-    const magicLink = `${baseUrl}${separator}token=${magicToken}`;
+    const magicLink = appendTokenToUrl(baseUrl, magicToken);
 
     // Send email with both code and link
     await this.mailService.sendOTPEmail(email, code, magicLink);
@@ -165,15 +164,12 @@ export class AuthService {
         manager,
       );
 
-      // Generate a random password for OTP-registered users
-      const randomPassword = Math.random().toString(36).slice(-12) + 'Aa1';
-
-      // Create user with generated username and random password
+      // Create user with empty password (OTP-registered users)
       const user = await this.userService.create(
         {
           email,
           username,
-          password: randomPassword,
+          password: '',
           lang,
         },
         manager,
@@ -228,15 +224,12 @@ export class AuthService {
         manager,
       );
 
-      // Generate a random password for OTP-registered users
-      const randomPassword = Math.random().toString(36).slice(-12) + 'Aa1';
-
-      // Create user
+      // Create user with empty password (OTP-registered users)
       const user = await this.userService.create(
         {
           email,
           username,
-          password: randomPassword,
+          password: '',
           lang,
         },
         manager,
@@ -333,7 +326,7 @@ export class AuthService {
     const token = this.jwtService.sign(payload, {
       expiresIn: '1h',
     });
-    const mailSendUri = `${url}?token=${token}`;
+    const mailSendUri = appendTokenToUrl(url, token);
     await this.mailService.sendPasswordEmail(user.email!, mailSendUri);
     // return { url: mailSendUri };
   }
@@ -419,9 +412,14 @@ export class AuthService {
       );
       const receiverLang = receiverLangOption?.value;
 
+      const inviteUrl = appendQueryParams(data.inviteUrl, {
+        user: userId,
+        namespace: data.namespaceId,
+        token,
+      });
       await this.mailService.sendInviteEmail(
         email,
-        `${data.inviteUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`,
+        inviteUrl,
         senderUsername!,
         namespaceName,
         account.username!,
@@ -437,7 +435,7 @@ export class AuthService {
     const token = this.jwtService.sign(payload, {
       expiresIn: '7d',
     });
-    const mailSendUri = `${data.registerUrl}?token=${token}`;
+    const mailSendUri = appendTokenToUrl(data.registerUrl, token);
     await this.mailService.sendInviteEmail(
       email,
       mailSendUri,
@@ -511,15 +509,12 @@ export class AuthService {
         manager,
       );
 
-      // Generate a random password for invited users
-      const randomPassword = Math.random().toString(36).slice(-12) + 'Aa1';
-
-      // Create user with generated username and random password
+      // Create user with empty password (invited users)
       const user = await this.userService.create(
         {
           email,
           username,
-          password: randomPassword,
+          password: '',
           lang,
         },
         manager,

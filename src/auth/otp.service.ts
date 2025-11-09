@@ -2,9 +2,12 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { CacheService } from 'omniboxd/common/cache.service';
 
+type DeliveryChannel = 'email' | 'sms';
+
 interface OtpRecord {
   code: string;
-  email: string;
+  contact: string; // email or phone number
+  channel: DeliveryChannel;
   expiresAt: number;
   attempts: number;
 }
@@ -40,13 +43,13 @@ export class OtpService {
   }
 
   /**
-   * Check rate limiting for email
+   * Check rate limiting for contact (email or phone)
    */
-  private async checkRateLimit(email: string): Promise<void> {
+  private async checkRateLimit(contact: string): Promise<void> {
     const now = Date.now();
     const record = await this.cacheService.get<RateLimitRecord>(
       this.rateLimitNamespace,
-      email,
+      contact,
     );
 
     if (!record || now > record.resetAt) {
@@ -57,7 +60,7 @@ export class OtpService {
       };
       await this.cacheService.set(
         this.rateLimitNamespace,
-        email,
+        contact,
         newRecord,
         this.RATE_LIMIT_WINDOW_MS,
       );
@@ -74,17 +77,18 @@ export class OtpService {
     // Increment count
     record.count++;
     const ttl = record.resetAt - now;
-    await this.cacheService.set(this.rateLimitNamespace, email, record, ttl);
+    await this.cacheService.set(this.rateLimitNamespace, contact, record, ttl);
   }
 
   /**
-   * Generate and store OTP for email
+   * Generate and store OTP for contact (email or phone)
    * Returns the OTP code and magic link token
    */
   async generateOtp(
-    email: string,
+    contact: string,
+    channel: DeliveryChannel = 'email',
   ): Promise<{ code: string; magicToken: string }> {
-    await this.checkRateLimit(email);
+    await this.checkRateLimit(contact);
 
     const code = this.generateCode();
     const now = Date.now();
@@ -92,20 +96,21 @@ export class OtpService {
     // Store OTP with TTL
     const otpRecord: OtpRecord = {
       code,
-      email,
+      contact,
+      channel,
       expiresAt: now + this.OTP_EXPIRY_MS,
       attempts: 0,
     };
     await this.cacheService.set(
       this.otpNamespace,
-      email,
+      contact,
       otpRecord,
       this.OTP_EXPIRY_MS,
     );
 
     // Generate magic link JWT token
     const magicToken = this.jwtService.sign(
-      { email, code, type: 'otp-magic' },
+      { contact, code, channel, type: 'otp-magic' },
       { expiresIn: this.MAGIC_LINK_EXPIRY },
     );
 
@@ -113,13 +118,13 @@ export class OtpService {
   }
 
   /**
-   * Verify OTP code for email
+   * Verify OTP code for contact (email or phone)
    * Returns true if valid, throws error if invalid
    */
-  async verifyOtp(email: string, code: string): Promise<boolean> {
+  async verifyOtp(contact: string, code: string): Promise<boolean> {
     const record = await this.cacheService.get<OtpRecord>(
       this.otpNamespace,
-      email,
+      contact,
     );
 
     if (!record) {
@@ -130,13 +135,13 @@ export class OtpService {
 
     // Check expiration
     if (now > record.expiresAt) {
-      await this.cacheService.delete(this.otpNamespace, email);
+      await this.cacheService.delete(this.otpNamespace, contact);
       throw new BadRequestException('Verification code has expired');
     }
 
     // Check max attempts
     if (record.attempts >= this.MAX_ATTEMPTS) {
-      await this.cacheService.delete(this.otpNamespace, email);
+      await this.cacheService.delete(this.otpNamespace, contact);
       throw new BadRequestException(
         'Too many failed attempts. Please request a new code.',
       );
@@ -146,20 +151,20 @@ export class OtpService {
     if (record.code !== code) {
       record.attempts++;
       const ttl = record.expiresAt - now;
-      await this.cacheService.set(this.otpNamespace, email, record, ttl);
+      await this.cacheService.set(this.otpNamespace, contact, record, ttl);
       throw new BadRequestException(
         `Invalid verification code. ${this.MAX_ATTEMPTS - record.attempts} attempts remaining.`,
       );
     }
 
     // Success - remove the OTP (one-time use)
-    await this.cacheService.delete(this.otpNamespace, email);
+    await this.cacheService.delete(this.otpNamespace, contact);
     return true;
   }
 
   /**
    * Verify magic link token
-   * Returns email if valid, throws error if invalid
+   * Returns contact (email or phone) if valid, throws error if invalid
    */
   async verifyMagicToken(token: string): Promise<string> {
     const payload = this.jwtService.verify(token);
@@ -171,7 +176,7 @@ export class OtpService {
     // Verify the code still exists and matches
     const record = await this.cacheService.get<OtpRecord>(
       this.otpNamespace,
-      payload.email,
+      payload.contact,
     );
     if (!record || record.code !== payload.code) {
       throw new BadRequestException(
@@ -180,7 +185,7 @@ export class OtpService {
     }
 
     // Success - remove the OTP (one-time use)
-    await this.cacheService.delete(this.otpNamespace, payload.email);
-    return payload.email;
+    await this.cacheService.delete(this.otpNamespace, payload.contact);
+    return payload.contact;
   }
 }

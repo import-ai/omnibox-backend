@@ -57,6 +57,10 @@ export class UserService {
     if (!account) {
       return;
     }
+    // Reject authentication if password is empty (OTP-only users)
+    if (account.password === '') {
+      return;
+    }
     const match = await bcrypt.compare(password, account.password);
     if (!match) {
       return;

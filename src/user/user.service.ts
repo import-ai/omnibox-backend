@@ -337,7 +337,17 @@ export class UserService {
       expiresIn,
     );
 
-    await this.mailService.validateEmail(email, code);
+    // Get user info for personalization
+    const user = await this.find(userId);
+    const userLangOption = await this.getOption(userId, 'language');
+    const userLang = userLangOption?.value;
+
+    await this.mailService.validateEmail(
+      email,
+      code,
+      user.username || undefined,
+      userLang,
+    );
 
     return { email };
   }
@@ -415,7 +425,31 @@ export class UserService {
         );
       }
       await this.cacheService.delete(this.namespace, account.email);
+
+      // Store old email before updating
+      const oldEmail = existUser.email;
       existUser.email = account.email;
+
+      // Send notification to old email after successful update (only if old email exists)
+      // Users from WeChat/OAuth signup may not have an email initially
+      if (oldEmail) {
+        const userLangOption = await this.getOption(id, 'language');
+        const userLang = userLangOption?.value;
+
+        // Send notification asynchronously (don't block the response)
+        this.mailService
+          .sendEmailChangeNotification(
+            oldEmail,
+            oldEmail,
+            account.email,
+            existUser.username || undefined,
+            userLang,
+          )
+          .catch((error) => {
+            // Log error but don't fail the update
+            console.error('Failed to send email change notification:', error);
+          });
+      }
     }
     return await this.userRepository.update(id, existUser);
   }

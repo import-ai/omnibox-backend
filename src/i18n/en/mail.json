@@ -6,6 +6,8 @@
     "signUp": "Continue completing account registration",
     "passwordReset": "Password Reset Request",
     "emailVerification": "Email Verification",
+    "emailChangeVerification": "Email Change Verification",
+    "emailChangeNotification": "Your Email Has Been Changed",
     "emailOtp": "Your verification code",
     "invite": "{senderUsername} invites you to join the space {namespaceName}"
   },
@@ -28,11 +30,23 @@
     },
     "emailVerification": {
       "title": "Email Verification",
-      "heading": "Email Verification",
-      "body": "Please use the following verification code to verify your email address:",
+      "heading": "Email Change Verification",
+      "greeting": "Hi",
+      "body": "You have requested to change your email address. Please use the following verification code to verify your new email address:",
       "codeLabel": "Verification Code:",
-      "ignoreText": "If you did not request this verification, please ignore this email.",
-      "expireText": "This code will expire in 10 minutes."
+      "ignoreText": "If you did not request this email change, please ignore this email and your current email address will remain unchanged.",
+      "expireText": "This code will expire in 5 minutes."
+    },
+    "emailChangeNotification": {
+      "title": "Email Change Notification",
+      "heading": "Your Email Has Been Changed",
+      "greeting": "Hi",
+      "body": "This is a security notification to inform you that your email address has been successfully changed:",
+      "oldEmailLabel": "Previous Email:",
+      "newEmailLabel": "New Email:",
+      "timeLabel": "Changed At:",
+      "securityNotice": "If you did not make this change, please contact our support team immediately as your account may have been compromised.",
+      "ignoreText": "If you authorized this change, no further action is needed."
     },
     "emailOtp": {
       "title": "Email Verification",

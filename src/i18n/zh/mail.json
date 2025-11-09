@@ -6,6 +6,8 @@
     "signUp": "继续完成账号注册",
     "passwordReset": "密码重置请求",
     "emailVerification": "邮箱验证",
+    "emailChangeVerification": "邮箱变更验证",
+    "emailChangeNotification": "您的邮箱已变更",
     "emailOtp": "您的验证码",
     "invite": "{senderUsername} 邀请您加入空间 {namespaceName}"
   },
@@ -28,11 +30,23 @@
     },
     "emailVerification": {
       "title": "邮箱验证",
-      "heading": "邮箱验证",
-      "body": "请使用以下验证码来验证您的邮箱地址：",
+      "heading": "邮箱变更验证",
+      "greeting": "您好",
+      "body": "您请求变更邮箱地址。请使用以下验证码来验证您的新邮箱地址：",
       "codeLabel": "验证码：",
-      "ignoreText": "如果您没有请求此验证，请忽略此邮件。",
-      "expireText": "此验证码将在10分钟后过期。"
+      "ignoreText": "如果您没有请求变更邮箱，请忽略此邮件，您当前的邮箱地址将保持不变。",
+      "expireText": "此验证码将在5分钟后过期。"
+    },
+    "emailChangeNotification": {
+      "title": "邮箱变更通知",
+      "heading": "您的邮箱已变更",
+      "greeting": "您好",
+      "body": "这是一封安全通知，您的邮箱地址已成功变更：",
+      "oldEmailLabel": "原邮箱：",
+      "newEmailLabel": "新邮箱：",
+      "timeLabel": "变更时间：",
+      "securityNotice": "如果您没有进行此变更，请立即联系我们的客服团队，您的账户可能已被盗用。",
+      "ignoreText": "如果此变更是您本人操作，则无需进一步操作。"
     },
     "emailOtp": {
       "title": "邮箱验证",

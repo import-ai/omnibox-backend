@@ -6,8 +6,9 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
-  CreateBucketCommand,
-  HeadBucketCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCopyCommand,
+  CompleteMultipartUploadCommand,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
@@ -28,8 +29,8 @@ export interface ObjectInfo {
   mimetype: string;
   metadata: Record<string, any>;
   stat: {
-    size: number;
-    lastModified: Date;
+    size?: number;
+    lastModified?: Date;
   };
 }
 
@@ -74,23 +75,6 @@ export class MinioService {
     });
 
     this.bucket = s3Bucket;
-
-    void this.ensureBucketExists();
-  }
-
-  private async ensureBucketExists() {
-    try {
-      await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
-    } catch (error) {
-      if (error.name === 'NotFound') {
-        await this.s3Client.send(
-          new CreateBucketCommand({ Bucket: this.bucket }),
-        );
-      } else {
-        this.logger.error({ error });
-        throw error;
-      }
-    }
   }
 
   async putObject(objectName: string, buffer: Buffer, mimetype: string) {
@@ -113,34 +97,44 @@ export class MinioService {
   }
 
   async composeObject(objectName: string, chunksName: Array<string>) {
-    const chunks: Buffer[] = [];
-    for (const chunkName of chunksName) {
-      const command = new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: chunkName,
-      });
-      const response = await this.s3Client.send(command);
-      const stream = response.Body as Readable;
-      const chunkData = await this.streamToBuffer(stream);
-      chunks.push(chunkData);
-    }
-    const composedBuffer = Buffer.concat(chunks);
-    const putCommand = new PutObjectCommand({
+    const createCommand = new CreateMultipartUploadCommand({
       Bucket: this.bucket,
       Key: objectName,
-      Body: composedBuffer,
       ContentType: 'application/octet-stream',
     });
-    return await this.s3Client.send(putCommand);
-  }
+    const { UploadId } = await this.s3Client.send(createCommand);
+    if (!UploadId) {
+      throw new Error('Failed to initiate multipart upload');
+    }
 
-  private async streamToBuffer(stream: Readable): Promise<Buffer> {
-    const chunks: Buffer[] = [];
-    return new Promise((resolve, reject) => {
-      stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-      stream.on('error', reject);
-      stream.on('end', () => resolve(Buffer.concat(chunks)));
+    const uploadedParts: { ETag: string; PartNumber: number }[] = [];
+    for (let i = 0; i < chunksName.length; i++) {
+      const uploadPartCommand = new UploadPartCopyCommand({
+        Bucket: this.bucket,
+        Key: objectName,
+        UploadId,
+        PartNumber: i + 1,
+        CopySource: `${this.bucket}/${chunksName[i]}`,
+      });
+      const response = await this.s3Client.send(uploadPartCommand);
+      if (!response.CopyPartResult?.ETag) {
+        throw new Error(`Failed to upload part`);
+      }
+      uploadedParts.push({
+        ETag: response.CopyPartResult.ETag,
+        PartNumber: i + 1,
+      });
+    }
+
+    const completeCommand = new CompleteMultipartUploadCommand({
+      Bucket: this.bucket,
+      Key: objectName,
+      UploadId,
+      MultipartUpload: {
+        Parts: uploadedParts,
+      },
     });
+    return await this.s3Client.send(completeCommand);
   }
 
   async getObject(objectName: string): Promise<Readable> {
@@ -209,8 +203,8 @@ export class MinioService {
     const mimetype: string = response.ContentType || 'application/octet-stream';
     const metadata: Record<string, any> = JSON.parse(metadataString);
     const stat = {
-      size: response.ContentLength || 0,
-      lastModified: response.LastModified || new Date(),
+      size: response.ContentLength,
+      lastModified: response.LastModified,
     };
     return { filename, mimetype, metadata, stat };
   }

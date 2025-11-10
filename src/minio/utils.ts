@@ -15,11 +15,15 @@ export function objectStreamResponse(
   const encodedName = encodeURIComponent(filename);
   const disposition = forceDownload ? 'attachment' : 'inline';
   const headers = {
-    'Content-Length': stat.size,
-    'Last-Modified': stat.lastModified.toUTCString(),
     'Content-Disposition': `${disposition}; filename="${encodedName}"`,
     'Content-Type': mimetype,
   };
+  if (stat.size) {
+    headers['Content-Length'] = stat.size;
+  }
+  if (stat.lastModified) {
+    headers['Last-Modified'] = stat.lastModified.toUTCString();
+  }
   if (cacheControl) {
     headers['Cache-Control'] = 'public, max-age=31536000'; // 1 year
   } else {

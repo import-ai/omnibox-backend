@@ -6,35 +6,40 @@ import {
   IsUUID,
   ValidateNested,
 } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 import { Type } from 'class-transformer';
 import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
 import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
 import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
 
 export class CreateAPIKeyDto {
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.userId.isString'),
+  })
   user_id: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.namespaceId.isString'),
+  })
   namespace_id: string;
 
-  @IsObject()
+  @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   @IsOptional()
   attrs?: APIKeyAttrs;
 }
 
 export class UpdateAPIKeyDto {
-  @IsObject()
+  @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   @IsOptional()
   attrs?: APIKeyAttrs;
 }
 
 export class PatchAPIKeyDto {
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsOptional()
   root_resource_id?: string;
 
-  @IsArray()
+  @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
   @ValidateNested({ each: true })
   @Type(() => Object)
   @IsOptional()
@@ -42,19 +47,25 @@ export class PatchAPIKeyDto {
 }
 
 export class APIKeyResponseDto {
-  @IsUUID()
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
   id: string;
 
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   value: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.userId.isString'),
+  })
   user_id: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.namespaceId.isString'),
+  })
   namespace_id: string;
 
-  @IsObject()
+  @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   attrs: APIKeyAttrs;
 
   created_at: Date;

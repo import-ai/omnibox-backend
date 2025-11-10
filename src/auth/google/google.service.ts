@@ -173,17 +173,28 @@ export class GoogleService {
     }
 
     if (userId) {
-      const wechatUser = await this.userService.findByLoginId(userData.sub);
-      if (wechatUser && wechatUser.id !== userId) {
-        const providerName = this.i18n.t('auth.providers.google');
-        const message = this.i18n.t('auth.errors.invalidProviderData', {
-          args: { provider: providerName },
-        });
-        throw new AppException(
-          message,
-          'ACCOUNT_ALREADY_BOUND',
-          HttpStatus.BAD_REQUEST,
-        );
+      const googleUser = await this.userService.findByLoginId(userData.sub);
+      if (googleUser) {
+        if (googleUser.id !== userId) {
+          const providerName = this.i18n.t('auth.providers.google');
+          const message = this.i18n.t('auth.errors.invalidProviderData', {
+            args: { provider: providerName },
+          });
+          throw new AppException(
+            message,
+            'ACCOUNT_ALREADY_BOUND',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        const returnValue = {
+          id: googleUser.id,
+          access_token: this.jwtService.sign({
+            sub: googleUser.id,
+          }),
+        };
+        stateInfo.userInfo = returnValue;
+        await this.socialService.updateState(state, stateInfo);
+        return returnValue;
       }
       const existingUser = await this.userService.bindingExistUser({
         userId,

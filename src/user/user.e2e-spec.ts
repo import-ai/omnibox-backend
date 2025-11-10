@@ -110,11 +110,10 @@ describe('UserController (e2e)', () => {
     it('should validate new email address', async () => {
       const testEmail = `test-${Date.now()}@example.com`;
 
-      // Note: This will fail due to email service in test environment, but endpoint should be accessible
       await client
         .post('/api/v1/user/email/validate')
         .send({ email: testEmail })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Expected to fail due to email service configuration
+        .expect(HttpStatus.CREATED);
     });
 
     it('should fail with invalid email format', async () => {
@@ -266,7 +265,7 @@ describe('UserController (e2e)', () => {
         await client
           .post('/api/v1/user/option')
           .send({
-            name: 'a'.repeat(21), // Too long
+            name: 'a'.repeat(65), // Too long
             value: 'test',
           })
           .expect(HttpStatus.BAD_REQUEST);

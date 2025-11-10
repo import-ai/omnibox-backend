@@ -7,41 +7,53 @@ import {
   IsDateString,
   IsInt,
 } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 import { ShareType } from '../entities/share.entity';
 
 export class UpdateShareInfoReqDto {
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean({
+    message: i18nValidationMessage('validation.errors.enabled.isBoolean'),
+  })
   @Expose({ name: 'enabled' })
   enabled?: boolean;
 
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean({
+    message: i18nValidationMessage('validation.errors.allResources.isBoolean'),
+  })
   @Expose({ name: 'all_resources' })
   allResources?: boolean;
 
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean({
+    message: i18nValidationMessage('validation.errors.requireLogin.isBoolean'),
+  })
   @Expose({ name: 'require_login' })
   requireLogin?: boolean;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @Expose({ name: 'password' })
   password?: string | null;
 
   @IsOptional()
-  @IsEnum(ShareType)
+  @IsEnum(ShareType, {
+    message: i18nValidationMessage('validation.errors.isEnum'),
+  })
   @Expose({ name: 'share_type' })
   shareType?: ShareType;
 
   @IsOptional()
-  @IsDateString()
+  @IsDateString(
+    {},
+    { message: i18nValidationMessage('validation.errors.isDateString') },
+  )
   @Expose({ name: 'expires_at' })
   expiresAt?: Date | null;
 
   @IsOptional()
-  @IsInt()
+  @IsInt({ message: i18nValidationMessage('validation.errors.isInt') })
   @Expose({ name: 'expires_seconds' })
   expiresSeconds?: number;
 }

@@ -23,15 +23,24 @@ export class TasksService {
     namespaceId: string,
     offset: number,
     limit: number,
-  ): Promise<TaskMetaDto[]> {
-    const tasks = await this.taskRepository.find({
-      where: { namespaceId },
+    userId?: string,
+  ): Promise<{ tasks: TaskMetaDto[]; total: number }> {
+    const where: any = { namespaceId };
+    if (userId) {
+      where.userId = userId;
+    }
+
+    const [tasks, total] = await this.taskRepository.findAndCount({
+      where,
       skip: offset,
       take: limit,
       order: { createdAt: 'DESC' },
     });
 
-    return tasks.map((task) => TaskMetaDto.fromEntity(task));
+    return {
+      tasks: tasks.map((task) => TaskMetaDto.fromEntity(task)),
+      total,
+    };
   }
 
   async get(id: string) {

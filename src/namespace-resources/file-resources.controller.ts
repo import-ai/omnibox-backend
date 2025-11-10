@@ -1,19 +1,6 @@
-import { Request, Response } from 'express';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  Req,
-  Res,
-  UploadedFile,
-  UseInterceptors,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
 
@@ -33,78 +20,6 @@ export class FileResourcesController {
       userId,
       namespaceId,
       createReq,
-    );
-  }
-
-  @Post('chunk')
-  @UseInterceptors(FileInterceptor('chunk'))
-  async uploadFileChunk(
-    @UploadedFile() chunk: Express.Multer.File,
-    @Body('chunk_number') chunkNumber: string,
-    @Body('file_hash') fileHash: string,
-    @Param('namespaceId') namespaceId: string,
-  ) {
-    return this.namespaceResourcesService.uploadFileChunk(
-      namespaceId,
-      chunk,
-      chunkNumber,
-      fileHash,
-    );
-  }
-
-  @Post('chunk/clean')
-  async cleanFileChunks(
-    @Param('namespaceId') namespaceId: string,
-    @Body('chunks_number') chunksNumber: string,
-    @Body('file_hash') fileHash: string,
-  ) {
-    return this.namespaceResourcesService.cleanFileChunks(
-      namespaceId,
-      chunksNumber,
-      fileHash,
-    );
-  }
-
-  @Post('merge')
-  async mergeFileChunks(
-    @Req() req: Request,
-    @Param('namespaceId') namespaceId: string,
-    @Body('total_chunks', ParseIntPipe) totalChunks: number,
-    @Body('file_hash') fileHash: string,
-    @Body('file_name') fileName: string,
-    @Body('mimetype') mimetype: string,
-    @Body('parent_id') parentId: string,
-  ) {
-    const newResource = await this.namespaceResourcesService.mergeFileChunks(
-      req.user!.id,
-      namespaceId,
-      totalChunks,
-      fileHash,
-      fileName,
-      mimetype,
-      parentId,
-    );
-    return await this.namespaceResourcesService.getResource({
-      namespaceId,
-      userId: req.user!.id,
-      resourceId: newResource.id,
-    });
-  }
-
-  @Patch(':resourceId')
-  @UseInterceptors(FileInterceptor('file'))
-  async patchFile(
-    @UserId() userId: string,
-    @UploadedFile() file: Express.Multer.File,
-    @Param('namespaceId') namespaceId: string,
-    @Body('resource_id') resourceId: string,
-  ) {
-    return this.namespaceResourcesService.uploadFile(
-      userId,
-      namespaceId,
-      file,
-      undefined,
-      resourceId,
     );
   }
 

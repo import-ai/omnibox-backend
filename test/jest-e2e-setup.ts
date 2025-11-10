@@ -67,6 +67,7 @@ export default async () => {
   process.env.OBB_S3_ENDPOINT = `http://${minioContainer.getHost()}:${minioContainer.getMappedPort(9000)}`;
   process.env.OBB_S3_BUCKET = 'omnibox-test';
   process.env.OBB_S3_PREFIX = 'uploaded-files';
+  process.env.OBB_S3_FORCE_PATH_STYLE = 'true';
   process.env.OBB_MAIL_TRANSPORT = mailTransport;
   process.env.OBB_MAIL_FROM = '"Test <test@example.com>"';
 

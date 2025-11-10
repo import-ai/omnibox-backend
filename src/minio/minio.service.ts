@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -9,6 +9,8 @@ import {
   CreateMultipartUploadCommand,
   UploadPartCopyCommand,
   CompleteMultipartUploadCommand,
+  HeadBucketCommand,
+  CreateBucketCommand,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
@@ -39,7 +41,7 @@ export interface GetResponse extends ObjectInfo {
 }
 
 @Injectable()
-export class MinioService {
+export class MinioService implements OnModuleInit {
   private readonly s3Client: S3Client;
   private readonly bucket: string;
 
@@ -63,6 +65,7 @@ export class MinioService {
     }
 
     const s3Region = configService.get<string>('OBB_S3_REGION', 'us-east-1');
+    const forcePathStyle = configService.get<string>('OBB_S3_FORCE_PATH_STYLE', 'false') === 'true';
     this.s3Client = new S3Client({
       region: s3Region,
       credentials: {
@@ -70,6 +73,7 @@ export class MinioService {
         secretAccessKey,
       },
       endpoint: s3Endpoint,
+      forcePathStyle,
     });
 
     this.bucket = s3Bucket;
@@ -214,5 +218,21 @@ export class MinioService {
       this.info(objectName),
     ]);
     return { stream, ...info } as GetResponse;
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.ensureBucket();
+  }
+
+  private async ensureBucket(): Promise<void> {
+    try {
+      await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+    } catch (error: any) {
+      if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+        await this.s3Client.send(new CreateBucketCommand({ Bucket: this.bucket }));
+      } else {
+        throw error;
+      }
+    }
   }
 }

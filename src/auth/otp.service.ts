@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { CacheService } from 'omniboxd/common/cache.service';
+import { I18nService } from 'nestjs-i18n';
 
 type DeliveryChannel = 'email' | 'sms';
 
@@ -33,6 +34,7 @@ export class OtpService {
   constructor(
     private jwtService: JwtService,
     private cacheService: CacheService,
+    private i18n: I18nService,
   ) {}
 
   /**
@@ -128,7 +130,9 @@ export class OtpService {
     );
 
     if (!record) {
-      throw new BadRequestException('Invalid or expired verification code');
+      throw new BadRequestException(
+        this.i18n.t('auth.errors.invalidVerificationCode'),
+      );
     }
 
     const now = Date.now();
@@ -136,15 +140,15 @@ export class OtpService {
     // Check expiration
     if (now > record.expiresAt) {
       await this.cacheService.delete(this.otpNamespace, contact);
-      throw new BadRequestException('Verification code has expired');
+      throw new BadRequestException(
+        this.i18n.t('auth.errors.expiredVerificationCode'),
+      );
     }
 
     // Check max attempts
     if (record.attempts >= this.MAX_ATTEMPTS) {
       await this.cacheService.delete(this.otpNamespace, contact);
-      throw new BadRequestException(
-        'Too many failed attempts. Please request a new code.',
-      );
+      throw new BadRequestException(this.i18n.t('auth.errors.tooManyAttempts'));
     }
 
     // Verify code
@@ -153,7 +157,9 @@ export class OtpService {
       const ttl = record.expiresAt - now;
       await this.cacheService.set(this.otpNamespace, contact, record, ttl);
       throw new BadRequestException(
-        `Invalid verification code. ${this.MAX_ATTEMPTS - record.attempts} attempts remaining.`,
+        this.i18n.t('auth.errors.invalidVerificationCodeWithAttempts', {
+          args: { remaining: this.MAX_ATTEMPTS - record.attempts },
+        }),
       );
     }
 

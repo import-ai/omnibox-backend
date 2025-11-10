@@ -58,13 +58,12 @@ export class FeedbackController {
 
     if (image) {
       const originalname = encodeFileName(image.originalname);
-      const uploadResult = await this.minioService.put(
+      imageUrl = await this.minioService.put(
         originalname,
         image.buffer,
         image.mimetype,
         { folder: 'feedback' },
       );
-      imageUrl = uploadResult.id;
     }
 
     const userAgent = request.get('User-Agent');

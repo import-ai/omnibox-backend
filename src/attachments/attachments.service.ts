@@ -69,7 +69,7 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
 
-    const { id } = await this.minioService.put(filename, buffer, mimetype, {
+    const id = await this.minioService.put(filename, buffer, mimetype, {
       folder: 'attachments',
     });
 

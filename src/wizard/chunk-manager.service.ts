@@ -26,7 +26,7 @@ export class ChunkManagerService {
     const buffer = Buffer.from(data, 'base64');
 
     try {
-      await this.minioService.putChunkObject(chunkPath, buffer, buffer.length);
+      await this.minioService.putChunkObject(chunkPath, buffer);
       this.logger.debug(
         `Stored chunk ${chunkIndex + 1}/${totalChunks} for task ${taskId}`,
       );

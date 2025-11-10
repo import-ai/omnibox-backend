@@ -1,6 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as Minio from 'minio';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectCommand,
+  CreateBucketCommand,
+  HeadBucketCommand,
+} from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
 import {
@@ -8,24 +16,21 @@ import {
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
-import { UploadedObjectInfo } from 'minio/dist/main/internal/type';
 
 export interface PutOptions {
   id?: string;
   metadata?: Record<string, any>;
-  bucket?: string;
   folder?: string;
-}
-
-export interface PutResponse extends UploadedObjectInfo {
-  id: string;
 }
 
 export interface ObjectInfo {
   filename: string;
   mimetype: string;
   metadata: Record<string, any>;
-  stat: Minio.BucketItemStat;
+  stat: {
+    size: number;
+    lastModified: Date;
+  };
 }
 
 export interface GetResponse extends ObjectInfo {
@@ -35,121 +40,124 @@ export interface GetResponse extends ObjectInfo {
 @Injectable()
 export class MinioService {
   private readonly logger = new Logger(MinioService.name);
-  private readonly minioClient: Minio.Client;
+  private readonly s3Client: S3Client;
   private readonly bucket: string;
 
-  constructor(private readonly configService: ConfigService) {
-    // Parse MINIO_URL from config
-    const minioUrl =
-      this.configService.get<string>('OBB_MINIO_URL') ||
-      'http://username:password@minio:9000/omnibox';
-    const url = new URL(minioUrl);
-    const accessKey = url.username;
-    const secretKey = url.password;
-    const endPoint = url.hostname;
-    const port = url.port
-      ? parseInt(url.port, 10)
-      : url.protocol === 'https:'
-        ? 443
-        : 80;
-    const useSSL = url.protocol === 'https:';
+  constructor(configService: ConfigService) {
+    const accessKeyId = configService.get<string>('OBB_S3_ACCESS_KEY_ID');
+    const secretAccessKey = configService.get<string>(
+      'OBB_S3_SECRET_ACCESS_KEY',
+    );
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error('S3 credentials not set');
+    }
 
-    this.minioClient = new Minio.Client({
-      endPoint,
-      port,
-      useSSL,
-      accessKey,
-      secretKey,
+    const s3Endpoint = configService.get<string>('OBB_S3_ENDPOINT');
+    if (!s3Endpoint) {
+      throw new Error('S3 endpoint not set');
+    }
+
+    const s3Bucket = configService.get<string>('OBB_S3_BUCKET');
+    if (!s3Bucket) {
+      throw new Error('S3 bucket not set');
+    }
+
+    const s3Region = configService.get<string>('OBB_S3_REGION', 'us-east-1');
+    this.s3Client = new S3Client({
+      region: s3Region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
+      endpoint: s3Endpoint,
+      forcePathStyle: true,
     });
 
-    this.bucket = url.pathname.split('/')[1];
+    this.bucket = s3Bucket;
 
-    this.minioClient
-      .bucketExists(this.bucket)
-      .then((exists) => {
-        if (!exists) {
-          return this.minioClient.makeBucket(this.bucket, 'us-east-1');
-        }
-      })
-      .catch((error) => {
+    void this.ensureBucketExists();
+  }
+
+  private async ensureBucketExists() {
+    try {
+      await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+    } catch (error) {
+      if (error.name === 'NotFound') {
+        await this.s3Client.send(
+          new CreateBucketCommand({ Bucket: this.bucket }),
+        );
+      } else {
         this.logger.error({ error });
         throw error;
-      });
+      }
+    }
   }
 
-  async putObject(
-    objectName: string,
-    buffer: Buffer,
-    mimetype: string,
-    bucket: string = this.bucket,
-  ) {
-    return await this.minioClient.putObject(
-      bucket,
-      objectName,
-      buffer,
-      buffer.length,
-      {
-        'Content-Type': mimetype,
-      },
-    );
-  }
-
-  async putChunkObject(
-    objectName: string,
-    chunk: Buffer,
-    size: number,
-    bucket: string = this.bucket,
-  ) {
-    return await this.minioClient.putObject(bucket, objectName, chunk, size);
-  }
-
-  async composeObject(
-    objectName: string,
-    chunksName: Array<string>,
-    bucket: string = this.bucket,
-  ) {
-    const destOption = new Minio.CopyDestinationOptions({
-      Bucket: bucket,
-      Object: objectName,
-      Headers: {
-        'Content-Type': 'application/octet-stream',
-      },
+  async putObject(objectName: string, buffer: Buffer, mimetype: string) {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: objectName,
+      Body: buffer,
+      ContentType: mimetype,
     });
-    const sourceList = chunksName.map(
-      (name) =>
-        new Minio.CopySourceOptions({
-          Bucket: bucket,
-          Object: name,
-        }),
-    );
-    return this.minioClient.composeObject(destOption, sourceList);
+    return await this.s3Client.send(command);
   }
 
-  async getObject(
-    objectName: string,
-    bucket: string = this.bucket,
-  ): Promise<Readable> {
-    return this.minioClient.getObject(bucket, objectName);
+  async putChunkObject(objectName: string, chunk: Buffer) {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: objectName,
+      Body: chunk,
+    });
+    return await this.s3Client.send(command);
   }
 
-  async getObjectUrl(
-    objectName: string,
-    bucket: string = this.bucket,
-  ): Promise<string> {
-    // Presigned URL, valid for 24h
-    return this.minioClient.presignedGetObject(
-      bucket,
-      objectName,
-      24 * 60 * 60,
-    );
+  async composeObject(objectName: string, chunksName: Array<string>) {
+    const chunks: Buffer[] = [];
+    for (const chunkName of chunksName) {
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: chunkName,
+      });
+      const response = await this.s3Client.send(command);
+      const stream = response.Body as Readable;
+      const chunkData = await this.streamToBuffer(stream);
+      chunks.push(chunkData);
+    }
+    const composedBuffer = Buffer.concat(chunks);
+    const putCommand = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: objectName,
+      Body: composedBuffer,
+      ContentType: 'application/octet-stream',
+    });
+    return await this.s3Client.send(putCommand);
   }
 
-  async removeObject(objectName: string, bucket: string = this.bucket) {
-    return this.minioClient.removeObject(bucket, objectName);
+  private async streamToBuffer(stream: Readable): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      stream.on('error', reject);
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+    });
   }
 
-  async getStat(objectName: string, bucket: string = this.bucket) {
-    return this.minioClient.statObject(bucket, objectName);
+  async getObject(objectName: string): Promise<Readable> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: objectName,
+    });
+    const response = await this.s3Client.send(command);
+    return response.Body as Readable;
+  }
+
+  async removeObject(objectName: string) {
+    const command = new DeleteObjectCommand({
+      Bucket: this.bucket,
+      Key: objectName,
+    });
+    return await this.s3Client.send(command);
   }
 
   generateId(filename: string, length: number = 32): string {
@@ -172,43 +180,45 @@ export class MinioService {
     buffer: Buffer,
     mimetype: string,
     options?: PutOptions,
-  ) {
-    const {
-      id = this.generateId(filename),
-      metadata = {},
-      bucket = this.bucket,
-    } = options || {};
+  ): Promise<string> {
+    const { id = this.generateId(filename), metadata = {} } = options || {};
     const path: string = options?.folder ? `${options.folder}/${id}` : id;
-    const info = await this.minioClient.putObject(
-      bucket,
-      path,
-      buffer,
-      buffer.length,
-      {
-        'Content-Type': mimetype,
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: path,
+      Body: buffer,
+      ContentType: mimetype,
+      Metadata: {
         filename: encodeFileName(filename),
-        // Minio would convert metadata keys to lowercase
         metadata_string: JSON.stringify(metadata),
       },
-    );
-    return { ...info, id } as PutResponse;
+    });
+    await this.s3Client.send(command);
+    return id;
   }
 
-  async info(objectName: string, bucket: string = this.bucket) {
-    const stat = await this.getStat(objectName, bucket);
-    const metadataString: string = stat?.metaData.metadata_string || '{}';
-    const encodedFilename: string = stat?.metaData.filename;
+  async info(objectName: string): Promise<ObjectInfo> {
+    const command = new HeadObjectCommand({
+      Bucket: this.bucket,
+      Key: objectName,
+    });
+    const response = await this.s3Client.send(command);
+    const metadataString: string = response.Metadata?.metadata_string || '{}';
+    const encodedFilename: string = response.Metadata?.filename || '';
     const filename: string = decodeFileName(encodedFilename);
-    const mimetype: string =
-      stat?.metaData['content-type'] || 'application/octet-stream';
+    const mimetype: string = response.ContentType || 'application/octet-stream';
     const metadata: Record<string, any> = JSON.parse(metadataString);
-    return { filename, mimetype, metadata, stat } as ObjectInfo;
+    const stat = {
+      size: response.ContentLength || 0,
+      lastModified: response.LastModified || new Date(),
+    };
+    return { filename, mimetype, metadata, stat };
   }
 
-  async get(objectName: string, bucket: string = this.bucket) {
+  async get(objectName: string): Promise<GetResponse> {
     const [stream, info] = await Promise.all([
-      this.getObject(objectName, bucket),
-      this.info(objectName, bucket),
+      this.getObject(objectName),
+      this.info(objectName),
     ]);
     return { stream, ...info } as GetResponse;
   }

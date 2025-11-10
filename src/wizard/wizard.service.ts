@@ -158,7 +158,7 @@ export class WizardService {
     );
 
     const filename = 'html.gz';
-    const { id } = await this.minioService.put(
+    const id = await this.minioService.put(
       filename,
       compressedHtml.buffer,
       compressedHtml.mimetype,

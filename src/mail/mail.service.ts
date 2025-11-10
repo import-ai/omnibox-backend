@@ -12,16 +12,21 @@ export class MailService {
     private readonly i18n: I18nService,
   ) {}
 
-  async sendSignUpEmail(email: string, resetUrl: string): Promise<void> {
-    const subject = this.i18n.t('mail.subjects.signUp');
+  async sendOTPEmail(
+    email: string,
+    code: string,
+    magicLink: string,
+  ): Promise<void> {
+    const subject = this.i18n.t('mail.subjects.emailOtp');
 
     try {
       await this.mailerService.sendMail({
         to: email,
         subject,
-        template: 'sign-up',
+        template: 'email-otp',
         context: {
-          resetUrl,
+          code,
+          magicLink,
           i18nLang: I18nContext.current()?.lang,
         },
       });
@@ -36,31 +41,16 @@ export class MailService {
     }
   }
 
-  async sendPasswordEmail(email: string, resetUrl: string): Promise<void> {
-    const subject = this.i18n.t('mail.subjects.passwordReset');
-    try {
-      await this.mailerService.sendMail({
-        to: email,
-        subject,
-        template: 'password',
-        context: {
-          resetUrl,
-          i18nLang: I18nContext.current()?.lang,
-        },
-      });
-    } catch (error) {
-      this.logger.error({ error });
-      const message = this.i18n.t('mail.errors.unableToSendEmail');
-      throw new AppException(
-        message,
-        'UNABLE_TO_SEND_EMAIL',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  async validateEmail(email: string, code: string): Promise<void> {
-    const subject = this.i18n.t('mail.subjects.emailVerification');
+  async validateEmail(
+    email: string,
+    code: string,
+    username?: string,
+    userLang?: string,
+  ): Promise<void> {
+    const lang = userLang || I18nContext.current()?.lang;
+    const subject = this.i18n.t('mail.subjects.emailChangeVerification', {
+      lang,
+    });
 
     try {
       await this.mailerService.sendMail({
@@ -69,7 +59,8 @@ export class MailService {
         template: 'email-verification',
         context: {
           code,
-          i18nLang: I18nContext.current()?.lang,
+          username,
+          i18nLang: lang,
         },
       });
     } catch (error) {
@@ -83,8 +74,68 @@ export class MailService {
     }
   }
 
-  async sendInviteEmail(email: string, resetUrl: string): Promise<void> {
-    const subject = this.i18n.t('mail.subjects.invite');
+  async sendEmailChangeNotification(
+    email: string,
+    oldEmail: string,
+    newEmail: string,
+    username?: string,
+    userLang?: string,
+  ): Promise<void> {
+    const lang = userLang || I18nContext.current()?.lang;
+    const subject = this.i18n.t('mail.subjects.emailChangeNotification', {
+      lang,
+    });
+
+    const changeTime = new Date().toLocaleString(
+      lang === 'zh' ? 'zh-CN' : 'en-US',
+      {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      },
+    );
+
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject,
+        template: 'email-change-notification',
+        context: {
+          username,
+          oldEmail,
+          newEmail,
+          changeTime,
+          i18nLang: lang,
+        },
+      });
+    } catch (error) {
+      this.logger.error({ error });
+      const message = this.i18n.t('mail.errors.unableToSendEmail');
+      throw new AppException(
+        message,
+        'UNABLE_TO_SEND_EMAIL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async sendInviteEmail(
+    email: string,
+    resetUrl: string,
+    senderUsername: string,
+    namespaceName: string,
+    receiverUsername?: string,
+    isExistingUser?: boolean,
+    receiverLang?: string,
+  ): Promise<void> {
+    const lang = receiverLang || I18nContext.current()?.lang;
+    const subject = this.i18n.t('mail.subjects.invite', {
+      lang,
+      args: { senderUsername, namespaceName },
+    });
 
     try {
       await this.mailerService.sendMail({
@@ -93,7 +144,11 @@ export class MailService {
         template: 'invite',
         context: {
           resetUrl,
-          i18nLang: I18nContext.current()?.lang,
+          senderUsername,
+          namespaceName,
+          receiverUsername,
+          isExistingUser: isExistingUser || false,
+          i18nLang: lang,
         },
       });
     } catch (error) {

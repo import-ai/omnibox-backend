@@ -14,10 +14,14 @@ import {
   Controller,
   ParseIntPipe,
 } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 
 @Controller('api/v1/user')
 export class UserController {
-  constructor(private userService: UserService) {}
+  constructor(
+    private userService: UserService,
+    private readonly i18n: I18nService,
+  ) {}
 
   @Get()
   async findAll(
@@ -40,12 +44,26 @@ export class UserController {
 
   @Post('email/validate')
   async validateEmail(@UserId() userId: string, @Body('email') email: string) {
-    return await this.userService.validateEmail(userId, email);
+    const result = await this.userService.validateEmail(userId, email);
+    const message = this.i18n.t('user.success.emailVerificationSent');
+    return {
+      ...result,
+      message,
+    };
   }
 
   @Patch(':id')
   async update(@Param('id') id: string, @Body() account: UpdateUserDto) {
-    return await this.userService.update(id, account);
+    const result = await this.userService.update(id, account);
+    // If email was updated, add success message
+    if (account.email) {
+      const message = this.i18n.t('user.success.emailUpdatedSuccessfully');
+      return {
+        ...result,
+        message,
+      };
+    }
+    return result;
   }
 
   @Delete(':id')

@@ -2,11 +2,51 @@
 <html>
 <head>
   <title>{{t "mail.templates.emailVerification.title"}}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .verification-code {
+      font-size: 36px;
+      font-weight: bold;
+      letter-spacing: 8px;
+      text-align: center;
+      padding: 30px;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      margin: 30px 0;
+      color: #000;
+    }
+    .expiry {
+      color: #666;
+      font-size: 14px;
+      text-align: center;
+    }
+    .footer {
+      color: #666;
+      font-size: 14px;
+      margin-top: 30px;
+    }
+  </style>
 </head>
 <body>
   <h1>{{t "mail.templates.emailVerification.heading"}}</h1>
+  {{#if username}}
+    <p>{{t "mail.templates.emailVerification.greeting"}} <strong>{{username}}</strong>,</p>
+  {{else}}
+    <p>{{t "mail.templates.emailVerification.greeting"}}</p>
+  {{/if}}
   <p>{{t "mail.templates.emailVerification.body"}}</p>
-  <p><strong>{{t "mail.templates.emailVerification.codeLabel"}} {{code}}</strong></p>
-  <p>{{t "mail.templates.emailVerification.expireText"}}</p>
+
+  <div class="verification-code">{{code}}</div>
+
+  <p class="expiry">{{t "mail.templates.emailVerification.expireText"}}</p>
+
+  <p class="footer">{{t "mail.templates.emailVerification.ignoreText"}}</p>
 </body>
 </html>

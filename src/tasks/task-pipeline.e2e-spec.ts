@@ -103,7 +103,11 @@ class MockWizardWorker {
 
       return response.body as TaskDto;
     } catch (error) {
-      if (error.code === 'ECONNRESET' || error.timeout) {
+      if (
+        error.code === 'ECONNRESET' ||
+        error.timeout ||
+        error.message?.includes('socket hang up')
+      ) {
         console.warn('Connection issue when fetching task, retrying...');
         return null; // Treat connection issues as no tasks available for now
       }
@@ -241,7 +245,11 @@ class MockWizardWorker {
         throw new Error(`Failed to send callback: ${response.status}`);
       }
     } catch (error) {
-      if (error.code === 'ECONNRESET' || error.timeout) {
+      if (
+        error.code === 'ECONNRESET' ||
+        error.timeout ||
+        error.message?.includes('socket hang up')
+      ) {
         console.warn(
           `Connection issue when sending callback for task ${taskId}:`,
           error.message,

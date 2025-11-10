@@ -10,5 +10,9 @@
     "emailAlreadyInUse": "Email already in use",
     "provideVerificationCode": "Please provide verification code",
     "userCannotbeEmptyStr": "Invalid username"
+  },
+  "success": {
+    "emailVerificationSent": "Verification code has been sent to your new email address",
+    "emailUpdatedSuccessfully": "Email address has been updated successfully"
   }
 }

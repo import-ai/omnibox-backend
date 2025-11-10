@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -40,7 +40,6 @@ export interface GetResponse extends ObjectInfo {
 
 @Injectable()
 export class MinioService {
-  private readonly logger = new Logger(MinioService.name);
   private readonly s3Client: S3Client;
   private readonly bucket: string;
 
@@ -71,7 +70,6 @@ export class MinioService {
         secretAccessKey,
       },
       endpoint: s3Endpoint,
-      forcePathStyle: true,
     });
 
     this.bucket = s3Bucket;
@@ -184,7 +182,7 @@ export class MinioService {
       ContentType: mimetype,
       Metadata: {
         filename: encodeFileName(filename),
-        metadata_string: JSON.stringify(metadata),
+        metadata: JSON.stringify(metadata),
       },
     });
     await this.s3Client.send(command);
@@ -197,7 +195,8 @@ export class MinioService {
       Key: objectName,
     });
     const response = await this.s3Client.send(command);
-    const metadataString: string = response.Metadata?.metadata_string || '{}';
+    const metadataString: string =
+      response.Metadata?.metadata_string || response.Metadata?.metadata || '{}';
     const encodedFilename: string = response.Metadata?.filename || '';
     const filename: string = decodeFileName(encodedFilename);
     const mimetype: string = response.ContentType || 'application/octet-stream';

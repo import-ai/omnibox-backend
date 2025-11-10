@@ -600,7 +600,7 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    if (resource.namespaceId !== namespaceId) {
+    if (!resource.parentId) {
       const message = this.i18n.t('resource.errors.resourceNotFound');
       throw new AppException(
         message,
@@ -614,9 +614,7 @@ export class NamespaceResourcesService {
         resource.parentId,
       );
 
-    const rootResourceId = parentResources
-      ? parentResources[parentResources.length - 1].id
-      : resourceId;
+    const rootResourceId = parentResources[parentResources.length - 1].id;
     const spaceType = await this.getSpaceType(namespaceId, rootResourceId);
 
     const resourceMeta = ResourceMetaDto.fromEntity(resource);

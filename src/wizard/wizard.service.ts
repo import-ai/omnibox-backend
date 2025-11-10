@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -392,6 +392,27 @@ export class WizardService {
         .join(', ');
       andConditions.push(`tasks.function IN (${condition})`);
     }
+
+    // Filter by file extensions for file_reader tasks
+    let fileExtFilter: string;
+    if (query.file_extensions) {
+      const supportedExtensions = query.file_extensions
+        .split(',')
+        .map((ext) => ext.replace(/'/g, "''"));
+      const extConditions = supportedExtensions
+        .map((ext) => `LOWER(tasks.input->>'filename') LIKE '%${ext}'`)
+        .join(' OR ');
+      fileExtFilter = `
+        AND (
+          tasks.function != 'file_reader'
+          OR (${extConditions})
+        )
+      `;
+    } else {
+      // If file_extensions not provided, exclude all file_reader tasks
+      fileExtFilter = `AND tasks.function != 'file_reader'`;
+    }
+
     const andCondition: string = andConditions.map((x) => `AND ${x}`).join(' ');
     const rawQuery = `
       WITH
@@ -425,6 +446,7 @@ export class WizardService {
           AND tasks.deleted_at IS NULL
           AND COALESCE(running_tasks_sub_query.running_count, 0) < COALESCE(namespaces.max_running_tasks, 0)
           ${andCondition}
+          ${fileExtFilter}
           ORDER BY
             priority DESC,
             tasks.created_at

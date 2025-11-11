@@ -29,6 +29,9 @@ export class ResourceMetaDto {
   @Expose({ name: 'attrs' })
   attrs: Record<string, any>;
 
+  @Expose({ name: 'content' })
+  content: string;
+
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
     dto.id = resource.id;
@@ -39,6 +42,7 @@ export class ResourceMetaDto {
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
     dto.attrs = resource.attrs;
+    dto.content = resource.content;
     return dto;
   }
 }

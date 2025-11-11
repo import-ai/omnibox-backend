@@ -33,6 +33,11 @@ export class UserController {
     return req.user;
   }
 
+  @Get('wx/profile')
+  async wxProfile(@UserId() userId: string) {
+    return await this.userService.find(userId);
+  }
+
   @Get(':id')
   async get(@Param('id') id: string) {
     return await this.userService.find(id);

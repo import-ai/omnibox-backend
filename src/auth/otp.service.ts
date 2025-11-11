@@ -72,7 +72,9 @@ export class OtpService {
     if (record.count >= this.RATE_LIMIT_MAX) {
       const remainingMinutes = Math.ceil((record.resetAt - now) / 60000);
       throw new BadRequestException(
-        `Too many OTP requests. Please try again in ${remainingMinutes} minutes.`,
+        this.i18n.t('auth.errors.tooManyOtpRequests', {
+          args: { minutes: remainingMinutes },
+        }),
       );
     }
 

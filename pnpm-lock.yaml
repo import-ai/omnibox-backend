@@ -134,6 +134,9 @@ importers:
       nanoid:
         specifier: ^5.1.6
         version: 5.1.6
+      nest-wechatpay-node-v3:
+        specifier: ^1.0.2
+        version: 1.0.2
       nestjs-i18n:
         specifier: ^10.5.1
         version: 10.5.1(@nestjs/common@11.1.8(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.8)(class-validator@0.14.2)(rxjs@7.8.2)
@@ -4716,6 +4719,9 @@ packages:
 
   neo-async@2.6.2:
     resolution: {integrity: sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==}
+
+  nest-wechatpay-node-v3@1.0.2:
+    resolution: {integrity: sha512-FKZq30BT1w0xMRe0CbJtxWOhsvoHjXcxd2B4HjGQzkgyiuBUDWsxy6ZipDerDR9elVF11j9RGUhpz7c+Sd7gTw==}
 
   nestjs-i18n@10.5.1:
     resolution: {integrity: sha512-cJJFz+RUfav23QACpGCq1pdXNLYC3tBesrP14RGoE/YYcD4xosQPX2eyjvDNuo0Ti63Xtn6j57wDNEUKrZqmSw==}
@@ -12274,6 +12280,8 @@ snapshots:
   negotiator@1.0.0: {}
 
   neo-async@2.6.2: {}
+
+  nest-wechatpay-node-v3@1.0.2: {}
 
   nestjs-i18n@10.5.1(@nestjs/common@11.1.8(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.8)(class-validator@0.14.2)(rxjs@7.8.2):
     dependencies:

@@ -95,6 +95,7 @@
     "meilisearch": "^0.50.0",
     "minio": "^8.0.6",
     "nanoid": "^5.1.6",
+    "nest-wechatpay-node-v3": "^1.0.2",
     "nestjs-i18n": "^10.5.1",
     "nestjs-otel": "^7.0.1",
     "nodemailer": "^6.10.1",

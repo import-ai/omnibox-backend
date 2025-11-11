@@ -1,9 +1,7 @@
 {
   "errors": {
     "invalidParameter": "Invalid parameter",
-    "signatureVerificationFailed": "Signature verification failed",
-    "missingRequiredParameters": "Missing required parameters",
-    "orderAmountMismatch": "Order amount mismatch",
-    "cannotGetUserIP": "Cannot get user's valid IP, unable to create order"
+    "cannotGetUserIP": "Cannot get user's valid IP, unable to create order",
+    "wechatNotBound": "WeChat account is not bound or missing openid"
   }
 }

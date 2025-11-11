@@ -30,7 +30,7 @@ export class Order extends Base {
   @Column('varchar')
   userId: string;
 
-  @Column('varchar', { nullable: true })
+  @Column('uuid', { nullable: true })
   productId: string | null;
 
   @Column('int')

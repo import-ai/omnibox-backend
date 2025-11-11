@@ -19,10 +19,10 @@ export class Product extends Base {
   @Column('varchar')
   name: string;
 
-  @Column('text')
+  @Column('varchar') // No more than 127 characters
   description: string;
 
-  @Column('int')
+  @Column('int') // Currency unit: cent
   price: number;
 
   @Column('varchar', { default: 'CNY' })

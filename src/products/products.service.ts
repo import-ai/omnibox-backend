@@ -1,7 +1,13 @@
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Product } from 'omniboxd/products/entities/product.entity';
+import { Injectable } from '@nestjs/common';
+// import { Injectable, HttpStatus } from '@nestjs/common';
+// import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import {
+  Product,
+  ProductStatus,
+  ProductType,
+} from 'omniboxd/products/entities/product.entity';
 import { QueryProductDto } from 'omniboxd/products/dto/query-product.dto';
 import { I18nService } from 'nestjs-i18n';
 
@@ -19,16 +25,32 @@ export class ProductsService {
   }
 
   async findById(id: string): Promise<Product> {
-    const product = await this.productRepository.findOne({
-      where: { id },
+    return Promise.resolve({
+      id,
+      name: 'omnibox pro',
+      description: '小黑智能高级帐户',
+      price: 10,
+      currency: 'CNY',
+      status: ProductStatus.ACTIVE,
+      type: ProductType.ONE_TIME,
+      sort: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
     });
 
-    if (!product) {
-      throw new NotFoundException(
-        this.i18n.t('product.errors.productNotFound'),
-      );
-    }
+    // const product = await this.productRepository.findOne({
+    //   where: { id },
+    // });
 
-    return product;
+    // if (!product) {
+    //   throw new AppException(
+    //     this.i18n.t('product.errors.productNotFound'),
+    //     'PRODUCT_NOT_FOUND',
+    //     HttpStatus.NOT_FOUND,
+    //   );
+    // }
+
+    // return product;
   }
 }

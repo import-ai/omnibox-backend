@@ -1,5 +1,6 @@
 {
   "errors": {
-    "productNotFound": "Product not found"
+    "productNotFound": "Product not found",
+    "productNotAvailable": "Product not available"
   }
 }

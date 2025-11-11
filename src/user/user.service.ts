@@ -173,6 +173,15 @@ export class UserService {
     await repo.remove(binding);
   }
 
+  async findUserBinding(
+    userId: string,
+    loginType: string,
+  ): Promise<UserBinding | null> {
+    return await this.userBindingRepository.findOne({
+      where: { userId, loginType },
+    });
+  }
+
   async updateBinding(oldUnionid: string, newUnionid: string) {
     // Unbind the associated new account
     const existBinding = await this.userBindingRepository.findOne({
@@ -245,6 +254,7 @@ export class UserService {
       userId: reset.id,
       loginId: userData.loginId,
       loginType: userData.loginType,
+      metadata: userData.metadata,
     });
 
     await bindingRepo.save(newBinding);
@@ -258,6 +268,7 @@ export class UserService {
       userId: userData.userId,
       loginId: userData.loginId,
       loginType: userData.loginType,
+      metadata: userData.metadata,
     });
 
     await bindingRepo.save(newBinding);

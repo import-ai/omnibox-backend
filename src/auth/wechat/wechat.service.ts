@@ -10,9 +10,15 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 
 export interface WechatUserInfo {
-  unionid: string;
-  nickname: string;
   openid: string;
+  nickname: string;
+  sex: number;
+  province: string;
+  city: string;
+  country: string;
+  headimgurl: string;
+  privilege: Array<string>;
+  unionid: string;
 }
 
 @Injectable()
@@ -200,6 +206,7 @@ export class WechatService {
         userId,
         loginType: 'wechat',
         loginId: userData.unionid,
+        metadata: userData,
       });
       const returnValue = {
         id: existingUser.id,
@@ -236,6 +243,7 @@ export class WechatService {
           loginType: 'wechat',
           loginId: userData.unionid,
           lang,
+          metadata: userData,
         } as CreateUserBindingDto,
         manager,
       );

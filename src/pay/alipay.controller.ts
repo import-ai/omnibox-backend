@@ -12,13 +12,14 @@ export class AlipayController {
     @UserId() userId: string,
     @Param('type') type: 'native' | 'h5',
     @Param('productId') productId: string,
+    @Query('returnUrl') returnUrl: string,
   ) {
-    return this.alipayService.transactions(userId, type, productId);
+    return this.alipayService.transactions(userId, type, productId, returnUrl);
   }
 
   @Post('callback')
-  async callback(@Query() query: AlipayCallbackQuery) {
-    return await this.alipayService.callback(query);
+  callback(@Query() query: AlipayCallbackQuery) {
+    return this.alipayService.callback(query);
   }
 
   @Get('query/:orderId')

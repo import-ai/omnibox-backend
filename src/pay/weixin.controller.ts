@@ -8,8 +8,10 @@ import {
   Param,
   Body,
   Controller,
-  BadRequestException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { getClientPublicIp } from 'omniboxd/pay/utils';
 import { I18nService } from 'nestjs-i18n';
@@ -30,7 +32,11 @@ export class WeixinController {
   ) {
     const clientIP = getClientPublicIp(req);
     if (!clientIP) {
-      throw new BadRequestException(this.i18n.t('pay.errors.cannotGetUserIP'));
+      throw new AppException(
+        this.i18n.t('pay.errors.cannotGetUserIP'),
+        'CANNOT_GET_USER_IP',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return await this.weixinService.transactions(
@@ -42,6 +48,7 @@ export class WeixinController {
   }
 
   @Post('callback')
+  @HttpCode(204) // Return 204 No Content on success as per WeChat Pay V3 API docs
   callback(@Body() body: WeixinCallbackBody) {
     return this.weixinService.callback(body);
   }

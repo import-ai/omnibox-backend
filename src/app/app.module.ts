@@ -76,6 +76,9 @@ import { isEmpty } from 'omniboxd/utils/is-empty';
 import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
+import { Products1762847077000 } from 'omniboxd/migrations/1762847077000-products';
+import { Orders1762847078000 } from 'omniboxd/migrations/1762847078000-orders';
+import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -206,6 +209,9 @@ export class AppModule implements NestModule {
               ShareUser1760171824000,
               Files1761556143000,
               AddFileIdToResources1761726974942,
+              Products1762847077000,
+              Orders1762847078000,
+              AddMetadataToUserBindings1762847685000,
               ...extraMigrations,
             ],
             migrationsRun: true,

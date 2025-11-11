@@ -1,8 +1,8 @@
-import fs from 'fs';
 import { AlipaySdk } from 'alipay-sdk';
 import { ConfigService } from '@nestjs/config';
 import { OrdersService } from 'omniboxd/orders/orders.service';
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   PaymentMethod,
   PaymentType,
@@ -26,18 +26,17 @@ export class AlipayService {
   ) {
     this.pay = new AlipaySdk({
       appId: this.configService.get<string>('OBB_ALIPAY_APPID', ''),
-      alipayPublicKey: fs.readFileSync(
-        this.configService.get<string>('OBB_ALIPAY_CERT_PATH', ''),
-        'ascii',
-      ),
-      privateKey: fs.readFileSync(
-        this.configService.get<string>('OBB_ALIPAY_KEY_PATH', ''),
-        'ascii',
-      ),
+      alipayPublicKey: this.configService.get<string>('OBB_ALIPAY_CERT', ''),
+      privateKey: this.configService.get<string>('OBB_ALIPAY_KEY', ''),
     });
   }
 
-  async transactions(userId: string, type: 'native' | 'h5', productId: string) {
+  async transactions(
+    userId: string,
+    type: 'native' | 'h5',
+    productId: string,
+    returnUrl: string,
+  ) {
     const order = await this.ordersService.create(userId, {
       productId,
       paymentMethod: PaymentMethod.ALIPAY,
@@ -48,16 +47,13 @@ export class AlipayService {
       'https://www.omnibox.pro',
     );
     const notifyUrl = `${baseURL}/api/v1/pay/alipay/callback`;
-    const returnUrl = this.configService.get<string>(
-      'OBB_ALIPAY_RETURN_URL',
-      'https://www.omnibox.pro',
-    );
     const amountInYuan = (order.amount / 100).toFixed(2);
+    const redirectUrl = `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}orderId=${order.id}`;
 
     if (type === 'h5') {
       const url = this.pay.pageExecute('alipay.trade.wap.pay', 'GET', {
         notifyUrl,
-        returnUrl,
+        returnUrl: redirectUrl,
         bizContent: {
           out_trade_no: order.orderNo,
           total_amount: amountInYuan,
@@ -65,12 +61,12 @@ export class AlipayService {
           product_code: 'QUICK_WAP_WAY',
         },
       });
-      return { url, orderId: order.id, orderNo: order.orderNo };
+      return { url, orderId: order.id };
     }
     if (type === 'native') {
       const url = this.pay.pageExecute('alipay.trade.page.pay', 'GET', {
         notifyUrl,
-        returnUrl,
+        returnUrl: redirectUrl,
         bizContent: {
           out_trade_no: order.orderNo,
           total_amount: amountInYuan,
@@ -80,55 +76,67 @@ export class AlipayService {
           integration_type: 'PCWEB',
         },
       });
-      return { url, orderId: order.id, orderNo: order.orderNo };
+      return { url, orderId: order.id };
     }
-    throw new BadRequestException(this.i18n.t('pay.errors.invalidParameter'));
+    throw new AppException(
+      this.i18n.t('pay.errors.invalidParameter'),
+      'INVALID_PARAMETER',
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
-  async callback(query: AlipayCallbackQuery) {
+  callback(query: AlipayCallbackQuery) {
     if (!this.pay.checkNotifySign(query)) {
-      throw new BadRequestException(
-        this.i18n.t('pay.errors.signatureVerificationFailed'),
-      );
+      return 'failure';
     }
 
     const { out_trade_no, trade_no, trade_status, total_amount } = query;
 
     if (!out_trade_no || !trade_no) {
-      throw new BadRequestException(
-        this.i18n.t('pay.errors.missingRequiredParameters'),
-      );
+      return 'failure';
     }
 
-    const order = await this.ordersService.findByOrderNo(out_trade_no);
+    // According to Alipay docs, we must return "success" immediately after successful verification
+    // Process business logic asynchronously to avoid timeout
+    // If we don't return "success", Alipay will keep retrying for 25 hours (8 times)
+    setImmediate(() => {
+      void (async () => {
+        try {
+          const order = await this.ordersService.findByOrderNo(out_trade_no);
+          const orderAmountInYuan = (order.amount / 100).toFixed(2);
+          if (total_amount !== orderAmountInYuan) {
+            return;
+          }
 
-    const orderAmountInYuan = (order.amount / 100).toFixed(2);
-    if (total_amount !== orderAmountInYuan) {
-      throw new BadRequestException(
-        this.i18n.t('pay.errors.orderAmountMismatch'),
-      );
-    }
+          if (
+            trade_status === 'TRADE_SUCCESS' ||
+            trade_status === 'TRADE_FINISHED'
+          ) {
+            await this.ordersService.markAsPaid(out_trade_no, trade_no);
+          } else if (trade_status === 'TRADE_CLOSED') {
+            await this.ordersService.close(out_trade_no);
+          }
+        } catch (error) {
+          console.error(
+            `[Alipay Callback] Error processing callback: ${error}`,
+          );
+        }
+      })();
+    });
 
-    if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
-      await this.ordersService.markAsPaid(out_trade_no, trade_no);
-    } else if (trade_status === 'TRADE_CLOSED') {
-      await this.ordersService.close(out_trade_no);
-    }
-
+    // According to Alipay docs: must return exactly "success" (7 characters) for successful verification
     return 'success';
   }
 
   async query(userId: string, orderId: string) {
     const order = await this.ordersService.findById(userId, orderId);
-    const response = await this.pay.curl('POST', '/alipay/trade/query', {
+    const response = await this.pay.curl('POST', '/v3/alipay/trade/query', {
       body: {
         out_trade_no: order.orderNo,
         query_options: ['trade_settle_info'],
       },
     });
-    const alipayData = response.data
-      .alipay_trade_query_response as unknown as AlipayQueryResponse;
-
+    const alipayData = response as unknown as AlipayQueryResponse;
     if (
       (alipayData.trade_status === AlipayTradeStatus.TRADE_SUCCESS ||
         alipayData.trade_status === AlipayTradeStatus.TRADE_FINISHED) &&
@@ -136,8 +144,10 @@ export class AlipayService {
     ) {
       const orderAmountInYuan = (order.amount / 100).toFixed(2);
       if (alipayData.total_amount !== orderAmountInYuan) {
-        throw new BadRequestException(
+        throw new AppException(
           this.i18n.t('pay.errors.orderAmountMismatch'),
+          'ORDER_AMOUNT_MISMATCH',
+          HttpStatus.BAD_REQUEST,
         );
       }
 

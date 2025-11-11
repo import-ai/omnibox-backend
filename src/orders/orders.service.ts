@@ -10,12 +10,10 @@ import {
   OrderStatus,
   PaymentMethod,
 } from 'omniboxd/orders/entities/order.entity';
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { ProductStatus } from 'omniboxd/products/entities/product.entity';
 
 @Injectable()
 export class OrdersService {
@@ -35,6 +33,14 @@ export class OrdersService {
 
   async create(userId: string, dto: CreateOrderDto): Promise<Order> {
     const product = await this.productsService.findById(dto.productId);
+
+    if (product.status !== ProductStatus.ACTIVE) {
+      throw new AppException(
+        this.i18n.t('product.errors.productNotAvailable'),
+        'PRODUCT_NOT_AVAILABLE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
     const orderNo = this.generateOrderNo(dto.paymentMethod);
 
@@ -89,7 +95,11 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException(this.i18n.t('order.errors.orderNotFound'));
+      throw new AppException(
+        this.i18n.t('order.errors.orderNotFound'),
+        'ORDER_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return order;
@@ -101,7 +111,11 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException(this.i18n.t('order.errors.orderNotFound'));
+      throw new AppException(
+        this.i18n.t('order.errors.orderNotFound'),
+        'ORDER_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return order;
@@ -113,7 +127,11 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException(this.i18n.t('order.errors.orderNotFound'));
+      throw new AppException(
+        this.i18n.t('order.errors.orderNotFound'),
+        'ORDER_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     if (dto.status) {
@@ -142,8 +160,10 @@ export class OrdersService {
     }
 
     if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException(
+      throw new AppException(
         this.i18n.t('order.errors.orderStatusIncorrect'),
+        'ORDER_STATUS_INCORRECT',
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -158,8 +178,10 @@ export class OrdersService {
     const order = await this.findByOrderNo(orderNo);
 
     if (order.status === OrderStatus.PAID) {
-      throw new BadRequestException(
+      throw new AppException(
         this.i18n.t('order.errors.paidOrderCannotClose'),
+        'PAID_ORDER_CANNOT_CLOSE',
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -177,8 +199,10 @@ export class OrdersService {
     const order = await this.findByOrderNo(orderNo);
 
     if (order.status !== OrderStatus.PAID) {
-      throw new BadRequestException(
+      throw new AppException(
         this.i18n.t('order.errors.onlyPaidOrderCanRefund'),
+        'ONLY_PAID_ORDER_CAN_REFUND',
+        HttpStatus.BAD_REQUEST,
       );
     }
 

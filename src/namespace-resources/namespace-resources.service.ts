@@ -1,5 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
+import * as mime from 'mime-types';
 import {
   DataSource,
   EntityManager,
@@ -706,11 +707,15 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
+    const mimetype =
+      createReq.mimetype ||
+      mime.lookup(createReq.name) ||
+      'application/octet-stream';
     const file = await this.filesService.createFile(
       userId,
       namespaceId,
       createReq.name,
-      createReq.mimetype,
+      mimetype,
     );
     const url = await this.filesService.generateUploadUrl(file.id);
     const postReq = await this.filesService.generatePostForm(

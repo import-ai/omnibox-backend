@@ -22,10 +22,8 @@ export class CreateFileReqDto {
   @IsString({
     message: i18nValidationMessage('validation.errors.mimetype.isString'),
   })
-  @IsNotEmpty({
-    message: i18nValidationMessage('validation.errors.mimetype.isNotEmpty'),
-  })
-  mimetype: string;
+  @IsOptional()
+  mimetype?: string;
 
   @Expose()
   @IsNumber(

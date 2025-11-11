@@ -13,21 +13,21 @@ import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
 import { Injectable, HttpStatus } from '@nestjs/common';
-import { isUsernameBlocked } from 'omniboxd/utils/blocked-usernames';
+import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { CacheService } from 'omniboxd/common/cache.service';
+import { filterEmoji } from 'omniboxd/utils/emoji';
+
+interface EmailVerificationState {
+  code: string;
+  createdAt: number;
+  expiresIn: number;
+}
 
 @Injectable()
 export class UserService {
-  private readonly emailStates = new Map<
-    string,
-    {
-      code: string;
-      createdAt: number;
-      expiresIn: number;
-    }
-  >();
-
+  private readonly namespace = '/user/email-verification';
   private readonly alphaRegex = /[a-zA-Z]/;
   private readonly numberRegex = /\d/;
 
@@ -40,6 +40,7 @@ export class UserService {
     private userBindingRepository: Repository<UserBinding>,
     private readonly mailService: MailService,
     private readonly i18n: I18nService,
+    private readonly cacheService: CacheService,
   ) {}
 
   async verify(email: string, password: string) {
@@ -56,6 +57,10 @@ export class UserService {
     if (!account) {
       return;
     }
+    // Reject authentication if password is empty (OTP-only users)
+    if (account.password === '') {
+      return;
+    }
     const match = await bcrypt.compare(password, account.password);
     if (!match) {
       return;
@@ -63,7 +68,7 @@ export class UserService {
     return account;
   }
 
-  async validatePassword(password: string) {
+  validatePassword(password: string) {
     if (!password || password.length < 8) {
       const message = this.i18n.t('user.errors.passwordTooShort');
       throw new AppException(
@@ -84,7 +89,12 @@ export class UserService {
   }
 
   async create(account: CreateUserDto, manager?: EntityManager) {
-    if (account.username && isUsernameBlocked(account.username)) {
+    // Filter emoji from username if provided
+    if (account.username) {
+      account.username = filterEmoji(account.username);
+    }
+
+    if (account.username && isNameBlocked(account.username)) {
       const message = this.i18n.t('user.errors.accountAlreadyExists');
       throw new AppException(
         message,
@@ -106,12 +116,16 @@ export class UserService {
       );
     }
 
-    await this.validatePassword(account.password);
+    // Only validate and hash password if provided (skip for OTP-only users)
+    let passwordHash = account.password;
+    if (account.password) {
+      this.validatePassword(account.password);
+      passwordHash = await bcrypt.hash(account.password, 10);
+    }
 
-    const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({
       ...account,
-      password: hash,
+      password: passwordHash,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -202,10 +216,14 @@ export class UserService {
   ) {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
     const hash = await bcrypt.hash(Math.random().toString(36), 10);
+
+    // Filter emoji from username
+    const username = filterEmoji(userData.username);
+
     const newUser = repo.create({
       password: hash,
       email: userData.email,
-      username: userData.username,
+      username: username,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -293,15 +311,6 @@ export class UserService {
     });
   }
 
-  private cleanExpiresState() {
-    const now = Date.now();
-    for (const [state, info] of this.emailStates.entries()) {
-      if (now - info.createdAt > info.expiresIn) {
-        this.emailStates.delete(state);
-      }
-    }
-  }
-
   async validateEmail(userId: string, email: string) {
     if (!isEmail(email)) {
       const message = this.i18n.t('user.errors.invalidEmailFormat');
@@ -313,7 +322,7 @@ export class UserService {
     }
 
     const userExists = await this.findByEmail(email);
-    if (userExists) {
+    if (userExists && userExists.id !== userId) {
       const message = this.i18n.t('user.errors.emailAlreadyInUse');
       throw new AppException(
         message,
@@ -323,21 +332,40 @@ export class UserService {
     }
 
     const code = generateId(6, '0123456789');
+    const expiresIn = 5 * 60 * 1000;
 
-    this.emailStates.set(email, {
+    await this.cacheService.set<EmailVerificationState>(
+      this.namespace,
+      email,
+      {
+        code,
+        createdAt: Date.now(),
+        expiresIn,
+      },
+      expiresIn,
+    );
+
+    // Get user info for personalization
+    const user = await this.find(userId);
+    const userLangOption = await this.getOption(userId, 'language');
+    const userLang = userLangOption?.value;
+
+    await this.mailService.validateEmail(
+      email,
       code,
-      createdAt: Date.now(),
-      expiresIn: 5 * 60 * 1000,
-    });
-
-    this.cleanExpiresState();
-
-    await this.mailService.validateEmail(email, code);
+      user.username || undefined,
+      userLang,
+    );
 
     return { email };
   }
 
   async update(id: string, account: UpdateUserDto) {
+    // Filter emoji from username if provided
+    if (account.username) {
+      account.username = filterEmoji(account.username);
+    }
+
     if (account.username && !account.username.trim().length) {
       const message = this.i18n.t('user.errors.userCannotbeEmptyStr');
       throw new AppException(
@@ -346,7 +374,7 @@ export class UserService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    if (account.username && isUsernameBlocked(account.username)) {
+    if (account.username && isNameBlocked(account.username)) {
       const message = this.i18n.t('user.errors.accountAlreadyExists');
       throw new AppException(
         message,
@@ -359,6 +387,20 @@ export class UserService {
       existUser.password = await bcrypt.hash(account.password, 10);
     }
     if (account.username && existUser.username !== account.username) {
+      // Check if the new username is already taken by another user
+      const duplicateUser = await this.userRepository.findOne({
+        where: { username: account.username },
+      });
+
+      if (duplicateUser && duplicateUser.id !== id) {
+        const message = this.i18n.t('user.errors.usernameAlreadyExists');
+        throw new AppException(
+          message,
+          'USERNAME_ALREADY_EXISTS',
+          HttpStatus.CONFLICT,
+        );
+      }
+
       existUser.username = account.username;
     }
     if (account.email && existUser.email !== account.email) {
@@ -370,7 +412,10 @@ export class UserService {
           HttpStatus.BAD_REQUEST,
         );
       }
-      const emailState = this.emailStates.get(account.email);
+      const emailState = await this.cacheService.get<EmailVerificationState>(
+        this.namespace,
+        account.email,
+      );
       if (!emailState) {
         const message = this.i18n.t('user.errors.pleaseVerifyEmail');
         throw new AppException(
@@ -387,8 +432,32 @@ export class UserService {
           HttpStatus.BAD_REQUEST,
         );
       }
-      this.emailStates.delete(account.email);
+      await this.cacheService.delete(this.namespace, account.email);
+
+      // Store old email before updating
+      const oldEmail = existUser.email;
       existUser.email = account.email;
+
+      // Send notification to old email after successful update (only if old email exists)
+      // Users from WeChat/OAuth signup may not have an email initially
+      if (oldEmail) {
+        const userLangOption = await this.getOption(id, 'language');
+        const userLang = userLangOption?.value;
+
+        // Send notification asynchronously (don't block the response)
+        this.mailService
+          .sendEmailChangeNotification(
+            oldEmail,
+            oldEmail,
+            account.email,
+            existUser.username || undefined,
+            userLang,
+          )
+          .catch((error) => {
+            // Log error but don't fail the update
+            console.error('Failed to send email change notification:', error);
+          });
+      }
     }
     return await this.userRepository.update(id, existUser);
   }
@@ -455,5 +524,20 @@ export class UserService {
     });
     option.value = value;
     return await this.userOptionRepository.save(option);
+  }
+
+  async isAutoTagEnabled(
+    userId: string,
+    entityManager?: EntityManager,
+  ): Promise<boolean> {
+    const option = await this.getOption(
+      userId,
+      'enable_ai_tag_extraction',
+      entityManager,
+    );
+    if (!option) {
+      return true; // Default: enabled
+    }
+    return option.value === 'true';
   }
 }

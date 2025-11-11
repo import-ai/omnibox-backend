@@ -59,6 +59,8 @@ export class ResourcesService {
         'parentId',
         'resourceType',
         'globalPermission',
+        'attrs',
+        'fileId',
         'createdAt',
         'updatedAt',
         'content',
@@ -326,6 +328,7 @@ export class ResourcesService {
       tagIds?: string[];
       content?: string;
       attrs?: Record<string, any>;
+      fileId?: string;
     },
     entityManager?: EntityManager,
   ): Promise<Resource> {
@@ -348,8 +351,21 @@ export class ResourcesService {
     const repo = entityManager.getRepository(Resource);
     const resource = await repo.save(repo.create(props));
 
-    // If it's not a root resource, create index task
-    if (resource.parentId) {
+    if (
+      resource.resourceType === ResourceType.FILE &&
+      !resource.content &&
+      resource.userId &&
+      resource.fileId
+    ) {
+      // If it's a user-uploaded file, create file reader task
+      await this.wizardTaskService.createFileReaderTask(
+        resource.userId,
+        resource,
+        'default',
+        entityManager.getRepository(Task),
+      );
+    } else if (resource.parentId) {
+      // If it's not a root resource, create index task
       await this.wizardTaskService.createIndexTask(
         TASK_PRIORITY,
         props.userId!,

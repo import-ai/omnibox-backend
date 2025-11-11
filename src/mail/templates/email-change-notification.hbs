@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{t "mail.templates.emailChangeNotification.title"}}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .info-box {
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 30px 0;
+    }
+    .info-item {
+      margin: 10px 0;
+      padding: 10px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .info-item:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      font-weight: bold;
+      color: #666;
+      display: inline-block;
+      min-width: 120px;
+    }
+    .info-value {
+      color: #000;
+    }
+    .security-notice {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .footer {
+      color: #666;
+      font-size: 14px;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+  <h1>{{t "mail.templates.emailChangeNotification.heading"}}</h1>
+  {{#if username}}
+    <p>{{t "mail.templates.emailChangeNotification.greeting"}} <strong>{{username}}</strong>,</p>
+  {{else}}
+    <p>{{t "mail.templates.emailChangeNotification.greeting"}}</p>
+  {{/if}}
+  <p>{{t "mail.templates.emailChangeNotification.body"}}</p>
+
+  <div class="info-box">
+    <div class="info-item">
+      <span class="info-label">{{t "mail.templates.emailChangeNotification.oldEmailLabel"}}</span>
+      <span class="info-value">{{oldEmail}}</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">{{t "mail.templates.emailChangeNotification.newEmailLabel"}}</span>
+      <span class="info-value">{{newEmail}}</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">{{t "mail.templates.emailChangeNotification.timeLabel"}}</span>
+      <span class="info-value">{{changeTime}}</span>
+    </div>
+  </div>
+
+  <div class="security-notice">
+    {{t "mail.templates.emailChangeNotification.securityNotice"}}
+  </div>
+
+  <p class="footer">{{t "mail.templates.emailChangeNotification.ignoreText"}}</p>
+</body>
+</html>

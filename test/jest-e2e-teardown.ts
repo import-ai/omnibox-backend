@@ -8,6 +8,8 @@ export default async () => {
     .__POSTGRES_CONTAINER__ as StartedTestContainer;
   const minioContainer = (global as any)
     .__MINIO_CONTAINER__ as StartedTestContainer;
+  const mailhogContainer = (global as any)
+    .__MAILHOG_CONTAINER__ as StartedTestContainer;
 
   if (postgresContainer) {
     await postgresContainer.stop();
@@ -17,6 +19,11 @@ export default async () => {
   if (minioContainer) {
     await minioContainer.stop();
     console.log('MinIO container stopped');
+  }
+
+  if (mailhogContainer) {
+    await mailhogContainer.stop();
+    console.log('MailHog container stopped');
   }
 
   console.log('Test containers teardown complete');

@@ -5,7 +5,7 @@ import { MailService } from 'omniboxd/mail/mail.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
@@ -14,9 +14,12 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { InvitePayloadDto } from './dto/invite-payload.dto';
 import { UserInvitationDto } from './dto/invitation.dto';
 import { SignUpPayloadDto } from './dto/signup-payload.dto';
-import { LoginPayloadDto } from './dto/login-payload.dto';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { isEmail } from 'class-validator';
+import { OtpService } from './otp.service';
+import { SocialService } from './social.service';
+import { SendEmailOtpResponseDto } from './dto/email-otp.dto';
+import { appendQueryParams, appendTokenToUrl } from 'omniboxd/utils/url-utils';
 
 @Injectable()
 export class AuthService {
@@ -32,6 +35,8 @@ export class AuthService {
     private readonly permissionsService: PermissionsService,
     private readonly dataSource: DataSource,
     private readonly i18n: I18nService,
+    private readonly otpService: OtpService,
+    private readonly socialService: SocialService,
   ) {}
 
   async verify(email: string, password: string): Promise<any> {
@@ -72,6 +77,139 @@ export class AuthService {
     };
   }
 
+  /**
+   * Send OTP to email for login only
+   * Does NOT send email if user doesn't exist
+   */
+  async sendOTP(
+    email: string,
+    baseUrl: string,
+  ): Promise<SendEmailOtpResponseDto> {
+    const account = await this.userService.findByEmail(email);
+    const exists = !!account;
+
+    // Don't send email for unregistered users (login only)
+    if (!exists) {
+      return { exists: false, sent: false };
+    }
+
+    // Generate OTP code and magic link token
+    const { code, magicToken } = await this.otpService.generateOtp(email);
+
+    // Build magic link URL
+    const magicLink = appendTokenToUrl(baseUrl, magicToken);
+
+    // Send email with both code and link
+    await this.mailService.sendOTPEmail(email, code, magicLink);
+
+    return { exists: true, sent: true };
+  }
+
+  /**
+   * Send OTP to email for signup only
+   */
+  async sendSignupOTP(
+    email: string,
+    baseUrl: string,
+  ): Promise<SendEmailOtpResponseDto> {
+    const account = await this.userService.findByEmail(email);
+
+    if (account) {
+      // User already exists, should login instead
+      return { exists: true, sent: false };
+    }
+
+    // Generate OTP code and magic link token for new user
+    const { code, magicToken } = await this.otpService.generateOtp(email);
+
+    // Build magic link URL
+    const magicLink = appendTokenToUrl(baseUrl, magicToken);
+
+    // Send email with both code and link
+    await this.mailService.sendOTPEmail(email, code, magicLink);
+
+    return { exists: false, sent: true };
+  }
+
+  /**
+   * Verify OTP and complete registration or login
+   */
+  async verifyOTP(email: string, code: string, lang?: string) {
+    // Verify the OTP code
+    await this.otpService.verifyOtp(email, code);
+    return this.handleAuthenticationOrRegistration(email, lang);
+  }
+
+  /**
+   * Verify magic link token and complete registration or login
+   */
+  async verifyMagicLink(token: string, lang?: string) {
+    // Verify the magic link token and get email
+    const email = await this.otpService.verifyMagicToken(token);
+    return this.handleAuthenticationOrRegistration(email, lang);
+  }
+
+  /**
+   * Handle authentication for existing users or registration for new users
+   * Used by both OTP and magic link authentication flows
+   */
+  private async handleAuthenticationOrRegistration(
+    email: string,
+    lang?: string,
+  ) {
+    // Check if user already exists
+    const existingUser = await this.userService.findByEmail(email);
+
+    if (existingUser) {
+      // User exists - login
+      return {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    // User doesn't exist - register
+    return await this.dataSource.transaction(async (manager) => {
+      // Extract username from email
+      const emailUsername = email.split('@')[0];
+
+      // Generate valid username (handles conflicts)
+      const username = await this.socialService.getValidUsername(
+        emailUsername,
+        manager,
+      );
+
+      // Create user with empty password
+      const user = await this.userService.create(
+        {
+          email,
+          username,
+          password: '',
+          lang,
+        },
+        manager,
+      );
+
+      // Create user namespace
+      await this.namespaceService.createUserNamespace(
+        user.id,
+        user.username,
+        manager,
+      );
+
+      return {
+        id: user.id,
+        access_token: this.jwtService.sign({
+          sub: user.id,
+          username: user.username,
+        }),
+      };
+    });
+  }
+
   private async getSignUpToken(email: string) {
     const account = await this.userService.findByEmail(email);
     if (account) {
@@ -82,12 +220,6 @@ export class AuthService {
     return this.jwtService.sign(payload, { expiresIn: '1h' });
   }
 
-  async signUp(url: string, email: string) {
-    const token: string = await this.getSignUpToken(email);
-    const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendSignUpEmail(email, mailSendUri);
-  }
-
   async signUpConfirm(
     token: string,
     data: {
@@ -96,7 +228,7 @@ export class AuthService {
       lang?: string;
     },
   ) {
-    const payload: SignUpPayloadDto = await this.jwtVerify(token);
+    const payload: SignUpPayloadDto = this.jwtVerify(token);
     const account = await this.userService.findByEmail(payload.email);
     if (account) {
       const message = this.i18n.t('auth.errors.emailAlreadyExists');
@@ -142,33 +274,6 @@ export class AuthService {
     return this.signUpConfirm(token, createUser);
   }
 
-  async password(url: string, email: string) {
-    const user = await this.userService.findByEmail(email);
-    if (!user) {
-      const message = this.i18n.t('auth.errors.userNotFound');
-      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
-    }
-    const payload: LoginPayloadDto = { email: user.email!, sub: user.id };
-    const token = this.jwtService.sign(payload, {
-      expiresIn: '1h',
-    });
-    const mailSendUri = `${url}?token=${token}`;
-    await this.mailService.sendPasswordEmail(user.email!, mailSendUri);
-    // return { url: mailSendUri };
-  }
-
-  async resetPassword(token: string, password: string): Promise<void> {
-    try {
-      const payload = this.jwtService.verify(token);
-      const user = await this.userService.find(payload.sub);
-      await this.userService.updatePassword(user.id, password);
-    } catch (error) {
-      this.logger.error({ error });
-      const message = this.i18n.t('auth.errors.tokenInvalid');
-      throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
-    }
-  }
-
   async invite(
     userId: string,
     email: string,
@@ -189,6 +294,28 @@ export class AuthService {
       permission: data.permission,
       groupId: data.groupId,
     };
+
+    // Fetch sender and namespace information
+    const senders = await this.userService.findByIds([userId]);
+    const sender = senders[0];
+    const namespace = await this.namespaceService.getNamespace(
+      data.namespaceId,
+    );
+
+    if (!sender || !namespace) {
+      this.logger.error(
+        `Failed to fetch sender or namespace: sender=${!!sender}, namespace=${!!namespace}`,
+      );
+      throw new AppException(
+        'Failed to fetch sender or namespace information',
+        'INVITE_INFO_FETCH_FAILED',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    const senderUsername = sender.username;
+    const namespaceName = namespace.name;
+
     const account = await this.userService.findByEmail(email);
     if (account) {
       const namespaceMembers = await this.namespaceService.listMembers(
@@ -208,9 +335,27 @@ export class AuthService {
       const token = this.jwtService.sign(payload, {
         expiresIn: '1h',
       });
+
+      // Get receiver's language preference
+      const receiverLangOption = await this.userService.getOption(
+        account.id,
+        'language',
+      );
+      const receiverLang = receiverLangOption?.value;
+
+      const inviteUrl = appendQueryParams(data.inviteUrl, {
+        user: userId,
+        namespace: data.namespaceId,
+        token,
+      });
       await this.mailService.sendInviteEmail(
         email,
-        `${data.inviteUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`,
+        inviteUrl,
+        senderUsername!,
+        namespaceName,
+        account.username!,
+        true,
+        receiverLang,
       );
       return;
     }
@@ -219,18 +364,111 @@ export class AuthService {
       invitation,
     };
     const token = this.jwtService.sign(payload, {
-      expiresIn: '1h',
+      expiresIn: '7d',
     });
-    const mailSendUri = `${data.registerUrl}?user=${userId}&namespace=${data.namespaceId}&token=${token}`;
-    await this.mailService.sendInviteEmail(email, mailSendUri);
-    // return { url: mailSendUri };
+    const mailSendUri = appendTokenToUrl(data.registerUrl, token);
+    await this.mailService.sendInviteEmail(
+      email,
+      mailSendUri,
+      senderUsername!,
+      namespaceName,
+      undefined,
+      false,
+    );
   }
 
-  async inviteConfirm(token: string): Promise<void> {
-    const payload: InvitePayloadDto = await this.jwtVerify(token);
+  async inviteConfirm(token: string, currentUserId: string): Promise<void> {
+    const payload: InvitePayloadDto = this.jwtVerify(token);
+
+    // Validate that the logged-in user matches the invited user
+    if (payload.userId !== currentUserId) {
+      const invitedUser = await this.userService.find(payload.userId);
+      const message = this.i18n.t('auth.errors.inviteUserMismatch', {
+        args: { username: invitedUser.username },
+      });
+      throw new AppException(
+        message,
+        'INVITE_USER_MISMATCH',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const user = await this.userService.find(payload.userId);
     await this.dataSource.transaction(async (manager) => {
       await this.handleUserInvitation(user.id, payload.invitation, manager);
+    });
+  }
+
+  async acceptInvite(token: string, lang?: string) {
+    // Verify and decode the JWT token
+    const payload: SignUpPayloadDto = this.jwtVerify(token);
+
+    if (!payload.email || !payload.invitation) {
+      const message = this.i18n.t('auth.errors.tokenInvalid');
+      throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
+    }
+
+    const { email, invitation } = payload;
+
+    // Check if user already exists
+    const existingUser = await this.userService.findByEmail(email);
+
+    if (existingUser) {
+      // User exists - just add to namespace
+      await this.dataSource.transaction(async (manager) => {
+        await this.handleUserInvitation(existingUser.id, invitation, manager);
+      });
+
+      return {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+        namespaceId: invitation.namespaceId,
+      };
+    }
+
+    // User doesn't exist - create account and add to namespace
+    return await this.dataSource.transaction(async (manager) => {
+      // Extract username from email (e.g., foo@example.com -> foo)
+      const emailUsername = email.split('@')[0];
+
+      // Generate valid username (handles conflicts)
+      const username = await this.socialService.getValidUsername(
+        emailUsername,
+        manager,
+      );
+
+      // Create user with empty password (invited users)
+      const user = await this.userService.create(
+        {
+          email,
+          username,
+          password: '',
+          lang,
+        },
+        manager,
+      );
+
+      // Create user's personal namespace
+      await this.namespaceService.createUserNamespace(
+        user.id,
+        user.username,
+        manager,
+      );
+
+      // Add user to the invited namespace
+      await this.handleUserInvitation(user.id, invitation, manager);
+
+      return {
+        id: user.id,
+        access_token: this.jwtService.sign({
+          sub: user.id,
+          username: user.username,
+        }),
+        namespaceId: invitation.namespaceId,
+      };
     });
   }
 
@@ -288,7 +526,7 @@ export class AuthService {
     }
   }
 
-  async jwtVerify(token: string) {
+  jwtVerify(token: string) {
     if (!token) {
       const message = this.i18n.t('auth.errors.noToken');
       throw new AppException(message, 'NO_TOKEN', HttpStatus.UNAUTHORIZED);

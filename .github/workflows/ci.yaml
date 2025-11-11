@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches:
-      - "main"
+      - 'main'
     tags:
-      - "v*"
+      - 'v*'
   pull_request:
     branches:
       - 'main'
@@ -77,18 +77,45 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  test:
+  lint:
     runs-on: ubuntu-latest
-    needs: [ runtime ]
-    container:
-      image: ghcr.io/import-ai/omnibox-backend-runtime:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint
+        run: pnpm lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -108,9 +135,7 @@ jobs:
       - name: Run tests
         run: pnpm test:e2e --coverage
         env:
-          OBB_POSTGRES_URL: postgres://omnibox:omnibox@postgres:5432/omnibox
-          OBB_MINIO_URL: http://username:password@minio:9000/omnibox
-          OBB_LOG_LEVELS: ""
+          OBB_LOG_LEVELS: ''
 
       - name: Print coverage report
         run: |
@@ -125,7 +150,7 @@ jobs:
 
   app:
     runs-on: ubuntu-latest
-    needs: [ test ]
+    needs: [runtime, test, lint]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -172,7 +197,7 @@ jobs:
 
   webhook:
     runs-on: ubuntu-latest
-    needs: [ app ]
+    needs: [app]
     steps:
       - name: TEST push webhook
         if: github.event_name == 'push'

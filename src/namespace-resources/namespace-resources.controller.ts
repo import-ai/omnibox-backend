@@ -60,15 +60,20 @@ export class NamespaceResourcesController {
   }
 
   @Post()
-  async create(@UserId() userId: string, @Body() data: CreateResourceDto) {
+  async create(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() data: CreateResourceDto,
+  ) {
     const newResource = await this.namespaceResourcesService.create(
       userId,
+      namespaceId,
       data,
     );
     return await this.namespaceResourcesService.getResource({
-      namespaceId: data.namespaceId,
+      namespaceId,
       resourceId: newResource.id,
-      userId: userId,
+      userId,
     });
   }
 
@@ -173,6 +178,19 @@ export class NamespaceResourcesController {
       resourceId,
       userId,
     });
+  }
+
+  @Get(':resourceId/file')
+  async getResourceFile(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return await this.namespaceResourcesService.getResourceFileForUser(
+      userId,
+      namespaceId,
+      resourceId,
+    );
   }
 
   @Patch(':resourceId')

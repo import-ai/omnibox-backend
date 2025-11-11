@@ -77,7 +77,7 @@ export class APIKeyAuthGuard implements CanActivate {
       apiKeyAuthOptions.permissions &&
       apiKeyAuthOptions.permissions.length > 0
     ) {
-      await this.validatePermissions(
+      this.validatePermissions(
         apiKey.attrs.permissions || [],
         apiKeyAuthOptions.permissions,
       );
@@ -90,10 +90,10 @@ export class APIKeyAuthGuard implements CanActivate {
     return true;
   }
 
-  private async validatePermissions(
+  private validatePermissions(
     apiKeyPermissions: APIKeyPermission[],
     requiredPermissions: APIKeyPermission[],
-  ): Promise<void> {
+  ): void {
     for (const required of requiredPermissions) {
       const apiKeyPermission = apiKeyPermissions.find(
         (p) => p.target === required.target,

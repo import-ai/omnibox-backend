@@ -31,6 +31,7 @@ export class ResourceMetaDto {
 
   @Expose({ name: 'content' })
   content: string;
+  fileId: string | null;
 
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
@@ -43,6 +44,7 @@ export class ResourceMetaDto {
     dto.updatedAt = resource.updatedAt;
     dto.attrs = resource.attrs;
     dto.content = resource.content;
+    dto.fileId = resource.fileId;
     return dto;
   }
 }

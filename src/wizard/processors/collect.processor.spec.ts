@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
 import { CollectProcessor } from './collect.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
@@ -109,9 +108,7 @@ describe('CollectProcessor', () => {
       it('should throw AppException when payload is null', async () => {
         const task = createMockTask({ payload: null });
 
-        await expect(processor.process(task)).rejects.toThrow(
-          AppException,
-        );
+        await expect(processor.process(task)).rejects.toThrow(AppException);
         await expect(processor.process(task)).rejects.toThrow(
           'Invalid task payload',
         );
@@ -120,9 +117,7 @@ describe('CollectProcessor', () => {
       it('should throw AppException when payload has no resource_id or resourceId', async () => {
         const task = createMockTask({ payload: {} });
 
-        await expect(processor.process(task)).rejects.toThrow(
-          AppException,
-        );
+        await expect(processor.process(task)).rejects.toThrow(AppException);
         await expect(processor.process(task)).rejects.toThrow(
           'Invalid task payload',
         );

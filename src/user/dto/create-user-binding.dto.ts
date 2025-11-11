@@ -1,20 +1,26 @@
 import { IsOptional, IsEmail, IsString } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateUserBindingDto {
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   loginId: string;
 
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   loginType: string;
 
-  @IsString()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.username.isString'),
+  })
   username: string;
 
-  @IsEmail()
+  @IsEmail(
+    {},
+    { message: i18nValidationMessage('validation.errors.email.isEmail') },
+  )
   @IsOptional()
   email: string;
 
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsOptional()
   lang?: string;
 }

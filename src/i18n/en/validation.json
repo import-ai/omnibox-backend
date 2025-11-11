@@ -1,0 +1,95 @@
+{
+  "errors": {
+    "isNotEmpty": "$property should not be empty",
+    "isString": "$property must be a string",
+    "isEmail": "$property must be a valid email address",
+    "isNumber": "$property must be a number",
+    "isBoolean": "$property must be a boolean value",
+    "isArray": "$property must be an array",
+    "isObject": "$property must be an object",
+    "isUUID": "$property must be a valid UUID",
+    "isDateString": "$property must be a valid date string",
+    "isInt": "$property must be an integer",
+    "isEnum": "$property must be a valid value",
+    "minLength": "$property must be at least $constraint1 characters",
+    "maxLength": "$property must not exceed $constraint1 characters",
+    "min": "$property must not be less than $constraint1",
+    "email": {
+      "isString": "Email must be a string",
+      "isNotEmpty": "Email is required",
+      "isEmail": "Email must be a valid email address"
+    },
+    "password": {
+      "isString": "Password must be a string",
+      "isNotEmpty": "Password is required"
+    },
+    "username": {
+      "isString": "Username must be a string",
+      "minLength": "Username must be at least 2 characters",
+      "maxLength": "Username must not exceed 32 characters"
+    },
+    "name": {
+      "isString": "Name must be a string",
+      "isNotEmpty": "Name is required",
+      "minLength": "Name must be at least 2 characters",
+      "maxLength": "Name must not exceed 64 characters"
+    },
+    "title": {
+      "isString": "Title must be a string",
+      "isNotEmpty": "Title is required"
+    },
+    "description": {
+      "isString": "Description must be a string",
+      "isNotEmpty": "Description is required",
+      "maxLength": "Description must not exceed $constraint1 characters"
+    },
+    "content": {
+      "isString": "Content must be a string",
+      "isNotEmpty": "Content is required"
+    },
+    "mimetype": {
+      "isString": "Mimetype must be a string",
+      "isNotEmpty": "Mimetype is required"
+    },
+    "parentId": {
+      "isString": "Parent ID must be a string",
+      "isNotEmpty": "Parent ID is required"
+    },
+    "resourceType": {
+      "isEnum": "Resource type must be a valid value"
+    },
+    "namespaceId": {
+      "isString": "Namespace ID must be a string",
+      "isNotEmpty": "Namespace ID is required"
+    },
+    "userId": {
+      "isString": "User ID must be a string",
+      "isNotEmpty": "User ID is required"
+    },
+    "permission": {
+      "isEnum": "Permission must be a valid value",
+      "isNotEmpty": "Permission is required"
+    },
+    "url": {
+      "isString": "URL must be a string",
+      "isNotEmpty": "URL is required"
+    },
+    "query": {
+      "isString": "Query must be a string",
+      "isNotEmpty": "Query is required"
+    },
+    "type": {
+      "isEnum": "Type must be a valid value",
+      "isNotEmpty": "Type is required"
+    },
+    "enabled": {
+      "isBoolean": "Enabled must be a boolean value"
+    },
+    "requireLogin": {
+      "isBoolean": "Require login must be a boolean value"
+    },
+    "allResources": {
+      "isBoolean": "All resources must be a boolean value"
+    }
+  }
+}

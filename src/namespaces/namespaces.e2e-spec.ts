@@ -411,7 +411,10 @@ describe('NamespacesController (e2e)', () => {
         .send(specialNameWorkspace)
         .expect(HttpStatus.CREATED);
 
-      expect(response.body.name).toBe(specialNameWorkspace.name);
+      // Emojis should be filtered out
+      expect(response.body.name).toBe(
+        'Test Workspace with 特殊字符 and émojis',
+      );
 
       // Clean up
       await client
@@ -420,7 +423,7 @@ describe('NamespacesController (e2e)', () => {
     });
 
     it('should handle very long namespace names', async () => {
-      const longName = 'A'.repeat(255); // Test boundary conditions
+      const longName = 'A'.repeat(64); // Test boundary conditions
       const longNameWorkspace = {
         name: longName,
       };

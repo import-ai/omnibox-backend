@@ -19,6 +19,8 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { isNameBlocked } from 'omniboxd/utils/blocked-names';
+import { filterEmoji } from 'omniboxd/utils/emoji';
 
 @Injectable()
 export class NamespacesService {
@@ -173,7 +175,13 @@ export class NamespacesService {
     name: string,
     manager: EntityManager,
   ): Promise<Namespace> {
-    if ((await manager.countBy(Namespace, { name })) > 0) {
+    // Filter emoji from namespace name
+    const filteredName = filterEmoji(name);
+
+    if (
+      isNameBlocked(filteredName) ||
+      (await manager.countBy(Namespace, { name: filteredName })) > 0
+    ) {
       const message = this.i18n.t('namespace.errors.namespaceConflict');
       throw new AppException(
         message,
@@ -181,7 +189,9 @@ export class NamespacesService {
         HttpStatus.CONFLICT,
       );
     }
-    const namespace = await manager.save(manager.create(Namespace, { name }));
+    const namespace = await manager.save(
+      manager.create(Namespace, { name: filteredName }),
+    );
     const publicRoot = await this.resourcesService.createResource(
       {
         namespaceId: namespace.id,
@@ -197,6 +207,16 @@ export class NamespacesService {
     return namespace;
   }
 
+  async getNamespaceByName(
+    name: string,
+    entityManager?: EntityManager,
+  ): Promise<Namespace | null> {
+    const repo = entityManager
+      ? entityManager.getRepository(Namespace)
+      : this.namespaceRepository;
+    return repo.findOne({ where: { name } });
+  }
+
   async update(
     id: string,
     updateDto: UpdateNamespaceDto,
@@ -207,7 +227,13 @@ export class NamespacesService {
       : this.namespaceRepository;
     const namespace = await this.getNamespace(id, manager);
     if (updateDto.name && updateDto.name !== namespace.name) {
-      if ((await repo.countBy({ name: updateDto.name })) > 0) {
+      // Filter emoji from namespace name
+      const filteredName = filterEmoji(updateDto.name);
+
+      if (
+        isNameBlocked(filteredName) ||
+        (await repo.countBy({ name: filteredName })) > 0
+      ) {
         const message = this.i18n.t('namespace.errors.namespaceConflict');
         throw new AppException(
           message,
@@ -215,7 +241,7 @@ export class NamespacesService {
           HttpStatus.CONFLICT,
         );
       }
-      namespace.name = updateDto.name;
+      namespace.name = filteredName;
     }
     return await repo.update(id, namespace);
   }
@@ -244,16 +270,6 @@ export class NamespacesService {
         parentId: null,
         userId,
         resourceType: ResourceType.FOLDER,
-      },
-      entityManager,
-    );
-    await this.resourcesService.createResource(
-      {
-        namespaceId,
-        parentId: privateRoot.id,
-        userId,
-        resourceType: ResourceType.FOLDER,
-        name: this.i18n.t('namespace.uncategorized'),
       },
       entityManager,
     );

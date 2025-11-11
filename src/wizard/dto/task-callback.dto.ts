@@ -1,8 +1,11 @@
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class TaskCallbackDto {
-  @IsString()
-  @IsNotEmpty()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
   id: string;
 
   @IsOptional()

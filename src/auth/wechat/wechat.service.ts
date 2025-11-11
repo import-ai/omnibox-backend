@@ -184,16 +184,27 @@ export class WechatService {
 
     if (userId) {
       const wechatUser = await this.userService.findByLoginId(userData.unionid);
-      if (wechatUser && wechatUser.id !== userId) {
-        const providerName = this.i18n.t('auth.providers.wechat');
-        const message = this.i18n.t('auth.errors.invalidProviderData', {
-          args: { provider: providerName },
-        });
-        throw new AppException(
-          message,
-          'ACCOUNT_ALREADY_BOUND',
-          HttpStatus.BAD_REQUEST,
-        );
+      if (wechatUser) {
+        if (wechatUser.id !== userId) {
+          const providerName = this.i18n.t('auth.providers.wechat');
+          const message = this.i18n.t('auth.errors.invalidProviderData', {
+            args: { provider: providerName },
+          });
+          throw new AppException(
+            message,
+            'ACCOUNT_ALREADY_BOUND',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        const returnValue = {
+          id: wechatUser.id,
+          access_token: this.jwtService.sign({
+            sub: wechatUser.id,
+          }),
+        };
+        stateInfo.userInfo = returnValue;
+        await this.socialService.updateState(state, stateInfo);
+        return returnValue;
       }
       const existingUser = await this.userService.bindingExistUser({
         userId,

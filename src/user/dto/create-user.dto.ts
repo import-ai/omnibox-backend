@@ -6,22 +6,36 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateUserDto {
-  @IsString()
-  @MinLength(2)
-  @MaxLength(32)
+  @IsString({
+    message: i18nValidationMessage('validation.errors.username.isString'),
+  })
+  @MinLength(2, {
+    message: i18nValidationMessage('validation.errors.username.minLength'),
+  })
+  @MaxLength(32, {
+    message: i18nValidationMessage('validation.errors.username.maxLength'),
+  })
   username: string;
 
-  @IsEmail()
+  @IsEmail(
+    {},
+    { message: i18nValidationMessage('validation.errors.email.isEmail') },
+  )
   @IsOptional()
   email: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsString({
+    message: i18nValidationMessage('validation.errors.password.isString'),
+  })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.password.isNotEmpty'),
+  })
   password: string;
 
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsOptional()
   lang?: string;
 }

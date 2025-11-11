@@ -1,10 +1,15 @@
 import { IsString, MaxLength } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateUserOptionDto {
-  @IsString()
-  @MaxLength(20)
+  @IsString({
+    message: i18nValidationMessage('validation.errors.name.isString'),
+  })
+  @MaxLength(64, {
+    message: i18nValidationMessage('validation.errors.name.maxLength'),
+  })
   name: string;
 
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   value: string;
 }

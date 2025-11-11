@@ -70,7 +70,7 @@ class MockWizardWorker {
         await this.client.get(
           `/api/v1/namespaces/${this.client.namespace.id}/tasks`,
         )
-      ).body;
+      ).body.tasks;
       if (tasks.length === 0) {
         flag = false;
         continue;
@@ -103,7 +103,11 @@ class MockWizardWorker {
 
       return response.body as TaskDto;
     } catch (error) {
-      if (error.code === 'ECONNRESET' || error.timeout) {
+      if (
+        error.code === 'ECONNRESET' ||
+        error.timeout ||
+        error.message?.includes('socket hang up')
+      ) {
         console.warn('Connection issue when fetching task, retrying...');
         return null; // Treat connection issues as no tasks available for now
       }
@@ -241,7 +245,11 @@ class MockWizardWorker {
         throw new Error(`Failed to send callback: ${response.status}`);
       }
     } catch (error) {
-      if (error.code === 'ECONNRESET' || error.timeout) {
+      if (
+        error.code === 'ECONNRESET' ||
+        error.timeout ||
+        error.message?.includes('socket hang up')
+      ) {
         console.warn(
           `Connection issue when sending callback for task ${taskId}:`,
           error.message,
@@ -313,7 +321,7 @@ describe('Task Pipeline (e2e)', () => {
 
       const taskMetas: TaskMetaDto[] = (
         await client.get(`/api/v1/namespaces/${client.namespace.id}/tasks`)
-      ).body;
+      ).body.tasks;
 
       const upsertTaskMeta = taskMetas.find(
         (t: TaskMetaDto) =>
@@ -342,7 +350,7 @@ describe('Task Pipeline (e2e)', () => {
       expect(patchResponse.status).toBe(200);
       const patchTaskMetas: TaskMetaDto[] = (
         await client.get(`/api/v1/namespaces/${client.namespace.id}/tasks`)
-      ).body;
+      ).body.tasks;
       const patchUpsertTaskMeta = patchTaskMetas.find(
         (t: TaskMetaDto) =>
           t.function === 'upsert_index' &&
@@ -416,7 +424,7 @@ describe('Task Pipeline (e2e)', () => {
 
       const taskMetas: TaskMetaDto[] = (
         await client.get(`/api/v1/namespaces/${client.namespace.id}/tasks`)
-      ).body;
+      ).body.tasks;
       const upsertTaskMeta = taskMetas.find(
         (t: TaskMetaDto) => t.function === 'upsert_index',
       );
@@ -602,7 +610,7 @@ describe('Task Pipeline (e2e)', () => {
         );
         if (tasksResponse.status !== 200) return false;
 
-        const tasks: TaskMetaDto[] = tasksResponse.body;
+        const tasks: TaskMetaDto[] = tasksResponse.body.tasks;
         const collectTask: TaskMetaDto | undefined = tasks.find(
           (t: any) => t.id === collectTaskId,
         );
@@ -624,7 +632,7 @@ describe('Task Pipeline (e2e)', () => {
       const tasksResponse = await client.get(
         `/api/v1/namespaces/${client.namespace.id}/tasks`,
       );
-      const taskMetaList: TaskMetaDto[] = tasksResponse.body;
+      const taskMetaList: TaskMetaDto[] = tasksResponse.body.tasks;
       const extractTagsTaskMeta = taskMetaList.find(
         (t: TaskMetaDto) =>
           t.function === 'extract_tags' &&
@@ -681,7 +689,7 @@ describe('Task Pipeline (e2e)', () => {
         const tasksResponse = await client.get(
           `/api/v1/namespaces/${client.namespace.id}/tasks`,
         );
-        const tasks: TaskMetaDto[] = tasksResponse.body;
+        const tasks: TaskMetaDto[] = tasksResponse.body.tasks;
         const generateTitleTask = tasks.find(
           (t: TaskMetaDto) =>
             t.function === 'generate_title' &&

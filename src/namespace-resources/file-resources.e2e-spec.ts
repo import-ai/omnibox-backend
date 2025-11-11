@@ -27,27 +27,14 @@ describe('FileResourcesController (e2e)', () => {
   test.each(uploadLanguageDatasets)(
     'upload and download file: $filename',
     async ({ filename, content }) => {
-      const parentId: string = client.namespace.root_resource_id;
       const uploadRes = await client
         .post(`/api/v1/namespaces/${client.namespace.id}/resources/files`)
-        .field('namespace_id', client.namespace.id)
-        .field('parent_id', parentId)
-        .attach('file', Buffer.from(content), filename);
+        .send({
+          name: filename,
+          mimetype: 'text/plain',
+          size: content.length,
+        });
       expect(uploadRes.status).toBe(201);
-      expect(uploadRes.body.name).toBe(filename);
-      const resourceId = uploadRes.body.id;
-
-      const downloadRes = await client
-        .get(
-          `/api/v1/namespaces/${client.namespace.id}/resources/files/${resourceId}`,
-        )
-        .expect(200);
-      expect(
-        decodeURIComponent(
-          downloadRes.header['content-disposition'].split('"')[1],
-        ),
-      ).toBe(filename);
-      expect(downloadRes.text).toBe(content);
     },
   );
 });

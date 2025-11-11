@@ -9,7 +9,4 @@ export class UpdateOrderDto {
   @IsOptional()
   @IsString()
   thirdPartyOrderNo?: string;
-
-  @IsOptional()
-  metadata?: Record<string, any>;
 }

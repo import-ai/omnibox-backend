@@ -1,0 +1,8 @@
+{
+  "errors": {
+    "orderNotFound": "Order not found",
+    "orderStatusIncorrect": "Order status is incorrect, cannot mark as paid",
+    "paidOrderCannotClose": "Paid order cannot be closed",
+    "onlyPaidOrderCanRefund": "Only paid orders can be refunded"
+  }
+}

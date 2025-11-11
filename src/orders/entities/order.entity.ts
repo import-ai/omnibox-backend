@@ -1,5 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum OrderStatus {
   PENDING = 'pending',
@@ -25,11 +25,9 @@ export class Order extends Base {
   id: string;
 
   @Column('varchar', { unique: true })
-  @Index()
   orderNo: string;
 
   @Column('varchar')
-  @Index()
   userId: string;
 
   @Column('varchar', { nullable: true })
@@ -46,7 +44,6 @@ export class Order extends Base {
     enum: OrderStatus,
     default: OrderStatus.PENDING,
   })
-  @Index()
   status: OrderStatus;
 
   @Column({
@@ -64,14 +61,10 @@ export class Order extends Base {
   paymentType: PaymentType | null;
 
   @Column('varchar', { nullable: true })
-  @Index()
-  thirdPartyOrderNo: string | null; // 第三方支付平台订单号（微信/支付宝）
+  thirdPartyOrderNo: string | null;
 
   @Column('varchar')
   description: string;
-
-  @Column('jsonb', { nullable: true })
-  metadata: Record<string, any> | null; // 其他元数据
 
   @Column('timestamptz', { nullable: true })
   paidAt: Date | null;

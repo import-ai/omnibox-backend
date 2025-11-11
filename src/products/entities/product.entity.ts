@@ -1,5 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum ProductStatus {
   ACTIVE = 'active',
@@ -15,10 +15,6 @@ export enum ProductType {
 export class Product extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column('varchar', { unique: true })
-  @Index()
-  code: string;
 
   @Column('varchar')
   name: string;
@@ -37,7 +33,6 @@ export class Product extends Base {
     enum: ProductStatus,
     default: ProductStatus.ACTIVE,
   })
-  @Index()
   status: ProductStatus;
 
   @Column({
@@ -47,12 +42,6 @@ export class Product extends Base {
   })
   type: ProductType;
 
-  @Column('int', { nullable: true })
-  stock: number | null; // 库存，null 表示无限库存
-
-  @Column('jsonb', { nullable: true })
-  metadata: Record<string, any> | null; // 其他元数据
-
   @Column('int', { default: 0 })
-  sortOrder: number; // 排序顺序
+  sort: number;
 }

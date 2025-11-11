@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsInt, Min } from 'class-validator';
+import { IsEnum, IsOptional } from 'class-validator';
 import {
   ProductStatus,
   ProductType,
@@ -12,14 +12,4 @@ export class QueryProductDto {
   @IsEnum(ProductType)
   @IsOptional()
   type?: ProductType;
-
-  @IsInt()
-  @Min(1)
-  @IsOptional()
-  page?: number;
-
-  @IsInt()
-  @Min(1)
-  @IsOptional()
-  limit?: number;
 }

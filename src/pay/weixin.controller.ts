@@ -1,19 +1,44 @@
+import { Request } from 'express';
 import { WeixinCallbackBody } from 'omniboxd/pay/types';
 import { WeixinService } from 'omniboxd/pay/weixin.service';
-import { Get, Post, Param, Body, Controller } from '@nestjs/common';
+import {
+  Req,
+  Get,
+  Post,
+  Param,
+  Body,
+  Controller,
+  BadRequestException,
+} from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { getClientPublicIp } from 'omniboxd/pay/utils';
+import { I18nService } from 'nestjs-i18n';
 
 @Controller('api/v1/pay/weixin')
 export class WeixinController {
-  constructor(private readonly weixinService: WeixinService) {}
+  constructor(
+    private readonly weixinService: WeixinService,
+    private readonly i18n: I18nService,
+  ) {}
 
   @Post('transactions/:type/:productId')
   async transactions(
+    @Req() req: Request,
     @UserId() userId: string,
     @Param('type') type: 'native' | 'jsapi' | 'h5',
     @Param('productId') productId: string,
   ) {
-    return await this.weixinService.transactions(userId, type, productId);
+    const clientIP = getClientPublicIp(req);
+    if (!clientIP) {
+      throw new BadRequestException(this.i18n.t('pay.errors.cannotGetUserIP'));
+    }
+
+    return await this.weixinService.transactions(
+      userId,
+      type,
+      productId,
+      clientIP,
+    );
   }
 
   @Post('callback')

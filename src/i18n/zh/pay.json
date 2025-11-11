@@ -1,0 +1,9 @@
+{
+  "errors": {
+    "invalidParameter": "参数错误",
+    "signatureVerificationFailed": "签名验证失败",
+    "missingRequiredParameters": "缺少必要参数",
+    "orderAmountMismatch": "订单金额不匹配",
+    "cannotGetUserIP": "无法获取用户有效IP，无法创建订单"
+  }
+}

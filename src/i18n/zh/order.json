@@ -1,0 +1,8 @@
+{
+  "errors": {
+    "orderNotFound": "订单不存在",
+    "orderStatusIncorrect": "订单状态不正确，无法标记为已支付",
+    "paidOrderCannotClose": "已支付的订单无法关闭",
+    "onlyPaidOrderCanRefund": "只有已支付的订单才能退款"
+  }
+}

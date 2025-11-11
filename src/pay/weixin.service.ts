@@ -1,21 +1,28 @@
 import fs from 'fs';
 import WxPay from 'wechatpay-node-v3';
 import { ConfigService } from '@nestjs/config';
-import { WeixinCallbackBody } from 'omniboxd/pay/types';
+import {
+  WeixinCallbackBody,
+  WeixinQueryResponse,
+  WeixinTradeState,
+} from 'omniboxd/pay/types';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { OrdersService } from 'omniboxd/orders/orders.service';
 import {
   PaymentMethod,
   PaymentType,
+  OrderStatus,
 } from 'omniboxd/orders/entities/order.entity';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class WeixinService {
   private pay: WxPay;
 
   constructor(
-    private readonly configService: ConfigService,
-    private readonly ordersService: OrdersService,
+    private configService: ConfigService,
+    private ordersService: OrdersService,
+    private readonly i18n: I18nService,
   ) {
     this.pay = new WxPay({
       key: this.configService.get<string>('OBB_WECHAT_APP_KEY', ''),
@@ -35,8 +42,8 @@ export class WeixinService {
     userId: string,
     type: 'native' | 'jsapi' | 'h5',
     productId: string,
+    ip: string,
   ) {
-    // 确定支付类型
     let paymentType: PaymentType;
     if (type === 'jsapi') {
       paymentType = PaymentType.JSAPI;
@@ -46,35 +53,32 @@ export class WeixinService {
       paymentType = PaymentType.NATIVE;
     }
 
-    // 创建订单
     const order = await this.ordersService.create(userId, {
       productId,
-      amount: 1, // TODO: 根据 productId 获取实际金额
-      description: '产品购买', // TODO: 根据 productId 获取产品描述
       paymentMethod: PaymentMethod.WECHAT,
       paymentType,
     });
 
-    const notifyUrl = this.configService.get<string>(
-      'OBB_WECHAT_NOTIFY_URL',
-      '',
+    const baseURL = this.configService.get<string>(
+      'OBB_BASE_URL',
+      'https://www.omnibox.pro',
     );
+    const notifyUrl = `${baseURL}/api/v1/pay/weixin/callback`;
 
     if (type === 'jsapi') {
-      // TODO: 需要从请求中获取用户的 openid
       const response = await this.pay.transactions_jsapi({
         description: order.description,
         out_trade_no: order.orderNo,
         notify_url: notifyUrl,
         amount: {
-          total: order.amount, // 单位分
+          total: order.amount, // Currency unit: cent
           currency: 'CNY',
         },
         payer: {
           openid: 'TODO', // TODO: 需要从用户绑定中获取 openid
         },
         scene_info: {
-          payer_client_ip: '127.0.0.1', // TODO: 从请求中获取真实IP
+          payer_client_ip: ip,
         },
       });
       return { ...response, orderId: order.id, orderNo: order.orderNo };
@@ -89,7 +93,7 @@ export class WeixinService {
           currency: 'CNY',
         },
         scene_info: {
-          payer_client_ip: '127.0.0.1', // TODO: 从请求中获取真实IP
+          payer_client_ip: ip,
           h5_info: {
             type: 'Wap',
             app_name: 'Omnibox',
@@ -109,16 +113,15 @@ export class WeixinService {
           currency: 'CNY',
         },
         scene_info: {
-          payer_client_ip: '127.0.0.1', // TODO: 从请求中获取真实IP
+          payer_client_ip: ip,
         },
       });
       return { ...response, orderId: order.id, orderNo: order.orderNo };
     }
-    throw new BadRequestException('参数错误');
+    throw new BadRequestException(this.i18n.t('pay.errors.invalidParameter'));
   }
 
   async callback(body: WeixinCallbackBody) {
-    // 解密回调数据
     const data = this.pay.decipher_gcm(
       body.resource.ciphertext,
       body.resource.associated_data,
@@ -132,15 +135,14 @@ export class WeixinService {
       amount: { total: number };
     };
 
-    // 获取订单
     const order = await this.ordersService.findByOrderNo(out_trade_no);
 
-    // 验证金额
     if (amount.total !== order.amount) {
-      throw new BadRequestException('订单金额不匹配');
+      throw new BadRequestException(
+        this.i18n.t('pay.errors.orderAmountMismatch'),
+      );
     }
 
-    // 根据支付状态更新订单
     if (trade_state === 'SUCCESS') {
       await this.ordersService.markAsPaid(out_trade_no, transaction_id);
     } else if (trade_state === 'CLOSED') {
@@ -151,15 +153,37 @@ export class WeixinService {
   }
 
   async query(userId: string, orderId: string) {
-    // 查询本地订单
     const order = await this.ordersService.findById(userId, orderId);
+    const response = await this.pay.query({
+      out_trade_no: order.orderNo,
+    });
 
-    // 查询微信支付订单状态
-    const wechatData = await this.pay.query({ out_trade_no: order.orderNo });
+    const wechatData = response as unknown as WeixinQueryResponse;
 
-    return {
-      order,
-      wechatData,
-    };
+    if (
+      wechatData.trade_state === WeixinTradeState.SUCCESS &&
+      order.status !== OrderStatus.PAID
+    ) {
+      if (wechatData.amount && wechatData.amount.total !== order.amount) {
+        throw new BadRequestException(
+          this.i18n.t('pay.errors.orderAmountMismatch'),
+        );
+      }
+
+      await this.ordersService.markAsPaid(
+        order.orderNo,
+        wechatData.transaction_id || '',
+      );
+    }
+
+    if (
+      wechatData.trade_state === WeixinTradeState.CLOSED &&
+      order.status !== OrderStatus.CLOSED &&
+      order.status !== OrderStatus.PAID
+    ) {
+      await this.ordersService.close(order.orderNo);
+    }
+
+    return await this.ordersService.findById(userId, orderId);
   }
 }

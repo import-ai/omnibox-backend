@@ -1,25 +1,29 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import generateId from 'omniboxd/utils/generate-id';
+import { ProductsService } from 'omniboxd/products/products.service';
+import { CreateOrderDto } from 'omniboxd/orders/dto/create-order.dto';
+import { QueryOrderDto } from 'omniboxd/orders/dto/query-order.dto';
+import { UpdateOrderDto } from 'omniboxd/orders/dto/update-order.dto';
 import {
   Order,
   OrderStatus,
   PaymentMethod,
 } from 'omniboxd/orders/entities/order.entity';
-import { CreateOrderDto } from 'omniboxd/orders/dto/create-order.dto';
-import { QueryOrderDto } from 'omniboxd/orders/dto/query-order.dto';
-import { UpdateOrderDto } from 'omniboxd/orders/dto/update-order.dto';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class OrdersService {
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    private readonly productsService: ProductsService,
+    private readonly i18n: I18nService,
   ) {}
 
   private generateOrderNo(paymentMethod: PaymentMethod): string {
@@ -30,48 +34,26 @@ export class OrdersService {
   }
 
   async create(userId: string, dto: CreateOrderDto): Promise<Order> {
+    const product = await this.productsService.findById(dto.productId);
+
     const orderNo = this.generateOrderNo(dto.paymentMethod);
 
     const order = this.orderRepository.create({
       orderNo,
       userId,
+      amount: product.price,
+      currency: product.currency,
       productId: dto.productId,
-      amount: dto.amount,
-      description: dto.description,
+      description: product.description,
       paymentMethod: dto.paymentMethod,
       paymentType: dto.paymentType,
-      metadata: dto.metadata || null,
       status: OrderStatus.PENDING,
     });
 
     return await this.orderRepository.save(order);
   }
 
-  async findById(userId: string, orderId: string): Promise<Order> {
-    const order = await this.orderRepository.findOne({
-      where: { id: orderId, userId },
-    });
-
-    if (!order) {
-      throw new NotFoundException('订单不存在');
-    }
-
-    return order;
-  }
-
-  async findByOrderNo(orderNo: string): Promise<Order> {
-    const order = await this.orderRepository.findOne({
-      where: { orderNo },
-    });
-
-    if (!order) {
-      throw new NotFoundException('订单不存在');
-    }
-
-    return order;
-  }
-
-  async findByUser(userId: string, query: QueryOrderDto) {
+  async findAll(userId: string, query: QueryOrderDto) {
     const { status, productId, page = 1, limit = 20 } = query;
 
     const queryBuilder = this.orderRepository
@@ -101,19 +83,41 @@ export class OrdersService {
     };
   }
 
+  async findById(userId: string, orderId: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId, userId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(this.i18n.t('order.errors.orderNotFound'));
+    }
+
+    return order;
+  }
+
+  async findByOrderNo(orderNo: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { orderNo },
+    });
+
+    if (!order) {
+      throw new NotFoundException(this.i18n.t('order.errors.orderNotFound'));
+    }
+
+    return order;
+  }
+
   async update(orderId: string, dto: UpdateOrderDto): Promise<Order> {
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
     });
 
     if (!order) {
-      throw new NotFoundException('订单不存在');
+      throw new NotFoundException(this.i18n.t('order.errors.orderNotFound'));
     }
 
     if (dto.status) {
       order.status = dto.status;
-
-      // 根据状态更新时间
       if (dto.status === OrderStatus.PAID && !order.paidAt) {
         order.paidAt = new Date();
       } else if (dto.status === OrderStatus.CLOSED && !order.closedAt) {
@@ -127,10 +131,6 @@ export class OrdersService {
       order.thirdPartyOrderNo = dto.thirdPartyOrderNo;
     }
 
-    if (dto.metadata) {
-      order.metadata = { ...order.metadata, ...dto.metadata };
-    }
-
     return await this.orderRepository.save(order);
   }
 
@@ -142,7 +142,9 @@ export class OrdersService {
     }
 
     if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException('订单状态不正确，无法标记为已支付');
+      throw new BadRequestException(
+        this.i18n.t('order.errors.orderStatusIncorrect'),
+      );
     }
 
     order.status = OrderStatus.PAID;
@@ -156,7 +158,9 @@ export class OrdersService {
     const order = await this.findByOrderNo(orderNo);
 
     if (order.status === OrderStatus.PAID) {
-      throw new BadRequestException('已支付的订单无法关闭');
+      throw new BadRequestException(
+        this.i18n.t('order.errors.paidOrderCannotClose'),
+      );
     }
 
     if (order.status === OrderStatus.CLOSED) {
@@ -173,7 +177,9 @@ export class OrdersService {
     const order = await this.findByOrderNo(orderNo);
 
     if (order.status !== OrderStatus.PAID) {
-      throw new BadRequestException('只有已支付的订单才能退款');
+      throw new BadRequestException(
+        this.i18n.t('order.errors.onlyPaidOrderCanRefund'),
+      );
     }
 
     order.status = OrderStatus.REFUNDED;

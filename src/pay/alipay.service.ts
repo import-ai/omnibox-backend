@@ -1,21 +1,28 @@
 import fs from 'fs';
 import { AlipaySdk } from 'alipay-sdk';
 import { ConfigService } from '@nestjs/config';
-import { AlipayCallbackQuery } from 'omniboxd/pay/types';
-import { Injectable, BadRequestException } from '@nestjs/common';
 import { OrdersService } from 'omniboxd/orders/orders.service';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import {
   PaymentMethod,
   PaymentType,
+  OrderStatus,
 } from 'omniboxd/orders/entities/order.entity';
+import {
+  AlipayCallbackQuery,
+  AlipayQueryResponse,
+  AlipayTradeStatus,
+} from 'omniboxd/pay/types';
+import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class AlipayService {
   private pay: AlipaySdk;
 
   constructor(
-    private readonly configService: ConfigService,
-    private readonly ordersService: OrdersService,
+    private configService: ConfigService,
+    private ordersService: OrdersService,
+    private readonly i18n: I18nService,
   ) {
     this.pay = new AlipaySdk({
       appId: this.configService.get<string>('OBB_ALIPAY_APPID', ''),
@@ -33,21 +40,19 @@ export class AlipayService {
   async transactions(userId: string, type: 'native' | 'h5', productId: string) {
     const order = await this.ordersService.create(userId, {
       productId,
-      amount: 1, // TODO: 根据 productId 获取实际金额
-      description: '产品购买', // TODO: 根据 productId 获取产品描述
       paymentMethod: PaymentMethod.ALIPAY,
       paymentType: type === 'h5' ? PaymentType.H5 : PaymentType.NATIVE,
     });
-
-    const notifyUrl = this.configService.get<string>(
-      'OBB_ALIPAY_NOTIFY_URL',
-      '',
+    const baseURL = this.configService.get<string>(
+      'OBB_BASE_URL',
+      'https://www.omnibox.pro',
     );
+    const notifyUrl = `${baseURL}/api/v1/pay/alipay/callback`;
     const returnUrl = this.configService.get<string>(
       'OBB_ALIPAY_RETURN_URL',
       'https://www.omnibox.pro',
     );
-    const amountInYuan = (order.amount / 100).toFixed(2); // 将分转换为元
+    const amountInYuan = (order.amount / 100).toFixed(2);
 
     if (type === 'h5') {
       const url = this.pay.pageExecute('alipay.trade.wap.pay', 'GET', {
@@ -77,31 +82,33 @@ export class AlipayService {
       });
       return { url, orderId: order.id, orderNo: order.orderNo };
     }
-    throw new BadRequestException('参数错误');
+    throw new BadRequestException(this.i18n.t('pay.errors.invalidParameter'));
   }
 
   async callback(query: AlipayCallbackQuery) {
-    // 验证签名
     if (!this.pay.checkNotifySign(query)) {
-      throw new BadRequestException('签名验证失败');
+      throw new BadRequestException(
+        this.i18n.t('pay.errors.signatureVerificationFailed'),
+      );
     }
 
     const { out_trade_no, trade_no, trade_status, total_amount } = query;
 
     if (!out_trade_no || !trade_no) {
-      throw new BadRequestException('缺少必要参数');
+      throw new BadRequestException(
+        this.i18n.t('pay.errors.missingRequiredParameters'),
+      );
     }
 
-    // 获取订单
     const order = await this.ordersService.findByOrderNo(out_trade_no);
 
-    // 验证金额
     const orderAmountInYuan = (order.amount / 100).toFixed(2);
     if (total_amount !== orderAmountInYuan) {
-      throw new BadRequestException('订单金额不匹配');
+      throw new BadRequestException(
+        this.i18n.t('pay.errors.orderAmountMismatch'),
+      );
     }
 
-    // 根据支付状态更新订单
     if (trade_status === 'TRADE_SUCCESS' || trade_status === 'TRADE_FINISHED') {
       await this.ordersService.markAsPaid(out_trade_no, trade_no);
     } else if (trade_status === 'TRADE_CLOSED') {
@@ -112,20 +119,39 @@ export class AlipayService {
   }
 
   async query(userId: string, orderId: string) {
-    // 查询本地订单
     const order = await this.ordersService.findById(userId, orderId);
-
-    // 查询支付宝订单状态
-    const data = await this.pay.curl('POST', '/alipay/trade/query', {
+    const response = await this.pay.curl('POST', '/alipay/trade/query', {
       body: {
         out_trade_no: order.orderNo,
         query_options: ['trade_settle_info'],
       },
     });
+    const alipayData = response.data
+      .alipay_trade_query_response as unknown as AlipayQueryResponse;
 
-    return {
-      order,
-      alipayData: data,
-    };
+    if (
+      (alipayData.trade_status === AlipayTradeStatus.TRADE_SUCCESS ||
+        alipayData.trade_status === AlipayTradeStatus.TRADE_FINISHED) &&
+      order.status !== OrderStatus.PAID
+    ) {
+      const orderAmountInYuan = (order.amount / 100).toFixed(2);
+      if (alipayData.total_amount !== orderAmountInYuan) {
+        throw new BadRequestException(
+          this.i18n.t('pay.errors.orderAmountMismatch'),
+        );
+      }
+
+      await this.ordersService.markAsPaid(order.orderNo, alipayData.trade_no);
+    }
+
+    if (
+      alipayData.trade_status === AlipayTradeStatus.TRADE_CLOSED &&
+      order.status !== OrderStatus.CLOSED &&
+      order.status !== OrderStatus.PAID
+    ) {
+      await this.ordersService.close(order.orderNo);
+    }
+
+    return await this.ordersService.findById(userId, orderId);
   }
 }

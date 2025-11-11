@@ -9,7 +9,7 @@ import { tap, finalize } from 'rxjs/operators';
 import { trace, context } from '@opentelemetry/api';
 import { Socket } from 'socket.io';
 
-const LOGIN_URLS = ['/api/v1/login', '/api/v1/sign-up/confirm'];
+const LOGIN_URLS = ['/api/v1/login', '/api/v1/auth/accept-invite'];
 
 @Injectable()
 export class UserInterceptor implements NestInterceptor {

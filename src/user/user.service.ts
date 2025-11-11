@@ -57,6 +57,10 @@ export class UserService {
     if (!account) {
       return;
     }
+    // Reject authentication if password is empty (OTP-only users)
+    if (account.password === '') {
+      return;
+    }
     const match = await bcrypt.compare(password, account.password);
     if (!match) {
       return;
@@ -112,12 +116,16 @@ export class UserService {
       );
     }
 
-    this.validatePassword(account.password);
+    // Only validate and hash password if provided (skip for OTP-only users)
+    let passwordHash = account.password;
+    if (account.password) {
+      this.validatePassword(account.password);
+      passwordHash = await bcrypt.hash(account.password, 10);
+    }
 
-    const hash = await bcrypt.hash(account.password, 10);
     const newUser = repo.create({
       ...account,
-      password: hash,
+      password: passwordHash,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -337,7 +345,17 @@ export class UserService {
       expiresIn,
     );
 
-    await this.mailService.validateEmail(email, code);
+    // Get user info for personalization
+    const user = await this.find(userId);
+    const userLangOption = await this.getOption(userId, 'language');
+    const userLang = userLangOption?.value;
+
+    await this.mailService.validateEmail(
+      email,
+      code,
+      user.username || undefined,
+      userLang,
+    );
 
     return { email };
   }
@@ -415,7 +433,31 @@ export class UserService {
         );
       }
       await this.cacheService.delete(this.namespace, account.email);
+
+      // Store old email before updating
+      const oldEmail = existUser.email;
       existUser.email = account.email;
+
+      // Send notification to old email after successful update (only if old email exists)
+      // Users from WeChat/OAuth signup may not have an email initially
+      if (oldEmail) {
+        const userLangOption = await this.getOption(id, 'language');
+        const userLang = userLangOption?.value;
+
+        // Send notification asynchronously (don't block the response)
+        this.mailService
+          .sendEmailChangeNotification(
+            oldEmail,
+            oldEmail,
+            account.email,
+            existUser.username || undefined,
+            userLang,
+          )
+          .catch((error) => {
+            // Log error but don't fail the update
+            console.error('Failed to send email change notification:', error);
+          });
+      }
     }
     return await this.userRepository.update(id, existUser);
   }

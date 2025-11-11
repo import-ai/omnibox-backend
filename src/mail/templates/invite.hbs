@@ -2,12 +2,54 @@
 <html>
 <head>
   <title>{{t "mail.templates.invite.title"}}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .magic-link {
+      text-align: center;
+      margin: 30px 0;
+    }
+    .magic-link a {
+      display: inline-block;
+      padding: 12px 30px;
+      background-color: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: 500;
+    }
+    .expiry {
+      color: #666;
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
   <h1>{{t "mail.templates.invite.heading"}}</h1>
-  <p>{{t "mail.templates.invite.body"}}</p>
-  <p><a href="{{resetUrl}}">{{t "mail.templates.invite.buttonText"}}</a></p>
+
+  {{#if isExistingUser}}
+    {{#if receiverUsername}}
+      <p>{{t "mail.templates.invite.bodyExistingUserPrefix"}} <strong>{{receiverUsername}}</strong>, <strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyExistingUserMiddle"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
+    {{else}}
+      <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyExistingUserNoUsernamePrefix"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
+    {{/if}}
+  {{else}}
+    <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyNewUserPrefix"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyNewUserSuffix"}}</p>
+  {{/if}}
+
+  <div class="magic-link">
+    <a href="{{resetUrl}}">{{t "mail.templates.invite.buttonText"}}</a>
+  </div>
+
+  <p class="expiry">{{t "mail.templates.invite.expireText"}}</p>
+
   <p>{{t "mail.templates.invite.ignoreText"}}</p>
-  <p>{{t "mail.templates.invite.expireText"}}</p>
 </body>
 </html>

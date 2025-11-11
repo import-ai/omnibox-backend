@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{t "mail.templates.emailOtp.title"}}</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .otp-code {
+      font-size: 36px;
+      font-weight: bold;
+      letter-spacing: 8px;
+      text-align: center;
+      padding: 30px;
+      background-color: #f5f5f5;
+      border-radius: 8px;
+      margin: 30px 0;
+      color: #000;
+    }
+    .magic-link {
+      text-align: center;
+      margin: 30px 0;
+    }
+    .magic-link a {
+      display: inline-block;
+      padding: 12px 30px;
+      background-color: #007bff;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: 500;
+    }
+    .divider {
+      text-align: center;
+      margin: 20px 0;
+      color: #999;
+    }
+    .expiry {
+      color: #666;
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>{{t "mail.templates.emailOtp.heading"}}</h1>
+  <p>{{t "mail.templates.emailOtp.body"}}</p>
+
+  <div class="otp-code">{{code}}</div>
+
+  <p class="expiry">{{t "mail.templates.emailOtp.expireText"}}</p>
+
+  <div class="divider">{{t "mail.templates.emailOtp.dividerText"}}</div>
+
+  <div class="magic-link">
+    <a href="{{magicLink}}">{{t "mail.templates.emailOtp.buttonText"}}</a>
+  </div>
+
+  <p>{{t "mail.templates.emailOtp.ignoreText"}}</p>
+</body>
+</html>

@@ -254,18 +254,6 @@ describe('AuthModule (e2e)', () => {
         });
     });
 
-    it('should access sign-up endpoint without authentication', async () => {
-      // Note: This will fail due to email service in test environment, but endpoint should be accessible
-      await client
-        .request()
-        .post('/api/v1/sign-up')
-        .send({
-          url: 'http://localhost:3000/signup',
-          email: 'test-signup@example.com',
-        })
-        .expect(201);
-    });
-
     it('should access WeChat QR code endpoint without authentication', async () => {
       await client
         .request()
@@ -482,57 +470,6 @@ describe('AuthModule (e2e)', () => {
         .get(`/api/v1/user/${client.user.id}`)
         .set('Authorization', '')
         .expect(HttpStatus.UNAUTHORIZED);
-    });
-  });
-
-  describe('Sign-up Flow', () => {
-    describe('POST /api/v1/sign-up/confirm', () => {
-      it('should fail with invalid token', async () => {
-        await client
-          .request()
-          .post('/api/v1/sign-up/confirm')
-          .send({
-            token: 'invalid-token',
-            username: 'testuser',
-            password: 'testpassword',
-          })
-          .expect(HttpStatus.UNAUTHORIZED);
-      });
-
-      it('should fail with missing parameters', async () => {
-        await client
-          .request()
-          .post('/api/v1/sign-up/confirm')
-          .send({
-            token: 'some-token',
-            // Missing username and password
-          })
-          .expect(HttpStatus.UNAUTHORIZED); // Invalid token gets processed first
-      });
-    });
-
-    describe('POST /api/v1/password', () => {
-      it('should initiate password reset for existing user', async () => {
-        await client
-          .request()
-          .post('/api/v1/password')
-          .send({
-            url: 'http://localhost:3000/reset-password',
-            email: client.user.email,
-          })
-          .expect(201);
-      });
-
-      it('should fail for non-existent user', async () => {
-        await client
-          .request()
-          .post('/api/v1/password')
-          .send({
-            url: 'http://localhost:3000/reset-password',
-            email: 'nonexistent@example.com',
-          })
-          .expect(HttpStatus.NOT_FOUND);
-      });
     });
   });
 });

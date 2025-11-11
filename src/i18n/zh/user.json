@@ -10,5 +10,9 @@
     "emailAlreadyInUse": "邮箱已被使用",
     "provideVerificationCode": "请提供邮箱验证码",
     "userCannotbeEmptyStr": "无效的用户名"
+  },
+  "success": {
+    "emailVerificationSent": "验证码已发送至您的新邮箱地址",
+    "emailUpdatedSuccessfully": "邮箱地址已成功更新"
   }
 }

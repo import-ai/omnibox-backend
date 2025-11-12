@@ -4,9 +4,6 @@ export class FileInfoDto {
   @Expose()
   id: string;
 
-  @Expose()
-  url: string;
-
   @Expose({ name: 'post_url' })
   postUrl?: string;
 
@@ -15,13 +12,11 @@ export class FileInfoDto {
 
   static new(
     id: string,
-    url: string,
     postUrl?: string,
     postFields?: Record<string, string>,
   ) {
     const dto = new FileInfoDto();
     dto.id = id;
-    dto.url = url;
     dto.postUrl = postUrl;
     if (postFields) {
       dto.postFields = Object.entries(postFields);

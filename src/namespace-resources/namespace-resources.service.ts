@@ -717,14 +717,13 @@ export class NamespaceResourcesService {
       createReq.name,
       mimetype,
     );
-    const url = await this.filesService.generateUploadUrl(file.id);
-    const postReq = await this.filesService.generatePostForm(
+    const postReq = await this.filesService.generateUploadForm(
       file.id,
       createReq.size,
       file.name,
       file.mimetype,
     );
-    return FileInfoDto.new(file.id, url, postReq.url, postReq.fields);
+    return FileInfoDto.new(file.id, postReq.url, postReq.fields);
   }
 
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {

@@ -1,4 +1,5 @@
 import { Request } from 'express';
+import { getClientIp } from 'request-ip';
 import { WeixinCallbackBody } from 'omniboxd/pay/types';
 import { WeixinService } from 'omniboxd/pay/weixin.service';
 import {
@@ -14,7 +15,6 @@ import {
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { getClientPublicIp } from 'omniboxd/pay/utils';
 import { I18nService } from 'nestjs-i18n';
 
 @Controller('api/v1/pay/weixin')
@@ -31,7 +31,7 @@ export class WeixinController {
     @Param('type') type: 'native' | 'jsapi' | 'h5',
     @Param('productId') productId: string,
   ) {
-    const clientIP = getClientPublicIp(req);
+    const clientIP = getClientIp(req);
     if (!clientIP) {
       throw new AppException(
         this.i18n.t('pay.errors.cannotGetUserIP'),

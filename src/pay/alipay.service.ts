@@ -92,7 +92,7 @@ export class AlipayService {
 
     const { out_trade_no, trade_no, trade_status, total_amount } = query;
 
-    if (!out_trade_no || !trade_no) {
+    if (!out_trade_no || !trade_no || !trade_status) {
       return 'failure';
     }
 
@@ -107,13 +107,14 @@ export class AlipayService {
           if (total_amount !== orderAmountInYuan) {
             return;
           }
-
           if (
-            trade_status === 'TRADE_SUCCESS' ||
-            trade_status === 'TRADE_FINISHED'
+            [
+              AlipayTradeStatus.TRADE_SUCCESS,
+              AlipayTradeStatus.TRADE_FINISHED,
+            ].includes(trade_status)
           ) {
             await this.ordersService.markAsPaid(out_trade_no, trade_no);
-          } else if (trade_status === 'TRADE_CLOSED') {
+          } else if (trade_status === AlipayTradeStatus.TRADE_CLOSED) {
             await this.ordersService.close(out_trade_no);
           }
         } catch (error) {

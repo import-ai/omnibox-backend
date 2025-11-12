@@ -183,16 +183,18 @@ export class WeixinService {
 
   async query(userId: string, orderId: string) {
     const order = await this.ordersService.findById(userId, orderId);
+
+    if (order.status === OrderStatus.PAID) {
+      return order;
+    }
+
     const response = await this.pay.query({
       out_trade_no: order.orderNo,
     });
 
     const wechatData = response as unknown as WeixinQueryResponse;
 
-    if (
-      wechatData.trade_state === WeixinTradeState.SUCCESS &&
-      order.status !== OrderStatus.PAID
-    ) {
+    if (wechatData.trade_state === WeixinTradeState.SUCCESS) {
       if (wechatData.amount && wechatData.amount.total !== order.amount) {
         throw new AppException(
           this.i18n.t('pay.errors.orderAmountMismatch'),
@@ -209,12 +211,13 @@ export class WeixinService {
 
     if (
       wechatData.trade_state === WeixinTradeState.CLOSED &&
-      order.status !== OrderStatus.CLOSED &&
-      order.status !== OrderStatus.PAID
+      order.status !== OrderStatus.CLOSED
     ) {
       await this.ordersService.close(order.orderNo);
     }
 
-    return await this.ordersService.findById(userId, orderId);
+    const lastOrder: any = await this.ordersService.findById(userId, orderId);
+    lastOrder.response = response;
+    return lastOrder;
   }
 }

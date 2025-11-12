@@ -46,7 +46,7 @@ export interface AlipayCallbackQuery {
   body?: string;
   out_trade_no?: string;
   trade_no?: string;
-  trade_status?: string;
+  trade_status?: AlipayTradeStatus;
   out_biz_no?: string;
 
   gmt_create?: string;

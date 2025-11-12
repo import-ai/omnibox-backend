@@ -75,7 +75,7 @@ export class ChunkManagerService {
 
       await Promise.all(
         objectsToRemove.map((objectName) =>
-          this.minioService.removeObject(objectName).catch((error) => {
+          this.minioService.deleteObject(objectName).catch((error) => {
             this.logger.warn(`Failed to remove object ${objectName}:`, error);
           }),
         ),

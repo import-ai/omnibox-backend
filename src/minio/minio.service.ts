@@ -64,6 +64,7 @@ export class MinioService implements OnModuleInit {
     const s3Region = configService.get<string>('OBB_S3_REGION', 'us-east-1');
     const forcePathStyle =
       configService.get<string>('OBB_S3_FORCE_PATH_STYLE', 'false') === 'true';
+
     this.s3Client = new S3Client({
       region: s3Region,
       credentials: {
@@ -114,34 +115,34 @@ export class MinioService implements OnModuleInit {
   }
 
   async putObject(
-    objectName: string,
+    key: string,
     buffer: Buffer,
-    mimetype?: string,
+    contentType?: string,
     metadata?: Record<string, string>,
-  ) {
+  ): Promise<void> {
     const command = new PutObjectCommand({
       Bucket: this.bucket,
-      Key: objectName,
+      Key: key,
       Body: buffer,
-      ContentType: mimetype,
+      ContentType: contentType,
       Metadata: metadata,
     });
-    return await this.s3Client.send(command);
+    await this.s3Client.send(command);
   }
 
-  async getObject(objectName: string): Promise<Readable> {
+  async getObject(key: string): Promise<Readable> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
-      Key: objectName,
+      Key: key,
     });
     const response = await this.s3Client.send(command);
     return response.Body as Readable;
   }
 
-  async removeObject(objectName: string) {
+  async deleteObject(key: string) {
     const command = new DeleteObjectCommand({
       Bucket: this.bucket,
-      Key: objectName,
+      Key: key,
     });
     return await this.s3Client.send(command);
   }

@@ -1,15 +1,13 @@
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { getClientIp } from 'request-ip';
-import { WeixinCallbackBody } from 'omniboxd/pay/types';
 import { WeixinService } from 'omniboxd/pay/weixin.service';
 import {
   Req,
   Get,
   Post,
+  Res,
   Param,
-  Body,
   Controller,
-  HttpCode,
   HttpStatus,
 } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -50,9 +48,8 @@ export class WeixinController {
 
   @Public()
   @Post('callback')
-  @HttpCode(204) // Return 204 No Content on success as per WeChat Pay V3 API docs
-  callback(@Body() body: WeixinCallbackBody) {
-    return this.weixinService.callback(body);
+  async callback(@Req() req: Request, @Res() res: Response) {
+    return await this.weixinService.callback(req, res);
   }
 
   @Get('query/:orderId')

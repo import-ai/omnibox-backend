@@ -1,10 +1,11 @@
 import WxPay from 'wechatpay-node-v3';
+import { Request, Response } from 'express';
 import { WECHAT_PAY_MANAGER } from 'nest-wechatpay-node-v3';
 import { ConfigService } from '@nestjs/config';
 import {
-  WeixinCallbackBody,
   WeixinQueryResponse,
   WeixinTradeState,
+  WeixinCallbackBody,
 } from 'omniboxd/pay/types';
 import { Inject, Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -63,7 +64,6 @@ export class WeixinService {
           HttpStatus.BAD_REQUEST,
         );
       }
-
       const response = await this.pay.transactions_jsapi({
         description: order.description,
         out_trade_no: order.orderNo,
@@ -79,7 +79,14 @@ export class WeixinService {
           payer_client_ip: ip,
         },
       });
-      return { ...response, orderId: order.id };
+      if (response.status !== 200) {
+        throw new AppException(
+          response.error,
+          'WECHAT_PAY_ERROR',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      return { ...response.data, orderId: order.id };
     }
     if (type === 'h5') {
       const response = await this.pay.transactions_h5({
@@ -99,7 +106,14 @@ export class WeixinService {
           },
         },
       });
-      return { ...response, orderId: order.id };
+      if (response.status !== 200) {
+        throw new AppException(
+          response.error,
+          'WECHAT_PAY_ERROR',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      return { ...response.data, orderId: order.id };
     }
     if (type === 'native') {
       const response = await this.pay.transactions_native({
@@ -114,7 +128,14 @@ export class WeixinService {
           payer_client_ip: ip,
         },
       });
-      return { ...response, orderId: order.id };
+      if (response.status !== 200) {
+        throw new AppException(
+          response.error,
+          'WECHAT_PAY_ERROR',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      return { ...response.data, orderId: order.id };
     }
     throw new AppException(
       this.i18n.t('pay.errors.invalidParameter'),
@@ -123,62 +144,51 @@ export class WeixinService {
     );
   }
 
-  callback(body: WeixinCallbackBody) {
-    try {
-      // Decrypt the callback data
-      // Note: wechatpay-node-v3 library handles signature verification internally
-      const data = this.pay.decipher_gcm(
-        body.resource.ciphertext,
-        body.resource.associated_data,
-        body.resource.nonce,
-      );
-
-      const { out_trade_no, transaction_id, trade_state, amount } = data as {
-        out_trade_no: string;
-        transaction_id: string;
-        trade_state: string;
-        amount: { total: number };
-      };
-
-      // Process business logic asynchronously to avoid timeout
-      // According to WeChat Pay docs, we should respond immediately and process business logic asynchronously
-      setImmediate(() => {
-        void (async () => {
-          try {
-            const order = await this.ordersService.findByOrderNo(out_trade_no);
-
-            if (amount.total !== order.amount) {
-              console.error(
-                `[WeChat Pay Callback] Order amount mismatch: ${out_trade_no}`,
-              );
-              return;
-            }
-
-            if (trade_state === 'SUCCESS') {
-              await this.ordersService.markAsPaid(out_trade_no, transaction_id);
-            } else if (trade_state === 'CLOSED') {
-              await this.ordersService.close(out_trade_no);
-            }
-          } catch (error) {
-            console.error(
-              `[WeChat Pay Callback] Error processing callback: ${error}`,
-            );
-          }
-        })();
+  async callback(req: Request, res: Response) {
+    const headers = req.headers as any;
+    const body = req.body as WeixinCallbackBody;
+    const ret = await this.pay.verifySign({
+      body,
+      signature: headers['wechatpay-signature'],
+      serial: headers['wechatpay-serial'],
+      nonce: headers['wechatpay-nonce'],
+      timestamp: headers['wechatpay-timestamp'],
+    });
+    if (!ret) {
+      return res.status(400).json({
+        code: 'FAIL',
+        message: 'Signature verification failed',
       });
-
-      // According to WeChat Pay V3 API docs:
-      // For successful verification, return HTTP 200 or 204 with no response body
-      return;
-    } catch {
-      // If decryption fails (e.g., signature verification failed),
-      // throw an exception to return 4XX/5XX status code with error response
-      throw new AppException(
-        this.i18n.t('pay.errors.signatureVerificationFailed'),
-        'SIGNATURE_VERIFICATION_FAILED',
-        HttpStatus.BAD_REQUEST,
-      );
     }
+
+    const data = this.pay.decipher_gcm(
+      body.resource.ciphertext,
+      body.resource.associated_data,
+      body.resource.nonce,
+    );
+
+    const { out_trade_no, transaction_id, trade_state, amount } = data as {
+      out_trade_no: string;
+      transaction_id: string;
+      trade_state: WeixinTradeState;
+      amount: { total: number };
+    };
+
+    setImmediate(() => {
+      void (async () => {
+        const order = await this.ordersService.findByOrderNo(out_trade_no);
+        if (amount.total !== order.amount) {
+          return;
+        }
+        if (trade_state === WeixinTradeState.SUCCESS) {
+          await this.ordersService.markAsPaid(out_trade_no, transaction_id);
+        } else if (trade_state === WeixinTradeState.CLOSED) {
+          await this.ordersService.close(out_trade_no);
+        }
+      })();
+    });
+
+    return res.status(200);
   }
 
   async query(userId: string, orderId: string) {
@@ -192,7 +202,15 @@ export class WeixinService {
       out_trade_no: order.orderNo,
     });
 
-    const wechatData = response as unknown as WeixinQueryResponse;
+    if (response.status !== 200) {
+      throw new AppException(
+        response.error,
+        'WECHAT_PAY_ERROR',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const wechatData = response.data as unknown as WeixinQueryResponse;
 
     if (wechatData.trade_state === WeixinTradeState.SUCCESS) {
       if (wechatData.amount && wechatData.amount.total !== order.amount) {
@@ -216,8 +234,16 @@ export class WeixinService {
       await this.ordersService.close(order.orderNo);
     }
 
-    const lastOrder: any = await this.ordersService.findById(userId, orderId);
-    lastOrder.response = response;
-    return lastOrder;
+    if (wechatData.payer && wechatData.payer.openid) {
+      await this.userService.updateUserBindingWhenMetadataEmpty(
+        userId,
+        'wechat',
+        {
+          openid: wechatData.payer.openid,
+        },
+      );
+    }
+
+    return await this.ordersService.findById(userId, orderId);
   }
 }

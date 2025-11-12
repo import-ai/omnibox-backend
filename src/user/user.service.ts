@@ -182,6 +182,18 @@ export class UserService {
     });
   }
 
+  async updateUserBindingWhenMetadataEmpty(
+    userId: string,
+    loginType: string,
+    metadata: Record<string, any>,
+  ) {
+    const userBinding = await this.findUserBinding(userId, loginType);
+    if (userBinding && !userBinding.metadata) {
+      userBinding.metadata = metadata;
+      await this.userBindingRepository.save(userBinding);
+    }
+  }
+
   async updateBinding(oldUnionid: string, newUnionid: string) {
     // Unbind the associated new account
     const existBinding = await this.userBindingRepository.findOne({

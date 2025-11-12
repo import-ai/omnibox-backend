@@ -22,9 +22,11 @@ import { UserModule } from 'omniboxd/user/user.module';
           serial_no: configService.get<string>('OBB_WECHAT_PAY_SERIAL', ''),
           publicKey: Buffer.from(
             configService.get<string>('OBB_WECHAT_PAY_CERT', ''),
+            'base64',
           ),
           privateKey: Buffer.from(
             configService.get<string>('OBB_WECHAT_PAY_KEY', ''),
+            'base64',
           ),
         };
       },

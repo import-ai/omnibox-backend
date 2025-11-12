@@ -101,26 +101,20 @@ export class AlipayService {
     // If we don't return "success", Alipay will keep retrying for 25 hours (8 times)
     setImmediate(() => {
       void (async () => {
-        try {
-          const order = await this.ordersService.findByOrderNo(out_trade_no);
-          const orderAmountInYuan = (order.amount / 100).toFixed(2);
-          if (total_amount !== orderAmountInYuan) {
-            return;
-          }
-          if (
-            [
-              AlipayTradeStatus.TRADE_SUCCESS,
-              AlipayTradeStatus.TRADE_FINISHED,
-            ].includes(trade_status)
-          ) {
-            await this.ordersService.markAsPaid(out_trade_no, trade_no);
-          } else if (trade_status === AlipayTradeStatus.TRADE_CLOSED) {
-            await this.ordersService.close(out_trade_no);
-          }
-        } catch (error) {
-          console.error(
-            `[Alipay Callback] Error processing callback: ${error}`,
-          );
+        const order = await this.ordersService.findByOrderNo(out_trade_no);
+        const orderAmountInYuan = (order.amount / 100).toFixed(2);
+        if (total_amount !== orderAmountInYuan) {
+          return;
+        }
+        if (
+          [
+            AlipayTradeStatus.TRADE_SUCCESS,
+            AlipayTradeStatus.TRADE_FINISHED,
+          ].includes(trade_status)
+        ) {
+          await this.ordersService.markAsPaid(out_trade_no, trade_no);
+        } else if (trade_status === AlipayTradeStatus.TRADE_CLOSED) {
+          await this.ordersService.close(out_trade_no);
         }
       })();
     });

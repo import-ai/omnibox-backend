@@ -802,14 +802,6 @@ export class NamespaceResourcesService {
     return `resources/${resourceId}`;
   }
 
-  chunkPath(
-    namespaceId: string,
-    fileHash: string,
-    chunkNumber: string | number,
-  ) {
-    return `chunks/${namespaceId}/${fileHash}/${chunkNumber}`;
-  }
-
   async uploadFile(
     userId: string,
     namespaceId: string,

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { MinioService } from 'omniboxd/minio/minio.service';
 import { ConfigService } from '@nestjs/config';
+import { buffer } from 'node:stream/consumers';
 
 @Injectable()
 export class ChunkManagerService {
@@ -26,7 +27,7 @@ export class ChunkManagerService {
     const buffer = Buffer.from(data, 'base64');
 
     try {
-      await this.minioService.putChunkObject(chunkPath, buffer);
+      await this.minioService.putObject(chunkPath, buffer);
       this.logger.debug(
         `Stored chunk ${chunkIndex + 1}/${totalChunks} for task ${taskId}`,
       );
@@ -40,32 +41,13 @@ export class ChunkManagerService {
   }
 
   async assembleChunks(taskId: string, totalChunks: number): Promise<string> {
-    const assembledPath = this.getAssembledPath(taskId);
-    const chunkPaths = Array.from({ length: totalChunks }, (_, i) =>
-      this.getChunkPath(taskId, i),
-    );
-
-    try {
-      // Use MinIO's composeObject to merge all chunks
-      await this.minioService.composeObject(assembledPath, chunkPaths);
-
-      // Retrieve the assembled data
-      const stream = await this.minioService.getObject(assembledPath);
-      const chunks: Buffer[] = [];
-
-      return new Promise((resolve, reject) => {
-        stream.on('data', (chunk) => chunks.push(chunk));
-        stream.on('end', () => {
-          const assembledBuffer = Buffer.concat(chunks);
-          const assembledData = assembledBuffer.toString('utf-8');
-          resolve(assembledData);
-        });
-        stream.on('error', reject);
-      });
-    } catch (error) {
-      this.logger.error(`Failed to assemble chunks for task ${taskId}:`, error);
-      throw error;
+    const buffers: Buffer[] = [];
+    for (let i = 0; i < totalChunks; i++) {
+      const chunkPath = this.getChunkPath(taskId, i);
+      const stream = await this.minioService.getObject(chunkPath);
+      buffers.push(await buffer(stream));
     }
+    return Buffer.concat(buffers).toString('utf-8');
   }
 
   cleanupChunks(taskId: string, totalChunks: number): void {
@@ -87,15 +69,10 @@ export class ChunkManagerService {
     try {
       const objectsToRemove: string[] = [];
 
-      // Add chunk paths
       for (let i = 0; i < totalChunks; i++) {
         objectsToRemove.push(this.getChunkPath(taskId, i));
       }
 
-      // Add assembled path
-      objectsToRemove.push(this.getAssembledPath(taskId));
-
-      // Remove all objects
       await Promise.all(
         objectsToRemove.map((objectName) =>
           this.minioService.removeObject(objectName).catch((error) => {
@@ -112,9 +89,5 @@ export class ChunkManagerService {
 
   private getChunkPath(taskId: string, chunkIndex: number): string {
     return `wizard-chunks/${taskId}/chunk-${chunkIndex.toString().padStart(6, '0')}`;
-  }
-
-  private getAssembledPath(taskId: string): string {
-    return `wizard-chunks/${taskId}/assembled`;
   }
 }

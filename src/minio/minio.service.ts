@@ -6,9 +6,6 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
-  CreateMultipartUploadCommand,
-  UploadPartCopyCommand,
-  CompleteMultipartUploadCommand,
   HeadBucketCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
@@ -80,7 +77,7 @@ export class MinioService implements OnModuleInit {
     this.bucket = s3Bucket;
   }
 
-  async putObject(objectName: string, buffer: Buffer, mimetype: string) {
+  async putObject(objectName: string, buffer: Buffer, mimetype?: string) {
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: objectName,
@@ -88,56 +85,6 @@ export class MinioService implements OnModuleInit {
       ContentType: mimetype,
     });
     return await this.s3Client.send(command);
-  }
-
-  async putChunkObject(objectName: string, chunk: Buffer) {
-    const command = new PutObjectCommand({
-      Bucket: this.bucket,
-      Key: objectName,
-      Body: chunk,
-    });
-    return await this.s3Client.send(command);
-  }
-
-  async composeObject(objectName: string, chunksName: Array<string>) {
-    const createCommand = new CreateMultipartUploadCommand({
-      Bucket: this.bucket,
-      Key: objectName,
-      ContentType: 'application/octet-stream',
-    });
-    const { UploadId } = await this.s3Client.send(createCommand);
-    if (!UploadId) {
-      throw new Error('Failed to initiate multipart upload');
-    }
-
-    const uploadedParts: { ETag: string; PartNumber: number }[] = [];
-    for (let i = 0; i < chunksName.length; i++) {
-      const uploadPartCommand = new UploadPartCopyCommand({
-        Bucket: this.bucket,
-        Key: objectName,
-        UploadId,
-        PartNumber: i + 1,
-        CopySource: `${this.bucket}/${chunksName[i]}`,
-      });
-      const response = await this.s3Client.send(uploadPartCommand);
-      if (!response.CopyPartResult?.ETag) {
-        throw new Error(`Failed to upload part`);
-      }
-      uploadedParts.push({
-        ETag: response.CopyPartResult.ETag,
-        PartNumber: i + 1,
-      });
-    }
-
-    const completeCommand = new CompleteMultipartUploadCommand({
-      Bucket: this.bucket,
-      Key: objectName,
-      UploadId,
-      MultipartUpload: {
-        Parts: uploadedParts,
-      },
-    });
-    return await this.s3Client.send(completeCommand);
   }
 
   async getObject(objectName: string): Promise<Readable> {

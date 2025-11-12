@@ -130,17 +130,23 @@ export class AlipayService {
 
   async query(userId: string, orderId: string) {
     const order = await this.ordersService.findById(userId, orderId);
+
+    if (order.status === OrderStatus.PAID) {
+      return order;
+    }
+
     const response = await this.pay.curl('POST', '/v3/alipay/trade/query', {
       body: {
         out_trade_no: order.orderNo,
         query_options: ['trade_settle_info'],
       },
     });
-    const alipayData = response as unknown as AlipayQueryResponse;
+    const alipayData = response.data as unknown as AlipayQueryResponse;
     if (
-      (alipayData.trade_status === AlipayTradeStatus.TRADE_SUCCESS ||
-        alipayData.trade_status === AlipayTradeStatus.TRADE_FINISHED) &&
-      order.status !== OrderStatus.PAID
+      [
+        AlipayTradeStatus.TRADE_SUCCESS,
+        AlipayTradeStatus.TRADE_FINISHED,
+      ].includes(alipayData.trade_status)
     ) {
       const orderAmountInYuan = (order.amount / 100).toFixed(2);
       if (alipayData.total_amount !== orderAmountInYuan) {
@@ -156,8 +162,7 @@ export class AlipayService {
 
     if (
       alipayData.trade_status === AlipayTradeStatus.TRADE_CLOSED &&
-      order.status !== OrderStatus.CLOSED &&
-      order.status !== OrderStatus.PAID
+      order.status !== OrderStatus.CLOSED
     ) {
       await this.ordersService.close(order.orderNo);
     }

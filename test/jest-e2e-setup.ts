@@ -71,6 +71,10 @@ export default async () => {
   process.env.OBB_MAIL_FROM = '"Test <test@example.com>"';
   process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8080';
 
+  process.env.OBB_ALIPAY_APPID = 'test-alipay-appid';
+  process.env.OBB_ALIPAY_CERT = 'test-alipay-app-cert';
+  process.env.OBB_ALIPAY_KEY = 'test-alipay-app-key';
+
   // WeChat Pay test configuration
   process.env.OBB_WECHAT_APP_KEY = 'test-wechat-app-key';
   process.env.OBB_WECHAT_PAY_APPID = 'test-wechat-pay-appid';

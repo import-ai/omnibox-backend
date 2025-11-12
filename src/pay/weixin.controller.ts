@@ -12,6 +12,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { getClientPublicIp } from 'omniboxd/pay/utils';
 import { I18nService } from 'nestjs-i18n';
@@ -47,6 +48,7 @@ export class WeixinController {
     );
   }
 
+  @Public()
   @Post('callback')
   @HttpCode(204) // Return 204 No Content on success as per WeChat Pay V3 API docs
   callback(@Body() body: WeixinCallbackBody) {

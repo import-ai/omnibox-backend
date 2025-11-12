@@ -2,6 +2,7 @@ import { AlipayCallbackQuery } from 'omniboxd/pay/types';
 import { AlipayService } from 'omniboxd/pay/alipay.service';
 import { Get, Post, Param, Query, Controller } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
 @Controller('api/v1/pay/alipay')
 export class AlipayController {
@@ -17,6 +18,7 @@ export class AlipayController {
     return this.alipayService.transactions(userId, type, productId, returnUrl);
   }
 
+  @Public()
   @Post('callback')
   callback(@Query() query: AlipayCallbackQuery) {
     return this.alipayService.callback(query);

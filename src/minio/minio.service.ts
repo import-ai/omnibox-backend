@@ -77,12 +77,54 @@ export class MinioService implements OnModuleInit {
     this.bucket = s3Bucket;
   }
 
-  async putObject(objectName: string, buffer: Buffer, mimetype?: string) {
+  async onModuleInit(): Promise<void> {
+    await this.ensureBucket();
+  }
+
+  private generateId(filename: string, length: number = 32): string {
+    const uuid = generateId(length);
+    // Get the original filename to extract the proper extension
+    const originalFilename = getOriginalFileName(filename);
+    const extIndex = originalFilename.lastIndexOf('.');
+    if (extIndex === -1) {
+      return uuid;
+    }
+    const ext: string = originalFilename.substring(
+      extIndex,
+      originalFilename.length,
+    );
+    return `${uuid}${ext}`;
+  }
+
+  private async ensureBucket(): Promise<void> {
+    try {
+      await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+    } catch (error: any) {
+      if (
+        error.name === 'NotFound' ||
+        error.$metadata?.httpStatusCode === 404
+      ) {
+        await this.s3Client.send(
+          new CreateBucketCommand({ Bucket: this.bucket }),
+        );
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  async putObject(
+    objectName: string,
+    buffer: Buffer,
+    mimetype?: string,
+    metadata?: Record<string, string>,
+  ) {
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: objectName,
       Body: buffer,
       ContentType: mimetype,
+      Metadata: metadata,
     });
     return await this.s3Client.send(command);
   }
@@ -104,21 +146,6 @@ export class MinioService implements OnModuleInit {
     return await this.s3Client.send(command);
   }
 
-  generateId(filename: string, length: number = 32): string {
-    const uuid = generateId(length);
-    // Get the original filename to extract the proper extension
-    const originalFilename = getOriginalFileName(filename);
-    const extIndex = originalFilename.lastIndexOf('.');
-    if (extIndex === -1) {
-      return uuid;
-    }
-    const ext: string = originalFilename.substring(
-      extIndex,
-      originalFilename.length,
-    );
-    return `${uuid}${ext}`;
-  }
-
   async put(
     filename: string,
     buffer: Buffer,
@@ -127,17 +154,10 @@ export class MinioService implements OnModuleInit {
   ): Promise<string> {
     const { id = this.generateId(filename), metadata = {} } = options || {};
     const path: string = options?.folder ? `${options.folder}/${id}` : id;
-    const command = new PutObjectCommand({
-      Bucket: this.bucket,
-      Key: path,
-      Body: buffer,
-      ContentType: mimetype,
-      Metadata: {
-        filename: encodeFileName(filename),
-        metadata: JSON.stringify(metadata),
-      },
+    await this.putObject(path, buffer, mimetype, {
+      filename: encodeFileName(filename),
+      metadata: JSON.stringify(metadata),
     });
-    await this.s3Client.send(command);
     return id;
   }
 
@@ -166,26 +186,5 @@ export class MinioService implements OnModuleInit {
       this.info(objectName),
     ]);
     return { stream, ...info } as GetResponse;
-  }
-
-  async onModuleInit(): Promise<void> {
-    await this.ensureBucket();
-  }
-
-  private async ensureBucket(): Promise<void> {
-    try {
-      await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
-    } catch (error: any) {
-      if (
-        error.name === 'NotFound' ||
-        error.$metadata?.httpStatusCode === 404
-      ) {
-        await this.s3Client.send(
-          new CreateBucketCommand({ Bucket: this.bucket }),
-        );
-      } else {
-        throw error;
-      }
-    }
   }
 }

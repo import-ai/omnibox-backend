@@ -38,7 +38,7 @@ export interface GetResponse extends ObjectInfo {
 }
 
 @Injectable()
-export class MinioService implements OnModuleInit {
+export class S3Service implements OnModuleInit {
   private readonly s3Client: S3Client;
   private readonly bucket: string;
 

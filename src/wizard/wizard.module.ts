@@ -16,7 +16,7 @@ import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { UserModule } from 'omniboxd/user/user.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
-import { MinioModule } from 'omniboxd/minio/minio.module';
+import { S3Module } from 'omniboxd/s3/s3.module';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
@@ -37,7 +37,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     ConversationsModule,
     AttachmentsModule,
     TasksModule,
-    MinioModule,
+    S3Module,
     SharedResourcesModule,
     TypeOrmModule.forFeature([Task]),
   ],

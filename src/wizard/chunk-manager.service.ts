@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { MinioService } from 'omniboxd/minio/minio.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
 import { ConfigService } from '@nestjs/config';
 import { buffer } from 'node:stream/consumers';
 
@@ -9,7 +9,7 @@ export class ChunkManagerService {
   private readonly cleanupDelay: number;
 
   constructor(
-    private readonly minioService: MinioService,
+    private readonly s3Service: S3Service,
     private readonly configService: ConfigService,
   ) {
     this.cleanupDelay =
@@ -27,7 +27,7 @@ export class ChunkManagerService {
     const buffer = Buffer.from(data, 'base64');
 
     try {
-      await this.minioService.putObject(chunkPath, buffer);
+      await this.s3Service.putObject(chunkPath, buffer);
       this.logger.debug(
         `Stored chunk ${chunkIndex + 1}/${totalChunks} for task ${taskId}`,
       );
@@ -44,7 +44,7 @@ export class ChunkManagerService {
     const buffers: Buffer[] = [];
     for (let i = 0; i < totalChunks; i++) {
       const chunkPath = this.getChunkPath(taskId, i);
-      const stream = await this.minioService.getObject(chunkPath);
+      const stream = await this.s3Service.getObject(chunkPath);
       buffers.push(await buffer(stream));
     }
     return Buffer.concat(buffers).toString('utf-8');
@@ -75,7 +75,7 @@ export class ChunkManagerService {
 
       await Promise.all(
         objectsToRemove.map((objectName) =>
-          this.minioService.deleteObject(objectName).catch((error) => {
+          this.s3Service.deleteObject(objectName).catch((error) => {
             this.logger.warn(`Failed to remove object ${objectName}:`, error);
           }),
         ),

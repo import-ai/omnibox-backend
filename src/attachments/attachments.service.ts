@@ -6,10 +6,10 @@ import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { Response } from 'express';
-import { MinioService } from 'omniboxd/minio/minio.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { objectStreamResponse } from 'omniboxd/minio/utils';
+import { objectStreamResponse } from 'omniboxd/s3/utils';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import {
   UploadAttachmentsResponseDto,
@@ -24,7 +24,7 @@ export class AttachmentsService {
   private readonly logger = new Logger(AttachmentsService.name);
 
   constructor(
-    private readonly minioService: MinioService,
+    private readonly s3Service: S3Service,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly sharesService: SharesService,
@@ -50,7 +50,7 @@ export class AttachmentsService {
     }
   }
 
-  minioPath(attachmentId: string): string {
+  s3Path(attachmentId: string): string {
     return `attachments/${attachmentId}`;
   }
 
@@ -69,7 +69,7 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
 
-    const id = await this.minioService.put(filename, buffer, mimetype, {
+    const id = await this.s3Service.put(filename, buffer, mimetype, {
       folder: 'attachments',
     });
 
@@ -148,8 +148,8 @@ export class AttachmentsService {
       attachmentId,
     );
 
-    const objectResponse = await this.minioService.get(
-      this.minioPath(attachmentId),
+    const objectResponse = await this.s3Service.get(
+      this.s3Path(attachmentId),
     );
 
     // Display media files inline, download other files as attachments
@@ -198,8 +198,8 @@ export class AttachmentsService {
       attachmentId,
     );
 
-    const objectResponse = await this.minioService.get(
-      this.minioPath(attachmentId),
+    const objectResponse = await this.s3Service.get(
+      this.s3Path(attachmentId),
     );
 
     // Display media files inline, download other files as attachments

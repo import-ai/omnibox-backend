@@ -3,11 +3,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { FeedbackController } from './feedback.controller';
 import { FeedbackService } from './feedback.service';
 import { Feedback } from './entities/feedback.entity';
-import { MinioModule } from 'omniboxd/minio/minio.module';
+import { S3Module } from 'omniboxd/s3/s3.module';
 import { InternalFeedbackController } from 'omniboxd/feedback/internal.feedback.controller';
 
 @Module({
-  imports: [MinioModule, TypeOrmModule.forFeature([Feedback])],
+  imports: [S3Module, TypeOrmModule.forFeature([Feedback])],
   controllers: [FeedbackController, InternalFeedbackController],
   providers: [FeedbackService],
   exports: [FeedbackService],

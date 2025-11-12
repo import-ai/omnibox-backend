@@ -21,7 +21,7 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { MinioService } from 'omniboxd/minio/minio.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
@@ -58,7 +58,7 @@ export class NamespaceResourcesService {
     private readonly namespaceRepository: Repository<Namespace>,
     private readonly tagService: TagService,
     private readonly dataSource: DataSource,
-    private readonly minioService: MinioService,
+    private readonly s3Service: S3Service,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
@@ -797,7 +797,7 @@ export class NamespaceResourcesService {
     });
   }
 
-  minioPath(resourceId: string) {
+  s3Path(resourceId: string) {
     return `resources/${resourceId}`;
   }
 
@@ -849,8 +849,8 @@ export class NamespaceResourcesService {
 
     const artifactName = resource.id;
 
-    await this.minioService.putObject(
-      this.minioPath(artifactName),
+    await this.s3Service.putObject(
+      this.s3Path(artifactName),
       file.buffer,
       file.mimetype,
     );
@@ -890,8 +890,8 @@ export class NamespaceResourcesService {
     }
     const artifactName = resource.id;
 
-    const fileStream = await this.minioService.getObject(
-      this.minioPath(artifactName),
+    const fileStream = await this.s3Service.getObject(
+      this.s3Path(artifactName),
     );
     return { fileStream, resource };
   }

@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  nest-wechatpay-node-v3:
+    hash: e2dc508464defc046aa5757bab12509acdc8ac156b916a43703ced571b8b7098
+    path: patches/nest-wechatpay-node-v3.patch
   wechatpay-node-v3:
     hash: 5947cdce97f5fa6e8e813708920ac933770282be7b6b56dfc40ec453a38dd478
     path: patches/wechatpay-node-v3.patch
@@ -141,7 +144,7 @@ importers:
         version: 5.1.6
       nest-wechatpay-node-v3:
         specifier: ^1.0.2
-        version: 1.0.2
+        version: 1.0.2(patch_hash=e2dc508464defc046aa5757bab12509acdc8ac156b916a43703ced571b8b7098)
       nestjs-i18n:
         specifier: ^10.5.1
         version: 10.5.1(@nestjs/common@11.1.8(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.8)(class-validator@0.14.2)(rxjs@7.8.2)
@@ -12292,7 +12295,7 @@ snapshots:
 
   neo-async@2.6.2: {}
 
-  nest-wechatpay-node-v3@1.0.2: {}
+  nest-wechatpay-node-v3@1.0.2(patch_hash=e2dc508464defc046aa5757bab12509acdc8ac156b916a43703ced571b8b7098): {}
 
   nestjs-i18n@10.5.1(@nestjs/common@11.1.8(class-transformer@0.5.1)(class-validator@0.14.2)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.8)(class-validator@0.14.2)(rxjs@7.8.2):
     dependencies:

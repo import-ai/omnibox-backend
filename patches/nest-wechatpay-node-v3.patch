@@ -1,0 +1,13 @@
+diff --git a/dist/lib/providers.js b/dist/lib/providers.js
+index 3abeb20be1aa8eb0c0420152a9f5bbba381a5540..3f1a8ace81c55d6d5ee796b78a9576d041e26c81 100644
+--- a/dist/lib/providers.js
++++ b/dist/lib/providers.js
+@@ -24,7 +24,7 @@ function createWeChatPayManager(name) {
+         provide: name || constants_1.WECHAT_PAY_MANAGER,
+         useFactory: function (options) {
+             var WeChatPayManager = util_1.loadPackage('wechatpay-node-v3', 'WeChatPayModule', function () { return require('wechatpay-node-v3'); });
+-            return new WeChatPayManager(__assign(__assign(__assign(__assign({ appid: options.appid, mchid: options.mchid, publicKey: options.publicKey, privateKey: options.privateKey }, (options.serial_no && { serial_no: options.serial_no })), (options.authType && { authType: options.authType })), (options.userAgent && { userAgent: options.userAgent })), (options.key && { key: options.key })));
++            return new WeChatPayManager(__assign(__assign(__assign(__assign({ appid: options.appid, mchid: options.mchid, publicKey: options.publicKey, privateKey: options.privateKey, wxPayPublicKey: options.wxPayPublicKey, wxPayPublicId: options.wxPayPublicId }, (options.serial_no && { serial_no: options.serial_no })), (options.authType && { authType: options.authType })), (options.userAgent && { userAgent: options.userAgent })), (options.key && { key: options.key })));
+         },
+         inject: [constants_1.WECHAT_PAY_MODULE_OPTIONS],
+     };

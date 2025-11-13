@@ -8,4 +8,5 @@ onlyBuiltDependencies:
   - ssh2
 
 patchedDependencies:
+  nest-wechatpay-node-v3: patches/nest-wechatpay-node-v3.patch
   wechatpay-node-v3: patches/wechatpay-node-v3.patch

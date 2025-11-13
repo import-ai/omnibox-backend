@@ -11,7 +11,7 @@ on:
       - 'main'
 
 concurrency:
-  group: registry-push-${{ github.ref }}
+  group: registry-push
   cancel-in-progress: true
 
 jobs:

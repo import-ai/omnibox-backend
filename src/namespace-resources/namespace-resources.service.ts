@@ -41,6 +41,7 @@ import { ChildrenMetaDto } from './dto/list-children-resp.dto';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
 import { FileInfoDto, InternalFileInfoDto } from './dto/file-info.dto';
+import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
 
 const TASK_PRIORITY = 5;
 
@@ -814,8 +815,9 @@ export class NamespaceResourcesService {
     source?: string,
     parsedContent?: string,
   ) {
+    const originalFilename = getOriginalFileName(file.originalname);
     const resourceFile = await this.createResourceFile(userId, namespaceId, {
-      name: file.originalname,
+      name: originalFilename,
       mimetype: file.mimetype,
     });
     await this.filesService.uploadFile(resourceFile, file);
@@ -825,7 +827,7 @@ export class NamespaceResourcesService {
       {
         parentId,
         resourceType: ResourceType.FILE,
-        name: file.originalname,
+        name: originalFilename,
         file_id: resourceFile.id,
         content: parsedContent,
       },

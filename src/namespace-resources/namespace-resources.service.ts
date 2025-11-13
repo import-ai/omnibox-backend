@@ -723,7 +723,7 @@ export class NamespaceResourcesService {
       file.name,
       file.mimetype,
     );
-    return FileInfoDto.new(file.id, postReq.url, postReq.fields);
+    return FileInfoDto.new(file.id, undefined, postReq.url, postReq.fields);
   }
 
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {

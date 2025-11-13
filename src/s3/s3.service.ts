@@ -4,9 +4,12 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  GetObjectCommandOutput,
   DeleteObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
+  HeadObjectCommand,
+  HeadObjectCommandOutput,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
@@ -21,11 +24,24 @@ export interface PutOptions {
   folder?: string;
 }
 
-export interface ObjectMeta {
-  contentType?: string;
-  contentLength?: number;
-  metadata?: Record<string, string>;
-  lastModified?: Date;
+export class ObjectMeta {
+  constructor(
+    public contentType?: string,
+    public contentLength?: number,
+    public metadata?: Record<string, string>,
+    public lastModified?: Date,
+  ) {}
+
+  static fromResponse(
+    response: GetObjectCommandOutput | HeadObjectCommandOutput,
+  ): ObjectMeta {
+    return new ObjectMeta(
+      response.ContentType,
+      response.ContentLength,
+      response.Metadata,
+      response.LastModified,
+    );
+  }
 }
 
 @Injectable()
@@ -73,21 +89,6 @@ export class S3Service implements OnModuleInit {
     await this.ensureBucket();
   }
 
-  private generateId(filename: string, length: number = 32): string {
-    const uuid = generateId(length);
-    // Get the original filename to extract the proper extension
-    const originalFilename = getOriginalFileName(filename);
-    const extIndex = originalFilename.lastIndexOf('.');
-    if (extIndex === -1) {
-      return uuid;
-    }
-    const ext: string = originalFilename.substring(
-      extIndex,
-      originalFilename.length,
-    );
-    return `${uuid}${ext}`;
-  }
-
   private async ensureBucket(): Promise<void> {
     try {
       await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucket }));
@@ -103,6 +104,40 @@ export class S3Service implements OnModuleInit {
         throw error;
       }
     }
+  }
+
+  private generateId(filename?: string, length: number = 32): string {
+    const uuid = generateId(length);
+    // Get the original filename to extract the proper extension
+    const originalFilename = getOriginalFileName(filename);
+    const extIndex = originalFilename.lastIndexOf('.');
+    if (extIndex === -1) {
+      return uuid;
+    }
+    const ext: string = originalFilename.substring(
+      extIndex,
+      originalFilename.length,
+    );
+    return `${uuid}${ext}`;
+  }
+
+  // There might still be race conditions but the probability should be low enough
+  async generateObjectKey(
+    prefix: string,
+    filename?: string,
+    length: number = 32,
+  ): Promise<{ key: string; objectName: string }> {
+    if (!prefix.endsWith('/')) {
+      prefix += '/';
+    }
+    for (let i = 0; i < 5; i++) {
+      const objectName = this.generateId(filename, length);
+      const key = `${prefix}${objectName}`;
+      if ((await this.headObject(key)) === null) {
+        return { key, objectName };
+      }
+    }
+    throw new Error('Unable to generate unique S3 key');
   }
 
   async putObject(
@@ -131,13 +166,28 @@ export class S3Service implements OnModuleInit {
     const response = await this.s3Client.send(command);
     return {
       stream: response.Body as Readable,
-      meta: {
-        contentType: response.ContentType,
-        contentLength: response.ContentLength,
-        metadata: response.Metadata,
-        lastModified: response.LastModified,
-      },
+      meta: ObjectMeta.fromResponse(response),
     };
+  }
+
+  async headObject(key: string): Promise<ObjectMeta | null> {
+    const command = new HeadObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+
+    try {
+      const response = await this.s3Client.send(command);
+      return ObjectMeta.fromResponse(response);
+    } catch (error: any) {
+      if (
+        error?.name === 'NotFound' ||
+        error?.$metadata?.httpStatusCode === 404
+      ) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async deleteObject(key: string) {

@@ -88,18 +88,23 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
 
-    const id = await this.s3Service.put(filename, buffer, mimetype, {
-      folder: 'attachments',
-    });
+    const { key, objectName } = await this.s3Service.generateObjectKey(
+      'attachments',
+      filename,
+    );
+    const metadata = {
+      filename: encodeFileName(filename),
+    };
+    await this.s3Service.putObject(key, buffer, mimetype, metadata);
 
     // Create the resource-attachment relation
     await this.resourceAttachmentsService.addAttachmentToResource(
       namespaceId,
       resourceId,
-      id,
+      objectName,
     );
 
-    return id;
+    return objectName;
   }
 
   async uploadAttachments(

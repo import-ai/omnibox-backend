@@ -14,6 +14,9 @@ import {
 import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
 import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
+import { createPresignedPost, PresignedPost } from '@aws-sdk/s3-presigned-post';
+import { Conditions } from '@aws-sdk/s3-presigned-post/dist-types/types';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export class ObjectMeta {
   constructor(
@@ -38,6 +41,7 @@ export class ObjectMeta {
 @Injectable()
 export class S3Service implements OnModuleInit {
   private readonly s3Client: S3Client;
+  private readonly s3PublicClient: S3Client;
   private readonly bucket: string;
 
   constructor(configService: ConfigService) {
@@ -50,6 +54,9 @@ export class S3Service implements OnModuleInit {
     }
 
     const s3Endpoint = configService.get<string>('OBB_S3_ENDPOINT');
+    const s3PublicEndpoint = configService.get<string>(
+      'OBB_S3_PUBLIC_ENDPOINT',
+    );
     if (!s3Endpoint) {
       throw new Error('S3 endpoint not set');
     }
@@ -72,7 +79,19 @@ export class S3Service implements OnModuleInit {
       endpoint: s3Endpoint,
       forcePathStyle,
     });
-
+    if (s3PublicEndpoint && s3PublicEndpoint != s3Endpoint) {
+      this.s3PublicClient = new S3Client({
+        region: s3Region,
+        credentials: {
+          accessKeyId,
+          secretAccessKey,
+        },
+        endpoint: s3PublicEndpoint,
+        forcePathStyle,
+      });
+    } else {
+      this.s3PublicClient = this.s3Client;
+    }
     this.bucket = s3Bucket;
   }
 
@@ -187,5 +206,49 @@ export class S3Service implements OnModuleInit {
       Key: key,
     });
     return await this.s3Client.send(command);
+  }
+
+  async generateUploadForm(
+    key: string,
+    isPublic: boolean,
+    contentType?: string,
+    contentDisposition?: string,
+    maxSize?: number,
+  ): Promise<PresignedPost> {
+    const s3Client = isPublic ? this.s3PublicClient : this.s3Client;
+    const conditions: Conditions[] = [];
+    const fields: Record<string, string> = {};
+    if (contentType) {
+      conditions.push({ 'content-type': contentType });
+      fields['content-type'] = contentType;
+    }
+    if (contentDisposition) {
+      conditions.push({ 'content-disposition': contentDisposition });
+      fields['content-disposition'] = contentDisposition;
+    }
+    if (maxSize) {
+      conditions.push(['content-length-range', 0, maxSize]);
+    }
+    return await createPresignedPost(s3Client, {
+      Bucket: this.bucket,
+      Key: key,
+      Conditions: conditions,
+      Fields: fields,
+      Expires: 900, // 900 seconds
+    });
+  }
+
+  async generateDownloadUrl(
+    key: string,
+    isPublic: boolean,
+    contentDisposition?: string,
+  ): Promise<string> {
+    const s3Client = isPublic ? this.s3PublicClient : this.s3Client;
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ResponseContentDisposition: contentDisposition,
+    });
+    return await getSignedUrl(s3Client, command, { expiresIn: 900 });
   }
 }

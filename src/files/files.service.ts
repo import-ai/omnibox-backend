@@ -5,17 +5,14 @@ import { File } from './entities/file.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { createPresignedPost, PresignedPost } from '@aws-sdk/s3-presigned-post';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { PresignedPost } from '@aws-sdk/s3-presigned-post';
 import { formatFileSize } from '../utils/format-file-size';
+import { S3Service } from 'omniboxd/s3/s3.service';
+
+const s3Prefix = 'uploaded-files';
 
 @Injectable()
 export class FilesService {
-  private readonly s3Client: S3Client;
-  private readonly s3InternalClient: S3Client;
-  private readonly s3Bucket: string;
-  private readonly s3Prefix: string;
   private readonly s3MaxFileSize: number;
 
   constructor(
@@ -24,65 +21,12 @@ export class FilesService {
     @InjectRepository(File)
     private readonly fileRepo: Repository<File>,
     private readonly i18n: I18nService,
+    private readonly s3Service: S3Service,
   ) {
-    const accessKeyId = configService.get<string>('OBB_S3_ACCESS_KEY_ID');
-    const secretAccessKey = configService.get<string>(
-      'OBB_S3_SECRET_ACCESS_KEY',
-    );
-    if (!accessKeyId || !secretAccessKey) {
-      throw new Error('S3 credentials not set');
-    }
-
-    const s3Endpoint = configService.get<string>('OBB_S3_ENDPOINT');
-    if (!s3Endpoint) {
-      throw new Error('S3 endpoint not set');
-    }
-
-    const s3InternalEndpoint = configService.get<string>(
-      'OBB_S3_INTERNAL_ENDPOINT',
-    );
-
-    const s3Bucket = configService.get<string>('OBB_S3_BUCKET');
-    if (!s3Bucket) {
-      throw new Error('S3 bucket not set');
-    }
-
-    const s3Prefix = configService.get<string>('OBB_S3_PREFIX');
-    if (!s3Prefix) {
-      throw new Error('S3 prefix not set');
-    }
-
-    const s3Region = configService.get<string>('OBB_S3_REGION', 'us-east-1');
-
     this.s3MaxFileSize = configService.get<number>(
       'OBB_S3_MAX_FILE_SIZE',
       20 * 1024 * 1024,
     );
-
-    this.s3Client = new S3Client({
-      region: s3Region,
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-      endpoint: s3Endpoint,
-    });
-
-    if (s3InternalEndpoint && s3InternalEndpoint != s3Endpoint) {
-      this.s3InternalClient = new S3Client({
-        region: s3Region,
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-        endpoint: s3InternalEndpoint,
-      });
-    } else {
-      this.s3InternalClient = this.s3Client;
-    }
-
-    this.s3Bucket = s3Bucket;
-    this.s3Prefix = s3Prefix;
   }
 
   async createFile(
@@ -121,26 +65,19 @@ export class FilesService {
       throw new AppException(message, 'FILE_TOO_LARGE', HttpStatus.BAD_REQUEST);
     }
     const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
-    return await createPresignedPost(this.s3Client, {
-      Bucket: this.s3Bucket,
-      Key: `${this.s3Prefix}/${fileId}`,
-      Conditions: [
-        ['content-length-range', 0, this.s3MaxFileSize],
-        { 'content-type': mimetype },
-        { 'content-disposition': disposition },
-      ],
-      Fields: {
-        'content-type': mimetype,
-        'content-disposition': disposition,
-      },
-      Expires: 900, // 900 seconds
-    });
+    return await this.s3Service.generateUploadForm(
+      `${s3Prefix}/${fileId}`,
+      true,
+      mimetype,
+      disposition,
+      this.s3MaxFileSize,
+    );
   }
 
   private async generateDownloadUrl(
     namespaceId: string,
     fileId: string,
-    s3Client: S3Client,
+    isPublic: boolean,
   ): Promise<string> {
     const file = await this.getFile(namespaceId, fileId);
     if (!file) {
@@ -148,26 +85,25 @@ export class FilesService {
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
-    const command = new GetObjectCommand({
-      Bucket: this.s3Bucket,
-      Key: `${this.s3Prefix}/${fileId}`,
-      ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
-    });
-
-    return await getSignedUrl(s3Client, command, { expiresIn: 900 });
+    const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`;
+    return await this.s3Service.generateDownloadUrl(
+      `${s3Prefix}/${fileId}`,
+      isPublic,
+      disposition,
+    );
   }
 
   async generatePublicDownloadUrl(
     namespaceId: string,
     fileId: string,
   ): Promise<string> {
-    return this.generateDownloadUrl(namespaceId, fileId, this.s3Client);
+    return this.generateDownloadUrl(namespaceId, fileId, true);
   }
 
   async generateInternalDownloadUrl(
     namespaceId: string,
     fileId: string,
   ): Promise<string> {
-    return this.generateDownloadUrl(namespaceId, fileId, this.s3InternalClient);
+    return this.generateDownloadUrl(namespaceId, fileId, false);
   }
 }

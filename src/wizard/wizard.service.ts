@@ -489,7 +489,7 @@ export class WizardService {
   }
 
   async getHtmlFromMinioGzipFile(path: string) {
-    const stream = await this.s3Service.getObject(path);
+    const { stream } = await this.s3Service.getObject(path);
     const gunzip = createGunzip();
     return new Promise<string>((resolve, reject) => {
       const chunks: Buffer[] = [];

@@ -890,10 +890,10 @@ export class NamespaceResourcesService {
     }
     const artifactName = resource.id;
 
-    const fileStream = await this.s3Service.getObject(
+    const { stream } = await this.s3Service.getObject(
       this.s3Path(artifactName),
     );
-    return { fileStream, resource };
+    return { fileStream: stream, resource };
   }
 
   async getAllResourcesByUser(

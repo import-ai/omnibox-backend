@@ -508,6 +508,24 @@ export class PermissionsService {
     return comparePermission(permission, requiredPermission) >= 0;
   }
 
+  async userHasPermissionOrFail(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    permission: ResourcePermission = ResourcePermission.CAN_VIEW,
+  ) {
+    const hasPermission = await this.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      permission,
+    );
+    if (!hasPermission) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+  }
+
   /**
    * Filter resources by permission.
    * For each non-root resource specified, it's required that all its parents are also specified.

@@ -4,7 +4,6 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
-  HeadObjectCommand,
   DeleteObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
@@ -12,29 +11,21 @@ import {
 import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
 import {
-  decodeFileName,
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 
 export interface PutOptions {
   id?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, string>;
   folder?: string;
 }
 
-export interface ObjectInfo {
-  filename: string;
-  mimetype: string;
-  metadata: Record<string, any>;
-  stat: {
-    size?: number;
-    lastModified?: Date;
-  };
-}
-
-export interface GetResponse extends ObjectInfo {
-  stream: Readable;
+export interface ObjectMeta {
+  contentType?: string;
+  contentLength?: number;
+  metadata?: Record<string, string>;
+  lastModified?: Date;
 }
 
 @Injectable()
@@ -130,13 +121,23 @@ export class S3Service implements OnModuleInit {
     await this.s3Client.send(command);
   }
 
-  async getObject(key: string): Promise<Readable> {
+  async getObject(
+    key: string,
+  ): Promise<{ stream: Readable; meta: ObjectMeta }> {
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,
     });
     const response = await this.s3Client.send(command);
-    return response.Body as Readable;
+    return {
+      stream: response.Body as Readable,
+      meta: {
+        contentType: response.ContentType,
+        contentLength: response.ContentLength,
+        metadata: response.Metadata,
+        lastModified: response.LastModified,
+      },
+    };
   }
 
   async deleteObject(key: string) {
@@ -153,39 +154,12 @@ export class S3Service implements OnModuleInit {
     mimetype: string,
     options?: PutOptions,
   ): Promise<string> {
-    const { id = this.generateId(filename), metadata = {} } = options || {};
+    const { id = this.generateId(filename) } = options || {};
     const path: string = options?.folder ? `${options.folder}/${id}` : id;
     await this.putObject(path, buffer, mimetype, {
+      ...options?.metadata,
       filename: encodeFileName(filename),
-      metadata: JSON.stringify(metadata),
     });
     return id;
-  }
-
-  async info(objectName: string): Promise<ObjectInfo> {
-    const command = new HeadObjectCommand({
-      Bucket: this.bucket,
-      Key: objectName,
-    });
-    const response = await this.s3Client.send(command);
-    const metadataString: string =
-      response.Metadata?.metadata_string || response.Metadata?.metadata || '{}';
-    const encodedFilename: string = response.Metadata?.filename || '';
-    const filename: string = decodeFileName(encodedFilename);
-    const mimetype: string = response.ContentType || 'application/octet-stream';
-    const metadata: Record<string, any> = JSON.parse(metadataString);
-    const stat = {
-      size: response.ContentLength,
-      lastModified: response.LastModified,
-    };
-    return { filename, mimetype, metadata, stat };
-  }
-
-  async get(objectName: string): Promise<GetResponse> {
-    const [stream, info] = await Promise.all([
-      this.getObject(objectName),
-      this.info(objectName),
-    ]);
-    return { stream, ...info } as GetResponse;
   }
 }

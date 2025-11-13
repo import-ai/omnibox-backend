@@ -44,7 +44,7 @@ export class ChunkManagerService {
     const buffers: Buffer[] = [];
     for (let i = 0; i < totalChunks; i++) {
       const chunkPath = this.getChunkPath(taskId, i);
-      const stream = await this.s3Service.getObject(chunkPath);
+      const { stream } = await this.s3Service.getObject(chunkPath);
       buffers.push(await buffer(stream));
     }
     return Buffer.concat(buffers).toString('utf-8');

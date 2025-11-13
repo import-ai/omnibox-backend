@@ -152,14 +152,14 @@ export class S3Service implements OnModuleInit {
 
   async putObject(
     key: string,
-    buffer: Buffer,
+    data: Readable | Buffer,
     contentType?: string,
     metadata?: Record<string, string>,
   ): Promise<void> {
     const command = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
-      Body: buffer,
+      Body: data,
       ContentType: contentType,
       Metadata: metadata,
     });

@@ -131,7 +131,6 @@ export class OpenResourcesController {
       apiKey.namespaceId,
       file,
       apiKey.attrs.root_resource_id,
-      undefined,
       'open_api',
       parsedContent,
     );

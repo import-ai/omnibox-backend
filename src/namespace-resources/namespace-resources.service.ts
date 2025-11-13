@@ -38,11 +38,6 @@ import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resour
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
-import {
-  encodeFileName,
-  getOriginalFileName,
-} from 'omniboxd/utils/encode-filename';
-import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
 import { FileInfoDto, InternalFileInfoDto } from './dto/file-info.dto';
@@ -180,6 +175,7 @@ export class NamespaceResourcesService {
     namespaceId: string,
     createReq: CreateResourceDto,
     manager?: EntityManager,
+    source?: string,
   ) {
     if (!manager) {
       return await this.dataSource.transaction(async (manager) => {
@@ -235,6 +231,7 @@ export class NamespaceResourcesService {
         attrs,
         tagIds: createReq.tag_ids,
         fileId: createReq.file_id,
+        source,
       },
       manager,
     );
@@ -698,7 +695,7 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     createReq: CreateFileReqDto,
-  ): Promise<FileInfoDto> {
+  ) {
     const ok = await this.permissionsService.userInNamespace(
       userId,
       namespaceId,
@@ -711,12 +708,20 @@ export class NamespaceResourcesService {
       createReq.mimetype ||
       mime.lookup(createReq.name) ||
       'application/octet-stream';
-    const file = await this.filesService.createFile(
+    return await this.filesService.createFile(
       userId,
       namespaceId,
       createReq.name,
       mimetype,
     );
+  }
+
+  async createFileUploadForm(
+    userId: string,
+    namespaceId: string,
+    createReq: CreateFileReqDto,
+  ): Promise<FileInfoDto> {
+    const file = await this.createResourceFile(userId, namespaceId, createReq);
     const postReq = await this.filesService.generateUploadForm(
       file.id,
       createReq.size,
@@ -805,75 +810,28 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     file: Express.Multer.File,
-    parentId?: string,
-    resourceId?: string,
+    parentId: string,
     source?: string,
     parsedContent?: string,
   ) {
-    const originalFilename = getOriginalFileName(file.originalname);
-    const encodedFilename = encodeFileName(file.originalname);
-
-    let resource: Resource;
-    if (resourceId) {
-      resource = await this.resourcesService.getResourceOrFail(
-        namespaceId,
-        resourceId,
-      );
-      if (resource.resourceType !== ResourceType.FILE) {
-        const message = this.i18n.t('resource.errors.resourceNotFile');
-        throw new AppException(
-          message,
-          'RESOURCE_NOT_FILE',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-    } else if (parentId) {
-      resource = await this.create(userId, namespaceId, {
-        name: originalFilename, // Use original filename for display
-        resourceType: ResourceType.FILE,
+    const resourceFile = await this.createResourceFile(userId, namespaceId, {
+      name: file.originalname,
+      mimetype: file.mimetype,
+    });
+    await this.filesService.uploadFile(resourceFile, file);
+    return await this.create(
+      userId,
+      namespaceId,
+      {
         parentId,
-        attrs: {
-          original_name: originalFilename,
-          encoded_name: encodedFilename, // Store encoded name for MinIO
-          mimetype: file.mimetype,
-        },
-      });
-    } else {
-      const message = this.i18n.t('resource.errors.parentOrResourceIdRequired');
-      throw new AppException(
-        message,
-        'PARENT_OR_RESOURCE_ID_REQUIRED',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const artifactName = resource.id;
-
-    await this.s3Service.putObject(
-      this.s3Path(artifactName),
-      file.buffer,
-      file.mimetype,
+        resourceType: ResourceType.FILE,
+        name: file.originalname,
+        file_id: resourceFile.id,
+        content: parsedContent,
+      },
+      undefined,
+      source,
     );
-
-    resource.attrs = { ...resource.attrs, url: artifactName };
-
-    const hasParsedContent = !isEmpty(parsedContent);
-
-    if (hasParsedContent) {
-      resource.content = parsedContent!;
-    }
-
-    await this.resourceRepository.save(resource);
-
-    if (!hasParsedContent) {
-      await this.wizardTaskService.createFileReaderTask(
-        userId,
-        resource,
-        source,
-      );
-    }
-
-    return resource;
   }
 
   async downloadFile(resourceId: string) {

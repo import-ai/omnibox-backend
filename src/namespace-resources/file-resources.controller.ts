@@ -16,7 +16,7 @@ export class FileResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Body() createReq: CreateFileReqDto,
   ) {
-    return await this.namespaceResourcesService.createResourceFile(
+    return await this.namespaceResourcesService.createFileUploadForm(
       userId,
       namespaceId,
       createReq,

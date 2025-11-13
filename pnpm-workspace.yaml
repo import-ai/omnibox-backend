@@ -6,3 +6,6 @@ onlyBuiltDependencies:
   - cpu-features
   - protobufjs
   - ssh2
+
+patchedDependencies:
+  wechatpay-node-v3: patches/wechatpay-node-v3.patch

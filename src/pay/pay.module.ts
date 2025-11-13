@@ -21,6 +21,9 @@ import { UserModule } from 'omniboxd/user/user.module';
         const privateKeyCert = configService
           .get<string>('OBB_WECHAT_PAY_KEY', '')
           .trim();
+        const privateKey = configService
+          .get<string>('OBB_WECHAT_PAY_PUBLIC_KEY', '')
+          .trim();
 
         return {
           key: configService.get<string>('OBB_WECHAT_APP_KEY', ''),
@@ -29,6 +32,11 @@ import { UserModule } from 'omniboxd/user/user.module';
           serial_no: configService.get<string>('OBB_WECHAT_PAY_SERIAL', ''),
           publicKey: Buffer.from(publicKeyCert, 'utf-8'),
           privateKey: Buffer.from(privateKeyCert, 'utf-8'),
+          wxPayPublicKey: Buffer.from(privateKey, 'utf-8'),
+          wxPayPublicId: configService.get<string>(
+            'OBB_WECHAT_PAY_PUBLIC_KEY_ID',
+            '',
+          ),
         };
       },
     }),

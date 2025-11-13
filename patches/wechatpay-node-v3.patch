@@ -1,0 +1,629 @@
+diff --git a/dist/define.js b/dist/define.js
+index 4fb173b3f825932938ea36293e7fad70a14db2c3..7838041358ba8141d06c64cf634b36ffd61cab57 100644
+--- a/dist/define.js
++++ b/dist/define.js
+@@ -1,11 +1,7 @@
+ "use strict";
+ var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+     if (k2 === undefined) k2 = k;
+-    var desc = Object.getOwnPropertyDescriptor(m, k);
+-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+-      desc = { enumerable: true, get: function() { return m[k]; } };
+-    }
+-    Object.defineProperty(o, k2, desc);
++    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
+ }) : (function(o, m, k, k2) {
+     if (k2 === undefined) k2 = k;
+     o[k2] = m[k];
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 5bdb830ea842351c4f5a5701a00dceed134776b2..747f462ff75985bf02566b90619173d46a5fdbf0 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -1,7 +1,7 @@
+ /// <reference types="node" />
+ import { Ipay, Ih5, Inative, Ijsapi, Iquery1, Iquery2, Itradebill, Ifundflowbill, Iapp, Ioptions, Irefunds1, Irefunds2, ICertificates } from './lib/interface';
+ import { IcombineH5, IcombineNative, IcombineApp, IcombineJsapi, IcloseSubOrders } from './lib/combine_interface';
+-import { BatchesTransfer, FindRefunds, ProfitSharing, Refunds, UploadImages } from './lib/interface-v2';
++import { BatchesTransfer, FindRefunds, ProfitSharing, Refunds } from './lib/interface-v2';
+ import { Base } from './lib/base';
+ import { IPayRequest } from './lib/pay-request.interface';
+ declare class Pay extends Base {
+@@ -16,20 +16,22 @@ declare class Pay extends Base {
+     protected static certificates: {
+         [key in string]: string;
+     };
++    protected wxPayPublicKey?: Buffer;
++    protected wxPayPublicId?: string;
+     /**
+      * 构造器
+      * @param appid 直连商户申请的公众号或移动应用appid。
+      * @param mchid 商户号
+      * @param publicKey 公钥
+      * @param privateKey 密钥
+-     * @param options 可选参数 object 包括下面参数
++     * @param optipns 可选参数 object 包括下面参数
+      *
+      * @param serial_no  证书序列号
+      * @param authType 可选参数 认证类型，目前为WECHATPAY2-SHA256-RSA2048
+      * @param userAgent 可选参数 User-Agent
+      * @param key 可选参数 APIv3密钥
+      */
+-    constructor(appid: string, mchid: string, publicKey: Buffer, privateKey: Buffer, options?: Ioptions);
++    constructor(appid: string, mchid: string, publicKey: Buffer, privateKey: Buffer, optipns?: Ioptions);
+     /**
+      * 构造器
+      * @param obj object类型 包括下面参数
+@@ -124,7 +126,7 @@ declare class Pay extends Base {
+     /**
+      * 参数初始化
+      */
+-    protected buildAuthorization(method: string, url: string, params?: Record<string, any>): string;
++    protected init(method: string, url: string, params?: Record<string, any>): string;
+     /**
+      * h5支付
+      * @param params 请求参数 object 参数介绍 请看文档https://pay.weixin.qq.com/wiki/doc/apiv3/apis/chapter3_3_1.shtml
+@@ -283,6 +285,5 @@ declare class Pay extends Base {
+      * @documentation https://pay.weixin.qq.com/wiki/doc/apiv3/apis/chapter8_1_11.shtml
+      */
+     profitsharing_bills(bill_date: string, tar_type?: string): Promise<ProfitSharing.ProfitSharingBills.IOutput>;
+-    upload_images(pic_buffer: Buffer, filename: string): Promise<UploadImages.IOutput>;
+ }
+ export = Pay;
+diff --git a/dist/index.js b/dist/index.js
+index 949f612d4740459c0095241f8bf6dcf50016c770..37b77752e88cd8f76ffa68afa93b16746c55153f 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -7,8 +7,6 @@ var __extends = (this && this.__extends) || (function () {
+         return extendStatics(d, b);
+     };
+     return function (d, b) {
+-        if (typeof b !== "function" && b !== null)
+-            throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
+         extendStatics(d, b);
+         function __() { this.constructor = d; }
+         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+@@ -70,7 +68,7 @@ var base_1 = require("./lib/base");
+ var pay_request_1 = require("./lib/pay-request");
+ var Pay = /** @class */ (function (_super) {
+     __extends(Pay, _super);
+-    function Pay(arg1, mchid, publicKey, privateKey, options) {
++    function Pay(arg1, mchid, publicKey, privateKey, optipns) {
+         var _this = _super.call(this) || this;
+         _this.serial_no = ''; // 证书序列号
+         _this.authType = 'WECHATPAY2-SHA256-RSA2048'; // 认证类型，目前为WECHATPAY2-SHA256-RSA2048
+@@ -88,13 +86,21 @@ var Pay = /** @class */ (function (_super) {
+             _this.authType = arg1.authType || 'WECHATPAY2-SHA256-RSA2048';
+             _this.userAgent = arg1.userAgent || '127.0.0.1';
+             _this.key = arg1.key;
++            if (arg1.wxPayPublicKey) {
++                _this.wxPayPublicKey = arg1.wxPayPublicKey;
++            }
++            if (arg1.wxPayPublicId) {
++                _this.wxPayPublicId = arg1.wxPayPublicId;
++            }
+         }
+         else {
+-            var _optipns = options || {};
++            var _optipns = optipns || {};
+             _this.appid = arg1;
+             _this.mchid = mchid || '';
+             _this.publicKey = publicKey;
+             _this.privateKey = privateKey;
++            _this.wxPayPublicKey = _optipns.wxPayPublicKey;
++            _this.wxPayPublicId = _optipns.wxPayPublicId;
+             _this.authType = _optipns.authType || 'WECHATPAY2-SHA256-RSA2048';
+             _this.userAgent = _optipns.userAgent || '127.0.0.1';
+             _this.key = _optipns.key;
+@@ -126,7 +132,7 @@ var Pay = /** @class */ (function (_super) {
+                 switch (_b.label) {
+                     case 0:
+                         url = 'https://api.mch.weixin.qq.com/v3/certificates';
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1:
+@@ -162,7 +168,7 @@ var Pay = /** @class */ (function (_super) {
+                 switch (_b.label) {
+                     case 0:
+                         url = 'https://api.mch.weixin.qq.com/v3/certificates';
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1:
+@@ -195,11 +201,22 @@ var Pay = /** @class */ (function (_super) {
+      */
+     Pay.prototype.verifySign = function (params) {
+         return __awaiter(this, void 0, void 0, function () {
+-            var timestamp, nonce, body, serial, signature, apiSecret, publicKey, bodyStr, data, verify;
++            var timestamp, nonce, body, serial, signature, apiSecret, serial_on, bodyStr, data, verify, publicKey;
+             return __generator(this, function (_a) {
+                 switch (_a.label) {
+                     case 0:
+                         timestamp = params.timestamp, nonce = params.nonce, body = params.body, serial = params.serial, signature = params.signature, apiSecret = params.apiSecret;
++                        serial_on = serial.startsWith('PUB_KEY_ID_');
++                        bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
++                        data = timestamp + "\n" + nonce + "\n" + bodyStr + "\n";
++                        verify = crypto_1.default.createVerify('RSA-SHA256');
++                        if (serial_on) {
++                            if (!this.wxPayPublicKey) {
++                                throw new Error('缺少微信支付公钥');
++                            }
++                            verify.update(data);
++                            return [2 /*return*/, verify.verify(this.wxPayPublicKey, signature, 'base64')];
++                        }
+                         publicKey = Pay.certificates[serial];
+                         if (!!publicKey) return [3 /*break*/, 2];
+                         return [4 /*yield*/, this.fetchCertificates(apiSecret)];
+@@ -211,9 +228,6 @@ var Pay = /** @class */ (function (_super) {
+                         if (!publicKey) {
+                             throw new Error('平台证书序列号不相符，未找到平台序列号');
+                         }
+-                        bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+-                        data = "".concat(timestamp, "\n").concat(nonce, "\n").concat(bodyStr, "\n");
+-                        verify = crypto_1.default.createVerify('RSA-SHA256');
+                         verify.update(data);
+                         return [2 /*return*/, verify.verify(publicKey, signature, 'base64')];
+                 }
+@@ -228,7 +242,7 @@ var Pay = /** @class */ (function (_super) {
+     Pay.prototype.publicEncrypt = function (str, wxPublicKey, padding) {
+         if (padding === void 0) { padding = crypto_1.default.constants.RSA_PKCS1_OAEP_PADDING; }
+         if (![crypto_1.default.constants.RSA_PKCS1_PADDING, crypto_1.default.constants.RSA_PKCS1_OAEP_PADDING].includes(padding)) {
+-            throw new Error("Doesn't supported the padding mode(".concat(padding, "), here's only support RSA_PKCS1_OAEP_PADDING or RSA_PKCS1_PADDING."));
++            throw new Error("Doesn't supported the padding mode(" + padding + "), here's only support RSA_PKCS1_OAEP_PADDING or RSA_PKCS1_PADDING.");
+         }
+         var encrypted = crypto_1.default.publicEncrypt({ key: wxPublicKey, padding: padding, oaepHash: 'sha1' }, Buffer.from(str, 'utf8')).toString('base64');
+         return encrypted;
+@@ -241,7 +255,7 @@ var Pay = /** @class */ (function (_super) {
+     Pay.prototype.privateDecrypt = function (str, padding) {
+         if (padding === void 0) { padding = crypto_1.default.constants.RSA_PKCS1_OAEP_PADDING; }
+         if (![crypto_1.default.constants.RSA_PKCS1_PADDING, crypto_1.default.constants.RSA_PKCS1_OAEP_PADDING].includes(padding)) {
+-            throw new Error("Doesn't supported the padding mode(".concat(padding, "), here's only support RSA_PKCS1_OAEP_PADDING or RSA_PKCS1_PADDING."));
++            throw new Error("Doesn't supported the padding mode(" + padding + "), here's only support RSA_PKCS1_OAEP_PADDING or RSA_PKCS1_PADDING.");
+         }
+         var decrypted = crypto_1.default.privateDecrypt({ key: this.privateKey, padding: padding, oaepHash: 'sha1' }, Buffer.from(str, 'base64'));
+         return decrypted.toString('utf8');
+@@ -341,6 +355,7 @@ var Pay = /** @class */ (function (_super) {
+         decipher.setAuthTag(authTag);
+         decipher.setAAD(Buffer.from(associated_data));
+         var decoded = decipher.update(data, undefined, 'utf8');
++        decipher.final();
+         try {
+             return JSON.parse(decoded);
+         }
+@@ -351,7 +366,7 @@ var Pay = /** @class */ (function (_super) {
+     /**
+      * 参数初始化
+      */
+-    Pay.prototype.buildAuthorization = function (method, url, params) {
++    Pay.prototype.init = function (method, url, params) {
+         var nonce_str = Math.random()
+             .toString(36)
+             .substr(2, 15), timestamp = parseInt(+new Date() / 1000 + '').toString();
+@@ -372,8 +387,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         _params = __assign({ appid: this.appid, mchid: this.mchid }, params);
+                         url = 'https://api.mch.weixin.qq.com/v3/pay/transactions/h5';
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -392,7 +407,7 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         _params = __assign({ combine_appid: this.appid, combine_mchid: this.mchid }, params);
+                         url = 'https://api.mch.weixin.qq.com/v3/combine-transactions/h5';
+-                        authorization = this.buildAuthorization('POST', url, _params);
++                        authorization = this.init('POST', url, _params);
+                         headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -412,8 +427,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         _params = __assign({ appid: this.appid, mchid: this.mchid }, params);
+                         url = 'https://api.mch.weixin.qq.com/v3/pay/transactions/native';
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -432,8 +447,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         _params = __assign({ combine_appid: this.appid, combine_mchid: this.mchid }, params);
+                         url = 'https://api.mch.weixin.qq.com/v3/combine-transactions/native';
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -452,8 +467,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         _params = __assign({ appid: this.appid, mchid: this.mchid }, params);
+                         url = 'https://api.mch.weixin.qq.com/v3/pay/transactions/app';
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1:
+                         result = _a.sent();
+@@ -490,8 +505,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         _params = __assign({ combine_appid: this.appid, combine_mchid: this.mchid }, params);
+                         url = 'https://api.mch.weixin.qq.com/v3/combine-transactions/app';
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1:
+                         result = _a.sent();
+@@ -528,8 +543,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         _params = __assign({ appid: this.appid, mchid: this.mchid }, params);
+                         url = 'https://api.mch.weixin.qq.com/v3/pay/transactions/jsapi';
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1:
+                         result = _a.sent();
+@@ -540,7 +555,7 @@ var Pay = /** @class */ (function (_super) {
+                                 nonceStr: Math.random()
+                                     .toString(36)
+                                     .substr(2, 15),
+-                                package: "prepay_id=".concat(result.data.prepay_id),
++                                package: "prepay_id=" + result.data.prepay_id,
+                                 signType: 'RSA',
+                                 paySign: '',
+                             };
+@@ -565,8 +580,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         _params = __assign({ combine_appid: this.appid, combine_mchid: this.mchid }, params);
+                         url = 'https://api.mch.weixin.qq.com/v3/combine-transactions/jsapi';
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1:
+                         result = _a.sent();
+@@ -577,7 +592,7 @@ var Pay = /** @class */ (function (_super) {
+                                 nonceStr: Math.random()
+                                     .toString(36)
+                                     .substr(2, 15),
+-                                package: "prepay_id=".concat(result.data.prepay_id),
++                                package: "prepay_id=" + result.data.prepay_id,
+                                 signType: 'RSA',
+                                 paySign: '',
+                             };
+@@ -602,15 +617,15 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         url = '';
+                         if (params.transaction_id) {
+-                            url = "https://api.mch.weixin.qq.com/v3/pay/transactions/id/".concat(params.transaction_id, "?mchid=").concat(this.mchid);
++                            url = "https://api.mch.weixin.qq.com/v3/pay/transactions/id/" + params.transaction_id + "?mchid=" + this.mchid;
+                         }
+                         else if (params.out_trade_no) {
+-                            url = "https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/".concat(params.out_trade_no, "?mchid=").concat(this.mchid);
++                            url = "https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/" + params.out_trade_no + "?mchid=" + this.mchid;
+                         }
+                         else {
+                             throw new Error('缺少transaction_id或者out_trade_no');
+                         }
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -630,8 +645,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         if (!combine_out_trade_no)
+                             throw new Error('缺少combine_out_trade_no');
+-                        url = "https://api.mch.weixin.qq.com/v3/combine-transactions/out-trade-no/".concat(combine_out_trade_no);
+-                        authorization = this.buildAuthorization('GET', url);
++                        url = "https://api.mch.weixin.qq.com/v3/combine-transactions/out-trade-no/" + combine_out_trade_no;
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -654,9 +669,9 @@ var Pay = /** @class */ (function (_super) {
+                         _params = {
+                             mchid: this.mchid,
+                         };
+-                        url = "https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/".concat(out_trade_no, "/close");
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        url = "https://api.mch.weixin.qq.com/v3/pay/transactions/out-trade-no/" + out_trade_no + "/close";
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -680,9 +695,9 @@ var Pay = /** @class */ (function (_super) {
+                             combine_appid: this.appid,
+                             sub_orders: sub_orders,
+                         };
+-                        url = "https://api.mch.weixin.qq.com/v3/combine-transactions/out-trade-no/".concat(combine_out_trade_no, "/close");
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        url = "https://api.mch.weixin.qq.com/v3/combine-transactions/out-trade-no/" + combine_out_trade_no + "/close";
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -710,8 +725,8 @@ var Pay = /** @class */ (function (_super) {
+                             return key + '=' + _params[key];
+                         })
+                             .join('&');
+-                        url = url + "?".concat(querystring);
+-                        authorization = this.buildAuthorization('GET', url);
++                        url = url + ("?" + querystring);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -740,8 +755,8 @@ var Pay = /** @class */ (function (_super) {
+                             return key + '=' + _params[key];
+                         })
+                             .join('&');
+-                        url = url + "?".concat(querystring);
+-                        authorization = this.buildAuthorization('GET', url);
++                        url = url + ("?" + querystring);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -759,7 +774,7 @@ var Pay = /** @class */ (function (_super) {
+             return __generator(this, function (_a) {
+                 switch (_a.label) {
+                     case 0:
+-                        authorization = this.buildAuthorization('GET', download_url);
++                        authorization = this.init('GET', download_url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(download_url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -779,8 +794,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         url = 'https://api.mch.weixin.qq.com/v3/refund/domestic/refunds';
+                         _params = __assign({}, params);
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -799,8 +814,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         if (!out_refund_no)
+                             throw new Error('缺少out_refund_no');
+-                        url = "https://api.mch.weixin.qq.com/v3/refund/domestic/refunds/".concat(out_refund_no);
+-                        authorization = this.buildAuthorization('GET', url);
++                        url = "https://api.mch.weixin.qq.com/v3/refund/domestic/refunds/" + out_refund_no;
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -824,8 +839,8 @@ var Pay = /** @class */ (function (_super) {
+                         _params = __assign({ appid: this.appid }, params);
+                         serial_no = _params === null || _params === void 0 ? void 0 : _params.wx_serial_no;
+                         delete _params.wx_serial_no;
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.serial_no, 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.wxPayPublicId ? this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.wxPayPublicId, 'Content-Type': 'application/json' }) : this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.serial_no, 'Content-Type': 'application/json' });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -842,9 +857,9 @@ var Pay = /** @class */ (function (_super) {
+             return __generator(this, function (_a) {
+                 switch (_a.label) {
+                     case 0:
+-                        baseUrl = "https://api.mch.weixin.qq.com/v3/transfer/batches/batch-id/".concat(params.batch_id);
++                        baseUrl = "https://api.mch.weixin.qq.com/v3/transfer/batches/batch-id/" + params.batch_id;
+                         url = baseUrl + this.objectToQueryString(params, ['batch_id']);
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -862,9 +877,9 @@ var Pay = /** @class */ (function (_super) {
+             return __generator(this, function (_a) {
+                 switch (_a.label) {
+                     case 0:
+-                        baseUrl = "https://api.mch.weixin.qq.com/v3/transfer/batches/batch-id/".concat(params.batch_id, "/details/detail-id/").concat(params.detail_id);
++                        baseUrl = "https://api.mch.weixin.qq.com/v3/transfer/batches/batch-id/" + params.batch_id + "/details/detail-id/" + params.detail_id;
+                         url = baseUrl + this.objectToQueryString(params, ['batch_id', 'detail_id']);
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -882,9 +897,9 @@ var Pay = /** @class */ (function (_super) {
+             return __generator(this, function (_a) {
+                 switch (_a.label) {
+                     case 0:
+-                        baseUrl = "https://api.mch.weixin.qq.com/v3/transfer/batches/out-batch-no/".concat(params.out_batch_no);
++                        baseUrl = "https://api.mch.weixin.qq.com/v3/transfer/batches/out-batch-no/" + params.out_batch_no;
+                         url = baseUrl + this.objectToQueryString(params, ['out_batch_no']);
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -902,9 +917,9 @@ var Pay = /** @class */ (function (_super) {
+             return __generator(this, function (_a) {
+                 switch (_a.label) {
+                     case 0:
+-                        baseUrl = "https://api.mch.weixin.qq.com/v3/transfer/batches/out-batch-no/".concat(params.out_batch_no, "/details/out-detail-no/").concat(params.out_detail_no);
++                        baseUrl = "https://api.mch.weixin.qq.com/v3/transfer/batches/out-batch-no/" + params.out_batch_no + "/details/out-detail-no/" + params.out_detail_no;
+                         url = baseUrl + this.objectToQueryString(params, ['out_batch_no', 'out_detail_no']);
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -930,8 +945,8 @@ var Pay = /** @class */ (function (_super) {
+                         _params = __assign({ appid: this.appid }, params);
+                         serial_no = _params === null || _params === void 0 ? void 0 : _params.wx_serial_no;
+                         delete _params.wx_serial_no;
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.serial_no, 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.wxPayPublicId ? this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.wxPayPublicId, 'Content-Type': 'application/json' }) : this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.serial_no, 'Content-Type': 'application/json' });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -952,9 +967,9 @@ var Pay = /** @class */ (function (_super) {
+                             throw new Error('缺少transaction_id');
+                         if (!out_order_no)
+                             throw new Error('缺少out_order_no');
+-                        url = "https://api.mch.weixin.qq.com/v3/profitsharing/orders/".concat(out_order_no);
++                        url = "https://api.mch.weixin.qq.com/v3/profitsharing/orders/" + out_order_no;
+                         url = url + this.objectToQueryString({ transaction_id: transaction_id });
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -974,8 +989,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         url = 'https://api.mch.weixin.qq.com/v3/profitsharing/return-orders';
+                         _params = __assign({}, params);
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -996,9 +1011,9 @@ var Pay = /** @class */ (function (_super) {
+                             throw new Error('缺少out_return_no');
+                         if (!out_order_no)
+                             throw new Error('缺少out_order_no');
+-                        url = "https://api.mch.weixin.qq.com/v3/profitsharing/return-orders/".concat(out_return_no);
++                        url = "https://api.mch.weixin.qq.com/v3/profitsharing/return-orders/" + out_return_no;
+                         url = url + this.objectToQueryString({ out_order_no: out_order_no });
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -1018,8 +1033,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         url = 'https://api.mch.weixin.qq.com/v3/profitsharing/orders/unfreeze';
+                         _params = __assign({}, params);
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -1038,8 +1053,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         if (!transaction_id)
+                             throw new Error('缺少transaction_id');
+-                        url = "https://api.mch.weixin.qq.com/v3/profitsharing/transactions/".concat(transaction_id, "/amounts");
+-                        authorization = this.buildAuthorization('GET', url);
++                        url = "https://api.mch.weixin.qq.com/v3/profitsharing/transactions/" + transaction_id + "/amounts";
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -1061,8 +1076,8 @@ var Pay = /** @class */ (function (_super) {
+                         _params = __assign({ appid: this.appid }, params);
+                         serial_no = _params === null || _params === void 0 ? void 0 : _params.wx_serial_no;
+                         delete _params.wx_serial_no;
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.serial_no, 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.wxPayPublicId ? this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.wxPayPublicId, 'Content-Type': 'application/json' }) : this.getHeaders(authorization, { 'Wechatpay-Serial': serial_no || this.serial_no, 'Content-Type': 'application/json' });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -1081,8 +1096,8 @@ var Pay = /** @class */ (function (_super) {
+                     case 0:
+                         url = 'https://api.mch.weixin.qq.com/v3/profitsharing/receivers/delete';
+                         _params = __assign({ appid: this.appid }, params);
+-                        authorization = this.buildAuthorization('POST', url, _params);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json' });
++                        authorization = this.init('POST', url, _params);
++                        headers = this.getHeaders(authorization, { 'Content-Type': 'application/json', 'Wechatpay-Serial': this.wxPayPublicId ? this.wxPayPublicId : null });
+                         return [4 /*yield*/, this.httpService.post(url, _params, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+                 }
+@@ -1103,7 +1118,7 @@ var Pay = /** @class */ (function (_super) {
+                             throw new Error('缺少bill_date');
+                         url = "https://api.mch.weixin.qq.com/v3/profitsharing/bills";
+                         url = url + this.objectToQueryString(__assign({ bill_date: bill_date }, (tar_type && { tar_type: tar_type })));
+-                        authorization = this.buildAuthorization('GET', url);
++                        authorization = this.init('GET', url);
+                         headers = this.getHeaders(authorization);
+                         return [4 /*yield*/, this.httpService.get(url, headers)];
+                     case 1: return [2 /*return*/, _a.sent()];
+@@ -1111,32 +1126,6 @@ var Pay = /** @class */ (function (_super) {
+             });
+         });
+     };
+-    //#endregion 分账
+-    Pay.prototype.upload_images = function (pic_buffer, filename) {
+-        return __awaiter(this, void 0, void 0, function () {
+-            var fileinfo, sign, url, authorization, headers;
+-            return __generator(this, function (_a) {
+-                switch (_a.label) {
+-                    case 0:
+-                        fileinfo = {
+-                            filename: filename,
+-                            sha256: '',
+-                        };
+-                        sign = crypto_1.default.createHash('sha256');
+-                        sign.update(pic_buffer);
+-                        fileinfo.sha256 = sign.digest('hex');
+-                        url = '/v3/merchant/media/upload';
+-                        authorization = this.buildAuthorization('POST', url, fileinfo);
+-                        headers = this.getHeaders(authorization, { 'Content-Type': 'multipart/form-data;boundary=boundary' });
+-                        return [4 /*yield*/, this.httpService.post(url, {
+-                                fileinfo: fileinfo,
+-                                pic_buffer: pic_buffer,
+-                            }, headers)];
+-                    case 1: return [2 /*return*/, _a.sent()];
+-                }
+-            });
+-        });
+-    };
+     Pay.certificates = {}; // 微信平台证书 key 是 serialNo, value 是 publicKey
+     return Pay;
+ }(base_1.Base));
+diff --git a/dist/lib/interface.d.ts b/dist/lib/interface.d.ts
+index 49cdb8d372f0cf00975085930f9b3e70f010a65d..c8243dcfa0f8b9ed6521f08de834b59bf45f014c 100644
+--- a/dist/lib/interface.d.ts
++++ b/dist/lib/interface.d.ts
+@@ -47,6 +47,8 @@ export interface Ioptions {
+     authType?: string;
+     key?: string;
+     serial_no?: string;
++    wxPayPublicKey?: Buffer;
++    wxPayPublicId?: string;
+ }
+ export interface Ipay {
+     appid: string;
+@@ -57,6 +59,8 @@ export interface Ipay {
+     authType?: string;
+     userAgent?: string;
+     key?: string;
++    wxPayPublicKey?: Buffer;
++    wxPayPublicId?: string;
+ }
+ export interface Ih5 {
+     appid?: string;

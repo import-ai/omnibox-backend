@@ -88,14 +88,14 @@ export class AttachmentsService {
       ResourcePermission.CAN_EDIT,
     );
 
-    const { key, objectName } = await this.s3Service.generateObjectKey(
+    const { objectKey, objectName } = await this.s3Service.generateObjectKey(
       'attachments',
       filename,
     );
     const metadata = {
       filename: encodeFileName(filename),
     };
-    await this.s3Service.putObject(key, buffer, mimetype, metadata);
+    await this.s3Service.putObject(objectKey, buffer, mimetype, metadata);
 
     // Create the resource-attachment relation
     await this.resourceAttachmentsService.addAttachmentToResource(

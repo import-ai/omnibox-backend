@@ -157,15 +157,19 @@ export class WizardService {
       resourceDto,
     );
 
-    const filename = 'html.gz';
-    const id = await this.s3Service.put(
-      filename,
+    const { objectKey } = await this.s3Service.generateObjectKey(
+      this.gzipHtmlFolder,
+      'html.gz',
+    );
+    const metadata = {
+      resourceId: resource.id,
+      url,
+    };
+    await this.s3Service.putObject(
+      objectKey,
       compressedHtml.buffer,
       compressedHtml.mimetype,
-      {
-        folder: this.gzipHtmlFolder,
-        metadata: { resourceId: resource.id, url },
-      },
+      metadata,
     );
 
     if (this.isVideoUrl(url)) {
@@ -173,7 +177,7 @@ export class WizardService {
         userId,
         namespaceId,
         resource.id,
-        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+        { html: objectKey, url, title },
       );
       return { task_id: task.id, resource_id: resource.id };
     } else {
@@ -181,7 +185,7 @@ export class WizardService {
         userId,
         namespaceId,
         resource.id,
-        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+        { html: objectKey, url, title },
       );
       return { task_id: task.id, resource_id: resource.id };
     }

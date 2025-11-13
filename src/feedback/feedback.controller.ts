@@ -58,12 +58,12 @@ export class FeedbackController {
 
     if (image) {
       const originalname = encodeFileName(image.originalname);
-      imageUrl = await this.s3Service.put(
+      const { objectKey, objectName } = await this.s3Service.generateObjectKey(
+        'feedback',
         originalname,
-        image.buffer,
-        image.mimetype,
-        { folder: 'feedback' },
       );
+      await this.s3Service.putObject(objectKey, image.buffer, image.mimetype);
+      imageUrl = objectName;
     }
 
     const userAgent = request.get('User-Agent');

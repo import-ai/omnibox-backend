@@ -13,16 +13,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import generateId from 'omniboxd/utils/generate-id';
-import {
-  encodeFileName,
-  getOriginalFileName,
-} from 'omniboxd/utils/encode-filename';
-
-export interface PutOptions {
-  id?: string;
-  metadata?: Record<string, string>;
-  folder?: string;
-}
+import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
 
 export class ObjectMeta {
   constructor(
@@ -126,15 +117,15 @@ export class S3Service implements OnModuleInit {
     prefix: string,
     filename?: string,
     length: number = 32,
-  ): Promise<{ key: string; objectName: string }> {
+  ): Promise<{ objectKey: string; objectName: string }> {
     if (!prefix.endsWith('/')) {
       prefix += '/';
     }
     for (let i = 0; i < 5; i++) {
       const objectName = this.generateId(filename, length);
-      const key = `${prefix}${objectName}`;
-      if ((await this.headObject(key)) === null) {
-        return { key, objectName };
+      const objectKey = `${prefix}${objectName}`;
+      if ((await this.headObject(objectKey)) === null) {
+        return { objectKey, objectName };
       }
     }
     throw new Error('Unable to generate unique S3 key');
@@ -196,20 +187,5 @@ export class S3Service implements OnModuleInit {
       Key: key,
     });
     return await this.s3Client.send(command);
-  }
-
-  async put(
-    filename: string,
-    buffer: Buffer,
-    mimetype: string,
-    options?: PutOptions,
-  ): Promise<string> {
-    const { id = this.generateId(filename) } = options || {};
-    const path: string = options?.folder ? `${options.folder}/${id}` : id;
-    await this.putObject(path, buffer, mimetype, {
-      ...options?.metadata,
-      filename: encodeFileName(filename),
-    });
-    return id;
   }
 }

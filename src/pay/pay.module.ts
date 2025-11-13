@@ -15,17 +15,20 @@ import { UserModule } from 'omniboxd/user/user.module';
     WeChatPayModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
+        const publicKeyCert = configService
+          .get<string>('OBB_WECHAT_PAY_CERT', '')
+          .trim();
+        const privateKeyCert = configService
+          .get<string>('OBB_WECHAT_PAY_KEY', '')
+          .trim();
+
         return {
           key: configService.get<string>('OBB_WECHAT_APP_KEY', ''),
           appid: configService.get<string>('OBB_WECHAT_PAY_APPID', ''),
           mchid: configService.get<string>('OBB_WECHAT_PAY_MCHID', ''),
           serial_no: configService.get<string>('OBB_WECHAT_PAY_SERIAL', ''),
-          publicKey: Buffer.from(
-            configService.get<string>('OBB_WECHAT_PAY_CERT', ''),
-          ),
-          privateKey: Buffer.from(
-            configService.get<string>('OBB_WECHAT_PAY_KEY', ''),
-          ),
+          publicKey: Buffer.from(publicKeyCert, 'utf-8'),
+          privateKey: Buffer.from(privateKeyCert, 'utf-8'),
         };
       },
     }),

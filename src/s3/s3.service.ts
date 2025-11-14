@@ -219,7 +219,7 @@ export class S3Service implements OnModuleInit {
     const conditions: Conditions[] = [];
     const fields: Record<string, string> = {};
     if (contentType) {
-      conditions.push({ 'content-type': contentType });
+      // conditions.push({ 'content-type': contentType });
       fields['content-type'] = contentType;
     }
     if (contentDisposition) {

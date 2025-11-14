@@ -40,7 +40,11 @@ import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
-import { FileInfoDto, InternalFileInfoDto } from './dto/file-info.dto';
+import {
+  UploadFileInfoDto,
+  InternalFileInfoDto,
+  DownloadFileInfoDto,
+} from './dto/file-info.dto';
 import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
 
 const TASK_PRIORITY = 5;
@@ -644,7 +648,7 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     resourceId: string,
-  ): Promise<FileInfoDto> {
+  ): Promise<DownloadFileInfoDto> {
     const ok = await this.permissionsService.userHasPermission(
       namespaceId,
       resourceId,
@@ -658,15 +662,24 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    if (resource.resourceType !== ResourceType.FILE || !resource.fileId) {
+    if (resource.resourceType !== ResourceType.FILE) {
       const message = this.i18n.t('resource.errors.fileNotFound');
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    if (!resource.fileId) {
+      const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(resource.name)}`;
+      const url = await this.s3Service.generateDownloadUrl(
+        this.s3Path(resource.id),
+        true,
+        disposition,
+      );
+      return DownloadFileInfoDto.new(url);
     }
     const url = await this.filesService.generatePublicDownloadUrl(
       namespaceId,
       resource.fileId,
     );
-    return FileInfoDto.new(resource.fileId, url);
+    return DownloadFileInfoDto.new(url);
   }
 
   async getResourceFileForInternal(
@@ -721,7 +734,7 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     createReq: CreateFileReqDto,
-  ): Promise<FileInfoDto> {
+  ): Promise<UploadFileInfoDto> {
     const file = await this.createResourceFile(userId, namespaceId, createReq);
     const postReq = await this.filesService.generateUploadForm(
       file.id,
@@ -729,7 +742,7 @@ export class NamespaceResourcesService {
       file.name,
       file.mimetype,
     );
-    return FileInfoDto.new(file.id, undefined, postReq.url, postReq.fields);
+    return UploadFileInfoDto.new(file.id, postReq.url, postReq.fields);
   }
 
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {

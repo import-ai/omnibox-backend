@@ -1,31 +1,31 @@
 import { Expose } from 'class-transformer';
 
-export class FileInfoDto {
+export class UploadFileInfoDto {
   @Expose()
   id: string;
 
-  @Expose()
-  url?: string;
-
   @Expose({ name: 'post_url' })
-  postUrl?: string;
+  postUrl: string;
 
   @Expose({ name: 'post_fields' })
-  postFields?: [string, string][];
+  postFields: [string, string][];
 
-  static new(
-    id: string,
-    url?: string,
-    postUrl?: string,
-    postFields?: Record<string, string>,
-  ) {
-    const dto = new FileInfoDto();
+  static new(id: string, postUrl: string, postFields: Record<string, string>) {
+    const dto = new UploadFileInfoDto();
     dto.id = id;
-    dto.url = url;
     dto.postUrl = postUrl;
-    if (postFields) {
-      dto.postFields = Object.entries(postFields);
-    }
+    dto.postFields = Object.entries(postFields);
+    return dto;
+  }
+}
+
+export class DownloadFileInfoDto {
+  @Expose()
+  url: string;
+
+  static new(url: string) {
+    const dto = new DownloadFileInfoDto();
+    dto.url = url;
     return dto;
   }
 }

@@ -91,7 +91,7 @@ export class FilesService {
     );
   }
 
-  private async generateDownloadUrl(
+  async generateDownloadUrl(
     namespaceId: string,
     fileId: string,
     isPublic: boolean,
@@ -108,19 +108,5 @@ export class FilesService {
       isPublic,
       disposition,
     );
-  }
-
-  async generatePublicDownloadUrl(
-    namespaceId: string,
-    fileId: string,
-  ): Promise<string> {
-    return this.generateDownloadUrl(namespaceId, fileId, true);
-  }
-
-  async generateInternalDownloadUrl(
-    namespaceId: string,
-    fileId: string,
-  ): Promise<string> {
-    return this.generateDownloadUrl(namespaceId, fileId, false);
   }
 }

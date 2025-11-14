@@ -1,6 +1,5 @@
-import { Response } from 'express';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Param, Post } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
 
@@ -21,13 +20,5 @@ export class FileResourcesController {
       namespaceId,
       createReq,
     );
-  }
-
-  @Get(':resourceId')
-  async downloadFile(
-    @Param('resourceId') resourceId: string,
-    @Res() res: Response,
-  ) {
-    return await this.namespaceResourcesService.fileResponse(resourceId, res);
   }
 }

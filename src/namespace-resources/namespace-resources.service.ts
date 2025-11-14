@@ -29,7 +29,6 @@ import {
   comparePermission,
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
-import { Response } from 'express';
 import { ResourceDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -675,9 +674,10 @@ export class NamespaceResourcesService {
       );
       return DownloadFileInfoDto.new(url);
     }
-    const url = await this.filesService.generatePublicDownloadUrl(
+    const url = await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
+      true,
     );
     return DownloadFileInfoDto.new(url);
   }
@@ -694,13 +694,15 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('resource.errors.fileNotFound');
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
-    const publicUrl = await this.filesService.generatePublicDownloadUrl(
+    const publicUrl = await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
+      true,
     );
-    const internalUrl = await this.filesService.generateInternalDownloadUrl(
+    const internalUrl = await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
+      false,
     );
     return InternalFileInfoDto.new(publicUrl, internalUrl);
   }
@@ -849,26 +851,6 @@ export class NamespaceResourcesService {
     );
   }
 
-  async downloadFile(resourceId: string) {
-    const resource = await this.resourceRepository.findOne({
-      where: { id: resourceId },
-    });
-    if (!resource || resource.resourceType !== ResourceType.FILE) {
-      const message = this.i18n.t('resource.errors.fileResourceNotFound');
-      throw new AppException(
-        message,
-        'FILE_RESOURCE_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-    const artifactName = resource.id;
-
-    const { stream } = await this.s3Service.getObject(
-      this.s3Path(artifactName),
-    );
-    return { fileStream: stream, resource };
-  }
-
   async getAllResourcesByUser(
     userId: string,
     namespaceId: string,
@@ -887,19 +869,5 @@ export class NamespaceResourcesService {
       skip: offset,
       take: limit,
     });
-  }
-
-  async fileResponse(resourceId: string, response: Response) {
-    const { fileStream, resource } = await this.downloadFile(resourceId);
-    const encodedName = encodeURIComponent(resource.name);
-    response.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${encodedName}"`,
-    );
-    response.setHeader(
-      'Content-Type',
-      resource.attrs?.mimetype || 'application/octet-stream',
-    );
-    fileStream.pipe(response);
   }
 }

@@ -68,7 +68,7 @@ export class S3Service implements OnModuleInit {
 
     const s3Region = configService.get<string>('OBB_S3_REGION', 'us-east-1');
     const forcePathStyle =
-      configService.get<string>('OBB_S3_FORCE_PATH_STYLE', 'false') === 'true';
+      configService.get<string>('OBB_S3_FORCE_PATH_STYLE', 'true') === 'true';
 
     this.s3Client = new S3Client({
       region: s3Region,

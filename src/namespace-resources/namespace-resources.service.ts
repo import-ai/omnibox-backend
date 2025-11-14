@@ -1,5 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
+import * as mime from 'mime-types';
 import {
   DataSource,
   EntityManager,
@@ -20,7 +21,7 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { MinioService } from 'omniboxd/minio/minio.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
@@ -28,7 +29,6 @@ import {
   comparePermission,
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
-import { Response } from 'express';
 import { ResourceDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -37,14 +37,14 @@ import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resour
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ChildrenMetaDto } from './dto/list-children-resp.dto';
-import {
-  encodeFileName,
-  getOriginalFileName,
-} from 'omniboxd/utils/encode-filename';
-import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
-import { FileInfoDto, InternalFileInfoDto } from './dto/file-info.dto';
+import {
+  UploadFileInfoDto,
+  InternalFileInfoDto,
+  DownloadFileInfoDto,
+} from './dto/file-info.dto';
+import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
 
 const TASK_PRIORITY = 5;
 
@@ -57,7 +57,7 @@ export class NamespaceResourcesService {
     private readonly namespaceRepository: Repository<Namespace>,
     private readonly tagService: TagService,
     private readonly dataSource: DataSource,
-    private readonly minioService: MinioService,
+    private readonly s3Service: S3Service,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly wizardTaskService: WizardTaskService,
@@ -179,6 +179,7 @@ export class NamespaceResourcesService {
     namespaceId: string,
     createReq: CreateResourceDto,
     manager?: EntityManager,
+    source?: string,
   ) {
     if (!manager) {
       return await this.dataSource.transaction(async (manager) => {
@@ -234,6 +235,7 @@ export class NamespaceResourcesService {
         attrs,
         tagIds: createReq.tag_ids,
         fileId: createReq.file_id,
+        source,
       },
       manager,
     );
@@ -600,7 +602,7 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    if (resource.namespaceId !== namespaceId) {
+    if (!resource.parentId) {
       const message = this.i18n.t('resource.errors.resourceNotFound');
       throw new AppException(
         message,
@@ -614,9 +616,7 @@ export class NamespaceResourcesService {
         resource.parentId,
       );
 
-    const rootResourceId = parentResources
-      ? parentResources[parentResources.length - 1].id
-      : resourceId;
+    const rootResourceId = parentResources[parentResources.length - 1].id;
     const spaceType = await this.getSpaceType(namespaceId, rootResourceId);
 
     const resourceMeta = ResourceMetaDto.fromEntity(resource);
@@ -647,7 +647,7 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     resourceId: string,
-  ): Promise<FileInfoDto> {
+  ): Promise<DownloadFileInfoDto> {
     const ok = await this.permissionsService.userHasPermission(
       namespaceId,
       resourceId,
@@ -661,15 +661,25 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    if (resource.resourceType !== ResourceType.FILE || !resource.fileId) {
+    if (resource.resourceType !== ResourceType.FILE) {
       const message = this.i18n.t('resource.errors.fileNotFound');
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
-    const url = await this.filesService.generatePublicDownloadUrl(
+    if (!resource.fileId) {
+      const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(resource.name)}`;
+      const url = await this.s3Service.generateDownloadUrl(
+        this.s3Path(resource.id),
+        true,
+        disposition,
+      );
+      return DownloadFileInfoDto.new(url);
+    }
+    const url = await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
+      true,
     );
-    return FileInfoDto.new(resource.fileId, url);
+    return DownloadFileInfoDto.new(url);
   }
 
   async getResourceFileForInternal(
@@ -684,13 +694,15 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('resource.errors.fileNotFound');
       throw new AppException(message, 'FILE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
-    const publicUrl = await this.filesService.generatePublicDownloadUrl(
+    const publicUrl = await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
+      true,
     );
-    const internalUrl = await this.filesService.generateInternalDownloadUrl(
+    const internalUrl = await this.filesService.generateDownloadUrl(
       namespaceId,
       resource.fileId,
+      false,
     );
     return InternalFileInfoDto.new(publicUrl, internalUrl);
   }
@@ -699,7 +711,7 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     createReq: CreateFileReqDto,
-  ): Promise<FileInfoDto> {
+  ) {
     const ok = await this.permissionsService.userInNamespace(
       userId,
       namespaceId,
@@ -708,20 +720,31 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
-    const file = await this.filesService.createFile(
+    const mimetype =
+      createReq.mimetype ||
+      mime.lookup(createReq.name) ||
+      'application/octet-stream';
+    return await this.filesService.createFile(
       userId,
       namespaceId,
       createReq.name,
-      createReq.mimetype,
+      mimetype,
     );
-    const url = await this.filesService.generateUploadUrl(file.id);
-    const postReq = await this.filesService.generatePostForm(
+  }
+
+  async createFileUploadForm(
+    userId: string,
+    namespaceId: string,
+    createReq: CreateFileReqDto,
+  ): Promise<UploadFileInfoDto> {
+    const file = await this.createResourceFile(userId, namespaceId, createReq);
+    const postReq = await this.filesService.generateUploadForm(
       file.id,
       createReq.size,
       file.name,
       file.mimetype,
     );
-    return FileInfoDto.new(file.id, url, postReq.url, postReq.fields);
+    return UploadFileInfoDto.new(file.id, postReq.url, postReq.fields);
   }
 
   async update(userId: string, resourceId: string, data: UpdateResourceDto) {
@@ -795,206 +818,37 @@ export class NamespaceResourcesService {
     });
   }
 
-  minioPath(resourceId: string) {
+  s3Path(resourceId: string) {
     return `resources/${resourceId}`;
-  }
-
-  chunkPath(
-    namespaceId: string,
-    fileHash: string,
-    chunkNumber: string | number,
-  ) {
-    return `chunks/${namespaceId}/${fileHash}/${chunkNumber}`;
-  }
-
-  async uploadFileChunk(
-    namespaceId: string,
-    chunk: Express.Multer.File,
-    chunkNumber: string,
-    fileHash: string,
-  ) {
-    await this.minioService.putChunkObject(
-      this.chunkPath(namespaceId, fileHash, chunkNumber),
-      chunk.buffer,
-      chunk.size,
-    );
-  }
-
-  async cleanFileChunks(
-    namespaceId: string,
-    chunksNumber: string,
-    fileHash: string,
-  ) {
-    const chunksName = chunksNumber
-      .split(',')
-      .map((chunkNumber) => this.chunkPath(namespaceId, fileHash, chunkNumber));
-    await Promise.all(
-      chunksName.map((name) => this.minioService.removeObject(name)),
-    );
-  }
-
-  async mergeFileChunks(
-    userId: string,
-    namespaceId: string,
-    totalChunks: number,
-    fileHash: string,
-    fileName: string,
-    mimetype: string,
-    parentId?: string,
-    resourceId?: string,
-  ) {
-    const originalName = decodeURIComponent(fileName);
-    const encodedName = encodeFileName(originalName);
-
-    let resource: Resource;
-    if (resourceId) {
-      resource = await this.resourcesService.getResourceOrFail(
-        namespaceId,
-        resourceId,
-      );
-      if (resource.resourceType !== ResourceType.FILE) {
-        const message = this.i18n.t('resource.errors.resourceNotFile');
-        throw new AppException(
-          message,
-          'RESOURCE_NOT_FILE',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-    } else if (parentId) {
-      resource = await this.create(userId, namespaceId, {
-        name: originalName,
-        resourceType: ResourceType.FILE,
-        parentId,
-        attrs: {
-          original_name: originalName,
-          encoded_name: encodedName,
-          mimetype: mimetype,
-        },
-      });
-    } else {
-      const message = this.i18n.t('resource.errors.parentOrResourceIdRequired');
-      throw new AppException(
-        message,
-        'PARENT_OR_RESOURCE_ID_REQUIRED',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const artifactName = resource.id;
-
-    const chunksName = Array.from({ length: totalChunks }, (_, i) =>
-      this.chunkPath(namespaceId, fileHash, i),
-    );
-
-    await this.minioService.composeObject(
-      this.minioPath(artifactName),
-      chunksName,
-    );
-    await Promise.all(
-      chunksName.map((name) => this.minioService.removeObject(name)),
-    );
-
-    resource.attrs = { ...resource.attrs, url: artifactName };
-    await this.resourceRepository.save(resource);
-
-    await this.wizardTaskService.createFileReaderTask(userId, resource);
-
-    return resource;
   }
 
   async uploadFile(
     userId: string,
     namespaceId: string,
     file: Express.Multer.File,
-    parentId?: string,
-    resourceId?: string,
+    parentId: string,
     source?: string,
     parsedContent?: string,
   ) {
     const originalFilename = getOriginalFileName(file.originalname);
-    const encodedFilename = encodeFileName(file.originalname);
-
-    let resource: Resource;
-    if (resourceId) {
-      resource = await this.resourcesService.getResourceOrFail(
-        namespaceId,
-        resourceId,
-      );
-      if (resource.resourceType !== ResourceType.FILE) {
-        const message = this.i18n.t('resource.errors.resourceNotFile');
-        throw new AppException(
-          message,
-          'RESOURCE_NOT_FILE',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-    } else if (parentId) {
-      resource = await this.create(userId, namespaceId, {
-        name: originalFilename, // Use original filename for display
-        resourceType: ResourceType.FILE,
-        parentId,
-        attrs: {
-          original_name: originalFilename,
-          encoded_name: encodedFilename, // Store encoded name for MinIO
-          mimetype: file.mimetype,
-        },
-      });
-    } else {
-      const message = this.i18n.t('resource.errors.parentOrResourceIdRequired');
-      throw new AppException(
-        message,
-        'PARENT_OR_RESOURCE_ID_REQUIRED',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const artifactName = resource.id;
-
-    await this.minioService.putObject(
-      this.minioPath(artifactName),
-      file.buffer,
-      file.mimetype,
-    );
-
-    resource.attrs = { ...resource.attrs, url: artifactName };
-
-    const hasParsedContent = !isEmpty(parsedContent);
-
-    if (hasParsedContent) {
-      resource.content = parsedContent!;
-    }
-
-    await this.resourceRepository.save(resource);
-
-    if (!hasParsedContent) {
-      await this.wizardTaskService.createFileReaderTask(
-        userId,
-        resource,
-        source,
-      );
-    }
-
-    return resource;
-  }
-
-  async downloadFile(resourceId: string) {
-    const resource = await this.resourceRepository.findOne({
-      where: { id: resourceId },
+    const resourceFile = await this.createResourceFile(userId, namespaceId, {
+      name: originalFilename,
+      mimetype: file.mimetype,
     });
-    if (!resource || resource.resourceType !== ResourceType.FILE) {
-      const message = this.i18n.t('resource.errors.fileResourceNotFound');
-      throw new AppException(
-        message,
-        'FILE_RESOURCE_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-    const artifactName = resource.id;
-
-    const fileStream = await this.minioService.getObject(
-      this.minioPath(artifactName),
+    await this.filesService.uploadFile(resourceFile, file);
+    return await this.create(
+      userId,
+      namespaceId,
+      {
+        parentId,
+        resourceType: ResourceType.FILE,
+        name: originalFilename,
+        file_id: resourceFile.id,
+        content: parsedContent,
+      },
+      undefined,
+      source,
     );
-    return { fileStream, resource };
   }
 
   async getAllResourcesByUser(
@@ -1015,19 +869,5 @@ export class NamespaceResourcesService {
       skip: offset,
       take: limit,
     });
-  }
-
-  async fileResponse(resourceId: string, response: Response) {
-    const { fileStream, resource } = await this.downloadFile(resourceId);
-    const encodedName = encodeURIComponent(resource.name);
-    response.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${encodedName}"`,
-    );
-    response.setHeader(
-      'Content-Type',
-      resource.attrs?.mimetype || 'application/octet-stream',
-    );
-    fileStream.pipe(response);
   }
 }

@@ -8,7 +8,7 @@ import { InternalResourcesController } from 'omniboxd/namespace-resources/intern
 import { OpenResourcesController } from 'omniboxd/namespace-resources/open.resource.controller';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { FileResourcesController } from 'omniboxd/namespace-resources/file-resources.controller';
-import { MinioModule } from 'omniboxd/minio/minio.module';
+import { S3Module } from 'omniboxd/s3/s3.module';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
@@ -31,7 +31,7 @@ import { FilesModule } from 'omniboxd/files/files.module';
     TypeOrmModule.forFeature([Namespace]),
     TagModule,
     PermissionsModule,
-    MinioModule,
+    S3Module,
     TasksModule,
     ResourceAttachmentsModule,
     ResourcesModule,

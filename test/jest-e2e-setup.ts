@@ -63,10 +63,9 @@ export default async () => {
   process.env.OBB_DB_LOGGING = 'false';
   process.env.OBB_S3_ACCESS_KEY_ID = 'minioadmin';
   process.env.OBB_S3_SECRET_ACCESS_KEY = 'minioadmin';
-  process.env.OBB_S3_URL = `http://${minioContainer.getHost()}:${minioContainer.getMappedPort(9000)}`;
   process.env.OBB_S3_ENDPOINT = `http://${minioContainer.getHost()}:${minioContainer.getMappedPort(9000)}`;
   process.env.OBB_S3_BUCKET = 'omnibox-test';
-  process.env.OBB_S3_PREFIX = 'uploaded-files';
+  process.env.OBB_S3_FORCE_PATH_STYLE = 'true';
   process.env.OBB_MAIL_TRANSPORT = mailTransport;
   process.env.OBB_MAIL_FROM = '"Test <test@example.com>"';
 

@@ -326,6 +326,7 @@ export class ResourcesService {
       content?: string;
       attrs?: Record<string, any>;
       fileId?: string;
+      source?: string;
     },
     entityManager?: EntityManager,
   ): Promise<Resource> {
@@ -358,7 +359,7 @@ export class ResourcesService {
       await this.wizardTaskService.createFileReaderTask(
         resource.userId,
         resource,
-        'default',
+        props.source || 'default',
         entityManager.getRepository(Task),
       );
     } else if (resource.parentId) {

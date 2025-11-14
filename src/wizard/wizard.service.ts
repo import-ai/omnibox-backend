@@ -27,7 +27,7 @@ import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
-import { MinioService } from 'omniboxd/minio/minio.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
 import { createGunzip } from 'zlib';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
@@ -49,7 +49,7 @@ export class WizardService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
-    private readonly minioService: MinioService,
+    private readonly s3Service: S3Service,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
@@ -157,15 +157,19 @@ export class WizardService {
       resourceDto,
     );
 
-    const filename = 'html.gz';
-    const { id } = await this.minioService.put(
-      filename,
+    const { objectKey } = await this.s3Service.generateObjectKey(
+      this.gzipHtmlFolder,
+      'html.gz',
+    );
+    const metadata = {
+      resourceId: resource.id,
+      url,
+    };
+    await this.s3Service.putObject(
+      objectKey,
       compressedHtml.buffer,
       compressedHtml.mimetype,
-      {
-        folder: this.gzipHtmlFolder,
-        metadata: { resourceId: resource.id, url },
-      },
+      metadata,
     );
 
     if (this.isVideoUrl(url)) {
@@ -173,7 +177,7 @@ export class WizardService {
         userId,
         namespaceId,
         resource.id,
-        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+        { html: objectKey, url, title },
       );
       return { task_id: task.id, resource_id: resource.id };
     } else {
@@ -181,7 +185,7 @@ export class WizardService {
         userId,
         namespaceId,
         resource.id,
-        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+        { html: objectKey, url, title },
       );
       return { task_id: task.id, resource_id: resource.id };
     }
@@ -489,7 +493,7 @@ export class WizardService {
   }
 
   async getHtmlFromMinioGzipFile(path: string) {
-    const stream = await this.minioService.getObject(path);
+    const { stream } = await this.s3Service.getObject(path);
     const gunzip = createGunzip();
     return new Promise<string>((resolve, reject) => {
       const chunks: Buffer[] = [];

@@ -73,6 +73,7 @@ import { isEmpty } from 'omniboxd/utils/is-empty';
 import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
+import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -151,6 +152,7 @@ export class AppModule implements NestModule {
         ApplicationsModule,
         WebSocketModule,
         FilesModule,
+        OpenAPIModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

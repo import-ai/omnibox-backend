@@ -17,7 +17,6 @@ import { UserModule } from 'omniboxd/user/user.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { S3Module } from 'omniboxd/s3/s3.module';
-import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
@@ -46,8 +45,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     CollectController,
     SharedWizardController,
     InternalWizardController,
-    OpenWizardController,
   ],
-  exports: [WizardService],
+  exports: [WizardService, OpenWizardService],
 })
 export class WizardModule {}

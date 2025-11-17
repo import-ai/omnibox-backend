@@ -8,8 +8,32 @@ import { I18nService } from 'nestjs-i18n';
 import { PresignedPost } from '@aws-sdk/s3-presigned-post';
 import { formatFileSize } from '../utils/format-file-size';
 import { S3Service } from 'omniboxd/s3/s3.service';
+import { extname } from 'path';
+import * as mime from 'mime-types';
 
 const s3Prefix = 'uploaded-files';
+
+const ALLOWED_FILE_EXTENSIONS = new Set([
+  '.md',
+  '.doc',
+  '.ppt',
+  '.docx',
+  '.pptx',
+  '.txt',
+  '.pdf',
+  '.wav',
+  '.mp3',
+  '.m4a',
+  '.pcm',
+  '.opus',
+  '.webm',
+  '.mp4',
+  '.avi',
+  '.mov',
+  '.mkv',
+  '.flv',
+  '.wmv',
+]);
 
 @Injectable()
 export class FilesService {
@@ -33,8 +57,18 @@ export class FilesService {
     userId: string,
     namespaceId: string,
     filename: string,
-    mimetype: string,
+    mimetype?: string,
   ): Promise<File> {
+    const extension = extname(filename).toLowerCase();
+    if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
+      const message = this.i18n.t('resource.errors.fileTypeNotSupported');
+      throw new AppException(
+        message,
+        'FILE_TYPE_NOT_SUPPORTED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    mimetype = mimetype || mime.lookup(filename) || 'application/octet-stream';
     return await this.fileRepo.save(
       this.fileRepo.create({
         namespaceId,
@@ -53,7 +87,6 @@ export class FilesService {
     fileId: string,
     fileSize: number | undefined,
     filename: string,
-    mimetype: string,
   ): Promise<PresignedPost> {
     if (fileSize && fileSize > this.s3MaxFileSize) {
       const message = this.i18n.t('resource.errors.fileTooLarge', {
@@ -68,7 +101,6 @@ export class FilesService {
     return await this.s3Service.generateUploadForm(
       `${s3Prefix}/${fileId}`,
       true,
-      mimetype,
       disposition,
       this.s3MaxFileSize,
     );

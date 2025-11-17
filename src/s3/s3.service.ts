@@ -211,17 +211,12 @@ export class S3Service implements OnModuleInit {
   async generateUploadForm(
     key: string,
     isPublic: boolean,
-    contentType?: string,
     contentDisposition?: string,
     maxSize?: number,
   ): Promise<PresignedPost> {
     const s3Client = isPublic ? this.s3PublicClient : this.s3Client;
     const conditions: Conditions[] = [];
     const fields: Record<string, string> = {};
-    if (contentType) {
-      // conditions.push({ 'content-type': contentType });
-      fields['content-type'] = contentType;
-    }
     if (contentDisposition) {
       conditions.push({ 'content-disposition': contentDisposition });
       fields['content-disposition'] = contentDisposition;

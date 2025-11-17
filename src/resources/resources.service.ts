@@ -7,6 +7,7 @@ import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { FilesService } from 'omniboxd/files/files.service';
 
 const TASK_PRIORITY = 5;
 
@@ -18,6 +19,7 @@ export class ResourcesService {
     private readonly resourceRepository: Repository<Resource>,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
+    private readonly filesService: FilesService,
   ) {}
 
   async getParentResourcesOrFail(
@@ -343,6 +345,18 @@ export class ResourcesService {
         props.parentId,
         entityManager,
       );
+    }
+
+    if (props.fileId) {
+      const fileMeta = await this.filesService.headFile(props.fileId);
+      if (!fileMeta) {
+        const message = this.i18n.t('resource.errors.fileNotFound');
+        throw new AppException(
+          message,
+          'FILE_NOT_FOUND',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
     }
 
     // Create the resource

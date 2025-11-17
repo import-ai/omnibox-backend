@@ -1,19 +1,19 @@
 {
   "errors": {
-    "isNotEmpty": "$property 不能为空",
-    "isString": "$property 必须是字符串",
-    "isEmail": "$property 必须是有效的邮箱地址",
-    "isNumber": "$property 必须是数字",
-    "isBoolean": "$property 必须是布尔值",
-    "isArray": "$property 必须是数组",
-    "isObject": "$property 必须是对象",
-    "isUUID": "$property 必须是有效的 UUID",
-    "isDateString": "$property 必须是有效的日期字符串",
-    "isInt": "$property 必须是整数",
-    "isEnum": "$property 必须是有效的值",
-    "minLength": "$property 长度至少为 $constraint1 个字符",
-    "maxLength": "$property 长度不能超过 $constraint1 个字符",
-    "min": "$property 不能小于 $constraint1",
+    "isNotEmpty": "{property} 不能为空",
+    "isString": "{property} 必须是字符串",
+    "isEmail": "{property} 必须是有效的邮箱地址",
+    "isNumber": "{property} 必须是数字",
+    "isBoolean": "{property} 必须是布尔值",
+    "isArray": "{property} 必须是数组",
+    "isObject": "{property} 必须是对象",
+    "isUUID": "{property} 必须是有效的 UUID",
+    "isDateString": "{property} 必须是有效的日期字符串",
+    "isInt": "{property} 必须是整数",
+    "isEnum": "{property} 必须是有效的值",
+    "minLength": "{property} 长度至少为 {constraints.0} 个字符",
+    "maxLength": "{property} 长度不能超过 {constraints.0} 个字符",
+    "min": "{property} 不能小于 {constraints.0}",
     "email": {
       "isString": "邮箱必须是字符串",
       "isNotEmpty": "邮箱不能为空",
@@ -25,14 +25,17 @@
     },
     "username": {
       "isString": "用户名必须是字符串",
-      "minLength": "用户名至少 2 个字符",
-      "maxLength": "用户名不能超过 32 个字符"
+      "minLength": "用户名至少 {constraints.0} 个字符",
+      "maxLength": "用户名不能超过 {constraints.0} 个字符"
+    },
+    "tags": {
+      "maxLength": "名称不能超过 {constraints.0} 个字符"
     },
     "name": {
       "isString": "名称必须是字符串",
       "isNotEmpty": "名称不能为空",
-      "minLength": "名称至少 2 个字符",
-      "maxLength": "名称不能超过 64 个字符"
+      "minLength": "名称至少 {constraints.0} 个字符",
+      "maxLength": "名称不能超过 {constraints.0} 个字符"
     },
     "title": {
       "isString": "标题必须是字符串",
@@ -41,7 +44,7 @@
     "description": {
       "isString": "描述必须是字符串",
       "isNotEmpty": "描述不能为空",
-      "maxLength": "描述不能超过 $constraint1 个字符"
+      "maxLength": "描述不能超过 {constraints.0} 个字符"
     },
     "content": {
       "isString": "内容必须是字符串",

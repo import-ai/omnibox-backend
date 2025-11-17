@@ -25,14 +25,14 @@
     },
     "username": {
       "isString": "Username must be a string",
-      "minLength": "Username must be at least 2 characters",
-      "maxLength": "Username must not exceed 32 characters"
+      "minLength": "Username must be at least $constraint1 characters",
+      "maxLength": "Username must not exceed $constraint1 characters"
     },
     "name": {
       "isString": "Name must be a string",
       "isNotEmpty": "Name is required",
-      "minLength": "Name must be at least 2 characters",
-      "maxLength": "Name must not exceed 64 characters"
+      "minLength": "Name must be at least $constraint1 characters",
+      "maxLength": "Name must not exceed $constraint1 characters"
     },
     "title": {
       "isString": "Title must be a string",

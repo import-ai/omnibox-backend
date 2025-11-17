@@ -7,7 +7,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { PresignedPost } from '@aws-sdk/s3-presigned-post';
 import { formatFileSize } from '../utils/format-file-size';
-import { S3Service } from 'omniboxd/s3/s3.service';
+import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
 import { extname } from 'path';
 import * as mime from 'mime-types';
 
@@ -140,5 +140,9 @@ export class FilesService {
       isPublic,
       disposition,
     );
+  }
+
+  async headFile(fileId: string): Promise<ObjectMeta | null> {
+    return await this.s3Service.headObject(`${s3Prefix}/${fileId}`);
   }
 }

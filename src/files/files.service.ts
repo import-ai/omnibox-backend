@@ -106,11 +106,11 @@ export class FilesService {
     );
   }
 
-  async uploadFile(file: File, data: Express.Multer.File): Promise<void> {
-    if (data.size > this.s3MaxFileSize) {
+  async uploadFile(file: File, buffer: Buffer): Promise<void> {
+    if (buffer.length > this.s3MaxFileSize) {
       const message = this.i18n.t('resource.errors.fileTooLarge', {
         args: {
-          userSize: formatFileSize(data.size),
+          userSize: formatFileSize(buffer.length),
           limitSize: formatFileSize(this.s3MaxFileSize),
         },
       });
@@ -118,7 +118,7 @@ export class FilesService {
     }
     await this.s3Service.putObject(
       `${s3Prefix}/${file.id}`,
-      data.stream,
+      buffer,
       file.mimetype,
     );
   }

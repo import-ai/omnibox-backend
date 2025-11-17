@@ -828,7 +828,7 @@ export class NamespaceResourcesService {
       name: originalFilename,
       mimetype: file.mimetype,
     });
-    await this.filesService.uploadFile(resourceFile, file);
+    await this.filesService.uploadFile(resourceFile, file.buffer);
     return await this.create(
       userId,
       namespaceId,

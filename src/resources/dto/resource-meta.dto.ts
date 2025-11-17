@@ -40,7 +40,9 @@ export class ResourceMetaDto {
     dto.globalPermission = resource.globalPermission;
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
-    dto.attrs = resource.attrs;
+    dto.attrs = { ...resource.attrs };
+    delete dto.attrs.transcript;
+    delete dto.attrs.video_info;
     dto.fileId = resource.fileId;
     return dto;
   }

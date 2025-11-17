@@ -1,19 +1,19 @@
 {
   "errors": {
-    "isNotEmpty": "$property should not be empty",
-    "isString": "$property must be a string",
-    "isEmail": "$property must be a valid email address",
-    "isNumber": "$property must be a number",
-    "isBoolean": "$property must be a boolean value",
-    "isArray": "$property must be an array",
-    "isObject": "$property must be an object",
-    "isUUID": "$property must be a valid UUID",
-    "isDateString": "$property must be a valid date string",
-    "isInt": "$property must be an integer",
-    "isEnum": "$property must be a valid value",
-    "minLength": "$property must be at least $constraint1 characters",
-    "maxLength": "$property must not exceed $constraint1 characters",
-    "min": "$property must not be less than $constraint1",
+    "isNotEmpty": "{property} should not be empty",
+    "isString": "{property} must be a string",
+    "isEmail": "{property} must be a valid email address",
+    "isNumber": "{property} must be a number",
+    "isBoolean": "{property} must be a boolean value",
+    "isArray": "{property} must be an array",
+    "isObject": "{property} must be an object",
+    "isUUID": "{property} must be a valid UUID",
+    "isDateString": "{property} must be a valid date string",
+    "isInt": "{property} must be an integer",
+    "isEnum": "{property} must be a valid value",
+    "minLength": "{property} must be at least {constraints.0} characters",
+    "maxLength": "{property} must not exceed {constraints.0} characters",
+    "min": "{property} must not be less than {constraints.0}",
     "email": {
       "isString": "Email must be a string",
       "isNotEmpty": "Email is required",
@@ -25,14 +25,17 @@
     },
     "username": {
       "isString": "Username must be a string",
-      "minLength": "Username must be at least $constraint1 characters",
-      "maxLength": "Username must not exceed $constraint1 characters"
+      "minLength": "Username must be at least {constraints.0} characters",
+      "maxLength": "Username must not exceed {constraints.0} characters"
+    },
+    "tags": {
+      "maxLength": "Name must not exceed {constraints.0} characters"
     },
     "name": {
       "isString": "Name must be a string",
       "isNotEmpty": "Name is required",
-      "minLength": "Name must be at least $constraint1 characters",
-      "maxLength": "Name must not exceed $constraint1 characters"
+      "minLength": "Name must be at least {constraints.0} characters",
+      "maxLength": "Name must not exceed {constraints.0} characters"
     },
     "title": {
       "isString": "Title must be a string",
@@ -41,7 +44,7 @@
     "description": {
       "isString": "Description must be a string",
       "isNotEmpty": "Description is required",
-      "maxLength": "Description must not exceed $constraint1 characters"
+      "maxLength": "Description must not exceed {constraints.0} characters"
     },
     "content": {
       "isString": "Content must be a string",

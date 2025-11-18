@@ -231,7 +231,7 @@ export class WizardService {
   async createTaskUploadUrl(taskId: string): Promise<string> {
     return await this.s3Service.generateUploadUrl(
       `wizard-tasks/${taskId}`,
-      true,
+      false,
     );
   }
 

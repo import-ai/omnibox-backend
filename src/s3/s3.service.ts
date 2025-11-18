@@ -233,6 +233,15 @@ export class S3Service implements OnModuleInit {
     });
   }
 
+  async generateUploadUrl(key: string, isPublic: boolean): Promise<string> {
+    const s3Client = isPublic ? this.s3PublicClient : this.s3Client;
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+    return await getSignedUrl(s3Client, command, { expiresIn: 900 });
+  }
+
   async generateDownloadUrl(
     key: string,
     isPublic: boolean,

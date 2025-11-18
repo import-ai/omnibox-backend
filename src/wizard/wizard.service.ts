@@ -29,6 +29,7 @@ import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { createGunzip } from 'zlib';
+import { buffer } from 'node:stream/consumers';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 
@@ -227,6 +228,20 @@ export class WizardService {
     return { task_id: task.id, resource_id: resource.id };
   }
 
+  async createTaskUploadUrl(taskId: string): Promise<string> {
+    return await this.s3Service.generateUploadUrl(
+      `wizard-tasks/${taskId}`,
+      true,
+    );
+  }
+
+  async uploadedTaskDoneCallback(taskId: string) {
+    const { stream } = await this.s3Service.getObject(`wizard-tasks/${taskId}`);
+    const payload = await buffer(stream);
+    const taskCallback: TaskCallbackDto = JSON.parse(payload.toString('utf-8'));
+    return this.taskDoneCallback(taskCallback);
+  }
+
   async taskDoneCallback(data: TaskCallbackDto) {
     const task = await this.wizardTaskService.taskRepository.findOneOrFail({
       where: { id: data.id },
@@ -244,8 +259,8 @@ export class WizardService {
     }
 
     task.endedAt = new Date();
-    task.exception = data.exception;
-    task.output = data.output;
+    task.exception = data.exception || null;
+    task.output = data.output || null;
     await this.preprocessTask(task);
 
     await this.wizardTaskService.taskRepository.save(task);

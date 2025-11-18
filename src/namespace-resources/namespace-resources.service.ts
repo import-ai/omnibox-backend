@@ -528,18 +528,26 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
+    limit?: number,
+    offset?: number,
   ): Promise<ChildrenMetaDto[]> {
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
     );
-    let children = await this.resourcesService.getSubResources(namespaceId, [
-      resourceId,
-    ]);
+
+    // Apply pagination at database level
+    let children = await this.resourcesService.getSubResources(
+      namespaceId,
+      [resourceId],
+      { limit, offset },
+    );
+
     let subChildren = await this.resourcesService.getSubResources(
       namespaceId,
       children.map((child) => child.id),
     );
+
     const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,

@@ -9,6 +9,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -115,11 +116,15 @@ export class NamespaceResourcesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
   ): Promise<ChildrenMetaDto[]> {
     return this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
       userId,
+      limit,
+      offset,
     );
   }
 

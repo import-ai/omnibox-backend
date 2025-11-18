@@ -43,8 +43,7 @@ export class InternalWizardController {
   @Public()
   @Post('tasks/:taskId/callback')
   async handleUploadedTaskCallback(@Param('taskId') taskId: string) {
-    const url = await this.wizardService.createTaskUploadUrl(taskId);
-    return { url };
+    return await this.wizardService.uploadedTaskDoneCallback(taskId);
   }
 
   @Public()

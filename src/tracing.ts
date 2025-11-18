@@ -44,7 +44,7 @@ if (isTracingEnabled()) {
     instrumentations: [
       new HttpInstrumentation({
         ignoreIncomingRequestHook: (req) => {
-          return excludedUrls.some((url) => req.url?.includes(url)) || false;
+          return excludedUrls.some((url) => req.url === url) || false;
         },
       }),
       new ExpressInstrumentation({

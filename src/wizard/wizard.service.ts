@@ -236,10 +236,13 @@ export class WizardService {
   }
 
   async uploadedTaskDoneCallback(taskId: string) {
-    const { stream } = await this.s3Service.getObject(`wizard-tasks/${taskId}`);
+    const key = `wizard-tasks/${taskId}`;
+    const { stream } = await this.s3Service.getObject(key);
     const payload = await buffer(stream);
     const taskCallback: TaskCallbackDto = JSON.parse(payload.toString('utf-8'));
-    return this.taskDoneCallback(taskCallback);
+    const result = await this.taskDoneCallback(taskCallback);
+    await this.s3Service.deleteObject(key);
+    return result;
   }
 
   async taskDoneCallback(data: TaskCallbackDto) {

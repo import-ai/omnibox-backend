@@ -353,7 +353,7 @@ export class AuthService {
         inviteUrl,
         senderUsername!,
         namespaceName,
-        account.username!,
+        account.username,
         true,
         receiverLang,
       );

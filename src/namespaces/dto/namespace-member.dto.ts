@@ -3,7 +3,7 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 export class NamespaceMemberDto {
   userId: string;
   email: string | null;
-  username: string | null;
+  username: string;
   role: string;
   permission: ResourcePermission;
 }

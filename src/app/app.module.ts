@@ -74,6 +74,7 @@ import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
+import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -202,6 +203,7 @@ export class AppModule implements NestModule {
               ShareUser1760171824000,
               Files1761556143000,
               AddFileIdToResources1761726974942,
+              UserUsernameNotNull1763533615604,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -351,7 +351,7 @@ export class AuthService {
       await this.mailService.sendInviteEmail(
         email,
         inviteUrl,
-        senderUsername!,
+        senderUsername,
         namespaceName,
         account.username,
         true,
@@ -370,7 +370,7 @@ export class AuthService {
     await this.mailService.sendInviteEmail(
       email,
       mailSendUri,
-      senderUsername!,
+      senderUsername,
       namespaceName,
       undefined,
       false,

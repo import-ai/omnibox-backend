@@ -457,12 +457,11 @@ export class WizardService {
         id_subquery AS (
           SELECT tasks.id
           FROM tasks
-          CROSS JOIN cutoff_time
           LEFT OUTER JOIN running_tasks_sub_query
           ON tasks.namespace_id = running_tasks_sub_query.namespace_id
           LEFT OUTER JOIN namespaces
           ON tasks.namespace_id = namespaces.id
-          WHERE (tasks.started_at IS NULL OR tasks.started_at <= cutoff_time.time)
+          WHERE tasks.started_at IS NULL
           AND tasks.ended_at IS NULL
           AND tasks.canceled_at IS NULL
           AND tasks.deleted_at IS NULL

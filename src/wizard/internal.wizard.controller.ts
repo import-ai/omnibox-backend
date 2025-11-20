@@ -7,6 +7,7 @@ import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
+import { CreateTempfileReqDto } from './dto/create-tempfile-req.dto';
 
 @Controller('internal/api/v1/wizard')
 export class InternalWizardController {
@@ -86,5 +87,11 @@ export class InternalWizardController {
     }
 
     return { message: 'Chunk received', chunk_index, total_chunks };
+  }
+
+  @Public()
+  @Post('tempfiles')
+  async createTempfile(@Body() createReq: CreateTempfileReqDto) {
+    return await this.wizardService.createTempfile(createReq.filename);
   }
 }

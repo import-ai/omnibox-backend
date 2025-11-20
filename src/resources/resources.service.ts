@@ -130,6 +130,10 @@ export class ResourcesService {
   async getSubResources(
     namespaceId: string,
     parentIds: string[],
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
   ): Promise<ResourceMetaDto[]> {
     const children = await this.resourceRepository.find({
       select: [
@@ -147,6 +151,8 @@ export class ResourcesService {
         parentId: In(parentIds),
       },
       order: { updatedAt: 'DESC' },
+      ...(options?.limit !== undefined && { take: options.limit }),
+      ...(options?.offset !== undefined && { skip: options.offset }),
     });
     return children.map((r) => ResourceMetaDto.fromEntity(r));
   }

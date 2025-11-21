@@ -24,7 +24,17 @@ import { isEmpty } from 'omniboxd/utils/is-empty';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { parseHashtags } from 'omniboxd/utils/parse-hashtags';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiSecurity,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 
+@ApiTags('Resources')
+@ApiSecurity('api-key')
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {
   constructor(
@@ -42,6 +52,24 @@ export class OpenResourcesController {
       },
     ],
   })
+  @ApiOperation({ summary: 'Create a new resource/document' })
+  @ApiBody({
+    description: 'Resource creation request with content and metadata',
+    type: OpenCreateResourceDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Resource created successfully',
+    schema: {
+      properties: {
+        id: { type: 'string', description: 'Resource ID' },
+        name: { type: 'string', description: 'Resource name' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Content required' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async create(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
@@ -120,6 +148,37 @@ export class OpenResourcesController {
     ],
   })
   @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload a file as a resource' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'File upload with optional parsed content',
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'File to upload',
+        },
+        parsed_content: {
+          type: 'string',
+          description: 'Optional pre-parsed text content',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'File uploaded successfully',
+    schema: {
+      properties: {
+        id: { type: 'string', description: 'Resource ID' },
+        name: { type: 'string', description: 'Resource name' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async uploadFile(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
@@ -131,7 +190,6 @@ export class OpenResourcesController {
       apiKey.namespaceId,
       file,
       apiKey.attrs.root_resource_id,
-      undefined,
       'open_api',
       parsedContent,
     );

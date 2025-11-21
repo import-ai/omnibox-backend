@@ -111,7 +111,7 @@ export class SharesService {
     return PublicShareInfoDto.fromResourceMeta(
       share,
       resourceMeta,
-      user.username!,
+      user.username,
     );
   }
 

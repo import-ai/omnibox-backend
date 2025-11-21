@@ -7,6 +7,7 @@ import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { FilesService } from 'omniboxd/files/files.service';
 
 const TASK_PRIORITY = 5;
 
@@ -18,6 +19,7 @@ export class ResourcesService {
     private readonly resourceRepository: Repository<Resource>,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
+    private readonly filesService: FilesService,
   ) {}
 
   async getParentResourcesOrFail(
@@ -129,6 +131,10 @@ export class ResourcesService {
   async getSubResources(
     namespaceId: string,
     parentIds: string[],
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
   ): Promise<ResourceMetaDto[]> {
     const children = await this.resourceRepository.find({
       select: [
@@ -147,6 +153,8 @@ export class ResourcesService {
         parentId: In(parentIds),
       },
       order: { updatedAt: 'DESC' },
+      ...(options?.limit !== undefined && { take: options.limit }),
+      ...(options?.offset !== undefined && { skip: options.offset }),
     });
     return children.map((r) => ResourceMetaDto.fromEntity(r));
   }
@@ -329,6 +337,7 @@ export class ResourcesService {
       content?: string;
       attrs?: Record<string, any>;
       fileId?: string;
+      source?: string;
     },
     entityManager?: EntityManager,
   ): Promise<Resource> {
@@ -347,6 +356,18 @@ export class ResourcesService {
       );
     }
 
+    if (props.fileId) {
+      const fileMeta = await this.filesService.headFile(props.fileId);
+      if (!fileMeta) {
+        const message = this.i18n.t('resource.errors.fileNotFound');
+        throw new AppException(
+          message,
+          'FILE_NOT_FOUND',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+    }
+
     // Create the resource
     const repo = entityManager.getRepository(Resource);
     const resource = await repo.save(repo.create(props));
@@ -361,7 +382,7 @@ export class ResourcesService {
       await this.wizardTaskService.createFileReaderTask(
         resource.userId,
         resource,
-        'default',
+        props.source || 'default',
         entityManager.getRepository(Task),
       );
     } else if (resource.parentId) {

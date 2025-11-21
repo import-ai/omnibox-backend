@@ -9,8 +9,8 @@ export class TaskCallbackDto {
   id: string;
 
   @IsOptional()
-  exception: Record<string, any>;
+  exception?: Record<string, any>;
 
   @IsOptional()
-  output: Record<string, any>;
+  output?: Record<string, any>;
 }

@@ -8,6 +8,7 @@ import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto'
 import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { fetchWithRetry } from 'omniboxd/utils/fetch-with-retry';
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -103,19 +104,22 @@ export class GoogleService {
       );
     }
 
-    const tokenResponse = await fetch(`${this.googleOAuthAPIBaseUrl}/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+    const tokenResponse = await fetchWithRetry(
+      `${this.googleOAuthAPIBaseUrl}/token`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          code: code,
+          grant_type: 'authorization_code',
+          redirect_uri: this.redirectUri,
+        }),
       },
-      body: new URLSearchParams({
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code: code,
-        grant_type: 'authorization_code',
-        redirect_uri: this.redirectUri,
-      }),
-    });
+    );
 
     if (!tokenResponse.ok) {
       const providerName = this.i18n.t('auth.providers.google');
@@ -139,7 +143,7 @@ export class GoogleService {
       );
     }
 
-    const userInfoResponse = await fetch(
+    const userInfoResponse = await fetchWithRetry(
       `${this.googleAPIBaseUrl}/oauth2/v3/userinfo`,
       {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },

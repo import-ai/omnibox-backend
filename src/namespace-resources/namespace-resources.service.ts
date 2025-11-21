@@ -439,14 +439,18 @@ export class NamespaceResourcesService {
   async recent(
     namespaceId: string,
     userId: string,
+    offset: number = 0,
     limit: number = 10,
   ): Promise<ResourceMetaDto[]> {
     const allVisible = await this.getUserVisibleResources(userId, namespaceId);
+
     const sorted = allVisible
       .filter((r) => r.parentId !== null)
+      .filter((r) => r.resourceType !== ResourceType.FOLDER)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const take = Math.max(1, Math.min(100, limit));
-    return sorted.slice(0, take);
+    const skip = Math.max(0, offset);
+    return sorted.slice(skip, skip + take);
   }
 
   // Alias for clarity and reuse across modules

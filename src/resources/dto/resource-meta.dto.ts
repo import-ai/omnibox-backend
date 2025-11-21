@@ -29,6 +29,8 @@ export class ResourceMetaDto {
   @Expose({ name: 'attrs' })
   attrs: Record<string, any>;
 
+  @Expose({ name: 'content' })
+  content: string;
   fileId: string | null;
 
   static fromEntity(resource: Resource) {
@@ -40,6 +42,8 @@ export class ResourceMetaDto {
     dto.globalPermission = resource.globalPermission;
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
+    dto.attrs = resource.attrs;
+    dto.content = resource.content;
     dto.attrs = { ...resource.attrs };
     delete dto.attrs.transcript;
     delete dto.attrs.video_info;

@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -27,8 +27,9 @@ import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
-import { MinioService } from 'omniboxd/minio/minio.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
 import { createGunzip } from 'zlib';
+import { buffer } from 'node:stream/consumers';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 
@@ -49,7 +50,7 @@ export class WizardService {
     private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
-    private readonly minioService: MinioService,
+    private readonly s3Service: S3Service,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
@@ -157,15 +158,19 @@ export class WizardService {
       resourceDto,
     );
 
-    const filename = 'html.gz';
-    const { id } = await this.minioService.put(
-      filename,
+    const { objectKey } = await this.s3Service.generateObjectKey(
+      this.gzipHtmlFolder,
+      'html.gz',
+    );
+    const metadata = {
+      resourceId: resource.id,
+      url,
+    };
+    await this.s3Service.putObject(
+      objectKey,
       compressedHtml.buffer,
       compressedHtml.mimetype,
-      {
-        folder: this.gzipHtmlFolder,
-        metadata: { resourceId: resource.id, url },
-      },
+      metadata,
     );
 
     if (this.isVideoUrl(url)) {
@@ -173,7 +178,7 @@ export class WizardService {
         userId,
         namespaceId,
         resource.id,
-        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+        { html: objectKey, url, title },
       );
       return { task_id: task.id, resource_id: resource.id };
     } else {
@@ -181,7 +186,7 @@ export class WizardService {
         userId,
         namespaceId,
         resource.id,
-        { html: [this.gzipHtmlFolder, id].join('/'), url, title },
+        { html: objectKey, url, title },
       );
       return { task_id: task.id, resource_id: resource.id };
     }
@@ -223,6 +228,23 @@ export class WizardService {
     return { task_id: task.id, resource_id: resource.id };
   }
 
+  async createTaskUploadUrl(taskId: string): Promise<string> {
+    return await this.s3Service.generateUploadUrl(
+      `wizard-tasks/${taskId}`,
+      false,
+    );
+  }
+
+  async uploadedTaskDoneCallback(taskId: string) {
+    const key = `wizard-tasks/${taskId}`;
+    const { stream } = await this.s3Service.getObject(key);
+    const payload = await buffer(stream);
+    const taskCallback: TaskCallbackDto = JSON.parse(payload.toString('utf-8'));
+    const result = await this.taskDoneCallback(taskCallback);
+    await this.s3Service.deleteObject(key);
+    return result;
+  }
+
   async taskDoneCallback(data: TaskCallbackDto) {
     const task = await this.wizardTaskService.taskRepository.findOneOrFail({
       where: { id: data.id },
@@ -240,8 +262,8 @@ export class WizardService {
     }
 
     task.endedAt = new Date();
-    task.exception = data.exception;
-    task.output = data.output;
+    task.exception = data.exception || null;
+    task.output = data.output || null;
     await this.preprocessTask(task);
 
     await this.wizardTaskService.taskRepository.save(task);
@@ -392,6 +414,27 @@ export class WizardService {
         .join(', ');
       andConditions.push(`tasks.function IN (${condition})`);
     }
+
+    // Filter by file extensions for file_reader tasks
+    let fileExtFilter: string;
+    if (query.file_extensions) {
+      const supportedExtensions = query.file_extensions
+        .split(',')
+        .map((ext) => ext.replace(/'/g, "''"));
+      const extConditions = supportedExtensions
+        .map((ext) => `LOWER(tasks.input->>'filename') LIKE '%${ext}'`)
+        .join(' OR ');
+      fileExtFilter = `
+        AND (
+          tasks.function != 'file_reader'
+          OR (${extConditions})
+        )
+      `;
+    } else {
+      // If file_extensions not provided, exclude all file_reader tasks
+      fileExtFilter = `AND tasks.function != 'file_reader'`;
+    }
+
     const andCondition: string = andConditions.map((x) => `AND ${x}`).join(' ');
     const rawQuery = `
       WITH
@@ -414,17 +457,17 @@ export class WizardService {
         id_subquery AS (
           SELECT tasks.id
           FROM tasks
-          CROSS JOIN cutoff_time
           LEFT OUTER JOIN running_tasks_sub_query
           ON tasks.namespace_id = running_tasks_sub_query.namespace_id
           LEFT OUTER JOIN namespaces
           ON tasks.namespace_id = namespaces.id
-          WHERE (tasks.started_at IS NULL OR tasks.started_at <= cutoff_time.time)
+          WHERE tasks.started_at IS NULL
           AND tasks.ended_at IS NULL
           AND tasks.canceled_at IS NULL
           AND tasks.deleted_at IS NULL
           AND COALESCE(running_tasks_sub_query.running_count, 0) < COALESCE(namespaces.max_running_tasks, 0)
           ${andCondition}
+          ${fileExtFilter}
           ORDER BY
             priority DESC,
             tasks.created_at
@@ -467,7 +510,7 @@ export class WizardService {
   }
 
   async getHtmlFromMinioGzipFile(path: string) {
-    const stream = await this.minioService.getObject(path);
+    const { stream } = await this.s3Service.getObject(path);
     const gunzip = createGunzip();
     return new Promise<string>((resolve, reject) => {
       const chunks: Buffer[] = [];

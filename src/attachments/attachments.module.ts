@@ -3,7 +3,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { AttachmentsController } from 'omniboxd/attachments/attachments.controller';
 import { ShareAttachmentsController } from 'omniboxd/attachments/share-attachments.controller';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
-import { MinioModule } from 'omniboxd/minio/minio.module';
+import { S3Module } from 'omniboxd/s3/s3.module';
 import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
@@ -14,7 +14,7 @@ import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resource
   controllers: [AttachmentsController, ShareAttachmentsController],
   imports: [
     PermissionsModule,
-    MinioModule,
+    S3Module,
     ResourceAttachmentsModule,
     SharesModule,
     SharedResourcesModule,

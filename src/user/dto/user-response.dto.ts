@@ -1,36 +1,29 @@
-import { IsOptional, IsString } from 'class-validator';
-import { i18nValidationMessage } from 'nestjs-i18n';
 import { User } from '../entities/user.entity';
+import { Expose } from 'class-transformer';
 
 export class UserResponseDto {
-  @IsString({
-    message: i18nValidationMessage('validation.errors.id.isString'),
-  })
+  @Expose()
   id: string;
 
-  @IsString({
-    message: i18nValidationMessage('validation.errors.username.isString'),
-  })
-  @IsOptional()
-  username: string | null;
+  @Expose()
+  username: string;
 
-  @IsString({
-    message: i18nValidationMessage('validation.errors.email.isString'),
-  })
-  @IsOptional()
+  @Expose()
   email: string | null;
 
-  created_at?: Date;
+  @Expose({ name: 'created_at' })
+  createdAt?: Date;
 
-  updated_at?: Date;
+  @Expose({ name: 'updated_at' })
+  updatedAt?: Date;
 
   static fromEntity(user: User): UserResponseDto {
     const dto = new UserResponseDto();
     dto.id = user.id;
     dto.username = user.username;
     dto.email = user.email;
-    dto.created_at = user.createdAt;
-    dto.updated_at = user.updatedAt;
+    dto.createdAt = user.createdAt;
+    dto.updatedAt = user.updatedAt;
     return dto;
   }
 }

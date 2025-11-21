@@ -5,7 +5,7 @@ import { transformKeysToSnakeCase } from 'omniboxd/interceptor/utils';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
-import { Body, Controller, Get, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
 import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
 
 @Controller('internal/api/v1/wizard')
@@ -31,6 +31,19 @@ export class InternalWizardController {
     @Body() taskCallback: TaskCallbackDto,
   ): Promise<Record<string, any>> {
     return await this.wizardService.taskDoneCallback(taskCallback);
+  }
+
+  @Public()
+  @Post('tasks/:taskId/upload')
+  async createTaskResult(@Param('taskId') taskId: string) {
+    const url = await this.wizardService.createTaskUploadUrl(taskId);
+    return { url };
+  }
+
+  @Public()
+  @Post('tasks/:taskId/callback')
+  async handleUploadedTaskCallback(@Param('taskId') taskId: string) {
+    return await this.wizardService.uploadedTaskDoneCallback(taskId);
   }
 
   @Public()

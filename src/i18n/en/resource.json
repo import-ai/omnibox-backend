@@ -4,6 +4,7 @@
     "parentOrResourceIdRequired": "parent_id or resource_id is required",
     "resourceNotFound": "Resource not found",
     "fileNotFound": "File not found",
+    "fileTypeNotSupported": "This file type is not supported",
     "fileTooLarge": "Your file ({userSize}) exceeds the maximum limit of {limitSize}",
     "cannotDeleteRoot": "Cannot delete root resource",
     "cannotDuplicateRoot": "Cannot duplicate root resource",

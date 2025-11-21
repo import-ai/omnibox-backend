@@ -11,6 +11,7 @@ import { Type } from 'class-transformer';
 import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
 import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
 import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAPIKeyDto {
   @IsString({
@@ -47,29 +48,36 @@ export class PatchAPIKeyDto {
 }
 
 export class APIKeyResponseDto {
+  @ApiProperty({ description: 'API key ID' })
   @IsUUID(undefined, {
     message: i18nValidationMessage('validation.errors.isUUID'),
   })
   id: string;
 
+  @ApiProperty({ description: 'API key value' })
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   value: string;
 
+  @ApiProperty({ description: 'User ID associated with the API key' })
   @IsString({
     message: i18nValidationMessage('validation.errors.userId.isString'),
   })
   user_id: string;
 
+  @ApiProperty({ description: 'Namespace ID associated with the API key' })
   @IsString({
     message: i18nValidationMessage('validation.errors.namespaceId.isString'),
   })
   namespace_id: string;
 
+  @ApiProperty({ description: 'API key attributes and settings' })
   @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   attrs: APIKeyAttrs;
 
+  @ApiProperty({ description: 'Creation timestamp' })
   created_at: Date;
 
+  @ApiProperty({ description: 'Last update timestamp' })
   updated_at: Date;
 
   static fromEntity(apiKey: APIKey): APIKeyResponseDto {
@@ -85,8 +93,22 @@ export class APIKeyResponseDto {
   }
 }
 
-export interface APIKeyInfoDto {
+export class APIKeyInfoDto {
+  @ApiProperty({
+    description: 'API key details',
+    type: () => APIKeyResponseDto,
+  })
   api_key: APIKeyResponseDto;
+
+  @ApiProperty({
+    description: 'Associated namespace details',
+    type: () => NamespaceResponseDto,
+  })
   namespace: NamespaceResponseDto;
+
+  @ApiProperty({
+    description: 'Associated user details',
+    type: () => UserResponseDto,
+  })
   user: UserResponseDto;
 }

@@ -2,56 +2,75 @@ import {
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
-import { MinioService } from 'omniboxd/minio/minio.service';
+import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { objectStreamResponse } from 'omniboxd/minio/utils';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import {
   UploadAttachmentsResponseDto,
   UploadedAttachmentDto,
 } from './dto/upload-attachments-response.dto';
-import { SharesService } from 'omniboxd/shares/shares.service';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { Readable } from 'stream';
 
 @Injectable()
 export class AttachmentsService {
   private readonly logger = new Logger(AttachmentsService.name);
 
   constructor(
-    private readonly minioService: MinioService,
+    private readonly s3Service: S3Service,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
-    private readonly sharesService: SharesService,
     private readonly sharedResourcesService: SharedResourcesService,
-    private readonly i18n: I18nService,
   ) {}
 
-  async checkPermission(
-    namespaceId: string,
-    resourceId: string,
-    userId: string,
-    permission: ResourcePermission = ResourcePermission.CAN_VIEW,
-  ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
-      namespaceId,
-      resourceId,
-      userId,
-      permission,
-    );
-    if (!hasPermission) {
-      const message = this.i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
+  private s3Path(attachmentId: string): string {
+    return `attachments/${attachmentId}`;
   }
 
-  minioPath(attachmentId: string): string {
-    return `attachments/${attachmentId}`;
+  private isMedia(mimetype?: string): boolean {
+    for (const type of ['image/', 'audio/']) {
+      if (mimetype?.startsWith(type)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private objectStreamResponse(
+    objectStream: Readable,
+    objectMeta: ObjectMeta,
+    httpResponse: Response,
+    cacheControl: boolean = true,
+    forceDownload: boolean = true,
+  ) {
+    const headers: Record<string, string> = {};
+    if (objectMeta.metadata?.filename) {
+      const disposition = forceDownload ? 'attachment' : 'inline';
+      headers['Content-Disposition'] =
+        `${disposition}; filename*=UTF-8''${encodeURIComponent(objectMeta.metadata.filename)}`;
+    }
+    if (objectMeta.contentType) {
+      headers['Content-Type'] = objectMeta.contentType;
+    }
+    if (objectMeta.contentLength) {
+      headers['Content-Length'] = objectMeta.contentLength.toString();
+    }
+    if (objectMeta.lastModified) {
+      headers['Last-Modified'] = objectMeta.lastModified.toUTCString();
+    }
+    if (cacheControl) {
+      headers['Cache-Control'] = 'public, max-age=31536000'; // 1 year
+    } else {
+      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    }
+    for (const [key, value] of Object.entries(headers)) {
+      httpResponse.setHeader(key, value);
+    }
+    objectStream.pipe(httpResponse);
   }
 
   async uploadAttachment(
@@ -62,25 +81,30 @@ export class AttachmentsService {
     buffer: Buffer,
     mimetype: string,
   ) {
-    await this.checkPermission(
+    await this.permissionsService.userHasPermissionOrFail(
       namespaceId,
       resourceId,
       userId,
       ResourcePermission.CAN_EDIT,
     );
 
-    const { id } = await this.minioService.put(filename, buffer, mimetype, {
-      folder: 'attachments',
-    });
+    const { objectKey, objectName } = await this.s3Service.generateObjectKey(
+      'attachments',
+      filename,
+    );
+    const metadata = {
+      filename: encodeFileName(filename),
+    };
+    await this.s3Service.putObject(objectKey, buffer, mimetype, metadata);
 
     // Create the resource-attachment relation
     await this.resourceAttachmentsService.addAttachmentToResource(
       namespaceId,
       resourceId,
-      id,
+      objectName,
     );
 
-    return id;
+    return objectName;
   }
 
   async uploadAttachments(
@@ -89,7 +113,7 @@ export class AttachmentsService {
     userId: string,
     files: Express.Multer.File[],
   ): Promise<UploadAttachmentsResponseDto> {
-    await this.checkPermission(
+    await this.permissionsService.userHasPermissionOrFail(
       namespaceId,
       resourceId,
       userId,
@@ -135,7 +159,7 @@ export class AttachmentsService {
     userId: string,
     httpResponse: Response,
   ) {
-    await this.checkPermission(
+    await this.permissionsService.userHasPermissionOrFail(
       namespaceId,
       resourceId,
       userId,
@@ -148,16 +172,11 @@ export class AttachmentsService {
       attachmentId,
     );
 
-    const objectResponse = await this.minioService.get(
-      this.minioPath(attachmentId),
+    const { stream, meta } = await this.s3Service.getObject(
+      this.s3Path(attachmentId),
     );
-
-    // Display media files inline, download other files as attachments
-    const forceDownload = !this.isMedia(objectResponse.mimetype);
-
-    return objectStreamResponse(objectResponse, httpResponse, {
-      forceDownload,
-    });
+    const forceDownload = !this.isMedia(meta.contentType);
+    this.objectStreamResponse(stream, meta, httpResponse, true, forceDownload);
   }
 
   async deleteAttachment(
@@ -166,7 +185,7 @@ export class AttachmentsService {
     attachmentId: string,
     userId: string,
   ) {
-    await this.checkPermission(
+    await this.permissionsService.userHasPermissionOrFail(
       namespaceId,
       resourceId,
       userId,
@@ -197,25 +216,10 @@ export class AttachmentsService {
       resourceId,
       attachmentId,
     );
-
-    const objectResponse = await this.minioService.get(
-      this.minioPath(attachmentId),
+    const { stream, meta } = await this.s3Service.getObject(
+      this.s3Path(attachmentId),
     );
-
-    // Display media files inline, download other files as attachments
-    const forceDownload = !this.isMedia(objectResponse.mimetype);
-
-    return objectStreamResponse(objectResponse, httpResponse, {
-      forceDownload,
-    });
-  }
-
-  isMedia(mimetype: string): boolean {
-    for (const type of ['image/', 'audio/']) {
-      if (mimetype.startsWith(type)) {
-        return true;
-      }
-    }
-    return false;
+    const forceDownload = !this.isMedia(meta.contentType);
+    this.objectStreamResponse(stream, meta, httpResponse, true, forceDownload);
   }
 }

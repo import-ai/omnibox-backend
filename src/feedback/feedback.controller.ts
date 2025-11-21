@@ -13,7 +13,7 @@ import { Request } from 'express';
 import { FeedbackService } from './feedback.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { MinioService } from 'omniboxd/minio/minio.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
 import { CookieAuth } from 'omniboxd/auth';
 import { FeedbackResponseDto } from 'omniboxd/feedback/dto/feedback.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -22,7 +22,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 export class FeedbackController {
   constructor(
     private readonly feedbackService: FeedbackService,
-    private readonly minioService: MinioService,
+    private readonly s3Service: S3Service,
   ) {}
 
   @Post()
@@ -58,13 +58,12 @@ export class FeedbackController {
 
     if (image) {
       const originalname = encodeFileName(image.originalname);
-      const uploadResult = await this.minioService.put(
+      const { objectKey, objectName } = await this.s3Service.generateObjectKey(
+        'feedback',
         originalname,
-        image.buffer,
-        image.mimetype,
-        { folder: 'feedback' },
       );
-      imageUrl = uploadResult.id;
+      await this.s3Service.putObject(objectKey, image.buffer, image.mimetype);
+      imageUrl = objectName;
     }
 
     const userAgent = request.get('User-Agent');

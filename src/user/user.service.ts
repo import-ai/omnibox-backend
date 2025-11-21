@@ -349,14 +349,7 @@ export class UserService {
     const user = await this.find(userId);
     const userLangOption = await this.getOption(userId, 'language');
     const userLang = userLangOption?.value;
-
-    await this.mailService.validateEmail(
-      email,
-      code,
-      user.username || undefined,
-      userLang,
-    );
-
+    await this.mailService.validateEmail(email, code, user.username, userLang);
     return { email };
   }
 

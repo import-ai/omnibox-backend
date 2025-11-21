@@ -6,8 +6,8 @@ export class User extends Base {
   @PrimaryGeneratedColumn()
   id: string;
 
-  @Column('varchar', { nullable: true })
-  username: string | null;
+  @Column()
+  username: string;
 
   @Column('varchar', { nullable: true })
   email: string | null;

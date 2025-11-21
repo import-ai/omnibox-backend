@@ -20,7 +20,17 @@ import { OpenCollectRequestDto } from 'omniboxd/wizard/dto/open-collect-request.
 import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiResponse,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 
+@ApiTags('Wizard')
+@ApiSecurity('api-key')
 @Controller('open/api/v1/wizard')
 export class OpenWizardController {
   constructor(
@@ -38,6 +48,21 @@ export class OpenWizardController {
     ],
   })
   @UseInterceptors(FileInterceptor('html'))
+  @ApiOperation({
+    summary: 'Collect web content and create a resource',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    description: 'Web content collection request with compressed HTML',
+    type: OpenCollectRequestDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Web content collected successfully',
+    type: CollectResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async collect(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
@@ -65,6 +90,17 @@ export class OpenWizardController {
       },
     ],
   })
+  @ApiOperation({ summary: 'Ask a question to the AI wizard/assistant' })
+  @ApiBody({
+    description: 'Question and context for the AI assistant',
+    type: OpenAgentRequestDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Question answered successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async ask(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,

@@ -1,9 +1,15 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Kafka, Producer, ProducerRecord, Message } from 'kafkajs';
 
 @Injectable()
 export class KafkaService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(KafkaService.name);
   private kafka?: Kafka;
   private producer?: Producer;
 
@@ -14,7 +20,10 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const clientId = this.configService.get<string>('OBB_KAFKA_CLIENT_ID', 'omnibox-backend');
+    const clientId = this.configService.get<string>(
+      'OBB_KAFKA_CLIENT_ID',
+      'omnibox-backend',
+    );
 
     this.kafka = new Kafka({
       clientId,
@@ -38,7 +47,8 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
 
   async produce(topic: string, messages: Message[]): Promise<void> {
     if (!this.producer) {
-      throw new Error('Kafka is not configured');
+      this.logger.warn('Kafka is not configured, skipping message production');
+      return;
     }
 
     const record: ProducerRecord = {

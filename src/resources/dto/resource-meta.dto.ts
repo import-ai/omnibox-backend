@@ -33,6 +33,9 @@ export class ResourceMetaDto {
   content: string;
   fileId: string | null;
 
+  @Expose({ name: 'first_attachment_id' })
+  firstAttachmentId?: string;
+
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
     dto.id = resource.id;

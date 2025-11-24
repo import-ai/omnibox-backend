@@ -446,7 +446,16 @@ export class NamespaceResourcesService {
       .filter((r) => r.parentId !== null)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const take = Math.max(1, Math.min(100, limit));
-    return sorted.slice(0, take);
+    const resources = sorted.slice(0, take);
+    const firstAttachments =
+      await this.resourceAttachmentsService.getFirstAttachments(
+        namespaceId,
+        resources.map((r) => r.id),
+      );
+    for (const resource of resources) {
+      resource.firstAttachmentId = firstAttachments.get(resource.id);
+    }
+    return resources;
   }
 
   // Alias for clarity and reuse across modules

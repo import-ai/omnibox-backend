@@ -440,20 +440,23 @@ export class NamespaceResourcesService {
     namespaceId: string,
     userId: string,
     limit: number = 10,
+    offset: number = 0,
   ): Promise<ResourceMetaDto[]> {
     const allVisible = await this.getUserVisibleResources(userId, namespaceId);
     const sorted = allVisible
       .filter((r) => r.parentId !== null)
+      .filter((r) => r.resourceType !== ResourceType.FOLDER)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const take = Math.max(1, Math.min(100, limit));
-    const resources = sorted.slice(0, take);
+    const skip = Math.max(0, offset);
+    const resources = sorted.slice(skip, skip + take);
     const firstAttachments =
       await this.resourceAttachmentsService.getFirstAttachments(
         namespaceId,
         resources.map((r) => r.id),
       );
     for (const resource of resources) {
-      resource.firstAttachmentId = firstAttachments.get(resource.id);
+      resource.firstAttachment = firstAttachments.get(resource.id);
     }
     return resources;
   }

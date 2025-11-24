@@ -45,6 +45,7 @@ export class ResourceMetaDto {
     dto.attrs = { ...resource.attrs };
     delete dto.attrs.transcript;
     delete dto.attrs.video_info;
+    dto.content = resource.content.slice(0, 100);
     dto.fileId = resource.fileId;
     return dto;
   }

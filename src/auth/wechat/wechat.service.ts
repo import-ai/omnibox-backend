@@ -404,13 +404,6 @@ export class WechatService {
 
     const sessionData = await jscode2sessionResponse.json();
 
-    // Debug: Check if unionid exists
-    console.log('=== MiniProgram Login Debug ===');
-    console.log('Has unionid:', !!sessionData.unionid);
-    console.log('Has openid:', !!sessionData.openid);
-    console.log('unionid value:', sessionData.unionid);
-    console.log('openid value:', sessionData.openid);
-    console.log('==============================');
     if (sessionData.errcode) {
       const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.invalidProviderData', {
@@ -440,17 +433,8 @@ export class WechatService {
       ? sessionData.unionid
       : `miniprogram_${sessionData.openid}`;
 
-    console.log('Using loginId for lookup:', loginId);
-
     // find existing user
     const wechatUser = await this.userService.findByLoginId(loginId);
-
-    console.log(
-      'Found existing user:',
-      wechatUser
-        ? `Yes (id: ${wechatUser.id}, username: ${wechatUser.username})`
-        : 'No',
-    );
 
     if (wechatUser) {
       return {

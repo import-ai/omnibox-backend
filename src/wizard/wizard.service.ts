@@ -32,6 +32,7 @@ import { createGunzip } from 'zlib';
 import { buffer } from 'node:stream/consumers';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { TempfileDto } from './dto/tempfile.dto';
 
 @Injectable()
 export class WizardService {
@@ -233,6 +234,19 @@ export class WizardService {
       `wizard-tasks/${taskId}`,
       false,
     );
+  }
+
+  async createTempfile(filename?: string): Promise<TempfileDto> {
+    const { objectKey } = await this.s3Service.generateObjectKey(
+      'wizard-tempfiles',
+      filename,
+    );
+    const uploadUrl = await this.s3Service.generateUploadUrl(objectKey, false);
+    const downloadUrl = await this.s3Service.generateDownloadUrl(
+      objectKey,
+      true,
+    );
+    return { uploadUrl, downloadUrl };
   }
 
   async uploadedTaskDoneCallback(taskId: string) {

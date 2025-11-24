@@ -44,7 +44,8 @@ if (isTracingEnabled()) {
     instrumentations: [
       new HttpInstrumentation({
         ignoreIncomingRequestHook: (req) => {
-          return excludedUrls.some((url) => req.url === url) || false;
+          const pathname = new URL(req.url!, 'http://localhost').pathname;
+          return excludedUrls.some((url) => pathname === url) || false;
         },
       }),
       new ExpressInstrumentation({

@@ -76,11 +76,11 @@ export class WechatService {
       '',
     );
     this.miniProgramAppId = this.configService.get<string>(
-      'MINI_PROGRAM_APP_ID',
+      'OBB_MINI_PROGRAM_APP_ID',
       '',
     );
     this.miniProgramAppSecret = this.configService.get<string>(
-      'MINI_PROGRAM_APP_SECRET',
+      'OBB_MINI_PROGRAM_APP_SECRET',
       '',
     );
   }

@@ -13,7 +13,7 @@ export class TraceService {
     private readonly configService: ConfigService,
     private readonly kafkaService: KafkaService,
   ) {
-    this.topic = this.configService.get<string>('OBB_KAFKA_TOPIC');
+    this.topic = this.configService.get<string>('OBB_TRACE_TOPIC');
   }
 
   async emitTraceEvents(

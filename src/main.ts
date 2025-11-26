@@ -3,7 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from 'omniboxd/app/app.module';
 import { configureApp } from 'omniboxd/app/app-config';
-import { NativeWsGateway } from 'omniboxd/websocket/native-ws.gateway';
+import { NativeWsGateway } from 'omniboxd/native-ws/native-ws.gateway';
 
 async function bootstrap() {
   // Start OpenTelemetry SDK before creating the NestJS app

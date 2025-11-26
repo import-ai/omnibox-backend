@@ -42,14 +42,24 @@ export class NativeWsGateway implements OnModuleInit {
   }
 
   initialize(server: any) {
-    // 创建 WebSocket 服务器，挂载到 /api/v1/ws 路径
+    // 创建 WebSocket 服务器，挂载到 /api/v1/native-ws 路径（原生 WebSocket，用于小程序）
     this.wss = new WsServer({
-      server,
-      path: '/api/v1/ws',
-      verifyClient: (info, callback) => {
-        // 可以在这里进行初步验证
-        callback(true);
-      },
+      noServer: true, // 使用 noServer 模式，手动处理 upgrade 事件
+    });
+
+    // 手动处理 HTTP upgrade 事件，只处理指定路径的 WebSocket 连接
+    server.on('upgrade', (request, socket, head) => {
+      const pathname = new URL(request.url, 'http://localhost').pathname;
+
+      // 只处理 /api/v1/native-ws 路径，其他路径完全忽略（让 Socket.IO 处理）
+      if (pathname === '/api/v1/native-ws') {
+        this.logger.log(`WebSocket upgrade request: ${pathname}`);
+        this.logger.log('Handling native WebSocket upgrade');
+        this.wss.handleUpgrade(request, socket, head, (ws) => {
+          this.wss.emit('connection', ws, request);
+        });
+      }
+      // 其他路径不记录日志，也不做任何处理，让 Socket.IO 自己处理
     });
 
     this.wss.on(
@@ -72,7 +82,7 @@ export class NativeWsGateway implements OnModuleInit {
       });
     }, 30000);
 
-    this.logger.log('Native WebSocket server initialized on path: /api/v1/ws');
+    this.logger.log('Native WebSocket server initialized on path: /api/v1/native-ws');
   }
 
   private handleConnection(ws: WebSocketClient, request: IncomingMessage) {
@@ -171,7 +181,7 @@ export class NativeWsGateway implements OnModuleInit {
     request: IncomingMessage,
   ) {
     const tracer = trace.getTracer('native-ws-gateway');
-    const spanName = `SOCKET /api/v1/ws/${message.event}`;
+    const spanName = `SOCKET /api/v1/native-ws/${message.event}`;
 
     await tracer.startActiveSpan(
       spanName,

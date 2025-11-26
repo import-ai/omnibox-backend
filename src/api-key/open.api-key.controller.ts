@@ -1,17 +1,13 @@
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { APIKeyInfoDto } from 'omniboxd/api-key/api-key.dto';
-import {
-  APIKey as APIKeyEntity,
-  APIKeyPermissionTarget,
-  APIKeyPermissionType,
-} from 'omniboxd/api-key/api-key.entity';
+import { APIKey as APIKeyEntity } from 'omniboxd/api-key/api-key.entity';
 import { Controller, Get } from '@nestjs/common';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import {
-  ApiTags,
   ApiOperation,
   ApiResponse,
   ApiSecurity,
+  ApiTags,
 } from '@nestjs/swagger';
 
 @ApiTags('API Keys')
@@ -21,14 +17,7 @@ export class OpenAPIKeyController {
   constructor(private readonly apiKeyService: APIKeyService) {}
 
   @Get('info')
-  @APIKeyAuth({
-    permissions: [
-      {
-        target: APIKeyPermissionTarget.RESOURCES,
-        permissions: [APIKeyPermissionType.READ],
-      },
-    ],
-  })
+  @APIKeyAuth()
   @ApiOperation({ summary: 'Get API key information' })
   @ApiResponse({
     status: 200,

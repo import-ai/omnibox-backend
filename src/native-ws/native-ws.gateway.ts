@@ -82,7 +82,9 @@ export class NativeWsGateway implements OnModuleInit {
       });
     }, 30000);
 
-    this.logger.log('Native WebSocket server initialized on path: /api/v1/native-ws');
+    this.logger.log(
+      'Native WebSocket server initialized on path: /api/v1/native-ws',
+    );
   }
 
   private handleConnection(ws: WebSocketClient, request: IncomingMessage) {

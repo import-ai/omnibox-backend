@@ -63,7 +63,6 @@ import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
 import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WebSocketModule } from 'omniboxd/websocket/websocket.module';
-import { NativeWsModule } from 'omniboxd/native-ws/native-ws.module';
 import { NullableUserId1757844448000 } from 'omniboxd/migrations/1757844448000-nullable-user-id';
 import { AddShareIdToConversations1757844449000 } from 'omniboxd/migrations/1757844449000-add-share-id-to-conversations';
 import { ShareUser1760171824000 } from 'omniboxd/migrations/1760171824000-share-user';
@@ -153,7 +152,6 @@ export class AppModule implements NestModule {
         FeedbackModule,
         ApplicationsModule,
         WebSocketModule,
-        NativeWsModule,
         FilesModule,
         OpenAPIModule,
         CacheModule.registerAsync({

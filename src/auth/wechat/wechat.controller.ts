@@ -106,4 +106,31 @@ export class WechatController extends SocialController {
   unbind(@UserId() userId: string) {
     return this.wechatService.unbind(userId);
   }
+
+  @Public()
+  @Post('miniprogram/login')
+  async miniProgramLogin(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body('code') code: string,
+    @Body('lang') lang?: string,
+  ) {
+    const loginData = await this.wechatService.miniProgramLogin(code, lang);
+
+    if (loginData && loginData.access_token) {
+      const jwtExpireSeconds = parseInt(
+        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+        10,
+      );
+      res.cookie('token', loginData.access_token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        maxAge: jwtExpireSeconds * 1000,
+      });
+    }
+
+    return res.json(loginData);
+  }
 }

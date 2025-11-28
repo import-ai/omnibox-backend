@@ -163,12 +163,15 @@ export class NamespaceResourcesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ): Promise<ResourceMetaDto[]> {
     const take = Number.isFinite(Number(limit)) ? Number(limit) : 10;
+    const skip = Number.isFinite(Number(offset)) ? Number(offset) : 0;
     return await this.namespaceResourcesService.recent(
       namespaceId,
       userId,
       take,
+      skip,
     );
   }
 

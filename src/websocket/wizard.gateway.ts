@@ -47,11 +47,15 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly i18n: I18nService,
   ) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  handleConnection(client: Socket) {}
+  handleConnection(client: Socket) {
+    this.logger.log(`Socket.IO client connected: ${client.id}`);
+    this.logger.log(`Namespace: ${client.nsp.name}`);
+    this.logger.log(`Transport: ${client.conn.transport.name}`);
+  }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  handleDisconnect(client: Socket) {}
+  handleDisconnect(client: Socket) {
+    this.logger.log(`Socket.IO client disconnected: ${client.id}`);
+  }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('ask')

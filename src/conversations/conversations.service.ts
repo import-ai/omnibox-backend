@@ -284,7 +284,7 @@ export class ConversationsService {
 
   async remove(namespaceId: string, userId: string, conversationId: string) {
     await this.dataSource.transaction(async (manager) => {
-      await this.wizardTaskService.deleteConversationTask(
+      await this.wizardTaskService.emitDeleteConversationTask(
         namespaceId,
         userId,
         conversationId,
@@ -304,7 +304,7 @@ export class ConversationsService {
     return await this.dataSource.transaction(async (manager) => {
       const taskRepo = manager.getRepository(Task);
       for (const message of messages) {
-        await this.wizardTaskService.createMessageIndexTask(
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
           TASK_PRIORITY,
           userId,
           namespaceId,

@@ -40,7 +40,7 @@ export class MessagesService {
     return await this.dataSource.transaction(async (manager) => {
       const savedMsg = await manager.save(message);
       if (index && userId) {
-        await this.wizardTaskService.createMessageIndexTask(
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
           TASK_PRIORITY,
           userId,
           namespaceId,
@@ -67,7 +67,7 @@ export class MessagesService {
     return await this.dataSource.transaction(async (manager) => {
       const updatedMsg = await manager.save(message);
       if (index && message.userId) {
-        await this.wizardTaskService.createMessageIndexTask(
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
           TASK_PRIORITY,
           message.userId,
           namespaceId,

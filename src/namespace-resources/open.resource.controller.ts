@@ -117,7 +117,7 @@ export class OpenResourcesController {
 
     if (!isEmpty(newResource.content?.trim())) {
       if (isEmpty(newResource.name?.trim())) {
-        await this.wizardTaskService.createGenerateTitleTask(
+        await this.wizardTaskService.emitGenerateTitleTask(
           userId,
           apiKey.namespaceId,
           { resource_id: newResource.id },
@@ -126,7 +126,7 @@ export class OpenResourcesController {
       }
       // Skip extract tags task if user requested or we already have tags
       if (!data.skip_parsing_tags_from_content && isEmpty(newResource.tagIds)) {
-        await this.wizardTaskService.createExtractTagsTask(
+        await this.wizardTaskService.emitExtractTagsTask(
           userId,
           newResource.id,
           apiKey.namespaceId,

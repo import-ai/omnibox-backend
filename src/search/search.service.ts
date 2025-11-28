@@ -144,7 +144,7 @@ export class SearchService {
         if (!resource.userId) {
           continue;
         }
-        await this.wizardTaskService.createIndexTask(
+        await this.wizardTaskService.emitUpsertIndexTask(
           TASK_PRIORITY,
           resource.userId,
           resource,
@@ -174,7 +174,7 @@ export class SearchService {
           conversation.id,
         );
         for (const message of messages) {
-          await this.wizardTaskService.createMessageIndexTask(
+          await this.wizardTaskService.emitUpsertMessageIndexTask(
             TASK_PRIORITY,
             conversation.userId,
             conversation.namespaceId,

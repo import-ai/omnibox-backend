@@ -41,20 +41,20 @@ export class WizardTaskService {
     return undefined;
   }
 
-  async create(data: Partial<Task>, repo?: Repository<Task>) {
+  private async emitTask(data: Partial<Task>, repo?: Repository<Task>) {
     const repository = repo || this.taskRepository;
     const task = repository.create(this.injectTraceHeaders(data));
     return await repository.save(task);
   }
 
-  async createCollectTask(
+  async emitCollectTask(
     userId: string,
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
     repo?: Repository<Task>,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'collect',
         input,
@@ -66,14 +66,14 @@ export class WizardTaskService {
     );
   }
 
-  async createGenerateVideoNoteTask(
+  async emitGenerateVideoNoteTask(
     userId: string,
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
     repo?: Repository<Task>,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'generate_video_note',
         input,
@@ -85,7 +85,7 @@ export class WizardTaskService {
     );
   }
 
-  async createExtractTagsTask(
+  async emitExtractTagsTask(
     userId: string,
     resourceId: string,
     namespaceId: string,
@@ -99,7 +99,7 @@ export class WizardTaskService {
     }
 
     const lang = await this.getUserLanguage(userId);
-    return this.create(
+    return this.emitTask(
       {
         function: 'extract_tags',
         input: { text, lang },
@@ -113,10 +113,7 @@ export class WizardTaskService {
     );
   }
 
-  async createExtractTagsTaskFromTask(
-    parentTask: Task,
-    repo?: Repository<Task>,
-  ) {
+  async emitExtractTagsTaskFromTask(parentTask: Task, repo?: Repository<Task>) {
     // Check if auto-tag is enabled for this user
     const isEnabled = await this.userService.isAutoTagEnabled(
       parentTask.userId,
@@ -126,7 +123,7 @@ export class WizardTaskService {
     }
 
     const lang = await this.getUserLanguage(parentTask.userId);
-    return this.create(
+    return this.emitTask(
       {
         function: 'extract_tags',
         input: {
@@ -145,7 +142,7 @@ export class WizardTaskService {
     );
   }
 
-  async createGenerateTitleTask(
+  async emitGenerateTitleTask(
     userId: string,
     namespaceId: string,
     payload: { resource_id: string; parent_task_id?: string },
@@ -153,7 +150,7 @@ export class WizardTaskService {
     repo?: Repository<Task>,
   ) {
     const lang = await this.getUserLanguage(userId);
-    return this.create(
+    return this.emitTask(
       {
         function: 'generate_title',
         input: { lang, ...input },
@@ -165,13 +162,13 @@ export class WizardTaskService {
     );
   }
 
-  async createFileReaderTask(
+  async emitFileReaderTask(
     userId: string,
     resource: Resource,
     source?: string,
     repo?: Repository<Task>,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'file_reader',
         input: {
@@ -192,7 +189,7 @@ export class WizardTaskService {
     );
   }
 
-  async createIndexTask(
+  async emitUpsertIndexTask(
     priority: number,
     userId: string,
     resource: Resource,
@@ -201,7 +198,7 @@ export class WizardTaskService {
     if (resource.resourceType === ResourceType.FOLDER || !resource.content) {
       return;
     }
-    return this.create(
+    return this.emitTask(
       {
         function: 'upsert_index',
         priority,
@@ -222,12 +219,12 @@ export class WizardTaskService {
     );
   }
 
-  async deleteIndexTask(
+  async emitDeleteIndexTask(
     userId: string,
     resource: Resource,
     repo?: Repository<Task>,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'delete_index',
         input: {
@@ -241,7 +238,7 @@ export class WizardTaskService {
     );
   }
 
-  async createMessageIndexTask(
+  async emitUpsertMessageIndexTask(
     priority: number,
     userId: string,
     namespaceId: string,
@@ -259,7 +256,7 @@ export class WizardTaskService {
     ) {
       return;
     }
-    return this.create(
+    return this.emitTask(
       {
         function: 'upsert_message_index',
         priority,
@@ -276,14 +273,14 @@ export class WizardTaskService {
     );
   }
 
-  async deleteConversationTask(
+  async emitDeleteConversationTask(
     namespaceId: string,
     userId: string,
     conversationId: string,
     priority: number,
     repo?: Repository<Task>,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'delete_conversation',
         priority,

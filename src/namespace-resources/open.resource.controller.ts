@@ -177,14 +177,21 @@ export class OpenResourcesController {
       },
     },
   })
+  @ApiResponse({ status: 400, description: 'File required' })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async uploadFile(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @I18n() i18n: I18nContext,
+    @UploadedFile() file?: Express.Multer.File,
     @Body('parsed_content') parsedContent?: string,
   ) {
+    if (!file) {
+      const message = i18n.t('resource.errors.fileRequired');
+      throw new AppException(message, 'FILE_REQUIRED', HttpStatus.BAD_REQUEST);
+    }
+
     const newResource = await this.namespaceResourcesService.uploadFile(
       userId,
       apiKey.namespaceId,

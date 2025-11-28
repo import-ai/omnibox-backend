@@ -777,7 +777,7 @@ export class NamespaceResourcesService {
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.softDelete(Resource, id);
-      await this.wizardTaskService.deleteIndexTask(
+      await this.wizardTaskService.emitDeleteIndexTask(
         userId,
         resource,
         manager.getRepository(Task),
@@ -810,7 +810,7 @@ export class NamespaceResourcesService {
     }
     await this.dataSource.transaction(async (manager) => {
       await manager.restore(Resource, id);
-      await this.wizardTaskService.createIndexTask(
+      await this.wizardTaskService.emitUpsertIndexTask(
         TASK_PRIORITY,
         userId,
         resource,

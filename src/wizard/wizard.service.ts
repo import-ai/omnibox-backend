@@ -114,10 +114,6 @@ export class WizardService {
     }
   }
 
-  async create(partialTask: Partial<Task>) {
-    return await this.wizardTaskService.create(partialTask);
-  }
-
   isVideoUrl(url: string): boolean {
     for (const prefix of this.videoPrefixes) {
       if (url.startsWith(prefix)) {
@@ -175,7 +171,7 @@ export class WizardService {
     );
 
     if (this.isVideoUrl(url)) {
-      const task = await this.wizardTaskService.createGenerateVideoNoteTask(
+      const task = await this.wizardTaskService.emitGenerateVideoNoteTask(
         userId,
         namespaceId,
         resource.id,
@@ -183,7 +179,7 @@ export class WizardService {
       );
       return { task_id: task.id, resource_id: resource.id };
     } else {
-      const task = await this.wizardTaskService.createCollectTask(
+      const task = await this.wizardTaskService.emitCollectTask(
         userId,
         namespaceId,
         resource.id,
@@ -220,7 +216,7 @@ export class WizardService {
       resourceDto,
     );
 
-    const task = await this.wizardTaskService.createCollectTask(
+    const task = await this.wizardTaskService.emitCollectTask(
       userId,
       namespaceId,
       resource.id,
@@ -330,7 +326,7 @@ export class WizardService {
   private async triggerExtractTags(parentTask: Task): Promise<void> {
     try {
       const extractTagsTask =
-        await this.wizardTaskService.createExtractTagsTaskFromTask(parentTask);
+        await this.wizardTaskService.emitExtractTagsTaskFromTask(parentTask);
 
       if (extractTagsTask) {
         this.logger.debug(
@@ -348,7 +344,7 @@ export class WizardService {
   private async triggerGenerateTitle(parentTask: Task): Promise<void> {
     try {
       const generateTitleTask =
-        await this.wizardTaskService.createGenerateTitleTask(
+        await this.wizardTaskService.emitGenerateTitleTask(
           parentTask.userId,
           parentTask.namespaceId,
           {

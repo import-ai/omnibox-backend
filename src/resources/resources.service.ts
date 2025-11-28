@@ -314,7 +314,7 @@ export class ResourcesService {
 
     // If it's not a root resource, create index task
     if (resource.parentId) {
-      await this.wizardTaskService.createIndexTask(
+      await this.wizardTaskService.emitUpsertIndexTask(
         TASK_PRIORITY,
         userId,
         resource,
@@ -376,7 +376,7 @@ export class ResourcesService {
       resource.fileId
     ) {
       // If it's a user-uploaded file, create file reader task
-      await this.wizardTaskService.createFileReaderTask(
+      await this.wizardTaskService.emitFileReaderTask(
         resource.userId,
         resource,
         props.source || 'default',
@@ -384,7 +384,7 @@ export class ResourcesService {
       );
     } else if (resource.parentId) {
       // If it's not a root resource, create index task
-      await this.wizardTaskService.createIndexTask(
+      await this.wizardTaskService.emitUpsertIndexTask(
         TASK_PRIORITY,
         props.userId!,
         resource,

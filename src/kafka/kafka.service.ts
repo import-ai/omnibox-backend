@@ -8,10 +8,10 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   private producer: Producer;
 
   constructor(private readonly configService: ConfigService) {
-    const brokers = this.configService.get<string>('OBB_KAFKA_BROKERS');
+    const brokers = this.configService.get<string>('OBB_KAFKA_BROKER');
 
     if (!brokers) {
-      throw new Error('OBB_KAFKA_BROKERS is required but not configured');
+      throw new Error('OBB_KAFKA_BROKER is required but not configured');
     }
 
     const clientId = this.configService.get<string>(

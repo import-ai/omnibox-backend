@@ -1,8 +1,10 @@
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { ExportPdfDto } from 'omniboxd/namespace-resources/dto/export-pdf.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { PdfExportService } from './pdf-export.service';
 import {
   Body,
   Controller,
@@ -14,7 +16,9 @@ import {
   Post,
   Query,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
@@ -26,6 +30,7 @@ export class NamespaceResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly permissionsService: PermissionsService,
+    private readonly pdfExportService: PdfExportService,
   ) {}
 
   @Get()
@@ -269,5 +274,63 @@ export class NamespaceResourcesController {
       ...resource,
       hasChildren,
     };
+  }
+
+  @Post('export-pdf')
+  async exportMarkdownToPdf(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() exportPdfDto: ExportPdfDto,
+    @Res() res: Response,
+  ) {
+    try {
+      // Log the incoming request for debugging
+      console.log('PDF Export Request:', {
+        userId,
+        namespaceId,
+        hasMarkdown: !!exportPdfDto?.markdown,
+        markdownLength: exportPdfDto?.markdown?.length || 0,
+        filename: exportPdfDto?.filename,
+      });
+
+      // Validate markdown exists
+      if (!exportPdfDto || !exportPdfDto.markdown) {
+        throw new Error('Markdown content is required');
+      }
+
+      // Convert markdown to PDF
+      const pdfBuffer = await this.pdfExportService.convertMarkdownToPdf(
+        exportPdfDto.markdown,
+        {
+          format: exportPdfDto.format,
+          landscape: exportPdfDto.landscape,
+          margin: exportPdfDto.margin,
+        },
+      );
+
+      // Set filename and encode for header
+      const filename = exportPdfDto.filename || 'document.pdf';
+
+      // Encode filename for Content-Disposition header to handle non-ASCII characters
+      const encodedFilename = encodeURIComponent(filename);
+      const contentDisposition = `attachment; filename="${encodedFilename}"; filename*=UTF-8''${encodedFilename}`;
+
+      // Set response headers for PDF download
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': contentDisposition,
+        'Content-Length': pdfBuffer.length.toString(),
+      });
+
+      // Send the PDF buffer
+      res.end(pdfBuffer);
+    } catch (error) {
+      console.error('PDF Export Error:', error);
+      throw new AppException(
+        `Failed to export PDF: ${error.message}`,
+        'PDF_EXPORT_FAILED',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { NamespaceResourcesController } from 'omniboxd/namespace-resources/namespace-resources.controller';
+import { PdfExportService } from 'omniboxd/namespace-resources/pdf-export.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InternalResourcesController } from 'omniboxd/namespace-resources/internal.resource.controller';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
@@ -17,7 +18,7 @@ import { FilesModule } from 'omniboxd/files/files.module';
 
 @Module({
   exports: [NamespaceResourcesService],
-  providers: [NamespaceResourcesService],
+  providers: [NamespaceResourcesService, PdfExportService],
   controllers: [
     NamespaceResourcesController,
     InternalResourcesController,

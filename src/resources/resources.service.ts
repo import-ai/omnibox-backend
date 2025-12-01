@@ -6,8 +6,8 @@ import { Resource, ResourceType } from './entities/resource.entity';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 import { FilesService } from 'omniboxd/files/files.service';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 
 const TASK_PRIORITY = 5;
 
@@ -262,19 +262,15 @@ export class ResourcesService {
       content?: string;
       attrs?: Record<string, any>;
     },
-    entityManager?: EntityManager,
+    tx?: Transaction,
   ): Promise<void> {
-    if (!entityManager) {
-      return await this.dataSource.transaction((entityManager) =>
-        this.updateResource(
-          namespaceId,
-          resourceId,
-          userId,
-          props,
-          entityManager,
-        ),
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.updateResource(namespaceId, resourceId, userId, props, tx),
       );
     }
+
+    const entityManager = tx.entityManager;
 
     if (props.parentId) {
       const parents = await this.getParentResourcesOrFail(
@@ -318,7 +314,7 @@ export class ResourcesService {
         TASK_PRIORITY,
         userId,
         resource,
-        entityManager.getRepository(Task),
+        tx,
       );
     }
   }
@@ -336,13 +332,15 @@ export class ResourcesService {
       fileId?: string;
       source?: string;
     },
-    entityManager?: EntityManager,
+    tx?: Transaction,
   ): Promise<Resource> {
-    if (!entityManager) {
-      return await this.dataSource.transaction((entityManager) =>
-        this.createResource(props, entityManager),
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.createResource(props, tx),
       );
     }
+
+    const entityManager = tx.entityManager;
 
     // Check if the parent belongs to the same namespace
     if (props.parentId) {
@@ -380,7 +378,7 @@ export class ResourcesService {
         resource.userId,
         resource,
         props.source || 'default',
-        entityManager.getRepository(Task),
+        tx,
       );
     } else if (resource.parentId) {
       // If it's not a root resource, create index task
@@ -388,7 +386,7 @@ export class ResourcesService {
         TASK_PRIORITY,
         props.userId!,
         resource,
-        entityManager.getRepository(Task),
+        tx,
       );
     }
 

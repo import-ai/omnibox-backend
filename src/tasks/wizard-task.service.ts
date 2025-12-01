@@ -14,6 +14,7 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { context, propagation } from '@opentelemetry/api';
 import { KafkaService } from 'omniboxd/kafka/kafka.service';
+import { Transaction } from 'omniboxd/utils/transaction-utils';
 
 @Injectable()
 export class WizardTaskService {
@@ -52,9 +53,7 @@ export class WizardTaskService {
     return undefined;
   }
 
-  private async emitTask(data: Partial<Task>, repo?: Repository<Task>) {
-    repo = repo || this.taskRepository;
-    const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
+  private async produceTaskMessage(task: Task): Promise<void> {
     await this.kafkaService.produce(this.kafkaTasksTopic, [
       {
         key: task.namespaceId,
@@ -65,7 +64,16 @@ export class WizardTaskService {
         }),
       },
     ]);
+  }
 
+  private async emitTask(data: Partial<Task>, tx?: Transaction) {
+    const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
+    const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
+    if (tx) {
+      tx.afterCommitHooks.push(() => this.produceTaskMessage(task));
+    } else {
+      await this.produceTaskMessage(task);
+    }
     return task;
   }
 
@@ -74,7 +82,7 @@ export class WizardTaskService {
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     return this.emitTask(
       {
@@ -84,7 +92,7 @@ export class WizardTaskService {
         payload: { resource_id: resourceId },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
@@ -93,7 +101,7 @@ export class WizardTaskService {
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     return this.emitTask(
       {
@@ -103,7 +111,7 @@ export class WizardTaskService {
         payload: { resource_id: resourceId },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
@@ -112,7 +120,7 @@ export class WizardTaskService {
     resourceId: string,
     namespaceId: string,
     text: string,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     // Check if auto-tag is enabled for this user
     const isEnabled = await this.userService.isAutoTagEnabled(userId);
@@ -131,11 +139,11 @@ export class WizardTaskService {
         },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async emitExtractTagsTaskFromTask(parentTask: Task, repo?: Repository<Task>) {
+  async emitExtractTagsTaskFromTask(parentTask: Task, tx?: Transaction) {
     // Check if auto-tag is enabled for this user
     const isEnabled = await this.userService.isAutoTagEnabled(
       parentTask.userId,
@@ -160,7 +168,7 @@ export class WizardTaskService {
         },
         userId: parentTask.userId,
       },
-      repo,
+      tx,
     );
   }
 
@@ -169,7 +177,7 @@ export class WizardTaskService {
     namespaceId: string,
     payload: { resource_id: string; parent_task_id?: string },
     input: { text: string },
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     const lang = await this.getUserLanguage(userId);
     return this.emitTask(
@@ -180,7 +188,7 @@ export class WizardTaskService {
         payload,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
@@ -188,7 +196,7 @@ export class WizardTaskService {
     userId: string,
     resource: Resource,
     source?: string,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     return this.emitTask(
       {
@@ -207,7 +215,7 @@ export class WizardTaskService {
         namespaceId: resource.namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
@@ -215,7 +223,7 @@ export class WizardTaskService {
     priority: number,
     userId: string,
     resource: Resource,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     if (resource.resourceType === ResourceType.FOLDER || !resource.content) {
       return;
@@ -237,14 +245,14 @@ export class WizardTaskService {
         namespaceId: resource.namespaceId,
         userId: userId,
       },
-      repo,
+      tx,
     );
   }
 
   async emitDeleteIndexTask(
     userId: string,
     resource: Resource,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     return this.emitTask(
       {
@@ -256,7 +264,7 @@ export class WizardTaskService {
         userId,
         payload: { resource_id: resource.id },
       },
-      repo,
+      tx,
     );
   }
 
@@ -266,7 +274,7 @@ export class WizardTaskService {
     namespaceId: string,
     conversationId: string,
     message: Message,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     if (!message.message.content?.trim()) {
       return;
@@ -291,7 +299,7 @@ export class WizardTaskService {
         namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
@@ -300,7 +308,7 @@ export class WizardTaskService {
     userId: string,
     conversationId: string,
     priority: number,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     return this.emitTask(
       {
@@ -311,7 +319,7 @@ export class WizardTaskService {
         namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 }

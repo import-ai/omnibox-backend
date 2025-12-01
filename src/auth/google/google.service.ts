@@ -9,6 +9,7 @@ import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { fetchWithRetry } from 'omniboxd/utils/fetch-with-retry';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -247,7 +248,9 @@ export class GoogleService {
       return returnValue;
     }
 
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       let nickname = userData.name;
       if (!nickname) {
         nickname = userData.given_name;
@@ -277,7 +280,7 @@ export class GoogleService {
       await this.namespaceService.createUserNamespace(
         googleUser.id,
         googleUser.username,
-        manager,
+        tx,
       );
 
       const returnValue = {

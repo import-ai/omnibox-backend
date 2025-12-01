@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { UserService } from 'omniboxd/user/user.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import {
@@ -12,13 +13,23 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { context, propagation } from '@opentelemetry/api';
+import { KafkaService } from 'omniboxd/kafka/kafka.service';
 
 @Injectable()
 export class WizardTaskService {
+  private readonly kafkaTasksTopic: string;
+
   constructor(
     @InjectRepository(Task) public taskRepository: Repository<Task>,
     private readonly userService: UserService,
-  ) {}
+    private readonly kafkaService: KafkaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.kafkaTasksTopic = this.configService.get<string>(
+      'OBB_TASKS_TOPIC',
+      'omnibox-tasks',
+    );
+  }
 
   injectTraceHeaders(task: Partial<Task>) {
     const traceHeaders: Record<string, string> = {};
@@ -42,9 +53,20 @@ export class WizardTaskService {
   }
 
   private async emitTask(data: Partial<Task>, repo?: Repository<Task>) {
-    const repository = repo || this.taskRepository;
-    const task = repository.create(this.injectTraceHeaders(data));
-    return await repository.save(task);
+    repo = repo || this.taskRepository;
+    const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
+    await this.kafkaService.produce(this.kafkaTasksTopic, [
+      {
+        key: task.namespaceId,
+        value: JSON.stringify({
+          id: task.id,
+          namespace_id: task.namespaceId,
+          function: task.function,
+        }),
+      },
+    ]);
+
+    return task;
   }
 
   async emitCollectTask(

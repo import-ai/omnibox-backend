@@ -51,14 +51,11 @@ export default async () => {
   console.log('MailHog container started');
 
   const postgresUrl = `postgres://omnibox:omnibox@${postgresContainer.getHost()}:${postgresContainer.getMappedPort(5432)}/omnibox`;
-  const minioUrl = `http://minioadmin:minioadmin@${minioContainer.getHost()}:${minioContainer.getMappedPort(9000)}/omnibox`;
   const mailTransport = `smtp://${mailhogContainer.getHost()}:${mailhogContainer.getMappedPort(1025)}`;
   console.log(`PostgreSQL URL: ${postgresUrl}`);
-  console.log(`MinIO URL: ${minioUrl}`);
   console.log(`Mail Transport: ${mailTransport}`);
 
   process.env.OBB_POSTGRES_URL = postgresUrl;
-  process.env.OBB_MINIO_URL = minioUrl;
   process.env.OBB_DB_SYNC = 'false';
   process.env.OBB_DB_LOGGING = 'false';
   process.env.OBB_S3_ACCESS_KEY_ID = 'minioadmin';

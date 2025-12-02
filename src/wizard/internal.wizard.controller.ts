@@ -48,6 +48,12 @@ export class InternalWizardController {
   }
 
   @Public()
+  @Post('tasks/:taskId/start')
+  async startTask(@Param('taskId') taskId: string) {
+    return await this.wizardService.startTask(taskId);
+  }
+
+  @Public()
   @Post('callback/chunk')
   async handleChunkCallback(
     @Body() chunkCallback: ChunkCallbackDto,

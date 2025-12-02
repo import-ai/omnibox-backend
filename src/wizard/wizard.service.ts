@@ -412,6 +412,25 @@ export class WizardService {
     task.output.images = processedImages;
   }
 
+  async startTask(taskId: string): Promise<InternalTaskDto> {
+    const task = await this.wizardTaskService.taskRepository.findOneOrFail({
+      where: { id: taskId },
+    });
+
+    if (task.canceledAt || task.endedAt) {
+      throw new AppException(
+        `Task ${taskId} has already ended or been canceled`,
+        'TASK_FINISHED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    task.startedAt = new Date();
+    const updatedTask = await this.wizardTaskService.taskRepository.save(task);
+
+    return InternalTaskDto.fromEntity(updatedTask);
+  }
+
   async fetchTask(query: FetchTaskRequest): Promise<InternalTaskDto | null> {
     const andConditions: string[] = [];
     if (query.namespace_id) {

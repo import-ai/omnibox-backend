@@ -28,8 +28,8 @@ export class WechatController extends SocialController {
 
   @Public()
   @Get('auth-url')
-  getAuthUrl() {
-    return this.wechatService.authUrl();
+  getAuthUrl(@Query('redirect_uri') redirectUri?: string) {
+    return this.wechatService.authUrl(redirectUri);
   }
 
   @Public()

@@ -107,9 +107,10 @@ export class WechatService {
     };
   }
 
-  async authUrl(): Promise<string> {
+  async authUrl(customRedirectUri?: string): Promise<string> {
     const state = await this.socialService.generateState('weixin');
-    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
+    const redirectUri = customRedirectUri || this.redirectUri;
+    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
   async handleCallback(

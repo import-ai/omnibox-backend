@@ -93,6 +93,28 @@
     },
     "allResources": {
       "isBoolean": "所有资源必须是布尔值"
+    },
+    "task_id": {
+      "isString": "任务 ID 必须是字符串",
+      "isNotEmpty": "任务 ID 不能为空"
+    },
+    "resource_id": {
+      "isString": "资源 ID 必须是字符串",
+      "isNotEmpty": "资源 ID 不能为空"
+    },
+    "id": {
+      "isString": "ID 必须是字符串",
+      "isNotEmpty": "ID 不能为空"
+    },
+    "invitationId": {
+      "isString": "邀请 ID 必须是字符串"
+    },
+    "role": {
+      "isString": "角色必须是字符串",
+      "isNotEmpty": "角色不能为空"
+    },
+    "rootResourceId": {
+      "isString": "根资源 ID 必须是字符串"
     }
   }
 }

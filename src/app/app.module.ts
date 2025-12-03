@@ -2,6 +2,7 @@ import {
   DynamicModule,
   MiddlewareConsumer,
   Module,
+  HttpStatus,
   NestModule,
 } from '@nestjs/common';
 import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.interceptor';
@@ -107,7 +108,7 @@ export class AppModule implements NestModule {
           provide: APP_FILTER,
           useValue: new I18nValidationExceptionFilter({
             detailedErrors: false,
-            errorHttpStatusCode: 500,
+            errorHttpStatusCode: HttpStatus.INTERNAL_SERVER_ERROR,
           }),
         },
       ],

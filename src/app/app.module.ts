@@ -107,6 +107,7 @@ export class AppModule implements NestModule {
           provide: APP_FILTER,
           useValue: new I18nValidationExceptionFilter({
             detailedErrors: false,
+            errorHttpStatusCode: 500,
           }),
         },
       ],

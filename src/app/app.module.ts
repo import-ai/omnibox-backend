@@ -79,15 +79,7 @@ import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762
 
 @Module({})
 export class AppModule implements NestModule {
-  static forRoot(
-    options: {
-      envFilePath: string[];
-      extraMigrations: Array<new () => any>;
-    } = {
-      envFilePath: ['.env'],
-      extraMigrations: [],
-    },
-  ): DynamicModule {
+  static forRoot(extraMigrations: Array<new () => any> = []): DynamicModule {
     return {
       module: AppModule,
       controllers: [AppController],
@@ -123,7 +115,6 @@ export class AppModule implements NestModule {
         ConfigModule.forRoot({
           cache: true,
           isGlobal: true,
-          envFilePath: options.envFilePath,
         }),
         I18nModule.forRoot({
           fallbackLanguage: 'en',
@@ -215,7 +206,7 @@ export class AppModule implements NestModule {
               AddFileIdToResources1761726974942,
               UserUsernameNotNull1763533615604,
               AddMetadataToUserBindings1762847685000,
-              ...options.extraMigrations,
+              ...extraMigrations,
             ],
             migrationsRun: true,
             namingStrategy: new SnakeNamingStrategy(),

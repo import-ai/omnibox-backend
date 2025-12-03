@@ -413,21 +413,34 @@ export class WizardService {
   }
 
   async startTask(taskId: string): Promise<InternalTaskDto> {
-    const task = await this.wizardTaskService.taskRepository.findOneOrFail({
+    const task = await this.wizardTaskService.taskRepository.findOne({
       where: { id: taskId },
     });
 
-    if (task.canceledAt || task.endedAt) {
+    if (!task) {
       throw new AppException(
-        `Task ${taskId} has already ended or been canceled`,
-        'TASK_FINISHED',
+        `Task ${taskId} not found`,
+        'TASK_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (task.canceledAt) {
+      throw new AppException(
+        `Task ${taskId} has been canceled`,
+        'TASK_CANCELED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (task.endedAt) {
+      throw new AppException(
+        `Task ${taskId} has already ended`,
+        'TASK_ENDED',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
 
     task.startedAt = new Date();
     const updatedTask = await this.wizardTaskService.taskRepository.save(task);
-
     return InternalTaskDto.fromEntity(updatedTask);
   }
 

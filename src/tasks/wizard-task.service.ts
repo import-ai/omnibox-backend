@@ -58,7 +58,7 @@ export class WizardTaskService {
       {
         key: task.namespaceId,
         value: JSON.stringify({
-          id: task.id,
+          task_id: task.id,
           namespace_id: task.namespaceId,
           function: task.function,
         }),

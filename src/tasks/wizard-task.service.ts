@@ -61,6 +61,7 @@ export class WizardTaskService {
           task_id: task.id,
           namespace_id: task.namespaceId,
           function: task.function,
+          meta: { file_name: task.input?.filename },
         }),
       },
     ]);

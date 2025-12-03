@@ -93,6 +93,28 @@
     },
     "allResources": {
       "isBoolean": "All resources must be a boolean value"
+    },
+    "task_id": {
+      "isString": "Task ID must be a string",
+      "isNotEmpty": "Task ID is required"
+    },
+    "resource_id": {
+      "isString": "Resource ID must be a string",
+      "isNotEmpty": "Resource ID is required"
+    },
+    "id": {
+      "isString": "ID must be a string",
+      "isNotEmpty": "ID is required"
+    },
+    "invitationId": {
+      "isString": "Invitation ID must be a string"
+    },
+    "role": {
+      "isString": "Role must be a string",
+      "isNotEmpty": "Role is required"
+    },
+    "rootResourceId": {
+      "isString": "Root resource ID must be a string"
     }
   }
 }

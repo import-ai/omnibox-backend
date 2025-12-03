@@ -100,4 +100,13 @@ export class InternalWizardController {
   async createTempfile(@Body() createReq: CreateTempfileReqDto) {
     return await this.wizardService.createTempfile(createReq.filename);
   }
+
+  @Public()
+  @Post('tasks/reproduce')
+  async reproduceTaskMessages(
+    @Query('offset') offset?: number,
+    @Query('limit') limit: number = 100,
+  ) {
+    return await this.wizardService.reproduceTaskMessages(offset, limit);
+  }
 }

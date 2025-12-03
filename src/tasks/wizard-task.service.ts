@@ -53,7 +53,7 @@ export class WizardTaskService {
     return undefined;
   }
 
-  private async produceTaskMessage(task: Task): Promise<void> {
+  async produceTaskMessage(task: Task): Promise<void> {
     await this.kafkaService.produce(this.kafkaTasksTopic, [
       {
         key: task.namespaceId,

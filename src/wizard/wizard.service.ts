@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { IsNull } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -564,5 +565,29 @@ export class WizardService {
         })
         .on('error', reject);
     });
+  }
+
+  async reproduceTaskMessages(offset?: number, limit?: number) {
+    const tasks = await this.wizardTaskService.taskRepository.find({
+      where: {
+        endedAt: IsNull(),
+        canceledAt: IsNull(),
+      },
+      skip: offset,
+      take: limit,
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+
+    for (const task of tasks) {
+      await this.wizardTaskService.produceTaskMessage(task);
+    }
+
+    return {
+      message: `Reproduced ${tasks.length} task messages`,
+      count: tasks.length,
+      taskIds: tasks.map((t) => t.id),
+    };
   }
 }

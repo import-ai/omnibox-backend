@@ -12,7 +12,7 @@ export async function transaction<T>(
   f: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
   const afterCommitHooks: Array<() => Promise<void>> = [];
-  const result = entityManager.transaction(async (entityManager) => {
+  const result = await entityManager.transaction(async (entityManager) => {
     const tx = new Transaction(entityManager, afterCommitHooks);
     return await f(tx);
   });

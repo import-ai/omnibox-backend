@@ -59,8 +59,6 @@ import { Applications1756914379375 } from 'omniboxd/migrations/1756914379375-app
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TraceModule } from 'omniboxd/trace/trace.module';
 import { ApplicationsModule } from 'omniboxd/applications/applications.module';
-import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
-import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WebSocketModule } from 'omniboxd/websocket/websocket.module';
 import { NullableUserId1757844448000 } from 'omniboxd/migrations/1757844448000-nullable-user-id';
@@ -150,7 +148,6 @@ export class AppModule implements NestModule {
         SharedResourcesModule,
         SeoModule,
         TraceModule,
-        FeedbackModule,
         ApplicationsModule,
         WebSocketModule,
         FilesModule,
@@ -198,7 +195,6 @@ export class AppModule implements NestModule {
               ScanResourceAttachments1755504936756,
               SharesAllResources1754471311959,
               Applications1756914379375,
-              Feedback1757100000000,
               NullableUserId1757844448000,
               AddShareIdToConversations1757844449000,
               ShareUser1760171824000,

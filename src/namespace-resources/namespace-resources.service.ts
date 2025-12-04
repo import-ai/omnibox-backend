@@ -2,7 +2,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
 import {
   DataSource,
-  EntityManager,
   FindOptionsWhere,
   In,
   IsNull,
@@ -19,7 +18,6 @@ import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resou
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -28,6 +26,7 @@ import {
   comparePermission,
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { ResourceDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -176,14 +175,16 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     createReq: CreateResourceDto,
-    manager?: EntityManager,
+    tx?: Transaction,
     source?: string,
   ) {
-    if (!manager) {
-      return await this.dataSource.transaction(async (manager) => {
-        return await this.create(userId, namespaceId, createReq, manager);
+    if (!tx) {
+      return await transaction(this.dataSource.manager, async (tx) => {
+        return await this.create(userId, namespaceId, createReq, tx);
       });
     }
+
+    const manager = tx.entityManager;
 
     const ok = await this.permissionsService.userHasPermission(
       namespaceId,
@@ -235,7 +236,7 @@ export class NamespaceResourcesService {
         fileId: createReq.file_id,
         source,
       },
-      manager,
+      tx,
     );
   }
 
@@ -269,13 +270,15 @@ export class NamespaceResourcesService {
       (newResource as any).tag_ids = resource.tagIds;
     }
 
-    return await this.dataSource.transaction(async (entityManager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const entityManager = tx.entityManager;
+
       // Create the duplicated resource within the transaction
       const duplicatedResource = await this.create(
         userId,
         namespaceId,
         newResource,
-        entityManager,
+        tx,
       );
 
       // Copy attachment relations to the duplicated resource within the same transaction
@@ -775,13 +778,10 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    await this.dataSource.transaction(async (manager) => {
+    await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
       await manager.softDelete(Resource, id);
-      await this.wizardTaskService.deleteIndexTask(
-        userId,
-        resource,
-        manager.getRepository(Task),
-      );
+      await this.wizardTaskService.emitDeleteIndexTask(userId, resource, tx);
     });
   }
 
@@ -808,13 +808,14 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    await this.dataSource.transaction(async (manager) => {
+    await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
       await manager.restore(Resource, id);
-      await this.wizardTaskService.createIndexTask(
+      await this.wizardTaskService.emitUpsertIndexTask(
         TASK_PRIORITY,
         userId,
         resource,
-        manager.getRepository(Task),
+        tx,
       );
     });
   }

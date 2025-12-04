@@ -21,6 +21,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 import { filterEmoji } from 'omniboxd/utils/emoji';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 
 @Injectable()
 export class NamespacesService {
@@ -138,43 +139,38 @@ export class NamespacesService {
   async createUserNamespace(
     userId: string,
     userName: string | null,
-    entityManager?: EntityManager,
+    tx?: Transaction,
   ): Promise<Namespace> {
     const namespaceName = this.i18n.t('namespace.userNamespaceName', {
       args: { userName },
     });
-    return await this.createAndJoinNamespace(
-      userId,
-      namespaceName,
-      entityManager,
-    );
+    return await this.createAndJoinNamespace(userId, namespaceName, tx);
   }
 
   async createAndJoinNamespace(
     ownerId: string,
     namespaceName: string,
-    entityManager?: EntityManager,
+    tx?: Transaction,
   ): Promise<Namespace> {
-    if (!entityManager) {
-      return await this.dataSource.transaction((entityManager) =>
-        this.createAndJoinNamespace(ownerId, namespaceName, entityManager),
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.createAndJoinNamespace(ownerId, namespaceName, tx),
       );
     }
-    const namespace = await this.createNamespace(namespaceName, entityManager);
+    const namespace = await this.createNamespace(namespaceName, tx);
     await this.addMember(
       namespace.id,
       ownerId,
       NamespaceRole.OWNER,
       ResourcePermission.FULL_ACCESS,
-      entityManager,
+      tx,
     );
     return namespace;
   }
 
-  async createNamespace(
-    name: string,
-    manager: EntityManager,
-  ): Promise<Namespace> {
+  async createNamespace(name: string, tx: Transaction): Promise<Namespace> {
+    const manager = tx.entityManager;
+
     // Filter emoji from namespace name
     const filteredName = filterEmoji(name);
 
@@ -199,7 +195,7 @@ export class NamespacesService {
         userId: null,
         resourceType: ResourceType.FOLDER,
       },
-      manager,
+      tx,
     );
     await manager.update(Namespace, namespace.id, {
       rootResourceId: publicRoot.id,
@@ -254,8 +250,10 @@ export class NamespacesService {
     userId: string,
     namespaceId: string,
     namespaceMember: NamespaceMember | null,
-    entityManager: EntityManager,
+    tx: Transaction,
   ): Promise<string> {
+    const entityManager = tx.entityManager;
+
     if (namespaceMember) {
       await this.resourcesService.restoreResource(
         namespaceId,
@@ -271,7 +269,7 @@ export class NamespacesService {
         userId,
         resourceType: ResourceType.FOLDER,
       },
-      entityManager,
+      tx,
     );
     return privateRoot.id;
   }
@@ -281,8 +279,10 @@ export class NamespacesService {
     userId: string,
     role: NamespaceRole,
     permission: ResourcePermission,
-    entityManager: EntityManager,
+    tx: Transaction,
   ) {
+    const entityManager = tx.entityManager;
+
     const count = await entityManager.count(NamespaceMember, {
       where: { namespaceId, userId },
     });
@@ -298,7 +298,7 @@ export class NamespacesService {
       userId,
       namespaceId,
       namespaceMember,
-      entityManager,
+      tx,
     );
     await entityManager.save(
       entityManager.create(NamespaceMember, {

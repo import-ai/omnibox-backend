@@ -48,6 +48,12 @@ export class InternalWizardController {
   }
 
   @Public()
+  @Post('tasks/:taskId/start')
+  async startTask(@Param('taskId') taskId: string) {
+    return await this.wizardService.startTask(taskId);
+  }
+
+  @Public()
   @Post('callback/chunk')
   async handleChunkCallback(
     @Body() chunkCallback: ChunkCallbackDto,
@@ -93,5 +99,14 @@ export class InternalWizardController {
   @Post('tempfiles')
   async createTempfile(@Body() createReq: CreateTempfileReqDto) {
     return await this.wizardService.createTempfile(createReq.filename);
+  }
+
+  @Public()
+  @Post('tasks/reproduce')
+  async reproduceTaskMessages(
+    @Query('offset') offset?: number,
+    @Query('limit') limit: number = 100,
+  ) {
+    return await this.wizardService.reproduceTaskMessages(offset, limit);
   }
 }

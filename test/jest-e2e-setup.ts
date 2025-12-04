@@ -3,6 +3,7 @@ import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 let postgresContainer: StartedTestContainer;
 let minioContainer: StartedTestContainer;
 let mailhogContainer: StartedTestContainer;
+let kafkaContainer: StartedTestContainer;
 
 // https://node.testcontainers.org/supported-container-runtimes
 export default async () => {
@@ -50,10 +51,34 @@ export default async () => {
     .start();
   console.log('MailHog container started');
 
+  const kafkaPort = 19092; // Use fixed port for tests
+  kafkaContainer = await new GenericContainer('apache/kafka:latest')
+    .withExposedPorts({ container: 9092, host: kafkaPort })
+    .withEnvironment({
+      KAFKA_NODE_ID: '1',
+      KAFKA_PROCESS_ROLES: 'broker,controller',
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093',
+      KAFKA_ADVERTISED_LISTENERS: `PLAINTEXT://localhost:${kafkaPort}`,
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER',
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:
+        'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT',
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:9093',
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1',
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: '1',
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: '1',
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: '0',
+      KAFKA_NUM_PARTITIONS: '1',
+    })
+    .withWaitStrategy(Wait.forListeningPorts())
+    .start();
+  console.log('Kafka container started');
+
   const postgresUrl = `postgres://omnibox:omnibox@${postgresContainer.getHost()}:${postgresContainer.getMappedPort(5432)}/omnibox`;
   const mailTransport = `smtp://${mailhogContainer.getHost()}:${mailhogContainer.getMappedPort(1025)}`;
+  const kafkaBroker = `${kafkaContainer.getHost()}:${kafkaContainer.getMappedPort(9092)}`;
   console.log(`PostgreSQL URL: ${postgresUrl}`);
   console.log(`Mail Transport: ${mailTransport}`);
+  console.log(`Kafka Broker: ${kafkaBroker}`);
 
   process.env.OBB_POSTGRES_URL = postgresUrl;
   process.env.OBB_DB_SYNC = 'false';
@@ -66,8 +91,10 @@ export default async () => {
   process.env.OBB_MAIL_TRANSPORT = mailTransport;
   process.env.OBB_MAIL_FROM = '"Test <test@example.com>"';
   process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8080';
+  process.env.OBB_KAFKA_BROKER = kafkaBroker;
 
   (global as any).__POSTGRES_CONTAINER__ = postgresContainer;
   (global as any).__MINIO_CONTAINER__ = minioContainer;
   (global as any).__MAILHOG_CONTAINER__ = mailhogContainer;
+  (global as any).__KAFKA_CONTAINER__ = kafkaContainer;
 };

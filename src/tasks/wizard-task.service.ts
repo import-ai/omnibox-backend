@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { UserService } from 'omniboxd/user/user.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import {
@@ -12,13 +13,24 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { context, propagation } from '@opentelemetry/api';
+import { KafkaService } from 'omniboxd/kafka/kafka.service';
+import { Transaction } from 'omniboxd/utils/transaction-utils';
 
 @Injectable()
 export class WizardTaskService {
+  private readonly kafkaTasksTopic: string;
+
   constructor(
     @InjectRepository(Task) public taskRepository: Repository<Task>,
     private readonly userService: UserService,
-  ) {}
+    private readonly kafkaService: KafkaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.kafkaTasksTopic = this.configService.get<string>(
+      'OBB_TASKS_TOPIC',
+      'omnibox-tasks',
+    );
+  }
 
   injectTraceHeaders(task: Partial<Task>) {
     const traceHeaders: Record<string, string> = {};
@@ -41,20 +53,39 @@ export class WizardTaskService {
     return undefined;
   }
 
-  async create(data: Partial<Task>, repo?: Repository<Task>) {
-    const repository = repo || this.taskRepository;
-    const task = repository.create(this.injectTraceHeaders(data));
-    return await repository.save(task);
+  async produceTaskMessage(task: Task): Promise<void> {
+    await this.kafkaService.produce(this.kafkaTasksTopic, [
+      {
+        key: task.namespaceId,
+        value: JSON.stringify({
+          task_id: task.id,
+          namespace_id: task.namespaceId,
+          function: task.function,
+          meta: { file_name: task.input?.filename },
+        }),
+      },
+    ]);
   }
 
-  async createCollectTask(
+  private async emitTask(data: Partial<Task>, tx?: Transaction) {
+    const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
+    const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
+    if (tx) {
+      tx.afterCommitHooks.push(() => this.produceTaskMessage(task));
+    } else {
+      await this.produceTaskMessage(task);
+    }
+    return task;
+  }
+
+  async emitCollectTask(
     userId: string,
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'collect',
         input,
@@ -62,18 +93,18 @@ export class WizardTaskService {
         payload: { resource_id: resourceId },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createGenerateVideoNoteTask(
+  async emitGenerateVideoNoteTask(
     userId: string,
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'generate_video_note',
         input,
@@ -81,16 +112,16 @@ export class WizardTaskService {
         payload: { resource_id: resourceId },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createExtractTagsTask(
+  async emitExtractTagsTask(
     userId: string,
     resourceId: string,
     namespaceId: string,
     text: string,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     // Check if auto-tag is enabled for this user
     const isEnabled = await this.userService.isAutoTagEnabled(userId);
@@ -99,7 +130,7 @@ export class WizardTaskService {
     }
 
     const lang = await this.getUserLanguage(userId);
-    return this.create(
+    return this.emitTask(
       {
         function: 'extract_tags',
         input: { text, lang },
@@ -109,14 +140,11 @@ export class WizardTaskService {
         },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createExtractTagsTaskFromTask(
-    parentTask: Task,
-    repo?: Repository<Task>,
-  ) {
+  async emitExtractTagsTaskFromTask(parentTask: Task, tx?: Transaction) {
     // Check if auto-tag is enabled for this user
     const isEnabled = await this.userService.isAutoTagEnabled(
       parentTask.userId,
@@ -126,7 +154,7 @@ export class WizardTaskService {
     }
 
     const lang = await this.getUserLanguage(parentTask.userId);
-    return this.create(
+    return this.emitTask(
       {
         function: 'extract_tags',
         input: {
@@ -141,19 +169,19 @@ export class WizardTaskService {
         },
         userId: parentTask.userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createGenerateTitleTask(
+  async emitGenerateTitleTask(
     userId: string,
     namespaceId: string,
     payload: { resource_id: string; parent_task_id?: string },
     input: { text: string },
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     const lang = await this.getUserLanguage(userId);
-    return this.create(
+    return this.emitTask(
       {
         function: 'generate_title',
         input: { lang, ...input },
@@ -161,17 +189,17 @@ export class WizardTaskService {
         payload,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createFileReaderTask(
+  async emitFileReaderTask(
     userId: string,
     resource: Resource,
     source?: string,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'file_reader',
         input: {
@@ -188,20 +216,20 @@ export class WizardTaskService {
         namespaceId: resource.namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createIndexTask(
+  async emitUpsertIndexTask(
     priority: number,
     userId: string,
     resource: Resource,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     if (resource.resourceType === ResourceType.FOLDER || !resource.content) {
       return;
     }
-    return this.create(
+    return this.emitTask(
       {
         function: 'upsert_index',
         priority,
@@ -218,16 +246,16 @@ export class WizardTaskService {
         namespaceId: resource.namespaceId,
         userId: userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async deleteIndexTask(
+  async emitDeleteIndexTask(
     userId: string,
     resource: Resource,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'delete_index',
         input: {
@@ -237,17 +265,17 @@ export class WizardTaskService {
         userId,
         payload: { resource_id: resource.id },
       },
-      repo,
+      tx,
     );
   }
 
-  async createMessageIndexTask(
+  async emitUpsertMessageIndexTask(
     priority: number,
     userId: string,
     namespaceId: string,
     conversationId: string,
     message: Message,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     if (!message.message.content?.trim()) {
       return;
@@ -259,7 +287,7 @@ export class WizardTaskService {
     ) {
       return;
     }
-    return this.create(
+    return this.emitTask(
       {
         function: 'upsert_message_index',
         priority,
@@ -272,18 +300,18 @@ export class WizardTaskService {
         namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async deleteConversationTask(
+  async emitDeleteConversationTask(
     namespaceId: string,
     userId: string,
     conversationId: string,
     priority: number,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
-    return this.create(
+    return this.emitTask(
       {
         function: 'delete_conversation',
         priority,
@@ -292,7 +320,7 @@ export class WizardTaskService {
         namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 }

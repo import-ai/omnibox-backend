@@ -9,10 +9,11 @@ import {
 } from 'omniboxd/tasks/tasks.controller';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { InternalWizardTasksController } from 'omniboxd/tasks/internal.wizard-tasks.controller';
+import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 
 @Module({
   providers: [TasksService, WizardTaskService],
-  imports: [TypeOrmModule.forFeature([Task]), UserModule],
+  imports: [TypeOrmModule.forFeature([Task]), UserModule, KafkaModule],
   controllers: [
     TasksController,
     ResourceTasksController,

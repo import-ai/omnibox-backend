@@ -77,6 +77,7 @@ import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762
 import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 import { Orders1762847078000 } from 'omniboxd/migrations/1762847078000-orders';
 import { Products1762847077000 } from 'omniboxd/migrations/1762847077000-products';
+import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -130,6 +131,7 @@ export class AppModule implements NestModule {
           ],
         }),
         TelemetryModule,
+        KafkaModule,
         TagModule,
         MailModule,
         AuthModule,

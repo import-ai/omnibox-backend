@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { IsNull } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -114,10 +115,6 @@ export class WizardService {
     }
   }
 
-  async create(partialTask: Partial<Task>) {
-    return await this.wizardTaskService.create(partialTask);
-  }
-
   isVideoUrl(url: string): boolean {
     for (const prefix of this.videoPrefixes) {
       if (url.startsWith(prefix)) {
@@ -175,7 +172,7 @@ export class WizardService {
     );
 
     if (this.isVideoUrl(url)) {
-      const task = await this.wizardTaskService.createGenerateVideoNoteTask(
+      const task = await this.wizardTaskService.emitGenerateVideoNoteTask(
         userId,
         namespaceId,
         resource.id,
@@ -183,7 +180,7 @@ export class WizardService {
       );
       return { task_id: task.id, resource_id: resource.id };
     } else {
-      const task = await this.wizardTaskService.createCollectTask(
+      const task = await this.wizardTaskService.emitCollectTask(
         userId,
         namespaceId,
         resource.id,
@@ -220,7 +217,7 @@ export class WizardService {
       resourceDto,
     );
 
-    const task = await this.wizardTaskService.createCollectTask(
+    const task = await this.wizardTaskService.emitCollectTask(
       userId,
       namespaceId,
       resource.id,
@@ -330,7 +327,7 @@ export class WizardService {
   private async triggerExtractTags(parentTask: Task): Promise<void> {
     try {
       const extractTagsTask =
-        await this.wizardTaskService.createExtractTagsTaskFromTask(parentTask);
+        await this.wizardTaskService.emitExtractTagsTaskFromTask(parentTask);
 
       if (extractTagsTask) {
         this.logger.debug(
@@ -348,7 +345,7 @@ export class WizardService {
   private async triggerGenerateTitle(parentTask: Task): Promise<void> {
     try {
       const generateTitleTask =
-        await this.wizardTaskService.createGenerateTitleTask(
+        await this.wizardTaskService.emitGenerateTitleTask(
           parentTask.userId,
           parentTask.namespaceId,
           {
@@ -414,6 +411,49 @@ export class WizardService {
 
     // Replace images with processed attachment info, keep markdown unchanged
     task.output.images = processedImages;
+  }
+
+  async startTask(taskId: string): Promise<InternalTaskDto> {
+    const task = await this.wizardTaskService.taskRepository.findOne({
+      where: { id: taskId },
+    });
+
+    if (!task) {
+      throw new AppException(
+        `Task ${taskId} not found`,
+        'TASK_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (task.canceledAt) {
+      throw new AppException(
+        `Task ${taskId} has been canceled`,
+        'TASK_CANCELED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (task.endedAt) {
+      throw new AppException(
+        `Task ${taskId} has already ended`,
+        'TASK_ENDED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    task.startedAt = new Date();
+    const newTask = await this.wizardTaskService.taskRepository.save(task);
+    // Fetch HTML content from S3 for collect tasks
+    if (
+      ['collect', 'generate_video_note'].includes(newTask.function) &&
+      newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
+      newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
+    ) {
+      const htmlContent = await this.getHtmlFromMinioGzipFile(
+        newTask.input.html,
+      );
+      newTask.input = { ...newTask.input, html: htmlContent };
+    }
+    return InternalTaskDto.fromEntity(newTask);
   }
 
   async fetchTask(query: FetchTaskRequest): Promise<InternalTaskDto | null> {
@@ -536,5 +576,29 @@ export class WizardService {
         })
         .on('error', reject);
     });
+  }
+
+  async reproduceTaskMessages(offset?: number, limit?: number) {
+    const tasks = await this.wizardTaskService.taskRepository.find({
+      where: {
+        endedAt: IsNull(),
+        canceledAt: IsNull(),
+      },
+      skip: offset,
+      take: limit,
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+
+    for (const task of tasks) {
+      await this.wizardTaskService.produceTaskMessage(task);
+    }
+
+    return {
+      message: `Reproduced ${tasks.length} task messages`,
+      count: tasks.length,
+      taskIds: tasks.map((t) => t.id),
+    };
   }
 }

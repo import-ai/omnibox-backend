@@ -8,6 +8,7 @@ import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto'
 import { Logger, Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 
 export interface WechatUserInfo {
   openid: string;
@@ -230,7 +231,9 @@ export class WechatService {
       await this.socialService.updateState(state, stateInfo);
       return returnValue;
     }
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       const nickname: string = userData.nickname;
       const username: string = await this.socialService.getValidUsername(
         nickname,
@@ -250,7 +253,7 @@ export class WechatService {
       await this.namespaceService.createUserNamespace(
         wechatUser.id,
         wechatUser.username,
-        manager,
+        tx,
       );
       const returnValue = {
         id: wechatUser.id,

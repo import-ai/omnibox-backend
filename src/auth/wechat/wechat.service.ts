@@ -29,9 +29,8 @@ export class WechatService {
   private readonly oldOpenAppId: string;
   private readonly oldOpenAppSecret: string;
   private readonly redirectUri: string;
+  private readonly h5RedirectUri: string;
   private readonly migrationRedirectUri: string;
-  private readonly miniProgramAppId: string;
-  private readonly miniProgramAppSecret: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -72,16 +71,12 @@ export class WechatService {
       'OBB_WECHAT_REDIRECT_URI',
       '',
     );
+    this.h5RedirectUri = this.configService.get<string>(
+      'OBB_WECHAT_H5_REDIRECT_URI',
+      '',
+    );
     this.migrationRedirectUri = this.configService.get<string>(
       'OBB_WECHAT_MIGRATION_REDIRECT_URI',
-      '',
-    );
-    this.miniProgramAppId = this.configService.get<string>(
-      'OBB_MINI_PROGRAM_APP_ID',
-      '',
-    );
-    this.miniProgramAppSecret = this.configService.get<string>(
-      'OBB_MINI_PROGRAM_APP_SECRET',
       '',
     );
   }
@@ -98,19 +93,29 @@ export class WechatService {
     };
   }
 
-  async getQrCodeParams() {
+  async getQrCodeParams(platform?: 'h5' | 'web') {
     const state = await this.socialService.generateState('open_weixin');
+    console.log('platform', platform);
+    const redirectUri =
+      platform === 'h5' && this.h5RedirectUri
+        ? this.h5RedirectUri
+        : this.redirectUri;
+
     return {
       state,
       appId: this.openAppId,
       scope: 'snsapi_login',
-      redirectUri: encodeURIComponent(this.redirectUri),
+      redirectUri: encodeURIComponent(redirectUri),
     };
   }
 
-  async authUrl(customRedirectUri?: string): Promise<string> {
+  async authUrl(platform?: 'h5' | 'web'): Promise<string> {
     const state = await this.socialService.generateState('weixin');
-    const redirectUri = customRedirectUri || this.redirectUri;
+    const redirectUri =
+      platform === 'h5' && this.h5RedirectUri
+        ? this.h5RedirectUri
+        : this.redirectUri;
+
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
@@ -378,107 +383,5 @@ export class WechatService {
       );
     }
     await this.userService.unbindByLoginType(userId, 'wechat');
-  }
-
-  async miniProgramLogin(code: string, lang?: string): Promise<any> {
-    if (!this.miniProgramAppId || !this.miniProgramAppSecret) {
-      const message = this.i18n.t('auth.errors.miniProgramNotConfigured', {
-        defaultValue: 'WeChat MiniProgram is not configured',
-      });
-      throw new AppException(
-        message,
-        'MINIPROGRAM_NOT_CONFIGURED',
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
-    }
-
-    this.logger.debug({ code });
-
-    const jscode2sessionResponse = await fetch(
-      `https://api.weixin.qq.com/sns/jscode2session?appid=${this.miniProgramAppId}&secret=${this.miniProgramAppSecret}&js_code=${code}&grant_type=authorization_code`,
-    );
-
-    if (!jscode2sessionResponse.ok) {
-      const providerName = this.i18n.t('auth.providers.wechat');
-      const message = this.i18n.t('auth.errors.oauthFailed', {
-        args: { provider: providerName },
-      });
-      throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
-    }
-
-    const sessionData = await jscode2sessionResponse.json();
-
-    if (sessionData.errcode) {
-      const providerName = this.i18n.t('auth.providers.wechat');
-      const message = this.i18n.t('auth.errors.invalidProviderData', {
-        args: { provider: providerName },
-      });
-      throw new AppException(
-        `${message}: ${sessionData.errmsg}`,
-        'INVALID_WECHAT_DATA',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    // check if openid is present
-    if (!sessionData.openid) {
-      const providerName = this.i18n.t('auth.providers.wechat');
-      const message = this.i18n.t('auth.errors.invalidProviderData', {
-        args: { provider: providerName },
-      });
-      throw new AppException(
-        `${message}: missing openid`,
-        'INVALID_WECHAT_DATA',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Prioritize using unionid, if not available, use openid (add prefix distinction)
-    const loginId = sessionData.unionid
-      ? sessionData.unionid
-      : `miniprogram_${sessionData.openid}`;
-
-    // find existing user
-    const wechatUser = await this.userService.findByLoginId(loginId);
-
-    if (wechatUser) {
-      return {
-        id: wechatUser.id,
-        username: wechatUser.username,
-        access_token: this.jwtService.sign({
-          sub: wechatUser.id,
-        }),
-      };
-    }
-
-    // create new user
-    return await this.dataSource.transaction(async (manager) => {
-      const username: string = await this.socialService.getValidUsername(
-        `wx_${sessionData.openid.substring(0, 10)}`,
-        manager,
-      );
-      this.logger.debug({ username, openid: sessionData.openid });
-      const newUser = await this.userService.createUserBinding(
-        {
-          username,
-          loginType: 'wechat',
-          loginId: loginId,
-          lang,
-        } as CreateUserBindingDto,
-        manager,
-      );
-      await this.namespaceService.createUserNamespace(
-        newUser.id,
-        newUser.username,
-        manager,
-      );
-
-      return {
-        id: newUser.id,
-        username: newUser.username,
-        access_token: this.jwtService.sign({
-          sub: newUser.id,
-        }),
-      };
-    });
   }
 }

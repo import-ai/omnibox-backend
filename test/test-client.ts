@@ -159,7 +159,7 @@ export class TestClient {
 
   public static async create(): Promise<TestClient> {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule.forRoot()],
+      imports: [AppModule.forRoot([])],
     }).compile();
 
     const app = moduleFixture.createNestApplication({

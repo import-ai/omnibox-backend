@@ -9,7 +9,7 @@ async function bootstrap() {
   if (otelSDK) {
     otelSDK.start();
   }
-  const app = await NestFactory.create(AppModule.forRoot(), {
+  const app = await NestFactory.create(AppModule.forRoot([]), {
     cors: true,
     bodyParser: true,
     abortOnError: false,

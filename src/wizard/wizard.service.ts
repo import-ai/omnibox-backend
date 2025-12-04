@@ -441,8 +441,19 @@ export class WizardService {
     }
 
     task.startedAt = new Date();
-    const updatedTask = await this.wizardTaskService.taskRepository.save(task);
-    return InternalTaskDto.fromEntity(updatedTask);
+    const newTask = await this.wizardTaskService.taskRepository.save(task);
+    // Fetch HTML content from S3 for collect tasks
+    if (
+      ['collect', 'generate_video_note'].includes(newTask.function) &&
+      newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
+      newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
+    ) {
+      const htmlContent = await this.getHtmlFromMinioGzipFile(
+        newTask.input.html,
+      );
+      newTask.input = { ...newTask.input, html: htmlContent };
+    }
+    return InternalTaskDto.fromEntity(newTask);
   }
 
   async fetchTask(query: FetchTaskRequest): Promise<InternalTaskDto | null> {

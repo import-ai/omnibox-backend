@@ -19,8 +19,8 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 
 const TASK_PRIORITY = 5;
 
@@ -158,11 +158,7 @@ export class ConversationsService {
       }
     }
     const message = this.i18n.t('system.errors.noQueryContent');
-    throw new AppException(
-      message,
-      'NO_QUERY_CONTENT',
-      HttpStatus.INTERNAL_SERVER_ERROR,
-    );
+    throw new AppException(message, 'NO_QUERY_CONTENT', HttpStatus.BAD_REQUEST);
   }
 
   async getSummary(
@@ -287,14 +283,15 @@ export class ConversationsService {
   }
 
   async remove(namespaceId: string, userId: string, conversationId: string) {
-    await this.dataSource.transaction(async (manager) => {
-      await this.wizardTaskService.deleteConversationTask(
+    await transaction(this.dataSource.manager, async (tx) => {
+      await this.wizardTaskService.emitDeleteConversationTask(
         namespaceId,
         userId,
         conversationId,
         TASK_PRIORITY,
-        manager.getRepository(Task),
+        tx,
       );
+      const manager = tx.entityManager;
       return await manager.softDelete(Conversation, {
         namespaceId,
         userId,
@@ -305,18 +302,18 @@ export class ConversationsService {
 
   async restore(namespaceId: string, userId: string, conversationId: string) {
     const messages = await this.messagesService.findAll(userId, conversationId);
-    return await this.dataSource.transaction(async (manager) => {
-      const taskRepo = manager.getRepository(Task);
+    return await transaction(this.dataSource.manager, async (tx) => {
       for (const message of messages) {
-        await this.wizardTaskService.createMessageIndexTask(
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
           TASK_PRIORITY,
           userId,
           namespaceId,
           conversationId,
           message,
-          taskRepo,
+          tx,
         );
       }
+      const manager = tx.entityManager;
       await manager.restore(Conversation, {
         namespaceId,
         userId,

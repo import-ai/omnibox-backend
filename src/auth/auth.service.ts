@@ -1,6 +1,6 @@
 import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
 import { User } from 'omniboxd/user/entities/user.entity';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { MailService } from 'omniboxd/mail/mail.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
@@ -20,6 +20,7 @@ import { OtpService } from './otp.service';
 import { SocialService } from './social.service';
 import { SendEmailOtpResponseDto } from './dto/email-otp.dto';
 import { appendQueryParams, appendTokenToUrl } from 'omniboxd/utils/url-utils';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 
 @Injectable()
 export class AuthService {
@@ -172,7 +173,9 @@ export class AuthService {
     }
 
     // User doesn't exist - register
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       // Extract username from email
       const emailUsername = email.split('@')[0];
 
@@ -197,7 +200,7 @@ export class AuthService {
       await this.namespaceService.createUserNamespace(
         user.id,
         user.username,
-        manager,
+        tx,
       );
 
       return {
@@ -242,7 +245,9 @@ export class AuthService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       const user = await this.userService.create(
         {
           email: payload.email,
@@ -255,10 +260,10 @@ export class AuthService {
       await this.namespaceService.createUserNamespace(
         user.id,
         user.username,
-        manager,
+        tx,
       );
       if (payload.invitation) {
-        await this.handleUserInvitation(user.id, payload.invitation, manager);
+        await this.handleUserInvitation(user.id, payload.invitation, tx);
       }
       return {
         id: user.id,
@@ -394,8 +399,8 @@ export class AuthService {
     }
 
     const user = await this.userService.find(payload.userId);
-    await this.dataSource.transaction(async (manager) => {
-      await this.handleUserInvitation(user.id, payload.invitation, manager);
+    await transaction(this.dataSource.manager, async (tx) => {
+      await this.handleUserInvitation(user.id, payload.invitation, tx);
     });
   }
 
@@ -415,8 +420,8 @@ export class AuthService {
 
     if (existingUser) {
       // User exists - just add to namespace
-      await this.dataSource.transaction(async (manager) => {
-        await this.handleUserInvitation(existingUser.id, invitation, manager);
+      await transaction(this.dataSource.manager, async (tx) => {
+        await this.handleUserInvitation(existingUser.id, invitation, tx);
       });
 
       return {
@@ -430,7 +435,9 @@ export class AuthService {
     }
 
     // User doesn't exist - create account and add to namespace
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       // Extract username from email (e.g., foo@example.com -> foo)
       const emailUsername = email.split('@')[0];
 
@@ -455,11 +462,11 @@ export class AuthService {
       await this.namespaceService.createUserNamespace(
         user.id,
         user.username,
-        manager,
+        tx,
       );
 
       // Add user to the invited namespace
-      await this.handleUserInvitation(user.id, invitation, manager);
+      await this.handleUserInvitation(user.id, invitation, tx);
 
       return {
         id: user.id,
@@ -495,17 +502,22 @@ export class AuthService {
   async handleUserInvitation(
     userId: string,
     invitation: UserInvitationDto,
-    manager?: EntityManager,
+    tx?: Transaction,
   ) {
-    if (!manager) {
-      manager = this.dataSource.manager;
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.handleUserInvitation(userId, invitation, tx),
+      );
     }
+
+    const manager = tx.entityManager;
+
     await this.namespaceService.addMember(
       invitation.namespaceId,
       userId,
       invitation.namespaceRole,
       getRootPermission(invitation),
-      manager,
+      tx,
     );
     if (invitation.groupId) {
       await this.groupsService.addGroupUser(

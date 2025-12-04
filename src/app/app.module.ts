@@ -75,6 +75,7 @@ import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
+import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -128,6 +129,7 @@ export class AppModule implements NestModule {
           ],
         }),
         TelemetryModule,
+        KafkaModule,
         TagModule,
         MailModule,
         AuthModule,

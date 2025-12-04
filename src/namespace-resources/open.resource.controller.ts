@@ -117,7 +117,7 @@ export class OpenResourcesController {
 
     if (!isEmpty(newResource.content?.trim())) {
       if (isEmpty(newResource.name?.trim())) {
-        await this.wizardTaskService.createGenerateTitleTask(
+        await this.wizardTaskService.emitGenerateTitleTask(
           userId,
           apiKey.namespaceId,
           { resource_id: newResource.id },
@@ -126,7 +126,7 @@ export class OpenResourcesController {
       }
       // Skip extract tags task if user requested or we already have tags
       if (!data.skip_parsing_tags_from_content && isEmpty(newResource.tagIds)) {
-        await this.wizardTaskService.createExtractTagsTask(
+        await this.wizardTaskService.emitExtractTagsTask(
           userId,
           newResource.id,
           apiKey.namespaceId,
@@ -177,14 +177,21 @@ export class OpenResourcesController {
       },
     },
   })
+  @ApiResponse({ status: 400, description: 'File required' })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async uploadFile(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
-    @UploadedFile() file: Express.Multer.File,
+    @I18n() i18n: I18nContext,
+    @UploadedFile() file?: Express.Multer.File,
     @Body('parsed_content') parsedContent?: string,
   ) {
+    if (!file) {
+      const message = i18n.t('resource.errors.fileRequired');
+      throw new AppException(message, 'FILE_REQUIRED', HttpStatus.BAD_REQUEST);
+    }
+
     const newResource = await this.namespaceResourcesService.uploadFile(
       userId,
       apiKey.namespaceId,

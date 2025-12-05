@@ -28,14 +28,14 @@ export class WechatController extends SocialController {
 
   @Public()
   @Get('auth-url')
-  getAuthUrl(@Query('platform') platform?: 'h5' | 'web') {
-    return this.wechatService.authUrl(platform);
+  getAuthUrl(@Query('isH5') isH5?: boolean) {
+    return this.wechatService.authUrl(isH5);
   }
 
   @Public()
   @Get('qrcode')
-  getQrCode(@Query('platform') platform?: 'h5' | 'web') {
-    return this.wechatService.getQrCodeParams(platform);
+  getQrCode() {
+    return this.wechatService.getQrCodeParams();
   }
 
   @Public()

@@ -29,7 +29,6 @@ export class WechatService {
   private readonly oldOpenAppId: string;
   private readonly oldOpenAppSecret: string;
   private readonly redirectUri: string;
-  private readonly h5RedirectUri: string;
   private readonly migrationRedirectUri: string;
 
   constructor(
@@ -71,10 +70,6 @@ export class WechatService {
       'OBB_WECHAT_REDIRECT_URI',
       '',
     );
-    this.h5RedirectUri = this.configService.get<string>(
-      'OBB_WECHAT_H5_REDIRECT_URI',
-      '',
-    );
     this.migrationRedirectUri = this.configService.get<string>(
       'OBB_WECHAT_MIGRATION_REDIRECT_URI',
       '',
@@ -93,30 +88,23 @@ export class WechatService {
     };
   }
 
-  async getQrCodeParams(platform?: 'h5' | 'web') {
+  async getQrCodeParams() {
     const state = await this.socialService.generateState('open_weixin');
-    console.log('platform', platform);
-    const redirectUri =
-      platform === 'h5' && this.h5RedirectUri
-        ? this.h5RedirectUri
-        : this.redirectUri;
-
     return {
       state,
       appId: this.openAppId,
       scope: 'snsapi_login',
-      redirectUri: encodeURIComponent(redirectUri),
+      redirectUri: encodeURIComponent(this.redirectUri),
     };
   }
 
-  async authUrl(platform?: 'h5' | 'web'): Promise<string> {
+  async authUrl(isH5?: boolean): Promise<string> {
     const state = await this.socialService.generateState('weixin');
-    const redirectUri =
-      platform === 'h5' && this.h5RedirectUri
-        ? this.h5RedirectUri
-        : this.redirectUri;
-
-    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
+    if (isH5) {
+      return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}&isH5=true#wechat_redirect`;
+    } else {
+      return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
+    }
   }
 
   async handleCallback(

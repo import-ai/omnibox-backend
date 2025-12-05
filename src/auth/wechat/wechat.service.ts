@@ -98,7 +98,10 @@ export class WechatService {
     };
   }
 
-  async authUrl(source: 'h5' | 'web' = 'web', h5Redirect?: string): Promise<string> {
+  async authUrl(
+    source: 'h5' | 'web' = 'web',
+    h5Redirect?: string,
+  ): Promise<string> {
     const state = await this.socialService.generateState('weixin');
 
     // 在state中保存source和h5_redirect信息

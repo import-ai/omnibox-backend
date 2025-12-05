@@ -75,7 +75,6 @@ export class WechatController extends SocialController {
       });
     }
 
-    // 返回登录数据，包含source和h5_redirect信息
     return res.json(loginData);
   }
 

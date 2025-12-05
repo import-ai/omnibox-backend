@@ -18,7 +18,9 @@ async function bootstrap() {
   configureApp(app);
 
   const configService = app.get(ConfigService);
-  await app.listen(parseInt(configService.get('OBB_PORT', '8000')));
+  const port = parseInt(configService.get('OBB_PORT', '8000'));
+
+  await app.listen(port);
 }
 
 bootstrap().catch(console.error);

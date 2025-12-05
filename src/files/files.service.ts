@@ -32,7 +32,9 @@ const ALLOWED_FILE_EXTENSIONS = new Set([
   '.mov',
   '.mkv',
   '.flv',
-  '.wmv',
+  '.jpg',
+  '.jpeg',
+  '.png',
 ]);
 
 @Injectable()

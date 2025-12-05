@@ -205,6 +205,7 @@ export class GoogleService {
         userId,
         loginType: 'google',
         loginId: userData.sub,
+        metadata: userData,
       });
       const returnValue = {
         id: existingUser.id,
@@ -236,6 +237,7 @@ export class GoogleService {
         userId: linkedAccount.id,
         loginType: 'google',
         loginId: userData.sub,
+        metadata: userData,
       });
       const returnValue = {
         id: existingUser.id,
@@ -273,6 +275,7 @@ export class GoogleService {
           loginId: userData.sub,
           email: userData.email,
           lang,
+          metadata: userData,
         } as CreateUserBindingDto,
         manager,
       );

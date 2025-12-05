@@ -1,4 +1,4 @@
-import { IsString } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class UpdateUserBindingDto {
@@ -12,4 +12,7 @@ export class UpdateUserBindingDto {
     message: i18nValidationMessage('validation.errors.userId.isString'),
   })
   userId: string;
+
+  @IsOptional()
+  metadata?: Record<string, any>;
 }

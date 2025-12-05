@@ -14,4 +14,7 @@ export class UserBinding extends Base {
 
   @Column()
   loginId: string;
+
+  @Column('jsonb', { nullable: true })
+  metadata: Record<string, any> | null;
 }

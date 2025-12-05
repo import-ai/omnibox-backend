@@ -98,13 +98,20 @@ export class WechatService {
     };
   }
 
-  async authUrl(isH5?: boolean): Promise<string> {
+  async authUrl(source: 'h5' | 'web' = 'web', h5Redirect?: string): Promise<string> {
     const state = await this.socialService.generateState('weixin');
-    if (isH5) {
-      return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}&isH5=true#wechat_redirect`;
-    } else {
-      return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
+
+    // 在state中保存source和h5_redirect信息
+    const stateInfo = await this.socialService.getState(state);
+    if (stateInfo) {
+      stateInfo['source'] = source;
+      if (h5Redirect) {
+        stateInfo['h5_redirect'] = h5Redirect;
+      }
+      await this.socialService.updateState(state, stateInfo);
     }
+
+    return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
   async handleCallback(
@@ -196,6 +203,8 @@ export class WechatService {
           access_token: this.jwtService.sign({
             sub: wechatUser.id,
           }),
+          source: stateInfo['source'] || 'web',
+          h5_redirect: stateInfo['h5_redirect'],
         };
         stateInfo.userInfo = returnValue;
         await this.socialService.updateState(state, stateInfo);
@@ -211,6 +220,8 @@ export class WechatService {
         access_token: this.jwtService.sign({
           sub: existingUser.id,
         }),
+        source: stateInfo['source'] || 'web',
+        h5_redirect: stateInfo['h5_redirect'],
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -223,6 +234,8 @@ export class WechatService {
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
         }),
+        source: stateInfo['source'] || 'web',
+        h5_redirect: stateInfo['h5_redirect'],
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -256,6 +269,8 @@ export class WechatService {
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
         }),
+        source: stateInfo['source'] || 'web',
+        h5_redirect: stateInfo['h5_redirect'],
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);

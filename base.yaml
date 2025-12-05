@@ -3,20 +3,28 @@ name: omnibox-local
 services:
   backend:
     ports:
-      - "${OBB_PORT:-8000}:${OBB_PORT:-8000}"
+      - '${OBB_PORT:-8000}:${OBB_PORT:-8000}'
     env_file:
       - .env
     environment:
       OBB_DB_HOST: postgres
       OBB_MINIO_ENDPOINT: http://username:password@minio:9000
       OBB_WIZARD_BASE_URL: http://wizard:8000
+      OBB_KAFKA_BROKER: 127.0.0.1:19092
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "wget", "-q", "-O-", "http://127.0.0.1:${OBB_PORT:-8000}/api/v1/health" ]
+      test:
+        [
+          'CMD',
+          'wget',
+          '-q',
+          '-O-',
+          'http://127.0.0.1:${OBB_PORT:-8000}/api/v1/health',
+        ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -31,7 +39,18 @@ services:
       - POSTGRES_PASSWORD=${OBB_DB_PASSWORD:-omnibox}
       - POSTGRES_PORT=${OBB_DB_PORT:-5432}
     healthcheck:
-      test: [ "CMD", "pg_isready", "-q", "-d", "${OBB_DB_DATABASE:-omnibox}", "-U", "${OBB_DB_USERNAME:-omnibox}", "-p", "${OBB_DB_PORT:-5432}" ]
+      test:
+        [
+          'CMD',
+          'pg_isready',
+          '-q',
+          '-d',
+          '${OBB_DB_DATABASE:-omnibox}',
+          '-U',
+          '${OBB_DB_USERNAME:-omnibox}',
+          '-p',
+          '${OBB_DB_PORT:-5432}',
+        ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -44,7 +63,7 @@ services:
       MINIO_ROOT_USER: username
       MINIO_ROOT_PASSWORD: password
     healthcheck:
-      test: [ "CMD", "curl", "-I", "http://127.0.0.1:9000/minio/health/live" ]
+      test: ['CMD', 'curl', '-I', 'http://127.0.0.1:9000/minio/health/live']
       interval: 5s
       timeout: 3s
       retries: 5
@@ -59,9 +78,26 @@ services:
     environment:
       - MEILI_MASTER_KEY=${OBB_MEILI_KEY}
 
+  kafka:
+    image: bitnamilegacy/kafka:4.0
+    ports:
+      - 19092:9092
+    environment:
+      # KRaft settings
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      # Listeners
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:19092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+    restart: unless-stopped
+
   init:
     image: alpine/curl:8.10.0
-    command: 
+    command:
       - 'http://backend:${OBB_PORT:-8000}/internal/api/v1/sign-up'
       - '-H'
       - 'Content-Type: application/json'

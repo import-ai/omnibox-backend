@@ -74,9 +74,6 @@ import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/176172697
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
 import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
-import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
-import { Orders1762847078000 } from 'omniboxd/migrations/1762847078000-orders';
-import { Products1762847077000 } from 'omniboxd/migrations/1762847077000-products';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 
 @Module({})
@@ -207,9 +204,6 @@ export class AppModule implements NestModule {
               AddFileIdToResources1761726974942,
               UserUsernameNotNull1763533615604,
               AddMetadataToUserBindings1762847685000,
-              Feedback1757100000000,
-              Orders1762847078000,
-              Products1762847077000,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -50,6 +50,22 @@ export class OpenWizardController {
   @UseInterceptors(FileInterceptor('html'))
   @ApiOperation({
     summary: 'Collect web content and create a resource',
+    description: `Collects and saves a web page by uploading its HTML content along with metadata.
+
+## Example
+
+\`\`\`bash
+# First, create a gzip-compressed HTML file
+echo '<html><body>Page content</body></html>' | gzip > /tmp/html.gz
+
+# Then, make the API request
+curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
+  -H 'Authorization: Bearer your-api-key' \\
+  -F 'url=https://example.com/page' \\
+  -F 'title=Example Page' \\
+  -F 'html=@/tmp/html.gz;type=application/gzip;filename=html.gz'
+\`\`\`
+`,
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({

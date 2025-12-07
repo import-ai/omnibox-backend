@@ -36,11 +36,4 @@ export class OpenCollectRequestDto {
   })
   @IsOptional()
   parentId?: string;
-
-  @ApiProperty({
-    description: 'Compressed HTML file of the web page',
-    type: 'string',
-    format: 'binary',
-  })
-  html: any;
 }

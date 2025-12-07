@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { S3UsageController } from './s3-usage.controller';
-import { S3UsageService } from './s3-usage.service';
+import { StorageUsageController } from './storage-usage.controller';
+import { StorageUsageService } from './storage-usage.service';
 import { S3Module } from 'omniboxd/s3/s3.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
@@ -16,8 +16,8 @@ import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attac
     NamespaceResourcesModule,
     TypeOrmModule.forFeature([File, Resource, ResourceAttachment]),
   ],
-  controllers: [S3UsageController],
-  providers: [S3UsageService],
-  exports: [S3UsageService],
+  controllers: [StorageUsageController],
+  providers: [StorageUsageService],
+  exports: [StorageUsageService],
 })
-export class S3UsageModule {}
+export class StorageUsageModule {}

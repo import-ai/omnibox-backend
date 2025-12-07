@@ -72,7 +72,7 @@ import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
-import { S3UsageModule } from 'omniboxd/s3-usage/s3-usage.module';
+import { StorageUsageModule } from 'omniboxd/storage-usage/storage-usage.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
 import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
@@ -155,7 +155,7 @@ export class AppModule implements NestModule {
         WebSocketModule,
         FilesModule,
         OpenAPIModule,
-        S3UsageModule,
+        StorageUsageModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

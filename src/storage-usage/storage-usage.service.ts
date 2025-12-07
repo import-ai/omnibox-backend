@@ -6,7 +6,7 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { S3UsageResponseDto } from './dto/s3-usage-response.dto';
+import { StorageUsageResponseDto } from './dto/storage-usage-response.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 
@@ -14,7 +14,7 @@ const FILES_S3_PREFIX = 'uploaded-files';
 const ATTACHMENTS_S3_PREFIX = 'attachments';
 
 @Injectable()
-export class S3UsageService {
+export class StorageUsageService {
   constructor(
     @InjectRepository(File)
     private readonly fileRepository: Repository<File>,
@@ -30,12 +30,12 @@ export class S3UsageService {
     private readonly i18n: I18nService,
   ) {}
 
-  async getS3Usage(
+  async getStorageUsage(
     userId: string,
     namespaceId: string,
     resourceId?: string,
     recursive?: boolean,
-  ): Promise<S3UsageResponseDto> {
+  ): Promise<StorageUsageResponseDto> {
     if (resourceId) {
       return this.getResourceUsage(userId, namespaceId, resourceId, recursive);
     }
@@ -44,7 +44,7 @@ export class S3UsageService {
 
   private async getNamespaceUsage(
     namespaceId: string,
-  ): Promise<S3UsageResponseDto> {
+  ): Promise<StorageUsageResponseDto> {
     // Get all files in the namespace
     const files = await this.fileRepository.find({
       where: { namespaceId },
@@ -74,6 +74,9 @@ export class S3UsageService {
       ),
     );
 
+    // Calculate content sizes from PostgreSQL
+    const contentStats = await this.getContentStats(namespaceId);
+
     const filesBytes = fileSizes.reduce((sum, size) => sum + size, 0);
     const attachmentsBytes = attachmentSizes.reduce(
       (sum, size) => sum + size,
@@ -81,13 +84,14 @@ export class S3UsageService {
     );
 
     return {
-      totalBytes: filesBytes + attachmentsBytes,
+      totalBytes: filesBytes + attachmentsBytes + contentStats.bytes,
       breakdown: {
         files: { count: files.length, bytes: filesBytes },
         attachments: {
           count: uniqueAttachmentIds.length,
           bytes: attachmentsBytes,
         },
+        contents: contentStats,
       },
     };
   }
@@ -97,7 +101,7 @@ export class S3UsageService {
     namespaceId: string,
     resourceId: string,
     recursive?: boolean,
-  ): Promise<S3UsageResponseDto> {
+  ): Promise<StorageUsageResponseDto> {
     // Get the resource to verify it exists
     const resource = await this.resourceRepository.findOne({
       where: { id: resourceId, namespaceId },
@@ -166,6 +170,9 @@ export class S3UsageService {
       ),
     );
 
+    // Calculate content sizes for the specific resources
+    const contentStats = await this.getContentStatsByResourceIds(resourceIds);
+
     const filesBytes = fileSizes.reduce((sum, size) => sum + size, 0);
     const attachmentsBytes = attachmentSizes.reduce(
       (sum, size) => sum + size,
@@ -173,14 +180,53 @@ export class S3UsageService {
     );
 
     return {
-      totalBytes: filesBytes + attachmentsBytes,
+      totalBytes: filesBytes + attachmentsBytes + contentStats.bytes,
       breakdown: {
         files: { count: fileIds.length, bytes: filesBytes },
         attachments: {
           count: uniqueAttachmentIds.length,
           bytes: attachmentsBytes,
         },
+        contents: contentStats,
       },
+    };
+  }
+
+  private async getContentStats(
+    namespaceId: string,
+  ): Promise<{ count: number; bytes: number }> {
+    const result = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .select('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(octet_length(resource.content)), 0)', 'bytes')
+      .where('resource.namespaceId = :namespaceId', { namespaceId })
+      .andWhere('resource.deletedAt IS NULL')
+      .getRawOne();
+
+    return {
+      count: parseInt(result.count, 10),
+      bytes: parseInt(result.bytes, 10),
+    };
+  }
+
+  private async getContentStatsByResourceIds(
+    resourceIds: string[],
+  ): Promise<{ count: number; bytes: number }> {
+    if (resourceIds.length === 0) {
+      return { count: 0, bytes: 0 };
+    }
+
+    const result = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .select('COUNT(*)', 'count')
+      .addSelect('COALESCE(SUM(octet_length(resource.content)), 0)', 'bytes')
+      .where('resource.id IN (:...resourceIds)', { resourceIds })
+      .andWhere('resource.deletedAt IS NULL')
+      .getRawOne();
+
+    return {
+      count: parseInt(result.count, 10),
+      bytes: parseInt(result.bytes, 10),
     };
   }
 

@@ -1,11 +1,11 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { S3UsageService } from './s3-usage.service';
+import { StorageUsageService } from './storage-usage.service';
 import { NamespaceOwner } from 'omniboxd/namespaces/decorators/namespace-owner.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/usage')
-export class S3UsageController {
-  constructor(private readonly s3UsageService: S3UsageService) {}
+export class StorageUsageController {
+  constructor(private readonly storageUsageService: StorageUsageService) {}
 
   @NamespaceOwner()
   @Get()
@@ -16,7 +16,7 @@ export class S3UsageController {
     @Query('recursive') recursive?: string,
   ) {
     const isRecursive = recursive === 'true';
-    return await this.s3UsageService.getS3Usage(
+    return await this.storageUsageService.getStorageUsage(
       userId,
       namespaceId,
       resourceId,

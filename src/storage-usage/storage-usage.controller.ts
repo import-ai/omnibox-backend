@@ -34,8 +34,8 @@ export class StorageUsageController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
-    @Query('recursive') recursive?: string,
     @I18n() i18n: I18nContext,
+    @Query('recursive') recursive?: string,
   ) {
     const hasPermission = await this.permissionsService.userHasPermission(
       namespaceId,

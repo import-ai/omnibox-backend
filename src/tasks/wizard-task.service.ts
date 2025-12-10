@@ -15,6 +15,7 @@ import {
 import { context, propagation } from '@opentelemetry/api';
 import { KafkaService } from 'omniboxd/kafka/kafka.service';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
+import { TasksService } from './tasks.service';
 
 @Injectable()
 export class WizardTaskService {
@@ -23,6 +24,7 @@ export class WizardTaskService {
   constructor(
     @InjectRepository(Task) public taskRepository: Repository<Task>,
     private readonly userService: UserService,
+    private readonly tasksService: TasksService,
     private readonly kafkaService: KafkaService,
     private readonly configService: ConfigService,
   ) {
@@ -53,27 +55,36 @@ export class WizardTaskService {
     return undefined;
   }
 
-  async produceTaskMessage(task: Task): Promise<void> {
+  async produceTaskMessage(namespaceId: string): Promise<void> {
+    const numTasks = await this.tasksService.countEnqueuedTasks(namespaceId);
+    if (numTasks > 1) {
+      return;
+    }
+    const task = await this.tasksService.getNextTask(namespaceId);
+    if (!task) {
+      return;
+    }
     await this.kafkaService.produce(this.kafkaTasksTopic, [
       {
-        key: task.namespaceId,
+        key: namespaceId,
         value: JSON.stringify({
           task_id: task.id,
-          namespace_id: task.namespaceId,
+          namespace_id: namespaceId,
           function: task.function,
           meta: { file_name: task.input?.filename },
         }),
       },
     ]);
+    await this.tasksService.setTaskEnqueued(namespaceId, task.id);
   }
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {
     const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
     const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
     if (tx) {
-      tx.afterCommitHooks.push(() => this.produceTaskMessage(task));
+      tx.afterCommitHooks.push(() => this.produceTaskMessage(task.namespaceId));
     } else {
-      await this.produceTaskMessage(task);
+      await this.produceTaskMessage(task.namespaceId);
     }
     return task;
   }

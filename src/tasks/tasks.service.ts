@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable, HttpStatus } from '@nestjs/common';
@@ -15,6 +15,38 @@ export class TasksService {
     private readonly i18n: I18nService,
     private readonly wizardTaskService: WizardTaskService,
   ) {}
+
+  async countEnqueuedTasks(namespaceId: string): Promise<number> {
+    return await this.taskRepository.count({
+      where: {
+        namespaceId,
+        endedAt: IsNull(),
+        canceledAt: IsNull(),
+        enqueued: true,
+      },
+    });
+  }
+
+  async getNextTask(namespaceId: string): Promise<Task | null> {
+    return await this.taskRepository.findOne({
+      where: {
+        namespaceId,
+        endedAt: IsNull(),
+        canceledAt: IsNull(),
+        enqueued: false,
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+  }
+
+  async setTaskEnqueued(namespaceId: string, taskId: string): Promise<void> {
+    await this.taskRepository.update(
+      { namespaceId, id: taskId },
+      { enqueued: true },
+    );
+  }
 
   async list(
     namespaceId: string,

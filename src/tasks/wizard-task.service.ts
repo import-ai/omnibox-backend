@@ -67,7 +67,7 @@ export class WizardTaskService {
     ]);
   }
 
-  private async emitTask(data: Partial<Task>, tx?: Transaction) {
+  async emitTask(data: Partial<Task>, tx?: Transaction) {
     const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
     const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
     if (tx) {

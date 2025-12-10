@@ -5,6 +5,7 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { TaskDto, TaskMetaDto } from './dto/task.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { WizardTaskService } from './wizard-task.service';
 
 @Injectable()
 export class TasksService {
@@ -12,12 +13,8 @@ export class TasksService {
     @InjectRepository(Task)
     private taskRepository: Repository<Task>,
     private readonly i18n: I18nService,
+    private readonly wizardTaskService: WizardTaskService,
   ) {}
-
-  async create(data: Partial<Task>) {
-    const newTask = this.taskRepository.create(data);
-    return await this.taskRepository.save(newTask);
-  }
 
   async list(
     namespaceId: string,
@@ -103,7 +100,7 @@ export class TasksService {
       );
     }
 
-    const newTask = await this.create({
+    const newTask = await this.wizardTaskService.emitTask({
       namespaceId: originalTask.namespaceId,
       userId: originalTask.userId,
       priority: originalTask.priority,

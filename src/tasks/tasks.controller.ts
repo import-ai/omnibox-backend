@@ -11,14 +11,18 @@ import {
   Query,
 } from '@nestjs/common';
 import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 
 @Controller('api/v1/namespaces/:namespaceId/tasks')
 export class TasksController {
-  constructor(private readonly tasksService: TasksService) {}
+  constructor(
+    private readonly tasksService: TasksService,
+    private readonly wizardTaskService: WizardTaskService,
+  ) {}
 
   @Post()
   async createTask(@Body() data: Partial<Task>) {
-    return TaskDto.fromEntity(await this.tasksService.create(data));
+    return TaskDto.fromEntity(await this.wizardTaskService.emitTask(data));
   }
 
   @Get()

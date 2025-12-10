@@ -32,6 +32,7 @@ import { createGunzip } from 'zlib';
 import { buffer } from 'node:stream/consumers';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TempfileDto } from './dto/tempfile.dto';
 
 @Injectable()
@@ -46,6 +47,7 @@ export class WizardService {
 
   constructor(
     private readonly wizardTaskService: WizardTaskService,
+    private readonly tasksService: TasksService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
     private readonly messagesService: MessagesService,
@@ -289,7 +291,7 @@ export class WizardService {
 
     const postprocessResult = await this.postprocess(task);
 
-    await this.wizardTaskService.checkTaskMessage(task.namespaceId);
+    await this.tasksService.checkTaskMessage(task.namespaceId);
     return { taskId: task.id, function: task.function, ...postprocessResult };
   }
 
@@ -424,7 +426,7 @@ export class WizardService {
         HttpStatus.NOT_FOUND,
       );
     }
-    await this.wizardTaskService.checkTaskMessage(task.namespaceId);
+    await this.tasksService.checkTaskMessage(task.namespaceId);
 
     if (task.canceledAt) {
       throw new AppException(
@@ -598,7 +600,7 @@ export class WizardService {
     const namespaceIds = results.map((r) => r.namespaceId);
 
     for (const namespaceId of namespaceIds) {
-      await this.wizardTaskService.checkTaskMessage(namespaceId);
+      await this.tasksService.checkTaskMessage(namespaceId);
     }
 
     return {

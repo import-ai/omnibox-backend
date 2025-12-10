@@ -5,16 +5,68 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { TaskDto, TaskMetaDto } from './dto/task.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { WizardTaskService } from './wizard-task.service';
+import { KafkaService } from 'omniboxd/kafka/kafka.service';
+import { ConfigService } from '@nestjs/config';
+import { Transaction } from 'omniboxd/utils/transaction-utils';
+import { context, propagation } from '@opentelemetry/api';
 
 @Injectable()
 export class TasksService {
+  private readonly kafkaTasksTopic: string;
+
   constructor(
     @InjectRepository(Task)
     private taskRepository: Repository<Task>,
     private readonly i18n: I18nService,
-    private readonly wizardTaskService: WizardTaskService,
-  ) {}
+    private readonly kafkaService: KafkaService,
+    private readonly configService: ConfigService,
+  ) {
+    this.kafkaTasksTopic = this.configService.get<string>(
+      'OBB_TASKS_TOPIC',
+      'omnibox-tasks',
+    );
+  }
+
+  injectTraceHeaders(task: Partial<Task>) {
+    const traceHeaders: Record<string, string> = {};
+    propagation.inject(context.active(), traceHeaders);
+    task.payload = { ...(task.payload || {}), trace_headers: traceHeaders };
+    return task;
+  }
+
+  async checkTaskMessage(namespaceId: string): Promise<void> {
+    const numTasks = await this.countEnqueuedTasks(namespaceId);
+    if (numTasks > 1) {
+      return;
+    }
+    const task = await this.getNextTask(namespaceId);
+    if (!task) {
+      return;
+    }
+    await this.kafkaService.produce(this.kafkaTasksTopic, [
+      {
+        key: namespaceId,
+        value: JSON.stringify({
+          task_id: task.id,
+          namespace_id: namespaceId,
+          function: task.function,
+          meta: { file_name: task.input?.filename },
+        }),
+      },
+    ]);
+    await this.setTaskEnqueued(namespaceId, task.id);
+  }
+
+  async emitTask(data: Partial<Task>, tx?: Transaction) {
+    const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
+    const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
+    if (tx) {
+      tx.afterCommitHooks.push(() => this.checkTaskMessage(task.namespaceId));
+    } else {
+      await this.checkTaskMessage(task.namespaceId);
+    }
+    return task;
+  }
 
   async countEnqueuedTasks(namespaceId: string): Promise<number> {
     return await this.taskRepository.count({
@@ -132,7 +184,7 @@ export class TasksService {
       );
     }
 
-    const newTask = await this.wizardTaskService.emitTask({
+    const newTask = await this.emitTask({
       namespaceId: originalTask.namespaceId,
       userId: originalTask.userId,
       priority: originalTask.priority,

@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ConfigService } from '@nestjs/config';
 import { UserService } from 'omniboxd/user/user.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import {
@@ -12,34 +11,16 @@ import {
   Message,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
-import { context, propagation } from '@opentelemetry/api';
-import { KafkaService } from 'omniboxd/kafka/kafka.service';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
-import { TasksService } from './tasks.service';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 
 @Injectable()
 export class WizardTaskService {
-  private readonly kafkaTasksTopic: string;
-
   constructor(
     @InjectRepository(Task) public taskRepository: Repository<Task>,
     private readonly userService: UserService,
     private readonly tasksService: TasksService,
-    private readonly kafkaService: KafkaService,
-    private readonly configService: ConfigService,
-  ) {
-    this.kafkaTasksTopic = this.configService.get<string>(
-      'OBB_TASKS_TOPIC',
-      'omnibox-tasks',
-    );
-  }
-
-  injectTraceHeaders(task: Partial<Task>) {
-    const traceHeaders: Record<string, string> = {};
-    propagation.inject(context.active(), traceHeaders);
-    task.payload = { ...(task.payload || {}), trace_headers: traceHeaders };
-    return task;
-  }
+  ) {}
 
   private async getUserLanguage(
     userId: string,
@@ -55,40 +36,6 @@ export class WizardTaskService {
     return undefined;
   }
 
-  async checkTaskMessage(namespaceId: string): Promise<void> {
-    const numTasks = await this.tasksService.countEnqueuedTasks(namespaceId);
-    if (numTasks > 1) {
-      return;
-    }
-    const task = await this.tasksService.getNextTask(namespaceId);
-    if (!task) {
-      return;
-    }
-    await this.kafkaService.produce(this.kafkaTasksTopic, [
-      {
-        key: namespaceId,
-        value: JSON.stringify({
-          task_id: task.id,
-          namespace_id: namespaceId,
-          function: task.function,
-          meta: { file_name: task.input?.filename },
-        }),
-      },
-    ]);
-    await this.tasksService.setTaskEnqueued(namespaceId, task.id);
-  }
-
-  async emitTask(data: Partial<Task>, tx?: Transaction) {
-    const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
-    const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
-    if (tx) {
-      tx.afterCommitHooks.push(() => this.checkTaskMessage(task.namespaceId));
-    } else {
-      await this.checkTaskMessage(task.namespaceId);
-    }
-    return task;
-  }
-
   async emitCollectTask(
     userId: string,
     namespaceId: string,
@@ -96,7 +43,7 @@ export class WizardTaskService {
     input: { html: string; url: string; title?: string },
     tx?: Transaction,
   ) {
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'collect',
         input,
@@ -115,7 +62,7 @@ export class WizardTaskService {
     input: { html: string; url: string; title?: string },
     tx?: Transaction,
   ) {
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'generate_video_note',
         input,
@@ -141,7 +88,7 @@ export class WizardTaskService {
     }
 
     const lang = await this.getUserLanguage(userId);
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'extract_tags',
         input: { text, lang },
@@ -165,7 +112,7 @@ export class WizardTaskService {
     }
 
     const lang = await this.getUserLanguage(parentTask.userId);
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'extract_tags',
         input: {
@@ -192,7 +139,7 @@ export class WizardTaskService {
     tx?: Transaction,
   ) {
     const lang = await this.getUserLanguage(userId);
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'generate_title',
         input: { lang, ...input },
@@ -210,7 +157,7 @@ export class WizardTaskService {
     source?: string,
     tx?: Transaction,
   ) {
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'file_reader',
         input: {
@@ -240,7 +187,7 @@ export class WizardTaskService {
     if (resource.resourceType === ResourceType.FOLDER || !resource.content) {
       return;
     }
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'upsert_index',
         priority,
@@ -266,7 +213,7 @@ export class WizardTaskService {
     resource: Resource,
     tx?: Transaction,
   ) {
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'delete_index',
         input: {
@@ -298,7 +245,7 @@ export class WizardTaskService {
     ) {
       return;
     }
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'upsert_message_index',
         priority,
@@ -322,7 +269,7 @@ export class WizardTaskService {
     priority: number,
     tx?: Transaction,
   ) {
-    return this.emitTask(
+    return this.tasksService.emitTask(
       {
         function: 'delete_conversation',
         priority,

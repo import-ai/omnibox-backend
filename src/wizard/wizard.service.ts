@@ -289,6 +289,7 @@ export class WizardService {
 
     const postprocessResult = await this.postprocess(task);
 
+    await this.wizardTaskService.checkTaskMessage(task.namespaceId);
     return { taskId: task.id, function: task.function, ...postprocessResult };
   }
 
@@ -416,7 +417,6 @@ export class WizardService {
     const task = await this.wizardTaskService.taskRepository.findOne({
       where: { id: taskId },
     });
-
     if (!task) {
       throw new AppException(
         `Task ${taskId} not found`,
@@ -424,6 +424,8 @@ export class WizardService {
         HttpStatus.NOT_FOUND,
       );
     }
+    await this.wizardTaskService.checkTaskMessage(task.namespaceId);
+
     if (task.canceledAt) {
       throw new AppException(
         `Task ${taskId} has been canceled`,
@@ -596,7 +598,7 @@ export class WizardService {
     const namespaceIds = results.map((r) => r.namespaceId);
 
     for (const namespaceId of namespaceIds) {
-      await this.wizardTaskService.produceTaskMessage(namespaceId);
+      await this.wizardTaskService.checkTaskMessage(namespaceId);
     }
 
     return {

@@ -55,7 +55,7 @@ export class WizardTaskService {
     return undefined;
   }
 
-  async produceTaskMessage(namespaceId: string): Promise<void> {
+  async checkTaskMessage(namespaceId: string): Promise<void> {
     const numTasks = await this.tasksService.countEnqueuedTasks(namespaceId);
     if (numTasks > 1) {
       return;
@@ -82,9 +82,9 @@ export class WizardTaskService {
     const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
     const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
     if (tx) {
-      tx.afterCommitHooks.push(() => this.produceTaskMessage(task.namespaceId));
+      tx.afterCommitHooks.push(() => this.checkTaskMessage(task.namespaceId));
     } else {
-      await this.produceTaskMessage(task.namespaceId);
+      await this.checkTaskMessage(task.namespaceId);
     }
     return task;
   }

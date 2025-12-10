@@ -18,7 +18,7 @@ export class TasksController {
 
   @Post()
   async createTask(@Body() data: Partial<Task>) {
-    return TaskDto.fromEntity(await this.tasksService.create(data));
+    return TaskDto.fromEntity(await this.tasksService.emitTask(data));
   }
 
   @Get()

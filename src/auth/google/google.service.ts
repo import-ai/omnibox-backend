@@ -195,6 +195,7 @@ export class GoogleService {
           id: googleUser.id,
           access_token: this.jwtService.sign({
             sub: googleUser.id,
+            username: googleUser.username,
           }),
         };
         stateInfo.userInfo = returnValue;
@@ -205,11 +206,13 @@ export class GoogleService {
         userId,
         loginType: 'google',
         loginId: userData.sub,
+        metadata: userData,
       });
       const returnValue = {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;
@@ -223,6 +226,7 @@ export class GoogleService {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;
@@ -236,11 +240,13 @@ export class GoogleService {
         userId: linkedAccount.id,
         loginType: 'google',
         loginId: userData.sub,
+        metadata: userData,
       });
       const returnValue = {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;
@@ -273,6 +279,7 @@ export class GoogleService {
           loginId: userData.sub,
           email: userData.email,
           lang,
+          metadata: userData,
         } as CreateUserBindingDto,
         manager,
       );
@@ -287,6 +294,7 @@ export class GoogleService {
         id: googleUser.id,
         access_token: this.jwtService.sign({
           sub: googleUser.id,
+          username: googleUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;

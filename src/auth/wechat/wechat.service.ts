@@ -11,9 +11,15 @@ import { I18nService } from 'nestjs-i18n';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 
 export interface WechatUserInfo {
-  unionid: string;
-  nickname: string;
   openid: string;
+  nickname: string;
+  sex: number;
+  province: string;
+  city: string;
+  country: string;
+  headimgurl: string;
+  privilege: Array<string>;
+  unionid: string;
 }
 
 @Injectable()
@@ -205,6 +211,7 @@ export class WechatService {
           id: wechatUser.id,
           access_token: this.jwtService.sign({
             sub: wechatUser.id,
+            username: wechatUser.username,
           }),
           source: stateInfo['source'] || 'web',
           h5_redirect: stateInfo['h5_redirect'],
@@ -217,11 +224,13 @@ export class WechatService {
         userId,
         loginType: 'wechat',
         loginId: userData.unionid,
+        metadata: userData,
       });
       const returnValue = {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
         source: stateInfo['source'] || 'web',
         h5_redirect: stateInfo['h5_redirect'],
@@ -236,6 +245,7 @@ export class WechatService {
         id: wechatUser.id,
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
+          username: wechatUser.username,
         }),
         source: stateInfo['source'] || 'web',
         h5_redirect: stateInfo['h5_redirect'],
@@ -259,6 +269,7 @@ export class WechatService {
           loginType: 'wechat',
           loginId: userData.unionid,
           lang,
+          metadata: userData,
         } as CreateUserBindingDto,
         manager,
       );
@@ -271,6 +282,7 @@ export class WechatService {
         id: wechatUser.id,
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
+          username: wechatUser.username,
         }),
         source: stateInfo['source'] || 'web',
         h5_redirect: stateInfo['h5_redirect'],

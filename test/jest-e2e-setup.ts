@@ -90,6 +90,7 @@ export default async () => {
   process.env.OBB_S3_FORCE_PATH_STYLE = 'true';
   process.env.OBB_MAIL_TRANSPORT = mailTransport;
   process.env.OBB_MAIL_FROM = '"Test <test@example.com>"';
+  process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8080';
   process.env.OBB_KAFKA_BROKER = kafkaBroker;
 
   (global as any).__POSTGRES_CONTAINER__ = postgresContainer;

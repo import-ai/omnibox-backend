@@ -1,7 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { IsNull } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -33,6 +32,7 @@ import { createGunzip } from 'zlib';
 import { buffer } from 'node:stream/consumers';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TempfileDto } from './dto/tempfile.dto';
 
 @Injectable()
@@ -47,6 +47,7 @@ export class WizardService {
 
   constructor(
     private readonly wizardTaskService: WizardTaskService,
+    private readonly tasksService: TasksService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
     private readonly messagesService: MessagesService,
@@ -260,37 +261,40 @@ export class WizardService {
     const task = await this.wizardTaskService.taskRepository.findOneOrFail({
       where: { id: data.id },
     });
+    try {
+      if (!task.startedAt) {
+        const message = this.i18n.t('wizard.errors.taskNotStarted', {
+          args: { taskId: task.id },
+        });
+        throw new AppException(
+          message,
+          'TASK_NOT_STARTED',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
-    if (!task.startedAt) {
-      const message = this.i18n.t('wizard.errors.taskNotStarted', {
-        args: { taskId: task.id },
-      });
-      throw new AppException(
-        message,
-        'TASK_NOT_STARTED',
-        HttpStatus.BAD_REQUEST,
-      );
+      task.endedAt = new Date();
+      task.exception = data.exception || null;
+      task.output = data.output || null;
+      await this.preprocessTask(task);
+
+      await this.wizardTaskService.taskRepository.save(task);
+
+      const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
+      const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
+      this.logger.debug({ taskId: task.id, cost, wait });
+
+      if (task.canceledAt) {
+        this.logger.warn(`Task ${task.id} was canceled.`);
+        return { taskId: task.id, function: task.function, status: 'canceled' };
+      }
+
+      const postprocessResult = await this.postprocess(task);
+
+      return { taskId: task.id, function: task.function, ...postprocessResult };
+    } finally {
+      await this.tasksService.checkTaskMessage(task.namespaceId);
     }
-
-    task.endedAt = new Date();
-    task.exception = data.exception || null;
-    task.output = data.output || null;
-    await this.preprocessTask(task);
-
-    await this.wizardTaskService.taskRepository.save(task);
-
-    const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
-    const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
-    this.logger.debug({ taskId: task.id, cost, wait });
-
-    if (task.canceledAt) {
-      this.logger.warn(`Task ${task.id} was canceled.`);
-      return { taskId: task.id, function: task.function, status: 'canceled' };
-    }
-
-    const postprocessResult = await this.postprocess(task);
-
-    return { taskId: task.id, function: task.function, ...postprocessResult };
   }
 
   async postprocess(task: Task): Promise<Record<string, any>> {
@@ -417,7 +421,6 @@ export class WizardService {
     const task = await this.wizardTaskService.taskRepository.findOne({
       where: { id: taskId },
     });
-
     if (!task) {
       throw new AppException(
         `Task ${taskId} not found`,
@@ -425,6 +428,8 @@ export class WizardService {
         HttpStatus.NOT_FOUND,
       );
     }
+    await this.tasksService.checkTaskMessage(task.namespaceId);
+
     if (task.canceledAt) {
       throw new AppException(
         `Task ${taskId} has been canceled`,
@@ -579,26 +584,30 @@ export class WizardService {
   }
 
   async reproduceTaskMessages(offset?: number, limit?: number) {
-    const tasks = await this.wizardTaskService.taskRepository.find({
-      where: {
-        endedAt: IsNull(),
-        canceledAt: IsNull(),
-      },
-      skip: offset,
-      take: limit,
-      order: {
-        createdAt: 'ASC',
-      },
-    });
+    const queryBuilder = this.wizardTaskService.taskRepository
+      .createQueryBuilder('task')
+      .select('DISTINCT task.namespace_id', 'namespaceId')
+      .where('task.ended_at IS NULL')
+      .andWhere('task.canceled_at IS NULL');
 
-    for (const task of tasks) {
-      await this.wizardTaskService.produceTaskMessage(task);
+    if (offset !== undefined) {
+      queryBuilder.offset(offset);
+    }
+    if (limit !== undefined) {
+      queryBuilder.limit(limit);
+    }
+
+    const results = await queryBuilder.getRawMany<{ namespaceId: string }>();
+    const namespaceIds = results.map((r) => r.namespaceId);
+
+    for (const namespaceId of namespaceIds) {
+      await this.tasksService.checkTaskMessage(namespaceId);
     }
 
     return {
-      message: `Reproduced ${tasks.length} task messages`,
-      count: tasks.length,
-      taskIds: tasks.map((t) => t.id),
+      message: `Reproduced task messages for ${namespaceIds.length} namespaces`,
+      count: namespaceIds.length,
+      namespaceIds,
     };
   }
 }

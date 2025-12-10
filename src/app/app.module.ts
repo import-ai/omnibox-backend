@@ -59,8 +59,6 @@ import { Applications1756914379375 } from 'omniboxd/migrations/1756914379375-app
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TraceModule } from 'omniboxd/trace/trace.module';
 import { ApplicationsModule } from 'omniboxd/applications/applications.module';
-import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
-import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WebSocketModule } from 'omniboxd/websocket/websocket.module';
 import { NullableUserId1757844448000 } from 'omniboxd/migrations/1757844448000-nullable-user-id';
@@ -75,11 +73,13 @@ import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
+import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
+import { AddEnqueuedToTasks1765348624000 } from 'omniboxd/migrations/1765348624000-add-enqueued-to-tasks';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 
 @Module({})
 export class AppModule implements NestModule {
-  static forRoot(extraMigrations: Array<() => void>): DynamicModule {
+  static forRoot(extraMigrations: Array<new () => any> = []): DynamicModule {
     return {
       module: AppModule,
       controllers: [AppController],
@@ -151,7 +151,6 @@ export class AppModule implements NestModule {
         SharedResourcesModule,
         SeoModule,
         TraceModule,
-        FeedbackModule,
         ApplicationsModule,
         WebSocketModule,
         FilesModule,
@@ -199,13 +198,14 @@ export class AppModule implements NestModule {
               ScanResourceAttachments1755504936756,
               SharesAllResources1754471311959,
               Applications1756914379375,
-              Feedback1757100000000,
               NullableUserId1757844448000,
               AddShareIdToConversations1757844449000,
               ShareUser1760171824000,
               Files1761556143000,
               AddFileIdToResources1761726974942,
               UserUsernameNotNull1763533615604,
+              AddMetadataToUserBindings1762847685000,
+              AddEnqueuedToTasks1765348624000,
               ...extraMigrations,
             ],
             migrationsRun: true,

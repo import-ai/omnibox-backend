@@ -14,6 +14,7 @@ import * as mime from 'mime-types';
 const s3Prefix = 'uploaded-files';
 
 const ALLOWED_FILE_EXTENSIONS = new Set([
+  // doc
   '.md',
   '.doc',
   '.ppt',
@@ -21,18 +22,23 @@ const ALLOWED_FILE_EXTENSIONS = new Set([
   '.pptx',
   '.txt',
   '.pdf',
+  // audio
   '.wav',
   '.mp3',
   '.m4a',
   '.pcm',
   '.opus',
   '.webm',
+  // video
   '.mp4',
   '.avi',
   '.mov',
   '.mkv',
   '.flv',
-  '.wmv',
+  // image
+  '.jpg',
+  '.jpeg',
+  '.png',
 ]);
 
 @Injectable()

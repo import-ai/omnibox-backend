@@ -28,8 +28,14 @@ export class WechatController extends SocialController {
 
   @Public()
   @Get('auth-url')
-  getAuthUrl() {
-    return this.wechatService.authUrl();
+  getAuthUrl(
+    @Query('isH5') isH5?: boolean,
+    @Query('source') source?: 'h5' | 'web',
+    @Query('h5_redirect') h5Redirect?: string,
+  ) {
+    // 兼容旧的isH5参数
+    const finalSource = source || (isH5 ? 'h5' : 'web');
+    return this.wechatService.authUrl(finalSource, h5Redirect);
   }
 
   @Public()

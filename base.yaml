@@ -3,7 +3,7 @@ name: omnibox-local
 services:
   backend:
     ports:
-      - "${OBB_PORT:-8000}:${OBB_PORT:-8000}"
+      - '${OBB_PORT:-8000}:${OBB_PORT:-8000}'
     env_file:
       - .env
     environment:
@@ -17,7 +17,14 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      test: [ "CMD", "wget", "-q", "-O-", "http://127.0.0.1:${OBB_PORT:-8000}/api/v1/health" ]
+      test:
+        [
+          'CMD',
+          'wget',
+          '-q',
+          '-O-',
+          'http://127.0.0.1:${OBB_PORT:-8000}/api/v1/health',
+        ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -32,7 +39,18 @@ services:
       - POSTGRES_PASSWORD=${OBB_DB_PASSWORD:-omnibox}
       - POSTGRES_PORT=${OBB_DB_PORT:-5432}
     healthcheck:
-      test: [ "CMD", "pg_isready", "-q", "-d", "${OBB_DB_DATABASE:-omnibox}", "-U", "${OBB_DB_USERNAME:-omnibox}", "-p", "${OBB_DB_PORT:-5432}" ]
+      test:
+        [
+          'CMD',
+          'pg_isready',
+          '-q',
+          '-d',
+          '${OBB_DB_DATABASE:-omnibox}',
+          '-U',
+          '${OBB_DB_USERNAME:-omnibox}',
+          '-p',
+          '${OBB_DB_PORT:-5432}',
+        ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -45,7 +63,7 @@ services:
       MINIO_ROOT_USER: username
       MINIO_ROOT_PASSWORD: password
     healthcheck:
-      test: [ "CMD", "curl", "-I", "http://127.0.0.1:9000/minio/health/live" ]
+      test: ['CMD', 'curl', '-I', 'http://127.0.0.1:9000/minio/health/live']
       interval: 5s
       timeout: 3s
       retries: 5
@@ -79,7 +97,7 @@ services:
 
   init:
     image: alpine/curl:8.10.0
-    command: 
+    command:
       - 'http://backend:${OBB_PORT:-8000}/internal/api/v1/sign-up'
       - '-H'
       - 'Content-Type: application/json'

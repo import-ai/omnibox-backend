@@ -74,6 +74,7 @@ import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/176172697
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
 import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
+import { AddEnqueuedToTasks1765348624000 } from 'omniboxd/migrations/1765348624000-add-enqueued-to-tasks';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 
 @Module({})
@@ -204,6 +205,7 @@ export class AppModule implements NestModule {
               AddFileIdToResources1761726974942,
               UserUsernameNotNull1763533615604,
               AddMetadataToUserBindings1762847685000,
+              AddEnqueuedToTasks1765348624000,
               ...extraMigrations,
             ],
             migrationsRun: true,

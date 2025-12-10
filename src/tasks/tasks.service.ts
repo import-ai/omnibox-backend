@@ -45,7 +45,6 @@ export class TasksService {
     }
     await this.kafkaService.produce(this.kafkaTasksTopic, [
       {
-        key: namespaceId,
         value: JSON.stringify({
           task_id: task.id,
           namespace_id: namespaceId,

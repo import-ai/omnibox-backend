@@ -261,38 +261,40 @@ export class WizardService {
     const task = await this.wizardTaskService.taskRepository.findOneOrFail({
       where: { id: data.id },
     });
+    try {
+      if (!task.startedAt) {
+        const message = this.i18n.t('wizard.errors.taskNotStarted', {
+          args: { taskId: task.id },
+        });
+        throw new AppException(
+          message,
+          'TASK_NOT_STARTED',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
-    if (!task.startedAt) {
-      const message = this.i18n.t('wizard.errors.taskNotStarted', {
-        args: { taskId: task.id },
-      });
-      throw new AppException(
-        message,
-        'TASK_NOT_STARTED',
-        HttpStatus.BAD_REQUEST,
-      );
+      task.endedAt = new Date();
+      task.exception = data.exception || null;
+      task.output = data.output || null;
+      await this.preprocessTask(task);
+
+      await this.wizardTaskService.taskRepository.save(task);
+
+      const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
+      const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
+      this.logger.debug({ taskId: task.id, cost, wait });
+
+      if (task.canceledAt) {
+        this.logger.warn(`Task ${task.id} was canceled.`);
+        return { taskId: task.id, function: task.function, status: 'canceled' };
+      }
+
+      const postprocessResult = await this.postprocess(task);
+
+      return { taskId: task.id, function: task.function, ...postprocessResult };
+    } finally {
+      await this.tasksService.checkTaskMessage(task.namespaceId);
     }
-
-    task.endedAt = new Date();
-    task.exception = data.exception || null;
-    task.output = data.output || null;
-    await this.preprocessTask(task);
-
-    await this.wizardTaskService.taskRepository.save(task);
-
-    const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
-    const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
-    this.logger.debug({ taskId: task.id, cost, wait });
-
-    if (task.canceledAt) {
-      this.logger.warn(`Task ${task.id} was canceled.`);
-      return { taskId: task.id, function: task.function, status: 'canceled' };
-    }
-
-    const postprocessResult = await this.postprocess(task);
-
-    await this.tasksService.checkTaskMessage(task.namespaceId);
-    return { taskId: task.id, function: task.function, ...postprocessResult };
   }
 
   async postprocess(task: Task): Promise<Record<string, any>> {

@@ -588,8 +588,7 @@ export class WizardService {
       .createQueryBuilder('task')
       .select('DISTINCT task.namespace_id', 'namespaceId')
       .where('task.ended_at IS NULL')
-      .andWhere('task.canceled_at IS NULL')
-      .orderBy('task.created_at', 'ASC');
+      .andWhere('task.canceled_at IS NULL');
 
     if (offset !== undefined) {
       queryBuilder.offset(offset);

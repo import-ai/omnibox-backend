@@ -36,7 +36,7 @@ export class TasksService {
 
   async checkTaskMessage(namespaceId: string): Promise<void> {
     const numTasks = await this.countEnqueuedTasks(namespaceId);
-    if (numTasks > 1) {
+    if (numTasks >= 1) {
       return;
     }
     const task = await this.getNextTask(namespaceId);

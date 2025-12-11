@@ -44,7 +44,7 @@ export class TasksController {
 
   @Patch(':id/cancel')
   async cancelTask(@Param('id') id: string) {
-    return await this.tasksService.cancelTask(id);
+    return await this.tasksService.cancelTaskOrFail(id);
   }
 
   @Post(':id/rerun')

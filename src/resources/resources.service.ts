@@ -396,13 +396,16 @@ export class ResourcesService {
   async restoreResource(
     namespaceId: string,
     resourceId: string,
-    entityManager?: EntityManager,
+    tx?: Transaction,
   ): Promise<void> {
-    if (!entityManager) {
-      return await this.dataSource.transaction((entityManager) =>
-        this.restoreResource(namespaceId, resourceId, entityManager),
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.restoreResource(namespaceId, resourceId, tx),
       );
     }
+
+    const entityManager = tx.entityManager;
+
     await entityManager.restore(Resource, {
       namespaceId,
       id: resourceId,
@@ -412,13 +415,16 @@ export class ResourcesService {
   async deleteResource(
     namespaceId: string,
     resourceId: string,
-    entityManager?: EntityManager,
+    tx?: Transaction,
   ): Promise<void> {
-    if (!entityManager) {
-      return await this.dataSource.transaction((entityManager) =>
-        this.deleteResource(namespaceId, resourceId, entityManager),
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.deleteResource(namespaceId, resourceId, tx),
       );
     }
+
+    const entityManager = tx.entityManager;
+
     await entityManager.softDelete(Resource, {
       namespaceId,
       id: resourceId,

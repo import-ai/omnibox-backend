@@ -99,6 +99,16 @@ export class TasksService {
     );
   }
 
+  async getPendingTasks(namespaceId: string): Promise<Task[]> {
+    return await this.taskRepository.find({
+      where: {
+        namespaceId,
+        endedAt: IsNull(),
+        canceledAt: IsNull(),
+      },
+    });
+  }
+
   async list(
     namespaceId: string,
     offset: number,
@@ -145,7 +155,7 @@ export class TasksService {
     await this.taskRepository.softRemove(task);
   }
 
-  async cancelTask(id: string): Promise<TaskDto> {
+  async cancelTaskOrFail(id: string): Promise<TaskDto> {
     const task = await this.get(id);
 
     if (task.canceledAt) {
@@ -169,6 +179,16 @@ export class TasksService {
     const updatedTask = await this.taskRepository.save(task);
 
     return TaskDto.fromEntity(updatedTask);
+  }
+
+  async cancelTask(namespaceId: string, taskId: string) {
+    if (!namespaceId || !taskId) {
+      return;
+    }
+    await this.taskRepository.update(
+      { namespaceId, id: taskId, canceledAt: IsNull(), endedAt: IsNull() },
+      { canceledAt: new Date() },
+    );
   }
 
   async rerunTask(id: string): Promise<TaskDto> {

@@ -420,6 +420,7 @@ export class NamespacesService {
       }
       // Delete private root
       await this.resourcesService.deleteResource(
+        userId,
         namespaceId,
         member.rootResourceId,
         tx,

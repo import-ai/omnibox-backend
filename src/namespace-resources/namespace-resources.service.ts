@@ -778,11 +778,7 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    await transaction(this.dataSource.manager, async (tx) => {
-      const manager = tx.entityManager;
-      await manager.softDelete(Resource, id);
-      await this.wizardTaskService.emitDeleteIndexTask(userId, resource, tx);
-    });
+    await this.resourcesService.deleteResource(userId, namespaceId, id);
   }
 
   async restore(userId: string, id: string) {

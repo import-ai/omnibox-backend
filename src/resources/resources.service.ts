@@ -8,6 +8,7 @@ import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 
 const TASK_PRIORITY = 5;
 
@@ -18,6 +19,7 @@ export class ResourcesService {
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly wizardTaskService: WizardTaskService,
+    private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
     private readonly filesService: FilesService,
   ) {}
@@ -413,21 +415,27 @@ export class ResourcesService {
   }
 
   async deleteResource(
+    userId: string,
     namespaceId: string,
     resourceId: string,
     tx?: Transaction,
   ): Promise<void> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.deleteResource(namespaceId, resourceId, tx),
+        this.deleteResource(userId, namespaceId, resourceId, tx),
       );
     }
 
-    const entityManager = tx.entityManager;
-
-    await entityManager.softDelete(Resource, {
+    await tx.entityManager.softDelete(Resource, {
       namespaceId,
       id: resourceId,
     });
+
+    await this.wizardTaskService.emitDeleteIndexTask(
+      userId,
+      namespaceId,
+      resourceId,
+      tx,
+    );
   }
 }

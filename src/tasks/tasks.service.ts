@@ -58,7 +58,12 @@ export class TasksService {
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {
     const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
-    const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
+    const task = await repo.save(
+      repo.create({
+        ...this.injectTraceHeaders(data),
+        resourceId: data.resourceId || data.payload?.resource_id,
+      }),
+    );
     if (tx) {
       tx.afterCommitHooks.push(() => this.checkTaskMessage(task.namespaceId));
     } else {

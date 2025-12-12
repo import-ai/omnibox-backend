@@ -76,6 +76,40 @@ export class ResourcesService {
     return ResourceMetaDto.fromEntity(resource);
   }
 
+  async batchGetResourceMeta(
+    namespaceId: string,
+    resourceIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<Map<string, ResourceMetaDto>> {
+    if (resourceIds.length === 0) {
+      return new Map();
+    }
+
+    const resourceRepository = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    const resources = await resourceRepository.find({
+      select: [
+        'id',
+        'name',
+        'parentId',
+        'resourceType',
+        'globalPermission',
+        'attrs',
+        'fileId',
+        'createdAt',
+        'updatedAt',
+      ],
+      where: { namespaceId, id: In(resourceIds) },
+    });
+
+    const resourceMap = new Map<string, ResourceMetaDto>();
+    for (const resource of resources) {
+      resourceMap.set(resource.id, ResourceMetaDto.fromEntity(resource));
+    }
+    return resourceMap;
+  }
+
   async getResourceMetaOrFail(
     namespaceId: string,
     resourceId: string,

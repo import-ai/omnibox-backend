@@ -16,7 +16,7 @@ export class TasksService {
 
   constructor(
     @InjectRepository(Task)
-    private taskRepository: Repository<Task>,
+    private readonly taskRepository: Repository<Task>,
     private readonly i18n: I18nService,
     private readonly kafkaService: KafkaService,
     private readonly configService: ConfigService,

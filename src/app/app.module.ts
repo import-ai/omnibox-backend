@@ -27,6 +27,7 @@ import {
 } from 'nestjs-i18n';
 import * as path from 'path';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
@@ -138,6 +139,7 @@ export class AppModule implements NestModule {
         APIKeyModule,
         NamespacesModule,
         NamespaceResourcesModule,
+        NamespaceTasksModule,
         ResourcesModule,
         TasksModule,
         WizardModule,

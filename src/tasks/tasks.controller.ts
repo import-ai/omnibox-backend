@@ -8,7 +8,6 @@ import {
   Param,
   Patch,
   Post,
-  Query,
 } from '@nestjs/common';
 import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
 
@@ -19,16 +18,6 @@ export class TasksController {
   @Post()
   async createTask(@Body() data: Partial<Task>) {
     return TaskDto.fromEntity(await this.tasksService.emitTask(data));
-  }
-
-  @Get()
-  async listTasks(
-    @Param('namespaceId') namespaceId: string,
-    @Query('offset') offset: number = 0,
-    @Query('limit') limit: number = 10,
-    @Query('userId') userId?: string,
-  ) {
-    return await this.tasksService.list(namespaceId, offset, limit, userId);
   }
 
   @Get(':id')

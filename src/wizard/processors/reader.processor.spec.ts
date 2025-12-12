@@ -102,6 +102,7 @@ describe('ReaderProcessor', () => {
       updatedAt: new Date(),
       deletedAt: null,
       enqueued: false,
+      resourceId: 'test-resource-id',
       ...overrides,
     });
 

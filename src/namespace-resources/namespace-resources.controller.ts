@@ -254,7 +254,11 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    await this.namespaceResourcesService.restore(userId, resourceId);
+    await this.namespaceResourcesService.restore(
+      userId,
+      namespaceId,
+      resourceId,
+    );
     const resource = await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,

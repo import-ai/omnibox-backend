@@ -396,19 +396,35 @@ export class ResourcesService {
   }
 
   async restoreResource(
+    userId: string,
     namespaceId: string,
     resourceId: string,
     tx?: Transaction,
   ): Promise<void> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.restoreResource(namespaceId, resourceId, tx),
+        this.restoreResource(userId, namespaceId, resourceId, tx),
       );
     }
-    await tx.entityManager.restore(Resource, {
+    const result = await tx.entityManager.restore(Resource, {
       namespaceId,
       id: resourceId,
     });
+    if (result.affected !== 1) {
+      return;
+    }
+    const resource = await tx.entityManager.findOneOrFail(Resource, {
+      where: { namespaceId, id: resourceId },
+    });
+    if (resource.parentId) {
+      // If it's not a root resource, create index task
+      await this.wizardTaskService.emitUpsertIndexTask(
+        TASK_PRIORITY,
+        userId,
+        resource,
+        tx,
+      );
+    }
   }
 
   async deleteResource(

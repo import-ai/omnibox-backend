@@ -254,6 +254,7 @@ export class NamespacesService {
   ): Promise<string> {
     if (namespaceMember) {
       await this.resourcesService.restoreResource(
+        userId,
         namespaceId,
         namespaceMember.rootResourceId,
         tx,

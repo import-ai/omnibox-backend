@@ -11,7 +11,7 @@ export class AddResourceIdToTasks1765443191000 implements MigrationInterface {
       'tasks',
       new TableColumn({
         name: 'resource_id',
-        type: 'uuid',
+        type: 'character varying',
         isNullable: true,
       }),
     );

@@ -104,14 +104,19 @@ export class TasksService {
     );
   }
 
-  async getPendingTasks(namespaceId: string): Promise<Task[]> {
-    return await this.taskRepository.find({
-      where: {
-        namespaceId,
-        endedAt: IsNull(),
-        canceledAt: IsNull(),
-      },
-    });
+  async cancelResourceTasks(
+    namespaceId: string,
+    resourceId: string,
+    tx: Transaction,
+  ) {
+    if (!namespaceId || !resourceId) {
+      return;
+    }
+    await tx.entityManager.update(
+      Task,
+      { namespaceId, resourceId, canceledAt: IsNull(), endedAt: IsNull() },
+      { canceledAt: new Date() },
+    );
   }
 
   async list(
@@ -184,16 +189,6 @@ export class TasksService {
     const updatedTask = await this.taskRepository.save(task);
 
     return TaskDto.fromEntity(updatedTask);
-  }
-
-  async cancelTask(namespaceId: string, taskId: string) {
-    if (!namespaceId || !taskId) {
-      return;
-    }
-    await this.taskRepository.update(
-      { namespaceId, id: taskId, canceledAt: IsNull(), endedAt: IsNull() },
-      { canceledAt: new Date() },
-    );
   }
 
   async rerunTask(id: string): Promise<TaskDto> {

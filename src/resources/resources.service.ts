@@ -405,10 +405,7 @@ export class ResourcesService {
         this.restoreResource(namespaceId, resourceId, tx),
       );
     }
-
-    const entityManager = tx.entityManager;
-
-    await entityManager.restore(Resource, {
+    await tx.entityManager.restore(Resource, {
       namespaceId,
       id: resourceId,
     });
@@ -425,12 +422,11 @@ export class ResourcesService {
         this.deleteResource(userId, namespaceId, resourceId, tx),
       );
     }
-
     await tx.entityManager.softDelete(Resource, {
       namespaceId,
       id: resourceId,
     });
-
+    await this.tasksService.cancelResourceTasks(namespaceId, resourceId, tx);
     await this.wizardTaskService.emitDeleteIndexTask(
       userId,
       namespaceId,

@@ -733,19 +733,14 @@ export class NamespaceResourcesService {
     // Get paths for each resource
     const result: InternalResourceDto[] = [];
     for (const resource of resources) {
-      const resourceMeta = ResourceMetaDto.fromEntity(resource);
-      let path: ResourceMetaDto[];
-
+      let path: ResourceMetaDto[] = [];
       if (resource.parentId) {
         const parentResources =
           await this.resourcesService.getParentResourcesOrFail(
             namespaceId,
             resource.parentId,
           );
-        path = [resourceMeta, ...parentResources].reverse();
-      } else {
-        // Root resource - path only contains itself
-        path = [resourceMeta];
+        path = parentResources.reverse();
       }
 
       result.push(

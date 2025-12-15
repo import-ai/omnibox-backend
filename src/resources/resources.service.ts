@@ -8,6 +8,7 @@ import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 
 const TASK_PRIORITY = 5;
 
@@ -18,6 +19,7 @@ export class ResourcesService {
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly wizardTaskService: WizardTaskService,
+    private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
     private readonly filesService: FilesService,
   ) {}
@@ -72,6 +74,40 @@ export class ResourcesService {
       return null;
     }
     return ResourceMetaDto.fromEntity(resource);
+  }
+
+  async batchGetResourceMeta(
+    namespaceId: string,
+    resourceIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<Map<string, ResourceMetaDto>> {
+    if (resourceIds.length === 0) {
+      return new Map();
+    }
+
+    const resourceRepository = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    const resources = await resourceRepository.find({
+      select: [
+        'id',
+        'name',
+        'parentId',
+        'resourceType',
+        'globalPermission',
+        'attrs',
+        'fileId',
+        'createdAt',
+        'updatedAt',
+      ],
+      where: { namespaceId, id: In(resourceIds) },
+    });
+
+    const resourceMap = new Map<string, ResourceMetaDto>();
+    for (const resource of resources) {
+      resourceMap.set(resource.id, ResourceMetaDto.fromEntity(resource));
+    }
+    return resourceMap;
   }
 
   async getResourceMetaOrFail(
@@ -394,34 +430,58 @@ export class ResourcesService {
   }
 
   async restoreResource(
+    userId: string,
     namespaceId: string,
     resourceId: string,
-    entityManager?: EntityManager,
+    tx?: Transaction,
   ): Promise<void> {
-    if (!entityManager) {
-      return await this.dataSource.transaction((entityManager) =>
-        this.restoreResource(namespaceId, resourceId, entityManager),
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.restoreResource(userId, namespaceId, resourceId, tx),
       );
     }
-    await entityManager.restore(Resource, {
+    const result = await tx.entityManager.restore(Resource, {
       namespaceId,
       id: resourceId,
     });
+    if (result.affected !== 1) {
+      return;
+    }
+    const resource = await tx.entityManager.findOneOrFail(Resource, {
+      where: { namespaceId, id: resourceId },
+    });
+    if (resource.parentId) {
+      // If it's not a root resource, create index task
+      await this.wizardTaskService.emitUpsertIndexTask(
+        TASK_PRIORITY,
+        userId,
+        resource,
+        tx,
+      );
+    }
   }
 
   async deleteResource(
+    userId: string,
     namespaceId: string,
     resourceId: string,
-    entityManager?: EntityManager,
+    tx?: Transaction,
   ): Promise<void> {
-    if (!entityManager) {
-      return await this.dataSource.transaction((entityManager) =>
-        this.deleteResource(namespaceId, resourceId, entityManager),
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.deleteResource(userId, namespaceId, resourceId, tx),
       );
     }
-    await entityManager.softDelete(Resource, {
+    await tx.entityManager.softDelete(Resource, {
       namespaceId,
       id: resourceId,
     });
+    await this.tasksService.cancelResourceTasks(namespaceId, resourceId, tx);
+    await this.wizardTaskService.emitDeleteIndexTask(
+      userId,
+      namespaceId,
+      resourceId,
+      tx,
+    );
   }
 }

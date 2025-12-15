@@ -27,6 +27,7 @@ import {
 } from 'nestjs-i18n';
 import * as path from 'path';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
@@ -75,6 +76,7 @@ import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
 import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
 import { AddEnqueuedToTasks1765348624000 } from 'omniboxd/migrations/1765348624000-add-enqueued-to-tasks';
+import { AddResourceIdToTasks1765443191000 } from 'omniboxd/migrations/1765443191000-add-resource-id-to-tasks';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 
 @Module({})
@@ -137,6 +139,7 @@ export class AppModule implements NestModule {
         APIKeyModule,
         NamespacesModule,
         NamespaceResourcesModule,
+        NamespaceTasksModule,
         ResourcesModule,
         TasksModule,
         WizardModule,
@@ -206,6 +209,7 @@ export class AppModule implements NestModule {
               UserUsernameNotNull1763533615604,
               AddMetadataToUserBindings1762847685000,
               AddEnqueuedToTasks1765348624000,
+              AddResourceIdToTasks1765443191000,
               ...extraMigrations,
             ],
             migrationsRun: true,

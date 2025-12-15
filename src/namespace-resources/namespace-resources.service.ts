@@ -760,6 +760,34 @@ export class NamespaceResourcesService {
     return result;
   }
 
+  async getResourceChildrenForInternal(
+    namespaceId: string,
+    resourceId: string,
+    depth: number,
+  ): Promise<ResourceMetaDto[]> {
+    if (depth < 1 || depth > 3) {
+      throw new AppException(
+        'Depth must be between 1 and 3',
+        'INVALID_DEPTH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const allChildren: ResourceMetaDto[] = [];
+    let resourceIds = [resourceId];
+    for (let currentDepth = 0; currentDepth < depth; currentDepth++) {
+      const children = await this.resourcesService.getSubResources(
+        namespaceId,
+        resourceIds,
+      );
+      if (children.length === 0) {
+        break;
+      }
+      allChildren.push(...children);
+      resourceIds = children.map((child) => child.id);
+    }
+    return allChildren;
+  }
+
   async createResourceFile(
     userId: string,
     namespaceId: string,

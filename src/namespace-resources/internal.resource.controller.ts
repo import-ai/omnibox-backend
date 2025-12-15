@@ -32,4 +32,18 @@ export class InternalResourcesController {
       ids,
     );
   }
+
+  @Public()
+  @Get('namespaces/:namespaceId/resources/:resourceId/children')
+  async getResourceChildren(
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Query('depth') depth: number = 1,
+  ) {
+    return await this.namespaceResourcesService.getResourceChildrenForInternal(
+      namespaceId,
+      resourceId,
+      depth,
+    );
+  }
 }

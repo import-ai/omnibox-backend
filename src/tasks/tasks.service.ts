@@ -16,7 +16,7 @@ export class TasksService {
 
   constructor(
     @InjectRepository(Task)
-    private taskRepository: Repository<Task>,
+    private readonly taskRepository: Repository<Task>,
     private readonly i18n: I18nService,
     private readonly kafkaService: KafkaService,
     private readonly configService: ConfigService,
@@ -58,7 +58,12 @@ export class TasksService {
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {
     const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
-    const task = await repo.save(repo.create(this.injectTraceHeaders(data)));
+    const task = await repo.save(
+      repo.create({
+        ...this.injectTraceHeaders(data),
+        resourceId: data.resourceId || data.payload?.resource_id,
+      }),
+    );
     if (tx) {
       tx.afterCommitHooks.push(() => this.checkTaskMessage(task.namespaceId));
     } else {
@@ -96,6 +101,21 @@ export class TasksService {
     await this.taskRepository.update(
       { namespaceId, id: taskId },
       { enqueued: true },
+    );
+  }
+
+  async cancelResourceTasks(
+    namespaceId: string,
+    resourceId: string,
+    tx: Transaction,
+  ) {
+    if (!namespaceId || !resourceId) {
+      return;
+    }
+    await tx.entityManager.update(
+      Task,
+      { namespaceId, resourceId, canceledAt: IsNull(), endedAt: IsNull() },
+      { canceledAt: new Date() },
     );
   }
 
@@ -145,7 +165,7 @@ export class TasksService {
     await this.taskRepository.softRemove(task);
   }
 
-  async cancelTask(id: string): Promise<TaskDto> {
+  async cancelTaskOrFail(id: string): Promise<TaskDto> {
     const task = await this.get(id);
 
     if (task.canceledAt) {

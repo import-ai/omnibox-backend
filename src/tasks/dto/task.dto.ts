@@ -29,6 +29,7 @@ class TaskDtoBase {
   started_at: string | null;
   ended_at: string | null;
   canceled_at: string | null;
+  resource_id?: string;
 
   protected static setValue(obj: TaskDtoBase, task: Task) {
     obj.id = task.id;
@@ -42,6 +43,7 @@ class TaskDtoBase {
     obj.started_at = task.startedAt?.toISOString() || null;
     obj.ended_at = task.endedAt?.toISOString() || null;
     obj.canceled_at = task.canceledAt?.toISOString() || null;
+    obj.resource_id = task.resourceId || task.payload?.resource_id;
   }
 }
 
@@ -65,6 +67,9 @@ export class InternalTaskDto extends TaskDtoBase {
 
 export class TaskMetaDto extends TaskDtoBase {
   attrs: Record<string, any> | null;
+  canCancel?: boolean;
+  canRerun?: boolean;
+  canRedirect?: boolean;
 
   protected static setValue(obj: TaskMetaDto, task: Task) {
     super.setValue(obj, task);

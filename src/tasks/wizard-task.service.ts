@@ -210,18 +210,19 @@ export class WizardTaskService {
 
   async emitDeleteIndexTask(
     userId: string,
-    resource: Resource,
+    namespaceId: string,
+    resourceId: string,
     tx?: Transaction,
   ) {
     return this.tasksService.emitTask(
       {
         function: 'delete_index',
         input: {
-          resource_id: resource.id,
+          resource_id: resourceId,
         },
-        namespaceId: resource.namespaceId,
+        namespaceId,
         userId,
-        payload: { resource_id: resource.id },
+        payload: { resource_id: resourceId },
       },
       tx,
     );

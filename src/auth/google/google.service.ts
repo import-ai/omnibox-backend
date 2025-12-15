@@ -196,6 +196,7 @@ export class GoogleService {
           id: googleUser.id,
           access_token: this.jwtService.sign({
             sub: googleUser.id,
+            username: googleUser.username,
           }),
         };
         stateInfo.userInfo = returnValue;
@@ -213,6 +214,7 @@ export class GoogleService {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;
@@ -226,6 +228,7 @@ export class GoogleService {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;
@@ -245,6 +248,7 @@ export class GoogleService {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;
@@ -292,6 +296,7 @@ export class GoogleService {
         id: googleUser.id,
         access_token: this.jwtService.sign({
           sub: googleUser.id,
+          username: googleUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;

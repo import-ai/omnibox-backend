@@ -198,6 +198,7 @@ export class WechatService {
           id: wechatUser.id,
           access_token: this.jwtService.sign({
             sub: wechatUser.id,
+            username: wechatUser.username,
           }),
         };
         stateInfo.userInfo = returnValue;
@@ -215,6 +216,7 @@ export class WechatService {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;
@@ -227,6 +229,7 @@ export class WechatService {
         id: wechatUser.id,
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
+          username: wechatUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;
@@ -261,6 +264,7 @@ export class WechatService {
         id: wechatUser.id,
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
+          username: wechatUser.username,
         }),
       };
       stateInfo.userInfo = returnValue;

@@ -101,6 +101,7 @@ describe('ReaderProcessor', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,
+      enqueued: false,
       ...overrides,
     });
 

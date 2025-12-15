@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
@@ -17,6 +17,19 @@ export class InternalResourcesController {
     return await this.namespaceResourcesService.getResourceFileForInternal(
       namespaceId,
       resourceId,
+    );
+  }
+
+  @Public()
+  @Get('namespaces/:namespaceId/resources')
+  async getResources(
+    @Param('namespaceId') namespaceId: string,
+    @Query('id') resourceIds: string,
+  ) {
+    const ids = resourceIds ? resourceIds.split(',').filter((id) => id) : [];
+    return await this.namespaceResourcesService.getResourcesForInternal(
+      namespaceId,
+      ids,
     );
   }
 }

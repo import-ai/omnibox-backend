@@ -42,6 +42,7 @@ import {
   DownloadFileInfoDto,
 } from './dto/file-info.dto';
 import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
+import { InternalResourceDto } from './dto/internal-resource.dto';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -711,6 +712,52 @@ export class NamespaceResourcesService {
       false,
     );
     return InternalFileInfoDto.new(publicUrl, internalUrl);
+  }
+
+  async getResourcesForInternal(
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<InternalResourceDto[]> {
+    if (resourceIds.length === 0) {
+      return [];
+    }
+
+    const resources = await this.resourcesService.batchGetResources(
+      namespaceId,
+      resourceIds,
+    );
+
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    // Get paths for each resource
+    const result: InternalResourceDto[] = [];
+    for (const resource of resources) {
+      const resourceMeta = ResourceMetaDto.fromEntity(resource);
+      let path: ResourceMetaDto[];
+
+      if (resource.parentId) {
+        const parentResources =
+          await this.resourcesService.getParentResourcesOrFail(
+            namespaceId,
+            resource.parentId,
+          );
+        path = [resourceMeta, ...parentResources].reverse();
+      } else {
+        // Root resource - path only contains itself
+        path = [resourceMeta];
+      }
+
+      result.push(
+        InternalResourceDto.fromEntity(
+          resource,
+          path,
+          tagsMap.get(resource.id) || [],
+        ),
+      );
+    }
+
+    return result;
   }
 
   async createResourceFile(

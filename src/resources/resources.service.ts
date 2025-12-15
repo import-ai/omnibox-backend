@@ -271,6 +271,19 @@ export class ResourcesService {
     });
   }
 
+  async batchGetResources(
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<Resource[]> {
+    if (resourceIds.length === 0) {
+      return [];
+    }
+
+    return await this.resourceRepository.find({
+      where: { namespaceId, id: In(resourceIds) },
+    });
+  }
+
   async getResourceOrFail(
     namespaceId: string,
     resourceId: string,

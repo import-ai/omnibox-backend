@@ -717,6 +717,10 @@ export class NamespaceResourcesService {
   async getResourcesForInternal(
     namespaceId: string,
     resourceIds: string[],
+    createdAtBefore?: Date,
+    createdAtAfter?: Date,
+    userId?: string,
+    parentId?: string,
   ): Promise<InternalResourceDto[]> {
     if (resourceIds.length === 0) {
       return [];
@@ -725,6 +729,10 @@ export class NamespaceResourcesService {
     const resources = await this.resourcesService.batchGetResources(
       namespaceId,
       resourceIds,
+      createdAtBefore,
+      createdAtAfter,
+      userId,
+      parentId,
     );
 
     // Populate tags for resources

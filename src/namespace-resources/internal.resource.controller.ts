@@ -24,12 +24,20 @@ export class InternalResourcesController {
   @Get('namespaces/:namespaceId/resources')
   async getResources(
     @Param('namespaceId') namespaceId: string,
-    @Query('id') resourceIds: string,
+    @Query('id') resourceIds?: string,
+    @Query('createdAtBefore') createdAtBefore?: Date,
+    @Query('createdAtAfter') createdAtAfter?: Date,
+    @Query('userId') userId?: string,
+    @Query('parentId') parentId?: string,
   ) {
     const ids = resourceIds ? resourceIds.split(',').filter((id) => id) : [];
     return await this.namespaceResourcesService.getResourcesForInternal(
       namespaceId,
       ids,
+      createdAtBefore,
+      createdAtAfter,
+      userId,
+      parentId,
     );
   }
 

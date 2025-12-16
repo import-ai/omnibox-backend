@@ -3,7 +3,15 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource, ResourceType } from './entities/resource.entity';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  Repository,
+  FindOptionsWhere,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+} from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
@@ -274,14 +282,34 @@ export class ResourcesService {
   async batchGetResources(
     namespaceId: string,
     resourceIds: string[],
+    createdAtBefore?: Date,
+    createdAtAfter?: Date,
+    userId?: string,
+    parentId?: string,
   ): Promise<Resource[]> {
     if (resourceIds.length === 0) {
       return [];
     }
 
-    return await this.resourceRepository.find({
-      where: { namespaceId, id: In(resourceIds) },
-    });
+    const where: FindOptionsWhere<Resource> = {
+      namespaceId,
+      id: In(resourceIds),
+    };
+
+    if (createdAtBefore) {
+      where.createdAt = LessThanOrEqual(createdAtBefore);
+    }
+    if (createdAtAfter) {
+      where.createdAt = MoreThanOrEqual(createdAtAfter);
+    }
+    if (userId) {
+      where.userId = userId;
+    }
+    if (parentId) {
+      where.parentId = parentId;
+    }
+
+    return await this.resourceRepository.find({ where });
   }
 
   async getResourceOrFail(

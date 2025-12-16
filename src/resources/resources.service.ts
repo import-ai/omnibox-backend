@@ -3,15 +3,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource, ResourceType } from './entities/resource.entity';
-import {
-  DataSource,
-  EntityManager,
-  In,
-  Repository,
-  FindOptionsWhere,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-} from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
@@ -281,35 +273,58 @@ export class ResourcesService {
 
   async batchGetResources(
     namespaceId: string,
-    resourceIds: string[],
+    resourceIds?: string[],
     createdAtBefore?: Date,
     createdAtAfter?: Date,
     userId?: string,
     parentId?: string,
+    tagIds?: string[],
   ): Promise<Resource[]> {
-    if (resourceIds.length === 0) {
-      return [];
+    const hasFilter =
+      (resourceIds && resourceIds.length > 0) ||
+      createdAtBefore ||
+      createdAtAfter ||
+      userId ||
+      parentId ||
+      (tagIds && tagIds.length > 0);
+    if (!hasFilter) {
+      throw new AppException(
+        'At least one filter parameter is required',
+        'FILTER_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    const where: FindOptionsWhere<Resource> = {
-      namespaceId,
-      id: In(resourceIds),
-    };
+    const queryBuilder = this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId });
 
+    if (resourceIds && resourceIds.length > 0) {
+      queryBuilder.andWhere('resource.id IN (:...resourceIds)', {
+        resourceIds,
+      });
+    }
     if (createdAtBefore) {
-      where.createdAt = LessThanOrEqual(createdAtBefore);
+      queryBuilder.andWhere('resource.created_at <= :createdAtBefore', {
+        createdAtBefore,
+      });
     }
     if (createdAtAfter) {
-      where.createdAt = MoreThanOrEqual(createdAtAfter);
+      queryBuilder.andWhere('resource.created_at >= :createdAtAfter', {
+        createdAtAfter,
+      });
     }
     if (userId) {
-      where.userId = userId;
+      queryBuilder.andWhere('resource.user_id = :userId', { userId });
     }
     if (parentId) {
-      where.parentId = parentId;
+      queryBuilder.andWhere('resource.parent_id = :parentId', { parentId });
+    }
+    if (tagIds && tagIds.length > 0) {
+      queryBuilder.andWhere('resource.tag_ids && :tagIds', { tagIds });
     }
 
-    return await this.resourceRepository.find({ where });
+    return await queryBuilder.getMany();
   }
 
   async getResourceOrFail(

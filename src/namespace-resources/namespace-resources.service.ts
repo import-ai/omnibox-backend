@@ -721,9 +721,15 @@ export class NamespaceResourcesService {
     createdAtAfter?: Date,
     userId?: string,
     parentId?: string,
+    tags?: string[],
   ): Promise<InternalResourceDto[]> {
-    if (resourceIds.length === 0) {
-      return [];
+    let tagIds: string[] | undefined;
+    if (tags && tags.length > 0) {
+      const tagEntities = await this.tagService.findByNames(namespaceId, tags);
+      tagIds = tagEntities.map((t) => t.id);
+      if (tagIds.length === 0) {
+        return [];
+      }
     }
 
     const resources = await this.resourcesService.batchGetResources(
@@ -733,6 +739,7 @@ export class NamespaceResourcesService {
       createdAtAfter,
       userId,
       parentId,
+      tagIds,
     );
 
     // Populate tags for resources

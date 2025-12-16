@@ -29,8 +29,10 @@ export class InternalResourcesController {
     @Query('createdAtAfter') createdAtAfter?: Date,
     @Query('userId') userId?: string,
     @Query('parentId') parentId?: string,
+    @Query('tag') tag?: string,
   ) {
     const ids = resourceIds ? resourceIds.split(',').filter((id) => id) : [];
+    const tags = tag ? tag.split(',').filter((t) => t.trim()) : [];
     return await this.namespaceResourcesService.getResourcesForInternal(
       namespaceId,
       ids,
@@ -38,6 +40,7 @@ export class InternalResourcesController {
       createdAtAfter,
       userId,
       parentId,
+      tags,
     );
   }
 

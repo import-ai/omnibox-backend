@@ -14,6 +14,7 @@ export interface UserSocialState {
   type: string;
   createdAt: number;
   expiresIn: number;
+  nonce?: string;
   userInfo?: WechatCheckResponseDto['user'];
 }
 
@@ -36,7 +37,11 @@ export class SocialService {
    * @param prefix
    * @return key
    */
-  async generateState(type: string, prefix: string = ''): Promise<string> {
+  async generateState(
+    type: string,
+    prefix: string = '',
+    nonce: string = '',
+  ): Promise<string> {
     const key = `${prefix ? prefix + '_' : ''}${generateId()}`;
     const expiresIn = 5 * 60 * 1000; // Expires in 5 minutes
     await this.cacheService.set<UserSocialState>(
@@ -44,6 +49,7 @@ export class SocialService {
       key,
       {
         type,
+        nonce,
         createdAt: Date.now(),
         expiresIn,
       },

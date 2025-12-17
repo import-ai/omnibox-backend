@@ -3,6 +3,10 @@ import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {
+  InitiateAccountDeletionDto,
+  ConfirmAccountDeletionDto,
+} from 'omniboxd/user/dto/delete-account.dto';
+import {
   Req,
   Get,
   Body,
@@ -13,9 +17,11 @@ import {
   Controller,
   ParseIntPipe,
   HttpStatus,
+  HttpCode,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
 @Controller('api/v1/user')
 export class UserController {
@@ -112,5 +118,22 @@ export class UserController {
   @Get('binding/list')
   async listBinding(@UserId() userId: string) {
     return await this.userService.listBinding(userId);
+  }
+
+  @Post('account/delete/initiate')
+  async initiateAccountDeletion(
+    @UserId() userId: string,
+    @Body() dto: InitiateAccountDeletionDto,
+  ) {
+    return await this.userService.initiateAccountDeletion(userId, dto.username);
+  }
+
+  @Public()
+  @Post('account/delete/confirm')
+  @HttpCode(200)
+  async confirmAccountDeletion(@Body() dto: ConfirmAccountDeletionDto) {
+    await this.userService.confirmAccountDeletion(dto.token);
+    const message = this.i18n.t('user.success.accountDeleted');
+    return { message };
   }
 }

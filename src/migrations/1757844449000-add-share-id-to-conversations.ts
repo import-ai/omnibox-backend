@@ -5,9 +5,7 @@ import {
   TableForeignKey,
 } from 'typeorm';
 
-export class AddShareIdToConversations1757844449000
-  implements MigrationInterface
-{
+export class AddShareIdToConversations1757844449000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.addColumn(
       'conversations',

@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { MailModule } from 'omniboxd/mail/mail.module';
 import { UserModule } from 'omniboxd/user/user.module';
+import { User } from 'omniboxd/user/entities/user.entity';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { JwtStrategy } from 'omniboxd/auth/jwt.strategy';
 import { JwtAuthGuard } from 'omniboxd/auth/jwt-auth.guard';
@@ -67,6 +69,7 @@ import { CacheService } from 'omniboxd/common/cache.service';
     },
   ],
   imports: [
+    TypeOrmModule.forFeature([User]),
     UserModule,
     MailModule,
     PassportModule,

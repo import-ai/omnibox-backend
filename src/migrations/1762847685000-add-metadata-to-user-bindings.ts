@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
-export class AddMetadataToUserBindings1762847685000
-  implements MigrationInterface
-{
+export class AddMetadataToUserBindings1762847685000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.addColumn(
       'user_bindings',

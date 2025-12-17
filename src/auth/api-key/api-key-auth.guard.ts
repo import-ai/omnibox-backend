@@ -4,6 +4,8 @@ import {
   ExecutionContext,
   HttpStatus,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Reflector } from '@nestjs/core';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { IS_API_KEY_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
@@ -11,6 +13,7 @@ import { APIKeyAuthOptions } from 'omniboxd/auth/api-key/api-key.auth.decorator'
 import { APIKeyPermission } from 'omniboxd/api-key/api-key.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { User } from 'omniboxd/user/entities/user.entity';
 
 @Injectable()
 export class APIKeyAuthGuard implements CanActivate {
@@ -18,6 +21,8 @@ export class APIKeyAuthGuard implements CanActivate {
     private reflector: Reflector,
     private apiKeyService: APIKeyService,
     private i18n: I18nService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -64,6 +69,20 @@ export class APIKeyAuthGuard implements CanActivate {
     const apiKey = await this.apiKeyService.findByValue(token);
 
     if (!apiKey) {
+      const message = this.i18n.t('apikey.errors.invalidApiKey');
+      throw new AppException(
+        message,
+        'INVALID_API_KEY',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    // Check if API key owner exists - TypeORM automatically excludes soft-deleted
+    const user = await this.userRepository.findOne({
+      where: { id: apiKey.userId },
+    });
+
+    if (!user) {
       const message = this.i18n.t('apikey.errors.invalidApiKey');
       throw new AppException(
         message,

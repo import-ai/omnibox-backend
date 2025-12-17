@@ -2,6 +2,7 @@ import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 import { MailerService } from '@nestjs-modules/mailer';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MailService {
@@ -10,6 +11,7 @@ export class MailService {
   constructor(
     private readonly mailerService: MailerService,
     private readonly i18n: I18nService,
+    private readonly configService: ConfigService,
   ) {}
 
   async sendOTPEmail(
@@ -148,6 +150,44 @@ export class MailService {
           namespaceName,
           receiverUsername,
           isExistingUser: isExistingUser || false,
+          i18nLang: lang,
+        },
+      });
+    } catch (error) {
+      this.logger.error({ error });
+      const message = this.i18n.t('mail.errors.unableToSendEmail');
+      throw new AppException(
+        message,
+        'UNABLE_TO_SEND_EMAIL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async sendAccountDeletionConfirmation(
+    email: string,
+    token: string,
+    username?: string,
+    userLang?: string,
+  ): Promise<void> {
+    const lang = userLang || I18nContext.current()?.lang;
+    const subject = this.i18n.t('mail.subjects.accountDeletion', { lang });
+
+    // Build confirmation URL
+    const frontendUrl = this.configService.get(
+      'FRONTEND_URL',
+      'http://localhost:5173',
+    );
+    const confirmationUrl = `${frontendUrl}/user/account/delete/confirm?token=${token}`;
+
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject,
+        template: 'account-deletion',
+        context: {
+          username,
+          confirmationUrl,
           i18nLang: lang,
         },
       });

@@ -641,6 +641,11 @@ export class UserService {
       // Soft delete applications
       await applicationsRepo.softDelete({ userId: deletionState.userId });
 
+      // Soft delete user bindings (OAuth connections)
+      await manager
+        .getRepository(UserBinding)
+        .softDelete({ userId: deletionState.userId });
+
       // Cancel pending tasks
       await taskRepo
         .createQueryBuilder()

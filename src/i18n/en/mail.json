@@ -76,7 +76,7 @@
       "heading": "Confirm Account Deletion",
       "greeting": "Hi",
       "warningTitle": "⚠️ Warning: This action cannot be undone",
-      "warningBody": "Once confirmed, your account will be permanently deactivated. All your data will be permanently deleted and cannot be recovered.",
+      "warningBody": "Once confirmed, your account will be permanently deleted. All your data will be permanently deleted and cannot be recovered.",
       "body": "We received a request to delete your account. If you want to proceed, please click the button below within 15 minutes:",
       "buttonText": "Confirm Account Deletion",
       "expireText": "This link will expire in 15 minutes.",

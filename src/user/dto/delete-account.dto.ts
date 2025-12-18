@@ -9,6 +9,9 @@ export class InitiateAccountDeletionDto {
     message: i18nValidationMessage('validation.errors.username.minLength'),
   })
   username: string;
+
+  @IsString()
+  url: string;
 }
 
 export class ConfirmAccountDeletionDto {

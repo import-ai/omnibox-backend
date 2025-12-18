@@ -13,6 +13,8 @@ import { Share } from 'omniboxd/shares/entities/share.entity';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Invitation } from 'omniboxd/invitations/entities/invitation.entity';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
@@ -39,6 +41,11 @@ interface AccountDeletionState {
   username: string;
   createdAt: number;
   expiresIn: number;
+}
+
+interface NamespaceOwnershipCheck {
+  blocked: boolean;
+  soloNamespaceIds: string[];
 }
 
 @Injectable()
@@ -533,8 +540,8 @@ export class UserService {
     }
 
     // 2. Check namespace ownership constraint
-    const isBlocked = await this.checkNamespaceOwnershipConstraint(userId);
-    if (isBlocked) {
+    const namespaceCheck = await this.checkNamespaceOwnershipConstraint(userId);
+    if (namespaceCheck.blocked) {
       const message = this.i18n.t('user.errors.cannotDeleteOwnerWithMembers');
       throw new AppException(
         message,
@@ -574,7 +581,9 @@ export class UserService {
     return { message: this.i18n.t('user.success.deletionEmailSent') };
   }
 
-  async checkNamespaceOwnershipConstraint(userId: string): Promise<boolean> {
+  async checkNamespaceOwnershipConstraint(
+    userId: string,
+  ): Promise<NamespaceOwnershipCheck> {
     const namespaceMemberRepo = this.dataSource.getRepository(NamespaceMember);
 
     // Get all namespaces where user is an owner
@@ -582,21 +591,26 @@ export class UserService {
       where: { userId, role: NamespaceRole.OWNER },
     });
 
+    const soloNamespaceIds: string[] = [];
+
     // For each owned namespace, check if there are other members
     for (const membership of ownerMemberships) {
-      const otherMembersCount = await namespaceMemberRepo.count({
+      const membersCount = await namespaceMemberRepo.count({
         where: {
           namespaceId: membership.namespaceId,
         },
       });
 
       // If there are other members besides the owner (count > 1), block deletion
-      if (otherMembersCount > 1) {
-        return true; // Block deletion
+      if (membersCount > 1) {
+        return { blocked: true, soloNamespaceIds: [] };
+      } else if (membersCount === 1) {
+        // User is sole member - namespace should be cleaned up
+        soloNamespaceIds.push(membership.namespaceId);
       }
     }
 
-    return false; // Allow deletion
+    return { blocked: false, soloNamespaceIds };
   }
 
   async confirmAccountDeletion(token: string): Promise<void> {
@@ -616,10 +630,10 @@ export class UserService {
     }
 
     // 2. Re-verify namespace constraint (in case it changed)
-    const isBlocked = await this.checkNamespaceOwnershipConstraint(
+    const namespaceCheck = await this.checkNamespaceOwnershipConstraint(
       deletionState.userId,
     );
-    if (isBlocked) {
+    if (namespaceCheck.blocked) {
       const message = this.i18n.t('user.errors.cannotDeleteOwnerWithMembers');
       throw new AppException(
         message,
@@ -634,6 +648,9 @@ export class UserService {
       const apiKeyRepo = manager.getRepository(APIKey);
       const applicationsRepo = manager.getRepository(Applications);
       const taskRepo = manager.getRepository(Task);
+      const invitationRepo = manager.getRepository(Invitation);
+      const namespaceRepo = manager.getRepository(Namespace);
+      const namespaceMemberRepo = manager.getRepository(NamespaceMember);
 
       // Disable all share links
       await shareRepo.update(
@@ -661,6 +678,19 @@ export class UserService {
         .andWhere('endedAt IS NULL')
         .andWhere('canceledAt IS NULL')
         .execute();
+
+      // Clean up solo-owned namespaces
+      for (const namespaceId of namespaceCheck.soloNamespaceIds) {
+        // Soft delete all invitations for this namespace
+        await invitationRepo.softDelete({ namespaceId });
+        // Soft delete the namespace member record
+        await namespaceMemberRepo.softDelete({
+          namespaceId,
+          userId: deletionState.userId,
+        });
+        // Soft delete the namespace itself
+        await namespaceRepo.softDelete(namespaceId);
+      }
 
       // Soft delete user
       await manager.getRepository(User).softDelete(deletionState.userId);

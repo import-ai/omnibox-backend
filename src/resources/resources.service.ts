@@ -271,6 +271,62 @@ export class ResourcesService {
     });
   }
 
+  async batchGetResources(
+    namespaceId: string,
+    resourceIds?: string[],
+    createdAtBefore?: Date,
+    createdAtAfter?: Date,
+    userId?: string,
+    parentId?: string,
+    tagIds?: string[],
+  ): Promise<Resource[]> {
+    const hasFilter =
+      (resourceIds && resourceIds.length > 0) ||
+      createdAtBefore ||
+      createdAtAfter ||
+      userId ||
+      parentId ||
+      (tagIds && tagIds.length > 0);
+    if (!hasFilter) {
+      throw new AppException(
+        'At least one filter parameter is required',
+        'FILTER_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const queryBuilder = this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId });
+
+    if (resourceIds && resourceIds.length > 0) {
+      queryBuilder.andWhere('resource.id IN (:...resourceIds)', {
+        resourceIds,
+      });
+    }
+    if (createdAtBefore) {
+      queryBuilder.andWhere('resource.created_at <= :createdAtBefore', {
+        createdAtBefore,
+      });
+    }
+    if (createdAtAfter) {
+      queryBuilder.andWhere('resource.created_at >= :createdAtAfter', {
+        createdAtAfter,
+      });
+    }
+    if (userId) {
+      queryBuilder.andWhere('resource.user_id = :userId', { userId });
+    }
+    if (parentId) {
+      queryBuilder.andWhere('resource.parent_id = :parentId', { parentId });
+    }
+    if (tagIds && tagIds.length > 0) {
+      queryBuilder.andWhere('resource.tag_ids && :tagIds', { tagIds });
+    }
+
+    return await queryBuilder.getMany();
+  }
+
   async getResourceOrFail(
     namespaceId: string,
     resourceId: string,

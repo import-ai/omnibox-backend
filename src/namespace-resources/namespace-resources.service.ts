@@ -42,6 +42,7 @@ import {
   DownloadFileInfoDto,
 } from './dto/file-info.dto';
 import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
+import { InternalResourceDto } from './dto/internal-resource.dto';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -711,6 +712,90 @@ export class NamespaceResourcesService {
       false,
     );
     return InternalFileInfoDto.new(publicUrl, internalUrl);
+  }
+
+  async getResourcesForInternal(
+    namespaceId: string,
+    resourceIds: string[],
+    createdAtBefore?: Date,
+    createdAtAfter?: Date,
+    userId?: string,
+    parentId?: string,
+    tags?: string[],
+  ): Promise<InternalResourceDto[]> {
+    let tagIds: string[] | undefined;
+    if (tags && tags.length > 0) {
+      const tagEntities = await this.tagService.findByNames(namespaceId, tags);
+      tagIds = tagEntities.map((t) => t.id);
+      if (tagIds.length === 0) {
+        return [];
+      }
+    }
+
+    const resources = await this.resourcesService.batchGetResources(
+      namespaceId,
+      resourceIds,
+      createdAtBefore,
+      createdAtAfter,
+      userId,
+      parentId,
+      tagIds,
+    );
+
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    // Get paths for each resource
+    const result: InternalResourceDto[] = [];
+    for (const resource of resources) {
+      let path: ResourceMetaDto[] = [];
+      if (resource.parentId) {
+        const parentResources =
+          await this.resourcesService.getParentResourcesOrFail(
+            namespaceId,
+            resource.parentId,
+          );
+        path = parentResources.reverse();
+      }
+
+      result.push(
+        InternalResourceDto.fromEntity(
+          resource,
+          path,
+          tagsMap.get(resource.id) || [],
+        ),
+      );
+    }
+
+    return result;
+  }
+
+  async getResourceChildrenForInternal(
+    namespaceId: string,
+    resourceId: string,
+    depth: number,
+  ): Promise<ResourceMetaDto[]> {
+    if (depth < 1 || depth > 3) {
+      throw new AppException(
+        'Depth must be between 1 and 3',
+        'INVALID_DEPTH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const allChildren: ResourceMetaDto[] = [];
+    let resourceIds = [resourceId];
+    for (let currentDepth = 0; currentDepth < depth; currentDepth++) {
+      const children = await this.resourcesService.getSubResources(
+        namespaceId,
+        resourceIds,
+      );
+      if (children.length === 0) {
+        break;
+      }
+      allChildren.push(...children);
+      resourceIds = children.map((child) => child.id);
+    }
+    return allChildren;
   }
 
   async createResourceFile(

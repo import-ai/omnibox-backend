@@ -1,12 +1,14 @@
 import { Request } from 'express';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
+import { I18nService } from 'nestjs-i18n';
 
 import { User } from 'omniboxd/user/entities/user.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -14,6 +16,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     config: ConfigService,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly i18n: I18nService,
   ) {
     super({
       ignoreExpiration: false,
@@ -42,7 +45,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     // Reject if user doesn't exist or is soft-deleted
     if (!user) {
-      throw new UnauthorizedException('Invalid token');
+      const message = this.i18n.t('auth.errors.invalidToken');
+      throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
 
     return {

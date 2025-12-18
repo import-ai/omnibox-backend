@@ -43,7 +43,8 @@ export class WsJwtGuard implements CanActivate {
       });
 
       if (!user) {
-        throw new WsException('Invalid token');
+        const message = this.i18n.t('auth.errors.invalidToken');
+        throw new WsException(message);
       }
 
       client.data.userId = payload.sub;

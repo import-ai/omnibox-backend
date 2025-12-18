@@ -79,6 +79,7 @@ import { AddEnqueuedToTasks1765348624000 } from 'omniboxd/migrations/17653486240
 import { AddResourceIdToTasks1765443191000 } from 'omniboxd/migrations/1765443191000-add-resource-id-to-tasks';
 import { AddAdminRole1766339893375 } from 'omniboxd/migrations/1766339893375-add-admin-role';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
+import { AddNamespaceIdIndexToResources1766053289000 } from 'omniboxd/migrations/1766053289000-add-namespace-id-index-to-resources';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -212,6 +213,7 @@ export class AppModule implements NestModule {
               AddEnqueuedToTasks1765348624000,
               AddResourceIdToTasks1765443191000,
               AddAdminRole1766339893375,
+              AddNamespaceIdIndexToResources1766053289000,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -125,7 +125,11 @@ export class UserController {
     @UserId() userId: string,
     @Body() dto: InitiateAccountDeletionDto,
   ) {
-    return await this.userService.initiateAccountDeletion(userId, dto.username);
+    return await this.userService.initiateAccountDeletion(
+      userId,
+      dto.username,
+      dto.url,
+    );
   }
 
   @Public()

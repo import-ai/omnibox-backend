@@ -26,6 +26,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { filterEmoji } from 'omniboxd/utils/emoji';
+import { appendTokenToUrl } from 'omniboxd/utils/url-utils';
 
 interface EmailVerificationState {
   code: string;
@@ -506,7 +507,11 @@ export class UserService {
     return await this.userRepository.softDelete(id);
   }
 
-  async initiateAccountDeletion(userId: string, username: string) {
+  async initiateAccountDeletion(
+    userId: string,
+    username: string,
+    baseUrl: string,
+  ) {
     // 1. Verify user exists and username matches
     const user = await this.find(userId);
     if (user.username !== username) {
@@ -555,12 +560,13 @@ export class UserService {
       expiresIn,
     );
 
-    // 5. Send deletion confirmation email
+    // 5. Build confirmation URL and send deletion confirmation email
+    const confirmationUrl = appendTokenToUrl(baseUrl, token);
     const userLangOption = await this.getOption(userId, 'language');
     const userLang = userLangOption?.value;
     await this.mailService.sendAccountDeletionConfirmation(
       user.email,
-      token,
+      confirmationUrl,
       user.username,
       userLang,
     );

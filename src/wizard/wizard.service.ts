@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
@@ -278,6 +278,13 @@ export class WizardService {
       task.output = data.output || null;
       await this.preprocessTask(task);
 
+      // Set status based on exception
+      if (!isEmpty(task.exception)) {
+        task.status = TaskStatus.ERROR;
+      } else {
+        task.status = TaskStatus.FINISHED;
+      }
+
       await this.wizardTaskService.taskRepository.save(task);
 
       const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
@@ -446,6 +453,7 @@ export class WizardService {
     }
 
     task.startedAt = new Date();
+    task.status = TaskStatus.RUNNING;
     const newTask = await this.wizardTaskService.taskRepository.save(task);
     // Fetch HTML content from S3 for collect tasks
     if (

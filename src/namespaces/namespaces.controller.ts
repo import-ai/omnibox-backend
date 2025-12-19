@@ -64,13 +64,17 @@ export class NamespacesController {
     );
   }
 
-  @NamespaceOwner()
   @Delete(':namespaceId/members/:userId')
   async deleteMember(
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
+    @UserId() currentUserId: string,
   ) {
-    return await this.namespacesService.deleteMember(namespaceId, userId);
+    return await this.namespacesService.deleteMember(
+      namespaceId,
+      userId,
+      currentUserId,
+    );
   }
 
   @Get(':namespaceId/root')

@@ -242,8 +242,62 @@ export class NamespacesService {
     return await repo.update(id, namespace);
   }
 
-  async delete(id: string) {
-    await this.namespaceRepository.softDelete(id);
+  async delete(namespaceId: string) {
+    await transaction(this.dataSource.manager, async (tx) => {
+      const entityManager = tx.entityManager;
+
+      // Count members
+      const memberCount = await entityManager.count(NamespaceMember, {
+        where: { namespaceId },
+      });
+
+      // Block if more than 1 member
+      if (memberCount > 1) {
+        throw new AppException(
+          this.i18n.t('namespace.errors.cannotDeleteWithMembers'),
+          'CANNOT_DELETE_WITH_MEMBERS',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+
+      // Get the last member (must exist since owner is calling this)
+      const member = await entityManager.findOne(NamespaceMember, {
+        where: { namespaceId },
+      });
+
+      if (member) {
+        // Delete member's private root
+        await this.resourcesService.deleteResource(
+          member.userId,
+          namespaceId,
+          member.rootResourceId,
+          tx,
+        );
+        await entityManager.softDelete(UserPermission, {
+          namespaceId,
+          userId: member.userId,
+        });
+        await entityManager.softDelete(GroupUser, {
+          namespaceId,
+          userId: member.userId,
+        });
+        await entityManager.softDelete(NamespaceMember, { id: member.id });
+
+        // Delete teamspace root resource
+        const namespace = await this.getNamespace(namespaceId, entityManager);
+        if (namespace.rootResourceId) {
+          await this.resourcesService.deleteResource(
+            member.userId,
+            namespaceId,
+            namespace.rootResourceId,
+            tx,
+          );
+        }
+      }
+
+      // Soft delete namespace
+      await entityManager.softDelete(Namespace, namespaceId);
+    });
   }
 
   async createOrRestorePrivateRoot(
@@ -409,42 +463,95 @@ export class NamespacesService {
     });
   }
 
-  async deleteMember(namespaceId: string, userId: string) {
+  async deleteMember(
+    namespaceId: string,
+    userId: string,
+    currentUserId: string,
+  ) {
     await transaction(this.dataSource.manager, async (tx) => {
       const entityManager = tx.entityManager;
+
+      const isSelfRemoval = userId === currentUserId;
+
+      // Authorization check: non-owners can only remove themselves
+      if (!isSelfRemoval) {
+        const isOwner = await this.userIsOwner(namespaceId, currentUserId);
+        if (!isOwner) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.userNotOwner'),
+            'USER_NOT_OWNER',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+      }
 
       const member = await entityManager.findOne(NamespaceMember, {
         where: { namespaceId, userId },
       });
       if (!member) {
+        if (isSelfRemoval) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.notAMember'),
+            'NOT_A_MEMBER',
+            HttpStatus.FORBIDDEN,
+          );
+        }
         return;
       }
-      // Delete private root
+
+      if (isSelfRemoval) {
+        // Self-removal validations
+        const memberCount = await entityManager.count(NamespaceMember, {
+          where: { namespaceId },
+        });
+        if (memberCount === 1) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.lastMemberCannotQuit'),
+            'LAST_MEMBER_CANNOT_QUIT',
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
+        if (member.role === NamespaceRole.OWNER) {
+          const ownerCount = await entityManager.count(NamespaceMember, {
+            where: { namespaceId, role: NamespaceRole.OWNER },
+          });
+          if (ownerCount === 1) {
+            throw new AppException(
+              this.i18n.t('namespace.errors.lastOwnerCannotQuit'),
+              'LAST_OWNER_CANNOT_QUIT',
+              HttpStatus.UNPROCESSABLE_ENTITY,
+            );
+          }
+        }
+      }
+
+      // Cleanup
       await this.resourcesService.deleteResource(
         userId,
         namespaceId,
         member.rootResourceId,
         tx,
       );
-      // Clear user permissions
       await entityManager.softDelete(UserPermission, {
         namespaceId,
         userId,
       });
-      // Remove user from all groups
       await entityManager.softDelete(GroupUser, {
         namespaceId,
         userId,
       });
-      // Delete namespace member record
       await entityManager.softDelete(NamespaceMember, { id: member.id });
-      const hasOwner = await this.hasOwner(namespaceId, entityManager);
-      if (!hasOwner) {
-        throw new AppException(
-          this.i18n.t('namespace.errors.noOwnerAfterwards'),
-          'NO_OWNER_AFTERWARDS',
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
+
+      // Admin removal validation
+      if (!isSelfRemoval) {
+        const hasOwner = await this.hasOwner(namespaceId, entityManager);
+        if (!hasOwner) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.noOwnerAfterwards'),
+            'NO_OWNER_AFTERWARDS',
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
       }
     });
   }

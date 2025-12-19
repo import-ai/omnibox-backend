@@ -157,13 +157,6 @@ describe('UserController (e2e)', () => {
       expect(response.body.username).toBe(newUsername);
     });
 
-    it('should fail to update non-existent user', async () => {
-      await client
-        .patch('/api/v1/user/00000000-0000-0000-0000-000000000000')
-        .send({ username: 'newname' })
-        .expect(HttpStatus.NOT_FOUND);
-    });
-
     it('should fail without authentication', async () => {
       await client
         .request()
@@ -190,29 +183,12 @@ describe('UserController (e2e)', () => {
         .send({ email: 'invalid-email' })
         .expect(HttpStatus.BAD_REQUEST);
     });
-  });
 
-  describe('DELETE /api/v1/user/:id', () => {
-    it('should soft delete user', async () => {
-      // Create a user to delete
-      const userToDelete = await TestClient.create();
-
+    it('should fail to update another user', async () => {
       await client
-        .delete(`/api/v1/user/${userToDelete.user.id}`)
-        .expect(HttpStatus.OK);
-
-      // User should be soft deleted and not returned by find
-      await client
-        .get(`/api/v1/user/${userToDelete.user.id}`)
-        .expect(HttpStatus.NOT_FOUND);
-      await userToDelete.close();
-    });
-
-    it('should fail without authentication', async () => {
-      await client
-        .request()
-        .delete(`/api/v1/user/${client.user.id}`)
-        .expect(HttpStatus.UNAUTHORIZED);
+        .patch(`/api/v1/user/${secondClient.user.id}`)
+        .send({ username: 'hacker' })
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 

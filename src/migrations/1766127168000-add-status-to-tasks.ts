@@ -7,7 +7,8 @@ async function createTaskStatusEnum(queryRunner: QueryRunner): Promise<void> {
       'running',
       'finished',
       'error',
-      'canceled'
+      'canceled',
+      'timeout'
     );
   `);
 }

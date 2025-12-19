@@ -7,6 +7,7 @@ export enum TaskStatus {
   FINISHED = 'finished',
   ERROR = 'error',
   CANCELED = 'canceled',
+  TIMEOUT = 'timeout',
 }
 
 @Entity('tasks')

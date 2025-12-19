@@ -52,22 +52,18 @@ export default async () => {
   console.log('MailHog container started');
 
   const kafkaPort = 19092; // Use fixed port for tests
-  kafkaContainer = await new GenericContainer('apache/kafka:latest')
+  kafkaContainer = await new GenericContainer('bitnamilegacy/kafka:4.0')
     .withExposedPorts({ container: 9092, host: kafkaPort })
     .withEnvironment({
-      KAFKA_NODE_ID: '1',
-      KAFKA_PROCESS_ROLES: 'broker,controller',
-      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093',
-      KAFKA_ADVERTISED_LISTENERS: `PLAINTEXT://localhost:${kafkaPort}`,
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER',
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:
+      KAFKA_CFG_NODE_ID: '0',
+      KAFKA_CFG_PROCESS_ROLES: 'controller,broker',
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: '0@localhost:9093',
+      KAFKA_CFG_LISTENERS: 'PLAINTEXT://:9092,CONTROLLER://:9093',
+      KAFKA_CFG_ADVERTISED_LISTENERS: `PLAINTEXT://localhost:${kafkaPort}`,
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP:
         'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT',
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:9093',
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1',
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: '1',
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: '1',
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: '0',
-      KAFKA_NUM_PARTITIONS: '1',
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: 'CONTROLLER',
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT',
     })
     .withWaitStrategy(Wait.forListeningPorts())
     .start();

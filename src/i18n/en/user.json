@@ -10,7 +10,8 @@
     "passwordRequirements": "Password must contain at least one letter and one number",
     "emailAlreadyInUse": "Email already in use",
     "provideVerificationCode": "Please provide verification code",
-    "userCannotbeEmptyStr": "Invalid username"
+    "userCannotbeEmptyStr": "Invalid username",
+    "cannotUpdateOtherUser": "You do not have permission to update this user"
   },
   "success": {
     "emailVerificationSent": "Verification code has been sent to your new email address",

@@ -278,8 +278,9 @@ export class WizardService {
       task.output = data.output || null;
       await this.preprocessTask(task);
 
-      // Set status based on exception
-      if (!isEmpty(task.exception)) {
+      if (data.status) {
+        task.status = data.status;
+      } else if (!isEmpty(task.exception)) {
         task.status = TaskStatus.ERROR;
       } else {
         task.status = TaskStatus.FINISHED;

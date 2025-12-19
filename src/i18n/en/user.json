@@ -14,7 +14,7 @@
     "usernameMismatch": "Username does not match",
     "cannotDeleteOwnerWithMembers": "Cannot delete account. You own one or more namespaces with other members. Please transfer ownership or remove members first.",
     "invalidOrExpiredToken": "Invalid or expired confirmation token",
-    "emailRequiredForDeletion": "A verified email address is required for account deletion"
+    "emailRequiredForDeletion": "A verified email address is required for account deletion",
     "cannotUpdateOtherUser": "You do not have permission to update this user"
   },
   "success": {

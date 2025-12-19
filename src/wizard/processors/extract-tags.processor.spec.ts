@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ExtractTagsProcessor } from './extract-tags.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
@@ -82,6 +82,7 @@ describe('ExtractTagsProcessor', () => {
     deletedAt: null,
     enqueued: false,
     resourceId: 'test-resource-id',
+    status: TaskStatus.PENDING,
     ...overrides,
   });
 

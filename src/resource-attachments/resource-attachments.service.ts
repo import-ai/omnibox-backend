@@ -2,7 +2,7 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager } from 'typeorm';
+import { Repository, EntityManager, In } from 'typeorm';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
 
 @Injectable()
@@ -129,5 +129,22 @@ export class ResourceAttachmentsService {
         resourceId,
       },
     });
+  }
+
+  async getFirstAttachments(
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<Map<string, string>> {
+    const attachments = await this.resourceAttachmentRepository.find({
+      where: { namespaceId, resourceId: In(resourceIds) },
+      order: { id: 'ASC' },
+    });
+    const firstAttachments = new Map<string, string>();
+    for (const attachment of attachments) {
+      if (!firstAttachments.has(attachment.resourceId)) {
+        firstAttachments.set(attachment.resourceId, attachment.attachmentId);
+      }
+    }
+    return firstAttachments;
   }
 }

@@ -692,6 +692,9 @@ export class UserService {
         await namespaceRepo.softDelete(namespaceId);
       }
 
+      // Soft delete user's membership in all other namespaces (multi-member namespaces)
+      await namespaceMemberRepo.softDelete({ userId: deletionState.userId });
+
       // Soft delete user
       await manager.getRepository(User).softDelete(deletionState.userId);
     });

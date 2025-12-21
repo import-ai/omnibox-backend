@@ -33,7 +33,8 @@ import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { ChildrenMetaDto } from './dto/list-children-resp.dto';
+import { SidebarChildDto } from './dto/sidebar-child.dto';
+import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
 import {
@@ -442,7 +443,7 @@ export class NamespaceResourcesService {
     userId: string,
     limit: number = 10,
     offset: number = 0,
-  ): Promise<ResourceMetaDto[]> {
+  ): Promise<ResourceSummaryDto[]> {
     const allVisible = await this.getUserVisibleResources(userId, namespaceId);
     const sorted = allVisible
       .filter((r) => r.parentId !== null)
@@ -450,16 +451,21 @@ export class NamespaceResourcesService {
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const take = Math.max(1, Math.min(100, limit));
     const skip = Math.max(0, offset);
-    const resources = sorted.slice(skip, skip + take);
-    const firstAttachments =
-      await this.resourceAttachmentsService.getFirstAttachments(
-        namespaceId,
-        resources.map((r) => r.id),
-      );
-    for (const resource of resources) {
-      resource.firstAttachment = firstAttachments.get(resource.id);
-    }
-    return resources;
+    const paged = sorted.slice(skip, skip + take);
+
+    // Fetch full resources with content
+    const resources = await this.resourcesService.getChildren(
+      namespaceId,
+      paged.map((r) => r.parentId!),
+      { summary: true },
+    );
+    const resourceMap = new Map(resources.map((r) => [r.id, r]));
+
+    // Non-folders don't have children
+    return paged
+      .map((r) => resourceMap.get(r.id))
+      .filter((r): r is Resource => !!r)
+      .map((r) => ResourceSummaryDto.fromEntity(r, false));
   }
 
   // Alias for clarity and reuse across modules
@@ -541,30 +547,39 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-    limit?: number,
-    offset?: number,
-  ): Promise<ChildrenMetaDto[]> {
+    options?: {
+      summary?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<SidebarChildDto[] | ResourceSummaryDto[]> {
+    const { summary = false, limit, offset } = options || {};
+
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
     );
 
-    // Apply pagination at database level
-    let children = await this.resourcesService.getSubResources(
+    let children = await this.resourcesService.getChildren(
       namespaceId,
       [resourceId],
-      { limit, offset },
+      { summary, limit, offset },
     );
 
-    let subChildren = await this.resourcesService.getSubResources(
+    let subChildren = await this.resourcesService.getChildren(
       namespaceId,
       children.map((child) => child.id),
     );
 
+    const allResources = [
+      ...parents,
+      ...children.map((r) => ResourceMetaDto.fromEntity(r)),
+      ...subChildren.map((r) => ResourceMetaDto.fromEntity(r)),
+    ];
     const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,
-      [...parents, ...children, ...subChildren],
+      allResources,
     );
 
     children = children.filter((res) => {
@@ -590,8 +605,13 @@ export class NamespaceResourcesService {
       }
     }
 
-    return children.map(
-      (res) => new ChildrenMetaDto(res, !!hasChildrenMap.get(res.id)),
+    if (summary) {
+      return children.map((res) =>
+        ResourceSummaryDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
+      );
+    }
+    return children.map((res) =>
+      SidebarChildDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
     );
   }
 
@@ -652,7 +672,9 @@ export class NamespaceResourcesService {
 
     // Load tags of the resource
     const tagsMap = await this.getTagsForResources(namespaceId, [resource]);
-    const path = [resourceMeta, ...parentResources].reverse();
+    const path = [resourceMeta, ...parentResources]
+      .reverse()
+      .map((r) => ({ id: r.id, name: r.name }));
     return ResourceDto.fromEntity(
       resource,
       curPermission,

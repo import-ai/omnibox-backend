@@ -195,6 +195,48 @@ export class ResourcesService {
     return children.map((r) => ResourceMetaDto.fromEntity(r));
   }
 
+  /**
+   * Get children resources with configurable fields
+   * @param summary - if true, includes content/timestamps for folder view
+   */
+  async getChildren(
+    namespaceId: string,
+    parentIds: string[],
+    options?: {
+      summary?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<Resource[]> {
+    const baseFields: (keyof Resource)[] = [
+      'id',
+      'name',
+      'parentId',
+      'resourceType',
+      'globalPermission',
+      'attrs',
+    ];
+    const summaryFields: (keyof Resource)[] = [
+      'content',
+      'createdAt',
+      'updatedAt',
+    ];
+    const select = options?.summary
+      ? [...baseFields, ...summaryFields]
+      : baseFields;
+
+    return await this.resourceRepository.find({
+      select,
+      where: {
+        namespaceId,
+        parentId: In(parentIds),
+      },
+      order: { updatedAt: 'DESC' },
+      ...(options?.limit !== undefined && { take: options.limit }),
+      ...(options?.offset !== undefined && { skip: options.offset }),
+    });
+  }
+
   async getAllSubResources(
     namespaceId: string,
     parentIds: string[],

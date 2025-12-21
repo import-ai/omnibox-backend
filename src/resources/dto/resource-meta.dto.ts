@@ -29,7 +29,13 @@ export class ResourceMetaDto {
   @Expose({ name: 'attrs' })
   attrs: Record<string, any>;
 
+  @Expose({ name: 'content' })
+  content: string;
+
   fileId: string | null;
+
+  @Expose({ name: 'first_attachment' })
+  firstAttachment?: string;
 
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
@@ -40,6 +46,12 @@ export class ResourceMetaDto {
     dto.globalPermission = resource.globalPermission;
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
+
+    const contentWithoutImages = resource.content
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/<img[^>]*>/gi, '')
+      .trim();
+    dto.content = contentWithoutImages.slice(0, 100);
     dto.attrs = { ...resource.attrs };
     delete dto.attrs.transcript;
     delete dto.attrs.video_info;

@@ -42,7 +42,10 @@ export class UserController {
   async get(@Param('id') id: string) {
     return await this.userService.find(id);
   }
-
+  @Get('wx/profile')
+  async wxProfile(@UserId() userId: string) {
+    return await this.userService.find(userId);
+  }
   @Post('email/validate')
   async validateEmail(@UserId() userId: string, @Body('email') email: string) {
     const result = await this.userService.validateEmail(userId, email);

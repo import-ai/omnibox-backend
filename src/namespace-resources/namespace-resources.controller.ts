@@ -19,7 +19,8 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { ChildrenMetaDto } from './dto/list-children-resp.dto';
+import { SidebarChildDto } from './dto/sidebar-child.dto';
+import { ResourceSummaryDto } from './dto/resource-summary.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -118,13 +119,13 @@ export class NamespaceResourcesController {
     @Param('resourceId') resourceId: string,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
-  ): Promise<ChildrenMetaDto[]> {
+    @Query('summary') summary?: string,
+  ): Promise<SidebarChildDto[] | ResourceSummaryDto[]> {
     return this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
       userId,
-      limit,
-      offset,
+      { summary: summary === 'true', limit, offset },
     );
   }
 
@@ -164,7 +165,7 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-  ): Promise<ResourceMetaDto[]> {
+  ): Promise<ResourceSummaryDto[]> {
     const take = Number.isFinite(Number(limit)) ? Number(limit) : 10;
     const skip = Number.isFinite(Number(offset)) ? Number(offset) : 0;
     return await this.namespaceResourcesService.recent(

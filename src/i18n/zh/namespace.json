@@ -2,10 +2,14 @@
   "userNamespaceName": "{userName} 的空间",
   "uncategorized": "未分类",
   "errors": {
-    "workspaceNotFound": "工作空间未找到",
+    "workspaceNotFound": "空间未找到",
     "rootResourceNotFound": "根资源未找到",
     "namespaceConflict": "命名空间冲突",
     "userNotOwner": "当前用户不是该命名空间的所有者",
-    "noOwnerAfterwards": "需要保留至少一个所有者"
+    "noOwnerAfterwards": "需要保留至少一个所有者",
+    "notAMember": "您不是该空间的成员",
+    "lastMemberCannotQuit": "您是唯一的成员，请直接删除该空间",
+    "lastOwnerCannotQuit": "您是最后一个所有者，请先转移所有权",
+    "cannotDeleteWithMembers": "无法删除有多个成员的空间"
   }
 }

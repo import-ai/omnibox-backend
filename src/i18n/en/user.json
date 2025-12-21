@@ -11,10 +11,16 @@
     "emailAlreadyInUse": "Email already in use",
     "provideVerificationCode": "Please provide verification code",
     "userCannotbeEmptyStr": "Invalid username",
+    "usernameMismatch": "Username does not match",
+    "cannotDeleteOwnerWithMembers": "Cannot delete account. You own one or more namespaces with other members. Please transfer ownership or remove members first.",
+    "invalidOrExpiredToken": "Invalid or expired confirmation token",
+    "emailRequiredForDeletion": "A verified email address is required for account deletion",
     "cannotUpdateOtherUser": "You do not have permission to update this user"
   },
   "success": {
     "emailVerificationSent": "Verification code has been sent to your new email address",
-    "emailUpdatedSuccessfully": "Email address has been updated successfully"
+    "emailUpdatedSuccessfully": "Email address has been updated successfully",
+    "deletionEmailSent": "Account deletion confirmation email has been sent. Please check your inbox.",
+    "accountDeleted": "Your account has been successfully deleted"
   }
 }

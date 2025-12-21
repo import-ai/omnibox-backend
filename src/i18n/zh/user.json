@@ -11,10 +11,16 @@
     "emailAlreadyInUse": "邮箱已被使用",
     "provideVerificationCode": "请提供邮箱验证码",
     "userCannotbeEmptyStr": "无效的用户名",
+    "usernameMismatch": "用户名不匹配",
+    "cannotDeleteOwnerWithMembers": "无法删除账户。您拥有一个或多个包含其他成员的空间。请先转移所有权或移除成员。",
+    "invalidOrExpiredToken": "无效或已过期的确认令牌",
+    "emailRequiredForDeletion": "删除账户需要已验证的邮箱地址",
     "cannotUpdateOtherUser": "您无权更新此用户"
   },
   "success": {
     "emailVerificationSent": "验证码已发送至您的新邮箱地址",
-    "emailUpdatedSuccessfully": "邮箱地址已成功更新"
+    "emailUpdatedSuccessfully": "邮箱地址已成功更新",
+    "deletionEmailSent": "账户删除确认邮件已发送。请查收您的邮箱。",
+    "accountDeleted": "您的账户已成功删除"
   }
 }

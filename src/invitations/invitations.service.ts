@@ -161,6 +161,10 @@ export class InvitationsService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
+
+    // Validate namespace is still active before processing
+    await this.authService.validateNamespaceHasMembers(namespaceId);
+
     const invitationDto: AuthInvitationDto = {
       namespaceId,
       namespaceRole: invitation.namespaceRole,

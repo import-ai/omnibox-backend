@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { APIKeyAuthGuard } from 'omniboxd/auth';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import {
@@ -11,11 +12,13 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { User } from 'omniboxd/user/entities/user.entity';
 
 describe('APIKeyAuthGuard', () => {
   let guard: APIKeyAuthGuard;
   let apiKeyService: jest.Mocked<APIKeyService>;
   let reflector: jest.Mocked<Reflector>;
+  let userRepository: jest.Mocked<any>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -52,12 +55,19 @@ describe('APIKeyAuthGuard', () => {
             }),
           },
         },
+        {
+          provide: getRepositoryToken(User),
+          useValue: {
+            findOne: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     guard = module.get<APIKeyAuthGuard>(APIKeyAuthGuard);
     apiKeyService = module.get(APIKeyService);
     reflector = module.get(Reflector);
+    userRepository = module.get(getRepositoryToken(User));
   });
 
   const createMockExecutionContext = (
@@ -155,6 +165,7 @@ describe('APIKeyAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true }); // apiKeyAuthOptions = { enabled: true }
     const context = createMockExecutionContext('Bearer sk-validkey');
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
+    userRepository.findOne.mockResolvedValue({ id: 'user-123' });
 
     const result = await guard.canActivate(context);
     const request = context.switchToHttp().getRequest();
@@ -199,6 +210,7 @@ describe('APIKeyAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true, permissions: requiredPermissions }); // apiKeyAuthOptions
     const context = createMockExecutionContext('Bearer sk-validkey');
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
+    userRepository.findOne.mockResolvedValue({ id: 'user-123' });
 
     const result = await guard.canActivate(context);
     const request = context.switchToHttp().getRequest();
@@ -235,6 +247,7 @@ describe('APIKeyAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true, permissions: requiredPermissions }); // apiKeyAuthOptions
     const context = createMockExecutionContext('Bearer sk-validkey');
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
+    userRepository.findOne.mockResolvedValue({ id: 'user-123' });
 
     await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
@@ -271,6 +284,7 @@ describe('APIKeyAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true, permissions: requiredPermissions }); // apiKeyAuthOptions
     const context = createMockExecutionContext('Bearer sk-validkey');
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
+    userRepository.findOne.mockResolvedValue({ id: 'user-123' });
 
     await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
@@ -312,9 +326,40 @@ describe('APIKeyAuthGuard', () => {
       .mockReturnValueOnce({ enabled: true, permissions: requiredPermissions }); // apiKeyAuthOptions
     const context = createMockExecutionContext('Bearer sk-validkey');
     apiKeyService.findByValue.mockResolvedValue(mockApiKey);
+    userRepository.findOne.mockResolvedValue({ id: 'user-123' });
 
     const result = await guard.canActivate(context);
 
     expect(result).toBe(true);
+  });
+
+  it('should throw AppException when API key owner does not exist', async () => {
+    const mockApiKey: APIKey = {
+      id: 'test-id',
+      value: 'sk-validkey',
+      userId: 'user-123',
+      namespaceId: 'namespace-456',
+      attrs: {
+        root_resource_id: 'resource-789',
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    };
+
+    reflector.getAllAndOverride
+      .mockReturnValueOnce(false) // isPublic = false
+      .mockReturnValueOnce({ enabled: true }); // apiKeyAuthOptions = { enabled: true }
+    const context = createMockExecutionContext('Bearer sk-validkey');
+    apiKeyService.findByValue.mockResolvedValue(mockApiKey);
+    userRepository.findOne.mockResolvedValue(null); // User not found
+
+    await expect(guard.canActivate(context)).rejects.toThrow(AppException);
   });
 });

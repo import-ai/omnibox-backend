@@ -9,7 +9,8 @@
     "emailChangeVerification": "邮箱变更验证",
     "emailChangeNotification": "您的邮箱已变更",
     "emailOtp": "您的验证码",
-    "invite": "{senderUsername} 邀请您加入空间 {namespaceName}"
+    "invite": "{senderUsername} 邀请您加入空间 {namespaceName}",
+    "accountDeletion": "确认删除账户"
   },
   "templates": {
     "signUp": {
@@ -69,6 +70,17 @@
       "buttonText": "接受邀请",
       "ignoreText": "如果您不想加入此空间，请忽略此邮件。",
       "expireText": "此邀请将在7天后过期。"
+    },
+    "accountDeletion": {
+      "title": "账户删除确认",
+      "heading": "确认删除账户",
+      "greeting": "您好",
+      "warningTitle": "⚠️ 警告：此操作无法撤销",
+      "warningBody": "一旦确认，您的账户将被永久删除。您的所有数据将被永久删除且无法恢复。",
+      "body": "我们收到了删除您账户的请求。如果您想继续，请在15分钟内点击下方按钮：",
+      "buttonText": "确认删除账户",
+      "expireText": "此链接将在15分钟后过期。",
+      "ignoreText": "如果您没有请求删除账户，请忽略此邮件，您的账户将保持活跃状态。"
     }
   }
 }

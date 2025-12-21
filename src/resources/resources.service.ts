@@ -67,7 +67,6 @@ export class ResourcesService {
         'fileId',
         'createdAt',
         'updatedAt',
-        'content',
       ],
       where: { namespaceId, id: resourceId },
     });
@@ -182,7 +181,6 @@ export class ResourcesService {
         'createdAt',
         'updatedAt',
         'attrs',
-        'content',
       ],
       where: {
         namespaceId,
@@ -271,7 +269,6 @@ export class ResourcesService {
         'createdAt',
         'updatedAt',
         'attrs',
-        'content',
       ],
       where: {
         namespaceId,

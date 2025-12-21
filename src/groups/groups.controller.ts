@@ -14,13 +14,13 @@ import { GroupDto } from './dto/group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupUserDto } from './dto/group-user.dto';
 import { AddGroupUserDto } from './dto/add-group-user.dto';
-import { NamespaceOwner } from 'omniboxd/namespaces/decorators/namespace-owner.decorator';
+import { NamespaceAdmin } from 'omniboxd/namespaces/decorators/namespace-admin.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/groups')
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Get()
   async list(@Param('namespaceId') namespaceId: string) {
     const groups = await this.groupsService.listGroups(namespaceId);
@@ -39,7 +39,7 @@ export class GroupsController {
     });
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Post()
   async create(
     @Param('namespaceId') namespaceId: string,
@@ -52,7 +52,7 @@ export class GroupsController {
     return plainToInstance(GroupDto, group);
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Patch(':groupId')
   async update(
     @Param('namespaceId') namespaceId: string,
@@ -67,7 +67,7 @@ export class GroupsController {
     return plainToInstance(GroupDto, group);
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Delete(':groupId')
   async delete(
     @Param('namespaceId') namespaceId: string,
@@ -76,7 +76,7 @@ export class GroupsController {
     await this.groupsService.deleteGroup(namespaceId, groupId);
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Get(':groupId/users')
   async listGroupUsers(
     @Param('namespaceId') namespaceId: string,
@@ -88,7 +88,7 @@ export class GroupsController {
     });
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Post(':groupId/users')
   async addGroupUser(
     @Param('namespaceId') namespaceId: string,
@@ -106,7 +106,7 @@ export class GroupsController {
     await Promise.all(actions);
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Delete(':groupId/users/:userId')
   async deleteGroupUser(
     @Param('namespaceId') namespaceId: string,

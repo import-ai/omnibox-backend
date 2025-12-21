@@ -10,10 +10,15 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { Namespace } from './entities/namespace.entity';
 import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interceptor';
+import { NamespaceAdminInterceptor } from './interceptors/namespace-admin.interceptor';
 
 @Module({
   exports: [NamespacesService],
-  providers: [NamespacesService, NamespaceOwnerInterceptor],
+  providers: [
+    NamespacesService,
+    NamespaceOwnerInterceptor,
+    NamespaceAdminInterceptor,
+  ],
   controllers: [NamespacesController],
   imports: [
     UserModule,

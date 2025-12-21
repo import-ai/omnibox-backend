@@ -3,6 +3,7 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum NamespaceRole {
   OWNER = 'owner',
+  ADMIN = 'admin',
   MEMBER = 'member',
 }
 

@@ -106,6 +106,10 @@ export class InvitationsService {
       req.namespaceRole = NamespaceRole.MEMBER;
       req.rootPermission = ResourcePermission.NO_ACCESS;
     }
+    // Prevent creating owner invitations - auto-downgrade to admin
+    if (req.namespaceRole === NamespaceRole.OWNER) {
+      req.namespaceRole = NamespaceRole.ADMIN;
+    }
     if (!req.namespaceRole || !req.rootPermission) {
       const message = this.i18n.t(
         'invitation.errors.roleAndPermissionRequired',

@@ -1,6 +1,6 @@
 {
   "name": "omniboxd",
-  "version": "0.1.10",
+  "version": "0.1.16",
   "private": true,
   "scripts": {
     "build": "nest build",

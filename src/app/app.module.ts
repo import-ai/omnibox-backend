@@ -77,6 +77,7 @@ import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615
 import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
 import { AddEnqueuedToTasks1765348624000 } from 'omniboxd/migrations/1765348624000-add-enqueued-to-tasks';
 import { AddResourceIdToTasks1765443191000 } from 'omniboxd/migrations/1765443191000-add-resource-id-to-tasks';
+import { AddAdminRole1766339893375 } from 'omniboxd/migrations/1766339893375-add-admin-role';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 
 @Module({})
@@ -210,6 +211,7 @@ export class AppModule implements NestModule {
               AddMetadataToUserBindings1762847685000,
               AddEnqueuedToTasks1765348624000,
               AddResourceIdToTasks1765443191000,
+              AddAdminRole1766339893375,
               ...extraMigrations,
             ],
             migrationsRun: true,

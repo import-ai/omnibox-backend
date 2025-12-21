@@ -14,6 +14,7 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateNamespaceDto } from './dto/create-namespace.dto';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceOwner } from './decorators/namespace-owner.decorator';
+import { NamespaceAdmin } from './decorators/namespace-admin.decorator';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
@@ -29,7 +30,7 @@ export class NamespacesController {
     return await this.namespacesService.getNamespace(namespaceId);
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Get(':namespaceId/members')
   async listMembers(@Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.listMembers(namespaceId);
@@ -41,7 +42,7 @@ export class NamespacesController {
     return { count };
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Get(':namespaceId/members/:userId')
   async getMemberByUserId(
     @Param('namespaceId') namespaceId: string,
@@ -50,7 +51,7 @@ export class NamespacesController {
     return await this.namespacesService.getMemberByUserId(namespaceId, userId);
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Patch(':namespaceId/members/:userId')
   async UpdateMemberRole(
     @Param('namespaceId') namespaceId: string,
@@ -101,13 +102,27 @@ export class NamespacesController {
     );
   }
 
-  @NamespaceOwner()
+  @NamespaceAdmin()
   @Patch(':namespaceId')
   async update(
     @Param('namespaceId') namespaceId: string,
     @Body() updateDto: UpdateNamespaceDto,
   ) {
     return await this.namespacesService.update(namespaceId, updateDto);
+  }
+
+  @NamespaceOwner()
+  @Post(':namespaceId/transfer-ownership')
+  async transferOwnership(
+    @Param('namespaceId') namespaceId: string,
+    @Body('newOwnerId') newOwnerId: string,
+    @UserId() currentUserId: string,
+  ) {
+    return await this.namespacesService.transferOwnership(
+      namespaceId,
+      currentUserId,
+      newOwnerId,
+    );
   }
 
   @NamespaceOwner()

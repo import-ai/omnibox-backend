@@ -36,6 +36,8 @@ export class WechatService {
   private readonly oldOpenAppSecret: string;
   private readonly redirectUri: string;
   private readonly migrationRedirectUri: string;
+  private readonly miniProgramAppId: string;
+  private readonly miniProgramAppSecret: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -78,6 +80,15 @@ export class WechatService {
     );
     this.migrationRedirectUri = this.configService.get<string>(
       'OBB_WECHAT_MIGRATION_REDIRECT_URI',
+      '',
+    );
+
+    this.miniProgramAppId = this.configService.get<string>(
+      'OBB_MINI_PROGRAM_APP_ID',
+      '',
+    );
+    this.miniProgramAppSecret = this.configService.get<string>(
+      'OBB_MINI_PROGRAM_APP_SECRET',
       '',
     );
   }
@@ -401,5 +412,116 @@ export class WechatService {
       );
     }
     await this.userService.unbindByLoginType(userId, 'wechat');
+  }
+
+  async miniProgramLogin(code: string, lang?: string): Promise<any> {
+    if (!this.miniProgramAppId || !this.miniProgramAppSecret) {
+      const message = this.i18n.t('auth.errors.miniProgramNotConfigured', {
+        defaultValue: 'WeChat MiniProgram is not configured',
+      });
+      throw new AppException(
+        message,
+        'MINIPROGRAM_NOT_CONFIGURED',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    this.logger.debug({ code });
+    const jscode2sessionResponse = await fetch(
+      `https://api.weixin.qq.com/sns/jscode2session?appid=${this.miniProgramAppId}&secret=${this.miniProgramAppSecret}&js_code=${code}&grant_type=authorization_code`,
+    );
+
+    if (!jscode2sessionResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.oauthFailed', {
+        args: { provider: providerName },
+      });
+      throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
+    }
+
+    const sessionData = await jscode2sessionResponse.json();
+    console.log('=== MiniProgram Login Debug ===');
+    console.log('Has unionid:', !!sessionData.unionid);
+    console.log('Has openid:', !!sessionData.openid);
+    console.log('unionid value:', sessionData.unionid);
+    console.log('openid value:', sessionData.openid);
+    console.log('==============================');
+    if (sessionData.errcode) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: ${sessionData.errmsg}`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    // check if openid is present
+    if (!sessionData.openid) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: missing openid`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Prioritize using unionid, if not available, use openid (add prefix distinction)
+    const loginId = sessionData.unionid
+      ? sessionData.unionid
+      : `miniprogram_${sessionData.openid}`;
+
+    console.log('Using loginId for lookup:', loginId);
+
+    const wechatUser = await this.userService.findByLoginId(loginId);
+
+    console.log(
+      'Found existing user:',
+      wechatUser
+        ? `Yes (id: ${wechatUser.id}, username: ${wechatUser.username})`
+        : 'No',
+    );
+
+    if (wechatUser) {
+      return {
+        id: wechatUser.id,
+        username: wechatUser.username,
+        access_token: this.jwtService.sign({
+          sub: wechatUser.id,
+        }),
+      };
+    }
+
+    return await this.dataSource.transaction(async (manager) => {
+      const username: string = await this.socialService.getValidUsername(
+        `wx_${sessionData.openid.substring(0, 10)}`,
+        manager,
+      );
+      this.logger.debug({ username, openid: sessionData.openid });
+
+      const newUser = await this.userService.createUserBinding(
+        {
+          username,
+          loginType: 'wechat',
+          loginId: loginId,
+          lang,
+        } as CreateUserBindingDto,
+        manager,
+      );
+      await this.namespaceService.createUserNamespace(
+        newUser.id,
+        newUser.username,
+      );
+      return {
+        id: newUser.id,
+        username: newUser.username,
+        access_token: this.jwtService.sign({
+          sub: newUser.id,
+        }),
+      };
+    });
   }
 }

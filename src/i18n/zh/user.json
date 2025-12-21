@@ -10,7 +10,8 @@
     "passwordRequirements": "密码必须包含至少一个字母和一个数字",
     "emailAlreadyInUse": "邮箱已被使用",
     "provideVerificationCode": "请提供邮箱验证码",
-    "userCannotbeEmptyStr": "无效的用户名"
+    "userCannotbeEmptyStr": "无效的用户名",
+    "cannotUpdateOtherUser": "您无权更新此用户"
   },
   "success": {
     "emailVerificationSent": "验证码已发送至您的新邮箱地址",

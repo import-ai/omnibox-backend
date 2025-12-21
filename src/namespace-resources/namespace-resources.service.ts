@@ -19,7 +19,6 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { S3Service } from 'omniboxd/s3/s3.service';
-import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import {
@@ -43,8 +42,8 @@ import {
   DownloadFileInfoDto,
 } from './dto/file-info.dto';
 import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
+import { InternalResourceDto } from './dto/internal-resource.dto';
 
-const TASK_PRIORITY = 5;
 @Injectable()
 export class NamespaceResourcesService {
   constructor(
@@ -57,7 +56,6 @@ export class NamespaceResourcesService {
     private readonly s3Service: S3Service,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
-    private readonly wizardTaskService: WizardTaskService,
     private readonly resourcesService: ResourcesService,
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
@@ -728,6 +726,90 @@ export class NamespaceResourcesService {
     return InternalFileInfoDto.new(publicUrl, internalUrl);
   }
 
+  async getResourcesForInternal(
+    namespaceId: string,
+    resourceIds: string[],
+    createdAtBefore?: Date,
+    createdAtAfter?: Date,
+    userId?: string,
+    parentId?: string,
+    tags?: string[],
+  ): Promise<InternalResourceDto[]> {
+    let tagIds: string[] | undefined;
+    if (tags && tags.length > 0) {
+      const tagEntities = await this.tagService.findByNames(namespaceId, tags);
+      tagIds = tagEntities.map((t) => t.id);
+      if (tagIds.length === 0) {
+        return [];
+      }
+    }
+
+    const resources = await this.resourcesService.batchGetResources(
+      namespaceId,
+      resourceIds,
+      createdAtBefore,
+      createdAtAfter,
+      userId,
+      parentId,
+      tagIds,
+    );
+
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    // Get paths for each resource
+    const result: InternalResourceDto[] = [];
+    for (const resource of resources) {
+      let path: ResourceMetaDto[] = [];
+      if (resource.parentId) {
+        const parentResources =
+          await this.resourcesService.getParentResourcesOrFail(
+            namespaceId,
+            resource.parentId,
+          );
+        path = parentResources.reverse();
+      }
+
+      result.push(
+        InternalResourceDto.fromEntity(
+          resource,
+          path,
+          tagsMap.get(resource.id) || [],
+        ),
+      );
+    }
+
+    return result;
+  }
+
+  async getResourceChildrenForInternal(
+    namespaceId: string,
+    resourceId: string,
+    depth: number,
+  ): Promise<ResourceMetaDto[]> {
+    if (depth < 1 || depth > 3) {
+      throw new AppException(
+        'Depth must be between 1 and 3',
+        'INVALID_DEPTH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const allChildren: ResourceMetaDto[] = [];
+    let resourceIds = [resourceId];
+    for (let currentDepth = 0; currentDepth < depth; currentDepth++) {
+      const children = await this.resourcesService.getSubResources(
+        namespaceId,
+        resourceIds,
+      );
+      if (children.length === 0) {
+        break;
+      }
+      allChildren.push(...children);
+      resourceIds = children.map((child) => child.id);
+    }
+    return allChildren;
+  }
+
   async createResourceFile(
     userId: string,
     namespaceId: string,
@@ -790,18 +872,15 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    await transaction(this.dataSource.manager, async (tx) => {
-      const manager = tx.entityManager;
-      await manager.softDelete(Resource, id);
-      await this.wizardTaskService.emitDeleteIndexTask(userId, resource, tx);
-    });
+    await this.resourcesService.deleteResource(userId, namespaceId, id);
   }
 
-  async restore(userId: string, id: string) {
+  async restore(userId: string, namespaceId: string, resourceId: string) {
     const resource = await this.resourceRepository.findOne({
       withDeleted: true,
       where: {
-        id,
+        namespaceId,
+        id: resourceId,
       },
     });
     if (!resource) {
@@ -820,16 +899,11 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    await transaction(this.dataSource.manager, async (tx) => {
-      const manager = tx.entityManager;
-      await manager.restore(Resource, id);
-      await this.wizardTaskService.emitUpsertIndexTask(
-        TASK_PRIORITY,
-        userId,
-        resource,
-        tx,
-      );
-    });
+    await this.resourcesService.restoreResource(
+      userId,
+      namespaceId,
+      resourceId,
+    );
   }
 
   s3Path(resourceId: string) {

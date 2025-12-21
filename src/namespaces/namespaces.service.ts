@@ -252,13 +252,12 @@ export class NamespacesService {
     namespaceMember: NamespaceMember | null,
     tx: Transaction,
   ): Promise<string> {
-    const entityManager = tx.entityManager;
-
     if (namespaceMember) {
       await this.resourcesService.restoreResource(
+        userId,
         namespaceId,
         namespaceMember.rootResourceId,
-        entityManager,
+        tx,
       );
       return namespaceMember.rootResourceId;
     }
@@ -411,8 +410,10 @@ export class NamespacesService {
   }
 
   async deleteMember(namespaceId: string, userId: string) {
-    await this.dataSource.transaction(async (manager) => {
-      const member = await manager.findOne(NamespaceMember, {
+    await transaction(this.dataSource.manager, async (tx) => {
+      const entityManager = tx.entityManager;
+
+      const member = await entityManager.findOne(NamespaceMember, {
         where: { namespaceId, userId },
       });
       if (!member) {
@@ -420,23 +421,24 @@ export class NamespacesService {
       }
       // Delete private root
       await this.resourcesService.deleteResource(
+        userId,
         namespaceId,
         member.rootResourceId,
-        manager,
+        tx,
       );
       // Clear user permissions
-      await manager.softDelete(UserPermission, {
+      await entityManager.softDelete(UserPermission, {
         namespaceId,
         userId,
       });
       // Remove user from all groups
-      await manager.softDelete(GroupUser, {
+      await entityManager.softDelete(GroupUser, {
         namespaceId,
         userId,
       });
       // Delete namespace member record
-      await manager.softDelete(NamespaceMember, { id: member.id });
-      const hasOwner = await this.hasOwner(namespaceId, manager);
+      await entityManager.softDelete(NamespaceMember, { id: member.id });
+      const hasOwner = await this.hasOwner(namespaceId, entityManager);
       if (!hasOwner) {
         throw new AppException(
           this.i18n.t('namespace.errors.noOwnerAfterwards'),

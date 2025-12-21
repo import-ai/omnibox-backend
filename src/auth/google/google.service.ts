@@ -192,6 +192,7 @@ export class GoogleService {
           );
         }
         const returnValue = {
+          isBinding: true,
           id: googleUser.id,
           access_token: this.jwtService.sign({
             sub: googleUser.id,
@@ -209,6 +210,7 @@ export class GoogleService {
         metadata: userData,
       });
       const returnValue = {
+        isBinding: true,
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,

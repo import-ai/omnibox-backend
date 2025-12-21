@@ -9,12 +9,13 @@ import {
   Patch,
   Query,
   Param,
-  Delete,
   Post,
   Controller,
   ParseIntPipe,
+  HttpStatus,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 @Controller('api/v1/user')
 export class UserController {
@@ -58,7 +59,20 @@ export class UserController {
   }
 
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() account: UpdateUserDto) {
+  async update(
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() account: UpdateUserDto,
+  ) {
+    if (userId !== id) {
+      const message = this.i18n.t('user.errors.cannotUpdateOtherUser');
+      throw new AppException(
+        message,
+        'CANNOT_UPDATE_OTHER_USER',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const result = await this.userService.update(id, account);
     // If email was updated, add success message
     if (account.email) {
@@ -69,11 +83,6 @@ export class UserController {
       };
     }
     return result;
-  }
-
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return await this.userService.remove(id);
   }
 
   @Post('option')

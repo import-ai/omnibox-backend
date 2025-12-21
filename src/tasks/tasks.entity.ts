@@ -41,4 +41,7 @@ export class Task extends Base {
 
   @Column({ default: false })
   enqueued: boolean;
+
+  @Column('varchar', { nullable: true })
+  resourceId: string | null;
 }

@@ -219,6 +219,7 @@ export class WechatService {
           );
         }
         const returnValue = {
+          isBinding: true,
           id: wechatUser.id,
           access_token: this.jwtService.sign({
             sub: wechatUser.id,
@@ -238,6 +239,7 @@ export class WechatService {
         metadata: userData,
       });
       const returnValue = {
+        isBinding: true,
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,

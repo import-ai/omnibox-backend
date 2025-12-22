@@ -165,7 +165,8 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
-  ): Promise<ResourceSummaryDto[]> {
+    @Query('summary') summary?: string,
+  ): Promise<SidebarChildDto[] | ResourceSummaryDto[]> {
     const take = Number.isFinite(Number(limit)) ? Number(limit) : 10;
     const skip = Number.isFinite(Number(offset)) ? Number(offset) : 0;
     return await this.namespaceResourcesService.recent(
@@ -173,6 +174,7 @@ export class NamespaceResourcesController {
       userId,
       take,
       skip,
+      { summary: summary === 'true' },
     );
   }
 

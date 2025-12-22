@@ -15,7 +15,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config jest.e2e-config.js --runInBand",
+    "test:e2e": "jest --config jest.e2e-config.js --runInBand --detectOpenHandles --forceExit",
     "prepare": "husky || true"
   },
   "devDependencies": {

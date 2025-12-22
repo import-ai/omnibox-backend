@@ -133,7 +133,7 @@ jobs:
         run: cp example.env .env
 
       - name: Run tests
-        run: pnpm test:e2e --coverage
+        run: pnpm test:e2e --coverage --bail
         env:
           OBB_LOG_LEVELS: ''
 

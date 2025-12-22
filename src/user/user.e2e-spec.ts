@@ -4,7 +4,6 @@ import { HttpStatus } from '@nestjs/common';
 describe('UserController (e2e)', () => {
   let client: TestClient;
   let secondClient: TestClient;
-  const tempClients: TestClient[] = [];
 
   beforeAll(async () => {
     client = await TestClient.create();
@@ -14,9 +13,6 @@ describe('UserController (e2e)', () => {
   afterAll(async () => {
     await client.close();
     await secondClient.close();
-    for (const tempClient of tempClients) {
-      await tempClient.close();
-    }
   });
 
   describe('GET /api/v1/user', () => {

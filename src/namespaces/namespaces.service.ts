@@ -22,6 +22,10 @@ import { I18nService } from 'nestjs-i18n';
 import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 import { filterEmoji } from 'omniboxd/utils/emoji';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { APIKey } from 'omniboxd/api-key/api-key.entity';
+import { Applications } from 'omniboxd/applications/applications.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Share } from 'omniboxd/shares/entities/share.entity';
 
 @Injectable()
 export class NamespacesService {
@@ -50,6 +54,43 @@ export class NamespacesService {
       where: { namespaceId, role: NamespaceRole.OWNER, deletedAt: IsNull() },
     });
     return count > 0;
+  }
+
+  /**
+   * Destructor: Clean up user's data when leaving or being removed from a namespace.
+   * - Soft-deletes API keys created by user in namespace
+   * - Soft-deletes WeChat assistant applications
+   * - Cancels ongoing tasks
+   * - Disables shares created by user in namespace
+   */
+  private async destructor(
+    namespaceId: string,
+    userId: string,
+    entityManager: EntityManager,
+  ): Promise<void> {
+    // Soft-delete API keys for this user in this namespace
+    await entityManager.softDelete(APIKey, { namespaceId, userId });
+
+    // Soft-delete applications (WeChat assistant) for this user in this namespace
+    await entityManager.softDelete(Applications, { namespaceId, userId });
+
+    // Cancel ongoing tasks for this user in this namespace
+    await entityManager
+      .createQueryBuilder()
+      .update(Task)
+      .set({ canceledAt: () => 'NOW()' })
+      .where('namespaceId = :namespaceId', { namespaceId })
+      .andWhere('userId = :userId', { userId })
+      .andWhere('endedAt IS NULL')
+      .andWhere('canceledAt IS NULL')
+      .execute();
+
+    // Disable shares created by this user in this namespace
+    await entityManager.update(
+      Share,
+      { namespaceId, userId },
+      { enabled: false },
+    );
   }
 
   async getPrivateRootId(userId: string, namespaceId: string): Promise<string> {
@@ -266,6 +307,9 @@ export class NamespacesService {
       });
 
       if (member) {
+        // Run destructor to clean up member's data in this namespace
+        await this.destructor(namespaceId, member.userId, entityManager);
+
         // Delete member's private root
         await this.resourcesService.deleteResource(
           member.userId,
@@ -394,6 +438,7 @@ export class NamespacesService {
     namespaceId: string,
     userId: string,
     role: NamespaceRole,
+    currentUserId: string,
   ) {
     await this.dataSource.transaction(async (manager) => {
       const currentMember = await manager.findOne(NamespaceMember, {
@@ -405,6 +450,21 @@ export class NamespacesService {
           this.i18n.t('namespace.errors.memberNotFound'),
           'MEMBER_NOT_FOUND',
           HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Check if current user is admin (not owner) - they cannot promote to admin or owner
+      const currentUserMember = await manager.findOne(NamespaceMember, {
+        where: { namespaceId, userId: currentUserId, deletedAt: IsNull() },
+      });
+      if (
+        currentUserMember?.role === NamespaceRole.ADMIN &&
+        (role === NamespaceRole.ADMIN || role === NamespaceRole.OWNER)
+      ) {
+        throw new AppException(
+          this.i18n.t('namespace.errors.adminCannotPromoteToAdmin'),
+          'ADMIN_CANNOT_PROMOTE_TO_ADMIN',
+          HttpStatus.FORBIDDEN,
         );
       }
 
@@ -548,6 +608,18 @@ export class NamespacesService {
             );
           }
         }
+
+        // Admins cannot remove other admins (only owner can)
+        if (member.role === NamespaceRole.ADMIN) {
+          const isOwner = await this.userIsOwner(namespaceId, currentUserId);
+          if (!isOwner) {
+            throw new AppException(
+              this.i18n.t('namespace.errors.adminCannotRemoveAdmin'),
+              'ADMIN_CANNOT_REMOVE_ADMIN',
+              HttpStatus.FORBIDDEN,
+            );
+          }
+        }
       }
 
       if (isSelfRemoval) {
@@ -575,6 +647,9 @@ export class NamespacesService {
           }
         }
       }
+
+      // Run destructor to clean up user's data in this namespace
+      await this.destructor(namespaceId, userId, entityManager);
 
       // Cleanup
       await this.resourcesService.deleteResource(

@@ -15,6 +15,8 @@
     "namespaceHasOwner": "This namespace already has an owner",
     "targetNotMember": "Target user is not a member of this namespace",
     "cannotRemoveOwner": "Only owner can remove the owner",
-    "memberNotFound": "Member not found"
+    "memberNotFound": "Member not found",
+    "adminCannotRemoveAdmin": "Admin cannot remove another admin",
+    "adminCannotPromoteToAdmin": "Admin cannot promote user to admin"
   }
 }

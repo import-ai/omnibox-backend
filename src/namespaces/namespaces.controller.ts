@@ -57,11 +57,13 @@ export class NamespacesController {
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
     @Body('role') role: NamespaceRole,
+    @UserId() currentUserId: string,
   ) {
     return await this.namespacesService.updateMemberRole(
       namespaceId,
       userId,
       role,
+      currentUserId,
     );
   }
 

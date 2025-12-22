@@ -15,6 +15,8 @@
     "namespaceHasOwner": "该命名空间已有所有者",
     "targetNotMember": "目标用户不是该命名空间的成员",
     "cannotRemoveOwner": "只有所有者可以移除所有者",
-    "memberNotFound": "成员未找到"
+    "memberNotFound": "成员未找到",
+    "adminCannotRemoveAdmin": "管理员无法移除其他管理员",
+    "adminCannotPromoteToAdmin": "管理员无法将用户提升为管理员"
   }
 }

@@ -443,7 +443,9 @@ export class NamespaceResourcesService {
     userId: string,
     limit: number = 10,
     offset: number = 0,
-  ): Promise<ResourceSummaryDto[]> {
+    options?: { summary?: boolean },
+  ): Promise<SidebarChildDto[] | ResourceSummaryDto[]> {
+    const { summary = false } = options || {};
     const allVisible = await this.getUserVisibleResources(userId, namespaceId);
     const sorted = allVisible
       .filter((r) => r.parentId !== null)
@@ -453,11 +455,11 @@ export class NamespaceResourcesService {
     const skip = Math.max(0, offset);
     const paged = sorted.slice(skip, skip + take);
 
-    // Fetch full resources with content
+    // Fetch resources with or without content based on summary flag
     const resources = await this.resourcesService.getChildren(
       namespaceId,
       paged.map((r) => r.parentId!),
-      { summary: true },
+      { summary },
     );
     const resourceMap = new Map(resources.map((r) => [r.id, r]));
 
@@ -466,17 +468,22 @@ export class NamespaceResourcesService {
       .map((r) => resourceMap.get(r.id))
       .filter((r): r is Resource => !!r);
 
-    // Fetch first attachments
-    const firstAttachments =
-      await this.resourceAttachmentsService.getFirstAttachments(
-        namespaceId,
-        finalResources.map((r) => r.id),
-      );
+    if (summary) {
+      // Fetch first attachments only when summary is true
+      const firstAttachments =
+        await this.resourceAttachmentsService.getFirstAttachments(
+          namespaceId,
+          finalResources.map((r) => r.id),
+        );
 
-    // For recent api, hasChildren is always false
-    return finalResources.map((r) =>
-      ResourceSummaryDto.fromEntity(r, false, firstAttachments.get(r.id)),
-    );
+      // For recent api, hasChildren is always false
+      return finalResources.map((r) =>
+        ResourceSummaryDto.fromEntity(r, false, firstAttachments.get(r.id)),
+      );
+    }
+
+    // For non-summary, return lightweight SidebarChildDto
+    return finalResources.map((r) => SidebarChildDto.fromEntity(r, false));
   }
 
   // Alias for clarity and reuse across modules

@@ -10,6 +10,7 @@ export default tseslint.config(
       'eslint.config.mjs',
       'test/jest-e2e-setup.ts',
       'test/jest-e2e-teardown.ts',
+      'test/custom-sequencer.ts',
     ],
   },
   eslint.configs.recommended,

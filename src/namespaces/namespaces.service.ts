@@ -14,6 +14,7 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import {
   NamespaceMember,
   NamespaceRole,
+  ROLE_LEVEL,
 } from './entities/namespace-member.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
@@ -453,19 +454,35 @@ export class NamespacesService {
         );
       }
 
-      // Check if current user is admin (not owner) - they cannot promote to admin or owner
+      // Check role hierarchy permissions
       const currentUserMember = await manager.findOne(NamespaceMember, {
         where: { namespaceId, userId: currentUserId, deletedAt: IsNull() },
       });
-      if (
-        currentUserMember?.role === NamespaceRole.ADMIN &&
-        (role === NamespaceRole.ADMIN || role === NamespaceRole.OWNER)
-      ) {
-        throw new AppException(
-          this.i18n.t('namespace.errors.adminCannotPromoteToAdmin'),
-          'ADMIN_CANNOT_PROMOTE_TO_ADMIN',
-          HttpStatus.FORBIDDEN,
-        );
+
+      // Owners can modify anyone and assign any role
+      if (currentUserMember?.role !== NamespaceRole.OWNER) {
+        const currentUserLevel =
+          ROLE_LEVEL[currentUserMember?.role ?? NamespaceRole.MEMBER];
+        const targetUserLevel = ROLE_LEVEL[currentMember.role];
+        const newRoleLevel = ROLE_LEVEL[role];
+
+        // Non-owners can only modify users at levels strictly greater than their own
+        if (currentUserLevel >= targetUserLevel) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.insufficientPermission'),
+            'INSUFFICIENT_PERMISSION',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+
+        // Non-owners can only assign roles at levels strictly greater than their own
+        if (currentUserLevel >= newRoleLevel) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.cannotAssignHigherRole'),
+            'CANNOT_ASSIGN_HIGHER_ROLE',
+            HttpStatus.FORBIDDEN,
+          );
+        }
       }
 
       // Prevent promoting to owner if namespace already has an owner

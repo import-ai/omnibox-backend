@@ -507,32 +507,14 @@ describe('NamespacesController (e2e)', () => {
         expect(response.body.name).toBe(newName);
       });
 
-      it('should allow admin to update member role (except to owner)', async () => {
-        // Admin updates member's role
+      it('should prevent admin from promoting member to admin', async () => {
+        // Admin tries to promote member to admin - should fail
         await secondClient
           .patch(
             `/api/v1/namespaces/${adminTestNamespaceId}/members/${thirdClient.user.id}`,
           )
           .send({ role: NamespaceRole.ADMIN })
-          .expect(HttpStatus.OK);
-
-        // Verify change
-        const members = await client
-          .get(`/api/v1/namespaces/${adminTestNamespaceId}/members`)
-          .expect(HttpStatus.OK);
-
-        const thirdMember = members.body.find(
-          (m: { userId?: string; user_id?: string }) =>
-            (m.userId || m.user_id) === thirdClient.user.id,
-        );
-        expect(thirdMember.role).toBe(NamespaceRole.ADMIN);
-
-        // Restore to member
-        await client
-          .patch(
-            `/api/v1/namespaces/${adminTestNamespaceId}/members/${thirdClient.user.id}`,
-          )
-          .send({ role: NamespaceRole.MEMBER });
+          .expect(HttpStatus.FORBIDDEN);
       });
 
       it('should prevent admin from promoting to owner', async () => {
@@ -541,7 +523,7 @@ describe('NamespacesController (e2e)', () => {
             `/api/v1/namespaces/${adminTestNamespaceId}/members/${thirdClient.user.id}`,
           )
           .send({ role: NamespaceRole.OWNER })
-          .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+          .expect(HttpStatus.FORBIDDEN);
       });
 
       it('should prevent admin from removing owner', async () => {
@@ -555,6 +537,52 @@ describe('NamespacesController (e2e)', () => {
       it('should prevent admin from deleting namespace', async () => {
         await secondClient
           .delete(`/api/v1/namespaces/${adminTestNamespaceId}`)
+          .expect(HttpStatus.FORBIDDEN);
+      });
+
+      it('should prevent admin from demoting another admin to member', async () => {
+        // First, have owner promote thirdClient to admin
+        await client
+          .patch(
+            `/api/v1/namespaces/${adminTestNamespaceId}/members/${thirdClient.user.id}`,
+          )
+          .send({ role: NamespaceRole.ADMIN })
+          .expect(HttpStatus.OK);
+
+        // Now secondClient (admin) tries to demote thirdClient (admin) to member - should fail
+        await secondClient
+          .patch(
+            `/api/v1/namespaces/${adminTestNamespaceId}/members/${thirdClient.user.id}`,
+          )
+          .send({ role: NamespaceRole.MEMBER })
+          .expect(HttpStatus.FORBIDDEN);
+
+        // Restore thirdClient to member (by owner)
+        await client
+          .patch(
+            `/api/v1/namespaces/${adminTestNamespaceId}/members/${thirdClient.user.id}`,
+          )
+          .send({ role: NamespaceRole.MEMBER })
+          .expect(HttpStatus.OK);
+      });
+
+      it('should prevent admin from demoting self to member', async () => {
+        // Admin tries to demote self to member - should fail
+        await secondClient
+          .patch(
+            `/api/v1/namespaces/${adminTestNamespaceId}/members/${secondClient.user.id}`,
+          )
+          .send({ role: NamespaceRole.MEMBER })
+          .expect(HttpStatus.FORBIDDEN);
+      });
+
+      it('should prevent admin from modifying owner role', async () => {
+        // Admin tries to change owner's role - should fail
+        await secondClient
+          .patch(
+            `/api/v1/namespaces/${adminTestNamespaceId}/members/${client.user.id}`,
+          )
+          .send({ role: NamespaceRole.MEMBER })
           .expect(HttpStatus.FORBIDDEN);
       });
     });

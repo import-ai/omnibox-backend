@@ -17,6 +17,8 @@
     "cannotRemoveOwner": "Only owner can remove the owner",
     "memberNotFound": "Member not found",
     "adminCannotRemoveAdmin": "Admin cannot remove another admin",
-    "adminCannotPromoteToAdmin": "Admin cannot promote user to admin"
+    "adminCannotPromoteToAdmin": "Admin cannot promote user to admin",
+    "insufficientPermission": "You do not have permission to modify this user",
+    "cannotAssignHigherRole": "You cannot assign a role equal to or higher than your own"
   }
 }

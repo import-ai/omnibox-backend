@@ -13,6 +13,7 @@ import {
   Controller,
   HttpCode,
   Query,
+  HttpStatus,
 } from '@nestjs/common';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
@@ -21,12 +22,15 @@ import {
   VerifyEmailOtpDto,
   SendEmailOtpResponseDto,
 } from './dto/email-otp.dto';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 @Controller('api/v1')
 export class AuthController {
   constructor(
     private authService: AuthService,
     private configService: ConfigService,
+    private namespacesService: NamespacesService,
   ) {}
 
   @UseGuards(LocalAuthGuard)
@@ -138,6 +142,19 @@ export class AuthController {
     @Body('emails') emails: Array<string>,
     @Body('groupTitles') groupTitles: Array<string>,
   ) {
+    // Check if current user is owner or admin of the namespace
+    const isOwnerOrAdmin = await this.namespacesService.userIsOwnerOrAdmin(
+      namespaceId,
+      req.user.id,
+    );
+    if (!isOwnerOrAdmin) {
+      throw new AppException(
+        'Only owner or admin can invite users',
+        'USER_NOT_OWNER_OR_ADMIN',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     if (groupTitles && groupTitles.length > 0) {
       await this.authService.inviteGroup(
         namespaceId,

@@ -1,4 +1,4 @@
-import { Expose } from 'class-transformer';
+import { Expose, Transform } from 'class-transformer';
 import {
   Resource,
   ResourceType,
@@ -23,6 +23,14 @@ export class SidebarChildDto {
   @Expose({ name: 'has_children' })
   hasChildren: boolean;
 
+  @Expose({ name: 'created_at' })
+  @Transform(({ value }) => value.toISOString())
+  createdAt: Date;
+
+  @Expose({ name: 'updated_at' })
+  @Transform(({ value }) => value.toISOString())
+  updatedAt: Date;
+
   static fromEntity(resource: Resource, hasChildren: boolean): SidebarChildDto {
     const dto = new SidebarChildDto();
     dto.id = resource.id;
@@ -33,6 +41,8 @@ export class SidebarChildDto {
     delete dto.attrs.transcript;
     delete dto.attrs.video_info;
     dto.hasChildren = hasChildren;
+    dto.createdAt = resource.createdAt;
+    dto.updatedAt = resource.updatedAt;
     return dto;
   }
 }

@@ -213,12 +213,10 @@ export class ResourcesService {
       'resourceType',
       'globalPermission',
       'attrs',
-    ];
-    const summaryFields: (keyof Resource)[] = [
-      'content',
       'createdAt',
       'updatedAt',
     ];
+    const summaryFields: (keyof Resource)[] = ['content'];
     const select = options?.summary
       ? [...baseFields, ...summaryFields]
       : baseFields;

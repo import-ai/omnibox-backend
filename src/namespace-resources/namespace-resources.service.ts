@@ -461,11 +461,22 @@ export class NamespaceResourcesService {
     );
     const resourceMap = new Map(resources.map((r) => [r.id, r]));
 
-    // Non-folders don't have children
-    return paged
+    // Get the final list of resources
+    const finalResources = paged
       .map((r) => resourceMap.get(r.id))
-      .filter((r): r is Resource => !!r)
-      .map((r) => ResourceSummaryDto.fromEntity(r, false));
+      .filter((r): r is Resource => !!r);
+
+    // Fetch first attachments
+    const firstAttachments =
+      await this.resourceAttachmentsService.getFirstAttachments(
+        namespaceId,
+        finalResources.map((r) => r.id),
+      );
+
+    // For recent api, hasChildren is always false
+    return finalResources.map((r) =>
+      ResourceSummaryDto.fromEntity(r, false, firstAttachments.get(r.id)),
+    );
   }
 
   // Alias for clarity and reuse across modules
@@ -606,8 +617,17 @@ export class NamespaceResourcesService {
     }
 
     if (summary) {
+      const firstAttachments =
+        await this.resourceAttachmentsService.getFirstAttachments(
+          namespaceId,
+          children.map((r) => r.id),
+        );
       return children.map((res) =>
-        ResourceSummaryDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
+        ResourceSummaryDto.fromEntity(
+          res,
+          !!hasChildrenMap.get(res.id),
+          firstAttachments.get(res.id),
+        ),
       );
     }
     return children.map((res) =>

@@ -31,9 +31,13 @@ export class ResourceSummaryDto {
   @Transform(({ value }) => value.toISOString())
   updatedAt: Date;
 
+  @Expose({ name: 'first_attachment' })
+  firstAttachment?: string;
+
   static fromEntity(
     resource: Resource,
     hasChildren: boolean,
+    firstAttachment?: string,
   ): ResourceSummaryDto {
     const dto = new ResourceSummaryDto();
     dto.id = resource.id;
@@ -51,6 +55,7 @@ export class ResourceSummaryDto {
     dto.hasChildren = hasChildren;
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
+    dto.firstAttachment = firstAttachment;
     return dto;
   }
 }

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner, TableIndex } from 'typeorm';
 
-export class AddNamespaceIdIndexToResources1766053289000
-  implements MigrationInterface
-{
+export class AddNamespaceIdIndexToResources1766053289000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.createIndex(
       'resources',

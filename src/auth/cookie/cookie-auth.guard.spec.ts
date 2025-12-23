@@ -38,7 +38,6 @@ describe('CookieAuthGuard', () => {
               const translations: Record<string, string> = {
                 'auth.errors.tokenCookieRequired':
                   'Authentication token cookie is required',
-                'auth.errors.tokenInvalid': 'Invalid or expired token',
                 'auth.errors.invalidTokenPayload': 'Invalid token payload',
                 'auth.errors.invalidToken': 'Invalid token',
                 'auth.errors.tokenExpired': 'Token expired',

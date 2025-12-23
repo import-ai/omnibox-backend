@@ -413,7 +413,7 @@ export class AuthService {
     const payload: SignUpPayloadDto = this.jwtVerify(token);
 
     if (!payload.email || !payload.invitation) {
-      const message = this.i18n.t('auth.errors.tokenInvalid');
+      const message = this.i18n.t('auth.errors.invalidToken');
       throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
 
@@ -588,7 +588,7 @@ export class AuthService {
       if (!this.knownErrors.some((cls) => error instanceof cls)) {
         this.logger.error({ error });
       }
-      const message = this.i18n.t('auth.errors.tokenInvalid');
+      const message = this.i18n.t('auth.errors.invalidToken');
       throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
   }

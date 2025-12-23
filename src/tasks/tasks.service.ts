@@ -119,6 +119,21 @@ export class TasksService {
     );
   }
 
+  async cancelUserTasks(
+    namespaceId: string,
+    userId: string,
+    tx: Transaction,
+  ): Promise<void> {
+    if (!namespaceId || !userId) {
+      return;
+    }
+    await tx.entityManager.update(
+      Task,
+      { namespaceId, userId, canceledAt: IsNull(), endedAt: IsNull() },
+      { canceledAt: new Date() },
+    );
+  }
+
   async list(
     namespaceId: string,
     offset: number,

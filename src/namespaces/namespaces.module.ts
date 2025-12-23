@@ -8,6 +8,7 @@ import { NamespaceMember } from './entities/namespace-member.entity';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { Namespace } from './entities/namespace.entity';
 import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interceptor';
 import { NamespaceAdminInterceptor } from './interceptors/namespace-admin.interceptor';
@@ -25,6 +26,7 @@ import { NamespaceAdminInterceptor } from './interceptors/namespace-admin.interc
     NamespaceResourcesModule,
     ResourcesModule,
     PermissionsModule,
+    TasksModule,
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Namespace]),
     TypeOrmModule.forFeature([NamespaceMember]),

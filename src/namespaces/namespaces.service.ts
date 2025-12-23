@@ -25,7 +25,7 @@ import { filterEmoji } from 'omniboxd/utils/emoji';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import { Applications } from 'omniboxd/applications/applications.entity';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
 @Injectable()
@@ -44,6 +44,7 @@ export class NamespacesService {
     private readonly resourcesService: ResourcesService,
 
     private readonly permissionsService: PermissionsService,
+    private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -67,8 +68,10 @@ export class NamespacesService {
   private async destructor(
     namespaceId: string,
     userId: string,
-    entityManager: EntityManager,
+    tx: Transaction,
   ): Promise<void> {
+    const entityManager = tx.entityManager;
+
     // Soft-delete API keys for this user in this namespace
     await entityManager.softDelete(APIKey, { namespaceId, userId });
 
@@ -76,15 +79,7 @@ export class NamespacesService {
     await entityManager.softDelete(Applications, { namespaceId, userId });
 
     // Cancel ongoing tasks for this user in this namespace
-    await entityManager
-      .createQueryBuilder()
-      .update(Task)
-      .set({ canceledAt: () => 'NOW()' })
-      .where('namespaceId = :namespaceId', { namespaceId })
-      .andWhere('userId = :userId', { userId })
-      .andWhere('endedAt IS NULL')
-      .andWhere('canceledAt IS NULL')
-      .execute();
+    await this.tasksService.cancelUserTasks(namespaceId, userId, tx);
 
     // Disable shares created by this user in this namespace
     await entityManager.update(
@@ -309,7 +304,7 @@ export class NamespacesService {
 
       if (member) {
         // Run destructor to clean up member's data in this namespace
-        await this.destructor(namespaceId, member.userId, entityManager);
+        await this.destructor(namespaceId, member.userId, tx);
 
         // Delete member's private root
         await this.resourcesService.deleteResource(
@@ -666,7 +661,7 @@ export class NamespacesService {
       }
 
       // Run destructor to clean up user's data in this namespace
-      await this.destructor(namespaceId, userId, entityManager);
+      await this.destructor(namespaceId, userId, tx);
 
       // Cleanup
       await this.resourcesService.deleteResource(

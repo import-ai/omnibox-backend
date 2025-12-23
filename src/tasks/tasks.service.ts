@@ -1,5 +1,5 @@
 import { IsNull, Repository } from 'typeorm';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { TaskDto, TaskMetaDto } from './dto/task.dto';
@@ -115,7 +115,7 @@ export class TasksService {
     await tx.entityManager.update(
       Task,
       { namespaceId, resourceId, canceledAt: IsNull(), endedAt: IsNull() },
-      { canceledAt: new Date() },
+      { canceledAt: new Date(), status: TaskStatus.CANCELED },
     );
   }
 
@@ -201,6 +201,7 @@ export class TasksService {
     }
 
     task.canceledAt = new Date();
+    task.status = TaskStatus.CANCELED;
     const updatedTask = await this.taskRepository.save(task);
 
     return TaskDto.fromEntity(updatedTask);

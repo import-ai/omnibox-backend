@@ -1,6 +1,15 @@
 import { Base } from 'omniboxd/common/base.entity';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
+export enum TaskStatus {
+  PENDING = 'pending',
+  RUNNING = 'running',
+  FINISHED = 'finished',
+  ERROR = 'error',
+  CANCELED = 'canceled',
+  TIMEOUT = 'timeout',
+}
+
 @Entity('tasks')
 export class Task extends Base {
   @PrimaryGeneratedColumn()
@@ -44,4 +53,7 @@ export class Task extends Base {
 
   @Column('varchar', { nullable: true })
   resourceId: string | null;
+
+  @Column('enum', { enum: TaskStatus, default: TaskStatus.PENDING })
+  status: TaskStatus;
 }

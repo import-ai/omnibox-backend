@@ -1,21 +1,4 @@
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { isEmpty } from 'omniboxd/utils/is-empty';
-
-function getTaskStatus(task: Task): string {
-  if (task.canceledAt) {
-    return 'canceled';
-  }
-  if (!isEmpty(task.exception)) {
-    return 'error';
-  }
-  if (task.endedAt) {
-    return 'finished';
-  }
-  if (task.startedAt) {
-    return 'running';
-  }
-  return 'pending';
-}
 
 class TaskDtoBase {
   id: string;
@@ -37,7 +20,7 @@ class TaskDtoBase {
     obj.user_id = task.userId;
     obj.priority = task.priority;
     obj.function = task.function;
-    obj.status = getTaskStatus(task);
+    obj.status = task.status;
     obj.created_at = task.createdAt.toISOString();
     obj.updated_at = task.updatedAt.toISOString();
     obj.started_at = task.startedAt?.toISOString() || null;

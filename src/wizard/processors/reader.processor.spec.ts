@@ -4,7 +4,7 @@ import { ReaderProcessor } from './reader.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -103,6 +103,7 @@ describe('ReaderProcessor', () => {
       deletedAt: null,
       enqueued: false,
       resourceId: 'test-resource-id',
+      status: TaskStatus.PENDING,
       ...overrides,
     });
 

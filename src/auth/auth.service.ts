@@ -399,6 +399,9 @@ export class AuthService {
       );
     }
 
+    // Validate namespace is still active
+    await this.validateNamespaceHasMembers(payload.invitation.namespaceId);
+
     const user = await this.userService.find(payload.userId);
     await transaction(this.dataSource.manager, async (tx) => {
       await this.handleUserInvitation(user.id, payload.invitation, tx);
@@ -410,11 +413,14 @@ export class AuthService {
     const payload: SignUpPayloadDto = this.jwtVerify(token);
 
     if (!payload.email || !payload.invitation) {
-      const message = this.i18n.t('auth.errors.tokenInvalid');
+      const message = this.i18n.t('auth.errors.invalidToken');
       throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
 
     const { email, invitation } = payload;
+
+    // Validate namespace is still active before processing
+    await this.validateNamespaceHasMembers(invitation.namespaceId);
 
     // Check if user already exists
     const existingUser = await this.userService.findByEmail(email);
@@ -539,6 +545,38 @@ export class AuthService {
     }
   }
 
+  async validateNamespaceHasMembers(namespaceId: string): Promise<void> {
+    try {
+      // getNamespace will throw WORKSPACE_NOT_FOUND if namespace is soft-deleted
+      await this.namespaceService.getNamespace(namespaceId);
+    } catch (error) {
+      // Show invitationNotFound if namespace doesn't exist
+      if (
+        error instanceof AppException &&
+        error.code === 'WORKSPACE_NOT_FOUND'
+      ) {
+        const message = this.i18n.t('invitation.errors.invitationNotFound');
+        throw new AppException(
+          message,
+          'INVITATION_NOT_FOUND',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw error;
+    }
+
+    // Ensure namespace has at least one active member
+    const memberCount = await this.namespaceService.countMembers(namespaceId);
+    if (memberCount === 0) {
+      const message = this.i18n.t('invitation.errors.invitationNotFound');
+      throw new AppException(
+        message,
+        'INVITATION_NOT_FOUND',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
   jwtVerify(token: string) {
     if (!token) {
       const message = this.i18n.t('auth.errors.noToken');
@@ -550,7 +588,7 @@ export class AuthService {
       if (!this.knownErrors.some((cls) => error instanceof cls)) {
         this.logger.error({ error });
       }
-      const message = this.i18n.t('auth.errors.tokenInvalid');
+      const message = this.i18n.t('auth.errors.invalidToken');
       throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
   }

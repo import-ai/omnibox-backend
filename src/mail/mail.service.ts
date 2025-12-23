@@ -161,4 +161,35 @@ export class MailService {
       );
     }
   }
+
+  async sendAccountDeletionConfirmation(
+    email: string,
+    confirmationUrl: string,
+    username?: string,
+    userLang?: string,
+  ): Promise<void> {
+    const lang = userLang || I18nContext.current()?.lang;
+    const subject = this.i18n.t('mail.subjects.accountDeletion', { lang });
+
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject,
+        template: 'account-deletion',
+        context: {
+          username,
+          confirmationUrl,
+          i18nLang: lang,
+        },
+      });
+    } catch (error) {
+      this.logger.error({ error });
+      const message = this.i18n.t('mail.errors.unableToSendEmail');
+      throw new AppException(
+        message,
+        'UNABLE_TO_SEND_EMAIL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }

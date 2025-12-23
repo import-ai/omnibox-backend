@@ -14,6 +14,7 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import {
   NamespaceMember,
   NamespaceRole,
+  ROLE_LEVEL,
 } from './entities/namespace-member.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
@@ -22,6 +23,10 @@ import { I18nService } from 'nestjs-i18n';
 import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 import { filterEmoji } from 'omniboxd/utils/emoji';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { APIKey } from 'omniboxd/api-key/api-key.entity';
+import { Applications } from 'omniboxd/applications/applications.entity';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { Share } from 'omniboxd/shares/entities/share.entity';
 
 @Injectable()
 export class NamespacesService {
@@ -39,6 +44,7 @@ export class NamespacesService {
     private readonly resourcesService: ResourcesService,
 
     private readonly permissionsService: PermissionsService,
+    private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -47,9 +53,40 @@ export class NamespacesService {
     entityManager: EntityManager,
   ): Promise<boolean> {
     const count = await entityManager.count(NamespaceMember, {
-      where: { namespaceId, role: NamespaceRole.OWNER },
+      where: { namespaceId, role: NamespaceRole.OWNER, deletedAt: IsNull() },
     });
     return count > 0;
+  }
+
+  /**
+   * Destructor: Clean up user's data when leaving or being removed from a namespace.
+   * - Soft-deletes API keys created by user in namespace
+   * - Soft-deletes WeChat assistant applications
+   * - Cancels ongoing tasks
+   * - Disables shares created by user in namespace
+   */
+  private async destructor(
+    namespaceId: string,
+    userId: string,
+    tx: Transaction,
+  ): Promise<void> {
+    const entityManager = tx.entityManager;
+
+    // Soft-delete API keys for this user in this namespace
+    await entityManager.softDelete(APIKey, { namespaceId, userId });
+
+    // Soft-delete applications (WeChat assistant) for this user in this namespace
+    await entityManager.softDelete(Applications, { namespaceId, userId });
+
+    // Cancel ongoing tasks for this user in this namespace
+    await this.tasksService.cancelUserTasks(namespaceId, userId, tx);
+
+    // Disable shares created by this user in this namespace
+    await entityManager.update(
+      Share,
+      { namespaceId, userId },
+      { enabled: false },
+    );
   }
 
   async getPrivateRootId(userId: string, namespaceId: string): Promise<string> {
@@ -242,8 +279,65 @@ export class NamespacesService {
     return await repo.update(id, namespace);
   }
 
-  async delete(id: string) {
-    await this.namespaceRepository.softDelete(id);
+  async delete(namespaceId: string) {
+    await transaction(this.dataSource.manager, async (tx) => {
+      const entityManager = tx.entityManager;
+
+      // Count members
+      const memberCount = await entityManager.count(NamespaceMember, {
+        where: { namespaceId },
+      });
+
+      // Block if more than 1 member
+      if (memberCount > 1) {
+        throw new AppException(
+          this.i18n.t('namespace.errors.cannotDeleteWithMembers'),
+          'CANNOT_DELETE_WITH_MEMBERS',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      // Get the last member (must exist since owner is calling this)
+      const member = await entityManager.findOne(NamespaceMember, {
+        where: { namespaceId },
+      });
+
+      if (member) {
+        // Run destructor to clean up member's data in this namespace
+        await this.destructor(namespaceId, member.userId, tx);
+
+        // Delete member's private root
+        await this.resourcesService.deleteResource(
+          member.userId,
+          namespaceId,
+          member.rootResourceId,
+          tx,
+        );
+        await entityManager.softDelete(UserPermission, {
+          namespaceId,
+          userId: member.userId,
+        });
+        await entityManager.softDelete(GroupUser, {
+          namespaceId,
+          userId: member.userId,
+        });
+        await entityManager.softDelete(NamespaceMember, { id: member.id });
+
+        // Delete teamspace root resource
+        const namespace = await this.getNamespace(namespaceId, entityManager);
+        if (namespace.rootResourceId) {
+          await this.resourcesService.deleteResource(
+            member.userId,
+            namespaceId,
+            namespace.rootResourceId,
+            tx,
+          );
+        }
+      }
+
+      // Soft delete namespace
+      await entityManager.softDelete(Namespace, namespaceId);
+    });
   }
 
   async createOrRestorePrivateRoot(
@@ -288,6 +382,15 @@ export class NamespacesService {
     if (count > 0) {
       return;
     }
+
+    // Prevent adding new owners via invitation - auto-downgrade to ADMIN
+    if (role === NamespaceRole.OWNER) {
+      const ownerExists = await this.hasOwner(namespaceId, entityManager);
+      if (ownerExists) {
+        role = NamespaceRole.ADMIN;
+      }
+    }
+
     const namespaceMember = await entityManager.findOne(NamespaceMember, {
       where: { namespaceId, userId },
       order: { updatedAt: 'DESC' },
@@ -331,8 +434,67 @@ export class NamespacesService {
     namespaceId: string,
     userId: string,
     role: NamespaceRole,
+    currentUserId: string,
   ) {
     await this.dataSource.transaction(async (manager) => {
+      const currentMember = await manager.findOne(NamespaceMember, {
+        where: { namespaceId, userId, deletedAt: IsNull() },
+      });
+
+      if (!currentMember) {
+        throw new AppException(
+          this.i18n.t('namespace.errors.memberNotFound'),
+          'MEMBER_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Check role hierarchy permissions
+      const currentUserMember = await manager.findOne(NamespaceMember, {
+        where: { namespaceId, userId: currentUserId, deletedAt: IsNull() },
+      });
+
+      // Owners can modify anyone and assign any role
+      if (currentUserMember?.role !== NamespaceRole.OWNER) {
+        const currentUserLevel =
+          ROLE_LEVEL[currentUserMember?.role ?? NamespaceRole.MEMBER];
+        const targetUserLevel = ROLE_LEVEL[currentMember.role];
+        const newRoleLevel = ROLE_LEVEL[role];
+
+        // Non-owners can only modify users at levels strictly greater than their own
+        if (currentUserLevel >= targetUserLevel) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.insufficientPermission'),
+            'INSUFFICIENT_PERMISSION',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+
+        // Non-owners can only assign roles at levels strictly greater than their own
+        if (currentUserLevel >= newRoleLevel) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.cannotAssignHigherRole'),
+            'CANNOT_ASSIGN_HIGHER_ROLE',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+      }
+
+      // Prevent promoting to owner if namespace already has an owner
+      if (
+        role === NamespaceRole.OWNER &&
+        currentMember.role !== NamespaceRole.OWNER
+      ) {
+        const ownerExists = await this.hasOwner(namespaceId, manager);
+        if (ownerExists) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.namespaceHasOwner'),
+            'NAMESPACE_HAS_OWNER',
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
+      }
+
       await manager.update(NamespaceMember, { namespaceId, userId }, { role });
       const hasOwner = await this.hasOwner(namespaceId, manager);
       if (!hasOwner) {
@@ -409,42 +571,125 @@ export class NamespacesService {
     });
   }
 
-  async deleteMember(namespaceId: string, userId: string) {
+  async deleteMember(
+    namespaceId: string,
+    userId: string,
+    currentUserId: string,
+  ) {
     await transaction(this.dataSource.manager, async (tx) => {
       const entityManager = tx.entityManager;
+
+      const isSelfRemoval = userId === currentUserId;
 
       const member = await entityManager.findOne(NamespaceMember, {
         where: { namespaceId, userId },
       });
       if (!member) {
+        if (isSelfRemoval) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.notAMember'),
+            'NOT_A_MEMBER',
+            HttpStatus.FORBIDDEN,
+          );
+        }
         return;
       }
-      // Delete private root
+
+      // Authorization check: only owner/admin can remove others
+      if (!isSelfRemoval) {
+        const isOwnerOrAdmin = await this.userIsOwnerOrAdmin(
+          namespaceId,
+          currentUserId,
+        );
+        if (!isOwnerOrAdmin) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.userNotOwnerOrAdmin'),
+            'USER_NOT_OWNER_OR_ADMIN',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+
+        // Admins cannot remove the owner
+        if (member.role === NamespaceRole.OWNER) {
+          const isOwner = await this.userIsOwner(namespaceId, currentUserId);
+          if (!isOwner) {
+            throw new AppException(
+              this.i18n.t('namespace.errors.cannotRemoveOwner'),
+              'CANNOT_REMOVE_OWNER',
+              HttpStatus.FORBIDDEN,
+            );
+          }
+        }
+
+        // Admins cannot remove other admins (only owner can)
+        if (member.role === NamespaceRole.ADMIN) {
+          const isOwner = await this.userIsOwner(namespaceId, currentUserId);
+          if (!isOwner) {
+            throw new AppException(
+              this.i18n.t('namespace.errors.adminCannotRemoveAdmin'),
+              'ADMIN_CANNOT_REMOVE_ADMIN',
+              HttpStatus.FORBIDDEN,
+            );
+          }
+        }
+      }
+
+      if (isSelfRemoval) {
+        // Self-removal validations
+        const memberCount = await entityManager.count(NamespaceMember, {
+          where: { namespaceId },
+        });
+        if (memberCount === 1) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.lastMemberCannotQuit'),
+            'LAST_MEMBER_CANNOT_QUIT',
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
+        if (member.role === NamespaceRole.OWNER) {
+          const ownerCount = await entityManager.count(NamespaceMember, {
+            where: { namespaceId, role: NamespaceRole.OWNER },
+          });
+          if (ownerCount === 1) {
+            throw new AppException(
+              this.i18n.t('namespace.errors.lastOwnerCannotQuit'),
+              'LAST_OWNER_CANNOT_QUIT',
+              HttpStatus.FORBIDDEN,
+            );
+          }
+        }
+      }
+
+      // Run destructor to clean up user's data in this namespace
+      await this.destructor(namespaceId, userId, tx);
+
+      // Cleanup
       await this.resourcesService.deleteResource(
         userId,
         namespaceId,
         member.rootResourceId,
         tx,
       );
-      // Clear user permissions
       await entityManager.softDelete(UserPermission, {
         namespaceId,
         userId,
       });
-      // Remove user from all groups
       await entityManager.softDelete(GroupUser, {
         namespaceId,
         userId,
       });
-      // Delete namespace member record
       await entityManager.softDelete(NamespaceMember, { id: member.id });
-      const hasOwner = await this.hasOwner(namespaceId, entityManager);
-      if (!hasOwner) {
-        throw new AppException(
-          this.i18n.t('namespace.errors.noOwnerAfterwards'),
-          'NO_OWNER_AFTERWARDS',
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
+
+      // Admin removal validation
+      if (!isSelfRemoval) {
+        const hasOwner = await this.hasOwner(namespaceId, entityManager);
+        if (!hasOwner) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.noOwnerAfterwards'),
+            'NO_OWNER_AFTERWARDS',
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
       }
     });
   }
@@ -490,5 +735,68 @@ export class NamespacesService {
       return false;
     }
     return user.role === NamespaceRole.OWNER;
+  }
+
+  async userIsOwnerOrAdmin(
+    namespaceId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const member = await this.namespaceMemberRepository.findOne({
+      where: {
+        namespaceId,
+        userId,
+        deletedAt: IsNull(),
+      },
+    });
+    if (!member) {
+      return false;
+    }
+    return (
+      member.role === NamespaceRole.OWNER || member.role === NamespaceRole.ADMIN
+    );
+  }
+
+  async transferOwnership(
+    namespaceId: string,
+    currentOwnerId: string,
+    newOwnerId: string,
+  ) {
+    await this.dataSource.transaction(async (manager) => {
+      // Verify current user is owner
+      const currentOwner = await manager.findOne(NamespaceMember, {
+        where: { namespaceId, userId: currentOwnerId, deletedAt: IsNull() },
+      });
+      if (!currentOwner || currentOwner.role !== NamespaceRole.OWNER) {
+        throw new AppException(
+          this.i18n.t('namespace.errors.userNotOwner'),
+          'USER_NOT_OWNER',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      // Verify target is a member
+      const newOwner = await manager.findOne(NamespaceMember, {
+        where: { namespaceId, userId: newOwnerId, deletedAt: IsNull() },
+      });
+      if (!newOwner) {
+        throw new AppException(
+          this.i18n.t('namespace.errors.targetNotMember'),
+          'TARGET_NOT_MEMBER',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+
+      // Transfer: new owner becomes OWNER, old owner becomes ADMIN
+      await manager.update(
+        NamespaceMember,
+        { namespaceId, userId: newOwnerId },
+        { role: NamespaceRole.OWNER },
+      );
+      await manager.update(
+        NamespaceMember,
+        { namespaceId, userId: currentOwnerId },
+        { role: NamespaceRole.ADMIN },
+      );
+    });
   }
 }

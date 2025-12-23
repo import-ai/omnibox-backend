@@ -6,6 +6,19 @@
     "rootResourceNotFound": "Root resource not found",
     "namespaceConflict": "Namespace conflict",
     "userNotOwner": "Current user is not owner of this namespace",
-    "noOwnerAfterwards": "The namespace requires at least one owner"
+    "userNotOwnerOrAdmin": "Current user is not owner or admin of this namespace",
+    "noOwnerAfterwards": "The namespace requires at least one owner",
+    "notAMember": "You are not a member of this namespace",
+    "lastMemberCannotQuit": "You are the only member. Please delete the namespace instead",
+    "lastOwnerCannotQuit": "You are the last owner. Please transfer ownership before leaving",
+    "cannotDeleteWithMembers": "Cannot delete namespace with multiple members",
+    "namespaceHasOwner": "This namespace already has an owner",
+    "targetNotMember": "Target user is not a member of this namespace",
+    "cannotRemoveOwner": "Only owner can remove the owner",
+    "memberNotFound": "Member not found",
+    "adminCannotRemoveAdmin": "Admin cannot remove another admin",
+    "adminCannotPromoteToAdmin": "Admin cannot promote user to admin",
+    "insufficientPermission": "You do not have permission to modify this user",
+    "cannotAssignHigherRole": "You cannot assign a role equal to or higher than your own"
   }
 }

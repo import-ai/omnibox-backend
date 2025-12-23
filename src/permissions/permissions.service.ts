@@ -20,7 +20,11 @@ import { GroupPermission } from './entities/group-permission.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
-import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import {
+  NamespaceMember,
+  NamespaceRole,
+  ROLE_LEVEL,
+} from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
@@ -424,6 +428,26 @@ export class PermissionsService {
     const users = await this.userService.findByIds(userIds);
     const userMap = new Map<string, User>(users.map((user) => [user.id, user]));
 
+    // Get namespace member roles for all users with permissions
+    const namespaceMembersRepo = entityManager
+      ? entityManager.getRepository(NamespaceMember)
+      : this.namespaceMembersRepository;
+    const namespaceMembers = await namespaceMembersRepo.find({
+      where: { namespaceId, userId: In([...userIds, userId]) },
+    });
+    const memberRoleMap = new Map<string, NamespaceRole>(
+      namespaceMembers.map((m) => [m.userId, m.role]),
+    );
+
+    // Get current user's permission on the resource
+    const currentPermission = await this.getCurrentPermission(
+      namespaceId,
+      resources,
+      userId,
+      entityManager,
+    );
+    const currentRole = memberRoleMap.get(userId) || NamespaceRole.MEMBER;
+
     // Get group information
     const groupIds = Array.from(groupPermissionMap.keys());
     const groups = await this.groupRepository.find({
@@ -436,10 +460,11 @@ export class PermissionsService {
 
     // Prepare response
     const userPermissions: UserPermissionDto[] = [];
-    for (const [userId, permission] of userPermissionMap) {
-      const user = userMap.get(userId);
+    for (const [permUserId, permission] of userPermissionMap) {
+      const user = userMap.get(permUserId);
       if (user) {
-        userPermissions.push(UserPermissionDto.new(user, permission));
+        const role = memberRoleMap.get(permUserId);
+        userPermissions.push(UserPermissionDto.new(user, permission, role));
       }
     }
     const groupPermissions: GroupPermissionDto[] = [];
@@ -467,6 +492,8 @@ export class PermissionsService {
       globalPermission: globalPermission || ResourcePermission.NO_ACCESS,
       users: userPermissions,
       groups: groupPermissions,
+      currentPermission,
+      currentRole,
     };
   }
 
@@ -556,6 +583,77 @@ export class PermissionsService {
       where: { namespaceId, userId },
     });
     return count > 0;
+  }
+
+  /**
+   * Check if a group exists in the namespace
+   */
+  async groupExistsInNamespace(
+    groupId: string,
+    namespaceId: string,
+  ): Promise<boolean> {
+    const count = await this.groupRepository.count({
+      where: { id: groupId, namespaceId },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Check if a user exists (regardless of namespace membership)
+   */
+  async userExists(userId: string): Promise<boolean> {
+    try {
+      const users = await this.userService.findByIds([userId]);
+      return users.length > 0;
+    } catch {
+      // Invalid ID format (not a UUID) - user doesn't exist
+      return false;
+    }
+  }
+
+  /**
+   * Check if the current user can modify the target user's permission.
+   * Role hierarchy: Owner > Admin > Member
+   * - Owner can modify anyone
+   * - Admin can only modify members
+   * - Member cannot modify anyone
+   */
+  async canModifyUserPermission(
+    namespaceId: string,
+    currentUserId: string,
+    targetUserId: string,
+  ): Promise<boolean> {
+    const [currentMember, targetMember] = await Promise.all([
+      this.namespaceMembersRepository.findOne({
+        where: { namespaceId, userId: currentUserId },
+      }),
+      this.namespaceMembersRepository.findOne({
+        where: { namespaceId, userId: targetUserId },
+      }),
+    ]);
+
+    if (!currentMember) {
+      return false;
+    }
+
+    // If target user is not in the namespace, allow (they might be being added)
+    if (!targetMember) {
+      // Only owner and admin can add new users
+      return currentMember.role !== NamespaceRole.MEMBER;
+    }
+
+    const currentRoleLevel = ROLE_LEVEL[currentMember.role];
+    const targetRoleLevel = ROLE_LEVEL[targetMember.role];
+
+    // Owner (level 0) can modify anyone
+    if (currentMember.role === NamespaceRole.OWNER) {
+      return true;
+    }
+
+    // Admin (level 1) can only modify members (level 2)
+    // Member (level 2) cannot modify anyone
+    // Current user must have a strictly lower level (higher rank) than target
+    return currentRoleLevel < targetRoleLevel;
   }
 }
 

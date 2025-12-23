@@ -270,6 +270,7 @@ class MockWizardWorker {
 
   /**
    * Waits for a condition to be met with timeout
+   * Handles transient connection errors (ECONNRESET) by treating them as "not ready yet"
    */
   static async waitFor(
     condition: () => Promise<boolean> | boolean,
@@ -279,8 +280,23 @@ class MockWizardWorker {
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeoutMs) {
-      if (await condition()) {
-        return;
+      try {
+        if (await condition()) {
+          return;
+        }
+      } catch (error) {
+        // Handle transient connection errors (ECONNRESET, socket hang up)
+        // by treating them as "not ready yet" rather than failing the test
+        if (
+          error.code === 'ECONNRESET' ||
+          error.message?.includes('socket hang up') ||
+          error.message?.includes('ECONNRESET')
+        ) {
+          console.warn('Transient connection error in waitFor:', error.code);
+          // Continue waiting instead of failing
+        } else {
+          throw error;
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
@@ -604,28 +620,42 @@ describe('Task Pipeline (e2e)', () => {
 
       // Wait for both the collect task and the triggered extract_tags task to complete
       await MockWizardWorker.waitFor(async () => {
-        // Check if extract_tags task was created and completed
-        const tasksResponse = await client.get(
-          `/api/v1/namespaces/${client.namespace.id}/tasks`,
-        );
-        if (tasksResponse.status !== 200) return false;
+        try {
+          // Check if extract_tags task was created and completed
+          const tasksResponse = await client.get(
+            `/api/v1/namespaces/${client.namespace.id}/tasks`,
+          );
+          if (tasksResponse.status !== 200) return false;
 
-        const tasks: TaskMetaDto[] = tasksResponse.body.tasks;
-        const collectTask: TaskMetaDto | undefined = tasks.find(
-          (t: any) => t.id === collectTaskId,
-        );
-        const extractTagsTask: TaskMetaDto | undefined = tasks.find(
-          (t: TaskMetaDto) =>
-            t.function === 'extract_tags' &&
-            t.attrs?.parent_task_id === collectTaskId,
-        );
+          const tasks: TaskMetaDto[] = tasksResponse.body.tasks;
+          const collectTask: TaskMetaDto | undefined = tasks.find(
+            (t: any) => t.id === collectTaskId,
+          );
+          const extractTagsTask: TaskMetaDto | undefined = tasks.find(
+            (t: TaskMetaDto) =>
+              t.function === 'extract_tags' &&
+              t.attrs?.parent_task_id === collectTaskId,
+          );
 
-        expect(collectTask?.status).not.toBe('error');
-        expect(extractTagsTask?.status).not.toBe('error');
+          expect(collectTask?.status).not.toBe('error');
+          expect(extractTagsTask?.status).not.toBe('error');
 
-        return (
-          !isEmpty(collectTask?.ended_at) && !isEmpty(extractTagsTask?.ended_at)
-        );
+          return (
+            !isEmpty(collectTask?.ended_at) &&
+            !isEmpty(extractTagsTask?.ended_at)
+          );
+        } catch (error) {
+          // Handle transient connection errors (ECONNRESET, socket hang up)
+          if (
+            error.code === 'ECONNRESET' ||
+            error.message?.includes('socket hang up') ||
+            error.message?.includes('ECONNRESET')
+          ) {
+            console.warn('Transient connection error in waitFor:', error.code);
+            return false;
+          }
+          throw error;
+        }
       });
 
       // Verify both tasks completed successfully
@@ -788,18 +818,32 @@ describe('Task Pipeline (e2e)', () => {
       // Process all tasks
       mockWorker.startPolling();
 
-      // Wait for all tasks to complete
+      // Wait for all tasks to complete with error handling for transient connection issues
       await MockWizardWorker.waitFor(async () => {
-        const promises = tasks.map((taskId) =>
-          client.get(
-            `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
-          ),
-        );
-        const responses = await Promise.all(promises);
-        return responses.every(
-          (response) =>
-            response.status === 200 && response.body.ended_at !== null,
-        );
+        try {
+          const promises = tasks.map((taskId) =>
+            client.get(
+              `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
+            ),
+          );
+          const responses = await Promise.all(promises);
+          return responses.every(
+            (response) =>
+              response.status === 200 && response.body.ended_at !== null,
+          );
+        } catch (error) {
+          // Handle transient connection errors (ECONNRESET, socket hang up)
+          // by treating them as "not ready yet" rather than failing the test
+          if (
+            error.code === 'ECONNRESET' ||
+            error.message?.includes('socket hang up') ||
+            error.message?.includes('ECONNRESET')
+          ) {
+            console.warn('Transient connection error in waitFor:', error.code);
+            return false;
+          }
+          throw error;
+        }
       });
 
       // Verify all tasks completed

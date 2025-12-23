@@ -4,7 +4,17 @@ import generateId from 'omniboxd/utils/generate-id';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { MailService } from 'omniboxd/mail/mail.service';
-import { EntityManager, In, Like, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Like, Repository } from 'typeorm';
+import {
+  NamespaceMember,
+  NamespaceRole,
+} from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { Share } from 'omniboxd/shares/entities/share.entity';
+import { APIKey } from 'omniboxd/api-key/api-key.entity';
+import { Applications } from 'omniboxd/applications/applications.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Invitation } from 'omniboxd/invitations/entities/invitation.entity';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
@@ -18,6 +28,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { filterEmoji } from 'omniboxd/utils/emoji';
+import { appendTokenToUrl } from 'omniboxd/utils/url-utils';
 
 interface EmailVerificationState {
   code: string;
@@ -25,9 +36,22 @@ interface EmailVerificationState {
   expiresIn: number;
 }
 
+interface AccountDeletionState {
+  userId: string;
+  username: string;
+  createdAt: number;
+  expiresIn: number;
+}
+
+interface NamespaceOwnershipCheck {
+  blocked: boolean;
+  soloNamespaceIds: string[];
+}
+
 @Injectable()
 export class UserService {
   private readonly namespace = '/user/email-verification';
+  private readonly deletionNamespace = '/user/account-deletion';
   private readonly alphaRegex = /[a-zA-Z]/;
   private readonly numberRegex = /\d/;
 
@@ -41,6 +65,7 @@ export class UserService {
     private readonly mailService: MailService,
     private readonly i18n: I18nService,
     private readonly cacheService: CacheService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async verify(email: string, password: string) {
@@ -487,6 +512,196 @@ export class UserService {
 
   async remove(id: string) {
     return await this.userRepository.softDelete(id);
+  }
+
+  async initiateAccountDeletion(
+    userId: string,
+    username: string,
+    baseUrl: string,
+  ) {
+    // 1. Verify user exists and username matches
+    const user = await this.find(userId);
+    if (user.username !== username) {
+      const message = this.i18n.t('user.errors.usernameMismatch');
+      throw new AppException(
+        message,
+        'USERNAME_MISMATCH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // 2. Check namespace ownership constraint first (403 takes precedence)
+    const namespaceCheck = await this.checkNamespaceOwnershipConstraint(userId);
+    if (namespaceCheck.blocked) {
+      const message = this.i18n.t('user.errors.cannotDeleteOwnerWithMembers');
+      throw new AppException(
+        message,
+        'CANNOT_DELETE_OWNER_WITH_MEMBERS',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // 3. Check email exists (needed to send confirmation)
+    if (!user.email) {
+      const message = this.i18n.t('user.errors.emailRequiredForDeletion');
+      throw new AppException(
+        message,
+        'EMAIL_REQUIRED_FOR_DELETION',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // 4. Generate deletion token
+    const token = generateId(32); // 32-char random token
+    const expiresIn = 15 * 60 * 1000; // 15 minutes
+
+    // 5. Store deletion state in cache
+    await this.cacheService.set<AccountDeletionState>(
+      this.deletionNamespace,
+      token,
+      {
+        userId,
+        username,
+        createdAt: Date.now(),
+        expiresIn,
+      },
+      expiresIn,
+    );
+
+    // 6. Build confirmation URL and send deletion confirmation email
+    const confirmationUrl = appendTokenToUrl(baseUrl, token);
+    const userLangOption = await this.getOption(userId, 'language');
+    const userLang = userLangOption?.value;
+    await this.mailService.sendAccountDeletionConfirmation(
+      user.email,
+      confirmationUrl,
+      user.username,
+      userLang,
+    );
+
+    return { message: this.i18n.t('user.success.deletionEmailSent') };
+  }
+
+  async checkNamespaceOwnershipConstraint(
+    userId: string,
+  ): Promise<NamespaceOwnershipCheck> {
+    const namespaceMemberRepo = this.dataSource.getRepository(NamespaceMember);
+
+    // Get all namespaces where user is an owner
+    const ownerMemberships = await namespaceMemberRepo.find({
+      where: { userId, role: NamespaceRole.OWNER },
+    });
+
+    const soloNamespaceIds: string[] = [];
+
+    // For each owned namespace, check if there are other members
+    for (const membership of ownerMemberships) {
+      const membersCount = await namespaceMemberRepo.count({
+        where: {
+          namespaceId: membership.namespaceId,
+        },
+      });
+
+      // If there are other members besides the owner (count > 1), block deletion
+      if (membersCount > 1) {
+        return { blocked: true, soloNamespaceIds: [] };
+      } else if (membersCount === 1) {
+        // User is sole member - namespace should be cleaned up
+        soloNamespaceIds.push(membership.namespaceId);
+      }
+    }
+
+    return { blocked: false, soloNamespaceIds };
+  }
+
+  async confirmAccountDeletion(token: string): Promise<void> {
+    // 1. Retrieve and validate token
+    const deletionState = await this.cacheService.get<AccountDeletionState>(
+      this.deletionNamespace,
+      token,
+    );
+
+    if (!deletionState) {
+      const message = this.i18n.t('user.errors.invalidOrExpiredToken');
+      throw new AppException(
+        message,
+        'INVALID_OR_EXPIRED_TOKEN',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // 2. Re-verify namespace constraint (in case it changed)
+    const namespaceCheck = await this.checkNamespaceOwnershipConstraint(
+      deletionState.userId,
+    );
+    if (namespaceCheck.blocked) {
+      const message = this.i18n.t('user.errors.cannotDeleteOwnerWithMembers');
+      throw new AppException(
+        message,
+        'CANNOT_DELETE_OWNER_WITH_MEMBERS',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // 3. Execute cleanup in transaction
+    await this.dataSource.transaction(async (manager) => {
+      const shareRepo = manager.getRepository(Share);
+      const apiKeyRepo = manager.getRepository(APIKey);
+      const applicationsRepo = manager.getRepository(Applications);
+      const taskRepo = manager.getRepository(Task);
+      const invitationRepo = manager.getRepository(Invitation);
+      const namespaceRepo = manager.getRepository(Namespace);
+      const namespaceMemberRepo = manager.getRepository(NamespaceMember);
+
+      // Disable all share links
+      await shareRepo.update(
+        { userId: deletionState.userId },
+        { enabled: false },
+      );
+
+      // Soft delete API keys
+      await apiKeyRepo.softDelete({ userId: deletionState.userId });
+
+      // Soft delete applications
+      await applicationsRepo.softDelete({ userId: deletionState.userId });
+
+      // Soft delete user bindings (OAuth connections)
+      await manager
+        .getRepository(UserBinding)
+        .softDelete({ userId: deletionState.userId });
+
+      // Cancel pending tasks
+      await taskRepo
+        .createQueryBuilder()
+        .update(Task)
+        .set({ canceledAt: () => 'NOW()' })
+        .where('userId = :userId', { userId: deletionState.userId })
+        .andWhere('endedAt IS NULL')
+        .andWhere('canceledAt IS NULL')
+        .execute();
+
+      // Clean up solo-owned namespaces
+      for (const namespaceId of namespaceCheck.soloNamespaceIds) {
+        // Soft delete all invitations for this namespace
+        await invitationRepo.softDelete({ namespaceId });
+        // Soft delete the namespace member record
+        await namespaceMemberRepo.softDelete({
+          namespaceId,
+          userId: deletionState.userId,
+        });
+        // Soft delete the namespace itself
+        await namespaceRepo.softDelete(namespaceId);
+      }
+
+      // Soft delete user's membership in all other namespaces (multi-member namespaces)
+      await namespaceMemberRepo.softDelete({ userId: deletionState.userId });
+
+      // Soft delete user
+      await manager.getRepository(User).softDelete(deletionState.userId);
+    });
+
+    // 4. Clean up token from cache
+    await this.cacheService.delete(this.deletionNamespace, token);
   }
 
   async createOption(userId: string, createOptionDto: CreateUserOptionDto) {

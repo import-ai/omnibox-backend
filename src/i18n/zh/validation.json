@@ -62,8 +62,8 @@
       "isEnum": "资源类型必须是有效的值"
     },
     "namespaceId": {
-      "isString": "命名空间 ID 必须是字符串",
-      "isNotEmpty": "命名空间 ID 不能为空"
+      "isString": "空间 ID 必须是字符串",
+      "isNotEmpty": "空间 ID 不能为空"
     },
     "userId": {
       "isString": "用户 ID 必须是字符串",

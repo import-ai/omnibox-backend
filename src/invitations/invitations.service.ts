@@ -106,6 +106,10 @@ export class InvitationsService {
       req.namespaceRole = NamespaceRole.MEMBER;
       req.rootPermission = ResourcePermission.NO_ACCESS;
     }
+    // Prevent creating owner invitations - auto-downgrade to admin
+    if (req.namespaceRole === NamespaceRole.OWNER) {
+      req.namespaceRole = NamespaceRole.ADMIN;
+    }
     if (!req.namespaceRole || !req.rootPermission) {
       const message = this.i18n.t(
         'invitation.errors.roleAndPermissionRequired',
@@ -161,6 +165,10 @@ export class InvitationsService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
+
+    // Validate namespace is still active before processing
+    await this.authService.validateNamespaceHasMembers(namespaceId);
+
     const invitationDto: AuthInvitationDto = {
       namespaceId,
       namespaceRole: invitation.namespaceRole,

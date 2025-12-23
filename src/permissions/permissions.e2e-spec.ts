@@ -241,13 +241,14 @@ describe('PermissionsController (e2e)', () => {
       const initialPermission =
         initialUserPermission?.permission || ResourcePermission.NO_ACCESS;
 
-      // Set a different permission
+      // Set FULL_ACCESS permission (must use FULL_ACCESS to maintain ability to delete)
+      // Setting a lower permission would lock out the user from deleting it
       await client
         .patch(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions/users/${client.user.id}`,
         )
         .send({
-          permission: ResourcePermission.CAN_VIEW,
+          permission: ResourcePermission.FULL_ACCESS,
         })
         .expect(HttpStatus.OK);
 
@@ -262,7 +263,7 @@ describe('PermissionsController (e2e)', () => {
         (u: any) => u.user.id === client.user.id,
       );
       expect(afterSetUserPermission.permission).toBe(
-        ResourcePermission.CAN_VIEW,
+        ResourcePermission.FULL_ACCESS,
       );
 
       // Then delete it
@@ -371,6 +372,7 @@ describe('PermissionsController (e2e)', () => {
 
   describe('Edge cases and error handling', () => {
     it('should handle non-existent group ID', async () => {
+      // Non-existent group ID should return 404
       await client
         .patch(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions/groups/nonexistent`,
@@ -378,10 +380,11 @@ describe('PermissionsController (e2e)', () => {
         .send({
           permission: ResourcePermission.CAN_VIEW,
         })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Database constraint violation
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should handle non-existent user ID', async () => {
+      // Non-existent user ID should return 404
       await client
         .patch(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions/users/nonexistent`,
@@ -389,7 +392,7 @@ describe('PermissionsController (e2e)', () => {
         .send({
           permission: ResourcePermission.CAN_VIEW,
         })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Database constraint violation
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should validate permission enum values', async () => {
@@ -458,6 +461,144 @@ describe('PermissionsController (e2e)', () => {
 
         expect(response.body.global_permission).toBe(permission);
       }
+    });
+  });
+
+  describe('Role hierarchy in user permission modification', () => {
+    let roleTestNamespaceId: string;
+    let roleTestResourceId: string;
+    let adminClient: TestClient;
+    let memberClient: TestClient;
+
+    beforeAll(async () => {
+      // Create additional test clients
+      adminClient = await TestClient.create();
+      memberClient = await TestClient.create();
+
+      // Create a namespace for role hierarchy testing
+      const namespaceCreateRes = await client
+        .post('/api/v1/namespaces')
+        .send({ name: `Role Hierarchy Test ${Date.now()}` })
+        .expect(HttpStatus.CREATED);
+
+      roleTestNamespaceId = namespaceCreateRes.body.id;
+
+      // Fetch the namespace to get the root_resource_id (it's null in create response)
+      const namespaceRes = await client
+        .get(`/api/v1/namespaces/${roleTestNamespaceId}`)
+        .expect(HttpStatus.OK);
+
+      const rootResourceId = namespaceRes.body.root_resource_id;
+
+      // Create a test resource in this namespace
+      const resourceRes = await client
+        .post(`/api/v1/namespaces/${roleTestNamespaceId}/resources`)
+        .send({
+          name: 'Role Test Resource',
+          resourceType: ResourceType.FOLDER,
+          parentId: rootResourceId,
+        })
+        .expect(HttpStatus.CREATED);
+
+      roleTestResourceId = resourceRes.body.id;
+
+      // Add adminClient as admin via invitation
+      const adminInvitation = await client
+        .post(`/api/v1/namespaces/${roleTestNamespaceId}/invitations`)
+        .send({
+          namespaceRole: 'admin',
+          rootPermission: ResourcePermission.FULL_ACCESS,
+        })
+        .expect(HttpStatus.CREATED);
+
+      await adminClient
+        .post(
+          `/api/v1/namespaces/${roleTestNamespaceId}/invitations/${adminInvitation.body.id}/accept`,
+        )
+        .expect(HttpStatus.CREATED);
+
+      // Delete invitation after acceptance to allow creating another one
+      await client
+        .delete(
+          `/api/v1/namespaces/${roleTestNamespaceId}/invitations/${adminInvitation.body.id}`,
+        )
+        .expect(HttpStatus.OK);
+
+      // Add memberClient as member via invitation
+      const memberInvitation = await client
+        .post(`/api/v1/namespaces/${roleTestNamespaceId}/invitations`)
+        .send({
+          namespaceRole: 'member',
+          rootPermission: ResourcePermission.CAN_EDIT,
+        })
+        .expect(HttpStatus.CREATED);
+
+      await memberClient
+        .post(
+          `/api/v1/namespaces/${roleTestNamespaceId}/invitations/${memberInvitation.body.id}/accept`,
+        )
+        .expect(HttpStatus.CREATED);
+    });
+
+    afterAll(async () => {
+      await client
+        .delete(`/api/v1/namespaces/${roleTestNamespaceId}`)
+        .catch(() => {});
+      await adminClient.close();
+      await memberClient.close();
+    });
+
+    it('should allow admin to modify member user permission', async () => {
+      await adminClient
+        .patch(
+          `/api/v1/namespaces/${roleTestNamespaceId}/resources/${roleTestResourceId}/permissions/users/${memberClient.user.id}`,
+        )
+        .send({ permission: ResourcePermission.CAN_VIEW })
+        .expect(HttpStatus.OK);
+    });
+
+    it('should prevent admin from modifying owner user permission', async () => {
+      await adminClient
+        .patch(
+          `/api/v1/namespaces/${roleTestNamespaceId}/resources/${roleTestResourceId}/permissions/users/${client.user.id}`,
+        )
+        .send({ permission: ResourcePermission.CAN_VIEW })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should prevent admin from deleting owner user permission', async () => {
+      await adminClient
+        .delete(
+          `/api/v1/namespaces/${roleTestNamespaceId}/resources/${roleTestResourceId}/permissions/users/${client.user.id}`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should prevent member from modifying any user permission', async () => {
+      // Member tries to modify admin's permission
+      await memberClient
+        .patch(
+          `/api/v1/namespaces/${roleTestNamespaceId}/resources/${roleTestResourceId}/permissions/users/${adminClient.user.id}`,
+        )
+        .send({ permission: ResourcePermission.CAN_VIEW })
+        .expect(HttpStatus.FORBIDDEN);
+
+      // Member tries to modify owner's permission
+      await memberClient
+        .patch(
+          `/api/v1/namespaces/${roleTestNamespaceId}/resources/${roleTestResourceId}/permissions/users/${client.user.id}`,
+        )
+        .send({ permission: ResourcePermission.CAN_VIEW })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should allow owner to modify admin user permission', async () => {
+      await client
+        .patch(
+          `/api/v1/namespaces/${roleTestNamespaceId}/resources/${roleTestResourceId}/permissions/users/${adminClient.user.id}`,
+        )
+        .send({ permission: ResourcePermission.CAN_EDIT })
+        .expect(HttpStatus.OK);
     });
   });
 });

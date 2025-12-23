@@ -79,7 +79,7 @@ services:
 
   init:
     image: alpine/curl:8.10.0
-    command: 
+    command:
       - 'http://backend:${OBB_PORT:-8000}/internal/api/v1/sign-up'
       - '-H'
       - 'Content-Type: application/json'

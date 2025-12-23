@@ -298,7 +298,7 @@ export class NamespacesService {
         throw new AppException(
           this.i18n.t('namespace.errors.cannotDeleteWithMembers'),
           'CANNOT_DELETE_WITH_MEMBERS',
-          HttpStatus.UNPROCESSABLE_ENTITY,
+          HttpStatus.FORBIDDEN,
         );
       }
 
@@ -659,7 +659,7 @@ export class NamespacesService {
             throw new AppException(
               this.i18n.t('namespace.errors.lastOwnerCannotQuit'),
               'LAST_OWNER_CANNOT_QUIT',
-              HttpStatus.UNPROCESSABLE_ENTITY,
+              HttpStatus.FORBIDDEN,
             );
           }
         }

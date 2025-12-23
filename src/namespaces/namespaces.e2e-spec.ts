@@ -252,6 +252,82 @@ describe('NamespacesController (e2e)', () => {
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });
 
+    it('should allow owner to promote member to admin (case 10)', async () => {
+      const tempNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Promote Member Test') })
+        .expect(HttpStatus.CREATED);
+
+      const tempNamespaceId = tempNamespace.body.id;
+
+      // Add secondClient as member
+      await addMemberViaInvitation(
+        client,
+        secondClient,
+        tempNamespaceId,
+        NamespaceRole.MEMBER,
+        ResourcePermission.CAN_EDIT,
+      );
+
+      // Owner promotes member to admin
+      await client
+        .patch(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${secondClient.user.id}`,
+        )
+        .send({ role: NamespaceRole.ADMIN })
+        .expect(HttpStatus.OK);
+
+      // Verify role was changed
+      const memberResponse = await client
+        .get(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${secondClient.user.id}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(memberResponse.body.role).toBe(NamespaceRole.ADMIN);
+
+      // Cleanup
+      await client.delete(`/api/v1/namespaces/${tempNamespaceId}`);
+    });
+
+    it('should allow owner to demote admin to member (case 11)', async () => {
+      const tempNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Demote Admin Test') })
+        .expect(HttpStatus.CREATED);
+
+      const tempNamespaceId = tempNamespace.body.id;
+
+      // Add secondClient as admin
+      await addMemberViaInvitation(
+        client,
+        secondClient,
+        tempNamespaceId,
+        NamespaceRole.ADMIN,
+        ResourcePermission.FULL_ACCESS,
+      );
+
+      // Owner demotes admin to member
+      await client
+        .patch(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${secondClient.user.id}`,
+        )
+        .send({ role: NamespaceRole.MEMBER })
+        .expect(HttpStatus.OK);
+
+      // Verify role was changed
+      const memberResponse = await client
+        .get(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${secondClient.user.id}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(memberResponse.body.role).toBe(NamespaceRole.MEMBER);
+
+      // Cleanup
+      await client.delete(`/api/v1/namespaces/${tempNamespaceId}`);
+    });
+
     it('should fail for non-existent member', async () => {
       await client
         .patch(
@@ -299,6 +375,163 @@ describe('NamespacesController (e2e)', () => {
       await client
         .delete(`/api/v1/namespaces/${tempNamespaceId}`)
         .expect(HttpStatus.OK);
+    });
+
+    it('should allow admin to quit namespace (self-removal)', async () => {
+      // Create a test namespace
+      const tempNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Admin Self-Quit Test') })
+        .expect(HttpStatus.CREATED);
+
+      const tempNamespaceId = tempNamespace.body.id;
+
+      // Add secondClient as admin via invitation
+      await addMemberViaInvitation(
+        client,
+        secondClient,
+        tempNamespaceId,
+        NamespaceRole.ADMIN,
+        ResourcePermission.FULL_ACCESS,
+      );
+
+      // Admin quits the namespace (self-removal)
+      await secondClient
+        .delete(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${secondClient.user.id}`,
+        )
+        .expect(HttpStatus.OK);
+
+      // Verify admin is no longer in the namespace
+      const membersResponse = await client
+        .get(`/api/v1/namespaces/${tempNamespaceId}/members`)
+        .expect(HttpStatus.OK);
+
+      const foundMember = membersResponse.body.find(
+        (m: { userId?: string; user_id?: string }) =>
+          (m.userId || m.user_id) === secondClient.user.id,
+      );
+      expect(foundMember).toBeUndefined();
+
+      // Cleanup
+      await client.delete(`/api/v1/namespaces/${tempNamespaceId}`);
+    });
+
+    it('should prevent owner from exiting namespace (case 15)', async () => {
+      // Create a test namespace
+      const tempNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Owner Exit Test') })
+        .expect(HttpStatus.CREATED);
+
+      const tempNamespaceId = tempNamespace.body.id;
+
+      // Add a member to the namespace so it's not sole owner
+      await addMemberViaInvitation(
+        client,
+        secondClient,
+        tempNamespaceId,
+        NamespaceRole.MEMBER,
+        ResourcePermission.CAN_EDIT,
+      );
+
+      // Owner tries to exit - should fail (403 Forbidden)
+      await client
+        .delete(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${client.user.id}`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
+
+      // Verify owner is still in the namespace
+      const membersResponse = await client
+        .get(`/api/v1/namespaces/${tempNamespaceId}/members`)
+        .expect(HttpStatus.OK);
+
+      const ownerMember = membersResponse.body.find(
+        (m: { userId?: string; user_id?: string }) =>
+          (m.userId || m.user_id) === client.user.id,
+      );
+      expect(ownerMember).toBeDefined();
+
+      // Cleanup
+      await client.delete(`/api/v1/namespaces/${tempNamespaceId}`);
+    });
+
+    it('should allow member to quit namespace (self-removal)', async () => {
+      // Create a test namespace
+      const tempNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Member Self-Quit Test') })
+        .expect(HttpStatus.CREATED);
+
+      const tempNamespaceId = tempNamespace.body.id;
+
+      // Add secondClient as member via invitation
+      const memberInvitation = await client
+        .post(`/api/v1/namespaces/${tempNamespaceId}/invitations`)
+        .send({
+          namespaceRole: NamespaceRole.MEMBER,
+          rootPermission: ResourcePermission.CAN_EDIT,
+        })
+        .expect(HttpStatus.CREATED);
+
+      await secondClient
+        .post(
+          `/api/v1/namespaces/${tempNamespaceId}/invitations/${memberInvitation.body.id}/accept`,
+        )
+        .expect(HttpStatus.CREATED);
+
+      // Member quits the namespace (self-removal)
+      await secondClient
+        .delete(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${secondClient.user.id}`,
+        )
+        .expect(HttpStatus.OK);
+
+      // Verify member is no longer in the namespace
+      const membersResponse = await client
+        .get(`/api/v1/namespaces/${tempNamespaceId}/members`)
+        .expect(HttpStatus.OK);
+
+      const foundMember = membersResponse.body.find(
+        (m: { userId?: string; user_id?: string }) =>
+          (m.userId || m.user_id) === secondClient.user.id,
+      );
+      expect(foundMember).toBeUndefined();
+
+      // Cleanup
+      await client.delete(`/api/v1/namespaces/${tempNamespaceId}`);
+    });
+
+    it('should prevent member from removing other members', async () => {
+      // Create a test namespace
+      const tempNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Member Remove Other Test') })
+        .expect(HttpStatus.CREATED);
+
+      const tempNamespaceId = tempNamespace.body.id;
+
+      // Use the addMemberViaInvitation helper instead of creating inline
+      // Add secondClient as member via invitation
+      await addMemberViaInvitation(
+        client,
+        secondClient,
+        tempNamespaceId,
+        NamespaceRole.MEMBER,
+        ResourcePermission.CAN_EDIT,
+      );
+
+      // Use client's namespace member (owner) as second member for this test
+      // We'll test that secondClient (member) cannot remove the owner
+      await secondClient
+        .delete(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${client.user.id}`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
+
+      // Cleanup
+      await client.delete(`/api/v1/namespaces/${tempNamespaceId}`);
     });
   });
 
@@ -416,6 +649,62 @@ describe('NamespacesController (e2e)', () => {
       // The exact behavior depends on implementation - it might return 404 or still return the namespace
       await client
         .get(`/api/v1/namespaces/${testNamespaceId}`)
+        .expect(HttpStatus.NOT_FOUND);
+    });
+
+    it('should prevent owner from deleting namespace with other members (case 40)', async () => {
+      // Create a test namespace
+      const tempNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Delete With Members Test') })
+        .expect(HttpStatus.CREATED);
+
+      const tempNamespaceId = tempNamespace.body.id;
+
+      // Add secondClient as member
+      await addMemberViaInvitation(
+        client,
+        secondClient,
+        tempNamespaceId,
+        NamespaceRole.MEMBER,
+        ResourcePermission.CAN_EDIT,
+      );
+
+      // Owner tries to delete namespace with other members - should fail (403 Forbidden)
+      await client
+        .delete(`/api/v1/namespaces/${tempNamespaceId}`)
+        .expect(HttpStatus.FORBIDDEN);
+
+      // Cleanup: remove member first
+      await client
+        .delete(
+          `/api/v1/namespaces/${tempNamespaceId}/members/${secondClient.user.id}`,
+        )
+        .expect(HttpStatus.OK);
+
+      // Now owner can delete the namespace
+      await client
+        .delete(`/api/v1/namespaces/${tempNamespaceId}`)
+        .expect(HttpStatus.OK);
+    });
+
+    it('should allow owner to delete namespace when sole member (case 40)', async () => {
+      // Create a test namespace - owner is the only member
+      const tempNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Delete Sole Owner Test') })
+        .expect(HttpStatus.CREATED);
+
+      const tempNamespaceId = tempNamespace.body.id;
+
+      // Owner can delete namespace when they are the sole member
+      await client
+        .delete(`/api/v1/namespaces/${tempNamespaceId}`)
+        .expect(HttpStatus.OK);
+
+      // Verify namespace is deleted
+      await client
+        .get(`/api/v1/namespaces/${tempNamespaceId}`)
         .expect(HttpStatus.NOT_FOUND);
     });
   });
@@ -614,6 +903,47 @@ describe('NamespacesController (e2e)', () => {
         await thirdClient
           .delete(`/api/v1/namespaces/${adminTestNamespaceId}`)
           .expect(HttpStatus.FORBIDDEN);
+      });
+
+      it('should prevent member from creating invitations', async () => {
+        await thirdClient
+          .post(`/api/v1/namespaces/${adminTestNamespaceId}/invitations`)
+          .send({
+            namespaceRole: NamespaceRole.MEMBER,
+            rootPermission: ResourcePermission.CAN_VIEW,
+          })
+          .expect(HttpStatus.FORBIDDEN);
+      });
+
+      it('should prevent member from listing invitations', async () => {
+        await thirdClient
+          .get(`/api/v1/namespaces/${adminTestNamespaceId}/invitations`)
+          .expect(HttpStatus.FORBIDDEN);
+      });
+
+      it('should prevent member from deleting invitations', async () => {
+        // First, owner creates an invitation
+        const invitationRes = await client
+          .post(`/api/v1/namespaces/${adminTestNamespaceId}/invitations`)
+          .send({
+            namespaceRole: NamespaceRole.MEMBER,
+            rootPermission: ResourcePermission.CAN_VIEW,
+          })
+          .expect(HttpStatus.CREATED);
+
+        // Member tries to delete it - should fail
+        await thirdClient
+          .delete(
+            `/api/v1/namespaces/${adminTestNamespaceId}/invitations/${invitationRes.body.id}`,
+          )
+          .expect(HttpStatus.FORBIDDEN);
+
+        // Cleanup: owner deletes the invitation
+        await client
+          .delete(
+            `/api/v1/namespaces/${adminTestNamespaceId}/invitations/${invitationRes.body.id}`,
+          )
+          .expect(HttpStatus.OK);
       });
     });
 

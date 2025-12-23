@@ -530,31 +530,32 @@ export class UserService {
       );
     }
 
-    if (!user.email) {
-      const message = this.i18n.t('user.errors.emailRequiredForDeletion');
-      throw new AppException(
-        message,
-        'EMAIL_REQUIRED_FOR_DELETION',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // 2. Check namespace ownership constraint
+    // 2. Check namespace ownership constraint first (403 takes precedence)
     const namespaceCheck = await this.checkNamespaceOwnershipConstraint(userId);
     if (namespaceCheck.blocked) {
       const message = this.i18n.t('user.errors.cannotDeleteOwnerWithMembers');
       throw new AppException(
         message,
         'CANNOT_DELETE_OWNER_WITH_MEMBERS',
-        HttpStatus.UNPROCESSABLE_ENTITY,
+        HttpStatus.FORBIDDEN,
       );
     }
 
-    // 3. Generate deletion token
+    // 3. Check email exists (needed to send confirmation)
+    if (!user.email) {
+      const message = this.i18n.t('user.errors.emailRequiredForDeletion');
+      throw new AppException(
+        message,
+        'EMAIL_REQUIRED_FOR_DELETION',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // 4. Generate deletion token
     const token = generateId(32); // 32-char random token
     const expiresIn = 15 * 60 * 1000; // 15 minutes
 
-    // 4. Store deletion state in cache
+    // 5. Store deletion state in cache
     await this.cacheService.set<AccountDeletionState>(
       this.deletionNamespace,
       token,
@@ -567,7 +568,7 @@ export class UserService {
       expiresIn,
     );
 
-    // 5. Build confirmation URL and send deletion confirmation email
+    // 6. Build confirmation URL and send deletion confirmation email
     const confirmationUrl = appendTokenToUrl(baseUrl, token);
     const userLangOption = await this.getOption(userId, 'language');
     const userLang = userLangOption?.value;
@@ -638,7 +639,7 @@ export class UserService {
       throw new AppException(
         message,
         'CANNOT_DELETE_OWNER_WITH_MEMBERS',
-        HttpStatus.UNPROCESSABLE_ENTITY,
+        HttpStatus.FORBIDDEN,
       );
     }
 

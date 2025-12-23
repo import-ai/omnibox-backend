@@ -241,13 +241,14 @@ describe('PermissionsController (e2e)', () => {
       const initialPermission =
         initialUserPermission?.permission || ResourcePermission.NO_ACCESS;
 
-      // Set a different permission
+      // Set FULL_ACCESS permission (must use FULL_ACCESS to maintain ability to delete)
+      // Setting a lower permission would lock out the user from deleting it
       await client
         .patch(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions/users/${client.user.id}`,
         )
         .send({
-          permission: ResourcePermission.CAN_VIEW,
+          permission: ResourcePermission.FULL_ACCESS,
         })
         .expect(HttpStatus.OK);
 
@@ -262,7 +263,7 @@ describe('PermissionsController (e2e)', () => {
         (u: any) => u.user.id === client.user.id,
       );
       expect(afterSetUserPermission.permission).toBe(
-        ResourcePermission.CAN_VIEW,
+        ResourcePermission.FULL_ACCESS,
       );
 
       // Then delete it
@@ -371,6 +372,7 @@ describe('PermissionsController (e2e)', () => {
 
   describe('Edge cases and error handling', () => {
     it('should handle non-existent group ID', async () => {
+      // Non-existent group ID should return 404
       await client
         .patch(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions/groups/nonexistent`,
@@ -378,10 +380,11 @@ describe('PermissionsController (e2e)', () => {
         .send({
           permission: ResourcePermission.CAN_VIEW,
         })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Database constraint violation
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should handle non-existent user ID', async () => {
+      // Non-existent user ID should return 404
       await client
         .patch(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions/users/nonexistent`,
@@ -389,7 +392,7 @@ describe('PermissionsController (e2e)', () => {
         .send({
           permission: ResourcePermission.CAN_VIEW,
         })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Database constraint violation
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should validate permission enum values', async () => {

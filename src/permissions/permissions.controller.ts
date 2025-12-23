@@ -85,6 +85,14 @@ export class PermissionsController {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
+    const groupExists = await this.permissionsService.groupExistsInNamespace(
+      groupId,
+      namespaceId,
+    );
+    if (!groupExists) {
+      const message = i18n.t('group.errors.groupNotFound');
+      throw new AppException(message, 'GROUP_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
     await this.permissionsService.updateGroupPermission(
       namespaceId,
       resourceId,
@@ -136,6 +144,11 @@ export class PermissionsController {
     if (!hasPermission) {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const userExists = await this.permissionsService.userExists(userId);
+    if (!userExists) {
+      const message = i18n.t('user.errors.userNotFound');
+      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
     const canModify = await this.permissionsService.canModifyUserPermission(
       namespaceId,

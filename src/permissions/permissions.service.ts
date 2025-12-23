@@ -586,6 +586,32 @@ export class PermissionsService {
   }
 
   /**
+   * Check if a group exists in the namespace
+   */
+  async groupExistsInNamespace(
+    groupId: string,
+    namespaceId: string,
+  ): Promise<boolean> {
+    const count = await this.groupRepository.count({
+      where: { id: groupId, namespaceId },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Check if a user exists (regardless of namespace membership)
+   */
+  async userExists(userId: string): Promise<boolean> {
+    try {
+      const users = await this.userService.findByIds([userId]);
+      return users.length > 0;
+    } catch {
+      // Invalid ID format (not a UUID) - user doesn't exist
+      return false;
+    }
+  }
+
+  /**
    * Check if the current user can modify the target user's permission.
    * Role hierarchy: Owner > Admin > Member
    * - Owner can modify anyone

@@ -479,31 +479,36 @@ export class WechatService {
       };
     }
 
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+      const nickname: string =
+        sessionData?.nickname ||
+        `wxuser_${sessionData.openid.substring(0, 10)}`;
       const username: string = await this.socialService.getValidUsername(
-        `wx_${sessionData.openid.substring(0, 10)}`,
+        nickname,
         manager,
       );
-      this.logger.debug({ username, openid: sessionData.openid });
-
-      const newUser = await this.userService.createUserBinding(
+      this.logger.debug({ username });
+      const wechatUser = await this.userService.createUserBinding(
         {
           username,
           loginType: 'wechat',
           loginId: loginId,
           lang,
+          metadata: sessionData,
         } as CreateUserBindingDto,
         manager,
       );
       await this.namespaceService.createUserNamespace(
-        newUser.id,
-        newUser.username,
+        wechatUser.id,
+        wechatUser.username,
+        tx,
       );
       return {
-        id: newUser.id,
-        username: newUser.username,
+        id: wechatUser.id,
+        username: wechatUser.username,
         access_token: this.jwtService.sign({
-          sub: newUser.id,
+          sub: wechatUser.id,
         }),
       };
     });

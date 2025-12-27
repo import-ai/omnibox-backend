@@ -15,13 +15,12 @@ import {
   Query,
   HttpStatus,
 } from '@nestjs/common';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import {
   SendEmailOtpDto,
   VerifyEmailOtpDto,
   SendEmailOtpResponseDto,
 } from './dto/email-otp.dto';
+import { InviteDto } from './dto/invite.dto';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
@@ -130,18 +129,19 @@ export class AuthController {
   }
 
   @Post('invite')
-  async invite(
-    @Request() req,
-    @Body('inviteUrl') inviteUrl: string,
-    @Body('registerUrl') registerUrl: string,
-    @Body('namespace') namespaceId: string,
-    @Body('role') role: NamespaceRole,
-    @Body('resourceId') resourceId: string,
-    @Body('permission') permission: ResourcePermission,
-    @Body('groupId') groupId: string,
-    @Body('emails') emails: Array<string>,
-    @Body('groupTitles') groupTitles: Array<string>,
-  ) {
+  async invite(@Request() req, @Body() inviteDto: InviteDto) {
+    const {
+      inviteUrl,
+      registerUrl,
+      namespace: namespaceId,
+      role,
+      resourceId,
+      permission,
+      groupId,
+      emails,
+      groupTitles,
+    } = inviteDto;
+
     // Check if current user is owner or admin of the namespace
     const isOwnerOrAdmin = await this.namespacesService.userIsOwnerOrAdmin(
       namespaceId,
@@ -155,7 +155,7 @@ export class AuthController {
       );
     }
 
-    if (groupTitles && groupTitles.length > 0) {
+    if (groupTitles && groupTitles.length > 0 && resourceId && permission) {
       await this.authService.inviteGroup(
         namespaceId,
         resourceId,

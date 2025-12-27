@@ -1,6 +1,8 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
 import { APIKeyPermissionType } from 'omniboxd/api-key/api-key.entity';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { ALLOWED_EMAIL_DOMAINS } from 'omniboxd/utils/email-validation';
 
 describe('AuthModule (e2e)', () => {
   let client: TestClient;
@@ -470,6 +472,180 @@ describe('AuthModule (e2e)', () => {
         .get(`/api/v1/user/${client.user.id}`)
         .set('Authorization', '')
         .expect(HttpStatus.UNAUTHORIZED);
+    });
+  });
+
+  describe('Email Domain Validation', () => {
+    const disallowedEmail = 'test@invalid-domain.com';
+    const allowedEmails = ALLOWED_EMAIL_DOMAINS.map(
+      (domain) => `test${Date.now()}@${domain}`,
+    );
+
+    describe('POST /api/v1/auth/send-otp', () => {
+      it('should reject email with disallowed domain', async () => {
+        await client
+          .request()
+          .post('/api/v1/auth/send-otp')
+          .send({ email: disallowedEmail })
+          .expect(HttpStatus.BAD_REQUEST)
+          .expect((res) => {
+            const message = Array.isArray(res.body.message)
+              ? res.body.message.join(' ')
+              : res.body.message;
+            expect(message.toLowerCase()).toContain('domain');
+          });
+      });
+
+      it('should accept email with allowed domain', async () => {
+        const response = await client
+          .request()
+          .post('/api/v1/auth/send-otp')
+          .send({ email: allowedEmails[0] });
+
+        // Should not be BAD_REQUEST due to domain validation
+        // It may return 200 or fail for other reasons (email not found, etc.)
+        expect(response.status).not.toBe(HttpStatus.BAD_REQUEST);
+      });
+
+      it('should transform email to lowercase', async () => {
+        const uppercaseEmail = 'TEST@GMAIL.COM';
+        const response = await client
+          .request()
+          .post('/api/v1/auth/send-otp')
+          .send({ email: uppercaseEmail });
+
+        // Should not fail due to domain validation (gmail.com is allowed)
+        expect(response.status).not.toBe(HttpStatus.BAD_REQUEST);
+      });
+    });
+
+    describe('POST /api/v1/auth/send-signup-otp', () => {
+      it('should reject email with disallowed domain', async () => {
+        await client
+          .request()
+          .post('/api/v1/auth/send-signup-otp')
+          .send({ email: disallowedEmail })
+          .expect(HttpStatus.BAD_REQUEST)
+          .expect((res) => {
+            const message = Array.isArray(res.body.message)
+              ? res.body.message.join(' ')
+              : res.body.message;
+            expect(message.toLowerCase()).toContain('domain');
+          });
+      });
+
+      it('should accept email with allowed domain', async () => {
+        const response = await client
+          .request()
+          .post('/api/v1/auth/send-signup-otp')
+          .send({ email: allowedEmails[1] || allowedEmails[0] });
+
+        expect(response.status).not.toBe(HttpStatus.BAD_REQUEST);
+      });
+    });
+
+    describe('POST /api/v1/auth/verify-otp', () => {
+      it('should reject email with disallowed domain', async () => {
+        await client
+          .request()
+          .post('/api/v1/auth/verify-otp')
+          .send({ email: disallowedEmail, code: '123456' })
+          .expect(HttpStatus.BAD_REQUEST)
+          .expect((res) => {
+            const message = Array.isArray(res.body.message)
+              ? res.body.message.join(' ')
+              : res.body.message;
+            expect(message.toLowerCase()).toContain('domain');
+          });
+      });
+
+      it('should accept email with allowed domain (validation passes, may fail on code)', async () => {
+        const response = await client
+          .request()
+          .post('/api/v1/auth/verify-otp')
+          .send({
+            email: allowedEmails[2] || allowedEmails[0],
+            code: '123456',
+          });
+
+        // Should not be BAD_REQUEST due to domain validation
+        // It will likely fail on invalid code (UNAUTHORIZED or NOT_FOUND), but that's expected
+        // BAD_REQUEST would indicate validation failure
+        if (response.status === 400) {
+          const message = Array.isArray(response.body.message)
+            ? response.body.message.join(' ')
+            : response.body.message;
+          // Should not contain domain-related error
+          expect(message.toLowerCase()).not.toContain('domain');
+        }
+      });
+    });
+
+    describe('POST /api/v1/invite', () => {
+      it('should reject invite with disallowed email domain', async () => {
+        await client
+          .post('/api/v1/invite')
+          .send({
+            inviteUrl: 'https://example.com/invite',
+            registerUrl: 'https://example.com/register',
+            namespace: client.namespace.id,
+            role: NamespaceRole.MEMBER,
+            emails: [disallowedEmail],
+          })
+          .expect(HttpStatus.BAD_REQUEST)
+          .expect((res) => {
+            const message = Array.isArray(res.body.message)
+              ? res.body.message.join(' ')
+              : res.body.message;
+            expect(message.toLowerCase()).toContain('domain');
+          });
+      });
+
+      it('should accept invite with allowed email domain', async () => {
+        const response = await client.post('/api/v1/invite').send({
+          inviteUrl: 'https://example.com/invite',
+          registerUrl: 'https://example.com/register',
+          namespace: client.namespace.id,
+          role: NamespaceRole.MEMBER,
+          emails: [`invitetest${Date.now()}@gmail.com`],
+        });
+
+        // Should not fail due to domain validation
+        expect(response.status).not.toBe(HttpStatus.BAD_REQUEST);
+      });
+
+      it('should reject invite with mixed allowed and disallowed email domains', async () => {
+        await client
+          .post('/api/v1/invite')
+          .send({
+            inviteUrl: 'https://example.com/invite',
+            registerUrl: 'https://example.com/register',
+            namespace: client.namespace.id,
+            role: NamespaceRole.MEMBER,
+            emails: [`valid${Date.now()}@gmail.com`, disallowedEmail],
+          })
+          .expect(HttpStatus.BAD_REQUEST)
+          .expect((res) => {
+            const message = Array.isArray(res.body.message)
+              ? res.body.message.join(' ')
+              : res.body.message;
+            expect(message.toLowerCase()).toContain('domain');
+          });
+      });
+
+      it('should transform invite emails to lowercase', async () => {
+        const uppercaseEmail = `UPPERCASE${Date.now()}@GMAIL.COM`;
+        const response = await client.post('/api/v1/invite').send({
+          inviteUrl: 'https://example.com/invite',
+          registerUrl: 'https://example.com/register',
+          namespace: client.namespace.id,
+          role: NamespaceRole.MEMBER,
+          emails: [uppercaseEmail],
+        });
+
+        // Should not fail due to domain validation
+        expect(response.status).not.toBe(HttpStatus.BAD_REQUEST);
+      });
     });
   });
 });

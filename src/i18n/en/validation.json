@@ -17,7 +17,8 @@
     "email": {
       "isString": "Email must be a string",
       "isNotEmpty": "Email is required",
-      "isEmail": "Email must be a valid email address"
+      "isEmail": "Email must be a valid email address",
+      "domainNotAllowed": "Email domain is not allowed. Allowed domains: gmail.com, outlook.com, 163.com, qq.com"
     },
     "password": {
       "isString": "Password must be a string",

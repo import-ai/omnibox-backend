@@ -482,8 +482,7 @@ export class WechatService {
     return await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
       const nickname: string =
-        sessionData?.nickname ||
-        `wxuser_${sessionData.openid.substring(0, 10)}`;
+        sessionData?.nickname || `wx_${sessionData.openid.substring(0, 10)}`;
       const username: string = await this.socialService.getValidUsername(
         nickname,
         manager,

@@ -9,6 +9,7 @@
     "passwordTooShort": "Password must be at least 8 characters long",
     "passwordRequirements": "Password must contain at least one letter and one number",
     "emailAlreadyInUse": "Email already in use",
+    "emailSameAsCurrent": "New email cannot be the same as current email",
     "provideVerificationCode": "Please provide verification code",
     "userCannotbeEmptyStr": "Invalid username",
     "usernameMismatch": "Username does not match",

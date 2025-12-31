@@ -108,7 +108,7 @@ describe('UserController (e2e)', () => {
 
   describe('POST /api/v1/user/email/validate', () => {
     it('should validate new email address', async () => {
-      const testEmail = `test-${Date.now()}@example.com`;
+      const testEmail = `test-${Date.now()}@gmail.com`;
 
       await client
         .post('/api/v1/user/email/validate')
@@ -135,7 +135,7 @@ describe('UserController (e2e)', () => {
       await client
         .request()
         .post('/api/v1/user/email/validate')
-        .send({ email: 'test@example.com' })
+        .send({ email: 'test@gmail.com' })
         .expect(HttpStatus.UNAUTHORIZED);
     });
   });

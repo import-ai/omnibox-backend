@@ -360,11 +360,13 @@ export class UserService {
   }
 
   async validateEmail(userId: string, email: string) {
-    if (!isEmail(email)) {
-      const message = this.i18n.t('user.errors.invalidEmailFormat');
+    // Check if new email is same as current email
+    const currentUser = await this.find(userId);
+    if (currentUser.email?.toLowerCase() === email.toLowerCase()) {
+      const message = this.i18n.t('user.errors.emailSameAsCurrent');
       throw new AppException(
         message,
-        'INVALID_EMAIL_FORMAT',
+        'EMAIL_SAME_AS_CURRENT',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -394,10 +396,14 @@ export class UserService {
     );
 
     // Get user info for personalization
-    const user = await this.find(userId);
     const userLangOption = await this.getOption(userId, 'language');
     const userLang = userLangOption?.value;
-    await this.mailService.validateEmail(email, code, user.username, userLang);
+    await this.mailService.validateEmail(
+      email,
+      code,
+      currentUser.username,
+      userLang,
+    );
     return { email };
   }
 

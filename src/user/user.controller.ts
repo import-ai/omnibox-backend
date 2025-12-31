@@ -1,5 +1,6 @@
 import { UserService } from 'omniboxd/user/user.service';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
+import { ValidateEmailDto } from 'omniboxd/user/dto/validate-email.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {
@@ -53,8 +54,8 @@ export class UserController {
     return await this.userService.find(userId);
   }
   @Post('email/validate')
-  async validateEmail(@UserId() userId: string, @Body('email') email: string) {
-    const result = await this.userService.validateEmail(userId, email);
+  async validateEmail(@UserId() userId: string, @Body() dto: ValidateEmailDto) {
+    const result = await this.userService.validateEmail(userId, dto.email);
     const message = this.i18n.t('user.success.emailVerificationSent');
     return {
       ...result,

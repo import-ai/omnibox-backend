@@ -502,7 +502,11 @@ export class AuthService {
       const message = this.i18n.t('invitation.errors.groupsNotFound', {
         args: { titles: missingTitles.join(', ') },
       });
-      throw new AppException(message, 'GROUPS_NOT_FOUND', HttpStatus.BAD_REQUEST);
+      throw new AppException(
+        message,
+        'GROUPS_NOT_FOUND',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     for (const group of groups) {
       await this.permissionsService.updateGroupPermission(

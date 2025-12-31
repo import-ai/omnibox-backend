@@ -67,7 +67,7 @@ export class TestClient {
 
     this.user = {
       id: signUpResponse.id,
-      email,
+      email: email.toLowerCase(),
       username,
       password,
       token: signUpResponse.access_token,

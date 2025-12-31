@@ -332,7 +332,11 @@ export class AuthService {
       );
       if (userInNamespace) {
         // User already in namespace
-        return;
+        throw new AppException(
+          this.i18n.t('auth.errors.userAlreadyMember'),
+          'USER_ALREADY_MEMBER',
+          HttpStatus.CONFLICT,
+        );
       }
       const payload: InvitePayloadDto = {
         userId: account.id,

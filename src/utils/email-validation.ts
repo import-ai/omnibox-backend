@@ -47,7 +47,10 @@ export function IsAllowedEmailDomain(validationOptions?: ValidationOptions) {
       target: object.constructor,
       propertyName: propertyName,
       options: validationOptions,
-      constraints: [],
+      constraints: [
+        ALLOWED_EMAIL_DOMAINS.join(', '),
+        ALLOWED_EMAIL_DOMAINS.join('、'),
+      ],
       validator: IsAllowedEmailDomainConstraint,
     });
   };

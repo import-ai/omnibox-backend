@@ -18,7 +18,7 @@
       "isString": "邮箱必须是字符串",
       "isNotEmpty": "邮箱不能为空",
       "isEmail": "邮箱必须是有效的邮箱地址",
-      "domainNotAllowed": "邮箱域名不被允许。允许的域名：gmail.com、outlook.com、hotmail.com、163.com、qq.com、126.com、foxmail.com、yeah.net、sina.com、yahoo.com、sohu.com"
+      "domainNotAllowed": "邮箱域名不被允许。允许的域名：{constraints.1}"
     },
     "password": {
       "isString": "密码必须是字符串",

@@ -496,6 +496,14 @@ export class AuthService {
       namespaceId,
       groupTitles,
     );
+    const foundTitles = groups.map((g) => g.title);
+    const missingTitles = groupTitles.filter((t) => !foundTitles.includes(t));
+    if (missingTitles.length > 0) {
+      const message = this.i18n.t('invitation.errors.groupsNotFound', {
+        args: { titles: missingTitles.join(', ') },
+      });
+      throw new AppException(message, 'GROUPS_NOT_FOUND', HttpStatus.BAD_REQUEST);
+    }
     for (const group of groups) {
       await this.permissionsService.updateGroupPermission(
         namespaceId,

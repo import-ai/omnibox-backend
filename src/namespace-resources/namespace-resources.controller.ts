@@ -179,6 +179,8 @@ export class NamespaceResourcesController {
     );
   }
 
+  // Trash routes must be defined before :resourceId routes to avoid
+  // 'trash' being matched as a resourceId parameter
   @Get('trash')
   async listTrash(
     @UserId() userId: string,

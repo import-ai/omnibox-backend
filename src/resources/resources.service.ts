@@ -16,6 +16,11 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
+import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
+import { GroupPermission } from 'omniboxd/permissions/entities/group-permission.entity';
+import { Share } from 'omniboxd/shares/entities/share.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 
 const TASK_PRIORITY = 5;
 
@@ -668,6 +673,24 @@ export class ResourcesService {
       );
     }
 
+    // Find and delete all children recursively (including soft-deleted ones)
+    const children = await repo.find({
+      withDeleted: true,
+      where: { namespaceId, parentId: resourceId },
+    });
+
+    for (const child of children) {
+      await this.hardDeleteResource(namespaceId, child.id, tx);
+    }
+
+    // Delete related records from other tables
+    const em = tx.entityManager;
+    await em.delete(ResourceAttachment, { resourceId });
+    await em.delete(UserPermission, { resourceId });
+    await em.delete(GroupPermission, { resourceId });
+    await em.delete(Share, { resourceId });
+    await em.getRepository(Task).update({ resourceId }, { resourceId: null });
+
     // Hard delete the resource
     await repo.remove(resource);
   }
@@ -698,8 +721,29 @@ export class ResourcesService {
       return 0;
     }
 
-    // Hard delete all
-    await repo.remove(deletedResources);
+    // Sort resources so children come before parents (deeper nodes first)
+    // Build a map of id -> resource for quick lookup
+    const resourceMap = new Map<string, Resource>();
+    deletedResources.forEach((r) => resourceMap.set(r.id, r));
+
+    // Calculate depth for each resource
+    const getDepth = (resource: Resource): number => {
+      let depth = 0;
+      let current = resource;
+      while (current.parentId && resourceMap.has(current.parentId)) {
+        depth++;
+        current = resourceMap.get(current.parentId)!;
+      }
+      return depth;
+    };
+
+    // Sort by depth descending (deepest first)
+    deletedResources.sort((a, b) => getDepth(b) - getDepth(a));
+
+    // Hard delete all in order
+    for (const resource of deletedResources) {
+      await repo.remove(resource);
+    }
 
     return deletedResources.length;
   }

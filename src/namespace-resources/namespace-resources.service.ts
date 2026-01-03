@@ -44,6 +44,8 @@ import {
 } from './dto/file-info.dto';
 import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
 import { InternalResourceDto } from './dto/internal-resource.dto';
+import { TrashItemDto } from './dto/trash-item.dto';
+import { TrashListResponseDto } from './dto/trash-list-response.dto';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -948,6 +950,34 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
+
+    // Check if parent is deleted, if so restore to root
+    const isParentDeleted = await this.resourcesService.isParentDeleted(
+      namespaceId,
+      resource.parentId,
+    );
+
+    if (isParentDeleted) {
+      // Find user's root resource to restore to
+      const userRoot = resource.userId
+        ? await this.resourceRepository.findOne({
+            where: {
+              namespaceId,
+              userId: resource.userId,
+              parentId: IsNull(),
+            },
+          })
+        : null;
+
+      if (userRoot) {
+        // Update parentId to user's root before restoring
+        await this.resourceRepository.update(
+          { id: resourceId },
+          { parentId: userRoot.id },
+        );
+      }
+    }
+
     await this.resourcesService.restoreResource(
       userId,
       namespaceId,
@@ -1006,5 +1036,76 @@ export class NamespaceResourcesService {
       skip: offset,
       take: limit,
     });
+  }
+
+  async listTrash(
+    namespaceId: string,
+    userId: string,
+    options?: {
+      search?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<TrashListResponseDto> {
+    const { search, limit = 20, offset = 0 } = options || {};
+
+    // Check if user has access to this namespace
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    const { items, total } = await this.resourcesService.getDeletedResources(
+      namespaceId,
+      { search, limit, offset },
+    );
+
+    const trashItems = items.map((resource) =>
+      TrashItemDto.fromEntity(resource, false),
+    );
+
+    return TrashListResponseDto.create(trashItems, total, limit, offset);
+  }
+
+  async permanentlyDeleteResource(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<void> {
+    // Check if user has access to this namespace
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    await this.resourcesService.hardDeleteResource(namespaceId, resourceId);
+  }
+
+  async emptyTrash(
+    userId: string,
+    namespaceId: string,
+  ): Promise<{ deleted_count: number }> {
+    // Check if user has access to this namespace
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    const deletedCount =
+      await this.resourcesService.hardDeleteAllTrash(namespaceId);
+
+    return { deleted_count: deletedCount };
   }
 }

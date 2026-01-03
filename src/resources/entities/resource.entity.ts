@@ -49,4 +49,7 @@ export class Resource extends Base {
 
   @Column('enum', { enum: ResourcePermission, nullable: true })
   globalPermission: ResourcePermission | null;
+
+  @Column('timestamptz', { nullable: true })
+  permanentDeletedAt: Date | null;
 }

@@ -14,6 +14,8 @@
     "fileResourceNotFound": "文件资源未找到",
     "cycleDetected": "资源树中检测到循环引用",
     "cannotSetParentToSubResource": "无法将父资源设置为子资源",
-    "invalidResourceType": "资源类型无效"
+    "invalidResourceType": "资源类型无效",
+    "trashItemNotFound": "回收站中未找到该项目",
+    "cannotPermanentlyDeleteRoot": "无法永久删除根资源"
   }
 }

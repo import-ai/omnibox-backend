@@ -81,6 +81,7 @@ import { AddAdminRole1766339893375 } from 'omniboxd/migrations/1766339893375-add
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 import { AddNamespaceIdIndexToResources1766053289000 } from 'omniboxd/migrations/1766053289000-add-namespace-id-index-to-resources';
 import { AddStatusToTasks1766127168000 } from 'omniboxd/migrations/1766127168000-add-status-to-tasks';
+import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/1767441415360-add-permanent-deleted-at';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -216,6 +217,7 @@ export class AppModule implements NestModule {
               AddAdminRole1766339893375,
               AddNamespaceIdIndexToResources1766053289000,
               AddStatusToTasks1766127168000,
+              AddPermanentDeletedAt1767441415360,
               ...extraMigrations,
             ],
             migrationsRun: true,

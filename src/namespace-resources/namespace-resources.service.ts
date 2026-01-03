@@ -1065,7 +1065,7 @@ export class NamespaceResourcesService {
     );
 
     const trashItems = items.map((resource) =>
-      TrashItemDto.fromEntity(resource),
+      TrashItemDto.fromEntity(resource, false),
     );
 
     return TrashListResponseDto.create(trashItems, total, limit, offset);

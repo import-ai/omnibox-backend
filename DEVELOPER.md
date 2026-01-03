@@ -96,7 +96,7 @@ See `src/auth/api-key/README.md` and `src/auth/cookie/README.md` for detailed us
 Migrations run automatically on app startup (`migrationsRun: true`). No CLI commands needed.
 
 **To create a new migration:**
-1. Create `src/migrations/{timestamp}-{description}.ts`
+1. Create `src/migrations/{timestamp}-{description}.ts` (use `date +%s%3N` to generate timestamp with milliseconds)
 2. Import and register in `src/app/app.module.ts` migrations array
 3. Use `BaseColumns()` from `src/migrations/base-columns.ts` for standard audit fields
 

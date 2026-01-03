@@ -16,11 +16,6 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
-import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
-import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
-import { GroupPermission } from 'omniboxd/permissions/entities/group-permission.entity';
-import { Share } from 'omniboxd/shares/entities/share.entity';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 
 const TASK_PRIORITY = 5;
 
@@ -548,6 +543,26 @@ export class ResourcesService {
         this.restoreResource(userId, namespaceId, resourceId, tx),
       );
     }
+
+    // Check if resource exists and is not permanently deleted
+    const resource = await tx.entityManager.findOne(Resource, {
+      withDeleted: true,
+      where: { namespaceId, id: resourceId },
+    });
+
+    if (!resource || !resource.deletedAt) {
+      return; // Not in trash
+    }
+
+    if (resource.permanentDeletedAt) {
+      const message = this.i18n.t('resource.errors.trashItemNotFound');
+      throw new AppException(
+        message,
+        'TRASH_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
     const result = await tx.entityManager.restore(Resource, {
       namespaceId,
       id: resourceId,
@@ -555,15 +570,15 @@ export class ResourcesService {
     if (result.affected !== 1) {
       return;
     }
-    const resource = await tx.entityManager.findOneOrFail(Resource, {
+    const restoredResource = await tx.entityManager.findOneOrFail(Resource, {
       where: { namespaceId, id: resourceId },
     });
-    if (resource.parentId) {
+    if (restoredResource.parentId) {
       // If it's not a root resource, create index task
       await this.wizardTaskService.emitUpsertIndexTask(
         TASK_PRIORITY,
         userId,
-        resource,
+        restoredResource,
         tx,
       );
     }
@@ -608,7 +623,8 @@ export class ResourcesService {
       .withDeleted()
       .where('resource.namespace_id = :namespaceId', { namespaceId })
       .andWhere('resource.deleted_at IS NOT NULL')
-      .andWhere('resource.parent_id IS NOT NULL');
+      .andWhere('resource.parent_id IS NOT NULL')
+      .andWhere('resource.permanent_deleted_at IS NULL');
 
     if (search) {
       queryBuilder.andWhere('resource.name ILIKE :search', {
@@ -673,26 +689,19 @@ export class ResourcesService {
       );
     }
 
-    // Find and delete all children recursively (including soft-deleted ones)
-    const children = await repo.find({
-      withDeleted: true,
-      where: { namespaceId, parentId: resourceId },
-    });
-
-    for (const child of children) {
-      await this.hardDeleteResource(namespaceId, child.id, tx);
+    // Check if already permanently deleted
+    if (resource.permanentDeletedAt) {
+      const message = this.i18n.t('resource.errors.trashItemNotFound');
+      throw new AppException(
+        message,
+        'TRASH_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
 
-    // Delete related records from other tables
-    const em = tx.entityManager;
-    await em.delete(ResourceAttachment, { resourceId });
-    await em.delete(UserPermission, { resourceId });
-    await em.delete(GroupPermission, { resourceId });
-    await em.delete(Share, { resourceId });
-    await em.getRepository(Task).update({ resourceId }, { resourceId: null });
-
-    // Hard delete the resource
-    await repo.remove(resource);
+    // Set permanent_deleted_at timestamp (children become inaccessible automatically)
+    const now = new Date();
+    await repo.update({ id: resourceId }, { permanentDeletedAt: now });
   }
 
   async hardDeleteAllTrash(
@@ -706,14 +715,17 @@ export class ResourcesService {
     }
 
     const repo = tx.entityManager.getRepository(Resource);
+    const now = new Date();
 
-    // Find all deleted resources (excluding root resources)
+    // Find all deleted resources that haven't been permanently deleted yet
+    // (excluding root resources)
     const deletedResources = await repo.find({
       withDeleted: true,
       where: {
         namespaceId,
         deletedAt: Not(IsNull()),
         parentId: Not(IsNull()),
+        permanentDeletedAt: IsNull(),
       },
     });
 
@@ -721,29 +733,9 @@ export class ResourcesService {
       return 0;
     }
 
-    // Sort resources so children come before parents (deeper nodes first)
-    // Build a map of id -> resource for quick lookup
-    const resourceMap = new Map<string, Resource>();
-    deletedResources.forEach((r) => resourceMap.set(r.id, r));
-
-    // Calculate depth for each resource
-    const getDepth = (resource: Resource): number => {
-      let depth = 0;
-      let current = resource;
-      while (current.parentId && resourceMap.has(current.parentId)) {
-        depth++;
-        current = resourceMap.get(current.parentId)!;
-      }
-      return depth;
-    };
-
-    // Sort by depth descending (deepest first)
-    deletedResources.sort((a, b) => getDepth(b) - getDepth(a));
-
-    // Hard delete all in order
-    for (const resource of deletedResources) {
-      await repo.remove(resource);
-    }
+    // Bulk update all resources with permanent_deleted_at
+    const resourceIds = deletedResources.map((r) => r.id);
+    await repo.update({ id: In(resourceIds) }, { permanentDeletedAt: now });
 
     return deletedResources.length;
   }
@@ -757,7 +749,7 @@ export class ResourcesService {
       where: { namespaceId, id: resourceId },
     });
 
-    if (!resource || !resource.deletedAt) {
+    if (!resource || !resource.deletedAt || resource.permanentDeletedAt) {
       const message = this.i18n.t('resource.errors.trashItemNotFound');
       throw new AppException(
         message,

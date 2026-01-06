@@ -3,7 +3,14 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource, ResourceType } from './entities/resource.entity';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  Not,
+  Repository,
+} from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
@@ -536,6 +543,26 @@ export class ResourcesService {
         this.restoreResource(userId, namespaceId, resourceId, tx),
       );
     }
+
+    // Check if resource exists and is not permanently deleted
+    const resource = await tx.entityManager.findOne(Resource, {
+      withDeleted: true,
+      where: { namespaceId, id: resourceId },
+    });
+
+    if (!resource || !resource.deletedAt) {
+      return; // Not in trash
+    }
+
+    if (resource.permanentDeletedAt) {
+      const message = this.i18n.t('resource.errors.trashItemNotFound');
+      throw new AppException(
+        message,
+        'TRASH_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
     const result = await tx.entityManager.restore(Resource, {
       namespaceId,
       id: resourceId,
@@ -543,15 +570,15 @@ export class ResourcesService {
     if (result.affected !== 1) {
       return;
     }
-    const resource = await tx.entityManager.findOneOrFail(Resource, {
+    const restoredResource = await tx.entityManager.findOneOrFail(Resource, {
       where: { namespaceId, id: resourceId },
     });
-    if (resource.parentId) {
+    if (restoredResource.parentId) {
       // If it's not a root resource, create index task
       await this.wizardTaskService.emitUpsertIndexTask(
         TASK_PRIORITY,
         userId,
-        resource,
+        restoredResource,
         tx,
       );
     }
@@ -579,5 +606,174 @@ export class ResourcesService {
       resourceId,
       tx,
     );
+  }
+
+  async getDeletedResources(
+    namespaceId: string,
+    options?: {
+      search?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{ items: Resource[]; total: number }> {
+    const { search, limit = 20, offset = 0 } = options || {};
+
+    const queryBuilder = this.resourceRepository
+      .createQueryBuilder('resource')
+      .withDeleted()
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.deleted_at IS NOT NULL')
+      .andWhere('resource.parent_id IS NOT NULL')
+      .andWhere('resource.permanent_deleted_at IS NULL');
+
+    if (search) {
+      queryBuilder.andWhere('resource.name ILIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    const total = await queryBuilder.getCount();
+
+    const items = await queryBuilder
+      .orderBy('resource.deleted_at', 'DESC')
+      .skip(offset)
+      .take(limit)
+      .getMany();
+
+    return { items, total };
+  }
+
+  async hardDeleteResource(
+    namespaceId: string,
+    resourceId: string,
+    tx?: Transaction,
+  ): Promise<void> {
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.hardDeleteResource(namespaceId, resourceId, tx),
+      );
+    }
+
+    const repo = tx.entityManager.getRepository(Resource);
+    const resource = await repo.findOne({
+      withDeleted: true,
+      where: { namespaceId, id: resourceId },
+    });
+
+    if (!resource) {
+      const message = this.i18n.t('resource.errors.trashItemNotFound');
+      throw new AppException(
+        message,
+        'TRASH_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (!resource.deletedAt) {
+      const message = this.i18n.t('resource.errors.trashItemNotFound');
+      throw new AppException(
+        message,
+        'TRASH_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (!resource.parentId) {
+      const message = this.i18n.t(
+        'resource.errors.cannotPermanentlyDeleteRoot',
+      );
+      throw new AppException(
+        message,
+        'CANNOT_PERMANENTLY_DELETE_ROOT',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Check if already permanently deleted
+    if (resource.permanentDeletedAt) {
+      const message = this.i18n.t('resource.errors.trashItemNotFound');
+      throw new AppException(
+        message,
+        'TRASH_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    // Set permanent_deleted_at timestamp (children become inaccessible automatically)
+    const now = new Date();
+    await repo.update({ id: resourceId }, { permanentDeletedAt: now });
+  }
+
+  async hardDeleteAllTrash(
+    namespaceId: string,
+    tx?: Transaction,
+  ): Promise<number> {
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.hardDeleteAllTrash(namespaceId, tx),
+      );
+    }
+
+    const repo = tx.entityManager.getRepository(Resource);
+    const now = new Date();
+
+    // Find all deleted resources that haven't been permanently deleted yet
+    // (excluding root resources)
+    const deletedResources = await repo.find({
+      withDeleted: true,
+      where: {
+        namespaceId,
+        deletedAt: Not(IsNull()),
+        parentId: Not(IsNull()),
+        permanentDeletedAt: IsNull(),
+      },
+    });
+
+    if (deletedResources.length === 0) {
+      return 0;
+    }
+
+    // Bulk update all resources with permanent_deleted_at
+    const resourceIds = deletedResources.map((r) => r.id);
+    await repo.update({ id: In(resourceIds) }, { permanentDeletedAt: now });
+
+    return deletedResources.length;
+  }
+
+  async getDeletedResourceOrFail(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Resource> {
+    const resource = await this.resourceRepository.findOne({
+      withDeleted: true,
+      where: { namespaceId, id: resourceId },
+    });
+
+    if (!resource || !resource.deletedAt || resource.permanentDeletedAt) {
+      const message = this.i18n.t('resource.errors.trashItemNotFound');
+      throw new AppException(
+        message,
+        'TRASH_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return resource;
+  }
+
+  async isParentDeleted(
+    namespaceId: string,
+    parentId: string | null,
+  ): Promise<boolean> {
+    if (!parentId) {
+      return false;
+    }
+
+    const parent = await this.resourceRepository.findOne({
+      withDeleted: true,
+      where: { namespaceId, id: parentId },
+    });
+
+    return !parent || !!parent.deletedAt;
   }
 }

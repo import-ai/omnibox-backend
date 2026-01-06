@@ -21,6 +21,7 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { SidebarChildDto } from './dto/sidebar-child.dto';
 import { ResourceSummaryDto } from './dto/resource-summary.dto';
+import { TrashListResponseDto } from './dto/trash-list-response.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -175,6 +176,44 @@ export class NamespaceResourcesController {
       take,
       skip,
       { summary: summary === 'true' },
+    );
+  }
+
+  // Trash routes must be defined before :resourceId routes to avoid
+  // 'trash' being matched as a resourceId parameter
+  @Get('trash')
+  async listTrash(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Query('search') search?: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
+  ): Promise<TrashListResponseDto> {
+    return await this.namespaceResourcesService.listTrash(namespaceId, userId, {
+      search,
+      limit,
+      offset,
+    });
+  }
+
+  @Delete('trash')
+  async emptyTrash(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+  ): Promise<{ deleted_count: number }> {
+    return await this.namespaceResourcesService.emptyTrash(userId, namespaceId);
+  }
+
+  @Delete('trash/:resourceId')
+  async permanentlyDelete(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ): Promise<void> {
+    await this.namespaceResourcesService.permanentlyDeleteResource(
+      userId,
+      namespaceId,
+      resourceId,
     );
   }
 

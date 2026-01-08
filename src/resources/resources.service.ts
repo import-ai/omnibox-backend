@@ -618,11 +618,15 @@ export class ResourcesService {
   ): Promise<{ items: Resource[]; total: number }> {
     const { search, limit = 20, offset = 0 } = options || {};
 
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 7);
+
     const queryBuilder = this.resourceRepository
       .createQueryBuilder('resource')
       .withDeleted()
       .where('resource.namespace_id = :namespaceId', { namespaceId })
       .andWhere('resource.deleted_at IS NOT NULL')
+      .andWhere('resource.deleted_at >= :cutoffDate', { cutoffDate })
       .andWhere('resource.parent_id IS NOT NULL')
       .andWhere('resource.permanent_deleted_at IS NULL');
 

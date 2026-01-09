@@ -785,6 +785,8 @@ export class NamespaceResourcesService {
     userId?: string,
     parentId?: string,
     tags?: string[],
+    nameContains?: string,
+    contentContains?: string,
   ): Promise<InternalResourceDto[]> {
     let tagIds: string[] | undefined;
     if (tags && tags.length > 0) {
@@ -803,6 +805,8 @@ export class NamespaceResourcesService {
       userId,
       parentId,
       tagIds,
+      nameContains,
+      contentContains,
     );
 
     // Populate tags for resources

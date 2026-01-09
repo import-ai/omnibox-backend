@@ -10,6 +10,7 @@ import {
 } from './applications.dto';
 import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
+import { QQBot } from 'omniboxd/applications/apps/qq-bot';
 
 export interface FindAllOptions {
   apiKeyId?: string;
@@ -23,9 +24,11 @@ export class ApplicationsService {
     @InjectRepository(Applications)
     private readonly applicationsRepository: Repository<Applications>,
     private readonly wechatBot: WechatBot,
+    private readonly qqBot: QQBot,
     private readonly i18n: I18nService,
   ) {
     this.apps[WechatBot.appId] = this.wechatBot;
+    this.apps[QQBot.appId] = this.qqBot;
   }
 
   async findOne(

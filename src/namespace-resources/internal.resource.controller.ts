@@ -30,6 +30,8 @@ export class InternalResourcesController {
     @Query('userId') userId?: string,
     @Query('parentId') parentId?: string,
     @Query('tag') tag?: string,
+    @Query('nameContains') nameContains?: string,
+    @Query('contentContains') contentContains?: string,
   ) {
     const ids = resourceIds ? resourceIds.split(',').filter((id) => id) : [];
     const tags = tag ? tag.split(',').filter((t) => t.trim()) : [];
@@ -41,6 +43,8 @@ export class InternalResourcesController {
       userId,
       parentId,
       tags,
+      nameContains,
+      contentContains,
     );
   }
 

@@ -326,6 +326,8 @@ export class ResourcesService {
     userId?: string,
     parentId?: string,
     tagIds?: string[],
+    nameContains?: string,
+    contentContains?: string,
   ): Promise<Resource[]> {
     const hasFilter =
       (resourceIds && resourceIds.length > 0) ||
@@ -333,7 +335,9 @@ export class ResourcesService {
       createdAtAfter ||
       userId ||
       parentId ||
-      (tagIds && tagIds.length > 0);
+      (tagIds && tagIds.length > 0) ||
+      nameContains ||
+      contentContains;
     if (!hasFilter) {
       throw new AppException(
         'At least one filter parameter is required',
@@ -369,6 +373,16 @@ export class ResourcesService {
     }
     if (tagIds && tagIds.length > 0) {
       queryBuilder.andWhere('resource.tag_ids && :tagIds', { tagIds });
+    }
+    if (nameContains) {
+      queryBuilder.andWhere('resource.name ILIKE :nameContains', {
+        nameContains: `%${nameContains}%`,
+      });
+    }
+    if (contentContains) {
+      queryBuilder.andWhere('resource.content ILIKE :contentContains', {
+        contentContains: `%${contentContains}%`,
+      });
     }
 
     return await queryBuilder.getMany();

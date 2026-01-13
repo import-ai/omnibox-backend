@@ -258,10 +258,15 @@ export class UserService {
     // Mask phone numbers - show only last 4 digits
     return bindings.map((binding) => {
       if (binding.loginType === 'phone' && binding.loginId) {
+        // Strip country code if present for proper masking
+        let nationalNumber = binding.loginId;
+        if (nationalNumber.startsWith('+86')) {
+          nationalNumber = nationalNumber.slice(3);
+        }
         const masked =
-          binding.loginId.length > 4
-            ? '*'.repeat(binding.loginId.length - 4) + binding.loginId.slice(-4)
-            : binding.loginId;
+          nationalNumber.length > 4
+            ? '*'.repeat(nationalNumber.length - 4) + nationalNumber.slice(-4)
+            : nationalNumber;
         return { ...binding, loginId: masked };
       }
       return binding;

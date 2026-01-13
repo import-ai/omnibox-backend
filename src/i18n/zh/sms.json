@@ -1,0 +1,6 @@
+{
+  "errors": {
+    "sendFailed": "短信发送失败，请稍后重试。",
+    "serviceUnavailable": "短信服务暂时不可用。"
+  }
+}

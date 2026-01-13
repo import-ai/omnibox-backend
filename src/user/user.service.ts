@@ -359,6 +359,67 @@ export class UserService {
     });
   }
 
+  async findByPhone(phone: string): Promise<User | null> {
+    const binding = await this.userBindingRepository.findOne({
+      where: { loginType: 'phone', loginId: phone },
+    });
+    if (!binding) {
+      return null;
+    }
+    return await this.userRepository.findOne({
+      where: { id: binding.userId },
+      select: ['id', 'username', 'email'],
+    });
+  }
+
+  async createUserWithPhone(
+    userData: {
+      phone: string;
+      username: string;
+      lang?: string;
+    },
+    manager?: EntityManager,
+  ) {
+    const repo = manager ? manager.getRepository(User) : this.userRepository;
+    const hash = await bcrypt.hash(Math.random().toString(36), 10);
+
+    // Filter emoji from username
+    const username = filterEmoji(userData.username);
+
+    const newUser = repo.create({
+      password: hash,
+      email: null,
+      username: username,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...result } = await repo.save(newUser);
+
+    if (userData.lang) {
+      await this.createOptionIfNotSet(
+        result.id,
+        'language',
+        userData.lang,
+        manager,
+      );
+    }
+
+    const bindingRepo = manager
+      ? manager.getRepository(UserBinding)
+      : this.userBindingRepository;
+
+    const newBinding = bindingRepo.create({
+      userId: result.id,
+      loginId: userData.phone,
+      loginType: 'phone',
+      metadata: { verified: true },
+    });
+
+    await bindingRepo.save(newBinding);
+
+    return result;
+  }
+
   async validateEmail(userId: string, email: string) {
     // Check if new email is same as current email
     const currentUser = await this.find(userId);

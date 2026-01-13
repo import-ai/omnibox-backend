@@ -1,0 +1,6 @@
+{
+  "errors": {
+    "sendFailed": "Failed to send SMS. Please try again later.",
+    "serviceUnavailable": "SMS service is temporarily unavailable."
+  }
+}

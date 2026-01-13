@@ -568,7 +568,12 @@ export class UserService {
       // Increment attempts
       phoneState.attempts++;
       const ttl = phoneState.expiresIn - (Date.now() - phoneState.createdAt);
-      await this.cacheService.set(this.phoneNamespace, cacheKey, phoneState, ttl);
+      await this.cacheService.set(
+        this.phoneNamespace,
+        cacheKey,
+        phoneState,
+        ttl,
+      );
 
       const message = this.i18n.t('user.errors.incorrectVerificationCode');
       throw new AppException(

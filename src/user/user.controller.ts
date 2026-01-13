@@ -1,7 +1,10 @@
 import { UserService } from 'omniboxd/user/user.service';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { ValidateEmailDto } from 'omniboxd/user/dto/validate-email.dto';
-import { SendPhoneCodeDto, BindPhoneDto } from 'omniboxd/user/dto/phone-binding.dto';
+import {
+  SendPhoneCodeDto,
+  BindPhoneDto,
+} from 'omniboxd/user/dto/phone-binding.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {

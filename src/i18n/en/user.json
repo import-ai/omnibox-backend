@@ -5,11 +5,16 @@
     "userNotFound": "User not found",
     "invalidEmailFormat": "Invalid email format",
     "pleaseVerifyEmail": "Please verify your email first",
+    "pleaseVerifyPhone": "Please verify your phone first",
     "incorrectVerificationCode": "Incorrect verification code",
     "passwordTooShort": "Password must be at least 8 characters long",
     "passwordRequirements": "Password must contain at least one letter and one number",
     "emailAlreadyInUse": "Email already in use",
     "emailSameAsCurrent": "New email cannot be the same as current email",
+    "phoneAlreadyInUse": "Phone number already in use",
+    "phoneSameAsCurrent": "Phone number is already bound to your account",
+    "tooManyAttempts": "Too many attempts. Please request a new verification code.",
+    "unbindingNotAllowed": "Cannot unbind. You must have at least one email or binding to log in.",
     "provideVerificationCode": "Please provide verification code",
     "userCannotbeEmptyStr": "Invalid username",
     "usernameMismatch": "Username does not match",
@@ -21,6 +26,9 @@
   "success": {
     "emailVerificationSent": "Verification code has been sent to your new email address",
     "emailUpdatedSuccessfully": "Email address has been updated successfully",
+    "phoneVerificationSent": "Verification code has been sent to your phone",
+    "phoneBoundSuccessfully": "Phone number has been bound successfully",
+    "phoneUnboundSuccessfully": "Phone number has been unbound successfully",
     "deletionEmailSent": "Account deletion confirmation email has been sent. Please check your inbox.",
     "accountDeleted": "Your account has been successfully deleted"
   }

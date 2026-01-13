@@ -1,6 +1,7 @@
 import { UserService } from 'omniboxd/user/user.service';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { ValidateEmailDto } from 'omniboxd/user/dto/validate-email.dto';
+import { SendPhoneCodeDto, BindPhoneDto } from 'omniboxd/user/dto/phone-binding.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {
@@ -57,6 +58,35 @@ export class UserController {
   async validateEmail(@UserId() userId: string, @Body() dto: ValidateEmailDto) {
     const result = await this.userService.validateEmail(userId, dto.email);
     const message = this.i18n.t('user.success.emailVerificationSent');
+    return {
+      ...result,
+      message,
+    };
+  }
+
+  @Post('phone/send-code')
+  @HttpCode(200)
+  async sendPhoneCode(@UserId() userId: string, @Body() dto: SendPhoneCodeDto) {
+    const result = await this.userService.sendPhoneBindingCode(
+      userId,
+      dto.phone,
+    );
+    const message = this.i18n.t('user.success.phoneVerificationSent');
+    return {
+      ...result,
+      message,
+    };
+  }
+
+  @Post('phone/bind')
+  @HttpCode(200)
+  async bindPhone(@UserId() userId: string, @Body() dto: BindPhoneDto) {
+    const result = await this.userService.bindPhone(
+      userId,
+      dto.phone,
+      dto.code,
+    );
+    const message = this.i18n.t('user.success.phoneBoundSuccessfully');
     return {
       ...result,
       message,

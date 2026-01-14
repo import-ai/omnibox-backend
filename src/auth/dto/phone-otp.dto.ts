@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { IsNotEmpty, IsString, Length } from 'class-validator';
+import { IsValidPhone } from 'omniboxd/common/validators';
 
 export class SendPhoneOtpDto {
   @ApiProperty({
@@ -9,10 +10,11 @@ export class SendPhoneOtpDto {
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\+[1-9]\d{6,14}$/, {
-    message: 'Phone number must be in E.164 format (e.g., +8613800138000)',
-  })
   @Transform(({ value }) => value?.replace(/\s/g, ''))
+  @IsValidPhone(undefined, {
+    message:
+      'Phone number must be in valid E.164 format (e.g., +8613800138000)',
+  })
   phone: string;
 }
 

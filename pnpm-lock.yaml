@@ -125,6 +125,9 @@ importers:
       keyv:
         specifier: ^5.5.5
         version: 5.5.5
+      libphonenumber-js:
+        specifier: ^1.12.34
+        version: 1.12.34
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
@@ -4533,8 +4536,8 @@ packages:
   libmime@5.3.7:
     resolution: {integrity: sha512-FlDb3Wtha8P01kTL3P9M+ZDNDWPKPmKHWaU/cG/lg5pfuAwdflVpZE+wm9m7pKmC5ww6s+zTxBKS1p6yl3KpSw==}
 
-  libphonenumber-js@1.12.31:
-    resolution: {integrity: sha512-Z3IhgVgrqO1S5xPYM3K5XwbkDasU67/Vys4heW+lfSBALcUZjeIIzI8zCLifY+OCzSq+fpDdywMDa7z+4srJPQ==}
+  libphonenumber-js@1.12.34:
+    resolution: {integrity: sha512-v/Ip8k8eYdp7bINpzqDh46V/PaQ8sK+qi97nMQgjZzFlb166YFqlR/HVI+MzsI9JqcyyVWCOipmmretiaSyQyw==}
 
   libqp@2.1.1:
     resolution: {integrity: sha512-0Wd+GPz1O134cP62YU2GTOPNA7Qgl09XwCqM5zpBv87ERCXdfDtyKXvV7c9U22yWJh44QZqBocFnXN11K96qow==}
@@ -10174,7 +10177,7 @@ snapshots:
   class-validator@0.14.3:
     dependencies:
       '@types/validator': 13.15.10
-      libphonenumber-js: 1.12.31
+      libphonenumber-js: 1.12.34
       validator: 13.15.23
 
   clean-css@4.2.4:
@@ -12120,7 +12123,7 @@ snapshots:
       libqp: 2.1.1
     optional: true
 
-  libphonenumber-js@1.12.31: {}
+  libphonenumber-js@1.12.34: {}
 
   libqp@2.1.1:
     optional: true

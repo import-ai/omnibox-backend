@@ -1,6 +1,7 @@
 import * as bcrypt from 'bcrypt';
 import { isEmail } from 'class-validator';
 import generateId from 'omniboxd/utils/generate-id';
+import { maskPhone } from 'omniboxd/common/validators';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { MailService } from 'omniboxd/mail/mail.service';
@@ -255,19 +256,10 @@ export class UserService {
       where: { userId },
     });
 
-    // Mask phone numbers - show only last 4 digits
+    // Mask phone numbers for privacy
     return bindings.map((binding) => {
       if (binding.loginType === 'phone' && binding.loginId) {
-        // Strip country code if present for proper masking
-        let nationalNumber = binding.loginId;
-        if (nationalNumber.startsWith('+86')) {
-          nationalNumber = nationalNumber.slice(3);
-        }
-        const masked =
-          nationalNumber.length > 4
-            ? '*'.repeat(nationalNumber.length - 4) + nationalNumber.slice(-4)
-            : nationalNumber;
-        return { ...binding, loginId: masked };
+        return { ...binding, loginId: maskPhone(binding.loginId) };
       }
       return binding;
     });

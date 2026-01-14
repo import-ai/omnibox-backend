@@ -4,6 +4,11 @@ import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { parsePhone } from 'omniboxd/common/validators';
+
+// Aliyun DysMS supports these regions
+// CN (Mainland China), HK (Hong Kong), MO (Macau), TW (Taiwan)
+const ALIYUN_SUPPORTED_COUNTRIES = ['CN', 'HK', 'MO', 'TW'];
 
 @Injectable()
 export class SmsService {
@@ -46,6 +51,26 @@ export class SmsService {
     };
   }
 
+  /**
+   * Get the list of countries supported by the SMS provider.
+   */
+  getSupportedCountries(): string[] {
+    if (!this.available().available) {
+      return [];
+    }
+    return ALIYUN_SUPPORTED_COUNTRIES;
+  }
+
+  /**
+   * Check if SMS can be sent to a specific country.
+   */
+  isCountrySupported(countryCode: string): boolean {
+    return (
+      this.available().available &&
+      ALIYUN_SUPPORTED_COUNTRIES.includes(countryCode.toUpperCase())
+    );
+  }
+
   async sendOtp(phone: string, code: string): Promise<void> {
     if (!this.client) {
       const message = this.i18n.t('sms.errors.serviceUnavailable');
@@ -53,6 +78,26 @@ export class SmsService {
         message,
         'SMS_SERVICE_UNAVAILABLE',
         HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+
+    // Validate phone country is supported
+    const parsed = parsePhone(phone);
+    if (!parsed) {
+      const message = this.i18n.t('sms.errors.invalidPhone');
+      throw new AppException(
+        message,
+        'INVALID_PHONE_NUMBER',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (!this.isCountrySupported(parsed.country)) {
+      const message = this.i18n.t('sms.errors.countryNotSupported');
+      throw new AppException(
+        message,
+        'COUNTRY_NOT_SUPPORTED',
+        HttpStatus.BAD_REQUEST,
       );
     }
 

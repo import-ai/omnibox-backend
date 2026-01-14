@@ -96,6 +96,7 @@
     "handlebars": "^4.7.8",
     "kafkajs": "^2.2.4",
     "keyv": "^5.5.5",
+    "libphonenumber-js": "^1.12.34",
     "lodash": "^4.17.21",
     "meilisearch": "^0.50.0",
     "mime-types": "^3.0.2",

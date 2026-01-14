@@ -13,7 +13,7 @@ const ALIYUN_SUPPORTED_COUNTRIES = ['CN', 'HK', 'MO', 'TW'];
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
-  private client: Dysmsapi20170525 | null = null;
+  private readonly client: Dysmsapi20170525 | null = null;
   private readonly signName: string;
   private readonly templateCode: string;
 

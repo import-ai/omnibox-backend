@@ -1,5 +1,5 @@
 import {
-  parsePhoneNumber,
+  parsePhoneNumberFromString,
   isValidPhoneNumber,
   getCountryCallingCode as getCallingCode,
   CountryCode,
@@ -19,7 +19,7 @@ export function validatePhone(
   phone: string,
   allowedCountries?: string[],
 ): boolean {
-  if (!phone || typeof phone !== 'string') {
+  if (!phone) {
     return false;
   }
 
@@ -36,7 +36,7 @@ export function validatePhone(
 
     // If allowed countries are specified, check if the phone belongs to one
     if (allowedCountries && allowedCountries.length > 0) {
-      const parsed = parsePhoneNumber(phone);
+      const parsed = parsePhoneNumberFromString(phone);
       if (!parsed || !parsed.country) {
         return false;
       }
@@ -54,12 +54,12 @@ export function validatePhone(
  * Returns null if the phone number is invalid.
  */
 export function parsePhone(phone: string): ParsedPhone | null {
-  if (!phone || typeof phone !== 'string') {
+  if (!phone) {
     return null;
   }
 
   try {
-    const parsed = parsePhoneNumber(phone);
+    const parsed = parsePhoneNumberFromString(phone);
     if (!parsed || !parsed.country) {
       return null;
     }
@@ -121,40 +121,4 @@ function getCountryCallingCode(country: string): string {
   } catch {
     return '';
   }
-}
-
-/**
- * Normalize a phone number to E.164 format.
- * If the number doesn't start with +, attempts to parse with default country.
- */
-export function normalizeToE164(
-  phone: string,
-  defaultCountry?: string,
-): string | null {
-  if (!phone || typeof phone !== 'string') {
-    return null;
-  }
-
-  // Remove whitespace
-  phone = phone.replace(/\s/g, '');
-
-  // Already in E.164 format
-  if (phone.startsWith('+')) {
-    const parsed = parsePhone(phone);
-    return parsed ? parsed.e164 : null;
-  }
-
-  // Try to parse with default country
-  if (defaultCountry) {
-    try {
-      const parsed = parsePhoneNumber(phone, defaultCountry as CountryCode);
-      if (parsed && parsed.isValid()) {
-        return parsed.format('E.164');
-      }
-    } catch {
-      // Fall through
-    }
-  }
-
-  return null;
 }

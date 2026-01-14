@@ -80,15 +80,18 @@ export class UserService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async verify(email: string, password: string) {
+  async verify(identifier: string, password: string, type?: 'email' | 'phone') {
     let account: User | null = null;
-    if (isEmail(email)) {
+    if (type === 'phone') {
+      // Phone number lookup via UserBinding
+      account = await this.findByPhoneWithPassword(identifier);
+    } else if (isEmail(identifier)) {
       account = await this.userRepository.findOne({
-        where: { email },
+        where: { email: identifier },
       });
     } else {
       account = await this.userRepository.findOne({
-        where: { username: email },
+        where: { username: identifier },
       });
     }
     if (!account) {
@@ -103,6 +106,18 @@ export class UserService {
       return;
     }
     return account;
+  }
+
+  private async findByPhoneWithPassword(phone: string): Promise<User | null> {
+    const binding = await this.userBindingRepository.findOne({
+      where: { loginType: 'phone', loginId: phone },
+    });
+    if (!binding) {
+      return null;
+    }
+    return await this.userRepository.findOne({
+      where: { id: binding.userId },
+    });
   }
 
   validatePassword(password: string) {
@@ -193,8 +208,7 @@ export class UserService {
   }
 
   async findBindingByLoginType(userId: string, loginType: string) {
-    const repo = this.userBindingRepository;
-    return await repo.findOne({
+    return await this.userBindingRepository.findOne({
       where: { userId, loginType },
     });
   }
@@ -251,8 +265,7 @@ export class UserService {
   }
 
   async listBinding(userId: string) {
-    const repo = this.userBindingRepository;
-    const bindings = await repo.find({
+    const bindings = await this.userBindingRepository.find({
       where: { userId },
     });
 

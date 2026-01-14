@@ -43,11 +43,25 @@ export class AuthService {
     private readonly socialService: SocialService,
   ) {}
 
-  async verify(email: string, password: string): Promise<any> {
-    const user = await this.userService.verify(email, password);
+  async verify(
+    identifier: string,
+    password: string,
+    type?: 'email' | 'phone',
+  ): Promise<any> {
+    const user = await this.userService.verify(identifier, password, type);
     if (!user) {
-      if (isEmail(email)) {
-        const userUseEmail = await this.userService.findByEmail(email);
+      if (type === 'phone') {
+        const userByPhone = await this.userService.findByPhone(identifier);
+        if (!userByPhone) {
+          const message = this.i18n.t('auth.errors.userNotFoundToSignUp');
+          throw new AppException(
+            message,
+            'USER_NOT_FOUND',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+      } else if (isEmail(identifier)) {
+        const userUseEmail = await this.userService.findByEmail(identifier);
         if (!userUseEmail) {
           const message = this.i18n.t('auth.errors.userNotFoundToSignUp');
           throw new AppException(

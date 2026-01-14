@@ -71,9 +71,11 @@ export default async () => {
 
   const postgresUrl = `postgres://omnibox:omnibox@${postgresContainer.getHost()}:${postgresContainer.getMappedPort(5432)}/omnibox`;
   const mailTransport = `smtp://${mailhogContainer.getHost()}:${mailhogContainer.getMappedPort(1025)}`;
+  const mailhogApiUrl = `http://${mailhogContainer.getHost()}:${mailhogContainer.getMappedPort(8025)}`;
   const kafkaBroker = `${kafkaContainer.getHost()}:${kafkaContainer.getMappedPort(9092)}`;
   console.log(`PostgreSQL URL: ${postgresUrl}`);
   console.log(`Mail Transport: ${mailTransport}`);
+  console.log(`MailHog API URL: ${mailhogApiUrl}`);
   console.log(`Kafka Broker: ${kafkaBroker}`);
 
   process.env.OBB_POSTGRES_URL = postgresUrl;
@@ -88,6 +90,7 @@ export default async () => {
   process.env.OBB_MAIL_FROM = '"Test <test@example.com>"';
   process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8080';
   process.env.OBB_KAFKA_BROKER = kafkaBroker;
+  process.env.MAILHOG_API_URL = mailhogApiUrl;
 
   (global as any).__POSTGRES_CONTAINER__ = postgresContainer;
   (global as any).__MINIO_CONTAINER__ = minioContainer;

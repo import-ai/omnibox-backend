@@ -28,7 +28,7 @@ importers:
         version: 5.1.5(keyv@5.5.5)
       '@nestjs-modules/mailer':
         specifier: ^2.0.2
-        version: 2.0.2(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.9)(nodemailer@6.10.1)
+        version: 2.0.2(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.9)(nodemailer@7.0.11)
       '@nestjs/cache-manager':
         specifier: ^3.0.1
         version: 3.0.1(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.9)(cache-manager@6.4.3)(keyv@5.5.5)(rxjs@7.8.2)
@@ -131,9 +131,6 @@ importers:
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
-      meilisearch:
-        specifier: ^0.50.0
-        version: 0.50.0
       mime-types:
         specifier: ^3.0.2
         version: 3.0.2
@@ -146,9 +143,6 @@ importers:
       nestjs-otel:
         specifier: ^7.0.1
         version: 7.0.1(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.9)
-      nodemailer:
-        specifier: ^6.10.1
-        version: 6.10.1
       openai:
         specifier: ^4.104.0
         version: 4.104.0
@@ -228,9 +222,6 @@ importers:
       '@types/node':
         specifier: ^22.19.3
         version: 22.19.3
-      '@types/nodemailer':
-        specifier: ^6.4.21
-        version: 6.4.21
       '@types/passport-jwt':
         specifier: ^3.0.13
         version: 3.0.13
@@ -404,10 +395,6 @@ packages:
 
   '@aws-sdk/client-s3@3.953.0':
     resolution: {integrity: sha512-Lxxdhq5nt6ONulu1UHbIS0tVIar7itXv1m4TJfkVzuSm/yQzxIwnFkLtgW/0P5KIE+FS1yUoE2lS+dJBS1PLFw==}
-    engines: {node: '>=18.0.0'}
-
-  '@aws-sdk/client-ses@3.953.0':
-    resolution: {integrity: sha512-MKG3j436mtASeHx1e9hBBkV9OvpTYB1eS0/jaqZZb0Z8bzUTpX3/BsGP2S0qvXhZPZffWy0aZ21DHgjRI3J5BQ==}
     engines: {node: '>=18.0.0'}
 
   '@aws-sdk/client-sso@3.953.0':
@@ -2285,9 +2272,6 @@ packages:
 
   '@types/node@22.19.3':
     resolution: {integrity: sha512-1N9SBnWYOJTrNZCdh/yJE+t910Y128BoyY+zBLWhL3r0TYzlTmFdXrPwHL9DyFZmlEXNQQolTZh3KHV31QDhyA==}
-
-  '@types/nodemailer@6.4.21':
-    resolution: {integrity: sha512-Eix+sb/Nj28MNnWvO2X1OLrk5vuD4C9SMnb2Vf4itWnxphYeSceqkFX7IdmxTzn+dvmnNz7paMbg4Uc60wSfJg==}
 
   '@types/passport-jwt@3.0.13':
     resolution: {integrity: sha512-fjHaC6Bv8EpMMqzTnHP32SXlZGaNfBPC/Po5dmRGYi2Ky7ljXPbGnOy+SxZqa6iZvFgVhoJ1915Re3m93zmcfA==}
@@ -4658,9 +4642,6 @@ packages:
     resolution: {integrity: sha512-aisnrDP4GNe06UcKFnV5bfMNPBUw4jsLGaWwWfnH3v02GnBuXX2MCVn5RbrWo0j3pczUilYblq7fQ7Nw2t5XKw==}
     engines: {node: '>= 0.8'}
 
-  meilisearch@0.50.0:
-    resolution: {integrity: sha512-9IzIkobvnuS18Eg4dq/eJB9W+eXqeLZjNRgq/kKMswSmVYYSQsXqGgSuCA0JkF+o5RwJlwIsieQee6rh313VhA==}
-
   memfs@3.5.3:
     resolution: {integrity: sha512-UERzLsxzllchadvbPs5aolHh65ISpKpM+ccLbOJ8/vvpBKmAWf+la7dXFy7Mr0ySHbdHrFv5kGFCUHHe6GFEmw==}
     engines: {node: '>= 4.0.0'}
@@ -6640,51 +6621,6 @@ snapshots:
     transitivePeerDependencies:
       - aws-crt
 
-  '@aws-sdk/client-ses@3.953.0':
-    dependencies:
-      '@aws-crypto/sha256-browser': 5.2.0
-      '@aws-crypto/sha256-js': 5.2.0
-      '@aws-sdk/core': 3.953.0
-      '@aws-sdk/credential-provider-node': 3.953.0
-      '@aws-sdk/middleware-host-header': 3.953.0
-      '@aws-sdk/middleware-logger': 3.953.0
-      '@aws-sdk/middleware-recursion-detection': 3.953.0
-      '@aws-sdk/middleware-user-agent': 3.953.0
-      '@aws-sdk/region-config-resolver': 3.953.0
-      '@aws-sdk/types': 3.953.0
-      '@aws-sdk/util-endpoints': 3.953.0
-      '@aws-sdk/util-user-agent-browser': 3.953.0
-      '@aws-sdk/util-user-agent-node': 3.953.0
-      '@smithy/config-resolver': 4.4.4
-      '@smithy/core': 3.19.0
-      '@smithy/fetch-http-handler': 5.3.7
-      '@smithy/hash-node': 4.2.6
-      '@smithy/invalid-dependency': 4.2.6
-      '@smithy/middleware-content-length': 4.2.6
-      '@smithy/middleware-endpoint': 4.4.0
-      '@smithy/middleware-retry': 4.4.16
-      '@smithy/middleware-serde': 4.2.7
-      '@smithy/middleware-stack': 4.2.6
-      '@smithy/node-config-provider': 4.3.6
-      '@smithy/node-http-handler': 4.4.6
-      '@smithy/protocol-http': 5.3.6
-      '@smithy/smithy-client': 4.10.1
-      '@smithy/types': 4.10.0
-      '@smithy/url-parser': 4.2.6
-      '@smithy/util-base64': 4.3.0
-      '@smithy/util-body-length-browser': 4.2.0
-      '@smithy/util-body-length-node': 4.2.1
-      '@smithy/util-defaults-mode-browser': 4.3.15
-      '@smithy/util-defaults-mode-node': 4.2.18
-      '@smithy/util-endpoints': 3.2.6
-      '@smithy/util-middleware': 4.2.6
-      '@smithy/util-retry': 4.2.6
-      '@smithy/util-utf8': 4.2.0
-      '@smithy/util-waiter': 4.2.6
-      tslib: 2.8.1
-    transitivePeerDependencies:
-      - aws-crt
-
   '@aws-sdk/client-sso@3.953.0':
     dependencies:
       '@aws-crypto/sha256-browser': 5.2.0
@@ -8036,13 +7972,13 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@nestjs-modules/mailer@2.0.2(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.9)(nodemailer@6.10.1)':
+  '@nestjs-modules/mailer@2.0.2(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.9)(nodemailer@7.0.11)':
     dependencies:
       '@css-inline/css-inline': 0.14.1
       '@nestjs/common': 11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 11.1.9(@nestjs/common@11.1.9(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.9)(@nestjs/websockets@11.1.9)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       glob: 10.3.12
-      nodemailer: 6.10.1
+      nodemailer: 7.0.11
     optionalDependencies:
       '@types/ejs': 3.1.5
       '@types/mjml': 4.7.4
@@ -9219,13 +9155,6 @@ snapshots:
   '@types/node@22.19.3':
     dependencies:
       undici-types: 6.21.0
-
-  '@types/nodemailer@6.4.21':
-    dependencies:
-      '@aws-sdk/client-ses': 3.953.0
-      '@types/node': 22.19.3
-    transitivePeerDependencies:
-      - aws-crt
 
   '@types/passport-jwt@3.0.13':
     dependencies:
@@ -12232,8 +12161,6 @@ snapshots:
 
   media-typer@1.1.0: {}
 
-  meilisearch@0.50.0: {}
-
   memfs@3.5.3:
     dependencies:
       fs-monkey: 1.1.0
@@ -12735,10 +12662,10 @@ snapshots:
     dependencies:
       asn1: 0.2.6
 
-  nodemailer@6.10.1: {}
-
-  nodemailer@7.0.11:
+  nodemailer@6.10.1:
     optional: true
+
+  nodemailer@7.0.11: {}
 
   nopt@5.0.0:
     dependencies:

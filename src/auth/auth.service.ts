@@ -53,7 +53,7 @@ export class AuthService {
       if (type === 'phone') {
         const userByPhone = await this.userService.findByPhone(identifier);
         if (!userByPhone) {
-          const message = this.i18n.t('auth.errors.userNotFoundToSignUp');
+          const message = this.i18n.t('auth.errors.phoneNotFoundToSignUp');
           throw new AppException(
             message,
             'USER_NOT_FOUND',

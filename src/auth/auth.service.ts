@@ -302,45 +302,67 @@ export class AuthService {
       };
     }
 
-    // User doesn't exist - register
-    return await transaction(this.dataSource.manager, async (tx) => {
-      const manager = tx.entityManager;
+    // Attempt to create new user
+    try {
+      return await transaction(this.dataSource.manager, async (tx) => {
+        const manager = tx.entityManager;
 
-      // Extract username from phone (last 4 digits + random suffix)
-      const phoneSuffix = phone.slice(-4);
-      const phoneUsername = `user_${phoneSuffix}`;
+        // Extract username from phone (last 4 digits + random suffix)
+        const phoneSuffix = phone.slice(-4);
+        const phoneUsername = `user_${phoneSuffix}`;
 
-      // Generate valid username (handles conflicts)
-      const username = await this.socialService.getValidUsername(
-        phoneUsername,
-        manager,
-      );
+        // Generate valid username (handles conflicts)
+        const username = await this.socialService.getValidUsername(
+          phoneUsername,
+          manager,
+        );
 
-      // Create user with phone binding
-      const user = await this.userService.createUserWithPhone(
-        {
-          phone,
-          username,
-          lang,
-        },
-        manager,
-      );
+        // Create user with phone binding
+        const user = await this.userService.createUserWithPhone(
+          {
+            phone,
+            username,
+            lang,
+          },
+          manager,
+        );
 
-      // Create user namespace
-      await this.namespaceService.createUserNamespace(
-        user.id,
-        user.username,
-        tx,
-      );
+        // Create user namespace
+        await this.namespaceService.createUserNamespace(
+          user.id,
+          user.username,
+          tx,
+        );
 
-      return {
-        id: user.id,
-        access_token: this.jwtService.sign({
-          sub: user.id,
-          username: user.username,
-        }),
-      };
-    });
+        return {
+          id: user.id,
+          access_token: this.jwtService.sign({
+            sub: user.id,
+            username: user.username,
+          }),
+        };
+      });
+    } catch (error) {
+      // Handle race condition: if another request created the user first,
+      // look them up and return their token
+      if (
+        error.code === '23505' ||
+        error?.query?.includes('IDX_user_bindings_login_type_login_id') ||
+        error?.detail?.includes('IDX_user_bindings_login_type_login_id')
+      ) {
+        const retryUser = await this.userService.findByPhone(phone);
+        if (retryUser) {
+          return {
+            id: retryUser.id,
+            access_token: this.jwtService.sign({
+              sub: retryUser.id,
+              username: retryUser.username,
+            }),
+          };
+        }
+      }
+      throw error;
+    }
   }
 
   private async getSignUpToken(email: string) {

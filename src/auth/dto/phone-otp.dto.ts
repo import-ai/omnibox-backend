@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString, Length } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 import { IsValidPhone } from 'omniboxd/common/validators';
 
 export class SendPhoneOtpDto {
@@ -9,11 +10,12 @@ export class SendPhoneOtpDto {
     example: '+8613800138000',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.phone.isNotEmpty'),
+  })
   @Transform(({ value }) => value?.replace(/\s/g, ''))
   @IsValidPhone(undefined, {
-    message:
-      'Phone number must be in valid E.164 format (e.g., +8613800138000)',
+    message: i18nValidationMessage('validation.errors.phone.invalid'),
   })
   phone: string;
 }
@@ -24,8 +26,12 @@ export class VerifyPhoneOtpDto extends SendPhoneOtpDto {
     example: '123456',
   })
   @IsString()
-  @IsNotEmpty()
-  @Length(6, 6)
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.code.isNotEmpty'),
+  })
+  @Length(6, 6, {
+    message: i18nValidationMessage('validation.errors.code.length'),
+  })
   code: string;
 }
 

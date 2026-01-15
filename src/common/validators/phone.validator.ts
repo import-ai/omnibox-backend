@@ -34,13 +34,25 @@ export function validatePhone(
       return false;
     }
 
+    const parsed = parsePhoneNumberFromString(phone);
+    if (!parsed || !parsed.country) {
+      return false;
+    }
+
     // If allowed countries are specified, check if the phone belongs to one
     if (allowedCountries && allowedCountries.length > 0) {
-      const parsed = parsePhoneNumberFromString(phone);
-      if (!parsed || !parsed.country) {
+      if (!allowedCountries.includes(parsed.country)) {
         return false;
       }
-      return allowedCountries.includes(parsed.country);
+    }
+
+    // Chinese mobile number validation: 11 digits starting with 1[3-9]
+    // Matches frontend validation in web/src/lib/validation-schemas.ts
+    if (parsed.country === 'CN') {
+      const nationalNumber = parsed.nationalNumber;
+      if (!/^1[3-9]\d{9}$/.test(nationalNumber)) {
+        return false;
+      }
     }
 
     return true;

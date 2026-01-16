@@ -470,6 +470,11 @@ export class WechatService {
     const wechatUser = await this.userService.findByLoginId(loginId);
 
     if (wechatUser) {
+      // Save miniprogram openid for existing users (needed for subscribe messages)
+      await this.userService.updateBindingMetadata(loginId, {
+        miniprogram_openid: sessionData.openid,
+      });
+
       return {
         id: wechatUser.id,
         username: wechatUser.username,
@@ -494,7 +499,10 @@ export class WechatService {
           loginType: 'wechat',
           loginId: loginId,
           lang,
-          metadata: sessionData,
+          metadata: {
+            ...sessionData,
+            miniprogram_openid: sessionData.openid,
+          },
         } as CreateUserBindingDto,
         manager,
       );

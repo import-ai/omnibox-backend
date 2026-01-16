@@ -219,6 +219,16 @@ export class UserService {
     }
   }
 
+  async updateBindingMetadata(loginId: string, metadata: Record<string, any>) {
+    const binding = await this.userBindingRepository.findOne({
+      where: { loginId },
+    });
+    if (binding) {
+      binding.metadata = { ...binding.metadata, ...metadata };
+      await this.userBindingRepository.save(binding);
+    }
+  }
+
   async updateBinding(oldUnionid: string, newUnionid: string) {
     // Unbind the associated new account
     const existBinding = await this.userBindingRepository.findOne({

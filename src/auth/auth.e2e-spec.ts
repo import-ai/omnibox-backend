@@ -51,8 +51,9 @@ describe('AuthModule (e2e)', () => {
           .request()
           .post('/api/v1/login')
           .send({
-            email: client.user.email,
+            username: client.user.email,
             password: client.user.password,
+            type: 'email',
           })
           .expect(200);
 
@@ -67,8 +68,9 @@ describe('AuthModule (e2e)', () => {
           .request()
           .post('/api/v1/login')
           .send({
-            email: 'nonexistent@example.com',
+            username: 'nonexistent@example.com',
             password: client.user.password,
+            type: 'email',
           })
           .expect(HttpStatus.NOT_FOUND);
       });
@@ -78,8 +80,9 @@ describe('AuthModule (e2e)', () => {
           .request()
           .post('/api/v1/login')
           .send({
-            email: client.user.email,
+            username: client.user.email,
             password: 'wrongpassword',
+            type: 'email',
           })
           .expect(HttpStatus.FORBIDDEN);
       });
@@ -347,8 +350,9 @@ describe('AuthModule (e2e)', () => {
         .request()
         .post('/api/v1/login')
         .send({
-          email: client.user.email,
+          username: client.user.email,
           password: client.user.password,
+          type: 'email',
         })
         .expect(200);
 

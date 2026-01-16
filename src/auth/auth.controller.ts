@@ -20,6 +20,11 @@ import {
   VerifyEmailOtpDto,
   SendEmailOtpResponseDto,
 } from './dto/email-otp.dto';
+import {
+  SendPhoneOtpRequestDto,
+  VerifyPhoneOtpRequestDto,
+  SendPhoneOtpResponseDto,
+} from './dto/phone-otp.dto';
 import { InviteDto } from './dto/invite.dto';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -112,6 +117,53 @@ export class AuthController {
     @Body('lang') lang?: string,
   ) {
     const authData = await this.authService.verifyMagicLink(token, lang);
+
+    const jwtExpireSeconds = parseInt(
+      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+      10,
+    );
+    res.cookie('token', authData.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+      maxAge: jwtExpireSeconds * 1000,
+    });
+
+    return res.json(authData);
+  }
+
+  @Public()
+  @Post('auth/send-phone-otp')
+  @HttpCode(200)
+  async sendPhoneOtp(
+    @Body() dto: SendPhoneOtpRequestDto,
+  ): Promise<SendPhoneOtpResponseDto> {
+    return await this.authService.sendPhoneOTP(dto.phone);
+  }
+
+  @Public()
+  @Post('auth/send-signup-phone-otp')
+  @HttpCode(200)
+  async sendSignupPhoneOtp(
+    @Body() dto: SendPhoneOtpRequestDto,
+  ): Promise<SendPhoneOtpResponseDto> {
+    return await this.authService.sendSignupPhoneOTP(dto.phone);
+  }
+
+  @Public()
+  @Post('auth/verify-phone-otp')
+  @HttpCode(200)
+  async verifyPhoneOtp(
+    @Body() dto: VerifyPhoneOtpRequestDto,
+    @Res() res: Response,
+    @Body('lang') lang?: string,
+  ) {
+    const authData = await this.authService.verifyPhoneOTP(
+      dto.phone,
+      dto.code,
+      lang,
+    );
 
     const jwtExpireSeconds = parseInt(
       this.configService.get('OBB_JWT_EXPIRE', '2678400'),

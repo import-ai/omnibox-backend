@@ -24,6 +24,15 @@
       "isString": "密码必须是字符串",
       "isNotEmpty": "密码不能为空"
     },
+    "phone": {
+      "isNotEmpty": "手机号不能为空",
+      "invalid": "请输入有效的手机号",
+      "invalidForCountry": "手机号不属于允许的国家/地区"
+    },
+    "code": {
+      "isNotEmpty": "验证码不能为空",
+      "length": "验证码必须是6位数字"
+    },
     "username": {
       "isString": "用户名必须是字符串",
       "minLength": "用户名至少 {constraints.0} 个字符",

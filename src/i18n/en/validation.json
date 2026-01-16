@@ -24,6 +24,15 @@
       "isString": "Password must be a string",
       "isNotEmpty": "Password is required"
     },
+    "phone": {
+      "isNotEmpty": "Phone number is required",
+      "invalid": "Please enter a valid phone number",
+      "invalidForCountry": "Phone number is not from an allowed country"
+    },
+    "code": {
+      "isNotEmpty": "Verification code is required",
+      "length": "Verification code must be 6 digits"
+    },
     "username": {
       "isString": "Username must be a string",
       "minLength": "Username must be at least {constraints.0} characters",

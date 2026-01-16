@@ -29,6 +29,7 @@ import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
 import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
 import { CacheService } from 'omniboxd/common/cache.service';
+import { SmsModule } from 'omniboxd/sms/sms.module';
 
 @Module({
   exports: [
@@ -72,6 +73,7 @@ import { CacheService } from 'omniboxd/common/cache.service';
     TypeOrmModule.forFeature([User]),
     UserModule,
     MailModule,
+    SmsModule,
     PassportModule,
     NamespacesModule,
     GroupsModule,

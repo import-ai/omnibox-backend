@@ -1,9 +1,11 @@
 import * as bcrypt from 'bcrypt';
 import { isEmail } from 'class-validator';
 import generateId from 'omniboxd/utils/generate-id';
+import { maskPhone } from 'omniboxd/common/validators';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { MailService } from 'omniboxd/mail/mail.service';
+import { SmsService } from 'omniboxd/sms/sms.service';
 import { DataSource, EntityManager, In, Like, Repository } from 'typeorm';
 import {
   NamespaceMember,
@@ -36,6 +38,13 @@ interface EmailVerificationState {
   expiresIn: number;
 }
 
+interface PhoneVerificationState {
+  code: string;
+  createdAt: number;
+  expiresIn: number;
+  attempts: number;
+}
+
 interface AccountDeletionState {
   userId: string;
   username: string;
@@ -51,9 +60,11 @@ interface NamespaceOwnershipCheck {
 @Injectable()
 export class UserService {
   private readonly namespace = '/user/email-verification';
+  private readonly phoneNamespace = '/user/phone-verification';
   private readonly deletionNamespace = '/user/account-deletion';
   private readonly alphaRegex = /[a-zA-Z]/;
   private readonly numberRegex = /\d/;
+  private readonly MAX_PHONE_ATTEMPTS = 5;
 
   constructor(
     @InjectRepository(User)
@@ -63,20 +74,24 @@ export class UserService {
     @InjectRepository(UserBinding)
     private userBindingRepository: Repository<UserBinding>,
     private readonly mailService: MailService,
+    private readonly smsService: SmsService,
     private readonly i18n: I18nService,
     private readonly cacheService: CacheService,
     private readonly dataSource: DataSource,
   ) {}
 
-  async verify(email: string, password: string) {
+  async verify(identifier: string, password: string, type?: 'email' | 'phone') {
     let account: User | null = null;
-    if (isEmail(email)) {
+    if (type === 'phone') {
+      // Phone number lookup via UserBinding
+      account = await this.findByPhoneWithPassword(identifier);
+    } else if (isEmail(identifier)) {
       account = await this.userRepository.findOne({
-        where: { email },
+        where: { email: identifier },
       });
     } else {
       account = await this.userRepository.findOne({
-        where: { username: email },
+        where: { username: identifier },
       });
     }
     if (!account) {
@@ -91,6 +106,18 @@ export class UserService {
       return;
     }
     return account;
+  }
+
+  private async findByPhoneWithPassword(phone: string): Promise<User | null> {
+    const binding = await this.userBindingRepository.findOne({
+      where: { loginType: 'phone', loginId: phone },
+    });
+    if (!binding) {
+      return null;
+    }
+    return await this.userRepository.findOne({
+      where: { id: binding.userId },
+    });
   }
 
   validatePassword(password: string) {
@@ -181,8 +208,7 @@ export class UserService {
   }
 
   async findBindingByLoginType(userId: string, loginType: string) {
-    const repo = this.userBindingRepository;
-    return await repo.findOne({
+    return await this.userBindingRepository.findOne({
       where: { userId, loginType },
     });
   }
@@ -239,9 +265,16 @@ export class UserService {
   }
 
   async listBinding(userId: string) {
-    const repo = this.userBindingRepository;
-    return await repo.find({
+    const bindings = await this.userBindingRepository.find({
       where: { userId },
+    });
+
+    // Mask phone numbers for privacy
+    return bindings.map((binding) => {
+      if (binding.loginType === 'phone' && binding.loginId) {
+        return { ...binding, loginId: maskPhone(binding.loginId) };
+      }
+      return binding;
     });
   }
 
@@ -359,6 +392,67 @@ export class UserService {
     });
   }
 
+  async findByPhone(phone: string): Promise<User | null> {
+    const binding = await this.userBindingRepository.findOne({
+      where: { loginType: 'phone', loginId: phone },
+    });
+    if (!binding) {
+      return null;
+    }
+    return await this.userRepository.findOne({
+      where: { id: binding.userId },
+      select: ['id', 'username', 'email'],
+    });
+  }
+
+  async createUserWithPhone(
+    userData: {
+      phone: string;
+      username: string;
+      lang?: string;
+    },
+    manager?: EntityManager,
+  ) {
+    const repo = manager ? manager.getRepository(User) : this.userRepository;
+    const hash = await bcrypt.hash(Math.random().toString(36), 10);
+
+    // Filter emoji from username
+    const username = filterEmoji(userData.username);
+
+    const newUser = repo.create({
+      password: hash,
+      email: null,
+      username: username,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...result } = await repo.save(newUser);
+
+    if (userData.lang) {
+      await this.createOptionIfNotSet(
+        result.id,
+        'language',
+        userData.lang,
+        manager,
+      );
+    }
+
+    const bindingRepo = manager
+      ? manager.getRepository(UserBinding)
+      : this.userBindingRepository;
+
+    const newBinding = bindingRepo.create({
+      userId: result.id,
+      loginId: userData.phone,
+      loginType: 'phone',
+      metadata: { verified: true },
+    });
+
+    await bindingRepo.save(newBinding);
+
+    return result;
+  }
+
   async validateEmail(userId: string, email: string) {
     // Check if new email is same as current email
     const currentUser = await this.find(userId);
@@ -405,6 +499,125 @@ export class UserService {
       userLang,
     );
     return { email };
+  }
+
+  async sendPhoneBindingCode(userId: string, phone: string) {
+    // Check if phone is already bound to another user
+    const existingBinding = await this.userBindingRepository.findOne({
+      where: { loginType: 'phone', loginId: phone },
+    });
+
+    if (existingBinding && existingBinding.userId !== userId) {
+      const message = this.i18n.t('user.errors.phoneAlreadyInUse');
+      throw new AppException(
+        message,
+        'PHONE_ALREADY_IN_USE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Check if user already has this phone bound
+    if (existingBinding && existingBinding.userId === userId) {
+      const message = this.i18n.t('user.errors.phoneSameAsCurrent');
+      throw new AppException(
+        message,
+        'PHONE_SAME_AS_CURRENT',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const code = generateId(6, '0123456789');
+    const expiresIn = 5 * 60 * 1000; // 5 minutes
+
+    await this.cacheService.set<PhoneVerificationState>(
+      this.phoneNamespace,
+      `${userId}:${phone}`,
+      {
+        code,
+        createdAt: Date.now(),
+        expiresIn,
+        attempts: 0,
+      },
+      expiresIn,
+    );
+
+    // Send SMS with code
+    await this.smsService.sendOtp(phone, code);
+
+    return { phone };
+  }
+
+  async bindPhone(userId: string, phone: string, code: string) {
+    const cacheKey = `${userId}:${phone}`;
+    const phoneState = await this.cacheService.get<PhoneVerificationState>(
+      this.phoneNamespace,
+      cacheKey,
+    );
+
+    if (!phoneState) {
+      const message = this.i18n.t('user.errors.pleaseVerifyPhone');
+      throw new AppException(
+        message,
+        'PHONE_NOT_VERIFIED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Check max attempts
+    if (phoneState.attempts >= this.MAX_PHONE_ATTEMPTS) {
+      await this.cacheService.delete(this.phoneNamespace, cacheKey);
+      const message = this.i18n.t('user.errors.tooManyAttempts');
+      throw new AppException(
+        message,
+        'TOO_MANY_ATTEMPTS',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (phoneState.code !== code) {
+      // Increment attempts
+      phoneState.attempts++;
+      const ttl = phoneState.expiresIn - (Date.now() - phoneState.createdAt);
+      await this.cacheService.set(
+        this.phoneNamespace,
+        cacheKey,
+        phoneState,
+        ttl,
+      );
+
+      const message = this.i18n.t('user.errors.incorrectVerificationCode');
+      throw new AppException(
+        message,
+        'INCORRECT_VERIFICATION_CODE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Delete the verification state
+    await this.cacheService.delete(this.phoneNamespace, cacheKey);
+
+    // Check if user already has a phone binding
+    const existingUserBinding = await this.userBindingRepository.findOne({
+      where: { userId, loginType: 'phone' },
+    });
+
+    if (existingUserBinding) {
+      // Update existing binding
+      existingUserBinding.loginId = phone;
+      existingUserBinding.metadata = { verified: true };
+      await this.userBindingRepository.save(existingUserBinding);
+    } else {
+      // Create new binding
+      const newBinding = this.userBindingRepository.create({
+        userId,
+        loginId: phone,
+        loginType: 'phone',
+        metadata: { verified: true },
+      });
+      await this.userBindingRepository.save(newBinding);
+    }
+
+    return { success: true };
   }
 
   async update(id: string, account: UpdateUserDto) {

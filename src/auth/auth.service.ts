@@ -19,8 +19,10 @@ import { isEmail } from 'class-validator';
 import { OtpService } from './otp.service';
 import { SocialService } from './social.service';
 import { SendEmailOtpResponseDto } from './dto/email-otp.dto';
+import { SendPhoneOtpResponseDto } from './dto/phone-otp.dto';
 import { appendQueryParams, appendTokenToUrl } from 'omniboxd/utils/url-utils';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { SmsService } from 'omniboxd/sms/sms.service';
 
 @Injectable()
 export class AuthService {
@@ -31,6 +33,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly mailService: MailService,
+    private readonly smsService: SmsService,
     private readonly namespaceService: NamespacesService,
     private readonly groupsService: GroupsService,
     private readonly permissionsService: PermissionsService,
@@ -40,11 +43,25 @@ export class AuthService {
     private readonly socialService: SocialService,
   ) {}
 
-  async verify(email: string, password: string): Promise<any> {
-    const user = await this.userService.verify(email, password);
+  async verify(
+    identifier: string,
+    password: string,
+    type?: 'email' | 'phone',
+  ): Promise<any> {
+    const user = await this.userService.verify(identifier, password, type);
     if (!user) {
-      if (isEmail(email)) {
-        const userUseEmail = await this.userService.findByEmail(email);
+      if (type === 'phone') {
+        const userByPhone = await this.userService.findByPhone(identifier);
+        if (!userByPhone) {
+          const message = this.i18n.t('auth.errors.phoneNotFoundToSignUp');
+          throw new AppException(
+            message,
+            'USER_NOT_FOUND',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+      } else if (isEmail(identifier)) {
+        const userUseEmail = await this.userService.findByEmail(identifier);
         if (!userUseEmail) {
           const message = this.i18n.t('auth.errors.userNotFoundToSignUp');
           throw new AppException(
@@ -211,6 +228,141 @@ export class AuthService {
         }),
       };
     });
+  }
+
+  /**
+   * Send OTP to phone for login only
+   * Does NOT send SMS if user doesn't exist
+   */
+  async sendPhoneOTP(phone: string): Promise<SendPhoneOtpResponseDto> {
+    const account = await this.userService.findByPhone(phone);
+    const exists = !!account;
+
+    // Don't send SMS for unregistered users (login only)
+    if (!exists) {
+      return { exists: false, sent: false };
+    }
+
+    // Generate OTP code
+    const { code } = await this.otpService.generateOtp(phone, 'sms');
+
+    // Send SMS with code
+    await this.smsService.sendOtp(phone, code);
+
+    return { exists: true, sent: true };
+  }
+
+  /**
+   * Send OTP to phone for signup only
+   */
+  async sendSignupPhoneOTP(phone: string): Promise<SendPhoneOtpResponseDto> {
+    const account = await this.userService.findByPhone(phone);
+
+    if (account) {
+      // User already exists, should login instead
+      return { exists: true, sent: false };
+    }
+
+    // Generate OTP code for new user
+    const { code } = await this.otpService.generateOtp(phone, 'sms');
+
+    // Send SMS with code
+    await this.smsService.sendOtp(phone, code);
+
+    return { exists: false, sent: true };
+  }
+
+  /**
+   * Verify phone OTP and complete registration or login
+   */
+  async verifyPhoneOTP(phone: string, code: string, lang?: string) {
+    // Verify the OTP code
+    await this.otpService.verifyOtp(phone, code);
+    return this.handlePhoneAuthenticationOrRegistration(phone, lang);
+  }
+
+  /**
+   * Handle authentication for existing users or registration for new users (phone)
+   */
+  private async handlePhoneAuthenticationOrRegistration(
+    phone: string,
+    lang?: string,
+  ) {
+    // Check if user already exists
+    const existingUser = await this.userService.findByPhone(phone);
+
+    if (existingUser) {
+      // User exists - login
+      return {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    // Attempt to create new user
+    try {
+      return await transaction(this.dataSource.manager, async (tx) => {
+        const manager = tx.entityManager;
+
+        // Extract username from phone (last 4 digits + random suffix)
+        const phoneSuffix = phone.slice(-4);
+        const phoneUsername = `user_${phoneSuffix}`;
+
+        // Generate valid username (handles conflicts)
+        const username = await this.socialService.getValidUsername(
+          phoneUsername,
+          manager,
+        );
+
+        // Create user with phone binding
+        const user = await this.userService.createUserWithPhone(
+          {
+            phone,
+            username,
+            lang,
+          },
+          manager,
+        );
+
+        // Create user namespace
+        await this.namespaceService.createUserNamespace(
+          user.id,
+          user.username,
+          tx,
+        );
+
+        return {
+          id: user.id,
+          access_token: this.jwtService.sign({
+            sub: user.id,
+            username: user.username,
+          }),
+        };
+      });
+    } catch (error) {
+      // Handle race condition: if another request created the user first,
+      // look them up and return their token
+      if (
+        error.code === '23505' ||
+        error?.query?.includes('IDX_user_bindings_login_type_login_id') ||
+        error?.detail?.includes('IDX_user_bindings_login_type_login_id')
+      ) {
+        const retryUser = await this.userService.findByPhone(phone);
+        if (retryUser) {
+          return {
+            id: retryUser.id,
+            access_token: this.jwtService.sign({
+              sub: retryUser.id,
+              username: retryUser.username,
+            }),
+          };
+        }
+      }
+      throw error;
+    }
   }
 
   private async getSignUpToken(email: string) {

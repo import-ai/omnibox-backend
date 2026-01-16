@@ -52,6 +52,7 @@ import { ResourceAttachments1755059371000 } from 'omniboxd/migrations/1755059371
 import { AddTagIdsToResources1755248141570 } from 'omniboxd/migrations/1755248141570-add-tag-ids-to-resources';
 import { TelemetryModule } from 'omniboxd/telemetry';
 import { SeoModule } from 'omniboxd/seo/seo.module';
+import { PhoneModule } from 'omniboxd/phone/phone.module';
 import { CleanResourceNames1755396702021 } from 'omniboxd/migrations/1755396702021-clean-resource-names';
 import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/1755499552000-update-attachment-urls';
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
@@ -82,6 +83,7 @@ import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 import { AddNamespaceIdIndexToResources1766053289000 } from 'omniboxd/migrations/1766053289000-add-namespace-id-index-to-resources';
 import { AddStatusToTasks1766127168000 } from 'omniboxd/migrations/1766127168000-add-status-to-tasks';
 import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/1767441415360-add-permanent-deleted-at';
+import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/1768483850604-add-phone-unique-constraint';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -157,6 +159,7 @@ export class AppModule implements NestModule {
         SharesModule,
         SharedResourcesModule,
         SeoModule,
+        PhoneModule,
         TraceModule,
         ApplicationsModule,
         WebSocketModule,
@@ -218,6 +221,7 @@ export class AppModule implements NestModule {
               AddNamespaceIdIndexToResources1766053289000,
               AddStatusToTasks1766127168000,
               AddPermanentDeletedAt1767441415360,
+              AddPhoneUniqueConstraint1768483850604,
               ...extraMigrations,
             ],
             migrationsRun: true,

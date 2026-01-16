@@ -87,6 +87,7 @@ import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/17674414
 import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/1768483850604-add-phone-unique-constraint';
 import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oauth-provider';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
+import { StorageUsages1768556182000 } from 'omniboxd/migrations/1768556182000-storage-usages';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -228,6 +229,7 @@ export class AppModule implements NestModule {
               AddPermanentDeletedAt1767441415360,
               AddPhoneUniqueConstraint1768483850604,
               OAuthProvider1768569496828,
+              StorageUsages1768556182000,
               ...extraMigrations,
             ],
             migrationsRun: true,

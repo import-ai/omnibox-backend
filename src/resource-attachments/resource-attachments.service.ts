@@ -2,8 +2,11 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager, In } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
+import { UsagesService } from 'omniboxd/usages/usages.service';
+import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
+import { transaction, Transaction } from 'omniboxd/utils/transaction-utils';
 
 @Injectable()
 export class ResourceAttachmentsService {
@@ -11,6 +14,8 @@ export class ResourceAttachmentsService {
     @InjectRepository(ResourceAttachment)
     private readonly resourceAttachmentRepository: Repository<ResourceAttachment>,
     private readonly i18n: I18nService,
+    private readonly usagesService: UsagesService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getResourceAttachment(
@@ -52,41 +57,71 @@ export class ResourceAttachmentsService {
     namespaceId: string,
     resourceId: string,
     attachmentId: string,
+    userId: string,
+    size: number,
   ) {
-    const resourceAttachment = this.resourceAttachmentRepository.create({
-      namespaceId,
-      resourceId,
-      attachmentId,
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const repository = tx.entityManager.getRepository(ResourceAttachment);
+
+      const resourceAttachment = repository.create({
+        namespaceId,
+        resourceId,
+        attachmentId,
+        attachmentSize: size,
+      });
+      await repository.save(resourceAttachment);
+
+      // Update storage usage for attachment within the same transaction
+      await this.usagesService.updateStorageUsage(
+        namespaceId,
+        userId,
+        StorageType.ATTACHMENT,
+        size,
+        tx,
+      );
     });
-    await this.resourceAttachmentRepository.save(resourceAttachment);
   }
 
   async removeAttachmentFromResource(
     namespaceId: string,
     resourceId: string,
     attachmentId: string,
+    userId: string,
   ) {
-    const existingAttachment = await this.resourceAttachmentRepository.findOne({
-      where: {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const repository = tx.entityManager.getRepository(ResourceAttachment);
+
+      const existingAttachment = await repository.findOne({
+        where: {
+          namespaceId,
+          resourceId,
+          attachmentId,
+        },
+      });
+
+      if (!existingAttachment) {
+        const message = this.i18n.t('attachment.errors.attachmentNotFound');
+        throw new AppException(
+          message,
+          'ATTACHMENT_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      await repository.softDelete({
         namespaceId,
         resourceId,
         attachmentId,
-      },
-    });
+      });
 
-    if (!existingAttachment) {
-      const message = this.i18n.t('attachment.errors.attachmentNotFound');
-      throw new AppException(
-        message,
-        'ATTACHMENT_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
+      // Update storage usage for attachment (decrement) within the same transaction
+      await this.usagesService.updateStorageUsage(
+        namespaceId,
+        userId,
+        StorageType.ATTACHMENT,
+        -existingAttachment.attachmentSize,
+        tx,
       );
-    }
-
-    await this.resourceAttachmentRepository.softDelete({
-      namespaceId,
-      resourceId,
-      attachmentId,
     });
   }
 
@@ -94,11 +129,10 @@ export class ResourceAttachmentsService {
     namespaceId: string,
     sourceResourceId: string,
     targetResourceId: string,
-    entityManager?: EntityManager,
+    userId: string,
+    tx: Transaction,
   ) {
-    const repository = entityManager
-      ? entityManager.getRepository(ResourceAttachment)
-      : this.resourceAttachmentRepository;
+    const repository = tx.entityManager.getRepository(ResourceAttachment);
 
     const sourceRelations = await repository.find({
       where: {
@@ -112,11 +146,27 @@ export class ResourceAttachmentsService {
         namespaceId,
         resourceId: targetResourceId,
         attachmentId: relation.attachmentId,
+        attachmentSize: relation.attachmentSize,
       }),
     );
 
     if (newRelations.length > 0) {
       await repository.save(newRelations);
+
+      // Update storage usage for all copied attachments within the same transaction
+      const totalSize = sourceRelations.reduce(
+        (sum, relation) => sum + Number(relation.attachmentSize),
+        0,
+      );
+      if (totalSize > 0) {
+        await this.usagesService.updateStorageUsage(
+          namespaceId,
+          userId,
+          StorageType.ATTACHMENT,
+          totalSize,
+          tx,
+        );
+      }
     }
 
     return newRelations.length;

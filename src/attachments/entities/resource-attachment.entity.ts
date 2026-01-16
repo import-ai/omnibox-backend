@@ -14,4 +14,7 @@ export class ResourceAttachment extends Base {
 
   @Column()
   attachmentId: string;
+
+  @Column('bigint', { default: 0 })
+  attachmentSize: number;
 }

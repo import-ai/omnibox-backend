@@ -88,6 +88,7 @@ import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/17684
 import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oauth-provider';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
 import { StorageUsages1768556182000 } from 'omniboxd/migrations/1768556182000-storage-usages';
+import { AddAttachmentSize1768560746946 } from 'omniboxd/migrations/1768560746946-add-attachment-size';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -230,6 +231,7 @@ export class AppModule implements NestModule {
               AddPhoneUniqueConstraint1768483850604,
               OAuthProvider1768569496828,
               StorageUsages1768556182000,
+              AddAttachmentSize1768560746946,
               ...extraMigrations,
             ],
             migrationsRun: true,

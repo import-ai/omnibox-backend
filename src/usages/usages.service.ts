@@ -12,13 +12,14 @@ export class UsagesService {
   ) {}
 
   /**
-   * Update storage usage for content type
+   * Update storage usage for a specific storage type
    * This method handles both increment and decrement operations
    */
-  async updateContentUsage(
+  async updateStorageUsage(
     namespaceId: string,
     userId: string,
-    contentLength: number,
+    storageType: StorageType,
+    amount: number,
     tx?: Transaction,
   ): Promise<void> {
     const entityManager = tx
@@ -32,13 +33,11 @@ export class UsagesService {
       .createQueryBuilder()
       .update(StorageUsage)
       .set({
-        amount: () => `amount + ${contentLength}`,
+        amount: () => `amount + ${amount}`,
       })
       .where('namespace_id = :namespaceId', { namespaceId })
       .andWhere('user_id = :userId', { userId })
-      .andWhere('storage_type = :storageType', {
-        storageType: StorageType.CONTENT,
-      })
+      .andWhere('storage_type = :storageType', { storageType })
       .andWhere('deleted_at IS NULL')
       .execute();
 
@@ -48,8 +47,8 @@ export class UsagesService {
         repo.create({
           namespaceId,
           userId,
-          storageType: StorageType.CONTENT,
-          amount: contentLength,
+          storageType,
+          amount,
         }),
       );
     }

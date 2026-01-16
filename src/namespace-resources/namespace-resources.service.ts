@@ -272,8 +272,6 @@ export class NamespaceResourcesService {
     }
 
     return await transaction(this.dataSource.manager, async (tx) => {
-      const entityManager = tx.entityManager;
-
       // Create the duplicated resource within the transaction
       const duplicatedResource = await this.create(
         userId,
@@ -287,7 +285,8 @@ export class NamespaceResourcesService {
         resource.namespaceId,
         resource.id,
         duplicatedResource.id,
-        entityManager,
+        userId,
+        tx,
       );
       return duplicatedResource;
     });

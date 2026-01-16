@@ -49,9 +49,9 @@ export function IsValidPhone(
         defaultMessage(args: ValidationArguments) {
           const [opts] = args.constraints as [IsValidPhoneOptions | undefined];
           if (opts?.allowedCountries && opts.allowedCountries.length > 0) {
-            return `${args.property} must be a valid phone number from: ${opts.allowedCountries.join(', ')}`;
+            return 'validation.errors.phone.invalidForCountry';
           }
-          return `${args.property} must be a valid phone number in E.164 format`;
+          return 'validation.errors.phone.invalid';
         },
       },
     });

@@ -4,7 +4,7 @@ import { IsNotEmpty, IsString, Length } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { IsValidPhone } from 'omniboxd/common/validators';
 
-export class SendPhoneOtpDto {
+export class SendPhoneOtpRequestDto {
   @ApiProperty({
     description: 'Phone number with country code (E.164 format)',
     example: '+8613800138000',
@@ -20,7 +20,7 @@ export class SendPhoneOtpDto {
   phone: string;
 }
 
-export class VerifyPhoneOtpDto extends SendPhoneOtpDto {
+export class VerifyPhoneOtpRequestDto extends SendPhoneOtpRequestDto {
   @ApiProperty({
     description: '6-digit verification code',
     example: '123456',

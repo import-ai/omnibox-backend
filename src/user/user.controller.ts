@@ -2,8 +2,8 @@ import { UserService } from 'omniboxd/user/user.service';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
 import { ValidateEmailDto } from 'omniboxd/user/dto/validate-email.dto';
 import {
-  SendPhoneCodeDto,
-  BindPhoneDto,
+  SendPhoneCodeRequestDto,
+  BindPhoneRequestDto,
 } from 'omniboxd/user/dto/phone-binding.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
@@ -69,7 +69,10 @@ export class UserController {
 
   @Post('phone/send-code')
   @HttpCode(200)
-  async sendPhoneCode(@UserId() userId: string, @Body() dto: SendPhoneCodeDto) {
+  async sendPhoneCode(
+    @UserId() userId: string,
+    @Body() dto: SendPhoneCodeRequestDto,
+  ) {
     const result = await this.userService.sendPhoneBindingCode(
       userId,
       dto.phone,
@@ -83,7 +86,7 @@ export class UserController {
 
   @Post('phone/bind')
   @HttpCode(200)
-  async bindPhone(@UserId() userId: string, @Body() dto: BindPhoneDto) {
+  async bindPhone(@UserId() userId: string, @Body() dto: BindPhoneRequestDto) {
     const result = await this.userService.bindPhone(
       userId,
       dto.phone,

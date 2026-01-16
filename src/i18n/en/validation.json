@@ -26,7 +26,8 @@
     },
     "phone": {
       "isNotEmpty": "Phone number is required",
-      "invalid": "Please enter a valid phone number"
+      "invalid": "Please enter a valid phone number",
+      "invalidForCountry": "Phone number is not from an allowed country"
     },
     "code": {
       "isNotEmpty": "Verification code is required",

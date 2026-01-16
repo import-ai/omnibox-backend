@@ -21,8 +21,8 @@ import {
   SendEmailOtpResponseDto,
 } from './dto/email-otp.dto';
 import {
-  SendPhoneOtpDto,
-  VerifyPhoneOtpDto,
+  SendPhoneOtpRequestDto,
+  VerifyPhoneOtpRequestDto,
   SendPhoneOtpResponseDto,
 } from './dto/phone-otp.dto';
 import { InviteDto } from './dto/invite.dto';
@@ -137,7 +137,7 @@ export class AuthController {
   @Post('auth/send-phone-otp')
   @HttpCode(200)
   async sendPhoneOtp(
-    @Body() dto: SendPhoneOtpDto,
+    @Body() dto: SendPhoneOtpRequestDto,
   ): Promise<SendPhoneOtpResponseDto> {
     return await this.authService.sendPhoneOTP(dto.phone);
   }
@@ -146,7 +146,7 @@ export class AuthController {
   @Post('auth/send-signup-phone-otp')
   @HttpCode(200)
   async sendSignupPhoneOtp(
-    @Body() dto: SendPhoneOtpDto,
+    @Body() dto: SendPhoneOtpRequestDto,
   ): Promise<SendPhoneOtpResponseDto> {
     return await this.authService.sendSignupPhoneOTP(dto.phone);
   }
@@ -155,7 +155,7 @@ export class AuthController {
   @Post('auth/verify-phone-otp')
   @HttpCode(200)
   async verifyPhoneOtp(
-    @Body() dto: VerifyPhoneOtpDto,
+    @Body() dto: VerifyPhoneOtpRequestDto,
     @Res() res: Response,
     @Body('lang') lang?: string,
   ) {

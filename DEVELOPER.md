@@ -141,6 +141,10 @@ await client.close();
 
 **Exception Handling**: Always raise exceptions with i18n support. Use the internationalization system for all error messages.
 
+**DTO Naming Convention**: All DTOs must be suffixed with either `RequestDto` or `ResponseDto` to clearly indicate their purpose:
+- `*RequestDto` - For incoming request payloads (e.g., `SendPhoneOtpRequestDto`, `BindPhoneRequestDto`)
+- `*ResponseDto` - For outgoing response payloads (e.g., `SendPhoneOtpResponseDto`)
+
 ## Git Commit Guidelines
 
 **Format**: `type(scope): Description`

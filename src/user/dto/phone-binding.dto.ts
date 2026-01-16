@@ -12,7 +12,7 @@ const normalizePhone = (value: string) => {
   return value.replace(/\s/g, '');
 };
 
-export class SendPhoneCodeDto {
+export class SendPhoneCodeRequestDto {
   @IsString()
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.phone.isNotEmpty'),
@@ -24,7 +24,7 @@ export class SendPhoneCodeDto {
   phone: string;
 }
 
-export class BindPhoneDto extends SendPhoneCodeDto {
+export class BindPhoneRequestDto extends SendPhoneCodeRequestDto {
   @IsString()
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.code.isNotEmpty'),

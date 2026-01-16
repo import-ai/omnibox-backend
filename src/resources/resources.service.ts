@@ -16,6 +16,7 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { UsagesService } from 'omniboxd/usages/usages.service';
 
 const TASK_PRIORITY = 5;
 
@@ -29,6 +30,7 @@ export class ResourcesService {
     private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
     private readonly filesService: FilesService,
+    private readonly usagesService: UsagesService,
   ) {}
 
   async getParentResourcesOrFail(
@@ -444,6 +446,27 @@ export class ResourcesService {
     }
 
     const repo = entityManager.getRepository(Resource);
+
+    // Get the old resource to calculate content length difference
+    const oldResource = await repo.findOne({
+      where: {
+        namespaceId,
+        id: resourceId,
+      },
+    });
+    if (!oldResource) {
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const oldContentLength = oldResource.content
+      ? Buffer.byteLength(oldResource.content, 'utf8')
+      : 0;
+
     await repo.update({ namespaceId, id: resourceId }, props);
 
     const resource = await repo.findOne({
@@ -459,6 +482,22 @@ export class ResourcesService {
         'RESOURCE_NOT_FOUND',
         HttpStatus.NOT_FOUND,
       );
+    }
+
+    // Update storage usage if content changed and userId is present
+    if (props.content !== undefined && resource.userId) {
+      const newContentLength = resource.content
+        ? Buffer.byteLength(resource.content, 'utf8')
+        : 0;
+      const contentLengthDiff = newContentLength - oldContentLength;
+      if (contentLengthDiff !== 0) {
+        await this.usagesService.updateContentUsage(
+          namespaceId,
+          resource.userId,
+          contentLengthDiff,
+          tx,
+        );
+      }
     }
 
     // If it's not a root resource, create index task
@@ -519,6 +558,19 @@ export class ResourcesService {
     // Create the resource
     const repo = entityManager.getRepository(Resource);
     const resource = await repo.save(repo.create(props));
+
+    // Update storage usage if content is present and userId is present
+    if (resource.content && resource.userId) {
+      const contentLength = Buffer.byteLength(resource.content, 'utf8');
+      if (contentLength > 0) {
+        await this.usagesService.updateContentUsage(
+          resource.namespaceId,
+          resource.userId,
+          contentLength,
+          tx,
+        );
+      }
+    }
 
     if (
       resource.resourceType === ResourceType.FILE &&
@@ -609,10 +661,31 @@ export class ResourcesService {
         this.deleteResource(userId, namespaceId, resourceId, tx),
       );
     }
+
+    // Get the resource before deletion to calculate content length
+    const resource = await tx.entityManager.findOne(Resource, {
+      where: { namespaceId, id: resourceId },
+    });
+
     await tx.entityManager.softDelete(Resource, {
       namespaceId,
       id: resourceId,
     });
+
+    // Update storage usage if resource had content and userId
+    if (resource && resource.content && resource.userId) {
+      const contentLength = Buffer.byteLength(resource.content, 'utf8');
+      if (contentLength > 0) {
+        // Subtract the content length (negative value)
+        await this.usagesService.updateContentUsage(
+          namespaceId,
+          resource.userId,
+          -contentLength,
+          tx,
+        );
+      }
+    }
+
     await this.tasksService.cancelResourceTasks(namespaceId, resourceId, tx);
     await this.wizardTaskService.emitDeleteIndexTask(
       userId,

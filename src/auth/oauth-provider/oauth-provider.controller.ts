@@ -11,7 +11,6 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import {
   ApiTags,
   ApiOperation,
@@ -33,16 +32,11 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 @ApiTags('OAuth Provider')
 @Controller('api/v1/oauth')
 export class OAuthProviderController {
-  private readonly webBaseUrl: string;
-
   constructor(
     private readonly oauthService: OAuthProviderService,
     private readonly clientService: OAuthClientService,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService,
-  ) {
-    this.webBaseUrl = this.configService.get('OBB_WEB_BASE_URL', '');
-  }
+  ) {}
 
   @Get('authorize')
   @Public()
@@ -81,11 +75,12 @@ export class OAuthProviderController {
 
     // If not authenticated, redirect to login with return URL
     if (!userId) {
-      // Build absolute URL for the redirect (backend URL, not frontend)
+      // Build absolute URL for the OAuth return redirect
       const protocol = req.protocol;
       const host = req.get('host');
       const currentUrl = `${protocol}://${host}${req.originalUrl}`;
-      const loginUrl = `${this.webBaseUrl}/user/login?redirect=${encodeURIComponent(currentUrl)}`;
+      // Use relative path - works when frontend/backend share same origin via reverse proxy
+      const loginUrl = `/user/login?redirect=${encodeURIComponent(currentUrl)}`;
       return res.redirect(HttpStatus.FOUND, loginUrl);
     }
 

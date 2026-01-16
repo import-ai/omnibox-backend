@@ -1,6 +1,16 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 import { BaseColumns } from './base-columns';
 
+async function createStorageTypeEnum(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.query(`
+    CREATE TYPE storage_type AS ENUM (
+      'content',
+      'attachment',
+      'upload'
+    );
+  `);
+}
+
 async function createStorageUsagesTable(
   queryRunner: QueryRunner,
 ): Promise<void> {
@@ -24,7 +34,7 @@ async function createStorageUsagesTable(
       },
       {
         name: 'storage_type',
-        type: 'character varying',
+        type: 'storage_type',
         isNullable: false,
       },
       {
@@ -61,6 +71,7 @@ async function createStorageUsagesTable(
 
 export class StorageUsages1768556182000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await createStorageTypeEnum(queryRunner);
     await createStorageUsagesTable(queryRunner);
   }
 

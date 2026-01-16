@@ -22,7 +22,7 @@ export class StorageUsage extends Base {
   @Column('uuid')
   userId: string;
 
-  @Column('varchar')
+  @Column('enum', { enum: StorageType })
   storageType: StorageType;
 
   @Column('bigint', { default: 0 })

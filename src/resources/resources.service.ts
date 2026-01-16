@@ -17,6 +17,7 @@ import { FilesService } from 'omniboxd/files/files.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { UsagesService } from 'omniboxd/usages/usages.service';
+import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
 
 const TASK_PRIORITY = 5;
 
@@ -491,9 +492,10 @@ export class ResourcesService {
         : 0;
       const contentLengthDiff = newContentLength - oldContentLength;
       if (contentLengthDiff !== 0) {
-        await this.usagesService.updateContentUsage(
+        await this.usagesService.updateStorageUsage(
           namespaceId,
           resource.userId,
+          StorageType.CONTENT,
           contentLengthDiff,
           tx,
         );
@@ -563,9 +565,10 @@ export class ResourcesService {
     if (resource.content && resource.userId) {
       const contentLength = Buffer.byteLength(resource.content, 'utf8');
       if (contentLength > 0) {
-        await this.usagesService.updateContentUsage(
+        await this.usagesService.updateStorageUsage(
           resource.namespaceId,
           resource.userId,
+          StorageType.CONTENT,
           contentLength,
           tx,
         );
@@ -677,9 +680,10 @@ export class ResourcesService {
       const contentLength = Buffer.byteLength(resource.content, 'utf8');
       if (contentLength > 0) {
         // Subtract the content length (negative value)
-        await this.usagesService.updateContentUsage(
+        await this.usagesService.updateStorageUsage(
           namespaceId,
           resource.userId,
+          StorageType.CONTENT,
           -contentLength,
           tx,
         );

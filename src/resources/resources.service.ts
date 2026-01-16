@@ -545,6 +545,7 @@ export class ResourcesService {
       );
     }
 
+    let fileSize = 0;
     if (props.fileId) {
       const fileMeta = await this.filesService.headFile(props.fileId);
       if (!fileMeta) {
@@ -555,6 +556,7 @@ export class ResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
+      fileSize = fileMeta.contentLength || 0;
     }
 
     // Create the resource
@@ -573,6 +575,17 @@ export class ResourcesService {
           tx,
         );
       }
+    }
+
+    // Update storage usage if file is uploaded and userId is present
+    if (resource.fileId && resource.userId && fileSize > 0) {
+      await this.usagesService.updateStorageUsage(
+        resource.namespaceId,
+        resource.userId,
+        StorageType.UPLOAD,
+        fileSize,
+        tx,
+      );
     }
 
     if (
@@ -665,7 +678,7 @@ export class ResourcesService {
       );
     }
 
-    // Get the resource before deletion to calculate content length
+    // Get the resource before deletion to calculate content length and file size
     const resource = await tx.entityManager.findOne(Resource, {
       where: { namespaceId, id: resourceId },
     });
@@ -685,6 +698,21 @@ export class ResourcesService {
           resource.userId,
           StorageType.CONTENT,
           -contentLength,
+          tx,
+        );
+      }
+    }
+
+    // Update storage usage if resource had uploaded file and userId
+    if (resource && resource.fileId && resource.userId) {
+      const fileMeta = await this.filesService.headFile(resource.fileId);
+      if (fileMeta && fileMeta.contentLength) {
+        // Subtract the file size (negative value)
+        await this.usagesService.updateStorageUsage(
+          namespaceId,
+          resource.userId,
+          StorageType.UPLOAD,
+          -fileMeta.contentLength,
           tx,
         );
       }

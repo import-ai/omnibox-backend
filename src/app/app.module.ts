@@ -84,6 +84,7 @@ import { AddNamespaceIdIndexToResources1766053289000 } from 'omniboxd/migrations
 import { AddStatusToTasks1766127168000 } from 'omniboxd/migrations/1766127168000-add-status-to-tasks';
 import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/1767441415360-add-permanent-deleted-at';
 import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/1768483850604-add-phone-unique-constraint';
+import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oauth-provider';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -222,6 +223,7 @@ export class AppModule implements NestModule {
               AddStatusToTasks1766127168000,
               AddPermanentDeletedAt1767441415360,
               AddPhoneUniqueConstraint1768483850604,
+              OAuthProvider1768569496828,
               ...extraMigrations,
             ],
             migrationsRun: true,

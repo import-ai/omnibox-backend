@@ -243,6 +243,7 @@ export class S3Service implements OnModuleInit {
     key: string,
     isPublic: boolean,
     contentDisposition?: string,
+    expiresIn: number = 900,
   ): Promise<string> {
     const s3Client = isPublic ? this.s3PublicClient : this.s3Client;
     const command = new GetObjectCommand({
@@ -250,6 +251,6 @@ export class S3Service implements OnModuleInit {
       Key: key,
       ResponseContentDisposition: contentDisposition,
     });
-    return await getSignedUrl(s3Client, command, { expiresIn: 900 });
+    return await getSignedUrl(s3Client, command, { expiresIn });
   }
 }

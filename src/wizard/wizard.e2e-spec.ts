@@ -1,5 +1,7 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
+import { ReadableStream } from 'stream/web';
+import { TextEncoder } from 'util';
 
 process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8000';
 
@@ -14,13 +16,25 @@ jest.mock('../wizard/api.wizard.service', () => {
   };
 });
 
+const encoder = new TextEncoder();
+const createStream = (payload: string) =>
+  new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(payload));
+      controller.close();
+    },
+  });
+
 // Mock fetch for any direct fetch calls
-global.fetch = jest.fn().mockResolvedValue({
-  ok: true,
-  json: jest.fn().mockResolvedValue({ success: true }),
-  text: jest.fn().mockResolvedValue('success'),
-  status: 200,
-}) as jest.MockedFunction<typeof fetch>;
+global.fetch = jest.fn().mockImplementation(() =>
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    body: createStream('data: {"response_type":"done"}\n'),
+    json: jest.fn().mockResolvedValue({ success: true }),
+    text: jest.fn().mockResolvedValue('success'),
+  }),
+) as jest.MockedFunction<typeof fetch>;
 
 describe('WizardController (e2e)', () => {
   let client: TestClient;

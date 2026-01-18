@@ -479,9 +479,7 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
         );
       } else if (node.resource.resourceType === ResourceType.DOC) {
         const content = node.resource.content || '';
-        const fileName = node.path.endsWith('.md')
-          ? node.path
-          : `${node.path}.md`;
+        const fileName = this.ensureMarkdownExtension(node.path);
         archive.append(content, { name: fileName });
 
         const attachmentRefs = this.extractAttachmentRefs(content);
@@ -574,8 +572,9 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private ensureMarkdownExtension(name: string): string {
-    if (name.toLowerCase().endsWith('.md')) {
-      return name;
+    const lowerName = name.toLowerCase();
+    if (lowerName.endsWith('.md')) {
+      return `${name.slice(0, -3)}.md`;
     }
     return `${name}.md`;
   }

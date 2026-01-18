@@ -220,6 +220,7 @@ export class ResourcesService {
       'resourceType',
       'globalPermission',
       'attrs',
+      'fileId',
       'createdAt',
       'updatedAt',
     ];

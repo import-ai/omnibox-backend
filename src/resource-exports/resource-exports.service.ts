@@ -225,6 +225,7 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    let s3Key: string | null = null;
     try {
       const updateResult = await this.exportRepository.update(
         { id: job.id, status: ExportStatus.PENDING },
@@ -236,7 +237,7 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
       }
       job.status = ExportStatus.PROCESSING;
 
-      const s3Key = `exports/${job.namespaceId}/${job.id}.zip`;
+      s3Key = `exports/${job.namespaceId}/${job.id}.zip`;
 
       const resourceTree = await this.buildResourceTree(
         job.namespaceId,
@@ -268,6 +269,16 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
 
       this.logger.log(`Export ${jobId} completed successfully`);
     } catch (error) {
+      if (s3Key) {
+        try {
+          await this.s3Service.deleteObject(s3Key);
+        } catch (cleanupError) {
+          this.logger.warn(
+            `Failed to delete export object: ${s3Key}`,
+            cleanupError,
+          );
+        }
+      }
       if (this.isCanceledError(error)) {
         this.logger.log(`Export ${jobId} canceled`);
         job.status = ExportStatus.CANCELED;
@@ -289,13 +300,19 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
       namespaceId,
       resourceId,
     );
-    const rootPath = this.sanitizeFileName(root.name);
+    const rootBaseName = this.sanitizeFileName(root.name);
+    const rootPath =
+      root.resourceType === ResourceType.DOC
+        ? this.ensureMarkdownExtension(rootBaseName)
+        : rootBaseName;
+    const usedNamesByDir = new Map<string, Set<string>>();
 
     if (root.resourceType === ResourceType.FOLDER) {
       const children = await this.fetchResourceTree(
         namespaceId,
         resourceId,
         rootPath,
+        usedNamesByDir,
       );
       return [{ resource: root, path: rootPath, children }];
     }
@@ -307,6 +324,7 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
     namespaceId: string,
     resourceId: string,
     currentPath: string,
+    usedNamesByDir: Map<string, Set<string>>,
   ): Promise<ResourceNode[]> {
     let offset = 0;
     const allChildren: Resource[] = [];
@@ -326,9 +344,18 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
     const nodes: ResourceNode[] = [];
     for (const child of allChildren) {
       const sanitizedName = this.sanitizeFileName(child.name);
+      const normalizedName =
+        child.resourceType === ResourceType.DOC
+          ? this.ensureMarkdownExtension(sanitizedName)
+          : sanitizedName;
+      const uniqueName = this.ensureUniqueName(
+        currentPath,
+        normalizedName,
+        usedNamesByDir,
+      );
       const nodePath = currentPath
-        ? `${currentPath}/${sanitizedName}`
-        : sanitizedName;
+        ? `${currentPath}/${uniqueName}`
+        : uniqueName;
 
       if (child.resourceType === ResourceType.FOLDER && child.parentId) {
         const subChildren = await this.resourcesService.getChildren(
@@ -343,6 +370,7 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
             namespaceId,
             child.id,
             nodePath,
+            usedNamesByDir,
           );
           nodes.push({
             resource: child,
@@ -379,8 +407,9 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
     onProgress: (count: number) => void,
     ensureActive?: () => Promise<void>,
   ): Promise<void> {
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = archiver.create('zip', { zlib: { level: 9 } });
     const passThrough = new PassThrough();
+    const attachmentNamesByDir = new Map<string, Set<string>>();
     const uploadPromise = this.s3Service.putObject(
       s3Key,
       passThrough,
@@ -406,6 +435,7 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
         onProgress,
         { value: 0 },
         ensureActive,
+        attachmentNamesByDir,
       );
       await archive.finalize();
       await uploadPromise;
@@ -426,6 +456,7 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
     onProgress: (count: number) => void,
     processedCount = { value: 0 },
     ensureActive?: () => Promise<void>,
+    attachmentNamesByDir?: Map<string, Set<string>>,
   ): Promise<void> {
     for (const node of nodes) {
       if (ensureActive) {
@@ -444,6 +475,7 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
           onProgress,
           processedCount,
           ensureActive,
+          attachmentNamesByDir,
         );
       } else if (node.resource.resourceType === ResourceType.DOC) {
         const content = node.resource.content || '';
@@ -467,8 +499,15 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
                 `attachments/${attachment.objectName}`,
               );
               const safeFilePath = attachment.filePath || 'image';
+              const uniqueFilePath = attachmentNamesByDir
+                ? this.ensureUniqueAttachmentPath(
+                    attachmentsPath,
+                    safeFilePath,
+                    attachmentNamesByDir,
+                  )
+                : safeFilePath;
               archive.append(stream, {
-                name: `${attachmentsPath}/${safeFilePath}`,
+                name: `${attachmentsPath}/${uniqueFilePath}`,
               });
             } catch (error) {
               this.logger.warn(
@@ -485,8 +524,27 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
         node.resource.resourceType === ResourceType.FILE ||
         node.resource.resourceType === ResourceType.LINK
       ) {
-        const content = this.generateFileContent(node.resource);
-        archive.append(content, { name: node.path });
+        if (node.resource.resourceType === ResourceType.FILE) {
+          const fileId = node.resource.fileId;
+          if (fileId) {
+            try {
+              const { stream } = await this.s3Service.getObject(
+                `uploaded-files/${fileId}`,
+              );
+              archive.append(stream, { name: node.path });
+            } catch (error) {
+              this.logger.warn(`Failed to fetch file: ${fileId}`, error);
+              const content = this.generateFileContent(node.resource);
+              archive.append(content, { name: node.path });
+            }
+          } else {
+            const content = this.generateFileContent(node.resource);
+            archive.append(content, { name: node.path });
+          }
+        } else {
+          const content = this.generateFileContent(node.resource);
+          archive.append(content, { name: node.path });
+        }
         processedCount.value += 1;
         onProgress(processedCount.value);
       }
@@ -513,6 +571,60 @@ export class ResourceExportsService implements OnModuleInit, OnModuleDestroy {
       return 'untitled';
     }
     return sanitized;
+  }
+
+  private ensureMarkdownExtension(name: string): string {
+    if (name.toLowerCase().endsWith('.md')) {
+      return name;
+    }
+    return `${name}.md`;
+  }
+
+  private ensureUniqueName(
+    dirPath: string,
+    name: string,
+    usedNamesByDir: Map<string, Set<string>>,
+  ): string {
+    const key = dirPath || '';
+    const used = usedNamesByDir.get(key) || new Set<string>();
+    const baseName = name || 'untitled';
+    if (!used.has(baseName)) {
+      used.add(baseName);
+      usedNamesByDir.set(key, used);
+      return baseName;
+    }
+
+    let counter = 2;
+    let candidate = this.appendSuffix(baseName, counter);
+    while (used.has(candidate)) {
+      counter += 1;
+      candidate = this.appendSuffix(baseName, counter);
+    }
+    used.add(candidate);
+    usedNamesByDir.set(key, used);
+    return candidate;
+  }
+
+  private appendSuffix(name: string, counter: number): string {
+    const suffix = `-${counter}`;
+    const dotIndex = name.lastIndexOf('.');
+    if (dotIndex > 0) {
+      return `${name.slice(0, dotIndex)}${suffix}${name.slice(dotIndex)}`;
+    }
+    return `${name}${suffix}`;
+  }
+
+  private ensureUniqueAttachmentPath(
+    baseDir: string,
+    relativePath: string,
+    usedNamesByDir: Map<string, Set<string>>,
+  ): string {
+    const segments = relativePath.split('/').filter(Boolean);
+    const fileName = segments.pop() || 'image';
+    const dirPart = segments.join('/');
+    const dirKey = dirPart ? `${baseDir}/${dirPart}` : baseDir;
+    const uniqueName = this.ensureUniqueName(dirKey, fileName, usedNamesByDir);
+    return dirPart ? `${dirPart}/${uniqueName}` : uniqueName;
   }
 
   private async buildExportFileName(

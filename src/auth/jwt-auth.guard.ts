@@ -22,6 +22,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true;
     }
 
+    // 检查是否已被其他 guard 认证（利用 NestJS 标准约定）
+    const request = context.switchToHttp().getRequest();
+    if (request.user?.id) {
+      return true;
+    }
+
     const isApiKeyAuth = this.reflector.getAllAndOverride<boolean>(
       IS_API_KEY_AUTH,
       [context.getHandler(), context.getClass()],

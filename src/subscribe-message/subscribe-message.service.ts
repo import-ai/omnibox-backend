@@ -141,12 +141,10 @@ export class SubscribeMessageService {
       data: dto.data,
     };
 
-    if (dto.resourceId && dto.namespaceId && this.baseUrl) {
-      const baseUrlTrimmed = 'https://test.omnibox.pro/m/';
+    if (dto.resourceId && dto.namespaceId) {
+      const deepLink = `omnibox://details?id=${dto.resourceId}&namespaceId=${dto.namespaceId}&title=${encodeURIComponent(dto.title || '')}`;
 
-      const h5Url = `${baseUrlTrimmed}details?id=${dto.resourceId}&namespaceId=${dto.namespaceId}&title=${encodeURIComponent(dto.title || '')}`;
-
-      body.page = `pages/webview/index?url=${encodeURIComponent(h5Url)}`;
+      body.page = `pages/webview/index?url=${encodeURIComponent(deepLink)}`;
     } else if (dto.page) {
       body.page = dto.page;
     }

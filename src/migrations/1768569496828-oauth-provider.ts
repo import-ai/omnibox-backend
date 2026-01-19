@@ -55,9 +55,9 @@ export class OAuthProvider1768569496828 implements MigrationInterface {
     });
     await queryRunner.createTable(oauthClientsTable, true, true, true);
 
-    // OAuth Authorization Codes table - temporary codes with 10min expiry
-    const oauthAuthorizationCodesTable = new Table({
-      name: 'oauth_authorization_codes',
+    // OAuth Pairwise Subjects table - maps users to unique per-client identifiers
+    const oauthPairwiseSubjectsTable = new Table({
+      name: 'oauth_pairwise_subjects',
       columns: [
         {
           name: 'id',
@@ -66,11 +66,9 @@ export class OAuthProvider1768569496828 implements MigrationInterface {
           default: 'gen_random_uuid()',
         },
         {
-          name: 'code',
-          type: 'character varying',
-          length: '255',
+          name: 'user_id',
+          type: 'uuid',
           isNullable: false,
-          isUnique: true,
         },
         {
           name: 'client_id',
@@ -79,43 +77,10 @@ export class OAuthProvider1768569496828 implements MigrationInterface {
           isNullable: false,
         },
         {
-          name: 'user_id',
-          type: 'uuid',
-          isNullable: false,
-        },
-        {
-          name: 'redirect_uri',
+          name: 'pairwise_subject',
           type: 'character varying',
-          length: '2048',
+          length: '64',
           isNullable: false,
-        },
-        {
-          name: 'scope',
-          type: 'character varying',
-          length: '255',
-          isNullable: false,
-        },
-        {
-          name: 'code_challenge',
-          type: 'character varying',
-          length: '255',
-          isNullable: true,
-        },
-        {
-          name: 'code_challenge_method',
-          type: 'character varying',
-          length: '10',
-          isNullable: true,
-        },
-        {
-          name: 'expires_at',
-          type: 'timestamp with time zone',
-          isNullable: false,
-        },
-        {
-          name: 'used_at',
-          type: 'timestamp with time zone',
-          isNullable: true,
         },
         ...BaseColumns(),
       ],
@@ -128,91 +93,19 @@ export class OAuthProvider1768569496828 implements MigrationInterface {
       ],
       indices: [
         {
-          columnNames: ['code'],
+          columnNames: ['user_id', 'client_id'],
           isUnique: true,
         },
         {
-          columnNames: ['client_id', 'user_id'],
+          columnNames: ['pairwise_subject'],
+          isUnique: true,
         },
         {
-          columnNames: ['expires_at'],
+          columnNames: ['client_id'],
         },
       ],
     });
-    await queryRunner.createTable(
-      oauthAuthorizationCodesTable,
-      true,
-      true,
-      true,
-    );
-
-    // OAuth Access Tokens table - access tokens with 1hr expiry
-    const oauthAccessTokensTable = new Table({
-      name: 'oauth_access_tokens',
-      columns: [
-        {
-          name: 'id',
-          type: 'uuid',
-          isPrimary: true,
-          default: 'gen_random_uuid()',
-        },
-        {
-          name: 'token',
-          type: 'character varying',
-          length: '255',
-          isNullable: false,
-          isUnique: true,
-        },
-        {
-          name: 'client_id',
-          type: 'character varying',
-          length: '255',
-          isNullable: false,
-        },
-        {
-          name: 'user_id',
-          type: 'uuid',
-          isNullable: false,
-        },
-        {
-          name: 'scope',
-          type: 'character varying',
-          length: '255',
-          isNullable: false,
-        },
-        {
-          name: 'expires_at',
-          type: 'timestamp with time zone',
-          isNullable: false,
-        },
-        {
-          name: 'revoked_at',
-          type: 'timestamp with time zone',
-          isNullable: true,
-        },
-        ...BaseColumns(),
-      ],
-      foreignKeys: [
-        {
-          columnNames: ['user_id'],
-          referencedTableName: 'users',
-          referencedColumnNames: ['id'],
-        },
-      ],
-      indices: [
-        {
-          columnNames: ['token'],
-          isUnique: true,
-        },
-        {
-          columnNames: ['client_id', 'user_id'],
-        },
-        {
-          columnNames: ['expires_at'],
-        },
-      ],
-    });
-    await queryRunner.createTable(oauthAccessTokensTable, true, true, true);
+    await queryRunner.createTable(oauthPairwiseSubjectsTable, true, true, true);
   }
 
   public down(): Promise<void> {

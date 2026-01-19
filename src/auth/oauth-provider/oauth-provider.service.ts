@@ -1,13 +1,10 @@
 import { Injectable, HttpStatus, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, IsNull } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import * as crypto from 'crypto';
-import { OAuthAuthorizationCode } from './entities/oauth-authorization-code.entity';
-import { OAuthAccessToken } from './entities/oauth-access-token.entity';
 import { OAuthClientService } from './oauth-client.service';
 import { PairwiseSubjectService } from './pairwise-subject.service';
+import { OAuthTokenStoreService } from './oauth-token-store.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { AuthorizeRequestDto } from './dto/authorize-request.dto';
 import { TokenRequestDto, TokenResponseDto } from './dto/token-request.dto';
@@ -21,10 +18,7 @@ export class OAuthProviderService {
   private readonly tokenExpireSeconds: number;
 
   constructor(
-    @InjectRepository(OAuthAuthorizationCode)
-    private readonly authCodeRepository: Repository<OAuthAuthorizationCode>,
-    @InjectRepository(OAuthAccessToken)
-    private readonly accessTokenRepository: Repository<OAuthAccessToken>,
+    private readonly tokenStore: OAuthTokenStoreService,
     private readonly clientService: OAuthClientService,
     private readonly pairwiseSubjectService: PairwiseSubjectService,
     private readonly userService: UserService,
@@ -80,20 +74,21 @@ export class OAuthProviderService {
     }
 
     const code = this.generateAuthorizationCode();
-    const expiresAt = new Date(Date.now() + this.codeExpireSeconds * 1000);
+    const ttlMs = this.codeExpireSeconds * 1000;
 
-    const authCode = this.authCodeRepository.create({
-      code,
-      clientId: dto.client_id,
-      userId,
-      redirectUri: dto.redirect_uri,
-      scope: validScopes.join(' '),
-      codeChallenge: dto.code_challenge || null,
-      codeChallengeMethod: dto.code_challenge_method || null,
-      expiresAt,
-    });
-
-    await this.authCodeRepository.save(authCode);
+    await this.tokenStore.saveAuthorizationCode(
+      {
+        code,
+        clientId: dto.client_id,
+        userId,
+        redirectUri: dto.redirect_uri,
+        scope: validScopes.join(' '),
+        codeChallenge: dto.code_challenge || null,
+        codeChallengeMethod: dto.code_challenge_method || null,
+        createdAt: Date.now(),
+      },
+      ttlMs,
+    );
 
     this.logger.log(
       `Generated authorization code for user ${userId} and client ${dto.client_id}`,
@@ -109,9 +104,7 @@ export class OAuthProviderService {
   }
 
   async exchangeToken(dto: TokenRequestDto): Promise<TokenResponseDto> {
-    const authCode = await this.authCodeRepository.findOne({
-      where: { code: dto.code },
-    });
+    const authCode = await this.tokenStore.getAuthorizationCode(dto.code);
 
     if (!authCode) {
       throw new AppException(
@@ -121,22 +114,8 @@ export class OAuthProviderService {
       );
     }
 
-    if (authCode.usedAt) {
-      this.logger.warn(`Authorization code ${dto.code} has already been used`);
-      throw new AppException(
-        this.i18n.t('auth.oauth.errors.codeAlreadyUsed'),
-        'OAUTH_CODE_ALREADY_USED',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (authCode.expiresAt < new Date()) {
-      throw new AppException(
-        this.i18n.t('auth.oauth.errors.codeExpired'),
-        'OAUTH_CODE_EXPIRED',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+    // Code existence in Redis means it hasn't been used yet (deleted after use)
+    // TTL handles expiration automatically, but the code existing means it's valid
 
     if (authCode.clientId !== dto.client_id) {
       throw new AppException(
@@ -188,21 +167,23 @@ export class OAuthProviderService {
       await this.clientService.validateClient(dto.client_id, dto.client_secret);
     }
 
-    authCode.usedAt = new Date();
-    await this.authCodeRepository.save(authCode);
+    // Delete code immediately after use (one-time use)
+    await this.tokenStore.deleteAuthorizationCode(dto.code);
 
     const token = this.generateAccessToken();
-    const expiresAt = new Date(Date.now() + this.tokenExpireSeconds * 1000);
+    const ttlMs = this.tokenExpireSeconds * 1000;
 
-    const accessToken = this.accessTokenRepository.create({
-      token,
-      clientId: authCode.clientId,
-      userId: authCode.userId,
-      scope: authCode.scope,
-      expiresAt,
-    });
-
-    await this.accessTokenRepository.save(accessToken);
+    await this.tokenStore.saveAccessToken(
+      {
+        token,
+        clientId: authCode.clientId,
+        userId: authCode.userId,
+        scope: authCode.scope,
+        createdAt: Date.now(),
+        expiresIn: this.tokenExpireSeconds,
+      },
+      ttlMs,
+    );
 
     this.logger.log(
       `Issued access token for user ${authCode.userId} and client ${authCode.clientId}`,
@@ -227,9 +208,7 @@ export class OAuthProviderService {
 
     const token = bearerToken.replace(/^Bearer\s+/i, '');
 
-    const accessToken = await this.accessTokenRepository.findOne({
-      where: { token, revokedAt: IsNull() },
-    });
+    const accessToken = await this.tokenStore.getAccessToken(token);
 
     if (!accessToken) {
       throw new AppException(
@@ -239,13 +218,7 @@ export class OAuthProviderService {
       );
     }
 
-    if (accessToken.expiresAt < new Date()) {
-      throw new AppException(
-        this.i18n.t('auth.oauth.errors.accessTokenExpired'),
-        'OAUTH_ACCESS_TOKEN_EXPIRED',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
+    // TTL handles expiration, deletion handles revocation - if token exists, it's valid
 
     const user = await this.userService.find(accessToken.userId);
 
@@ -269,30 +242,8 @@ export class OAuthProviderService {
   }
 
   async revokeToken(token: string): Promise<void> {
-    const accessToken = await this.accessTokenRepository.findOne({
-      where: { token },
-    });
-
-    if (accessToken) {
-      accessToken.revokedAt = new Date();
-      await this.accessTokenRepository.save(accessToken);
-      this.logger.log(`Revoked access token for user ${accessToken.userId}`);
-    }
-  }
-
-  // TODO: Schedule these cleanup methods via cron or expose as admin endpoints
-  async cleanupExpiredCodes(): Promise<number> {
-    const result = await this.authCodeRepository.delete({
-      expiresAt: LessThan(new Date()),
-    });
-    return result.affected || 0;
-  }
-
-  async cleanupExpiredTokens(): Promise<number> {
-    const result = await this.accessTokenRepository.delete({
-      expiresAt: LessThan(new Date()),
-    });
-    return result.affected || 0;
+    await this.tokenStore.deleteAccessToken(token);
+    this.logger.log(`Revoked access token`);
   }
 
   private generateAuthorizationCode(): string {

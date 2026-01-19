@@ -7,7 +7,7 @@ export enum MiniProgramState {
   FORMAL = 'formal',
 }
 
-export class SendSubscribeMessageDto {
+export class SendSubscribeMessageRequestDto {
   @IsString()
   @Expose({ name: 'user_id' })
   userId: string;
@@ -38,9 +38,9 @@ export class SendSubscribeMessageDto {
   page?: string;
 
   @IsOptional()
-  @Expose({ name: 'miniprogram_state' })
+  @Expose({ name: 'mini_program_state' })
   @IsEnum(MiniProgramState)
-  miniprogram_state?: MiniProgramState;
+  miniProgramState?: MiniProgramState;
 
   @IsOptional()
   @IsString()

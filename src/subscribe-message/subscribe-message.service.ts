@@ -1,4 +1,5 @@
 import { Injectable, Logger, HttpStatus } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,9 +7,9 @@ import { CacheService } from 'omniboxd/common/cache.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
 import {
-  SendSubscribeMessageDto,
+  SendSubscribeMessageRequestDto,
   MiniProgramState,
-} from './dto/send-subscribe-message.dto';
+} from './dto/send-subscribe-message-request.dto';
 
 interface AccessTokenResponse {
   access_token: string;
@@ -17,7 +18,7 @@ interface AccessTokenResponse {
   errmsg?: string;
 }
 
-export interface SendMessageResponse {
+export interface SendMessageResponseDto {
   errcode: number;
   errmsg: string;
 }
@@ -28,10 +29,9 @@ export class SubscribeMessageService {
 
   private readonly appId: string;
   private readonly appSecret: string;
-  private readonly baseUrl: string;
 
   private static readonly CACHE_NAMESPACE = '/wechat';
-  private static readonly ACCESS_TOKEN_KEY = 'miniprogram_access_token';
+  private static readonly ACCESS_TOKEN_KEY = 'mini_program_access_token';
   private static readonly SEND_MESSAGE_URL =
     'https://api.weixin.qq.com/cgi-bin/message/subscribe/send';
   private static readonly ACCESS_TOKEN_URL =
@@ -40,6 +40,7 @@ export class SubscribeMessageService {
   constructor(
     private readonly configService: ConfigService,
     private readonly cacheService: CacheService,
+    private readonly i18n: I18nService,
     @InjectRepository(UserBinding)
     private readonly userBindingRepository: Repository<UserBinding>,
   ) {
@@ -48,7 +49,6 @@ export class SubscribeMessageService {
       'OBB_MINI_PROGRAM_APP_SECRET',
       '',
     );
-    this.baseUrl = this.configService.get<string>('OBB_BASE_URL', '');
   }
 
   async getAccessToken(): Promise<string> {
@@ -96,12 +96,12 @@ export class SubscribeMessageService {
   }
 
   async sendMessage(
-    dto: SendSubscribeMessageDto,
-  ): Promise<SendMessageResponse> {
+    dto: SendSubscribeMessageRequestDto,
+  ): Promise<SendMessageResponseDto> {
     if (!this.appId || !this.appSecret) {
       throw new AppException(
         'WeChat MiniProgram is not configured',
-        'MINIPROGRAM_NOT_CONFIGURED',
+        'MINI_PROGRAM_NOT_CONFIGURED',
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
@@ -112,19 +112,19 @@ export class SubscribeMessageService {
 
     if (!userBinding) {
       throw new AppException(
-        'User has not bound WeChat',
+        this.i18n.t('auth.errors.userNotBoundWechat'),
         'USER_NOT_BOUND_WECHAT',
         HttpStatus.BAD_REQUEST,
       );
     }
 
     const metadata = userBinding.metadata as Record<string, any>;
-    const miniprogramOpenid = metadata?.miniprogram_openid;
+    const miniProgramOpenId = metadata?.mini_program_openid;
 
-    if (!miniprogramOpenid) {
+    if (!miniProgramOpenId) {
       throw new AppException(
-        'User has not logged in via MiniProgram',
-        'USER_NOT_LOGGED_IN_MINIPROGRAM',
+        this.i18n.t('auth.errors.userNotLoggedInMiniProgram'),
+        'USER_NOT_LOGGED_IN_MINI_PROGRAM',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -134,9 +134,10 @@ export class SubscribeMessageService {
     const url = `${SubscribeMessageService.SEND_MESSAGE_URL}?access_token=${accessToken}`;
 
     const body: Record<string, any> = {
-      touser: miniprogramOpenid,
+      touser: miniProgramOpenId,
       template_id: dto.templateId,
-      miniprogram_state: dto.miniprogram_state || MiniProgramState.FORMAL,
+      wechat_mini_program_state:
+        dto.miniProgramState || MiniProgramState.FORMAL,
       lang: dto.lang || 'zh_CN',
       data: dto.data,
     };
@@ -165,7 +166,7 @@ export class SubscribeMessageService {
       );
     }
 
-    const result: SendMessageResponse = await response.json();
+    const result: SendMessageResponseDto = await response.json();
 
     if (result.errcode !== 0) {
       this.logger.error(`WeChat send message error: ${result.errmsg}`);

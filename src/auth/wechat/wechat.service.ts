@@ -420,7 +420,7 @@ export class WechatService {
       });
       throw new AppException(
         message,
-        'MINIPROGRAM_NOT_CONFIGURED',
+        'MINI_PROGRAM_NOT_CONFIGURED',
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
@@ -472,7 +472,7 @@ export class WechatService {
     if (wechatUser) {
       // Save miniprogram openid for existing users (needed for subscribe messages)
       await this.userService.updateBindingMetadata(loginId, {
-        miniprogram_openid: sessionData.openid,
+        mini_program_openid: sessionData.openid,
       });
 
       return {
@@ -501,7 +501,7 @@ export class WechatService {
           lang,
           metadata: {
             ...sessionData,
-            miniprogram_openid: sessionData.openid,
+            mini_program_openid: sessionData.openid,
           },
         } as CreateUserBindingDto,
         manager,

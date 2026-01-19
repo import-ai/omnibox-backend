@@ -207,6 +207,14 @@ export class OAuthProviderService {
   }
 
   async getUserinfo(bearerToken: string): Promise<UserinfoResponseDto> {
+    if (!bearerToken) {
+      throw new AppException(
+        this.i18n.t('auth.oauth.errors.invalidAccessToken'),
+        'OAUTH_INVALID_ACCESS_TOKEN',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
     const token = bearerToken.replace(/^Bearer\s+/i, '');
 
     const accessToken = await this.accessTokenRepository.findOne({

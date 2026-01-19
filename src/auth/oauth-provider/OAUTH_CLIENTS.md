@@ -54,7 +54,7 @@ First, generate a hashed secret using Node.js:
 node -e "
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-const secret = 'cs_' + crypto.randomBytes(32).toString('hex');
+const secret = crypto.randomBytes(32).toString('hex');
 const hash = bcrypt.hashSync(secret, 10);
 console.log('Plain Secret:', secret);
 console.log('Hashed Secret:', hash);
@@ -107,7 +107,7 @@ WHERE client_id = 'my-app';
 node -e "
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-const secret = 'cs_' + crypto.randomBytes(32).toString('hex');
+const secret = crypto.randomBytes(32).toString('hex');
 const hash = bcrypt.hashSync(secret, 10);
 console.log('New Plain Secret:', secret);
 console.log('New Hashed Secret:', hash);
@@ -195,7 +195,7 @@ The OAuth provider exposes the following endpoints:
 | `/api/v1/oauth/token` | POST | Token endpoint - exchange auth code for access token |
 | `/api/v1/oauth/userinfo` | GET | UserInfo endpoint - returns user profile |
 | `/api/v1/oauth/revoke` | POST | Revoke an access token |
-| `/api/v1/oauth/clients` | POST | Create new OAuth client (requires auth) |
+| `/internal/oauth/clients` | POST | Create new OAuth client (internal use only) |
 
 ### Flarum FoF Passport Configuration
 
@@ -208,15 +208,15 @@ Configure in Flarum Admin → Extensions → FoF Passport:
 - **Client Secret**: `<your-client-secret>`
 - **Scopes**: `openid profile email`
 
-## Current Flarum Client
+## Example Client Configuration
 
-The Flarum forum is configured with:
+Example configuration for a Flarum forum client:
 
 | Field | Value |
 |-------|-------|
 | Client ID | `flarum-forum` |
-| Name | `OmniBox Forum` |
-| Redirect URIs | `["https://bbs-test.hub.changyuan.ai:1903/auth/passport"]` |
+| Name | `My Forum` |
+| Redirect URIs | `["https://forum.example.com/auth/passport"]` |
 | Scopes | `["openid", "profile", "email"]` |
 
 To view:

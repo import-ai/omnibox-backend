@@ -11,12 +11,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { JwtService } from '@nestjs/jwt';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { OAuthProviderService } from './oauth-provider.service';
 import { OAuthClientService } from './oauth-client.service';
 import { AuthorizeRequestDto } from './dto/authorize-request.dto';
@@ -27,14 +22,12 @@ import {
   CreateClientResponseDto,
 } from './dto/create-client-request.dto';
 import { Public } from 'omniboxd/auth/decorators';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @ApiTags('OAuth Provider')
 @Controller('api/v1/oauth')
 export class OAuthProviderController {
   constructor(
     private readonly oauthService: OAuthProviderService,
-    private readonly clientService: OAuthClientService,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -145,16 +138,15 @@ export class OAuthProviderController {
 }
 
 @ApiTags('OAuth Clients')
-@Controller('api/v1/oauth/clients')
+@Controller('internal/oauth/clients')
 export class OAuthClientController {
   constructor(private readonly clientService: OAuthClientService) {}
 
   @Post()
-  @ApiBearerAuth()
+  @Public()
   @ApiOperation({
     summary: 'Create OAuth Client',
-    description:
-      'Registers a new OAuth client application. Requires admin privileges.',
+    description: 'Registers a new OAuth client application. Internal use only.',
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -165,15 +157,8 @@ export class OAuthClientController {
     status: HttpStatus.CONFLICT,
     description: 'Client with this ID already exists',
   })
-  @ApiResponse({
-    status: HttpStatus.UNAUTHORIZED,
-    description: 'Not authenticated or not admin',
-  })
   async createClient(
     @Body() dto: CreateClientRequestDto,
-    // UserId decorator ensures user is authenticated
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    @UserId() userId: string,
   ): Promise<CreateClientResponseDto> {
     return this.clientService.create(dto);
   }

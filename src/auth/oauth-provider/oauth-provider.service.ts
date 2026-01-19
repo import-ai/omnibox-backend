@@ -174,7 +174,15 @@ export class OAuthProviderService {
           HttpStatus.BAD_REQUEST,
         );
       }
-    } else if (dto.client_secret) {
+    } else {
+      // Require client_secret for non-PKCE flows
+      if (!dto.client_secret) {
+        throw new AppException(
+          this.i18n.t('auth.oauth.errors.clientSecretRequired'),
+          'OAUTH_CLIENT_SECRET_REQUIRED',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
       await this.clientService.validateClient(dto.client_id, dto.client_secret);
     }
 
@@ -265,6 +273,7 @@ export class OAuthProviderService {
     }
   }
 
+  // TODO: Schedule these cleanup methods via cron or expose as admin endpoints
   async cleanupExpiredCodes(): Promise<number> {
     const result = await this.authCodeRepository.delete({
       expiresAt: LessThan(new Date()),

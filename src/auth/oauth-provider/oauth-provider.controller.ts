@@ -5,12 +5,8 @@ import {
   Body,
   Query,
   Headers,
-  Res,
-  Req,
   HttpStatus,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
-import { JwtService } from '@nestjs/jwt';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { OAuthProviderService } from './oauth-provider.service';
 import { OAuthClientService } from './oauth-client.service';
@@ -21,26 +17,28 @@ import {
   CreateClientRequestDto,
   CreateClientResponseDto,
 } from './dto/create-client-request.dto';
-import { Public } from 'omniboxd/auth/decorators';
+import { CookieAuth, Public } from 'omniboxd/auth/decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @ApiTags('OAuth Provider')
 @Controller('api/v1/oauth')
 export class OAuthProviderController {
-  constructor(
-    private readonly oauthService: OAuthProviderService,
-    private readonly jwtService: JwtService,
-  ) {}
+  constructor(private readonly oauthService: OAuthProviderService) {}
 
   @Get('authorize')
-  @Public()
+  @CookieAuth()
   @ApiOperation({
     summary: 'OAuth Authorization Endpoint',
     description:
-      'Initiates the OAuth authorization flow. Redirects to login if not authenticated.',
+      'Returns redirect URL for OAuth authorization flow. Returns 401 if not authenticated.',
   })
   @ApiResponse({
-    status: HttpStatus.FOUND,
-    description: 'Redirects to client with authorization code or to login page',
+    status: HttpStatus.OK,
+    description: 'Returns redirect URL with authorization code',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'User not authenticated',
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
@@ -48,37 +46,10 @@ export class OAuthProviderController {
   })
   async authorize(
     @Query() dto: AuthorizeRequestDto,
-    @Req() req: Request,
-    @Res() res: Response,
-  ): Promise<void> {
-    // Try to get user from cookie token
-    const token = req.cookies?.token;
-    let userId: string | null = null;
-
-    if (token) {
-      try {
-        const payload = this.jwtService.verify(token);
-        if (payload?.sub) {
-          userId = payload.sub;
-        }
-      } catch {
-        // Token invalid or expired, will redirect to login
-      }
-    }
-
-    // If not authenticated, redirect to login with return URL
-    if (!userId) {
-      // Build absolute URL for the OAuth return redirect
-      const protocol = req.protocol;
-      const host = req.get('host');
-      const currentUrl = `${protocol}://${host}${req.originalUrl}`;
-      // Use relative path - works when frontend/backend share same origin via reverse proxy
-      const loginUrl = `/user/login?redirect=${encodeURIComponent(currentUrl)}`;
-      return res.redirect(HttpStatus.FOUND, loginUrl);
-    }
-
+    @UserId() userId: string,
+  ): Promise<{ redirect_url: string }> {
     const { redirectUrl } = await this.oauthService.authorize(dto, userId);
-    res.redirect(HttpStatus.FOUND, redirectUrl);
+    return { redirect_url: redirectUrl };
   }
 
   @Post('token')

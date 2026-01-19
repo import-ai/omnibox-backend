@@ -22,16 +22,16 @@ export class SendSubscribeMessageDto {
   @IsOptional()
   @IsString()
   @Expose({ name: 'resource_id' })
-  resourceId?: string;
+  resourceId: string;
 
   @IsOptional()
   @IsString()
   @Expose({ name: 'namespace_id' })
-  namespaceId?: string;
+  namespaceId: string;
 
   @IsString()
   @Expose({ name: 'title' })
-  title?: string;
+  title: string;
 
   @IsOptional()
   @IsString()

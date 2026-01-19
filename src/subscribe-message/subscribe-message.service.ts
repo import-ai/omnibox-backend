@@ -142,14 +142,9 @@ export class SubscribeMessageService {
     };
 
     if (dto.resourceId && dto.namespaceId && this.baseUrl) {
-      const baseUrlTrimmed = 'http://test.omnibox.pro/m/';
+      const baseUrlTrimmed = 'https://test.omnibox.pro/m/';
 
-      const h5Url = `${baseUrlTrimmed}details?
-                    id=${dto.resourceId}&
-                    namespaceId=${dto.namespaceId}&
-                    token=${encodeURIComponent(accessToken)}&
-                    uid=${encodeURIComponent(dto.userId)}&
-                    title=${encodeURIComponent(dto.title || '')}`;
+      const h5Url = `${baseUrlTrimmed}details?id=${dto.resourceId}&namespaceId=${dto.namespaceId}&title=${encodeURIComponent(dto.title || '')}`;
 
       body.page = `pages/webview/index?url=${encodeURIComponent(h5Url)}`;
     } else if (dto.page) {

@@ -6,14 +6,14 @@ import {
 import { SendSubscribeMessageRequestDto } from './dto/send-subscribe-message-request.dto';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
-@Controller('api/v1/subscribe-message')
-export class SubscribeMessageController {
+@Controller('internal/api/v1')
+export class InternalSubscribeMessageController {
   constructor(
     private readonly subscribeMessageService: SubscribeMessageService,
   ) {}
 
   @Public()
-  @Post('send')
+  @Post('subscribe-message/send')
   async send(
     @Body() dto: SendSubscribeMessageRequestDto,
   ): Promise<SendMessageResponseDto> {

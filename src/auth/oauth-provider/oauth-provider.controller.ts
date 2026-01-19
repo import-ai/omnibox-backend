@@ -138,7 +138,7 @@ export class OAuthProviderController {
 }
 
 @ApiTags('OAuth Clients')
-@Controller('internal/oauth/clients')
+@Controller('internal/api/v1/oauth/clients')
 export class OAuthClientController {
   constructor(private readonly clientService: OAuthClientService) {}
 

@@ -21,6 +21,20 @@ export class SendSubscribeMessageDto {
 
   @IsOptional()
   @IsString()
+  @Expose({ name: 'resource_id' })
+  resourceId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Expose({ name: 'namespace_id' })
+  namespaceId?: string;
+
+  @IsString()
+  @Expose({ name: 'title' })
+  title?: string;
+
+  @IsOptional()
+  @IsString()
   page?: string;
 
   @IsOptional()

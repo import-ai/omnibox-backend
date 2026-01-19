@@ -28,6 +28,7 @@ export class SubscribeMessageService {
 
   private readonly appId: string;
   private readonly appSecret: string;
+  private readonly baseUrl: string;
 
   private static readonly CACHE_NAMESPACE = '/wechat';
   private static readonly ACCESS_TOKEN_KEY = 'miniprogram_access_token';
@@ -47,6 +48,7 @@ export class SubscribeMessageService {
       'OBB_MINI_PROGRAM_APP_SECRET',
       '',
     );
+    this.baseUrl = this.configService.get<string>('OBB_BASE_URL', '');
   }
 
   async getAccessToken(): Promise<string> {
@@ -139,7 +141,18 @@ export class SubscribeMessageService {
       data: dto.data,
     };
 
-    if (dto.page) {
+    if (dto.resourceId && dto.namespaceId && this.baseUrl) {
+      const baseUrlTrimmed = 'http://test.omnibox.pro/m/';
+
+      const h5Url = `${baseUrlTrimmed}details?
+                    id=${dto.resourceId}&
+                    namespaceId=${dto.namespaceId}&
+                    token=${encodeURIComponent(accessToken)}&
+                    uid=${encodeURIComponent(dto.userId)}&
+                    title=${encodeURIComponent(dto.title || '')}`;
+
+      body.page = `pages/webview/index?url=${encodeURIComponent(h5Url)}`;
+    } else if (dto.page) {
       body.page = dto.page;
     }
 

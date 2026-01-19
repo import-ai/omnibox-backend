@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 import { OAuthAuthorizationCode } from './entities/oauth-authorization-code.entity';
 import { OAuthAccessToken } from './entities/oauth-access-token.entity';
 import { OAuthClientService } from './oauth-client.service';
+import { PairwiseSubjectService } from './pairwise-subject.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { AuthorizeRequestDto } from './dto/authorize-request.dto';
 import { TokenRequestDto, TokenResponseDto } from './dto/token-request.dto';
@@ -25,6 +26,7 @@ export class OAuthProviderService {
     @InjectRepository(OAuthAccessToken)
     private readonly accessTokenRepository: Repository<OAuthAccessToken>,
     private readonly clientService: OAuthClientService,
+    private readonly pairwiseSubjectService: PairwiseSubjectService,
     private readonly userService: UserService,
     private readonly configService: ConfigService,
     private readonly i18n: I18nService,
@@ -247,10 +249,15 @@ export class OAuthProviderService {
 
     const user = await this.userService.find(accessToken.userId);
 
+    const pairwiseSubject = await this.pairwiseSubjectService.getOrCreate(
+      accessToken.userId,
+      accessToken.clientId,
+    );
+
     const scopes = accessToken.scope.split(' ');
     const response: UserinfoResponseDto = {
-      id: user.id,
-      sub: user.id,
+      id: pairwiseSubject,
+      sub: pairwiseSubject,
       name: user.username,
     };
 

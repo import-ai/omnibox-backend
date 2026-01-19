@@ -2,14 +2,16 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UserinfoResponseDto {
   @ApiProperty({
-    description: 'User ID (for Laravel Passport compatibility)',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description:
+      'Pairwise subject identifier - unique per user+client combination (for Laravel Passport compatibility)',
+    example: 'Uakgb5m9g0Fa',
   })
   id: string;
 
   @ApiProperty({
-    description: 'Subject identifier (user ID) - OpenID Connect standard',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    description:
+      'Pairwise subject identifier - unique per user+client combination (OpenID Connect standard)',
+    example: 'Uakgb5m9g0Fa',
   })
   sub: string;
 

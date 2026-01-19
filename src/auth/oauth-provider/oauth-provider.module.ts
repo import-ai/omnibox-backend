@@ -5,8 +5,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { OAuthClient } from './entities/oauth-client.entity';
 import { OAuthAuthorizationCode } from './entities/oauth-authorization-code.entity';
 import { OAuthAccessToken } from './entities/oauth-access-token.entity';
+import { OAuthPairwiseSubject } from './entities/oauth-pairwise-subject.entity';
 import { OAuthClientService } from './oauth-client.service';
 import { OAuthProviderService } from './oauth-provider.service';
+import { PairwiseSubjectService } from './pairwise-subject.service';
 import {
   OAuthProviderController,
   OAuthClientController,
@@ -19,6 +21,7 @@ import { UserModule } from 'omniboxd/user/user.module';
       OAuthClient,
       OAuthAuthorizationCode,
       OAuthAccessToken,
+      OAuthPairwiseSubject,
     ]),
     UserModule,
     JwtModule.registerAsync({
@@ -30,7 +33,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     }),
   ],
   controllers: [OAuthProviderController, OAuthClientController],
-  providers: [OAuthClientService, OAuthProviderService],
-  exports: [OAuthClientService, OAuthProviderService],
+  providers: [OAuthClientService, OAuthProviderService, PairwiseSubjectService],
+  exports: [OAuthClientService, OAuthProviderService, PairwiseSubjectService],
 })
 export class OAuthProviderModule {}

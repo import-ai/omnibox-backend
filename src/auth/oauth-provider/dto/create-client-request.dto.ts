@@ -6,6 +6,7 @@ import {
   IsOptional,
   ArrayMinSize,
 } from 'class-validator';
+import { Expose } from 'class-transformer';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateClientRequestDto {
@@ -62,29 +63,34 @@ export class CreateClientResponseDto {
     description: 'Generated client ID',
     example: 'flarum-forum',
   })
+  @Expose({ name: 'client_id' })
   clientId: string;
 
   @ApiProperty({
     description: 'Generated client secret (only shown once)',
     example: 'cs_abc123def456...',
   })
+  @Expose({ name: 'client_secret' })
   clientSecret: string;
 
   @ApiProperty({
     description: 'Display name',
     example: 'OmniBox Forum',
   })
+  @Expose()
   name: string;
 
   @ApiProperty({
     description: 'Allowed redirect URIs',
     example: ['https://forum.example.com/auth/callback'],
   })
+  @Expose({ name: 'redirect_uris' })
   redirectUris: string[];
 
   @ApiProperty({
     description: 'Allowed scopes',
     example: ['openid', 'profile', 'email'],
   })
+  @Expose()
   scopes: string[];
 }

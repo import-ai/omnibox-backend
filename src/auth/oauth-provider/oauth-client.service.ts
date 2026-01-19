@@ -103,6 +103,6 @@ export class OAuthClientService {
   }
 
   private generateClientSecret(): string {
-    return `cs_${crypto.randomBytes(32).toString('hex')}`;
+    return crypto.randomBytes(32).toString('hex');
   }
 }

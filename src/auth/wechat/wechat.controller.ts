@@ -32,9 +32,10 @@ export class WechatController extends SocialController {
     @Query('isH5') isH5?: boolean,
     @Query('source') source?: 'h5' | 'web',
     @Query('h5_redirect') h5Redirect?: string,
+    @Query('redirect') redirect?: string,
   ) {
     const finalSource = source || (isH5 ? 'h5' : 'web');
-    return this.wechatService.authUrl(finalSource, h5Redirect);
+    return this.wechatService.authUrl(finalSource, h5Redirect, redirect);
   }
 
   @Public()

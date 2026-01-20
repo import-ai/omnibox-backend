@@ -74,6 +74,7 @@ import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
+import { SubscribeMessageModule } from 'omniboxd/subscribe-message/subscribe-message.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
 import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
 import { AddEnqueuedToTasks1765348624000 } from 'omniboxd/migrations/1765348624000-add-enqueued-to-tasks';
@@ -166,6 +167,7 @@ export class AppModule implements NestModule {
         WebSocketModule,
         FilesModule,
         OpenAPIModule,
+        SubscribeMessageModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

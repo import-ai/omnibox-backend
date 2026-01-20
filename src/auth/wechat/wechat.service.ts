@@ -105,8 +105,13 @@ export class WechatService {
     };
   }
 
-  async getQrCodeParams() {
-    const state = await this.socialService.generateState('open_weixin');
+  async getQrCodeParams(redirectUrl?: string) {
+    const state = await this.socialService.generateState(
+      'open_weixin',
+      '',
+      '',
+      redirectUrl,
+    );
     return {
       state,
       appId: this.openAppId,

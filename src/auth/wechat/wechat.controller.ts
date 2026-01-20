@@ -67,8 +67,8 @@ export class WechatController extends SocialController {
 
   @Public()
   @Get('qrcode')
-  getQrCode() {
-    return this.wechatService.getQrCodeParams();
+  getQrCode(@Query('redirect') redirect?: string) {
+    return this.wechatService.getQrCodeParams(redirect);
   }
 
   @Public()

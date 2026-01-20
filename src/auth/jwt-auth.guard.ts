@@ -22,6 +22,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       return true;
     }
 
+    // Check if it has been certified by other guards
+    const request = context.switchToHttp().getRequest();
+    if (request.user?.id) {
+      return true;
+    }
+
     const isApiKeyAuth = this.reflector.getAllAndOverride<boolean>(
       IS_API_KEY_AUTH,
       [context.getHandler(), context.getClass()],

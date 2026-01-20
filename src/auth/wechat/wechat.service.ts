@@ -226,6 +226,12 @@ export class WechatService {
             HttpStatus.BAD_REQUEST,
           );
         }
+        // Update metadata if it's empty to ensure openid is available for payments
+        await this.userService.updateUserBindingWhenMetadataEmpty(
+          wechatUser.id,
+          'wechat',
+          userData,
+        );
         const returnValue = {
           isBinding: true,
           id: wechatUser.id,

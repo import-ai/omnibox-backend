@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { GoogleService } from 'omniboxd/auth/google/google.service';
-import { Req, Res, Get, Body, Controller, Post } from '@nestjs/common';
+import { Req, Res, Get, Body, Controller, Post, Query } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ConfigService } from '@nestjs/config';
 import { SocialController } from 'omniboxd/auth/social.controller';
@@ -25,8 +25,8 @@ export class GoogleController extends SocialController {
 
   @Public()
   @Get('auth-url')
-  getAuthUrl() {
-    return this.googleService.authUrl();
+  getAuthUrl(@Query('redirect') redirect?: string) {
+    return this.googleService.authUrl(redirect);
   }
 
   @Public()

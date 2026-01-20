@@ -16,6 +16,7 @@ export interface UserSocialState {
   expiresIn: number;
   nonce?: string;
   userInfo?: WechatCheckResponseDto['user'];
+  redirectUrl?: string;
 }
 
 @Injectable()
@@ -41,6 +42,7 @@ export class SocialService {
     type: string,
     prefix: string = '',
     nonce: string = '',
+    redirectUrl?: string,
   ): Promise<string> {
     const key = `${prefix ? prefix + '_' : ''}${generateId()}`;
     const expiresIn = 5 * 60 * 1000; // Expires in 5 minutes
@@ -50,6 +52,7 @@ export class SocialService {
       {
         type,
         nonce,
+        redirectUrl,
         createdAt: Date.now(),
         expiresIn,
       },

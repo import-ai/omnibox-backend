@@ -105,8 +105,13 @@ export class WechatService {
     };
   }
 
-  async getQrCodeParams() {
-    const state = await this.socialService.generateState('open_weixin');
+  async getQrCodeParams(redirectUrl?: string) {
+    const state = await this.socialService.generateState(
+      'open_weixin',
+      '',
+      '',
+      redirectUrl,
+    );
     return {
       state,
       appId: this.openAppId,
@@ -118,8 +123,14 @@ export class WechatService {
   async authUrl(
     source: 'h5' | 'web' = 'web',
     h5Redirect?: string,
+    redirectUrl?: string,
   ): Promise<string> {
-    const state = await this.socialService.generateState('weixin');
+    const state = await this.socialService.generateState(
+      'weixin',
+      '',
+      '',
+      redirectUrl,
+    );
     const stateInfo = await this.socialService.getState(state);
     if (stateInfo) {
       stateInfo['source'] = source;
@@ -224,6 +235,7 @@ export class WechatService {
           }),
           source: stateInfo['source'] || 'web',
           h5_redirect: stateInfo['h5_redirect'],
+          redirectUrl: stateInfo.redirectUrl,
         };
         stateInfo.userInfo = returnValue;
         await this.socialService.updateState(state, stateInfo);
@@ -244,6 +256,7 @@ export class WechatService {
         }),
         source: stateInfo['source'] || 'web',
         h5_redirect: stateInfo['h5_redirect'],
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -259,6 +272,7 @@ export class WechatService {
         }),
         source: stateInfo['source'] || 'web',
         h5_redirect: stateInfo['h5_redirect'],
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -296,6 +310,7 @@ export class WechatService {
         }),
         source: stateInfo['source'] || 'web',
         h5_redirect: stateInfo['h5_redirect'],
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);

@@ -10,9 +10,15 @@ import { ConfigService } from '@nestjs/config';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { context, propagation } from '@opentelemetry/api';
 
+interface TaskSettings {
+  priority: number;
+  parallelism: number;
+}
+
 @Injectable()
 export class TasksService {
   private readonly kafkaTasksTopic: string;
+  private readonly proUrl: string | undefined;
 
   constructor(
     @InjectRepository(Task)
@@ -25,6 +31,18 @@ export class TasksService {
       'OBB_TASKS_TOPIC',
       'omnibox-tasks',
     );
+    this.proUrl = this.configService.get<string>('OBB_PRO_URL');
+  }
+
+  private async getTaskSettings(namespaceId: string): Promise<TaskSettings> {
+    if (!this.proUrl) {
+      return { priority: 1, parallelism: 1 };
+    }
+
+    const response = await fetch(
+      `${this.proUrl}/internal/api/v1/namespaces/${namespaceId}/quotas/task-settings`,
+    );
+    return await response.json();
   }
 
   injectTraceHeaders(task: Partial<Task>) {
@@ -35,25 +53,29 @@ export class TasksService {
   }
 
   async checkTaskMessage(namespaceId: string): Promise<void> {
-    const numTasks = await this.countEnqueuedTasks(namespaceId);
-    if (numTasks >= 1) {
-      return;
+    const { priority, parallelism } = await this.getTaskSettings(namespaceId);
+    const topicName = `${this.kafkaTasksTopic}-${priority}`;
+    while (true) {
+      const task = await this.getNextTask(namespaceId);
+      if (!task) {
+        break;
+      }
+      const count = await this.countEnqueuedTasks(namespaceId);
+      if (count >= parallelism) {
+        break;
+      }
+      await this.kafkaService.produce(topicName, [
+        {
+          value: JSON.stringify({
+            task_id: task.id,
+            namespace_id: namespaceId,
+            function: task.function,
+            meta: { file_name: task.input?.filename },
+          }),
+        },
+      ]);
+      await this.setTaskEnqueued(namespaceId, task.id);
     }
-    const task = await this.getNextTask(namespaceId);
-    if (!task) {
-      return;
-    }
-    await this.kafkaService.produce(this.kafkaTasksTopic, [
-      {
-        value: JSON.stringify({
-          task_id: task.id,
-          namespace_id: namespaceId,
-          function: task.function,
-          meta: { file_name: task.input?.filename },
-        }),
-      },
-    ]);
-    await this.setTaskEnqueued(namespaceId, task.id);
   }
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {

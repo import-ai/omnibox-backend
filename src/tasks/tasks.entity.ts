@@ -8,6 +8,7 @@ export enum TaskStatus {
   ERROR = 'error',
   CANCELED = 'canceled',
   TIMEOUT = 'timeout',
+  INSUFFICIENT_QUOTA = 'insufficient_quota',
 }
 
 @Entity('tasks')

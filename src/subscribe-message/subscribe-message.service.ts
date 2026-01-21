@@ -6,10 +6,8 @@ import { Repository } from 'typeorm';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
-import {
-  SendSubscribeMessageRequestDto,
-  MiniProgramState,
-} from './dto/send-subscribe-message-request.dto';
+import { SendSubscribeMessageRequestDto } from './dto/send-subscribe-message-request.dto';
+import { Requests } from 'omniboxd/utils/requests';
 
 interface AccessTokenResponse {
   access_token: string;
@@ -29,13 +27,14 @@ export class SubscribeMessageService {
 
   private readonly appId: string;
   private readonly appSecret: string;
+  private readonly mini_program_state: string;
 
   private static readonly CACHE_NAMESPACE = '/wechat';
   private static readonly ACCESS_TOKEN_KEY = 'mini_program_access_token';
   private static readonly SEND_MESSAGE_URL =
     'https://api.weixin.qq.com/cgi-bin/message/subscribe/send';
   private static readonly ACCESS_TOKEN_URL =
-    'https://api.weixin.qq.com/cgi-bin/token';
+    'https://api.weixin.qq.com/cgi-bin/stable_token';
 
   constructor(
     private readonly configService: ConfigService,
@@ -49,6 +48,10 @@ export class SubscribeMessageService {
       'OBB_MINI_PROGRAM_APP_SECRET',
       '',
     );
+    this.mini_program_state = this.configService.get<string>(
+      'OBB_MINI_PROGRAM_STATE',
+      'formal',
+    );
   }
 
   async getAccessToken(): Promise<string> {
@@ -61,9 +64,15 @@ export class SubscribeMessageService {
       return cached;
     }
 
-    const url = `${SubscribeMessageService.ACCESS_TOKEN_URL}?grant_type=client_credential&appid=${this.appId}&secret=${this.appSecret}`;
+    const response = await Requests.post(
+      SubscribeMessageService.ACCESS_TOKEN_URL,
+      {
+        grant_type: 'client_credential',
+        appid: this.appId,
+        secret: this.appSecret,
+      },
+    );
 
-    const response = await fetch(url);
     if (!response.ok) {
       throw new AppException(
         'Failed to get access token from WeChat',
@@ -75,10 +84,13 @@ export class SubscribeMessageService {
     const data: AccessTokenResponse = await response.json();
 
     if (data.errcode) {
-      this.logger.error(`WeChat access token error: ${data.errmsg}`);
+      this.logger.error({
+        message: 'get wechat access token error',
+        response: data,
+      });
       throw new AppException(
-        `WeChat error: ${data.errmsg}`,
-        'WECHAT_ACCESS_TOKEN_ERROR',
+        data.errmsg || 'unknown WeChat error',
+        data.errcode.toString(),
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -136,27 +148,19 @@ export class SubscribeMessageService {
     const body: Record<string, any> = {
       touser: miniProgramOpenId,
       template_id: dto.templateId,
-      wechat_mini_program_state:
-        dto.miniProgramState || MiniProgramState.FORMAL,
+      wechat_mini_program_state: this.mini_program_state,
       lang: dto.lang || 'zh_CN',
       data: dto.data,
     };
 
     if (dto.resourceId && dto.namespaceId) {
       const deepLink = `omnibox://details?id=${dto.resourceId}&namespaceId=${dto.namespaceId}&title=${encodeURIComponent(dto.title || '')}`;
-
       body.page = `pages/webview/index?url=${encodeURIComponent(deepLink)}`;
     } else if (dto.page) {
       body.page = dto.page;
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    const response = await Requests.post(url, body);
 
     if (!response.ok) {
       throw new AppException(
@@ -169,10 +173,13 @@ export class SubscribeMessageService {
     const result: SendMessageResponseDto = await response.json();
 
     if (result.errcode !== 0) {
-      this.logger.error(`WeChat send message error: ${result.errmsg}`);
+      this.logger.error({
+        message: 'WeChat send message error',
+        response: result.errmsg,
+      });
       throw new AppException(
-        `WeChat error: ${result.errmsg}`,
-        'WECHAT_SEND_MESSAGE_ERROR',
+        result.errmsg || 'unknown WeChat send message error',
+        result.errcode.toString(),
         HttpStatus.BAD_REQUEST,
       );
     }

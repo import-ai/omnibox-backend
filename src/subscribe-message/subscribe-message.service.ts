@@ -144,10 +144,7 @@ export class SubscribeMessageService {
 
     if (dto.resourceId && dto.namespaceId) {
       const deepLink = `omnibox://details?id=${dto.resourceId}&namespaceId=${dto.namespaceId}&title=${encodeURIComponent(dto.title || '')}`;
-
       body.page = `pages/webview/index?url=${encodeURIComponent(deepLink)}`;
-    } else if (dto.page) {
-      body.page = dto.page;
     }
 
     const response = await fetch(url, {

@@ -7,6 +7,7 @@ import { S3Module } from 'omniboxd/s3/s3.module';
 import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 
 @Module({
   exports: [AttachmentsService],
@@ -18,6 +19,7 @@ import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resource
     ResourceAttachmentsModule,
     SharesModule,
     SharedResourcesModule,
+    NamespacesQuotaModule,
   ],
 })
 export class AttachmentsModule {}

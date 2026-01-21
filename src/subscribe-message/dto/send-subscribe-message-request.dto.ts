@@ -1,11 +1,5 @@
 import { Expose } from 'class-transformer';
-import { IsString, IsOptional, IsObject, IsEnum } from 'class-validator';
-
-export enum MiniProgramState {
-  DEVELOPER = 'developer',
-  TRIAL = 'trial',
-  FORMAL = 'formal',
-}
+import { IsString, IsOptional, IsObject } from 'class-validator';
 
 export class SendSubscribeMessageRequestDto {
   @IsString()
@@ -36,11 +30,6 @@ export class SendSubscribeMessageRequestDto {
   @IsOptional()
   @IsString()
   page?: string;
-
-  @IsOptional()
-  @Expose({ name: 'mini_program_state' })
-  @IsEnum(MiniProgramState)
-  miniProgramState?: MiniProgramState;
 
   @IsOptional()
   @IsString()

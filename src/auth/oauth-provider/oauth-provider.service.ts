@@ -234,8 +234,8 @@ export class OAuthProviderService {
       name: user.username,
     };
 
-    if (scopes.includes('email') && user.email) {
-      response.email = user.email;
+    if (scopes.includes('email')) {
+      response.email = user.email || `${pairwiseSubject}@email.local`;
     }
 
     return response;

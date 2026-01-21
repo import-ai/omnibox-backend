@@ -22,6 +22,25 @@ export interface WechatUserInfo {
   unionid: string;
 }
 
+interface WechatBindingMetadata {
+  nickname?: string;
+  sex?: number;
+  province?: string;
+  city?: string;
+  country?: string;
+  headimgurl?: string;
+  privilege?: string[];
+  unionid?: string;
+  // Backward compatibility: Retain old fields (deprecated)
+  openid?: string;
+  mini_program_openid?: string;
+
+  // OpenID Mapping: appid -> openid
+  openids?: {
+    [appid: string]: string;
+  };
+}
+
 @Injectable()
 export class WechatService {
   private readonly logger = new Logger(WechatService.name);
@@ -102,6 +121,25 @@ export class WechatService {
         this.openAppSecret &&
         this.redirectUri
       ),
+    };
+  }
+
+  private buildMetadataWithOpenids(
+    userData: any,
+    appId: string,
+    openid: string,
+    existingMetadata?: any,
+  ): WechatBindingMetadata {
+    const openids: { [key: string]: string } = existingMetadata?.openids || {};
+    return {
+      ...userData,
+      openids: {
+        ...openids,
+        [appId]: openid,
+      },
+      // Keep old fields to maintain compatibility
+      openid: existingMetadata?.openid,
+      mini_program_openid: existingMetadata?.mini_program_openid,
     };
   }
 
@@ -226,11 +264,19 @@ export class WechatService {
             HttpStatus.BAD_REQUEST,
           );
         }
-        // Update metadata if it's empty to ensure openid is available for payments
-        await this.userService.updateUserBindingWhenMetadataEmpty(
+        const binding = await this.userService.findUserBinding(
           wechatUser.id,
           'wechat',
+        );
+        const newMetadata = this.buildMetadataWithOpenids(
           userData,
+          appId,
+          accessTokenData.openid,
+          binding?.metadata,
+        );
+        await this.userService.updateBindingMetadata(
+          userData.unionid,
+          newMetadata,
         );
         const returnValue = {
           isBinding: true,
@@ -247,11 +293,18 @@ export class WechatService {
         await this.socialService.updateState(state, stateInfo);
         return returnValue;
       }
+      const binding = await this.userService.findUserBinding(userId, 'wechat');
+      const newMetadata = this.buildMetadataWithOpenids(
+        userData,
+        appId,
+        accessTokenData.openid,
+        binding?.metadata,
+      );
       const existingUser = await this.userService.bindingExistUser({
         userId,
         loginType: 'wechat',
         loginId: userData.unionid,
-        metadata: userData,
+        metadata: newMetadata,
       });
       const returnValue = {
         isBinding: true,
@@ -293,13 +346,18 @@ export class WechatService {
         manager,
       );
       this.logger.debug({ nickname, username });
+      const metadata = this.buildMetadataWithOpenids(
+        userData,
+        appId,
+        accessTokenData.openid,
+      );
       const wechatUser = await this.userService.createUserBinding(
         {
           username,
           loginType: 'wechat',
           loginId: userData.unionid,
           lang,
-          metadata: userData,
+          metadata,
         } as CreateUserBindingDto,
         manager,
       );
@@ -491,10 +549,17 @@ export class WechatService {
     const wechatUser = await this.userService.findByLoginId(loginId);
 
     if (wechatUser) {
-      // Save miniprogram openid for existing users (needed for subscribe messages)
-      await this.userService.updateBindingMetadata(loginId, {
-        mini_program_openid: sessionData.openid,
-      });
+      const binding = await this.userService.findUserBinding(
+        wechatUser.id,
+        'wechat',
+      );
+      const metadata = this.buildMetadataWithOpenids(
+        sessionData,
+        this.miniProgramAppId,
+        sessionData.openid,
+        binding?.metadata,
+      );
+      await this.userService.updateBindingMetadata(loginId, metadata);
 
       return {
         id: wechatUser.id,
@@ -514,16 +579,18 @@ export class WechatService {
         manager,
       );
       this.logger.debug({ username });
+      const metadata = this.buildMetadataWithOpenids(
+        sessionData,
+        this.miniProgramAppId,
+        sessionData.openid,
+      );
       const wechatUser = await this.userService.createUserBinding(
         {
           username,
           loginType: 'wechat',
           loginId: loginId,
           lang,
-          metadata: {
-            ...sessionData,
-            mini_program_openid: sessionData.openid,
-          },
+          metadata,
         } as CreateUserBindingDto,
         manager,
       );

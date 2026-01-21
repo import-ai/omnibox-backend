@@ -172,6 +172,7 @@ export class WechatService {
     source: 'h5' | 'web' = 'web',
     h5Redirect?: string,
     redirectUrl?: string,
+    userId?: string,
   ): Promise<string> {
     const state = await this.socialService.generateState(
       'weixin',
@@ -184,6 +185,9 @@ export class WechatService {
       stateInfo['source'] = source;
       if (h5Redirect) {
         stateInfo['h5_redirect'] = h5Redirect;
+      }
+      if (userId) {
+        stateInfo['userId'] = userId;
       }
       await this.socialService.updateState(state, stateInfo);
     }
@@ -204,6 +208,12 @@ export class WechatService {
         'INVALID_STATE_IDENTIFIER',
         HttpStatus.UNAUTHORIZED,
       );
+    }
+
+    // Commercial payment logic
+    const stateUserId = stateInfo['userId'];
+    if (stateUserId && !userId) {
+      userId = stateUserId;
     }
     const isWeixin = stateInfo.type === 'weixin';
     const appId = isWeixin ? this.appId : this.openAppId;

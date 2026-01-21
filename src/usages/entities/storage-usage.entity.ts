@@ -25,6 +25,6 @@ export class StorageUsage extends Base {
   @Column('enum', { enum: StorageType })
   storageType: StorageType;
 
-  @Column('bigint', { default: 0 })
+  @Column()
   amount: number;
 }

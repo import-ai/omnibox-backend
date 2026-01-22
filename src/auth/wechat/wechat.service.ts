@@ -22,25 +22,6 @@ export interface WechatUserInfo {
   unionid: string;
 }
 
-interface WechatBindingMetadata {
-  nickname?: string;
-  sex?: number;
-  province?: string;
-  city?: string;
-  country?: string;
-  headimgurl?: string;
-  privilege?: string[];
-  unionid?: string;
-  // Backward compatibility: Retain old fields (deprecated)
-  openid?: string;
-  mini_program_openid?: string;
-
-  // OpenID Mapping: appid -> openid
-  openids?: {
-    [appid: string]: string;
-  };
-}
-
 @Injectable()
 export class WechatService {
   private readonly logger = new Logger(WechatService.name);
@@ -134,36 +115,6 @@ export class WechatService {
     };
   }
 
-  private buildMetadataWithOpenids(
-    userData: any,
-    appId: string,
-    openid: string,
-    existingMetadata?: any,
-  ): WechatBindingMetadata {
-    const openids: { [key: string]: string } = existingMetadata?.openids || {};
-    return {
-      ...userData,
-      openids: {
-        ...openids,
-        [appId]: openid,
-      },
-      // Keep old fields to maintain compatibility
-      openid: existingMetadata?.openid,
-      mini_program_openid: existingMetadata?.mini_program_openid,
-    };
-  }
-
-  private shouldUpdateMetadata(
-    appId: string,
-    openid: string,
-    existingMetadata?: any,
-  ): boolean {
-    if (!existingMetadata?.openids) {
-      return true;
-    }
-    return existingMetadata.openids[appId] !== openid;
-  }
-
   async getQrCodeParams(redirectUrl?: string) {
     const state = await this.socialService.generateState(
       'open_weixin',
@@ -183,7 +134,6 @@ export class WechatService {
     source: 'h5' | 'web' = 'web',
     h5Redirect?: string,
     redirectUrl?: string,
-    userId?: string,
   ): Promise<string> {
     const state = await this.socialService.generateState(
       'weixin',
@@ -196,9 +146,6 @@ export class WechatService {
       stateInfo['source'] = source;
       if (h5Redirect) {
         stateInfo['h5_redirect'] = h5Redirect;
-      }
-      if (userId) {
-        stateInfo['userId'] = userId;
       }
       await this.socialService.updateState(state, stateInfo);
     }
@@ -220,12 +167,6 @@ export class WechatService {
         HttpStatus.UNAUTHORIZED,
       );
     }
-
-    // Commercial payment logic
-    const stateUserId = stateInfo['userId'];
-    if (stateUserId && !userId) {
-      userId = stateUserId;
-    }
     const isWeixin = stateInfo.type === 'weixin';
     const appId = isWeixin ? this.appId : this.openAppId;
     const appSecret = isWeixin ? this.appSecret : this.openAppSecret;
@@ -245,28 +186,12 @@ export class WechatService {
             HttpStatus.BAD_REQUEST,
           );
         }
-        const binding = await this.userService.findUserBinding(
+        // Update metadata if it's empty to ensure openid is available for payments
+        await this.userService.updateUserBindingWhenMetadataEmpty(
           wechatUser.id,
           'wechat',
+          userData,
         );
-        if (
-          this.shouldUpdateMetadata(
-            appId,
-            accessTokenData.openid,
-            binding?.metadata,
-          )
-        ) {
-          const newMetadata = this.buildMetadataWithOpenids(
-            userData,
-            appId,
-            accessTokenData.openid,
-            binding?.metadata,
-          );
-          await this.userService.updateBindingMetadata(
-            userData.unionid,
-            newMetadata,
-          );
-        }
         const returnValue = {
           isBinding: true,
           id: wechatUser.id,
@@ -282,18 +207,11 @@ export class WechatService {
         await this.socialService.updateState(state, stateInfo);
         return returnValue;
       }
-      const binding = await this.userService.findUserBinding(userId, 'wechat');
-      const newMetadata = this.buildMetadataWithOpenids(
-        userData,
-        appId,
-        accessTokenData.openid,
-        binding?.metadata,
-      );
       const existingUser = await this.userService.bindingExistUser({
         userId,
         loginType: 'wechat',
         loginId: userData.unionid,
-        metadata: newMetadata,
+        metadata: userData,
       });
       const returnValue = {
         isBinding: true,
@@ -312,28 +230,6 @@ export class WechatService {
     }
     const wechatUser = await this.userService.findByLoginId(userData.unionid);
     if (wechatUser) {
-      const binding = await this.userService.findUserBinding(
-        wechatUser.id,
-        'wechat',
-      );
-      if (
-        this.shouldUpdateMetadata(
-          appId,
-          accessTokenData.openid,
-          binding?.metadata,
-        )
-      ) {
-        const newMetadata = this.buildMetadataWithOpenids(
-          userData,
-          appId,
-          accessTokenData.openid,
-          binding?.metadata,
-        );
-        await this.userService.updateBindingMetadata(
-          userData.unionid,
-          newMetadata,
-        );
-      }
       const returnValue = {
         id: wechatUser.id,
         access_token: this.jwtService.sign({
@@ -357,18 +253,13 @@ export class WechatService {
         manager,
       );
       this.logger.debug({ nickname, username });
-      const metadata = this.buildMetadataWithOpenids(
-        userData,
-        appId,
-        accessTokenData.openid,
-      );
       const wechatUser = await this.userService.createUserBinding(
         {
           username,
           loginType: 'wechat',
           loginId: userData.unionid,
           lang,
-          metadata,
+          metadata: userData,
         } as CreateUserBindingDto,
         manager,
       );
@@ -680,25 +571,10 @@ export class WechatService {
     const wechatUser = await this.userService.findByLoginId(loginId);
 
     if (wechatUser) {
-      const binding = await this.userService.findUserBinding(
-        wechatUser.id,
-        'wechat',
-      );
-      if (
-        this.shouldUpdateMetadata(
-          this.miniProgramAppId,
-          sessionData.openid,
-          binding?.metadata,
-        )
-      ) {
-        const metadata = this.buildMetadataWithOpenids(
-          sessionData,
-          this.miniProgramAppId,
-          sessionData.openid,
-          binding?.metadata,
-        );
-        await this.userService.updateBindingMetadata(loginId, metadata);
-      }
+      // Save miniprogram openid for existing users (needed for subscribe messages)
+      await this.userService.updateBindingMetadata(loginId, {
+        mini_program_openid: sessionData.openid,
+      });
 
       return {
         id: wechatUser.id,
@@ -718,18 +594,16 @@ export class WechatService {
         manager,
       );
       this.logger.debug({ username });
-      const metadata = this.buildMetadataWithOpenids(
-        sessionData,
-        this.miniProgramAppId,
-        sessionData.openid,
-      );
       const wechatUser = await this.userService.createUserBinding(
         {
           username,
           loginType: 'wechat',
           loginId: loginId,
           lang,
-          metadata,
+          metadata: {
+            ...sessionData,
+            mini_program_openid: sessionData.openid,
+          },
         } as CreateUserBindingDto,
         manager,
       );

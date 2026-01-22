@@ -19,6 +19,9 @@ export interface UserSocialState {
   redirectUrl?: string;
 }
 
+const ALL_CJK_PATTERN =
+  /[\u4e00-\u9fa5]|[\u3040-\u309f]|[\u30a0-\u30ff]|[\uac00-\ud7af]/;
+
 @Injectable()
 export class SocialService {
   private readonly namespace = '/social/states';
@@ -173,17 +176,14 @@ export class SocialService {
     if (!lName) return fName;
 
     // Asian languages: Chinese, Japanese, Korean
-    const asianLangs = ['zh', 'ja', 'ko'];
+    const asianLangList = ['zh', 'ja', 'ko'];
     const isAsianLang =
-      lang && asianLangs.some((l) => lang.toLowerCase().startsWith(l));
+      lang && asianLangList.some((l) => lang.toLowerCase().startsWith(l));
 
     // CJK character ranges (Chinese, Japanese, Korean)
-    const hasCJK =
-      /[\u4e00-\u9fa5]|[\u3040-\u309f]|[\u30a0-\u30ff]|[\uac00-\ud7af]/.test(
-        fName + lName,
-      );
+    const allCJK = ALL_CJK_PATTERN.test(fName) && ALL_CJK_PATTERN.test(lName);
 
-    if (isAsianLang || hasCJK) {
+    if (isAsianLang || allCJK) {
       return `${lName}${fName}`;
     }
 

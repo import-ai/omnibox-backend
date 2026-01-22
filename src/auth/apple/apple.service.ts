@@ -23,6 +23,7 @@ interface AppleUserData {
 @Injectable()
 export class AppleService {
   private readonly clientId: string;
+  private readonly mobileClientId: string;
   private readonly redirectUri: string;
 
   constructor(
@@ -35,6 +36,10 @@ export class AppleService {
     private readonly socialService: SocialService,
   ) {
     this.clientId = this.configService.get<string>('OBB_APPLE_CLIENT_ID', '');
+    this.mobileClientId = this.configService.get<string>(
+      'OBB_APPLE_MOBILE_CLIENT_ID',
+      '',
+    );
     this.redirectUri = this.configService.get<string>(
       'OBB_APPLE_REDIRECT_URI',
       '',
@@ -43,7 +48,7 @@ export class AppleService {
 
   available() {
     return {
-      available: !!(this.clientId && this.redirectUri),
+      available: !!((this.clientId && this.redirectUri) || this.mobileClientId),
     };
   }
 
@@ -216,7 +221,11 @@ export class AppleService {
 
       let nickname: string;
       if (user?.name) {
-        nickname = `${user.name.firstName} ${user.name.lastName}`.trim();
+        nickname = this.socialService.formatName(
+          user.name.firstName,
+          user.name.lastName,
+          lang,
+        );
       } else if (email) {
         nickname = email.split('@')[0];
       } else {
@@ -265,6 +274,201 @@ export class AppleService {
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
       return returnValue;
+    });
+  }
+
+  async handleMobileCallback(
+    identityToken: string,
+    authorizationCode: string,
+    user: AppleUserData | undefined,
+    clientUsername: string | undefined,
+    userId: string | undefined,
+    lang?: string,
+  ): Promise<any> {
+    let appleUserId: string;
+    let email: string | undefined;
+    let emailVerified = false;
+
+    try {
+      const decodedToken = await appleSignin.verifyIdToken(identityToken, {
+        audience: this.mobileClientId || this.clientId,
+        ignoreExpiration: false,
+      });
+
+      appleUserId = decodedToken.sub;
+      email = decodedToken.email;
+      emailVerified = decodedToken.email_verified === 'true' || false;
+    } catch {
+      const providerName = this.i18n.t('auth.providers.apple');
+      const message = this.i18n.t('auth.errors.invalidTokenResponse', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'INVALID_TOKEN_RESPONSE',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    if (userId) {
+      const appleUser = await this.userService.findByLoginId(appleUserId);
+      if (appleUser) {
+        if (appleUser.id !== userId) {
+          const providerName = this.i18n.t('auth.providers.apple');
+          const message = this.i18n.t('auth.errors.invalidProviderData', {
+            args: { provider: providerName },
+          });
+          throw new AppException(
+            message,
+            'ACCOUNT_ALREADY_BOUND',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        return {
+          id: appleUser.id,
+          username: appleUser.username,
+          email: appleUser.email,
+          access_token: this.jwtService.sign({
+            sub: appleUser.id,
+            username: appleUser.username,
+          }),
+        };
+      }
+
+      const metadata: any = {
+        sub: appleUserId,
+        email,
+        email_verified: emailVerified,
+        authorizationCode,
+      };
+      if (user?.name) {
+        metadata.name = user.name;
+      }
+
+      const existingUser = await this.userService.bindingExistUser({
+        userId,
+        loginType: 'apple',
+        loginId: appleUserId,
+        metadata,
+      });
+
+      return {
+        id: existingUser.id,
+        username: existingUser.username,
+        email: existingUser.email,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    const existingUser = await this.userService.findByLoginId(appleUserId);
+    if (existingUser) {
+      return {
+        id: existingUser.id,
+        username: existingUser.username,
+        email: existingUser.email,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    if (email) {
+      const linkedAccount = await this.userService.findByEmail(email);
+      if (linkedAccount) {
+        const metadata: any = {
+          sub: appleUserId,
+          email,
+          email_verified: emailVerified,
+          authorizationCode,
+        };
+        if (user?.name) {
+          metadata.name = user.name;
+        }
+
+        const existingUser = await this.userService.bindingExistUser({
+          userId: linkedAccount.id,
+          loginType: 'apple',
+          loginId: appleUserId,
+          metadata,
+        });
+
+        return {
+          id: existingUser.id,
+          username: existingUser.username,
+          email: existingUser.email,
+          access_token: this.jwtService.sign({
+            sub: existingUser.id,
+            username: existingUser.username,
+          }),
+        };
+      }
+    }
+
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
+      let nickname: string;
+      // Priority: client username > full name > email prefix > apple user id prefix
+      if (clientUsername) {
+        nickname = clientUsername;
+      } else if (user?.name) {
+        nickname = this.socialService.formatName(
+          user.name.firstName,
+          user.name.lastName,
+          lang,
+        );
+      } else if (email) {
+        nickname = email.split('@')[0];
+      } else {
+        nickname = `user_${appleUserId.slice(0, 8)}`;
+      }
+
+      const username = await this.socialService.getValidUsername(
+        nickname,
+        manager,
+      );
+
+      const metadata: any = {
+        sub: appleUserId,
+        email,
+        email_verified: emailVerified,
+        authorizationCode,
+      };
+      if (user?.name) {
+        metadata.name = user.name;
+      }
+
+      const appleUser = await this.userService.createUserBinding(
+        {
+          username,
+          loginType: 'apple',
+          loginId: appleUserId,
+          email: email || undefined,
+          lang,
+          metadata,
+        } as CreateUserBindingDto,
+        manager,
+      );
+
+      await this.namespaceService.createUserNamespace(
+        appleUser.id,
+        appleUser.username,
+        tx,
+      );
+
+      return {
+        id: appleUser.id,
+        username: appleUser.username,
+        email: appleUser.email,
+        access_token: this.jwtService.sign({
+          sub: appleUser.id,
+          username: appleUser.username,
+        }),
+      };
     });
   }
 

@@ -19,6 +19,9 @@ export interface UserSocialState {
   redirectUrl?: string;
 }
 
+const ALL_CJK_PATTERN =
+  /[\u4e00-\u9fa5]|[\u3040-\u309f]|[\u30a0-\u30ff]|[\uac00-\ud7af]/;
+
 @Injectable()
 export class SocialService {
   private readonly namespace = '/social/states';
@@ -153,5 +156,37 @@ export class SocialService {
     }
     const binding = await this.userService.listBinding(userId);
     return binding.length > 1;
+  }
+
+  /**
+   * Format user name based on regional conventions.
+   * Asian (ZH, JA, KO): LastName + FirstName (no space)
+   * Others: FirstName + LastName (with space)
+   */
+  formatName(
+    firstName: string | undefined,
+    lastName: string | undefined,
+    lang?: string,
+  ): string {
+    const fName = firstName?.trim() || '';
+    const lName = lastName?.trim() || '';
+
+    if (!fName && !lName) return '';
+    if (!fName) return lName;
+    if (!lName) return fName;
+
+    // Asian languages: Chinese, Japanese, Korean
+    const asianLangList = ['zh', 'ja', 'ko'];
+    const isAsianLang =
+      lang && asianLangList.some((l) => lang.toLowerCase().startsWith(l));
+
+    // CJK character ranges (Chinese, Japanese, Korean)
+    const allCJK = ALL_CJK_PATTERN.test(fName) && ALL_CJK_PATTERN.test(lName);
+
+    if (isAsianLang || allCJK) {
+      return `${lName}${fName}`;
+    }
+
+    return `${fName} ${lName}`;
   }
 }

@@ -89,6 +89,7 @@ import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oa
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
 import { StorageUsages1768556182000 } from 'omniboxd/migrations/1768556182000-storage-usages';
 import { AddAttachmentSize1768560746946 } from 'omniboxd/migrations/1768560746946-add-attachment-size';
+import { AddInsufficientQuotaStatus1768569500000 } from 'omniboxd/migrations/1768569500000-add-insufficient-quota-status';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -232,6 +233,7 @@ export class AppModule implements NestModule {
               OAuthProvider1768569496828,
               StorageUsages1768556182000,
               AddAttachmentSize1768560746946,
+              AddInsufficientQuotaStatus1768569500000,
               ...extraMigrations,
             ],
             migrationsRun: true,

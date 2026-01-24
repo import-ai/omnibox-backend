@@ -11,7 +11,7 @@ import {
 } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import {
-  NextTaskDto,
+  NextTaskRequestDto,
   TaskCallbackDto,
 } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
@@ -326,7 +326,7 @@ export class WizardService {
       task.exception = data.exception || null;
 
       // Extract next_tasks from output before saving (task chain dispatch)
-      const nextTasks: NextTaskDto[] = data.output?.next_tasks || [];
+      const nextTasks: NextTaskRequestDto[] = data.output?.next_tasks || [];
       if (data.output) {
         // Save output without next_tasks
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -357,12 +357,11 @@ export class WizardService {
         return { taskId: task.id, function: task.function, status: 'canceled' };
       }
 
-      // Dispatch next tasks if the current task succeeded (task chain dispatch)
+      const postprocessResult = await this.postprocess(task);
+
       if (task.status === TaskStatus.FINISHED && nextTasks.length > 0) {
         await this.dispatchNextTasks(task, nextTasks);
       }
-
-      const postprocessResult = await this.postprocess(task);
 
       return { taskId: task.id, function: task.function, ...postprocessResult };
     } finally {
@@ -370,14 +369,9 @@ export class WizardService {
     }
   }
 
-  /**
-   * Dispatch next tasks in the task chain.
-   * Each next task inherits namespace, user from parent task.
-   * The payload.parent_task_id is set to the parent task's id.
-   */
   private async dispatchNextTasks(
     parentTask: Task,
-    nextTasks: NextTaskDto[],
+    nextTasks: NextTaskRequestDto[],
   ): Promise<void> {
     for (const nextTask of nextTasks) {
       try {
@@ -392,14 +386,19 @@ export class WizardService {
             parent_task_id: parentTask.id,
           },
         });
-        this.logger.debug(
-          `Dispatched next task ${createdTask.id} (${nextTask.function}) from parent task ${parentTask.id}`,
-        );
+        this.logger.debug({
+          parentTaskId: parentTask.id,
+          parentTaskFunction: parentTask.function,
+          nextTaskId: createdTask.id,
+          nextTaskFunction: nextTask.function,
+        });
       } catch (error) {
-        this.logger.error(
-          `Failed to dispatch next task (${nextTask.function}) from parent task ${parentTask.id}:`,
+        this.logger.error({
+          parentTaskId: parentTask.id,
+          parentTaskFunction: parentTask.function,
+          nextTaskFunction: nextTask.function,
           error,
-        );
+        });
       }
     }
   }
@@ -411,11 +410,6 @@ export class WizardService {
       const processor = this.processors[task.function];
       result = await processor.process(task);
     }
-
-    // Note: Task chaining (extract_tags, generate_title) is now handled by wizard functions
-    // via output.next_tasks. The wizard functions create next tasks which are dispatched
-    // by dispatchNextTasks() in taskDoneCallback() when the task succeeds.
-
     return result;
   }
 

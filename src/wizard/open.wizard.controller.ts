@@ -10,8 +10,8 @@ import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import {
-  CollectUrlRequestDto,
   CollectUrlResponseDto,
+  OpenCollectUrlRequestDto,
 } from 'omniboxd/wizard/dto/collect-url-request.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
@@ -42,7 +42,7 @@ export class OpenWizardController {
     private readonly openWizardService: OpenWizardService,
   ) {}
 
-  @Post('collect')
+  @Post('collect/gzip')
   @APIKeyAuth({
     permissions: [
       {
@@ -135,7 +135,7 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
     );
   }
 
-  @Post('collect_url')
+  @Post('collect/url')
   @APIKeyAuth({
     permissions: [
       {
@@ -144,31 +144,10 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
       },
     ],
   })
-  @ApiOperation({
-    summary: 'Collect content from a URL',
-    description: `Creates a resource for the given URL and triggers a task chain to fetch and process the content.
-
-## Example
-
-\`\`\`bash
-curl -X POST 'https://api.omnibox.pro/open/api/v1/wizard/collect_url' \\
-  -H 'Authorization: Bearer your-api-key' \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-    "url": "https://example.com/article",
-    "parentId": "parent-resource-id-or-omit-for-root"
-  }'
-\`\`\`
-
-The task chain will:
-1. Fetch the HTML content from the URL using the crawl service
-2. Extract the content and create a collect task
-3. Process the content (extract tags, generate title if needed)
-`,
-  })
+  @ApiOperation({ summary: 'Collect content from a URL' })
   @ApiBody({
     description: 'URL to collect content from',
-    type: CollectUrlRequestDto,
+    type: OpenCollectUrlRequestDto,
   })
   @ApiResponse({
     status: 201,
@@ -180,7 +159,7 @@ The task chain will:
   async collectUrl(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
-    @Body() data: CollectUrlRequestDto,
+    @Body() data: OpenCollectUrlRequestDto,
   ): Promise<CollectUrlResponseDto> {
     return await this.wizardService.collectUrl(
       apiKey.namespaceId,

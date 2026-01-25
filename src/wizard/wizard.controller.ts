@@ -130,7 +130,7 @@ export class WizardController {
     );
   }
 
-  @Post('collect_url')
+  @Post('collect/url')
   async collectUrl(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,

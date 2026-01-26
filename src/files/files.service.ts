@@ -93,10 +93,10 @@ export class FilesService {
 
   async generateUploadForm(
     fileId: string,
-    fileSize: number | undefined,
+    fileSize: number,
     filename: string,
   ): Promise<PresignedPost> {
-    if (fileSize && fileSize > this.s3MaxFileSize) {
+    if (fileSize > this.s3MaxFileSize) {
       const message = this.i18n.t('resource.errors.fileTooLarge', {
         args: {
           userSize: formatFileSize(fileSize),
@@ -110,7 +110,7 @@ export class FilesService {
       `${s3Prefix}/${fileId}`,
       true,
       disposition,
-      this.s3MaxFileSize,
+      fileSize,
     );
   }
 

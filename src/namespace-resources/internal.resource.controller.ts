@@ -3,6 +3,7 @@ import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespac
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { FilesService } from 'omniboxd/files/files.service';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
@@ -10,6 +11,7 @@ export class InternalResourcesController {
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
+    private readonly filesService: FilesService,
   ) {}
 
   @Public()
@@ -90,6 +92,19 @@ export class InternalResourcesController {
         namespaceId,
         batchSize,
       );
+    return result;
+  }
+
+  @Public()
+  @Post('files/recalculate-sizes')
+  async recalculateFileSizes(
+    @Query('namespaceId') namespaceId?: string,
+    @Query('batchSize') batchSize: number = 100,
+  ) {
+    const result = await this.filesService.recalculateFileSizes(
+      namespaceId,
+      batchSize,
+    );
     return result;
   }
 }

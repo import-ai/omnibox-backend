@@ -881,6 +881,7 @@ export class NamespaceResourcesService {
       userId,
       namespaceId,
       createReq.name,
+      createReq.size,
       createReq.mimetype,
     );
   }
@@ -1004,6 +1005,7 @@ export class NamespaceResourcesService {
     const resourceFile = await this.createResourceFile(userId, namespaceId, {
       name: originalFilename,
       mimetype: file.mimetype,
+      size: file.buffer.length,
     });
     await this.filesService.uploadFile(resourceFile, file.buffer);
     return await this.create(

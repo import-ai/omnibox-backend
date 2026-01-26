@@ -5,11 +5,7 @@ import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
-import {
-  CollectRequestDto,
-  CompressedCollectRequestDto,
-} from 'omniboxd/wizard/dto/collect-request.dto';
-import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
+import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import {
   NextTaskRequestDto,
   TaskCallbackDto,
@@ -29,7 +25,6 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
-import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { createGunzip } from 'zlib';
 import { buffer } from 'node:stream/consumers';
@@ -192,42 +187,6 @@ export class WizardService {
       );
       return { task_id: task.id, resource_id: resource.id };
     }
-  }
-
-  async collect(
-    namespaceId: string,
-    userId: string,
-    data: CollectRequestDto,
-  ): Promise<CollectResponseDto> {
-    const { html, url, title, parentId } = data;
-    if (!namespaceId || !parentId || !url || !html) {
-      const message = this.i18n.t('wizard.errors.missingRequiredFields');
-      throw new AppException(
-        message,
-        'MISSING_REQUIRED_FIELDS',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const resourceDto: CreateResourceDto = {
-      name: title || url,
-      resourceType: ResourceType.LINK,
-      parentId,
-      attrs: { url },
-    };
-    const resource = await this.namespaceResourcesService.create(
-      userId,
-      namespaceId,
-      resourceDto,
-    );
-
-    const task = await this.wizardTaskService.emitCollectTask(
-      userId,
-      namespaceId,
-      resource.id,
-      { html, url, title },
-    );
-    return { task_id: task.id, resource_id: resource.id };
   }
 
   /**
@@ -502,113 +461,6 @@ export class WizardService {
       newTask.input = { ...newTask.input, html: htmlContent };
     }
     return InternalTaskDto.fromEntity(newTask);
-  }
-
-  async fetchTask(query: FetchTaskRequest): Promise<InternalTaskDto | null> {
-    const andConditions: string[] = [];
-    if (query.namespace_id) {
-      andConditions.push(`tasks.namespace_id = '${query.namespace_id}'`);
-    }
-    if (query.functions) {
-      const condition = query.functions
-        .split(',')
-        .map((x) => `'${x}'`)
-        .join(', ');
-      andConditions.push(`tasks.function IN (${condition})`);
-    }
-
-    // Filter by file extensions for file_reader tasks
-    let fileExtFilter: string;
-    if (query.file_extensions) {
-      const supportedExtensions = query.file_extensions
-        .split(',')
-        .map((ext) => ext.replace(/'/g, "''"));
-      const extConditions = supportedExtensions
-        .map((ext) => `LOWER(tasks.input->>'filename') LIKE '%${ext}'`)
-        .join(' OR ');
-      fileExtFilter = `
-        AND (
-          tasks.function != 'file_reader'
-          OR (${extConditions})
-        )
-      `;
-    } else {
-      // If file_extensions not provided, exclude all file_reader tasks
-      fileExtFilter = `AND tasks.function != 'file_reader'`;
-    }
-
-    const andCondition: string = andConditions.map((x) => `AND ${x}`).join(' ');
-    const rawQuery = `
-      WITH
-        cutoff_time AS (
-          SELECT NOW() - INTERVAL '10 minutes' AS time
-        ),
-        running_tasks_sub_query AS (
-          SELECT
-            namespace_id,
-            COUNT(id) AS running_count
-          FROM tasks
-          CROSS JOIN cutoff_time
-          WHERE started_at IS NOT NULL
-          AND started_at > cutoff_time.time
-          AND ended_at IS NULL
-          AND canceled_at IS NULL
-          AND deleted_at IS NULL
-          GROUP BY namespace_id
-        ),
-        id_subquery AS (
-          SELECT tasks.id
-          FROM tasks
-          LEFT OUTER JOIN running_tasks_sub_query
-          ON tasks.namespace_id = running_tasks_sub_query.namespace_id
-          LEFT OUTER JOIN namespaces
-          ON tasks.namespace_id = namespaces.id
-          WHERE tasks.started_at IS NULL
-          AND tasks.ended_at IS NULL
-          AND tasks.canceled_at IS NULL
-          AND tasks.deleted_at IS NULL
-          AND COALESCE(running_tasks_sub_query.running_count, 0) < COALESCE(namespaces.max_running_tasks, 0)
-          ${andCondition}
-          ${fileExtFilter}
-          ORDER BY
-            priority DESC,
-            tasks.created_at
-          LIMIT 1
-      )
-      SELECT *
-      FROM tasks
-      WHERE id IN (SELECT id FROM id_subquery);
-    `;
-
-    const queryResult =
-      await this.wizardTaskService.taskRepository.query(rawQuery);
-
-    if (queryResult.length > 0) {
-      const record = queryResult[0];
-      const task = this.wizardTaskService.taskRepository.create({
-        ...(record as Task),
-        createdAt: record.created_at,
-        updatedAt: record.updated_at,
-        startedAt: new Date(),
-        userId: record.user_id,
-        namespaceId: record.namespace_id,
-      });
-      const newTask = await this.wizardTaskService.taskRepository.save(task);
-      // Fetch HTML content from S3 for collect tasks
-      if (
-        ['collect', 'generate_video_note'].includes(newTask.function) &&
-        newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
-        newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
-      ) {
-        const htmlContent = await this.getHtmlFromMinioGzipFile(
-          newTask.input.html,
-        );
-        newTask.input = { ...newTask.input, html: htmlContent };
-      }
-      return InternalTaskDto.fromEntity(newTask);
-    }
-
-    return null;
   }
 
   async getHtmlFromMinioGzipFile(path: string) {

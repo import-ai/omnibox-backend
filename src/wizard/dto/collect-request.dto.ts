@@ -26,11 +26,3 @@ export class CompressedCollectRequestDto {
   })
   parentId: string;
 }
-
-export class CollectRequestDto extends CompressedCollectRequestDto {
-  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
-  @IsNotEmpty({
-    message: i18nValidationMessage('validation.errors.isNotEmpty'),
-  })
-  html: string;
-}

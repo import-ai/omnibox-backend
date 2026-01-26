@@ -33,7 +33,7 @@ if (isTracingEnabled()) {
   const otlpTraceExporter = new OTLPTraceExporter({ url });
   const spanProcessor = new BatchSpanProcessor(otlpTraceExporter);
 
-  const excludedUrls = ['/api/v1/health', '/internal/api/v1/wizard/task'];
+  const excludedUrls = ['/api/v1/health'];
 
   sdk = new NodeSDK({
     resource: resourceFromAttributes({

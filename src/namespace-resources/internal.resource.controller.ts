@@ -1,11 +1,13 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   @Public()
@@ -60,5 +62,18 @@ export class InternalResourcesController {
       resourceId,
       depth,
     );
+  }
+
+  @Public()
+  @Post('resources/recalculate-content-sizes')
+  async recalculateContentSizes(
+    @Query('namespaceId') namespaceId?: string,
+    @Query('batchSize') batchSize: number = 100,
+  ) {
+    const result = await this.resourcesService.recalculateContentSizes(
+      namespaceId,
+      batchSize,
+    );
+    return result;
   }
 }

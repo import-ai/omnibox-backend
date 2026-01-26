@@ -63,6 +63,7 @@ export class FilesService {
     userId: string,
     namespaceId: string,
     filename: string,
+    size: number,
     mimetype?: string,
   ): Promise<File> {
     const extension = extname(filename).toLowerCase();
@@ -81,6 +82,7 @@ export class FilesService {
         userId,
         name: filename,
         mimetype,
+        size,
       }),
     );
   }
@@ -150,5 +152,43 @@ export class FilesService {
 
   async headFile(fileId: string): Promise<ObjectMeta | null> {
     return await this.s3Service.headObject(`${s3Prefix}/${fileId}`);
+  }
+
+  async recalculateFileSizes(
+    namespaceId?: string,
+    batchSize: number = 100,
+  ): Promise<{
+    processed: number;
+  }> {
+    let processed = 0;
+
+    while (true) {
+      const files = await this.fileRepo.find({
+        where: {
+          size: 0,
+          namespaceId,
+        },
+        take: batchSize,
+      });
+      if (files.length === 0) {
+        break;
+      }
+      for (const file of files) {
+        const meta = await this.headFile(file.id);
+        const size = meta?.contentLength ?? 0;
+        if (size === 0) {
+          return { processed };
+        }
+        const result = await this.fileRepo.update(
+          { id: file.id, size: 0 },
+          { size },
+        );
+        if (result.affected === 1) {
+          processed++;
+        }
+      }
+    }
+
+    return { processed };
   }
 }

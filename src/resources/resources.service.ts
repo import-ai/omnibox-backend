@@ -541,10 +541,12 @@ export class ResourcesService {
       );
     }
 
-    let fileSize = 0;
     if (props.fileId) {
-      const fileMeta = await this.filesService.headFile(props.fileId);
-      if (!fileMeta) {
+      const file = await this.filesService.getFile(
+        props.namespaceId,
+        props.fileId,
+      );
+      if (!file) {
         const message = this.i18n.t('resource.errors.fileNotFound');
         throw new AppException(
           message,
@@ -552,7 +554,15 @@ export class ResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      fileSize = fileMeta.contentLength || 0;
+      if (props.userId) {
+        await this.usagesService.updateStorageUsage(
+          props.namespaceId,
+          props.userId,
+          StorageType.UPLOAD,
+          file.size,
+          tx,
+        );
+      }
     }
 
     const contentSize = props.content
@@ -573,16 +583,6 @@ export class ResourcesService {
         resource.userId,
         StorageType.CONTENT,
         resource.contentSize,
-        tx,
-      );
-    }
-
-    if (resource.fileId && resource.userId && fileSize > 0) {
-      await this.usagesService.updateStorageUsage(
-        resource.namespaceId,
-        resource.userId,
-        StorageType.UPLOAD,
-        fileSize,
         tx,
       );
     }

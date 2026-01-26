@@ -899,4 +899,54 @@ export class ResourcesService {
 
     return !parent || !!parent.deletedAt;
   }
+
+  async recalculateContentSizes(
+    namespaceId?: string,
+    batchSize: number = 100,
+  ): Promise<{
+    processed: number;
+  }> {
+    let processed = 0;
+    while (true) {
+      const resources = await this.resourceRepository.find({
+        where: {
+          contentSize: 0,
+          content: Not(''),
+          userId: Not(IsNull()),
+          namespaceId,
+        },
+        take: batchSize,
+      });
+      if (resources.length === 0) {
+        break;
+      }
+      for (const resource of resources) {
+        const contentSize = Buffer.byteLength(resource.content, 'utf8');
+        if (contentSize === 0) {
+          return { processed };
+        }
+        await transaction(this.dataSource.manager, async (tx) => {
+          const result = await tx.entityManager.update(
+            Resource,
+            { id: resource.id, contentSize: 0 },
+            { contentSize },
+          );
+          if (result.affected !== 1) {
+            return;
+          }
+          await this.usagesService.updateStorageUsage(
+            resource.namespaceId,
+            resource.userId!,
+            StorageType.CONTENT,
+            contentSize,
+            tx,
+          );
+        });
+        processed++;
+      }
+    }
+    return {
+      processed,
+    };
+  }
 }

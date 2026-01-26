@@ -2,20 +2,25 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DataSource } from 'typeorm';
+import { Repository, In, DataSource, IsNull, Not } from 'typeorm';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { UsagesService } from 'omniboxd/usages/usages.service';
 import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
 import { transaction, Transaction } from 'omniboxd/utils/transaction-utils';
+import { S3Service } from 'omniboxd/s3/s3.service';
 
 @Injectable()
 export class ResourceAttachmentsService {
   constructor(
     @InjectRepository(ResourceAttachment)
     private readonly resourceAttachmentRepository: Repository<ResourceAttachment>,
+    @InjectRepository(Resource)
+    private readonly resourceRepository: Repository<Resource>,
     private readonly i18n: I18nService,
     private readonly usagesService: UsagesService,
     private readonly dataSource: DataSource,
+    private readonly s3Service: S3Service,
   ) {}
 
   async getResourceAttachment(
@@ -196,5 +201,69 @@ export class ResourceAttachmentsService {
       }
     }
     return firstAttachments;
+  }
+
+  async recalculateAttachmentSizes(
+    namespaceId?: string,
+    batchSize: number = 100,
+  ): Promise<{
+    processed: number;
+  }> {
+    let processed = 0;
+
+    while (true) {
+      const attachments = await this.resourceAttachmentRepository.find({
+        where: {
+          attachmentSize: 0,
+          namespaceId,
+        },
+        take: batchSize,
+      });
+      if (attachments.length === 0) {
+        break;
+      }
+      for (const attachment of attachments) {
+        const meta = await this.s3Service.headObject(
+          `attachments/${attachment.attachmentId}`,
+        );
+        const attachmentSize = meta?.contentLength ?? 0;
+        if (attachmentSize === 0) {
+          return { processed };
+        }
+
+        const resource = await this.resourceRepository.findOne({
+          where: {
+            id: attachment.resourceId,
+            namespaceId: attachment.namespaceId,
+            userId: Not(IsNull()),
+          },
+        });
+        if (!resource) {
+          continue;
+        }
+
+        await transaction(this.dataSource.manager, async (tx) => {
+          const result = await tx.entityManager.update(
+            ResourceAttachment,
+            { id: attachment.id, attachmentSize: 0 },
+            { attachmentSize },
+          );
+          if (result.affected !== 1) {
+            return;
+          }
+          await this.usagesService.updateStorageUsage(
+            attachment.namespaceId,
+            resource.userId!,
+            StorageType.ATTACHMENT,
+            attachmentSize,
+            tx,
+          );
+        });
+
+        processed++;
+      }
+    }
+
+    return { processed };
   }
 }

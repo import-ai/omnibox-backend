@@ -1,5 +1,4 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { File } from './entities/file.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,6 +9,7 @@ import { formatFileSize } from '../utils/format-file-size';
 import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
 import { extname } from 'path';
 import * as mime from 'mime-types';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 
 const s3Prefix = 'uploaded-files';
 
@@ -43,21 +43,13 @@ const ALLOWED_FILE_EXTENSIONS = new Set([
 
 @Injectable()
 export class FilesService {
-  private readonly s3MaxFileSize: number;
-
   constructor(
-    configService: ConfigService,
-
     @InjectRepository(File)
     private readonly fileRepo: Repository<File>,
     private readonly i18n: I18nService,
     private readonly s3Service: S3Service,
-  ) {
-    this.s3MaxFileSize = configService.get<number>(
-      'OBB_S3_MAX_FILE_SIZE',
-      20 * 1024 * 1024,
-    );
-  }
+    private readonly namespacesQuotaService: NamespacesQuotaService,
+  ) {}
 
   async createFile(
     userId: string,
@@ -66,6 +58,17 @@ export class FilesService {
     size: number,
     mimetype?: string,
   ): Promise<File> {
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+    if (usage.fileUploadSizeLimit > 0 && size > usage.fileUploadSizeLimit) {
+      const message = this.i18n.t('resource.errors.fileTooLarge', {
+        args: {
+          userSize: formatFileSize(size),
+          limitSize: formatFileSize(usage.fileUploadSizeLimit),
+        },
+      });
+      throw new AppException(message, 'FILE_TOO_LARGE', HttpStatus.BAD_REQUEST);
+    }
     const extension = extname(filename).toLowerCase();
     if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
       const message = this.i18n.t('resource.errors.fileTypeNotSupported');
@@ -96,15 +99,6 @@ export class FilesService {
     fileSize: number,
     filename: string,
   ): Promise<PresignedPost> {
-    if (fileSize > this.s3MaxFileSize) {
-      const message = this.i18n.t('resource.errors.fileTooLarge', {
-        args: {
-          userSize: formatFileSize(fileSize),
-          limitSize: formatFileSize(this.s3MaxFileSize),
-        },
-      });
-      throw new AppException(message, 'FILE_TOO_LARGE', HttpStatus.BAD_REQUEST);
-    }
     const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`;
     return await this.s3Service.generateUploadForm(
       `${s3Prefix}/${fileId}`,
@@ -115,15 +109,6 @@ export class FilesService {
   }
 
   async uploadFile(file: File, buffer: Buffer): Promise<void> {
-    if (buffer.length > this.s3MaxFileSize) {
-      const message = this.i18n.t('resource.errors.fileTooLarge', {
-        args: {
-          userSize: formatFileSize(buffer.length),
-          limitSize: formatFileSize(this.s3MaxFileSize),
-        },
-      });
-      throw new AppException(message, 'FILE_TOO_LARGE', HttpStatus.BAD_REQUEST);
-    }
     await this.s3Service.putObject(
       `${s3Prefix}/${file.id}`,
       buffer,

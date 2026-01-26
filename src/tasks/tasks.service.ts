@@ -9,16 +9,11 @@ import { KafkaService } from 'omniboxd/kafka/kafka.service';
 import { ConfigService } from '@nestjs/config';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { context, propagation } from '@opentelemetry/api';
-
-interface TaskSettings {
-  priority: number;
-  parallelism: number;
-}
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 
 @Injectable()
 export class TasksService {
   private readonly kafkaTasksTopic: string;
-  private readonly proUrl: string | undefined;
 
   constructor(
     @InjectRepository(Task)
@@ -26,23 +21,12 @@ export class TasksService {
     private readonly i18n: I18nService,
     private readonly kafkaService: KafkaService,
     private readonly configService: ConfigService,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
   ) {
     this.kafkaTasksTopic = this.configService.get<string>(
       'OBB_TASKS_TOPIC',
       'omnibox-tasks',
     );
-    this.proUrl = this.configService.get<string>('OBB_PRO_URL');
-  }
-
-  private async getTaskSettings(namespaceId: string): Promise<TaskSettings> {
-    if (!this.proUrl) {
-      return { priority: 1, parallelism: 1 };
-    }
-
-    const response = await fetch(
-      `${this.proUrl}/internal/api/v1/namespaces/${namespaceId}/quotas/task-settings`,
-    );
-    return await response.json();
   }
 
   injectTraceHeaders(task: Partial<Task>) {
@@ -53,15 +37,16 @@ export class TasksService {
   }
 
   async checkTaskMessage(namespaceId: string): Promise<void> {
-    const { priority, parallelism } = await this.getTaskSettings(namespaceId);
-    const topicName = `${this.kafkaTasksTopic}-${priority}`;
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+    const topicName = `${this.kafkaTasksTopic}-${usage.taskPriority}`;
     while (true) {
       const task = await this.getNextTask(namespaceId);
       if (!task) {
         break;
       }
       const count = await this.countEnqueuedTasks(namespaceId);
-      if (count >= parallelism) {
+      if (count >= usage.taskParallelism) {
         break;
       }
       await this.kafkaService.produce(topicName, [

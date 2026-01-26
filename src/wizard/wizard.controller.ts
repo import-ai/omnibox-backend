@@ -8,6 +8,7 @@ import {
   UploadedFile,
   UseInterceptors,
   ValidationPipe,
+  HttpStatus,
 } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import {
@@ -15,6 +16,10 @@ import {
   CompressedCollectRequestDto,
 } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
+import {
+  CollectUrlRequestDto,
+  CollectUrlResponseDto,
+} from 'omniboxd/wizard/dto/collect-url-request.dto';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { RequestId } from 'omniboxd/decorators/request-id.decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
@@ -26,6 +31,8 @@ import {
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
 
 @Controller('api/v1/wizard')
 export class CollectController {
@@ -59,7 +66,10 @@ export class CollectController {
 
 @Controller('api/v1/namespaces/:namespaceId/wizard')
 export class WizardController {
-  constructor(private readonly wizardService: WizardService) {}
+  constructor(
+    private readonly wizardService: WizardService,
+    private readonly i18n: I18nService,
+  ) {}
 
   @Post('collect')
   async collect(
@@ -117,6 +127,28 @@ export class WizardController {
       body,
       requestId,
       'write',
+    );
+  }
+
+  @Post('collect/url')
+  async collectUrl(
+    @Param('namespaceId') namespaceId: string,
+    @UserId() userId: string,
+    @Body() data: CollectUrlRequestDto,
+  ): Promise<CollectUrlResponseDto> {
+    if (!namespaceId || !data.parentId || !data.url) {
+      const message = this.i18n.t('wizard.errors.missingRequiredFields');
+      throw new AppException(
+        message,
+        'MISSING_REQUIRED_FIELDS',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return await this.wizardService.collectUrl(
+      namespaceId,
+      userId,
+      data.url,
+      data.parentId,
     );
   }
 

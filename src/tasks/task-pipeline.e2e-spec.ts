@@ -152,6 +152,13 @@ class MockWizardWorker {
         markdown: `# ${input.title || 'Collected Content'}\n\nURL: ${input.url}\n\nThis is mock markdown content extracted from the HTML.`,
         summary: 'Mock summary of the collected content',
         word_count: 42,
+        next_tasks: [
+          {
+            function: 'extract_tags',
+            input: { markdown: `# ${input.title || 'Collected Content'}` },
+            payload: { resource_id: task.resource_id },
+          },
+        ],
       },
     };
   }

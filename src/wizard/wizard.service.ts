@@ -10,7 +10,10 @@ import {
   CompressedCollectRequestDto,
 } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
-import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
+import {
+  NextTaskRequestDto,
+  TaskCallbackDto,
+} from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
@@ -227,6 +230,52 @@ export class WizardService {
     return { task_id: task.id, resource_id: resource.id };
   }
 
+  /**
+   * Collect content from a URL using the crawl service.
+   * Creates a collect_url task that will:
+   * 1. Fetch title and HTML from the crawl service
+   * 2. Create a collect task via the task chain dispatch system
+   */
+  async collectUrl(
+    namespaceId: string,
+    userId: string,
+    url: string,
+    parentId: string,
+  ): Promise<{ resource_id: string }> {
+    if (!namespaceId || !parentId || !url) {
+      const message = this.i18n.t('wizard.errors.missingRequiredFields');
+      throw new AppException(
+        message,
+        'MISSING_REQUIRED_FIELDS',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Create a placeholder resource for the URL
+    const resourceDto: CreateResourceDto = {
+      name: url,
+      resourceType: ResourceType.LINK,
+      parentId,
+      attrs: { url },
+    };
+    const resource = await this.namespaceResourcesService.create(
+      userId,
+      namespaceId,
+      resourceDto,
+    );
+
+    // Create a collect_url task that will fetch HTML and create a collect task
+    await this.tasksService.emitTask({
+      function: 'collect_url',
+      input: { url },
+      namespaceId,
+      payload: { resource_id: resource.id },
+      userId,
+    });
+
+    return { resource_id: resource.id };
+  }
+
   async createTaskUploadUrl(taskId: string): Promise<string> {
     return await this.s3Service.generateUploadUrl(
       `wizard-tasks/${taskId}`,
@@ -275,7 +324,18 @@ export class WizardService {
 
       task.endedAt = new Date();
       task.exception = data.exception || null;
-      task.output = data.output || null;
+
+      // Extract next_tasks from output before saving (task chain dispatch)
+      const nextTasks: NextTaskRequestDto[] = data.output?.next_tasks || [];
+      if (data.output) {
+        // Save output without next_tasks
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { next_tasks, ...outputWithoutNextTasks } = data.output;
+        task.output = outputWithoutNextTasks;
+      } else {
+        task.output = null;
+      }
+
       await this.preprocessTask(task);
 
       if (data.status) {
@@ -299,9 +359,47 @@ export class WizardService {
 
       const postprocessResult = await this.postprocess(task);
 
+      if (task.status === TaskStatus.FINISHED && nextTasks.length > 0) {
+        await this.dispatchNextTasks(task, nextTasks);
+      }
+
       return { taskId: task.id, function: task.function, ...postprocessResult };
     } finally {
       await this.tasksService.checkTaskMessage(task.namespaceId);
+    }
+  }
+
+  private async dispatchNextTasks(
+    parentTask: Task,
+    nextTasks: NextTaskRequestDto[],
+  ): Promise<void> {
+    for (const nextTask of nextTasks) {
+      try {
+        const createdTask = await this.tasksService.emitTask({
+          namespaceId: parentTask.namespaceId,
+          userId: parentTask.userId,
+          priority: nextTask.priority ?? parentTask.priority,
+          function: nextTask.function,
+          input: nextTask.input,
+          payload: {
+            ...nextTask.payload,
+            parent_task_id: parentTask.id,
+          },
+        });
+        this.logger.debug({
+          parentTaskId: parentTask.id,
+          parentTaskFunction: parentTask.function,
+          nextTaskId: createdTask.id,
+          nextTaskFunction: nextTask.function,
+        });
+      } catch (error) {
+        this.logger.error({
+          parentTaskId: parentTask.id,
+          parentTaskFunction: parentTask.function,
+          nextTaskFunction: nextTask.function,
+          error,
+        });
+      }
     }
   }
 
@@ -312,71 +410,7 @@ export class WizardService {
       const processor = this.processors[task.function];
       result = await processor.process(task);
     }
-
-    // Trigger extract_tags after collect or file_reader tasks finish
-    if (
-      ['collect', 'file_reader', 'generate_video_note'].includes(
-        task.function,
-      ) &&
-      !isEmpty(task.output?.markdown) &&
-      isEmpty(result.tagIds)
-    ) {
-      await this.triggerExtractTags(task);
-    }
-
-    // Trigger generate_title after file_reader task finishes (only for open_api uploads)
-    if (
-      task.function === 'file_reader' &&
-      task.output?.markdown &&
-      task.payload?.source === 'open_api'
-    ) {
-      await this.triggerGenerateTitle(task);
-    }
-
     return result;
-  }
-
-  private async triggerExtractTags(parentTask: Task): Promise<void> {
-    try {
-      const extractTagsTask =
-        await this.wizardTaskService.emitExtractTagsTaskFromTask(parentTask);
-
-      if (extractTagsTask) {
-        this.logger.debug(
-          `Triggered extract_tags task ${extractTagsTask.id} for parent task ${parentTask.id}`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `Failed to trigger extract_tags task for parent task ${parentTask.id}:`,
-        error,
-      );
-    }
-  }
-
-  private async triggerGenerateTitle(parentTask: Task): Promise<void> {
-    try {
-      const generateTitleTask =
-        await this.wizardTaskService.emitGenerateTitleTask(
-          parentTask.userId,
-          parentTask.namespaceId,
-          {
-            resource_id:
-              parentTask.payload?.resource_id || parentTask.payload?.resourceId,
-            parent_task_id: parentTask.id,
-          },
-          { text: parentTask.output?.markdown },
-        );
-
-      this.logger.debug(
-        `Triggered generate_title task ${generateTitleTask.id} for parent task ${parentTask.id}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to trigger generate_title task for parent task ${parentTask.id}:`,
-        error,
-      );
-    }
   }
 
   /**

@@ -5,11 +5,7 @@ import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
-import {
-  CollectRequestDto,
-  CompressedCollectRequestDto,
-} from 'omniboxd/wizard/dto/collect-request.dto';
-import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
+import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import {
   NextTaskRequestDto,
   TaskCallbackDto,
@@ -191,42 +187,6 @@ export class WizardService {
       );
       return { task_id: task.id, resource_id: resource.id };
     }
-  }
-
-  async collect(
-    namespaceId: string,
-    userId: string,
-    data: CollectRequestDto,
-  ): Promise<CollectResponseDto> {
-    const { html, url, title, parentId } = data;
-    if (!namespaceId || !parentId || !url || !html) {
-      const message = this.i18n.t('wizard.errors.missingRequiredFields');
-      throw new AppException(
-        message,
-        'MISSING_REQUIRED_FIELDS',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const resourceDto: CreateResourceDto = {
-      name: title || url,
-      resourceType: ResourceType.LINK,
-      parentId,
-      attrs: { url },
-    };
-    const resource = await this.namespaceResourcesService.create(
-      userId,
-      namespaceId,
-      resourceDto,
-    );
-
-    const task = await this.wizardTaskService.emitCollectTask(
-      userId,
-      namespaceId,
-      resource.id,
-      { html, url, title },
-    );
-    return { task_id: task.id, resource_id: resource.id };
   }
 
   /**

@@ -45,50 +45,13 @@ describe('InternalWizardController (e2e)', () => {
       .expect(HttpStatus.OK);
 
     expect(task.body.id).toBe(taskId);
-    expect(task.body.input.html).toBe(html);
+    // HTML is stored in S3, so input.html contains the object key path
+    expect(task.body.input.html).toMatch(/^collect\/html\/gzip\/.+\.gz$/);
 
-    const response = await client
-      .post('/internal/api/v1/wizard/callback')
-      .send({
-        id: taskId,
-        output: {
-          title: 'Test Page Title',
-          markdown: '![图片](http://example.com/image.png)',
-          images: [
-            {
-              name: '图片',
-              link: 'http://example.com/image.png',
-              data: 'iVBORw0KGgoAAAANSUhEUgAAAAUA',
-              mimetype: 'image/png',
-            },
-          ] as Image[],
-        },
-      });
-    expect(response.status).toBe(HttpStatus.CREATED);
-  });
-
-  it('collect_callback', async () => {
-    const collectData = {
-      html: '<html><body><h1>Test Page</h1><p>This is test content.</p></body></html>',
-      url: 'https://example.com/test-page',
-      title: 'Test Page Title',
-      namespace_id: client.namespace.id,
-      parentId: client.namespace.root_resource_id,
-    };
-
-    const taskCreateResponse = await client
-      .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-      .send(collectData)
+    // Start the task before sending callback
+    await client
+      .post(`/internal/api/v1/wizard/tasks/${taskId}/start`)
       .expect(HttpStatus.CREATED);
-
-    const taskId = taskCreateResponse.body.task_id;
-
-    const task = await client
-      .get(`/internal/api/v1/wizard/tasks/${taskId}`)
-      .expect(HttpStatus.OK);
-
-    expect(task.body.id).toBe(taskId);
-    expect(task.body.input.html).toBe(collectData.html);
 
     const response = await client
       .post('/internal/api/v1/wizard/callback')

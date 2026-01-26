@@ -33,74 +33,6 @@ describe('WizardController (e2e)', () => {
     await client.close();
   });
 
-  describe('POST /api/v1/namespaces/:namespaceId/wizard/collect', () => {
-    it('should collect web content successfully', async () => {
-      const collectData = {
-        html: '<html><body><h1>Test Page</h1><p>This is test content.</p></body></html>',
-        url: 'https://example.com/test-page',
-        title: 'Test Page Title',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData)
-        .expect(HttpStatus.CREATED);
-
-      expect(response.body).toHaveProperty('task_id');
-      expect(response.body).toHaveProperty('resource_id');
-      expect(typeof response.body.task_id).toBe('string');
-      expect(typeof response.body.resource_id).toBe('string');
-    });
-
-    it('should reject collect request with missing required fields', async () => {
-      const incompleteData = {
-        html: '<html><body>Test</body></html>',
-        url: 'https://example.com',
-        // Missing title, namespace_id, and parentId
-      };
-
-      await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(incompleteData)
-        .expect(HttpStatus.BAD_REQUEST);
-    });
-
-    it('should reject collect request with empty required fields', async () => {
-      const emptyData = {
-        html: '',
-        url: '',
-        title: '',
-        namespace_id: '',
-        parentId: '',
-      };
-
-      await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(emptyData)
-        .expect(HttpStatus.BAD_REQUEST);
-    });
-
-    it('should handle special characters in content', async () => {
-      const collectData = {
-        html: '<html><body><h1>测试页面</h1><p>Тест контент 🚀</p></body></html>',
-        url: 'https://example.com/unicode-test',
-        title: 'Unicode Test Page 测试 🌍',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData)
-        .expect(HttpStatus.CREATED);
-
-      expect(response.body).toHaveProperty('task_id');
-      expect(response.body).toHaveProperty('resource_id');
-    });
-  });
-
   describe('POST /api/v1/namespaces/:namespaceId/wizard/ask', () => {
     it('should handle ask request with valid data', async () => {
       const askData = {
@@ -244,22 +176,6 @@ describe('WizardController (e2e)', () => {
   });
 
   describe('Authentication', () => {
-    it('should reject requests without authentication', async () => {
-      const collectData = {
-        html: '<html><body>Test</body></html>',
-        url: 'https://example.com',
-        title: 'Test',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      await client
-        .request()
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData)
-        .expect(HttpStatus.UNAUTHORIZED);
-    });
-
     it('should reject ask requests without authentication', async () => {
       const askData = {
         query: 'Test query',
@@ -294,21 +210,6 @@ describe('WizardController (e2e)', () => {
   });
 
   describe('Input validation', () => {
-    it('should validate collect request DTO', async () => {
-      const invalidData = {
-        html: 123, // Should be string
-        url: null, // Should be string
-        title: [], // Should be string
-        namespace_id: {}, // Should be string
-        parentId: true, // Should be string
-      };
-
-      await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(invalidData)
-        .expect(HttpStatus.BAD_REQUEST);
-    });
-
     it('should validate agent request DTO for ask endpoint', async () => {
       const invalidData = {
         query: 123, // Should be string
@@ -357,46 +258,6 @@ describe('WizardController (e2e)', () => {
   });
 
   describe('Edge cases and error handling', () => {
-    it('should handle very long content in collect request', async () => {
-      const longContent = 'A'.repeat(100000); // 100KB of content
-      const collectData = {
-        html: `<html><body>${longContent}</body></html>`,
-        url: 'https://example.com/long-content',
-        title: 'Long Content Test',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData);
-
-      // Should either succeed or fail gracefully
-      expect([
-        HttpStatus.CREATED,
-        HttpStatus.BAD_REQUEST,
-        HttpStatus.PAYLOAD_TOO_LARGE,
-      ]).toContain(response.status);
-    });
-
-    it('should handle malformed HTML in collect request', async () => {
-      const collectData = {
-        html: '<html><body><div><p>Unclosed tags<span>test</div>',
-        url: 'https://example.com/malformed',
-        title: 'Malformed HTML Test',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData)
-        .expect(HttpStatus.CREATED);
-
-      expect(response.body).toHaveProperty('task_id');
-      expect(response.body).toHaveProperty('resource_id');
-    });
-
     it('should handle empty query in ask request', async () => {
       const askData = {
         query: '',
@@ -417,44 +278,6 @@ describe('WizardController (e2e)', () => {
         HttpStatus.CREATED,
         HttpStatus.BAD_REQUEST,
       ]).toContain(response.status);
-    });
-
-    it('should handle invalid namespace_id', async () => {
-      const collectData = {
-        html: '<html><body>Test</body></html>',
-        url: 'https://example.com',
-        title: 'Test',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      const response = await client
-        .post(`/api/v1/namespaces/invalid-namespace-id/wizard/collect`)
-        .send(collectData);
-
-      // Invalid namespace_id in URL results in not found error (404) or forbidden error (403)
-      expect([HttpStatus.NOT_FOUND, HttpStatus.FORBIDDEN]).toContain(
-        response.status,
-      );
-    });
-
-    it('should handle invalid parent_id', async () => {
-      const collectData = {
-        html: '<html><body>Test</body></html>',
-        url: 'https://example.com',
-        title: 'Test',
-        namespace_id: client.namespace.id,
-        parentId: 'invalid-parent-id',
-      };
-
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData);
-
-      // Invalid parent_id results in not-found error (404) rather than validation error (400)
-      expect([HttpStatus.BAD_REQUEST, HttpStatus.NOT_FOUND]).toContain(
-        response.status,
-      );
     });
   });
 

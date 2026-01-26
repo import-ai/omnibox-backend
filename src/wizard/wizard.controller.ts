@@ -11,10 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
-import {
-  CollectRequestDto,
-  CompressedCollectRequestDto,
-} from 'omniboxd/wizard/dto/collect-request.dto';
+import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import {
   CollectUrlRequestDto,
@@ -37,15 +34,6 @@ import { I18nService } from 'nestjs-i18n';
 @Controller('api/v1/wizard')
 export class CollectController {
   constructor(private readonly wizardService: WizardService) {}
-
-  @Post('collect')
-  async collect(
-    @UserId() userId: string,
-    @Body() data: CollectRequestDto,
-    @Body('namespace_id', new ValidationPipe()) namespaceId: string,
-  ): Promise<CollectResponseDto> {
-    return await this.wizardService.collect(namespaceId, userId, data);
-  }
 
   @Post('collect/gzip')
   @UseInterceptors(FileInterceptor('html'))
@@ -70,15 +58,6 @@ export class WizardController {
     private readonly wizardService: WizardService,
     private readonly i18n: I18nService,
   ) {}
-
-  @Post('collect')
-  async collect(
-    @Param('namespaceId') namespaceId: string,
-    @UserId() userId: string,
-    @Body() data: CollectRequestDto,
-  ): Promise<CollectResponseDto> {
-    return await this.wizardService.collect(namespaceId, userId, data);
-  }
 
   @Post('collect/gzip')
   @UseInterceptors(FileInterceptor('html'))

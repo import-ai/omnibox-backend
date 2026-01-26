@@ -448,12 +448,12 @@ export class ResourcesService {
 
     const repo = entityManager.getRepository(Resource);
 
-    // Get the old resource to calculate content length difference
     const oldResource = await repo.findOne({
       where: {
         namespaceId,
         id: resourceId,
       },
+      lock: { mode: 'pessimistic_write' },
     });
     if (!oldResource) {
       const message = this.i18n.t('resource.errors.resourceNotFound');
@@ -464,39 +464,35 @@ export class ResourcesService {
       );
     }
 
-    const oldContentLength = oldResource.content
-      ? Buffer.byteLength(oldResource.content, 'utf8')
-      : 0;
+    const contentSize =
+      props.content !== undefined
+        ? Buffer.byteLength(props.content, 'utf8')
+        : undefined;
 
-    await repo.update({ namespaceId, id: resourceId }, props);
+    await repo.update(
+      { namespaceId, id: resourceId },
+      {
+        ...props,
+        contentSize,
+      },
+    );
 
-    const resource = await repo.findOne({
+    const resource = await repo.findOneOrFail({
       where: {
         namespaceId,
         id: resourceId,
       },
     });
-    if (!resource) {
-      const message = this.i18n.t('resource.errors.resourceNotFound');
-      throw new AppException(
-        message,
-        'RESOURCE_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-      );
-    }
 
     // Update storage usage if content changed and userId is present
     if (props.content !== undefined && resource.userId) {
-      const newContentLength = resource.content
-        ? Buffer.byteLength(resource.content, 'utf8')
-        : 0;
-      const contentLengthDiff = newContentLength - oldContentLength;
-      if (contentLengthDiff !== 0) {
+      const contentSizeDiff = resource.contentSize - oldResource.contentSize;
+      if (contentSizeDiff !== 0) {
         await this.usagesService.updateStorageUsage(
           namespaceId,
           resource.userId,
           StorageType.CONTENT,
-          contentLengthDiff,
+          contentSizeDiff,
           tx,
         );
       }
@@ -559,25 +555,28 @@ export class ResourcesService {
       fileSize = fileMeta.contentLength || 0;
     }
 
-    // Create the resource
-    const repo = entityManager.getRepository(Resource);
-    const resource = await repo.save(repo.create(props));
+    const contentSize = props.content
+      ? Buffer.byteLength(props.content, 'utf8')
+      : 0;
 
-    // Update storage usage if content is present and userId is present
-    if (resource.content && resource.userId) {
-      const contentLength = Buffer.byteLength(resource.content, 'utf8');
-      if (contentLength > 0) {
-        await this.usagesService.updateStorageUsage(
-          resource.namespaceId,
-          resource.userId,
-          StorageType.CONTENT,
-          contentLength,
-          tx,
-        );
-      }
+    const repo = entityManager.getRepository(Resource);
+    const resource = await repo.save(
+      repo.create({
+        ...props,
+        contentSize,
+      }),
+    );
+
+    if (resource.contentSize > 0 && resource.userId) {
+      await this.usagesService.updateStorageUsage(
+        resource.namespaceId,
+        resource.userId,
+        StorageType.CONTENT,
+        resource.contentSize,
+        tx,
+      );
     }
 
-    // Update storage usage if file is uploaded and userId is present
     if (resource.fileId && resource.userId && fileSize > 0) {
       await this.usagesService.updateStorageUsage(
         resource.namespaceId,
@@ -678,36 +677,37 @@ export class ResourcesService {
       );
     }
 
-    // Get the resource before deletion to calculate content length and file size
     const resource = await tx.entityManager.findOne(Resource, {
       where: { namespaceId, id: resourceId },
+      lock: { mode: 'pessimistic_write' },
     });
+    if (!resource) {
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
 
     await tx.entityManager.softDelete(Resource, {
       namespaceId,
       id: resourceId,
     });
 
-    // Update storage usage if resource had content and userId
-    if (resource && resource.content && resource.userId) {
-      const contentLength = Buffer.byteLength(resource.content, 'utf8');
-      if (contentLength > 0) {
-        // Subtract the content length (negative value)
-        await this.usagesService.updateStorageUsage(
-          namespaceId,
-          resource.userId,
-          StorageType.CONTENT,
-          -contentLength,
-          tx,
-        );
-      }
+    if (resource.contentSize > 0 && resource.userId) {
+      await this.usagesService.updateStorageUsage(
+        namespaceId,
+        resource.userId,
+        StorageType.CONTENT,
+        -resource.contentSize,
+        tx,
+      );
     }
 
-    // Update storage usage if resource had uploaded file and userId
-    if (resource && resource.fileId && resource.userId) {
+    if (resource.fileId && resource.userId) {
       const fileMeta = await this.filesService.headFile(resource.fileId);
       if (fileMeta && fileMeta.contentLength) {
-        // Subtract the file size (negative value)
         await this.usagesService.updateStorageUsage(
           namespaceId,
           resource.userId,

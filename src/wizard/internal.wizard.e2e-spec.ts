@@ -41,7 +41,7 @@ describe('InternalWizardController (e2e)', () => {
     const taskId = taskCreateResponse.body.task_id;
 
     const task = await client
-      .get(`/internal/api/v1/wizard/task?namespace_id=${client.namespace.id}`)
+      .get(`/internal/api/v1/wizard/tasks/${taskId}`)
       .expect(HttpStatus.OK);
 
     expect(task.body.id).toBe(taskId);
@@ -84,7 +84,7 @@ describe('InternalWizardController (e2e)', () => {
     const taskId = taskCreateResponse.body.task_id;
 
     const task = await client
-      .get(`/internal/api/v1/wizard/task?namespace_id=${client.namespace.id}`)
+      .get(`/internal/api/v1/wizard/tasks/${taskId}`)
       .expect(HttpStatus.OK);
 
     expect(task.body.id).toBe(taskId);

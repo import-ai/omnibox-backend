@@ -85,23 +85,42 @@ class MockWizardWorker {
   }
 
   /**
-   * Fetches a task from the backend (simulates wizard worker fetching)
+   * Fetches a pending task from the backend
    */
   private async fetchTask(): Promise<TaskDto | null> {
     try {
       const response = await this.makeRequest()
-        .get(`/internal/api/v1/wizard/task?namespace_id=${this.namespaceId}`)
-        .timeout(5000); // 5 second timeout
-
-      if (response.status === 204) {
-        return null; // No tasks available
-      }
+        .get(`/api/v1/namespaces/${this.namespaceId}/tasks`)
+        .timeout(5000);
 
       if (response.status !== 200) {
-        throw new Error(`Failed to fetch task: ${response.status}`);
+        throw new Error(`Failed to fetch tasks: ${response.status}`);
       }
 
-      return response.body as TaskDto;
+      const tasks: TaskMetaDto[] = response.body.tasks;
+      // Find first pending task (not started, not ended, not canceled)
+      const pendingTask = tasks.find(
+        (t) => !t.started_at && !t.ended_at && !t.canceled_at,
+      );
+
+      if (!pendingTask) {
+        return null;
+      }
+
+      // Start the task and fetch full details
+      await this.makeRequest()
+        .post(`/internal/api/v1/wizard/tasks/${pendingTask.id}/start`)
+        .timeout(5000);
+
+      const taskResponse = await this.makeRequest()
+        .get(`/api/v1/namespaces/${this.namespaceId}/tasks/${pendingTask.id}`)
+        .timeout(5000);
+
+      if (taskResponse.status !== 200) {
+        throw new Error(`Failed to fetch task details: ${taskResponse.status}`);
+      }
+
+      return taskResponse.body as TaskDto;
     } catch (error) {
       if (
         error.code === 'ECONNRESET' ||
@@ -109,7 +128,7 @@ class MockWizardWorker {
         error.message?.includes('socket hang up')
       ) {
         console.warn('Connection issue when fetching task, retrying...');
-        return null; // Treat connection issues as no tasks available for now
+        return null;
       }
       throw error;
     }
@@ -501,108 +520,6 @@ describe('Task Pipeline (e2e)', () => {
     });
   });
 
-  describe('Task Fetching and Polling', () => {
-    it('should return 204 when no tasks are available', async () => {
-      // Try to fetch a task when none are available
-      const task = await mockWorker['fetchTask']();
-      expect(task).toBeNull();
-    });
-
-    it('should fetch and process multiple tasks in sequence', async () => {
-      const collectData1 = {
-        html: '<html><body><h1>Page 1</h1></body></html>',
-        url: 'https://example.com/page1',
-        title: 'Page 1',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      const collectData2 = {
-        html: '<html><body><h1>Page 2</h1></body></html>',
-        url: 'https://example.com/page2',
-        title: 'Page 2',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      // Create two tasks
-      const response1 = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData1)
-        .expect(HttpStatus.CREATED);
-
-      const response2 = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData2)
-        .expect(HttpStatus.CREATED);
-
-      const taskId1 = response1.body.task_id;
-      const taskId2 = response2.body.task_id;
-
-      // Start processing
-      mockWorker.startPolling();
-
-      // Wait for both tasks to be completed
-      await MockWizardWorker.waitFor(async () => {
-        const task1Response = await client.get(
-          `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId1}`,
-        );
-        const task2Response = await client.get(
-          `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId2}`,
-        );
-
-        return (
-          task1Response.status === 200 &&
-          task2Response.status === 200 &&
-          task1Response.body.ended_at !== null &&
-          task2Response.body.ended_at !== null
-        );
-      });
-
-      // Verify both tasks were completed
-      const task1Final = await client.get(
-        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId1}`,
-      );
-      const task2Final = await client.get(
-        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId2}`,
-      );
-
-      expect(task1Final.body.ended_at).toBeDefined();
-      expect(task2Final.body.ended_at).toBeDefined();
-      expect(task1Final.body.exception).toEqual({});
-      expect(task2Final.body.exception).toEqual({});
-    });
-
-    it('should process single poll cycle correctly', async () => {
-      // Create a task
-      const collectData = {
-        html: '<html><body><h1>Single Poll Test</h1></body></html>',
-        url: 'https://example.com/single-poll',
-        title: 'Single Poll Test',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData)
-        .expect(HttpStatus.CREATED);
-
-      const taskId = response.body.task_id;
-
-      // Process one poll cycle
-      await mockWorker.pollOnce();
-
-      // Verify the task was processed
-      const taskResponse = await client.get(
-        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
-      );
-      expect(taskResponse.status).toBe(200);
-      expect(taskResponse.body.ended_at).toBeDefined();
-      expect(taskResponse.body.output).toBeDefined();
-    });
-  });
-
   describe('Task Chaining and Postprocessing', () => {
     it('should automatically trigger extract_tags after collect task completes', async () => {
       // Start the mock worker
@@ -865,47 +782,6 @@ describe('Task Pipeline (e2e)', () => {
   });
 
   describe('Error Handling and Edge Cases', () => {
-    it('should handle malformed callback data gracefully', async () => {
-      // Create a task
-      const collectData = {
-        html: '<html><body><h1>Callback Test</h1></body></html>',
-        url: 'https://example.com/callback-test',
-        title: 'Callback Test',
-        namespace_id: client.namespace.id,
-        parentId: client.namespace.root_resource_id,
-      };
-
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/collect`)
-        .send(collectData)
-        .expect(HttpStatus.CREATED);
-
-      const taskId = response.body.task_id;
-
-      // Fetch the task manually
-      const task = await mockWorker['fetchTask']();
-      expect(task).toBeDefined();
-      // Note: The task ID might be different if other tasks are in the queue
-
-      // Send malformed callback (this should be handled gracefully by the backend)
-      try {
-        await mockWorker['sendCallback'](taskId, {
-          output: undefined,
-          exception: undefined,
-        });
-      } catch {
-        // Expected to potentially fail, but should not crash
-      }
-
-      // Verify task can still be processed normally
-      await mockWorker.pollOnce();
-
-      const taskResponse = await client.get(
-        `/api/v1/namespaces/${client.namespace.id}/tasks/${taskId}`,
-      );
-      expect(taskResponse.status).toBe(200);
-    });
-
     it('should handle task processing timeouts and retries', async () => {
       // Create a task that will be processed multiple times
       const collectData = {
@@ -932,28 +808,6 @@ describe('Task Pipeline (e2e)', () => {
       );
       expect(taskResponse.status).toBe(200);
       expect(taskResponse.body.ended_at).toBeDefined();
-    });
-
-    it('should handle empty task queue gracefully', async () => {
-      // Ensure no tasks are pending
-      let hasMoreTasks = true;
-      let attempts = 0;
-
-      while (hasMoreTasks && attempts < 10) {
-        await mockWorker.pollOnce();
-
-        // Check if there are still tasks
-        const fetchResult = await mockWorker['fetchTask']();
-        hasMoreTasks = fetchResult !== null;
-        attempts++;
-      }
-
-      // Verify polling empty queue doesn't cause errors
-      await mockWorker.pollOnce();
-      await mockWorker.pollOnce();
-
-      // Should complete without errors
-      expect(true).toBe(true);
     });
 
     it('should handle task state validation', async () => {

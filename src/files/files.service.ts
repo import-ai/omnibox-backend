@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { IsNull, Repository } from 'typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { File } from './entities/file.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -10,6 +10,9 @@ import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
 import { extname } from 'path';
 import * as mime from 'mime-types';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { UsagesService } from 'omniboxd/usages/usages.service';
+import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 
 const s3Prefix = 'uploaded-files';
 
@@ -51,6 +54,8 @@ export class FilesService {
     private readonly i18n: I18nService,
     private readonly s3Service: S3Service,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    private readonly usagesService: UsagesService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async createFile(
@@ -167,10 +172,25 @@ export class FilesService {
           chunk.map(async (file) => {
             const meta = await this.headFile(file.id);
             const size = meta?.contentLength ?? 0;
-            await this.fileRepo.update(
-              { id: file.id, size: IsNull() },
-              { size },
-            );
+            await transaction(this.dataSource.manager, async (tx) => {
+              const result = await tx.entityManager.update(
+                File,
+                { id: file.id, size: IsNull() },
+                { size },
+              );
+              if (result.affected !== 1) {
+                return;
+              }
+              if (size > 0) {
+                await this.usagesService.updateStorageUsage(
+                  file.namespaceId,
+                  file.userId,
+                  StorageType.UPLOAD,
+                  size,
+                  tx,
+                );
+              }
+            });
           }),
         );
         processed += chunk.length;

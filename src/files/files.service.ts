@@ -1,5 +1,5 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { IsNull, Repository } from 'typeorm';
 import { File } from './entities/file.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -43,6 +43,8 @@ const ALLOWED_FILE_EXTENSIONS = new Set([
 
 @Injectable()
 export class FilesService {
+  private readonly logger = new Logger(FilesService.name);
+
   constructor(
     @InjectRepository(File)
     private readonly fileRepo: Repository<File>,
@@ -150,7 +152,7 @@ export class FilesService {
     while (true) {
       const files = await this.fileRepo.find({
         where: {
-          size: 0,
+          size: IsNull(),
           namespaceId,
         },
         take: batchSize,
@@ -158,22 +160,23 @@ export class FilesService {
       if (files.length === 0) {
         break;
       }
-      for (const file of files) {
-        const meta = await this.headFile(file.id);
-        const size = meta?.contentLength ?? 0;
-        if (size === 0) {
-          return { processed };
-        }
-        const result = await this.fileRepo.update(
-          { id: file.id, size: 0 },
-          { size },
+      const maxConcurrency = 10;
+      for (let i = 0; i < files.length; i += maxConcurrency) {
+        const chunk = files.slice(i, i + maxConcurrency);
+        await Promise.allSettled(
+          chunk.map(async (file) => {
+            const meta = await this.headFile(file.id);
+            const size = meta?.contentLength ?? 0;
+            await this.fileRepo.update(
+              { id: file.id, size: IsNull() },
+              { size },
+            );
+          }),
         );
-        if (result.affected === 1) {
-          processed++;
-        }
+        processed += chunk.length;
       }
+      this.logger.log(`Processed ${processed} files`);
     }
-
     return { processed };
   }
 }

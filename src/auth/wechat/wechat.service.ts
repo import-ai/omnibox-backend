@@ -160,57 +160,7 @@ export class WechatService {
     const isWeixin = stateInfo.type === 'weixin';
     const appId = isWeixin ? this.appId : this.openAppId;
     const appSecret = isWeixin ? this.appSecret : this.openAppSecret;
-    const accessTokenResponse = await fetch(
-      `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
-    );
-    if (!accessTokenResponse.ok) {
-      const providerName = this.i18n.t('auth.providers.wechat');
-      const message = this.i18n.t('auth.errors.oauthFailed', {
-        args: { provider: providerName },
-      });
-      throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
-    }
-    const accessTokenData = await accessTokenResponse.json();
-
-    if (accessTokenData.errmsg) {
-      const providerName = this.i18n.t('auth.providers.wechat');
-      const message = this.i18n.t('auth.errors.invalidProviderData', {
-        args: { provider: providerName },
-      });
-      throw new AppException(
-        `${message}: ${accessTokenData.errmsg}`,
-        'INVALID_WECHAT_DATA',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const userDataResponse = await fetch(
-      `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
-    );
-    if (!userDataResponse.ok) {
-      const providerName = this.i18n.t('auth.providers.wechat');
-      const message = this.i18n.t('auth.errors.failedToGetUserInfo', {
-        args: { provider: providerName },
-      });
-      throw new AppException(
-        message,
-        'FAILED_TO_GET_USER_INFO',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
-    const userData = await userDataResponse.json();
-
-    if (userData.errmsg) {
-      const providerName = this.i18n.t('auth.providers.wechat');
-      const message = this.i18n.t('auth.errors.invalidProviderData', {
-        args: { provider: providerName },
-      });
-      throw new AppException(
-        `${message}: ${userData.errmsg}`,
-        'INVALID_WECHAT_DATA',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+    const userData = await this.fetchWechatUserData(appId, appSecret, code);
 
     if (userId) {
       const wechatUser = await this.userService.findByLoginId(userData.unionid);
@@ -321,6 +271,126 @@ export class WechatService {
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
       return returnValue;
+    });
+  }
+
+  private async fetchWechatUserData(
+    appId: string,
+    appSecret: string,
+    code: string,
+  ): Promise<WechatUserInfo> {
+    const accessTokenResponse = await fetch(
+      `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
+    );
+    if (!accessTokenResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.oauthFailed', {
+        args: { provider: providerName },
+      });
+      throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
+    }
+    const accessTokenData = await accessTokenResponse.json();
+
+    if (accessTokenData.errmsg) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: ${accessTokenData.errmsg}`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const userDataResponse = await fetch(
+      `https://api.weixin.qq.com/sns/userinfo?access_token=${accessTokenData.access_token}&openid=${accessTokenData.openid}&lang=zh_CN`,
+    );
+    if (!userDataResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.failedToGetUserInfo', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'FAILED_TO_GET_USER_INFO',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    const userData = await userDataResponse.json();
+
+    if (userData.errmsg) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: ${userData.errmsg}`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    return userData;
+  }
+
+  async nativeLogin(
+    code: string,
+    source?: string,
+    lang?: string,
+  ): Promise<any> {
+    const userData = await this.fetchWechatUserData(
+      this.appId,
+      this.appSecret,
+      code,
+    );
+
+    const wechatUser = await this.userService.findByLoginId(userData.unionid);
+    if (wechatUser) {
+      return {
+        id: wechatUser.id,
+        username: wechatUser.username,
+        access_token: this.jwtService.sign({
+          sub: wechatUser.id,
+          username: wechatUser.username,
+        }),
+        source: source || 'native_ios',
+      };
+    }
+
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
+      const nickname: string = userData.nickname;
+      const username: string = await this.socialService.getValidUsername(
+        nickname,
+        manager,
+      );
+      this.logger.debug({ nickname, username });
+      const createdUser = await this.userService.createUserBinding(
+        {
+          username,
+          loginType: 'wechat',
+          loginId: userData.unionid,
+          lang,
+          metadata: userData,
+        } as CreateUserBindingDto,
+        manager,
+      );
+      await this.namespaceService.createUserNamespace(
+        createdUser.id,
+        createdUser.username,
+        tx,
+      );
+      return {
+        id: createdUser.id,
+        username: createdUser.username,
+        access_token: this.jwtService.sign({
+          sub: createdUser.id,
+          username: createdUser.username,
+        }),
+        source: source || 'native_ios',
+      };
     });
   }
 

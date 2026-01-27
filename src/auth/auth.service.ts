@@ -576,15 +576,10 @@ export class AuthService {
 
     // If there are already member emails, throw error with specific emails
     if (alreadyMemberEmails.length > 0) {
-      const isSingular = alreadyMemberEmails.length === 1;
-      const i18nKey = isSingular
-        ? 'auth.errors.userAlreadyMember'
-        : 'auth.errors.usersAlreadyMember';
-      const message = this.i18n.t(i18nKey, {
-        args: isSingular
-          ? { email: alreadyMemberEmails[0] }
-          : { emails: alreadyMemberEmails.join('、') },
-      });
+      const i18nKey = alreadyMemberEmails.length === 1
+          ? 'auth.errors.userAlreadyMember'
+          : 'auth.errors.usersAlreadyMember';
+      const message = this.i18n.t(i18nKey, { args: { emails: alreadyMemberEmails.join('、') }});
       throw new AppException(
         message,
         'USER_ALREADY_MEMBER',

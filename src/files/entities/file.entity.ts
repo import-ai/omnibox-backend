@@ -18,6 +18,6 @@ export class File extends Base {
   @Column()
   mimetype: string;
 
-  @Column()
-  size: number;
+  @Column('int', { nullable: true })
+  size: number | null;
 }

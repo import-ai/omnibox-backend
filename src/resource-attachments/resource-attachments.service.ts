@@ -120,13 +120,15 @@ export class ResourceAttachmentsService {
       });
 
       // Update storage usage for attachment (decrement) within the same transaction
-      await this.usagesService.updateStorageUsage(
-        namespaceId,
-        userId,
-        StorageType.ATTACHMENT,
-        -existingAttachment.attachmentSize,
-        tx,
-      );
+      if (existingAttachment.attachmentSize !== null) {
+        await this.usagesService.updateStorageUsage(
+          namespaceId,
+          userId,
+          StorageType.ATTACHMENT,
+          -existingAttachment.attachmentSize,
+          tx,
+        );
+      }
     });
   }
 
@@ -160,7 +162,7 @@ export class ResourceAttachmentsService {
 
       // Update storage usage for all copied attachments within the same transaction
       const totalSize = sourceRelations.reduce(
-        (sum, relation) => sum + Number(relation.attachmentSize),
+        (sum, relation) => sum + (relation.attachmentSize ?? 0),
         0,
       );
       if (totalSize > 0) {

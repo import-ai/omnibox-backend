@@ -28,6 +28,8 @@ export class WechatService {
 
   private readonly appId: string;
   private readonly appSecret: string;
+  private readonly nativeAppId: string;
+  private readonly nativeAppSecret: string;
   private readonly openAppId: string;
   private readonly openAppSecret: string;
   private readonly oldAppId: string;
@@ -51,6 +53,14 @@ export class WechatService {
     this.appId = this.configService.get<string>('OBB_WECHAT_APP_ID', '');
     this.appSecret = this.configService.get<string>(
       'OBB_WECHAT_APP_SECRET',
+      '',
+    );
+    this.nativeAppId = this.configService.get<string>(
+      'OBB_WECHAT_APP_NATIVE_ID',
+      '',
+    );
+    this.nativeAppSecret = this.configService.get<string>(
+      'OBB_WECHAT_APP_NATIVE_SECRET',
       '',
     );
     this.openAppId = this.configService.get<string>(
@@ -340,8 +350,8 @@ export class WechatService {
     lang?: string,
   ): Promise<any> {
     const userData = await this.fetchWechatUserData(
-      this.appId,
-      this.appSecret,
+      this.nativeAppId || this.appId,
+      this.nativeAppSecret || this.appSecret,
       code,
     );
 

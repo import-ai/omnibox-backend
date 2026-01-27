@@ -554,7 +554,7 @@ export class ResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      if (props.userId) {
+      if (props.userId && file.size !== null) {
         await this.usagesService.updateStorageUsage(
           props.namespaceId,
           props.userId,

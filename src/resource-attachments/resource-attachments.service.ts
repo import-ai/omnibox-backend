@@ -1,4 +1,4 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpStatus, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,6 +12,8 @@ import { S3Service } from 'omniboxd/s3/s3.service';
 
 @Injectable()
 export class ResourceAttachmentsService {
+  private readonly logger = new Logger(ResourceAttachmentsService.name);
+
   constructor(
     @InjectRepository(ResourceAttachment)
     private readonly resourceAttachmentRepository: Repository<ResourceAttachment>,
@@ -212,11 +214,10 @@ export class ResourceAttachmentsService {
     processed: number;
   }> {
     let processed = 0;
-
     while (true) {
       const attachments = await this.resourceAttachmentRepository.find({
         where: {
-          attachmentSize: 0,
+          attachmentSize: IsNull(),
           namespaceId,
         },
         take: batchSize,
@@ -224,48 +225,48 @@ export class ResourceAttachmentsService {
       if (attachments.length === 0) {
         break;
       }
-      for (const attachment of attachments) {
-        const meta = await this.s3Service.headObject(
-          `attachments/${attachment.attachmentId}`,
+      const maxConcurrency = 10;
+      for (let i = 0; i < attachments.length; i += maxConcurrency) {
+        const chunk = attachments.slice(i, i + maxConcurrency);
+        const results = await Promise.allSettled(
+          chunk.map(async (attachment) => {
+            const meta = await this.s3Service.headObject(
+              `attachments/${attachment.attachmentId}`,
+            );
+            const attachmentSize = meta?.contentLength ?? 0;
+            const resource = await this.resourceRepository.findOne({
+              where: {
+                id: attachment.resourceId,
+                namespaceId: attachment.namespaceId,
+                userId: Not(IsNull()),
+              },
+            });
+            await transaction(this.dataSource.manager, async (tx) => {
+              const result = await tx.entityManager.update(
+                ResourceAttachment,
+                { id: attachment.id, attachmentSize: IsNull() },
+                { attachmentSize },
+              );
+              if (result.affected !== 1) {
+                return;
+              }
+              if (!resource) {
+                return;
+              }
+              await this.usagesService.updateStorageUsage(
+                attachment.namespaceId,
+                resource.userId!,
+                StorageType.ATTACHMENT,
+                attachmentSize,
+                tx,
+              );
+            });
+          }),
         );
-        const attachmentSize = meta?.contentLength ?? 0;
-        if (attachmentSize === 0) {
-          return { processed };
-        }
-
-        const resource = await this.resourceRepository.findOne({
-          where: {
-            id: attachment.resourceId,
-            namespaceId: attachment.namespaceId,
-            userId: Not(IsNull()),
-          },
-        });
-        if (!resource) {
-          continue;
-        }
-
-        await transaction(this.dataSource.manager, async (tx) => {
-          const result = await tx.entityManager.update(
-            ResourceAttachment,
-            { id: attachment.id, attachmentSize: 0 },
-            { attachmentSize },
-          );
-          if (result.affected !== 1) {
-            return;
-          }
-          await this.usagesService.updateStorageUsage(
-            attachment.namespaceId,
-            resource.userId!,
-            StorageType.ATTACHMENT,
-            attachmentSize,
-            tx,
-          );
-        });
-
-        processed++;
+        processed += results.length;
       }
+      this.logger.log(`Processed ${processed} attachments`);
     }
-
     return { processed };
   }
 }

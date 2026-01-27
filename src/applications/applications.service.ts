@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { Applications } from './applications.entity';
@@ -26,9 +27,34 @@ export class ApplicationsService {
     private readonly wechatBot: WechatBot,
     private readonly qqBot: QQBot,
     private readonly i18n: I18nService,
+    private readonly configService: ConfigService,
   ) {
-    this.apps[WechatBot.appId] = this.wechatBot;
-    this.apps[QQBot.appId] = this.qqBot;
+    const enabledApps = this.configService.get<string>(
+      'OBB_ENABLED_APPLICATIONS',
+    );
+    const enabledAppIds =
+      enabledApps === undefined
+        ? null
+        : enabledApps
+            .split(',')
+            .map((id) => id.trim())
+            .filter((id) => id.length > 0);
+
+    if (this.isAppEnabled(WechatBot.appId, enabledAppIds)) {
+      this.apps[WechatBot.appId] = this.wechatBot;
+    }
+    if (this.isAppEnabled(QQBot.appId, enabledAppIds)) {
+      this.apps[QQBot.appId] = this.qqBot;
+    }
+  }
+
+  private isAppEnabled(appId: string, enabledAppIds: string[] | null): boolean {
+    // If config is not set (undefined), all apps are enabled by default
+    // If config is set to empty string, no apps are enabled
+    if (enabledAppIds === null) {
+      return true;
+    }
+    return enabledAppIds.includes(appId);
   }
 
   async findOne(

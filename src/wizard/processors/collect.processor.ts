@@ -31,12 +31,13 @@ export class CollectProcessor extends Processor {
       );
     }
     if (task.exception && !isEmpty(task.exception)) {
+      const content = this.buildErrorContent(task);
       await this.namespaceResourcesService.update(
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {
           namespaceId: task.namespaceId,
-          content: 'error',
+          content,
         }),
       );
       return {};
@@ -84,5 +85,69 @@ export class CollectProcessor extends Processor {
       return { resourceId, tagIds };
     }
     return {};
+  }
+
+  private buildErrorContent(task: Task): string {
+    const exceptionType = (task.exception as any)?.type;
+    const details = (task.exception as any)?.details as
+      | {
+          code?: string;
+          usageType?: string;
+          requestedAmount?: number;
+          limitAmount?: number;
+          remainingAmount?: number;
+        }
+      | undefined;
+
+    // Only customize for quota-related errors coming from wizard-pro
+    if (
+      exceptionType === 'InsufficientQuotaError' &&
+      details &&
+      typeof details.requestedAmount === 'number'
+    ) {
+      const resourceLabel = this.getResourceLabel(details.usageType);
+      const isPageType =
+        details.usageType === 'pdf' || details.usageType === 'image';
+      const valueLabel = isPageType ? '页数' : '时长';
+      const unitLabel = isPageType ? '页' : '秒';
+
+      // 1. 单次解析上限不足
+      if (
+        typeof details.limitAmount === 'number' &&
+        (details.code === 'DOC_PARSE_LIMIT_EXCEEDED' ||
+          details.code === 'VIDEO_AUDIO_PARSE_LIMIT_EXCEEDED')
+      ) {
+        return `当前 ${resourceLabel} 的${
+          valueLabel
+        }为 ${details.requestedAmount}${unitLabel}，超出单次解析的上限：${details.limitAmount}${unitLabel}`;
+      }
+
+      // 2. 总额度不足
+      if (
+        typeof details.remainingAmount === 'number' &&
+        details.code === 'INSUFFICIENT_QUOTA'
+      ) {
+        return `当前 ${resourceLabel} 的${
+          valueLabel
+        }为 ${details.requestedAmount}${unitLabel}，当前剩余额度为：${details.remainingAmount}${unitLabel}`;
+      }
+    }
+
+    // Fallback generic error
+    return 'error';
+  }
+
+  private getResourceLabel(usageType?: string): string {
+    switch (usageType) {
+      case 'video':
+      case 'audio':
+        return '视频/音频';
+      case 'pdf':
+        return 'PDF';
+      case 'image':
+        return '图片';
+      default:
+        return '文件';
+    }
   }
 }

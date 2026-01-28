@@ -2,6 +2,7 @@ import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespac
 import { Body, Controller, Param, Post } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
+import { CheckStorageQuota } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/files')
 export class FileResourcesController {
@@ -10,6 +11,7 @@ export class FileResourcesController {
   ) {}
 
   @Post()
+  @CheckStorageQuota()
   async createResourceFile(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,

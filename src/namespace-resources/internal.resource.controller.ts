@@ -1,11 +1,17 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { FilesService } from 'omniboxd/files/files.service';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
+    private readonly resourceAttachmentsService: ResourceAttachmentsService,
+    private readonly filesService: FilesService,
   ) {}
 
   @Public()
@@ -60,5 +66,45 @@ export class InternalResourcesController {
       resourceId,
       depth,
     );
+  }
+
+  @Public()
+  @Post('resources/recalculate-content-sizes')
+  async recalculateContentSizes(
+    @Query('namespaceId') namespaceId?: string,
+    @Query('batchSize') batchSize: number = 100,
+  ) {
+    const result = await this.resourcesService.recalculateContentSizes(
+      namespaceId,
+      batchSize,
+    );
+    return result;
+  }
+
+  @Public()
+  @Post('attachments/recalculate-sizes')
+  async recalculateAttachmentSizes(
+    @Query('namespaceId') namespaceId?: string,
+    @Query('batchSize') batchSize: number = 100,
+  ) {
+    const result =
+      await this.resourceAttachmentsService.recalculateAttachmentSizes(
+        namespaceId,
+        batchSize,
+      );
+    return result;
+  }
+
+  @Public()
+  @Post('files/recalculate-sizes')
+  async recalculateFileSizes(
+    @Query('namespaceId') namespaceId?: string,
+    @Query('batchSize') batchSize: number = 100,
+  ) {
+    const result = await this.filesService.recalculateFileSizes(
+      namespaceId,
+      batchSize,
+    );
+    return result;
   }
 }

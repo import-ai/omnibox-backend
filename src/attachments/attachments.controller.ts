@@ -16,12 +16,14 @@ import { Request, Response } from 'express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { UploadAttachmentsResponseDto } from './dto/upload-attachments-response.dto';
 import { CookieAuth } from 'omniboxd/auth/decorators';
+import { CheckStorageQuota } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
 export class AttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Post()
+  @CheckStorageQuota()
   @UseInterceptors(FilesInterceptor('file[]'))
   async uploadAttachments(
     @UserId() userId: string,

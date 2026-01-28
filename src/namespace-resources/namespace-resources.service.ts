@@ -272,8 +272,6 @@ export class NamespaceResourcesService {
     }
 
     return await transaction(this.dataSource.manager, async (tx) => {
-      const entityManager = tx.entityManager;
-
       // Create the duplicated resource within the transaction
       const duplicatedResource = await this.create(
         userId,
@@ -287,7 +285,8 @@ export class NamespaceResourcesService {
         resource.namespaceId,
         resource.id,
         duplicatedResource.id,
-        entityManager,
+        userId,
+        tx,
       );
       return duplicatedResource;
     });
@@ -882,6 +881,7 @@ export class NamespaceResourcesService {
       userId,
       namespaceId,
       createReq.name,
+      createReq.size,
       createReq.mimetype,
     );
   }
@@ -1005,6 +1005,7 @@ export class NamespaceResourcesService {
     const resourceFile = await this.createResourceFile(userId, namespaceId, {
       name: originalFilename,
       mimetype: file.mimetype,
+      size: file.buffer.length,
     });
     await this.filesService.uploadFile(resourceFile, file.buffer);
     return await this.create(

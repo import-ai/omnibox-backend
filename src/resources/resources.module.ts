@@ -4,9 +4,15 @@ import { Resource } from './entities/resource.entity';
 import { ResourcesService } from './resources.service';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { FilesModule } from 'omniboxd/files/files.module';
+import { UsagesModule } from 'omniboxd/usages/usages.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Resource]), TasksModule, FilesModule],
+  imports: [
+    TypeOrmModule.forFeature([Resource]),
+    TasksModule,
+    FilesModule,
+    UsagesModule,
+  ],
   providers: [ResourcesService],
   exports: [ResourcesService],
 })

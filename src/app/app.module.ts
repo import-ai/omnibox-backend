@@ -87,6 +87,12 @@ import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/17674414
 import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/1768483850604-add-phone-unique-constraint';
 import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oauth-provider';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
+import { StorageUsages1768556182000 } from 'omniboxd/migrations/1768556182000-storage-usages';
+import { AddAttachmentSize1768560746946 } from 'omniboxd/migrations/1768560746946-add-attachment-size';
+import { AddInsufficientQuotaStatus1768569500000 } from 'omniboxd/migrations/1768569500000-add-insufficient-quota-status';
+import { AddContentSizeToResources1769415718000 } from 'omniboxd/migrations/1769415718000-add-content-size-to-resources';
+import { AddSizeToFiles1769415719000 } from 'omniboxd/migrations/1769415719000-add-size-to-files';
+import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000-make-size-nullable';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -228,6 +234,12 @@ export class AppModule implements NestModule {
               AddPermanentDeletedAt1767441415360,
               AddPhoneUniqueConstraint1768483850604,
               OAuthProvider1768569496828,
+              StorageUsages1768556182000,
+              AddAttachmentSize1768560746946,
+              AddInsufficientQuotaStatus1768569500000,
+              AddContentSizeToResources1769415718000,
+              AddSizeToFiles1769415719000,
+              MakeSizeNullable1769478367000,
               ...extraMigrations,
             ],
             migrationsRun: true,

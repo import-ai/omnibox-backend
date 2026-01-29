@@ -11,10 +11,6 @@ export class UsagesService {
     private readonly storageUsageRepository: Repository<StorageUsage>,
   ) {}
 
-  /**
-   * Update storage usage for a specific storage type
-   * This method handles both increment and decrement operations
-   */
   async updateStorageUsage(
     namespaceId: string,
     userId: string,
@@ -22,26 +18,20 @@ export class UsagesService {
     amount: number,
     tx?: Transaction,
   ): Promise<void> {
-    const entityManager = tx
-      ? tx.entityManager
-      : this.storageUsageRepository.manager;
+    const repo = tx
+      ? tx.entityManager.getRepository(StorageUsage)
+      : this.storageUsageRepository;
 
-    const repo = entityManager.getRepository(StorageUsage);
+    const updateResult = await repo.increment(
+      {
+        namespaceId,
+        userId,
+        storageType,
+      },
+      'amount',
+      amount,
+    );
 
-    // Try to update existing record using SQL addition
-    const updateResult = await repo
-      .createQueryBuilder()
-      .update(StorageUsage)
-      .set({
-        amount: () => `amount + ${amount}`,
-      })
-      .where('namespace_id = :namespaceId', { namespaceId })
-      .andWhere('user_id = :userId', { userId })
-      .andWhere('storage_type = :storageType', { storageType })
-      .andWhere('deleted_at IS NULL')
-      .execute();
-
-    // If no record was updated, create a new one
     if (updateResult.affected === 0) {
       await repo.save(
         repo.create({
@@ -54,9 +44,6 @@ export class UsagesService {
     }
   }
 
-  /**
-   * Get storage usage for a specific user and namespace
-   */
   async getUsage(
     namespaceId: string,
     userId: string,

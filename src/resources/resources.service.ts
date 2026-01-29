@@ -729,6 +729,7 @@ export class ResourcesService {
 
   async getDeletedResources(
     namespaceId: string,
+    retentionDays: number,
     options?: {
       search?: string;
       limit?: number;
@@ -738,7 +739,7 @@ export class ResourcesService {
     const { search, limit = 20, offset = 0 } = options || {};
 
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 7);
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
     const queryBuilder = this.resourceRepository
       .createQueryBuilder('resource')

@@ -1066,8 +1066,12 @@ export class NamespaceResourcesService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+
     const { items, total } = await this.resourcesService.getDeletedResources(
       namespaceId,
+      usage.trashRetentionDays,
       { search, limit, offset },
     );
 
@@ -1075,16 +1079,12 @@ export class NamespaceResourcesService {
       TrashItemDto.fromEntity(resource, false),
     );
 
-    const usage =
-      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
-    const retentionDays = usage.trashRetentionDays;
-
     return TrashListResponseDto.create(
       trashItems,
       total,
       limit,
       offset,
-      retentionDays,
+      usage.trashRetentionDays,
     );
   }
 

@@ -35,6 +35,5 @@ export class CreateFileReqDto {
     },
   )
   @Min(1, { message: i18nValidationMessage('validation.errors.min') })
-  @IsOptional()
-  size?: number;
+  size: number;
 }

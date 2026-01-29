@@ -38,6 +38,9 @@ export class Resource extends Base {
   @Column()
   content: string;
 
+  @Column()
+  contentSize: number;
+
   @Column('jsonb')
   attrs: Record<string, any>;
 

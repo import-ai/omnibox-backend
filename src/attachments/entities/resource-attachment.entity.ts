@@ -14,4 +14,7 @@ export class ResourceAttachment extends Base {
 
   @Column()
   attachmentId: string;
+
+  @Column('int', { nullable: true })
+  attachmentSize: number | null;
 }

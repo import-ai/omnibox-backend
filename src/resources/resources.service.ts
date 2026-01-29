@@ -16,6 +16,8 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { UsagesService } from 'omniboxd/usages/usages.service';
+import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
 
 const TASK_PRIORITY = 5;
 
@@ -29,6 +31,7 @@ export class ResourcesService {
     private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
     private readonly filesService: FilesService,
+    private readonly usagesService: UsagesService,
   ) {}
 
   async getParentResourcesOrFail(
@@ -444,21 +447,55 @@ export class ResourcesService {
     }
 
     const repo = entityManager.getRepository(Resource);
-    await repo.update({ namespaceId, id: resourceId }, props);
 
-    const resource = await repo.findOne({
+    const oldResource = await repo.findOne({
       where: {
         namespaceId,
         id: resourceId,
       },
+      lock: { mode: 'pessimistic_write' },
     });
-    if (!resource) {
+    if (!oldResource) {
       const message = this.i18n.t('resource.errors.resourceNotFound');
       throw new AppException(
         message,
         'RESOURCE_NOT_FOUND',
         HttpStatus.NOT_FOUND,
       );
+    }
+
+    const contentSize =
+      props.content !== undefined
+        ? Buffer.byteLength(props.content, 'utf8')
+        : undefined;
+
+    await repo.update(
+      { namespaceId, id: resourceId },
+      {
+        ...props,
+        contentSize,
+      },
+    );
+
+    const resource = await repo.findOneOrFail({
+      where: {
+        namespaceId,
+        id: resourceId,
+      },
+    });
+
+    // Update storage usage if content changed and userId is present
+    if (props.content !== undefined && resource.userId) {
+      const contentSizeDiff = resource.contentSize - oldResource.contentSize;
+      if (contentSizeDiff !== 0) {
+        await this.usagesService.updateStorageUsage(
+          namespaceId,
+          resource.userId,
+          StorageType.CONTENT,
+          contentSizeDiff,
+          tx,
+        );
+      }
     }
 
     // If it's not a root resource, create index task
@@ -505,8 +542,11 @@ export class ResourcesService {
     }
 
     if (props.fileId) {
-      const fileMeta = await this.filesService.headFile(props.fileId);
-      if (!fileMeta) {
+      const file = await this.filesService.getFile(
+        props.namespaceId,
+        props.fileId,
+      );
+      if (!file) {
         const message = this.i18n.t('resource.errors.fileNotFound');
         throw new AppException(
           message,
@@ -514,11 +554,38 @@ export class ResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
+      if (props.userId && file.size !== null) {
+        await this.usagesService.updateStorageUsage(
+          props.namespaceId,
+          props.userId,
+          StorageType.UPLOAD,
+          file.size,
+          tx,
+        );
+      }
     }
 
-    // Create the resource
+    const contentSize = props.content
+      ? Buffer.byteLength(props.content, 'utf8')
+      : 0;
+
     const repo = entityManager.getRepository(Resource);
-    const resource = await repo.save(repo.create(props));
+    const resource = await repo.save(
+      repo.create({
+        ...props,
+        contentSize,
+      }),
+    );
+
+    if (resource.contentSize > 0 && resource.userId) {
+      await this.usagesService.updateStorageUsage(
+        resource.namespaceId,
+        resource.userId,
+        StorageType.CONTENT,
+        resource.contentSize,
+        tx,
+      );
+    }
 
     if (
       resource.resourceType === ResourceType.FILE &&
@@ -609,10 +676,48 @@ export class ResourcesService {
         this.deleteResource(userId, namespaceId, resourceId, tx),
       );
     }
+
+    const resource = await tx.entityManager.findOne(Resource, {
+      where: { namespaceId, id: resourceId },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!resource) {
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
     await tx.entityManager.softDelete(Resource, {
       namespaceId,
       id: resourceId,
     });
+
+    if (resource.contentSize > 0 && resource.userId) {
+      await this.usagesService.updateStorageUsage(
+        namespaceId,
+        resource.userId,
+        StorageType.CONTENT,
+        -resource.contentSize,
+        tx,
+      );
+    }
+
+    if (resource.fileId && resource.userId) {
+      const fileMeta = await this.filesService.headFile(resource.fileId);
+      if (fileMeta && fileMeta.contentLength) {
+        await this.usagesService.updateStorageUsage(
+          namespaceId,
+          resource.userId,
+          StorageType.UPLOAD,
+          -fileMeta.contentLength,
+          tx,
+        );
+      }
+    }
+
     await this.tasksService.cancelResourceTasks(namespaceId, resourceId, tx);
     await this.wizardTaskService.emitDeleteIndexTask(
       userId,
@@ -624,6 +729,7 @@ export class ResourcesService {
 
   async getDeletedResources(
     namespaceId: string,
+    retentionDays: number,
     options?: {
       search?: string;
       limit?: number;
@@ -633,7 +739,7 @@ export class ResourcesService {
     const { search, limit = 20, offset = 0 } = options || {};
 
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 7);
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
     const queryBuilder = this.resourceRepository
       .createQueryBuilder('resource')
@@ -793,5 +899,55 @@ export class ResourcesService {
     });
 
     return !parent || !!parent.deletedAt;
+  }
+
+  async recalculateContentSizes(
+    namespaceId?: string,
+    batchSize: number = 100,
+  ): Promise<{
+    processed: number;
+  }> {
+    let processed = 0;
+    while (true) {
+      const resources = await this.resourceRepository.find({
+        where: {
+          contentSize: 0,
+          content: Not(''),
+          userId: Not(IsNull()),
+          namespaceId,
+        },
+        take: batchSize,
+      });
+      if (resources.length === 0) {
+        break;
+      }
+      for (const resource of resources) {
+        const contentSize = Buffer.byteLength(resource.content, 'utf8');
+        if (contentSize === 0) {
+          return { processed };
+        }
+        await transaction(this.dataSource.manager, async (tx) => {
+          const result = await tx.entityManager.update(
+            Resource,
+            { id: resource.id, contentSize: 0 },
+            { contentSize },
+          );
+          if (result.affected !== 1) {
+            return;
+          }
+          await this.usagesService.updateStorageUsage(
+            resource.namespaceId,
+            resource.userId!,
+            StorageType.CONTENT,
+            contentSize,
+            tx,
+          );
+        });
+        processed++;
+      }
+    }
+    return {
+      processed,
+    };
   }
 }

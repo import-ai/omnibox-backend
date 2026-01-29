@@ -9,6 +9,7 @@ import { KafkaService } from 'omniboxd/kafka/kafka.service';
 import { ConfigService } from '@nestjs/config';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { context, propagation } from '@opentelemetry/api';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 
 @Injectable()
 export class TasksService {
@@ -20,6 +21,7 @@ export class TasksService {
     private readonly i18n: I18nService,
     private readonly kafkaService: KafkaService,
     private readonly configService: ConfigService,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
   ) {
     this.kafkaTasksTopic = this.configService.get<string>(
       'OBB_TASKS_TOPIC',
@@ -35,25 +37,30 @@ export class TasksService {
   }
 
   async checkTaskMessage(namespaceId: string): Promise<void> {
-    const numTasks = await this.countEnqueuedTasks(namespaceId);
-    if (numTasks >= 1) {
-      return;
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+    const topicName = `${this.kafkaTasksTopic}-${usage.taskPriority}`;
+    while (true) {
+      const task = await this.getNextTask(namespaceId);
+      if (!task) {
+        break;
+      }
+      const count = await this.countEnqueuedTasks(namespaceId);
+      if (count >= usage.taskParallelism) {
+        break;
+      }
+      await this.kafkaService.produce(topicName, [
+        {
+          value: JSON.stringify({
+            task_id: task.id,
+            namespace_id: namespaceId,
+            function: task.function,
+            meta: { file_name: task.input?.filename },
+          }),
+        },
+      ]);
+      await this.setTaskEnqueued(namespaceId, task.id);
     }
-    const task = await this.getNextTask(namespaceId);
-    if (!task) {
-      return;
-    }
-    await this.kafkaService.produce(this.kafkaTasksTopic, [
-      {
-        value: JSON.stringify({
-          task_id: task.id,
-          namespace_id: namespaceId,
-          function: task.function,
-          meta: { file_name: task.input?.filename },
-        }),
-      },
-    ]);
-    await this.setTaskEnqueued(namespaceId, task.id);
   }
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {

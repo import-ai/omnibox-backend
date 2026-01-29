@@ -1,16 +1,28 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpStatus, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager, In } from 'typeorm';
+import { Repository, In, DataSource, IsNull, Not } from 'typeorm';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { UsagesService } from 'omniboxd/usages/usages.service';
+import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
+import { transaction, Transaction } from 'omniboxd/utils/transaction-utils';
+import { S3Service } from 'omniboxd/s3/s3.service';
 
 @Injectable()
 export class ResourceAttachmentsService {
+  private readonly logger = new Logger(ResourceAttachmentsService.name);
+
   constructor(
     @InjectRepository(ResourceAttachment)
     private readonly resourceAttachmentRepository: Repository<ResourceAttachment>,
+    @InjectRepository(Resource)
+    private readonly resourceRepository: Repository<Resource>,
     private readonly i18n: I18nService,
+    private readonly usagesService: UsagesService,
+    private readonly dataSource: DataSource,
+    private readonly s3Service: S3Service,
   ) {}
 
   async getResourceAttachment(
@@ -52,41 +64,73 @@ export class ResourceAttachmentsService {
     namespaceId: string,
     resourceId: string,
     attachmentId: string,
+    userId: string,
+    size: number,
   ) {
-    const resourceAttachment = this.resourceAttachmentRepository.create({
-      namespaceId,
-      resourceId,
-      attachmentId,
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const repository = tx.entityManager.getRepository(ResourceAttachment);
+
+      const resourceAttachment = repository.create({
+        namespaceId,
+        resourceId,
+        attachmentId,
+        attachmentSize: size,
+      });
+      await repository.save(resourceAttachment);
+
+      // Update storage usage for attachment within the same transaction
+      await this.usagesService.updateStorageUsage(
+        namespaceId,
+        userId,
+        StorageType.ATTACHMENT,
+        size,
+        tx,
+      );
     });
-    await this.resourceAttachmentRepository.save(resourceAttachment);
   }
 
   async removeAttachmentFromResource(
     namespaceId: string,
     resourceId: string,
     attachmentId: string,
+    userId: string,
   ) {
-    const existingAttachment = await this.resourceAttachmentRepository.findOne({
-      where: {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const repository = tx.entityManager.getRepository(ResourceAttachment);
+
+      const existingAttachment = await repository.findOne({
+        where: {
+          namespaceId,
+          resourceId,
+          attachmentId,
+        },
+      });
+
+      if (!existingAttachment) {
+        const message = this.i18n.t('attachment.errors.attachmentNotFound');
+        throw new AppException(
+          message,
+          'ATTACHMENT_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      await repository.softDelete({
         namespaceId,
         resourceId,
         attachmentId,
-      },
-    });
+      });
 
-    if (!existingAttachment) {
-      const message = this.i18n.t('attachment.errors.attachmentNotFound');
-      throw new AppException(
-        message,
-        'ATTACHMENT_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
-    await this.resourceAttachmentRepository.softDelete({
-      namespaceId,
-      resourceId,
-      attachmentId,
+      // Update storage usage for attachment (decrement) within the same transaction
+      if (existingAttachment.attachmentSize !== null) {
+        await this.usagesService.updateStorageUsage(
+          namespaceId,
+          userId,
+          StorageType.ATTACHMENT,
+          -existingAttachment.attachmentSize,
+          tx,
+        );
+      }
     });
   }
 
@@ -94,11 +138,10 @@ export class ResourceAttachmentsService {
     namespaceId: string,
     sourceResourceId: string,
     targetResourceId: string,
-    entityManager?: EntityManager,
+    userId: string,
+    tx: Transaction,
   ) {
-    const repository = entityManager
-      ? entityManager.getRepository(ResourceAttachment)
-      : this.resourceAttachmentRepository;
+    const repository = tx.entityManager.getRepository(ResourceAttachment);
 
     const sourceRelations = await repository.find({
       where: {
@@ -112,11 +155,27 @@ export class ResourceAttachmentsService {
         namespaceId,
         resourceId: targetResourceId,
         attachmentId: relation.attachmentId,
+        attachmentSize: relation.attachmentSize,
       }),
     );
 
     if (newRelations.length > 0) {
       await repository.save(newRelations);
+
+      // Update storage usage for all copied attachments within the same transaction
+      const totalSize = sourceRelations.reduce(
+        (sum, relation) => sum + (relation.attachmentSize ?? 0),
+        0,
+      );
+      if (totalSize > 0) {
+        await this.usagesService.updateStorageUsage(
+          namespaceId,
+          userId,
+          StorageType.ATTACHMENT,
+          totalSize,
+          tx,
+        );
+      }
     }
 
     return newRelations.length;
@@ -146,5 +205,68 @@ export class ResourceAttachmentsService {
       }
     }
     return firstAttachments;
+  }
+
+  async recalculateAttachmentSizes(
+    namespaceId?: string,
+    batchSize: number = 100,
+  ): Promise<{
+    processed: number;
+  }> {
+    let processed = 0;
+    while (true) {
+      const attachments = await this.resourceAttachmentRepository.find({
+        where: {
+          attachmentSize: IsNull(),
+          namespaceId,
+        },
+        take: batchSize,
+      });
+      if (attachments.length === 0) {
+        break;
+      }
+      const maxConcurrency = 10;
+      for (let i = 0; i < attachments.length; i += maxConcurrency) {
+        const chunk = attachments.slice(i, i + maxConcurrency);
+        const results = await Promise.allSettled(
+          chunk.map(async (attachment) => {
+            const meta = await this.s3Service.headObject(
+              `attachments/${attachment.attachmentId}`,
+            );
+            const attachmentSize = meta?.contentLength ?? 0;
+            const resource = await this.resourceRepository.findOne({
+              where: {
+                id: attachment.resourceId,
+                namespaceId: attachment.namespaceId,
+                userId: Not(IsNull()),
+              },
+            });
+            await transaction(this.dataSource.manager, async (tx) => {
+              const result = await tx.entityManager.update(
+                ResourceAttachment,
+                { id: attachment.id, attachmentSize: IsNull() },
+                { attachmentSize },
+              );
+              if (result.affected !== 1) {
+                return;
+              }
+              if (!resource) {
+                return;
+              }
+              await this.usagesService.updateStorageUsage(
+                attachment.namespaceId,
+                resource.userId!,
+                StorageType.ATTACHMENT,
+                attachmentSize,
+                tx,
+              );
+            });
+          }),
+        );
+        processed += results.length;
+      }
+      this.logger.log(`Processed ${processed} attachments`);
+    }
+    return { processed };
   }
 }

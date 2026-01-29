@@ -19,6 +19,7 @@
     "adminCannotRemoveAdmin": "管理员无法移除其他管理员",
     "adminCannotPromoteToAdmin": "管理员无法将用户提升为管理员",
     "insufficientPermission": "您没有权限修改此用户",
-    "cannotAssignHigherRole": "您不能分配与您相同或更高级别的角色"
+    "cannotAssignHigherRole": "您不能分配与您相同或更高级别的角色",
+    "storageQuotaExceeded": "存储空间已满，请删除部分文件或升级您的套餐。"
   }
 }

@@ -46,6 +46,7 @@ import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
 import { InternalResourceDto } from './dto/internal-resource.dto';
 import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -62,6 +63,7 @@ export class NamespaceResourcesService {
     private readonly resourcesService: ResourcesService,
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
   ) {}
 
   private async getTagsByIds(
@@ -1073,7 +1075,17 @@ export class NamespaceResourcesService {
       TrashItemDto.fromEntity(resource, false),
     );
 
-    return TrashListResponseDto.create(trashItems, total, limit, offset);
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+    const retentionDays = usage.trashRetentionDays;
+
+    return TrashListResponseDto.create(
+      trashItems,
+      total,
+      limit,
+      offset,
+      retentionDays,
+    );
   }
 
   async permanentlyDeleteResource(

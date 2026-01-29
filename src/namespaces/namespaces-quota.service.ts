@@ -9,7 +9,7 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
   storageUsage: 0,
   taskPriority: 1,
   taskParallelism: 1,
-  fileUploadSizeLimit: 0,
+  fileUploadSizeLimit: 20 * 1024 * 1024, // 20MB
   trashRetentionDays: 7,
 };
 

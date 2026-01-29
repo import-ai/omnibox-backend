@@ -10,6 +10,7 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
   taskPriority: 1,
   taskParallelism: 1,
   fileUploadSizeLimit: 0,
+  trashRetentionDays: 7,
 };
 
 @Injectable()

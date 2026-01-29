@@ -15,4 +15,7 @@ export class NamespaceUsageDto {
 
   @Expose({ name: 'file_upload_size_limit' })
   fileUploadSizeLimit: number;
+
+  @Expose({ name: 'trash_retention_days' })
+  trashRetentionDays: number;
 }

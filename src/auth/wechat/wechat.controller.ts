@@ -39,7 +39,7 @@ export class WechatController extends SocialController {
   }
 
   @Public()
-  @Post('login-native')
+  @Post('login/native')
   async nativeLogin(
     @Req() req: Request,
     @Res() res: Response,
@@ -67,7 +67,7 @@ export class WechatController extends SocialController {
   }
 
   @Public()
-  @Post('miniprogram/login')
+  @Post('login/miniprogram')
   async miniProgramLogin(
     @Req() req: Request,
     @Res() res: Response,

@@ -67,7 +67,7 @@ export class WechatController extends SocialController {
   }
 
   @Public()
-  @Post('login/miniprogram')
+  @Post('login/mini_program')
   async miniProgramLogin(
     @Req() req: Request,
     @Res() res: Response,

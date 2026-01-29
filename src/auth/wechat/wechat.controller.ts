@@ -39,7 +39,35 @@ export class WechatController extends SocialController {
   }
 
   @Public()
-  @Post('miniprogram/login')
+  @Post('login/native')
+  async nativeLogin(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body('code') code: string,
+    @Body('source') source?: string,
+    @Body('lang') lang?: string,
+  ) {
+    const loginData = await this.wechatService.nativeLogin(code, source, lang);
+
+    if (loginData && loginData.access_token) {
+      const jwtExpireSeconds = parseInt(
+        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+        10,
+      );
+      res.cookie('token', loginData.access_token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        maxAge: jwtExpireSeconds * 1000,
+      });
+    }
+
+    return res.json(loginData);
+  }
+
+  @Public()
+  @Post('login/mini_program')
   async miniProgramLogin(
     @Req() req: Request,
     @Res() res: Response,

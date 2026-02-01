@@ -11,6 +11,9 @@
     "responseBodyNotReadable": "Response body is not readable",
     "messageIdNotSet": "Message ID is not set in context",
     "messageNotFound": "Message not found",
-    "requestFailed": "Request failed with status {status}"
+    "requestFailed": "Request failed with status {status}",
+    "jpushNotConfigured": "JPush is not configured",
+    "jpushSendFailed": "Push notification failed: {message}",
+    "jpushBroadcastFailed": "Push broadcast failed: {message}"
   }
 }

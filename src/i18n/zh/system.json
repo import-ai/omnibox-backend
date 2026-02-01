@@ -11,6 +11,9 @@
     "responseBodyNotReadable": "响应体不可读",
     "messageIdNotSet": "上下文中未设置消息ID",
     "messageNotFound": "消息未找到",
-    "requestFailed": "请求失败，状态码 {status}"
+    "requestFailed": "请求失败，状态码 {status}",
+    "jpushNotConfigured": "极光推送未配置",
+    "jpushSendFailed": "推送发送失败: {message}",
+    "jpushBroadcastFailed": "推送广播失败: {message}"
   }
 }

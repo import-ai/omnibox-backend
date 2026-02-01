@@ -9,6 +9,7 @@ import {
   UseInterceptors,
   ValidationPipe,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
@@ -30,6 +31,7 @@ import {
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { JpushService } from 'omniboxd/subscribe-message/jpush.service';
 
 @Controller('api/v1/wizard')
 export class CollectController {
@@ -54,9 +56,12 @@ export class CollectController {
 
 @Controller('api/v1/namespaces/:namespaceId/wizard')
 export class WizardController {
+  private readonly logger = new Logger(WizardController.name);
+
   constructor(
     private readonly wizardService: WizardService,
     private readonly i18n: I18nService,
+    private readonly jpushService: JpushService,
   ) {}
 
   @Post('collect/gzip')
@@ -123,12 +128,54 @@ export class WizardController {
         HttpStatus.BAD_REQUEST,
       );
     }
-    return await this.wizardService.collectUrl(
-      namespaceId,
-      userId,
-      data.url,
-      data.parentId,
-    );
+
+    try {
+      const result = await this.wizardService.collectUrl(
+        namespaceId,
+        userId,
+        data.url,
+        data.parentId,
+      );
+
+      // Send success push notification
+      this.jpushService
+        .sendNotification({
+          userId,
+          title: this.i18n.t('wizard.push.collectSuccessTitle'),
+          content: this.i18n.t('wizard.push.collectSuccessContent'),
+          extras: {
+            type: 'collect_success',
+            namespaceId,
+            resourceId: result.resource_id,
+            url: data.url,
+          },
+        })
+        .catch((err) => {
+          this.logger.error({
+            message: 'Failed to send push notification',
+            err,
+          });
+        });
+
+      return result;
+    } catch (error) {
+      // Send failure push notification
+      this.jpushService
+        .sendNotification({
+          userId,
+          title: this.i18n.t('wizard.push.collectFailTitle'),
+          content: this.i18n.t('wizard.push.collectFailContent'),
+          extras: { type: 'collect_fail', namespaceId, url: data.url },
+        })
+        .catch((err) => {
+          this.logger.error({
+            message: 'Failed to send push notification',
+            err,
+          });
+        });
+
+      throw error;
+    }
   }
 
   @Post('*path')

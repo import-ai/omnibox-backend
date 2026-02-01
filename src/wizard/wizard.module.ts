@@ -22,6 +22,7 @@ import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { SubscribeMessageModule } from 'omniboxd/subscribe-message/subscribe-message.module';
 
 @Module({
   providers: [WizardService, ChunkManagerService, OpenWizardService],
@@ -38,6 +39,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     TasksModule,
     S3Module,
     SharedResourcesModule,
+    SubscribeMessageModule,
     TypeOrmModule.forFeature([Task]),
   ],
   controllers: [

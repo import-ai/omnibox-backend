@@ -4,5 +4,11 @@
     "missingRequiredFields": "缺少必填字段",
     "invalidTaskPayload": "无效的任务载荷",
     "taskNotStarted": "任务 {taskId} 尚未开始"
+  },
+  "push": {
+    "collectSuccessTitle": "小黑提示您~~~",
+    "collectSuccessContent": "您有新的内容保存成功",
+    "collectFailTitle": "小黑提示您~~~",
+    "collectFailContent": "我去修一修程序员!!!"
   }
 }

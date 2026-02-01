@@ -4,5 +4,11 @@
     "missingRequiredFields": "Missing required fields",
     "invalidTaskPayload": "Invalid task payload",
     "taskNotStarted": "Task {taskId} has not been started yet"
+  },
+  "push": {
+    "collectSuccessTitle": "Xiaohei reminds you~~~",
+    "collectSuccessContent": "Your content has been saved successfully",
+    "collectFailTitle": "Xiaohei reminds you~~~",
+    "collectFailContent": "Let me go fix the programmer!!!"
   }
 }

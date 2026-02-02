@@ -10,8 +10,8 @@ import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
 import { extname } from 'path';
 import * as mime from 'mime-types';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
-import { UsagesService } from 'omniboxd/usages/usages.service';
-import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
+import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
+import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 
 const s3Prefix = 'uploaded-files';
@@ -54,7 +54,7 @@ export class FilesService {
     private readonly i18n: I18nService,
     private readonly s3Service: S3Service,
     private readonly namespacesQuotaService: NamespacesQuotaService,
-    private readonly usagesService: UsagesService,
+    private readonly storageUsagesService: StorageUsagesService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -182,7 +182,7 @@ export class FilesService {
                 return;
               }
               if (size > 0) {
-                await this.usagesService.updateStorageUsage(
+                await this.storageUsagesService.updateStorageUsage(
                   file.namespaceId,
                   file.userId,
                   StorageType.UPLOAD,

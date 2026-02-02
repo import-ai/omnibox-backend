@@ -5,8 +5,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, DataSource, IsNull, Not } from 'typeorm';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
-import { UsagesService } from 'omniboxd/usages/usages.service';
-import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
+import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
+import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
 import { transaction, Transaction } from 'omniboxd/utils/transaction-utils';
 import { S3Service } from 'omniboxd/s3/s3.service';
 
@@ -20,7 +20,7 @@ export class ResourceAttachmentsService {
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly i18n: I18nService,
-    private readonly usagesService: UsagesService,
+    private readonly storageUsagesService: StorageUsagesService,
     private readonly dataSource: DataSource,
     private readonly s3Service: S3Service,
   ) {}
@@ -79,7 +79,7 @@ export class ResourceAttachmentsService {
       await repository.save(resourceAttachment);
 
       // Update storage usage for attachment within the same transaction
-      await this.usagesService.updateStorageUsage(
+      await this.storageUsagesService.updateStorageUsage(
         namespaceId,
         userId,
         StorageType.ATTACHMENT,
@@ -123,7 +123,7 @@ export class ResourceAttachmentsService {
 
       // Update storage usage for attachment (decrement) within the same transaction
       if (existingAttachment.attachmentSize !== null) {
-        await this.usagesService.updateStorageUsage(
+        await this.storageUsagesService.updateStorageUsage(
           namespaceId,
           userId,
           StorageType.ATTACHMENT,
@@ -168,7 +168,7 @@ export class ResourceAttachmentsService {
         0,
       );
       if (totalSize > 0) {
-        await this.usagesService.updateStorageUsage(
+        await this.storageUsagesService.updateStorageUsage(
           namespaceId,
           userId,
           StorageType.ATTACHMENT,
@@ -253,7 +253,7 @@ export class ResourceAttachmentsService {
               if (!resource) {
                 return;
               }
-              await this.usagesService.updateStorageUsage(
+              await this.storageUsagesService.updateStorageUsage(
                 attachment.namespaceId,
                 resource.userId!,
                 StorageType.ATTACHMENT,

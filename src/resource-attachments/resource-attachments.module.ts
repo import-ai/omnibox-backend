@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ResourceAttachmentsService } from './resource-attachments.service';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
-import { UsagesModule } from 'omniboxd/usages/usages.module';
+import { StorageUsagesModule } from 'omniboxd/storage-usages/storage-usages.module';
 import { S3Module } from 'omniboxd/s3/s3.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 
@@ -11,7 +11,7 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
   providers: [ResourceAttachmentsService],
   imports: [
     TypeOrmModule.forFeature([ResourceAttachment, Resource]),
-    UsagesModule,
+    StorageUsagesModule,
     S3Module,
   ],
 })

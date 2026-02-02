@@ -16,8 +16,8 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
-import { UsagesService } from 'omniboxd/usages/usages.service';
-import { StorageType } from 'omniboxd/usages/entities/storage-usage.entity';
+import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
+import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
 
 const TASK_PRIORITY = 5;
 
@@ -31,7 +31,7 @@ export class ResourcesService {
     private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
     private readonly filesService: FilesService,
-    private readonly usagesService: UsagesService,
+    private readonly storageUsagesService: StorageUsagesService,
   ) {}
 
   async getParentResourcesOrFail(
@@ -488,7 +488,7 @@ export class ResourcesService {
     if (props.content !== undefined && resource.userId) {
       const contentSizeDiff = resource.contentSize - oldResource.contentSize;
       if (contentSizeDiff !== 0) {
-        await this.usagesService.updateStorageUsage(
+        await this.storageUsagesService.updateStorageUsage(
           namespaceId,
           resource.userId,
           StorageType.CONTENT,
@@ -555,7 +555,7 @@ export class ResourcesService {
         );
       }
       if (props.userId && file.size !== null) {
-        await this.usagesService.updateStorageUsage(
+        await this.storageUsagesService.updateStorageUsage(
           props.namespaceId,
           props.userId,
           StorageType.UPLOAD,
@@ -578,7 +578,7 @@ export class ResourcesService {
     );
 
     if (resource.contentSize > 0 && resource.userId) {
-      await this.usagesService.updateStorageUsage(
+      await this.storageUsagesService.updateStorageUsage(
         resource.namespaceId,
         resource.userId,
         StorageType.CONTENT,
@@ -696,7 +696,7 @@ export class ResourcesService {
     });
 
     if (resource.contentSize > 0 && resource.userId) {
-      await this.usagesService.updateStorageUsage(
+      await this.storageUsagesService.updateStorageUsage(
         namespaceId,
         resource.userId,
         StorageType.CONTENT,
@@ -708,7 +708,7 @@ export class ResourcesService {
     if (resource.fileId && resource.userId) {
       const fileMeta = await this.filesService.headFile(resource.fileId);
       if (fileMeta && fileMeta.contentLength) {
-        await this.usagesService.updateStorageUsage(
+        await this.storageUsagesService.updateStorageUsage(
           namespaceId,
           resource.userId,
           StorageType.UPLOAD,
@@ -935,7 +935,7 @@ export class ResourcesService {
           if (result.affected !== 1) {
             return;
           }
-          await this.usagesService.updateStorageUsage(
+          await this.storageUsagesService.updateStorageUsage(
             resource.namespaceId,
             resource.userId!,
             StorageType.CONTENT,

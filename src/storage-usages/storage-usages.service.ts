@@ -5,7 +5,7 @@ import { StorageUsage, StorageType } from './entities/storage-usage.entity';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
 
 @Injectable()
-export class UsagesService {
+export class StorageUsagesService {
   constructor(
     @InjectRepository(StorageUsage)
     private readonly storageUsageRepository: Repository<StorageUsage>,

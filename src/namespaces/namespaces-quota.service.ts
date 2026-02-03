@@ -11,6 +11,7 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
   taskParallelism: 1,
   fileUploadSizeLimit: 20 * 1024 * 1024, // 20MB
   trashRetentionDays: 7,
+  readonly: false,
 };
 
 @Injectable()
@@ -41,6 +42,9 @@ export class NamespacesQuotaService {
 
   async isNamespaceReadonly(namespaceId: string): Promise<boolean> {
     const usage = await this.getNamespaceUsage(namespaceId);
+    if (usage.readonly) {
+      return true;
+    }
     return usage.storageQuota > 0 && usage.storageUsage > usage.storageQuota;
   }
 }

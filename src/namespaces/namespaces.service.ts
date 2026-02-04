@@ -190,7 +190,10 @@ export class NamespacesService {
     return await this.createAndJoinNamespace(userId, namespaceName, tx);
   }
 
-  async createNamespaceForUser(userId: string, name: string): Promise<Namespace> {
+  async createNamespaceForUser(
+    userId: string,
+    name: string,
+  ): Promise<Namespace> {
     if (!this.proUrl) {
       return await this.createAndJoinNamespace(userId, name);
     }

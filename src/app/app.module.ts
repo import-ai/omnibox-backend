@@ -87,6 +87,7 @@ import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/17674414
 import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/1768483850604-add-phone-unique-constraint';
 import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oauth-provider';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
+import { NotificationModule } from 'omniboxd/notification/notification.module';
 import { StorageUsages1768556182000 } from 'omniboxd/migrations/1768556182000-storage-usages';
 import { AddAttachmentSize1768560746946 } from 'omniboxd/migrations/1768560746946-add-attachment-size';
 import { AddInsufficientQuotaStatus1768569500000 } from 'omniboxd/migrations/1768569500000-add-insufficient-quota-status';
@@ -176,6 +177,7 @@ export class AppModule implements NestModule {
         OpenAPIModule,
         SubscribeMessageModule,
         AppConfigModule,
+        NotificationModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

@@ -1,5 +1,5 @@
 import { applyDecorators, UseInterceptors } from '@nestjs/common';
 import { NamespaceReadonlyInterceptor } from '../interceptors/namespace-readonly.interceptor';
 
-export const CheckStorageQuota = () =>
+export const CheckNamespaceReadonly = () =>
   applyDecorators(UseInterceptors(NamespaceReadonlyInterceptor));

@@ -22,7 +22,7 @@ import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { SidebarChildDto } from './dto/sidebar-child.dto';
 import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
-import { CheckStorageQuota } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -64,7 +64,7 @@ export class NamespaceResourcesController {
   }
 
   @Post()
-  @CheckStorageQuota()
+  @CheckNamespaceReadonly()
   async create(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -83,7 +83,7 @@ export class NamespaceResourcesController {
   }
 
   @Post(':resourceId/duplicate')
-  @CheckStorageQuota()
+  @CheckNamespaceReadonly()
   async duplicate(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -134,7 +134,7 @@ export class NamespaceResourcesController {
   }
 
   @Post(':resourceId/move/:targetId')
-  @CheckStorageQuota()
+  @CheckNamespaceReadonly()
   async move(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -248,7 +248,7 @@ export class NamespaceResourcesController {
   }
 
   @Patch(':resourceId')
-  @CheckStorageQuota()
+  @CheckNamespaceReadonly()
   async update(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -299,7 +299,7 @@ export class NamespaceResourcesController {
   }
 
   @Post(':resourceId/restore')
-  @CheckStorageQuota()
+  @CheckNamespaceReadonly()
   async restore(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,

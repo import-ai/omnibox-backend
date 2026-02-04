@@ -42,9 +42,6 @@ export class NamespacesQuotaService {
 
   async isNamespaceReadonly(namespaceId: string): Promise<boolean> {
     const usage = await this.getNamespaceUsage(namespaceId);
-    if (usage.readonly) {
-      return true;
-    }
-    return usage.storageQuota > 0 && usage.storageUsage > usage.storageQuota;
+    return usage.readonly;
   }
 }

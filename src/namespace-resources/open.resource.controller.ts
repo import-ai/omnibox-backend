@@ -32,10 +32,12 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @ApiTags('Resources')
 @ApiSecurity('api-key')
 @Controller('open/api/v1/resources')
+@CheckNamespaceReadonly()
 export class OpenResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,

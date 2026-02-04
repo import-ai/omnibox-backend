@@ -32,10 +32,12 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @ApiTags('Wizard')
 @ApiSecurity('api-key')
 @Controller('open/api/v1/wizard')
+@CheckNamespaceReadonly()
 export class OpenWizardController {
   constructor(
     private readonly wizardService: WizardService,

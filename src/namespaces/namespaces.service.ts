@@ -10,7 +10,8 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   NamespaceMember,
   NamespaceRole,
@@ -30,6 +31,8 @@ import { Share } from 'omniboxd/shares/entities/share.entity';
 
 @Injectable()
 export class NamespacesService {
+  private readonly proUrl: string | undefined;
+
   constructor(
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
@@ -46,7 +49,10 @@ export class NamespacesService {
     private readonly permissionsService: PermissionsService,
     private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
-  ) {}
+    configService: ConfigService,
+  ) {
+    this.proUrl = configService.get<string>('OBB_PRO_URL');
+  }
 
   private async hasOwner(
     namespaceId: string,
@@ -182,6 +188,28 @@ export class NamespacesService {
       args: { userName },
     });
     return await this.createAndJoinNamespace(userId, namespaceName, tx);
+  }
+
+  async createNamespaceForUser(userId: string, name: string): Promise<Namespace> {
+    if (!this.proUrl) {
+      return await this.createAndJoinNamespace(userId, name);
+    }
+    const url = `${this.proUrl}/internal/api/v1/pro-namespaces`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, name }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new AppException(
+        data.message ?? `Pro API error: ${response.statusText}`,
+        data.code ?? 'PRO_NAMESPACE_CREATE_FAILED',
+        response.status as HttpStatus,
+      );
+    }
+    const { id } = await response.json();
+    return await this.getNamespace(id);
   }
 
   async createAndJoinNamespace(

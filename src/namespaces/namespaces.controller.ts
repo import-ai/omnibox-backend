@@ -98,7 +98,7 @@ export class NamespacesController {
 
   @Post()
   async create(@Req() req, @Body() createDto: CreateNamespaceDto) {
-    return await this.namespacesService.createNamespaceForUser(
+    return await this.namespacesService.createAndJoinNamespace(
       req.user.id,
       createDto.name,
     );

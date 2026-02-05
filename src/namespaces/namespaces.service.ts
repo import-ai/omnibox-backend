@@ -190,31 +190,6 @@ export class NamespacesService {
     return await this.createAndJoinNamespace(userId, namespaceName, tx);
   }
 
-  async createNamespaceForUser(
-    userId: string,
-    name: string,
-  ): Promise<Namespace> {
-    if (!this.proUrl) {
-      return await this.createAndJoinNamespace(userId, name);
-    }
-    const url = `${this.proUrl}/internal/api/v1/pro-namespaces`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, name }),
-    });
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new AppException(
-        data.message ?? `Pro API error: ${response.statusText}`,
-        data.code ?? 'PRO_NAMESPACE_CREATE_FAILED',
-        response.status as HttpStatus,
-      );
-    }
-    const { id } = await response.json();
-    return await this.getNamespace(id);
-  }
-
   async createAndJoinNamespace(
     ownerId: string,
     namespaceName: string,
@@ -233,6 +208,23 @@ export class NamespacesService {
       ResourcePermission.FULL_ACCESS,
       tx,
     );
+    if (this.proUrl) {
+      tx.afterCommitHooks.push(async () => {
+        const url = `${this.proUrl}/internal/api/v1/pro-namespaces/${namespace.id}/creation-hook`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new AppException(
+            data.message ?? `Pro API error: ${response.statusText}`,
+            data.code ?? 'PRO_CREATION_HOOK_FAILED',
+            response.status as HttpStatus,
+          );
+        }
+      });
+    }
     return namespace;
   }
 

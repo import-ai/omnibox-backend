@@ -9,12 +9,10 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
-import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @ApiTags('API Keys')
 @ApiSecurity('api-key')
 @Controller('open/api/v1/api-keys')
-@CheckNamespaceReadonly()
 export class OpenAPIKeyController {
   constructor(private readonly apiKeyService: APIKeyService) {}
 

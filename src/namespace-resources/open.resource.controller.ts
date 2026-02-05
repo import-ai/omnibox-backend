@@ -37,7 +37,6 @@ import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-sto
 @ApiTags('Resources')
 @ApiSecurity('api-key')
 @Controller('open/api/v1/resources')
-@CheckNamespaceReadonly()
 export class OpenResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
@@ -46,6 +45,7 @@ export class OpenResourcesController {
   ) {}
 
   @Post()
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {
@@ -141,6 +141,7 @@ export class OpenResourcesController {
   }
 
   @Post('upload')
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {

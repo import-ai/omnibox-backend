@@ -30,12 +30,14 @@ import {
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('api/v1/wizard')
 export class CollectController {
   constructor(private readonly wizardService: WizardService) {}
 
   @Post('collect/gzip')
+  @CheckNamespaceReadonly()
   @UseInterceptors(FileInterceptor('html'))
   async collectGzip(
     @UserId() userId: string,
@@ -60,6 +62,7 @@ export class WizardController {
   ) {}
 
   @Post('collect/gzip')
+  @CheckNamespaceReadonly()
   @UseInterceptors(FileInterceptor('html'))
   async collectGzip(
     @Param('namespaceId') namespaceId: string,
@@ -110,6 +113,7 @@ export class WizardController {
   }
 
   @Post('collect/url')
+  @CheckNamespaceReadonly()
   async collectUrl(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,

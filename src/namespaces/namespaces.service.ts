@@ -558,6 +558,27 @@ export class NamespacesService {
     return await this.namespaceMemberRepository.countBy({ namespaceId });
   }
 
+  async getNamespaceOwnerUserId(namespaceId: string): Promise<string | null> {
+    await this.getNamespace(namespaceId);
+    const owner = await this.namespaceMemberRepository.findOne({
+      where: {
+        namespaceId,
+        role: NamespaceRole.OWNER,
+        deletedAt: IsNull(),
+      },
+      select: ['userId'],
+    });
+    return owner?.userId ?? null;
+  }
+
+  async getNamespaceIdsOwnedByUser(userId: string): Promise<string[]> {
+    const members = await this.namespaceMemberRepository.find({
+      where: { userId, role: NamespaceRole.OWNER },
+      select: ['namespaceId'],
+    });
+    return members.map((m) => m.namespaceId);
+  }
+
   async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
       where: { namespaceId },

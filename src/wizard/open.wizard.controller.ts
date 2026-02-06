@@ -32,6 +32,7 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @ApiTags('Wizard')
 @ApiSecurity('api-key')
@@ -43,6 +44,7 @@ export class OpenWizardController {
   ) {}
 
   @Post('collect/gzip')
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {
@@ -102,6 +104,7 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
   }
 
   @Post('ask')
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {
@@ -136,6 +139,7 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
   }
 
   @Post('collect/url')
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {

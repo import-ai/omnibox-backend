@@ -22,13 +22,11 @@ export class NamespaceReadonlyInterceptor implements NestInterceptor {
     next: CallHandler,
   ): Promise<Observable<any>> {
     const request = context.switchToHttp().getRequest();
-    const method = request.method;
-
-    if (method === 'DELETE') {
-      return next.handle();
-    }
-
-    const namespaceId = request.params?.namespaceId;
+    // Resolve namespace: from URL params (e.g. /namespaces/:namespaceId/...), body (e.g. collect/gzip), or API key (open API)
+    const namespaceId =
+      request.params?.namespaceId ??
+      request.body?.namespace_id ??
+      request.apiKey?.namespaceId;
 
     if (!namespaceId) {
       return next.handle();

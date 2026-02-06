@@ -10,7 +10,8 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   NamespaceMember,
   NamespaceRole,
@@ -30,6 +31,8 @@ import { Share } from 'omniboxd/shares/entities/share.entity';
 
 @Injectable()
 export class NamespacesService {
+  private readonly proUrl: string | undefined;
+
   constructor(
     @InjectRepository(Namespace)
     private readonly namespaceRepository: Repository<Namespace>,
@@ -46,7 +49,10 @@ export class NamespacesService {
     private readonly permissionsService: PermissionsService,
     private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
-  ) {}
+    configService: ConfigService,
+  ) {
+    this.proUrl = configService.get<string>('OBB_PRO_URL');
+  }
 
   private async hasOwner(
     namespaceId: string,
@@ -188,6 +194,7 @@ export class NamespacesService {
     ownerId: string,
     namespaceName: string,
     tx?: Transaction,
+    skipHook?: boolean,
   ): Promise<Namespace> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
@@ -202,6 +209,23 @@ export class NamespacesService {
       ResourcePermission.FULL_ACCESS,
       tx,
     );
+    if (this.proUrl && !skipHook) {
+      tx.afterCommitHooks.push(async () => {
+        const url = `${this.proUrl}/internal/api/v1/pro-namespaces/${namespace.id}/creation-hook`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new AppException(
+            data.message ?? `Pro API error: ${response.statusText}`,
+            data.code ?? 'PRO_CREATION_HOOK_FAILED',
+            response.status as HttpStatus,
+          );
+        }
+      });
+    }
     return namespace;
   }
 
@@ -525,6 +549,27 @@ export class NamespacesService {
 
   async countMembers(namespaceId: string): Promise<number> {
     return await this.namespaceMemberRepository.countBy({ namespaceId });
+  }
+
+  async getNamespaceOwnerUserId(namespaceId: string): Promise<string | null> {
+    await this.getNamespace(namespaceId);
+    const owner = await this.namespaceMemberRepository.findOne({
+      where: {
+        namespaceId,
+        role: NamespaceRole.OWNER,
+        deletedAt: IsNull(),
+      },
+      select: ['userId'],
+    });
+    return owner?.userId ?? null;
+  }
+
+  async getNamespaceIdsOwnedByUser(userId: string): Promise<string[]> {
+    const members = await this.namespaceMemberRepository.find({
+      where: { userId, role: NamespaceRole.OWNER },
+      select: ['namespaceId'],
+    });
+    return members.map((m) => m.namespaceId);
   }
 
   async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {

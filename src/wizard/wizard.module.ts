@@ -8,6 +8,7 @@ import {
 import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -29,6 +30,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     UserModule,
     SharesModule,
     NamespacesModule,
+    NamespacesQuotaModule,
     NamespaceResourcesModule,
     ResourcesModule,
     TagModule,

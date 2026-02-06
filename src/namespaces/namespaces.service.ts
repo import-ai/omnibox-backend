@@ -194,6 +194,7 @@ export class NamespacesService {
     ownerId: string,
     namespaceName: string,
     tx?: Transaction,
+    skipHook?: boolean,
   ): Promise<Namespace> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
@@ -208,7 +209,7 @@ export class NamespacesService {
       ResourcePermission.FULL_ACCESS,
       tx,
     );
-    if (this.proUrl) {
+    if (this.proUrl && !skipHook) {
       tx.afterCommitHooks.push(async () => {
         const url = `${this.proUrl}/internal/api/v1/pro-namespaces/${namespace.id}/creation-hook`;
         const response = await fetch(url, {

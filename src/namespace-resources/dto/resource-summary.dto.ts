@@ -18,7 +18,7 @@ export class ResourceSummaryDto {
   attrs: Record<string, any>;
 
   @Expose()
-  content: string;
+  content?: string;
 
   @Expose({ name: 'has_children' })
   hasChildren: boolean;
@@ -47,11 +47,13 @@ export class ResourceSummaryDto {
     delete dto.attrs.transcript;
     delete dto.attrs.video_info;
     // Content prefix: strip images and take first 100 chars
-    const contentWithoutImages = (resource.content || '')
-      .replace(/!\[.*?\]\(.*?\)/g, '')
-      .replace(/<img[^>]*>/gi, '')
-      .trim();
-    dto.content = contentWithoutImages.slice(0, 100);
+    if (resource.content) {
+      const contentWithoutImages = resource.content
+        .replace(/!\[.*?\]\(.*?\)/g, '')
+        .replace(/<img[^>]*>/gi, '')
+        .trim();
+      dto.content = contentWithoutImages.slice(0, 100);
+    }
     dto.hasChildren = hasChildren;
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;

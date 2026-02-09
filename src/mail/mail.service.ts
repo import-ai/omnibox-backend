@@ -138,9 +138,16 @@ export class MailService {
       inviteType === 'share'
         ? 'mail.subjects.inviteShare'
         : 'mail.subjects.invite';
+        
+    const truncatedResourceName = resourceName
+      ? resourceName.length > 16
+        ? resourceName.slice(0, 16) + '...'
+        : resourceName
+      : undefined;
+
     const subject = this.i18n.t(subjectKey, {
       lang,
-      args: { senderUsername, namespaceName, resourceName },
+      args: { senderUsername, namespaceName, resourceName: truncatedResourceName },
     });
 
     try {
@@ -156,7 +163,7 @@ export class MailService {
           isExistingUser: isExistingUser || false,
           i18nLang: lang,
           isShareInvite: inviteType === 'share',
-          resourceName,
+          resourceName: truncatedResourceName,
         },
       });
     } catch (error) {

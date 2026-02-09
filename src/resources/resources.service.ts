@@ -714,6 +714,17 @@ export class ResourcesService {
 
     const queryBuilder = this.resourceRepository
       .createQueryBuilder('resource')
+      .select([
+        'resource.id',
+        'resource.name',
+        'resource.parentId',
+        'resource.resourceType',
+        'resource.globalPermission',
+        'resource.attrs',
+        'resource.createdAt',
+        'resource.updatedAt',
+        'resource.deletedAt',
+      ])
       .withDeleted()
       .where('resource.namespace_id = :namespaceId', { namespaceId })
       .andWhere('resource.deleted_at IS NOT NULL')

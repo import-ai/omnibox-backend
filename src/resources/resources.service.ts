@@ -173,36 +173,6 @@ export class ResourcesService {
     return resources;
   }
 
-  async getSubResources(
-    namespaceId: string,
-    parentIds: string[],
-    options?: {
-      limit?: number;
-      offset?: number;
-    },
-  ): Promise<ResourceMetaDto[]> {
-    const children = await this.resourceRepository.find({
-      select: [
-        'id',
-        'name',
-        'parentId',
-        'resourceType',
-        'globalPermission',
-        'createdAt',
-        'updatedAt',
-        'attrs',
-      ],
-      where: {
-        namespaceId,
-        parentId: In(parentIds),
-      },
-      order: { updatedAt: 'DESC' },
-      ...(options?.limit !== undefined && { take: options.limit }),
-      ...(options?.offset !== undefined && { skip: options.offset }),
-    });
-    return children.map((r) => ResourceMetaDto.fromEntity(r));
-  }
-
   /**
    * Get children resources with configurable fields
    * @param summary - if true, includes content/timestamps for folder view
@@ -249,7 +219,8 @@ export class ResourcesService {
   ): Promise<ResourceMetaDto[]> {
     const resourcesMap: Map<string, ResourceMetaDto> = new Map();
     while (parentIds.length > 0) {
-      const resources = await this.getSubResources(namespaceId, parentIds);
+      const children = await this.getChildren(namespaceId, parentIds);
+      const resources = children.map((r) => ResourceMetaDto.fromEntity(r));
       for (const resource of resources) {
         if (resourcesMap.has(resource.id)) {
           const message = this.i18n.t('resource.errors.cycleDetected');

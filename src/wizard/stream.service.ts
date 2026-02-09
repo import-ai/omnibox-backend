@@ -311,7 +311,7 @@ export class StreamService {
         reqResource.id,
       );
       if (reqResource.type === 'folder') {
-        const subResources = await this.resourcesService.getSubResources(
+        const subResources = await this.resourcesService.getChildren(
           share.namespaceId,
           [reqResource.id],
         );

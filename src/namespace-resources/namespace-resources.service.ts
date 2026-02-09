@@ -506,10 +506,11 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    const subResources = await this.resourcesService.getSubResources(
+    const children = await this.resourcesService.getChildren(
       namespaceId,
       [resourceId],
     );
+    const subResources = children.map((r) => ResourceMetaDto.fromEntity(r));
     const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,
@@ -853,14 +854,15 @@ export class NamespaceResourcesService {
     const allChildren: ResourceMetaDto[] = [];
     let resourceIds = [resourceId];
     for (let currentDepth = 0; currentDepth < depth; currentDepth++) {
-      const children = await this.resourcesService.getSubResources(
+      const children = await this.resourcesService.getChildren(
         namespaceId,
         resourceIds,
       );
       if (children.length === 0) {
         break;
       }
-      allChildren.push(...children);
+      const childMetas = children.map((r) => ResourceMetaDto.fromEntity(r));
+      allChildren.push(...childMetas);
       resourceIds = children.map((child) => child.id);
     }
     return allChildren;

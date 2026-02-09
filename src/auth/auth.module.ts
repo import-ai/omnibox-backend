@@ -31,6 +31,7 @@ import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { SmsModule } from 'omniboxd/sms/sms.module';
 import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
   exports: [
@@ -82,6 +83,7 @@ import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider
     PermissionsModule,
     APIKeyModule,
     OAuthProviderModule,
+    ResourcesModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

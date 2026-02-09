@@ -40,11 +40,11 @@ export class GoogleController extends SocialController {
     @Body() body: { code: string; state: string; lang?: string },
   ) {
     const startTime = Date.now();
-    this.logger.debug(`[Google Callback] 开始处理 - state: ${body.state}`);
+    this.logger.log(`[Google Callback] 开始处理 - state: ${body.state}`);
 
     const findUserIdStart = Date.now();
     const userId = this.findUserId(req.headers.authorization);
-    this.logger.debug(
+    this.logger.log(
       `[Google Callback] findUserId 完成 - 耗时: ${Date.now() - findUserIdStart}ms, userId: ${userId}`,
     );
 
@@ -55,7 +55,7 @@ export class GoogleController extends SocialController {
       userId,
       body.lang,
     );
-    this.logger.debug(
+    this.logger.log(
       `[Google Callback] googleService.handleCallback 完成 - 耗时: ${Date.now() - handleCallbackStart}ms`,
     );
 
@@ -72,12 +72,12 @@ export class GoogleController extends SocialController {
         path: '/',
         maxAge: jwtExpireSeconds * 1000,
       });
-      this.logger.debug(
+      this.logger.log(
         `[Google Callback] 设置 cookie 完成 - 耗时: ${Date.now() - cookieStart}ms`,
       );
     }
 
-    this.logger.debug(`[Google Callback] 总耗时: ${Date.now() - startTime}ms`);
+    this.logger.log(`[Google Callback] 总耗时: ${Date.now() - startTime}ms`);
 
     return res.json(loginData);
   }

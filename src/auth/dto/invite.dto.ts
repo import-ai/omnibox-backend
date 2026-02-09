@@ -67,4 +67,9 @@ export class InviteDto {
   @IsOptional()
   @IsString({ each: true })
   groupTitles?: string[];
+
+  @Expose()
+  @IsString()
+  @IsOptional()
+  inviteType?: 'normal' | 'share';
 }

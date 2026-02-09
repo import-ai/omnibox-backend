@@ -130,11 +130,17 @@ export class MailService {
     receiverUsername?: string,
     isExistingUser?: boolean,
     receiverLang?: string,
+    inviteType?: 'normal' | 'share',
+    resourceName?: string,
   ): Promise<void> {
     const lang = receiverLang || I18nContext.current()?.lang;
-    const subject = this.i18n.t('mail.subjects.invite', {
+    const subjectKey =
+      inviteType === 'share'
+        ? 'mail.subjects.inviteShare'
+        : 'mail.subjects.invite';
+    const subject = this.i18n.t(subjectKey, {
       lang,
-      args: { senderUsername, namespaceName },
+      args: { senderUsername, namespaceName, resourceName },
     });
 
     try {
@@ -149,6 +155,8 @@ export class MailService {
           receiverUsername,
           isExistingUser: isExistingUser || false,
           i18nLang: lang,
+          isShareInvite: inviteType === 'share',
+          resourceName,
         },
       });
     } catch (error) {

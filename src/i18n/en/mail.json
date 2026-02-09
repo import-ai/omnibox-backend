@@ -10,6 +10,7 @@
     "emailChangeNotification": "Your Email Has Been Changed",
     "emailOtp": "Your verification code",
     "invite": "{senderUsername} invites you to join the space {namespaceName}",
+    "inviteShare": "{senderUsername} invites you to collaborate on {resourceName}",
     "accountDeletion": "Confirm Account Deletion"
   },
   "templates": {
@@ -67,6 +68,9 @@
       "bodyExistingUserMiddle": "has invited you to join the space",
       "bodyExistingUserAction": "Click the link below to accept the invitation:",
       "bodyExistingUserNoUsernamePrefix": "has invited you to join the space",
+      "shareHeading": "You're Invited to Collaborate",
+      "shareBodyPrefix": "invites you to join the space",
+      "shareBodyMiddle": "and collaborate on",
       "buttonText": "Accept Invitation",
       "ignoreText": "If you do not want to join this space, please ignore this email.",
       "expireText": "This invitation will expire in 7 days."

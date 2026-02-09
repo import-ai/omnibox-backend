@@ -26,6 +26,9 @@ export class SharedResourceMetaDto {
   @Expose({ name: 'has_children' })
   hasChildren?: boolean;
 
+  @Expose()
+  url?: string;
+
   static fromEntity(resource: Resource): SharedResourceMetaDto {
     const dto = new SharedResourceMetaDto();
     dto.id = resource.id;
@@ -33,6 +36,7 @@ export class SharedResourceMetaDto {
     dto.resourceType = resource.resourceType;
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
+    dto.url = resource.attrs?.url;
     return dto;
   }
 
@@ -47,6 +51,7 @@ export class SharedResourceMetaDto {
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
     dto.hasChildren = hasChildren;
+    dto.url = resource.attrs?.url;
     return dto;
   }
 }

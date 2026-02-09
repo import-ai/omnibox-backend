@@ -192,6 +192,7 @@ export class AuthController {
       groupId,
       emails,
       groupTitles,
+      inviteType,
     } = inviteDto;
 
     // Check if current user is owner or admin of the namespace
@@ -224,6 +225,7 @@ export class AuthController {
         resourceId,
         permission,
         groupId,
+        inviteType,
       });
     }
   }

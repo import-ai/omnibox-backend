@@ -10,6 +10,7 @@
     "emailChangeNotification": "您的邮箱已变更",
     "emailOtp": "您的验证码",
     "invite": "{senderUsername} 邀请您加入空间 {namespaceName}",
+    "inviteShare": "{senderUsername} 邀请您协作 {resourceName}",
     "accountDeletion": "确认删除账户"
   },
   "templates": {
@@ -67,6 +68,9 @@
       "bodyExistingUserMiddle": "邀请您加入空间",
       "bodyExistingUserAction": "点击下方链接接受邀请：",
       "bodyExistingUserNoUsernamePrefix": "邀请您加入空间",
+      "shareHeading": "您被邀请共同协作",
+      "shareBodyPrefix": "邀请您加入空间",
+      "shareBodyMiddle": "并协作",
       "buttonText": "接受邀请",
       "ignoreText": "如果您不想加入此空间，请忽略此邮件。",
       "expireText": "此邀请将在7天后过期。"

@@ -100,7 +100,16 @@ export class GoogleService {
     userId: string,
     lang?: string,
   ): Promise<any> {
+    const startTime = Date.now();
+    this.logger.debug(`[handleCallback] 开始处理 - state: ${state}`);
+
+    // 1. 获取并验证 state
+    const getStateStart = Date.now();
     const stateInfo = await this.socialService.getState(state);
+    this.logger.debug(
+      `[handleCallback] getState 完成 - 耗时: ${Date.now() - getStateStart}ms`,
+    );
+
     if (!stateInfo) {
       const message = this.i18n.t('auth.errors.invalidStateIdentifier');
       throw new AppException(
@@ -110,6 +119,8 @@ export class GoogleService {
       );
     }
 
+    // 2. 获取 Google access token
+    const tokenRequestStart = Date.now();
     const tokenResponse = await fetchWithRetry(
       `${this.googleOAuthAPIBaseUrl}/token`,
       {
@@ -125,6 +136,9 @@ export class GoogleService {
           redirect_uri: this.redirectUri,
         }),
       },
+    );
+    this.logger.debug(
+      `[handleCallback] Google token 请求完成 - 耗时: ${Date.now() - tokenRequestStart}ms`,
     );
 
     if (!tokenResponse.ok) {
@@ -149,11 +163,16 @@ export class GoogleService {
       );
     }
 
+    // 3. 获取 Google 用户信息
+    const userInfoRequestStart = Date.now();
     const userInfoResponse = await fetchWithRetry(
       `${this.googleAPIBaseUrl}/oauth2/v3/userinfo`,
       {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
       },
+    );
+    this.logger.debug(
+      `[handleCallback] Google 用户信息请求完成 - 耗时: ${Date.now() - userInfoRequestStart}ms`,
     );
 
     if (!userInfoResponse.ok) {
@@ -182,8 +201,18 @@ export class GoogleService {
       );
     }
 
+    // 4. 处理已登录用户的绑定场景
     if (userId) {
+      this.logger.debug(
+        `[handleCallback] 处理已登录用户绑定场景 - userId: ${userId}`,
+      );
+
+      const findByLoginIdStart = Date.now();
       const googleUser = await this.userService.findByLoginId(userData.sub);
+      this.logger.debug(
+        `[handleCallback] findByLoginId 完成 - 耗时: ${Date.now() - findByLoginIdStart}ms`,
+      );
+
       if (googleUser) {
         if (googleUser.id !== userId) {
           const providerName = this.i18n.t('auth.providers.google');
@@ -206,15 +235,29 @@ export class GoogleService {
           redirectUrl: stateInfo.redirectUrl,
         };
         stateInfo.userInfo = returnValue;
+
+        const updateStateStart = Date.now();
         await this.socialService.updateState(state, stateInfo);
+        this.logger.debug(
+          `[handleCallback] updateState 完成 - 耗时: ${Date.now() - updateStateStart}ms`,
+        );
+        this.logger.debug(
+          `[handleCallback] 总耗时: ${Date.now() - startTime}ms`,
+        );
         return returnValue;
       }
+
+      const bindingStart = Date.now();
       const existingUser = await this.userService.bindingExistUser({
         userId,
         loginType: 'google',
         loginId: userData.sub,
         metadata: userData,
       });
+      this.logger.debug(
+        `[handleCallback] bindingExistUser 完成 - 耗时: ${Date.now() - bindingStart}ms`,
+      );
+
       const returnValue = {
         isBinding: true,
         id: existingUser.id,
@@ -225,11 +268,24 @@ export class GoogleService {
         redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
+
+      const updateStateStart = Date.now();
       await this.socialService.updateState(state, stateInfo);
+      this.logger.debug(
+        `[handleCallback] updateState 完成 - 耗时: ${Date.now() - updateStateStart}ms`,
+      );
+      this.logger.debug(`[handleCallback] 总耗时: ${Date.now() - startTime}ms`);
       return returnValue;
     }
 
+    // 5. 检查是否是现有用户登录
+    this.logger.debug(`[handleCallback] 检查现有用户登录场景`);
+    const findExistingStart = Date.now();
     const existingUser = await this.userService.findByLoginId(userData.sub);
+    this.logger.debug(
+      `[handleCallback] findByLoginId (现有用户) 完成 - 耗时: ${Date.now() - findExistingStart}ms`,
+    );
+
     if (existingUser) {
       const returnValue = {
         id: existingUser.id,
@@ -240,18 +296,36 @@ export class GoogleService {
         redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
+
+      const updateStateStart = Date.now();
       await this.socialService.updateState(state, stateInfo);
+      this.logger.debug(
+        `[handleCallback] updateState 完成 - 耗时: ${Date.now() - updateStateStart}ms`,
+      );
+      this.logger.debug(`[handleCallback] 总耗时: ${Date.now() - startTime}ms`);
       return returnValue;
     }
-    // The email has already been used https://wqjowq8l2hl.feishu.cn/record/T8zVrlZjReK0HeceZ7icyh8qnze
+
+    // 6. 检查邮箱是否已被使用
+    this.logger.debug(`[handleCallback] 检查邮箱关联账户`);
+    const findByEmailStart = Date.now();
     const linkedAccount = await this.userService.findByEmail(userData.email);
+    this.logger.debug(
+      `[handleCallback] findByEmail 完成 - 耗时: ${Date.now() - findByEmailStart}ms`,
+    );
+
     if (linkedAccount) {
+      const bindingStart = Date.now();
       const existingUser = await this.userService.bindingExistUser({
         userId: linkedAccount.id,
         loginType: 'google',
         loginId: userData.sub,
         metadata: userData,
       });
+      this.logger.debug(
+        `[handleCallback] bindingExistUser (邮箱关联) 完成 - 耗时: ${Date.now() - bindingStart}ms`,
+      );
+
       const returnValue = {
         id: existingUser.id,
         access_token: this.jwtService.sign({
@@ -261,11 +335,21 @@ export class GoogleService {
         redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
+
+      const updateStateStart = Date.now();
       await this.socialService.updateState(state, stateInfo);
+      this.logger.debug(
+        `[handleCallback] updateState 完成 - 耗时: ${Date.now() - updateStateStart}ms`,
+      );
+      this.logger.debug(`[handleCallback] 总耗时: ${Date.now() - startTime}ms`);
       return returnValue;
     }
 
-    return await transaction(this.dataSource.manager, async (tx) => {
+    // 7. 创建新用户
+    this.logger.debug(`[handleCallback] 开始创建新用户`);
+    const createUserStart = Date.now();
+    const result = await transaction(this.dataSource.manager, async (tx) => {
+      const txStart = Date.now();
       const manager = tx.entityManager;
 
       let nickname = userData.name;
@@ -278,11 +362,18 @@ export class GoogleService {
       if (!nickname) {
         nickname = userData.sub;
       }
+
+      const getValidUsernameStart = Date.now();
       const username = await this.socialService.getValidUsername(
         nickname,
         manager,
       );
+      this.logger.debug(
+        `[handleCallback] getValidUsername 完成 - 耗时: ${Date.now() - getValidUsernameStart}ms`,
+      );
       this.logger.debug({ nickname, username });
+
+      const createUserBindingStart = Date.now();
       const googleUser = await this.userService.createUserBinding(
         {
           username,
@@ -294,11 +385,18 @@ export class GoogleService {
         } as CreateUserBindingDto,
         manager,
       );
+      this.logger.debug(
+        `[handleCallback] createUserBinding 完成 - 耗时: ${Date.now() - createUserBindingStart}ms`,
+      );
 
+      const createNamespaceStart = Date.now();
       await this.namespaceService.createUserNamespace(
         googleUser.id,
         googleUser.username,
         tx,
+      );
+      this.logger.debug(
+        `[handleCallback] createUserNamespace 完成 - 耗时: ${Date.now() - createNamespaceStart}ms`,
       );
 
       const returnValue = {
@@ -310,9 +408,24 @@ export class GoogleService {
         redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
+
+      const updateStateStart = Date.now();
       await this.socialService.updateState(state, stateInfo);
+      this.logger.debug(
+        `[handleCallback] updateState (事务内) 完成 - 耗时: ${Date.now() - updateStateStart}ms`,
+      );
+
+      this.logger.debug(
+        `[handleCallback] 事务总耗时: ${Date.now() - txStart}ms`,
+      );
       return returnValue;
     });
+
+    this.logger.debug(
+      `[handleCallback] 创建新用户完成 - 耗时: ${Date.now() - createUserStart}ms`,
+    );
+    this.logger.debug(`[handleCallback] 总耗时: ${Date.now() - startTime}ms`);
+    return result;
   }
 
   async unbind(userId: string) {

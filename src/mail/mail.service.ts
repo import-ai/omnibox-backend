@@ -139,11 +139,13 @@ export class MailService {
         ? 'mail.subjects.inviteShare'
         : 'mail.subjects.invite';
 
+    const defaultResourceName =
+      lang === 'zh' ? '未命名' : 'Untitled';
     const truncatedResourceName = resourceName
       ? resourceName.length > 16
         ? resourceName.slice(0, 16) + '...'
         : resourceName
-      : undefined;
+      : defaultResourceName;
 
     const subject = this.i18n.t(subjectKey, {
       lang,

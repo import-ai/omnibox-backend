@@ -52,6 +52,8 @@ export class SharedResourceMetaDto {
     dto.updatedAt = resource.updatedAt;
     dto.hasChildren = hasChildren;
     dto.attrs = resource.attrs;
+    delete dto.attrs.transcript;
+    delete dto.attrs.video_info;
     return dto;
   }
 }

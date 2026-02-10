@@ -62,6 +62,7 @@
     "invite": {
       "title": "Space Invitation",
       "heading": "You're Invited to Join a Space",
+      "unnamedResource": "Untitled",
       "bodyNewUserPrefix": "has invited you to join the space",
       "bodyNewUserSuffix": "Click the link below to create your account and join the space:",
       "bodyExistingUserPrefix": "Hi",

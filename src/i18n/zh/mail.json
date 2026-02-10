@@ -62,6 +62,7 @@
     "invite": {
       "title": "空间邀请",
       "heading": "您被邀请加入一个空间",
+      "unnamedResource": "未命名",
       "bodyNewUserPrefix": "邀请您加入空间",
       "bodyNewUserSuffix": "点击下方链接创建账户并加入空间：",
       "bodyExistingUserPrefix": "您好",

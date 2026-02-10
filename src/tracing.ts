@@ -13,7 +13,6 @@ import { ExpressLayerType } from '@opentelemetry/instrumentation-express/build/s
 const env = process.env.ENV || 'unknown';
 const enableTypeormInstrumentation =
   process.env.ENABLE_TYPEORM_INSTRUMENTATION === 'true';
-const serviceName = `omnibox-backend`;
 
 function isTracingEnabled(): boolean {
   if (process.env.JEST_WORKER_ID !== undefined) {
@@ -23,10 +22,21 @@ function isTracingEnabled(): boolean {
   return !isEmpty(process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
 }
 
-// Initialize OpenTelemetry SDK
 let sdk: NodeSDK | null = null;
 
-if (isTracingEnabled()) {
+export interface TracingOptions {
+  serviceName: string;
+}
+
+export default function getTracingSDK(options: TracingOptions): NodeSDK | null {
+  if (sdk !== null) {
+    return sdk;
+  }
+  if (!isTracingEnabled()) {
+    return null;
+  }
+
+  const { serviceName } = options;
   const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT!;
   const url = `${otlpEndpoint}/v1/traces`;
 
@@ -55,9 +65,9 @@ if (isTracingEnabled()) {
       ...(enableTypeormInstrumentation ? [new TypeormInstrumentation()] : []),
     ],
   });
-}
 
-export default sdk;
+  return sdk;
+}
 
 process.on('SIGTERM', () => {
   if (!sdk) {

@@ -31,13 +31,14 @@ export class SharedResourcesService {
     if (!share.allResources) {
       return [];
     }
-    const children = await this.resourcesService.getSubResources(
+    const children = await this.resourcesService.getChildren(
       share.namespaceId,
       [resource.id],
     );
+    const childMetas = children.map((r) => ResourceMetaDto.fromEntity(r));
     const resourceMetas: SharedResourceMetaDto[] = [];
-    for (const child of children) {
-      const subChildren = await this.resourcesService.getSubResources(
+    for (const child of childMetas) {
+      const subChildren = await this.resourcesService.getChildren(
         share.namespaceId,
         [child.id],
       );

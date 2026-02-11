@@ -622,6 +622,27 @@ export class ResourcesService {
     if (result.affected !== 1) {
       return;
     }
+    if (resource.contentSize > 0 && resource.userId) {
+      await this.storageUsagesService.updateStorageUsage(
+        namespaceId,
+        resource.userId,
+        StorageType.CONTENT,
+        resource.contentSize,
+        tx,
+      );
+    }
+    if (resource.fileId && resource.userId) {
+      const fileMeta = await this.filesService.headFile(resource.fileId);
+      if (fileMeta && fileMeta.contentLength) {
+        await this.storageUsagesService.updateStorageUsage(
+          namespaceId,
+          resource.userId,
+          StorageType.UPLOAD,
+          fileMeta.contentLength,
+          tx,
+        );
+      }
+    }
     const restoredResource = await tx.entityManager.findOneOrFail(Resource, {
       where: { namespaceId, id: resourceId },
     });

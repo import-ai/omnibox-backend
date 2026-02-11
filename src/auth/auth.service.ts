@@ -23,6 +23,7 @@ import { SendPhoneOtpResponseDto } from './dto/phone-otp.dto';
 import { appendQueryParams, appendTokenToUrl } from 'omniboxd/utils/url-utils';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { SmsService } from 'omniboxd/sms/sms.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Injectable()
 export class AuthService {
@@ -41,6 +42,7 @@ export class AuthService {
     private readonly i18n: I18nService,
     private readonly otpService: OtpService,
     private readonly socialService: SocialService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
   async verify(
@@ -443,6 +445,7 @@ export class AuthService {
       resourceId?: string;
       permission?: ResourcePermission;
       groupId?: string;
+      inviteType?: 'normal' | 'share';
     },
   ) {
     const invitation: UserInvitationDto = {
@@ -473,6 +476,16 @@ export class AuthService {
 
     const senderUsername = sender.username;
     const namespaceName = namespace.name;
+
+    // Query resource name for share invite
+    let resourceName: string | undefined;
+    if (data.inviteType === 'share' && data.resourceId) {
+      const resource = await this.resourcesService.getResourceMeta(
+        data.namespaceId,
+        data.resourceId,
+      );
+      resourceName = resource?.name;
+    }
 
     const account = await this.userService.findByEmail(email);
     if (account) {
@@ -518,6 +531,8 @@ export class AuthService {
         account.username,
         true,
         receiverLang,
+        data.inviteType,
+        resourceName,
       );
       return;
     }
@@ -536,6 +551,9 @@ export class AuthService {
       namespaceName,
       undefined,
       false,
+      undefined,
+      data.inviteType,
+      resourceName,
     );
   }
 
@@ -550,6 +568,7 @@ export class AuthService {
       resourceId?: string;
       permission?: ResourcePermission;
       groupId?: string;
+      inviteType?: 'normal' | 'share';
     },
   ) {
     // Deduplicate and filter invalid emails

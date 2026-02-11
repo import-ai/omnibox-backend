@@ -33,7 +33,6 @@ import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { SidebarChildDto } from './dto/sidebar-child.dto';
 import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
@@ -447,7 +446,7 @@ export class NamespaceResourcesService {
     limit: number = 10,
     offset: number = 0,
     options?: { summary?: boolean },
-  ): Promise<SidebarChildDto[] | ResourceSummaryDto[]> {
+  ): Promise<ResourceSummaryDto[]> {
     const { summary = false } = options || {};
     const allVisible = await this.getUserVisibleResources(userId, namespaceId);
     const sorted = allVisible
@@ -485,8 +484,8 @@ export class NamespaceResourcesService {
       );
     }
 
-    // For non-summary, return lightweight SidebarChildDto
-    return finalResources.map((r) => SidebarChildDto.fromEntity(r, false));
+    // For non-summary, return lightweight ResourceSummaryDto
+    return finalResources.map((r) => ResourceSummaryDto.fromEntity(r, false));
   }
 
   // Alias for clarity and reuse across modules
@@ -506,10 +505,10 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    const subResources = await this.resourcesService.getSubResources(
-      namespaceId,
-      [resourceId],
-    );
+    const children = await this.resourcesService.getChildren(namespaceId, [
+      resourceId,
+    ]);
+    const subResources = children.map((r) => ResourceMetaDto.fromEntity(r));
     const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,
@@ -573,7 +572,7 @@ export class NamespaceResourcesService {
       limit?: number;
       offset?: number;
     },
-  ): Promise<SidebarChildDto[] | ResourceSummaryDto[]> {
+  ): Promise<ResourceSummaryDto[]> {
     const { summary = false, limit, offset } = options || {};
 
     const parents = await this.resourcesService.getParentResourcesOrFail(
@@ -641,7 +640,7 @@ export class NamespaceResourcesService {
       );
     }
     return children.map((res) =>
-      SidebarChildDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
+      ResourceSummaryDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
     );
   }
 
@@ -853,14 +852,15 @@ export class NamespaceResourcesService {
     const allChildren: ResourceMetaDto[] = [];
     let resourceIds = [resourceId];
     for (let currentDepth = 0; currentDepth < depth; currentDepth++) {
-      const children = await this.resourcesService.getSubResources(
+      const children = await this.resourcesService.getChildren(
         namespaceId,
         resourceIds,
       );
       if (children.length === 0) {
         break;
       }
-      allChildren.push(...children);
+      const childMetas = children.map((r) => ResourceMetaDto.fromEntity(r));
+      allChildren.push(...childMetas);
       resourceIds = children.map((child) => child.id);
     }
     return allChildren;

@@ -55,7 +55,10 @@ export class WizardAPIService {
     return response;
   }
 
-  async search(userId: string | null, req: SearchRequestDto): Promise<SearchResponseDto> {
+  async search(
+    userId: string | null,
+    req: SearchRequestDto,
+  ): Promise<SearchResponseDto> {
     const resp = await this.request(
       userId,
       'POST',

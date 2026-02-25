@@ -1,6 +1,6 @@
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { HttpStatus, Injectable, Logger, MessageEvent } from '@nestjs/common';
 import { Observable, Subscriber } from 'rxjs';
-import { HttpStatus, Logger, MessageEvent } from '@nestjs/common';
 import {
   Message,
   MessageStatus,
@@ -31,6 +31,7 @@ interface HandlerContext {
   message?: OpenAIMessage;
 }
 
+@Injectable()
 export class StreamService {
   private readonly logger = new Logger(StreamService.name);
 

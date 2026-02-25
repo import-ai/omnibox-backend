@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { StreamService } from 'omniboxd/wizard/stream.service';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
@@ -13,6 +14,7 @@ import { I18nService } from 'nestjs-i18n';
 export class OpenWizardService {
   constructor(
     private readonly wizardService: WizardService,
+    private readonly streamService: StreamService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
     private readonly i18n: I18nService,
@@ -36,7 +38,7 @@ export class OpenWizardService {
       enable_thinking: data.enable_thinking ?? false,
     };
 
-    const chunks: ChatResponse[] = await this.wizardService.streamService.chat(
+    const chunks: ChatResponse[] = await this.streamService.chat(
       userId,
       namespaceId,
       agentRequest,

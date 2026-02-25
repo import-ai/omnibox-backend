@@ -6,9 +6,8 @@ import { DataSource, Repository } from 'typeorm';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { UserService } from 'omniboxd/user/user.service';
-import { ConfigService } from '@nestjs/config';
 import { MessagesService } from 'omniboxd/messages/messages.service';
-import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import {
   ConversationDetailDto,
   ConversationMessageMappingDto,
@@ -26,29 +25,16 @@ const TASK_PRIORITY = 5;
 
 @Injectable()
 export class ConversationsService {
-  private readonly wizardApiService: WizardAPIService;
-
   constructor(
     @InjectRepository(Conversation)
     private readonly conversationRepository: Repository<Conversation>,
     private readonly dataSource: DataSource,
     private readonly messagesService: MessagesService,
     private readonly userService: UserService,
-    private readonly configService: ConfigService,
+    private readonly wizardApiService: WizardAPIService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
-  ) {
-    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
-    if (!baseUrl) {
-      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
-      throw new AppException(
-        message,
-        'MISSING_WIZARD_BASE_URL',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
-  }
+  ) {}
 
   async create(namespaceId: string, user: User) {
     const conversation = this.conversationRepository.create({

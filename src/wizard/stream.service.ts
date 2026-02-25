@@ -16,13 +16,14 @@ import {
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
-import { context, propagation, trace } from '@opentelemetry/api';
+import { context, trace } from '@opentelemetry/api';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Span } from 'nestjs-otel';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 
 interface HandlerContext {
   parentId?: string;
@@ -34,7 +35,7 @@ export class StreamService {
   private readonly logger = new Logger(StreamService.name);
 
   constructor(
-    private readonly wizardBaseUrl: string,
+    private readonly wizardApiService: WizardAPIService,
     private readonly messagesService: MessagesService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
@@ -54,16 +55,8 @@ export class StreamService {
       span.setAttribute('agent_request', JSON.stringify(body));
     }
 
-    const traceHeaders: Record<string, string> = {};
-    propagation.inject(context.active(), traceHeaders);
-    const response = await fetch(`${this.wizardBaseUrl}${url}`, {
-      method: 'POST',
-      headers: {
-        ...traceHeaders,
-        'Content-Type': 'application/json',
-        'X-Request-Id': requestId,
-      },
-      body: JSON.stringify(body),
+    const response = await this.wizardApiService.requestStream(url, body, {
+      'X-Request-Id': requestId,
     });
     if (!response.ok) {
       const message = this.i18n.t('system.errors.wizardRequestFailed');

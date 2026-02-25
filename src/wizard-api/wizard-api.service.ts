@@ -1,22 +1,56 @@
 import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { propagation, context } from '@opentelemetry/api';
-import { SearchRequestDto } from './dto/search-request.dto';
-import { SearchResponseDto } from './dto/search-response.dto';
+import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
+import { SearchResponseDto } from 'omniboxd/wizard/dto/search-response.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class WizardAPIService {
+  private readonly wizardBaseUrl: string;
+
   constructor(
-    private readonly wizardBaseUrl: string,
+    private readonly configService: ConfigService,
     private readonly i18n: I18nService,
-  ) {}
+  ) {
+    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
+    if (!baseUrl) {
+      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
+      throw new AppException(
+        message,
+        'MISSING_WIZARD_BASE_URL',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+    this.wizardBaseUrl = baseUrl;
+  }
 
   getTraceHeaders(): Record<string, string> {
     const traceHeaders: Record<string, string> = {};
     propagation.inject(context.active(), traceHeaders);
     return traceHeaders;
+  }
+
+  async requestStream(
+    url: string,
+    body: Record<string, any>,
+    headers: Record<string, string> = {},
+  ): Promise<Response> {
+    const requestHeaders = {
+      'Content-Type': 'application/json',
+      ...headers,
+      ...this.getTraceHeaders(),
+    };
+
+    const response = await fetch(`${this.wizardBaseUrl}${url}`, {
+      method: 'POST',
+      headers: requestHeaders,
+      body: JSON.stringify(body),
+    });
+
+    return response;
   }
 
   async request(

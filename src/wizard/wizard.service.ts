@@ -18,7 +18,7 @@ import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-titl
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
-import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -38,12 +38,12 @@ export class WizardService {
   private readonly logger = new Logger(WizardService.name);
   private readonly processors: Record<string, Processor>;
   readonly streamService: StreamService;
-  readonly wizardApiService: WizardAPIService;
   private readonly videoPrefixes: string[];
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
   constructor(
+    public readonly wizardApiService: WizardAPIService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly tasksService: TasksService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
@@ -85,24 +85,14 @@ export class WizardService {
         this.i18n,
       ),
     };
-    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
-    if (!baseUrl) {
-      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
-      throw new AppException(
-        message,
-        'MISSING_WIZARD_BASE_URL',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
     this.streamService = new StreamService(
-      baseUrl,
+      this.wizardApiService,
       this.messagesService,
       this.namespaceResourcesService,
       this.sharedResourcesService,
       this.resourcesService,
       this.i18n,
     );
-    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
     const videoPrefixes: string =
       this.configService.get<string>('OB_VIDEO_PREFIXES') || '';
     if (isEmpty(videoPrefixes)) {

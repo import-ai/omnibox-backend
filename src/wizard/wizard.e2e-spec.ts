@@ -4,7 +4,7 @@ import { HttpStatus } from '@nestjs/common';
 process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8000';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
-jest.mock('../wizard/api.wizard.service', () => {
+jest.mock('../wizard-api/wizard-api.service', () => {
   return {
     WizardAPIService: jest.fn().mockImplementation(() => ({
       request: jest.fn().mockResolvedValue({ success: true }),

@@ -46,7 +46,7 @@ export class StreamService {
 
   @Span('stream')
   async stream(
-    url: string,
+    mode: 'ask' | 'write',
     body: Record<string, any>,
     requestId: string,
     callback: (data: string) => Promise<void>,
@@ -56,9 +56,11 @@ export class StreamService {
       span.setAttribute('agent_request', JSON.stringify(body));
     }
 
-    const response = await this.wizardApiService.requestStream(url, body, {
-      'X-Request-Id': requestId,
-    });
+    const response = await this.wizardApiService.createAgentStream(
+      mode,
+      body,
+      requestId,
+    );
     if (!response.ok) {
       const message = this.i18n.t('system.errors.wizardRequestFailed');
       throw new AppException(
@@ -376,14 +378,9 @@ export class StreamService {
         lang: requestDto.lang,
       };
 
-      this.stream(
-        `/api/v1/wizard/${mode}`,
-        wizardRequest,
-        requestId,
-        async (data) => {
-          await handler(data, handlerContext);
-        },
-      )
+      this.stream(mode, wizardRequest, requestId, async (data) => {
+        await handler(data, handlerContext);
+      })
         .then(() => subscriber.complete())
         .catch((err: Error) => this.streamError(subscriber, err));
     });

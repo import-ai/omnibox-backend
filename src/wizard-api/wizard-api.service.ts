@@ -33,18 +33,19 @@ export class WizardAPIService {
     return traceHeaders;
   }
 
-  async requestStream(
-    url: string,
+  async createAgentStream(
+    mode: 'ask' | 'write',
     body: Record<string, any>,
-    headers: Record<string, string> = {},
+    requestId: string,
   ): Promise<Response> {
+    const url = `${this.wizardBaseUrl}/api/v1/wizard/${mode}`;
     const requestHeaders = {
       'Content-Type': 'application/json',
-      ...headers,
+      'X-Request-Id': requestId,
       ...this.getTraceHeaders(),
     };
 
-    const response = await fetch(`${this.wizardBaseUrl}${url}`, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify(body),
@@ -53,19 +54,43 @@ export class WizardAPIService {
     return response;
   }
 
-  async request(
+  async search(req: SearchRequestDto): Promise<SearchResponseDto> {
+    const resp = await this.request(
+      'POST',
+      '/internal/api/v1/wizard/search',
+      instanceToPlain(req),
+      {},
+    );
+    return plainToInstance(SearchResponseDto, resp);
+  }
+
+  async createTitle(body: {
+    text: string;
+    lang: string;
+  }): Promise<{ title: string }> {
+    const resp = await this.request(
+      'POST',
+      '/internal/api/v1/wizard/title',
+      body,
+      {},
+    );
+    return { title: resp.title as string };
+  }
+
+  private async request(
     method: string,
-    url: string,
+    path: string,
     body: Record<string, any>,
-    headers: Record<string, string> = {},
+    headers: Record<string, string>,
   ): Promise<Record<string, any>> {
+    const url = `${this.wizardBaseUrl}${path}`;
     const requestHeaders = {
       'Content-Type': 'application/json',
       ...headers,
       ...this.getTraceHeaders(),
     };
 
-    const response = await fetch(`${this.wizardBaseUrl}${url}`, {
+    const response = await fetch(url, {
       method,
       headers: requestHeaders,
       body: JSON.stringify(body),
@@ -83,28 +108,5 @@ export class WizardAPIService {
     }
 
     return await response.json();
-  }
-
-  async proxy(req: Request): Promise<Record<string, any>> {
-    const url = `${this.wizardBaseUrl}${req.url}`;
-    const response = await fetch(url, {
-      method: req.method,
-      headers: {
-        ...this.getTraceHeaders(),
-        ...req.headers,
-      },
-      body: JSON.stringify(req.body),
-    });
-    return response.json();
-  }
-
-  async search(req: SearchRequestDto): Promise<SearchResponseDto> {
-    const resp = await this.request(
-      'POST',
-      '/internal/api/v1/wizard/search',
-      instanceToPlain(req),
-      {},
-    );
-    return plainToInstance(SearchResponseDto, resp);
   }
 }

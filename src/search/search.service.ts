@@ -38,10 +38,10 @@ export class SearchService {
   ) {}
 
   async search(
+    userId: string,
     namespaceId: string,
     query: string,
     type?: DocType,
-    userId?: string,
   ) {
     const searchRequest = new SearchRequestDto();
     searchRequest.query = query;
@@ -54,7 +54,7 @@ export class SearchService {
     if (type === DocType.MESSAGE) {
       searchRequest.type = IndexRecordType.MESSAGE;
     }
-    const result = await this.wizardApiService.search(searchRequest);
+    const result = await this.wizardApiService.search(userId, searchRequest);
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
     const seenConversationIds = new Set<string>();
@@ -72,17 +72,15 @@ export class SearchService {
         if (!parentResources) {
           continue;
         }
-        if (userId) {
-          const hasPermission = await this.permissionsService.userHasPermission(
-            namespaceId,
-            chunk.resourceId,
-            userId,
-            ResourcePermission.CAN_VIEW,
-            parentResources,
-          );
-          if (!hasPermission) {
-            continue;
-          }
+        const hasPermission = await this.permissionsService.userHasPermission(
+          namespaceId,
+          chunk.resourceId,
+          userId,
+          ResourcePermission.CAN_VIEW,
+          parentResources,
+        );
+        if (!hasPermission) {
+          continue;
         }
         const resourceDto: IndexedResourceDto = {
           type: DocType.RESOURCE,

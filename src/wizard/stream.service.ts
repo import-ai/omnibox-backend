@@ -46,6 +46,7 @@ export class StreamService {
 
   @Span('stream')
   async stream(
+    userId: string | null,
     mode: 'ask' | 'write',
     body: Record<string, any>,
     requestId: string,
@@ -57,6 +58,7 @@ export class StreamService {
     }
 
     const response = await this.wizardApiService.createAgentStream(
+      userId,
       mode,
       body,
       requestId,
@@ -378,7 +380,7 @@ export class StreamService {
         lang: requestDto.lang,
       };
 
-      this.stream(mode, wizardRequest, requestId, async (data) => {
+      this.stream(userId, mode, wizardRequest, requestId, async (data) => {
         await handler(data, handlerContext);
       })
         .then(() => subscriber.complete())

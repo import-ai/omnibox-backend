@@ -130,10 +130,13 @@ export class ConversationsService {
       if (content.length > 0) {
         const currentLanguage = I18nContext.current()?.lang;
         const lang = currentLanguage?.includes('zh') ? '简体中文' : 'English';
-        const titleCreateResponse = await this.wizardApiService.createTitle({
-          text: content,
-          lang,
-        });
+        const titleCreateResponse = await this.wizardApiService.createTitle(
+          userId,
+          {
+            text: content,
+            lang,
+          },
+        );
         conversation.title = titleCreateResponse.title!;
         await this.conversationRepository.save(conversation);
         return titleCreateResponse as { title: string };

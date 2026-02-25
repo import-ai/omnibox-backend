@@ -34,6 +34,7 @@ export class WizardAPIService {
   }
 
   async createAgentStream(
+    userId: string | null,
     mode: 'ask' | 'write',
     body: Record<string, any>,
     requestId: string,
@@ -54,8 +55,9 @@ export class WizardAPIService {
     return response;
   }
 
-  async search(req: SearchRequestDto): Promise<SearchResponseDto> {
+  async search(userId: string | null, req: SearchRequestDto): Promise<SearchResponseDto> {
     const resp = await this.request(
+      userId,
       'POST',
       '/internal/api/v1/wizard/search',
       instanceToPlain(req),
@@ -64,11 +66,15 @@ export class WizardAPIService {
     return plainToInstance(SearchResponseDto, resp);
   }
 
-  async createTitle(body: {
-    text: string;
-    lang: string;
-  }): Promise<{ title: string }> {
+  async createTitle(
+    userId: string | null,
+    body: {
+      text: string;
+      lang: string;
+    },
+  ): Promise<{ title: string }> {
     const resp = await this.request(
+      userId,
       'POST',
       '/internal/api/v1/wizard/title',
       body,
@@ -78,6 +84,7 @@ export class WizardAPIService {
   }
 
   private async request(
+    userId: string | null,
     method: string,
     path: string,
     body: Record<string, any>,

@@ -24,7 +24,7 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 jest.mock('../wizard-api/wizard-api.service', () => {
   return {
     WizardAPIService: jest.fn().mockImplementation(() => ({
-      search: jest.fn().mockImplementation((params) => {
+      search: jest.fn().mockImplementation((userId, params) => {
         const allRecords = [
           {
             id: 'search-result-1',

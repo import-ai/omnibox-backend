@@ -3,7 +3,6 @@ import {
   Controller,
   Param,
   Post,
-  Req,
   Sse,
   UploadedFile,
   UseInterceptors,
@@ -133,11 +132,6 @@ export class WizardController {
       data.url,
       data.parentId,
     );
-  }
-
-  @Post('*path')
-  async proxy(@Req() req: Request): Promise<Record<string, any>> {
-    return await this.wizardService.wizardApiService.proxy(req);
   }
 }
 

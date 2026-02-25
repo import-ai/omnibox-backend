@@ -8,7 +8,6 @@ jest.mock('../wizard-api/wizard-api.service', () => {
   return {
     WizardAPIService: jest.fn().mockImplementation(() => ({
       request: jest.fn().mockResolvedValue({ success: true }),
-      proxy: jest.fn().mockResolvedValue({ success: true }),
       search: jest.fn().mockResolvedValue({ results: [] }),
     })),
   };
@@ -230,29 +229,6 @@ describe('WizardController (e2e)', () => {
         HttpStatus.BAD_REQUEST,
         HttpStatus.OK,
         HttpStatus.CREATED,
-      ]).toContain(response.status);
-    });
-  });
-
-  describe('POST /api/v1/namespaces/:namespaceId/wizard/*path (proxy)', () => {
-    it('should handle proxy requests', async () => {
-      // Note: This test might fail if the wizard service is not running
-      // or if the proxy path doesn't exist. In a real test environment,
-      // you might want to mock the wizard service.
-      const response = await client
-        .post(
-          `/api/v1/namespaces/${client.namespace.id}/wizard/test-proxy-path`,
-        )
-        .send({ test: 'data' });
-
-      // The response status depends on the wizard service implementation
-      // We're mainly testing that the endpoint is accessible and doesn't crash
-      expect([
-        HttpStatus.OK,
-        HttpStatus.CREATED,
-        HttpStatus.BAD_REQUEST,
-        HttpStatus.NOT_FOUND,
-        HttpStatus.INTERNAL_SERVER_ERROR,
       ]).toContain(response.status);
     });
   });

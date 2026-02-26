@@ -24,7 +24,7 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 jest.mock('../wizard-api/wizard-api.service', () => {
   return {
     WizardAPIService: jest.fn().mockImplementation(() => ({
-      search: jest.fn().mockImplementation((userId, params) => {
+      search: jest.fn().mockImplementation((req) => {
         const allRecords = [
           {
             id: 'search-result-1',
@@ -61,12 +61,12 @@ jest.mock('../wizard-api/wizard-api.service', () => {
 
         // Filter records based on type if specified
         let filteredRecords = allRecords;
-        if (params?.type) {
-          if (params.type === IndexRecordType.CHUNK) {
+        if (req?.type) {
+          if (req.type === IndexRecordType.CHUNK) {
             filteredRecords = allRecords.filter(
               (r) => r.type === IndexRecordType.CHUNK,
             );
-          } else if (params.type === IndexRecordType.MESSAGE) {
+          } else if (req.type === IndexRecordType.MESSAGE) {
             filteredRecords = allRecords.filter(
               (r) => r.type === IndexRecordType.MESSAGE,
             );

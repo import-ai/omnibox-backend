@@ -131,7 +131,7 @@ export class ConversationsService {
         const currentLanguage = I18nContext.current()?.lang;
         const lang = currentLanguage?.includes('zh') ? '简体中文' : 'English';
         const titleCreateResponse = await this.wizardApiService.createTitle(
-          userId,
+          conversation.namespaceId,
           {
             text: content,
             lang,

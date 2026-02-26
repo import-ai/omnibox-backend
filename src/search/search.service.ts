@@ -54,7 +54,7 @@ export class SearchService {
     if (type === DocType.MESSAGE) {
       searchRequest.type = IndexRecordType.MESSAGE;
     }
-    const result = await this.wizardApiService.search(userId, searchRequest);
+    const result = await this.wizardApiService.search(searchRequest);
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
     const seenConversationIds = new Set<string>();

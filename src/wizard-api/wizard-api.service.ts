@@ -25,12 +25,12 @@ export class WizardAPIService {
   }
 
   async createAgentStream(
-    userId: string | null,
+    namespaceId: string,
     mode: 'ask' | 'write',
     body: Record<string, any>,
     requestId: string,
   ): Promise<Response> {
-    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(userId);
+    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(namespaceId);
     const url = `${wizardBaseUrl}/api/v1/wizard/${mode}`;
     const requestHeaders = {
       'Content-Type': 'application/json',
@@ -47,12 +47,9 @@ export class WizardAPIService {
     return response;
   }
 
-  async search(
-    userId: string | null,
-    req: SearchRequestDto,
-  ): Promise<SearchResponseDto> {
+  async search(req: SearchRequestDto): Promise<SearchResponseDto> {
     const resp = await this.request(
-      userId,
+      req.namespaceId,
       'POST',
       '/internal/api/v1/wizard/search',
       instanceToPlain(req),
@@ -62,14 +59,14 @@ export class WizardAPIService {
   }
 
   async createTitle(
-    userId: string | null,
+    namespaceId: string,
     body: {
       text: string;
       lang: string;
     },
   ): Promise<{ title: string }> {
     const resp = await this.request(
-      userId,
+      namespaceId,
       'POST',
       '/internal/api/v1/wizard/title',
       body,
@@ -79,13 +76,13 @@ export class WizardAPIService {
   }
 
   private async request(
-    userId: string | null,
+    namespaceId: string,
     method: string,
     path: string,
     body: Record<string, any>,
     headers: Record<string, string>,
   ): Promise<Record<string, any>> {
-    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(userId);
+    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(namespaceId);
     const url = `${wizardBaseUrl}${path}`;
     const requestHeaders = {
       'Content-Type': 'application/json',

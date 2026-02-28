@@ -16,9 +16,6 @@ import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
 import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-title.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
-import { MessagesService } from 'omniboxd/messages/messages.service';
-import { StreamService } from 'omniboxd/wizard/stream.service';
-import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -28,7 +25,6 @@ import { isEmpty } from 'omniboxd/utils/is-empty';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { createGunzip } from 'zlib';
 import { buffer } from 'node:stream/consumers';
-import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TempfileDto } from './dto/tempfile.dto';
@@ -37,8 +33,6 @@ import { TempfileDto } from './dto/tempfile.dto';
 export class WizardService {
   private readonly logger = new Logger(WizardService.name);
   private readonly processors: Record<string, Processor>;
-  readonly streamService: StreamService;
-  readonly wizardApiService: WizardAPIService;
   private readonly videoPrefixes: string[];
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
@@ -48,11 +42,9 @@ export class WizardService {
     private readonly tasksService: TasksService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
-    private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
     private readonly s3Service: S3Service,
-    private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
   ) {
@@ -85,24 +77,6 @@ export class WizardService {
         this.i18n,
       ),
     };
-    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
-    if (!baseUrl) {
-      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
-      throw new AppException(
-        message,
-        'MISSING_WIZARD_BASE_URL',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-    this.streamService = new StreamService(
-      baseUrl,
-      this.messagesService,
-      this.namespaceResourcesService,
-      this.sharedResourcesService,
-      this.resourcesService,
-      this.i18n,
-    );
-    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
     const videoPrefixes: string =
       this.configService.get<string>('OB_VIDEO_PREFIXES') || '';
     if (isEmpty(videoPrefixes)) {

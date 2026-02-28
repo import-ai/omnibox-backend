@@ -1,6 +1,6 @@
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { HttpStatus, Injectable, Logger, MessageEvent } from '@nestjs/common';
 import { Observable, Subscriber } from 'rxjs';
-import { HttpStatus, Logger, MessageEvent } from '@nestjs/common';
 import {
   Message,
   MessageStatus,
@@ -16,13 +16,14 @@ import {
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
-import { context, propagation, trace } from '@opentelemetry/api';
+import { context, trace } from '@opentelemetry/api';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Span } from 'nestjs-otel';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 
 interface HandlerContext {
   parentId?: string;
@@ -30,11 +31,12 @@ interface HandlerContext {
   message?: OpenAIMessage;
 }
 
+@Injectable()
 export class StreamService {
   private readonly logger = new Logger(StreamService.name);
 
   constructor(
-    private readonly wizardBaseUrl: string,
+    private readonly wizardApiService: WizardAPIService,
     private readonly messagesService: MessagesService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
@@ -44,7 +46,8 @@ export class StreamService {
 
   @Span('stream')
   async stream(
-    url: string,
+    namespaceId: string,
+    mode: 'ask' | 'write',
     body: Record<string, any>,
     requestId: string,
     callback: (data: string) => Promise<void>,
@@ -54,17 +57,12 @@ export class StreamService {
       span.setAttribute('agent_request', JSON.stringify(body));
     }
 
-    const traceHeaders: Record<string, string> = {};
-    propagation.inject(context.active(), traceHeaders);
-    const response = await fetch(`${this.wizardBaseUrl}${url}`, {
-      method: 'POST',
-      headers: {
-        ...traceHeaders,
-        'Content-Type': 'application/json',
-        'X-Request-Id': requestId,
-      },
-      body: JSON.stringify(body),
-    });
+    const response = await this.wizardApiService.createAgentStream(
+      namespaceId,
+      mode,
+      body,
+      requestId,
+    );
     if (!response.ok) {
       const message = this.i18n.t('system.errors.wizardRequestFailed');
       throw new AppException(
@@ -382,14 +380,9 @@ export class StreamService {
         lang: requestDto.lang,
       };
 
-      this.stream(
-        `/api/v1/wizard/${mode}`,
-        wizardRequest,
-        requestId,
-        async (data) => {
-          await handler(data, handlerContext);
-        },
-      )
+      this.stream(namespaceId, mode, wizardRequest, requestId, async (data) => {
+        await handler(data, handlerContext);
+      })
         .then(() => subscriber.complete())
         .catch((err: Error) => this.streamError(subscriber, err));
     });

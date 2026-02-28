@@ -1,5 +1,4 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { Injectable } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
 import {
   IndexedDocDto,
@@ -8,10 +7,9 @@ import {
 } from './dto/indexed-doc.dto';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
-import { ConfigService } from '@nestjs/config';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -26,37 +24,24 @@ const TASK_PRIORITY = 4;
 
 @Injectable()
 export class SearchService {
-  private readonly wizardApiService: WizardAPIService;
-
   constructor(
+    private readonly wizardApiService: WizardAPIService,
     private readonly permissionsService: PermissionsService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
-    private readonly configService: ConfigService,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
-  ) {
-    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
-    if (!baseUrl) {
-      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
-      throw new AppException(
-        message,
-        'MISSING_WIZARD_BASE_URL',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
-  }
+  ) {}
 
   async search(
+    userId: string,
     namespaceId: string,
     query: string,
     type?: DocType,
-    userId?: string,
   ) {
     const searchRequest = new SearchRequestDto();
     searchRequest.query = query;
@@ -87,17 +72,15 @@ export class SearchService {
         if (!parentResources) {
           continue;
         }
-        if (userId) {
-          const hasPermission = await this.permissionsService.userHasPermission(
-            namespaceId,
-            chunk.resourceId,
-            userId,
-            ResourcePermission.CAN_VIEW,
-            parentResources,
-          );
-          if (!hasPermission) {
-            continue;
-          }
+        const hasPermission = await this.permissionsService.userHasPermission(
+          namespaceId,
+          chunk.resourceId,
+          userId,
+          ResourcePermission.CAN_VIEW,
+          parentResources,
+        );
+        if (!hasPermission) {
+          continue;
         }
         const resourceDto: IndexedResourceDto = {
           type: DocType.RESOURCE,

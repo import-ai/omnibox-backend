@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { StreamService } from 'omniboxd/wizard/stream.service';
+import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 import {
   CollectController,
   SharedWizardController,
@@ -25,8 +27,14 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
-  providers: [WizardService, ChunkManagerService, OpenWizardService],
+  providers: [
+    WizardService,
+    StreamService,
+    ChunkManagerService,
+    OpenWizardService,
+  ],
   imports: [
+    WizardAPIModule,
     UserModule,
     SharesModule,
     NamespacesModule,
@@ -48,6 +56,6 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     SharedWizardController,
     InternalWizardController,
   ],
-  exports: [WizardService, OpenWizardService],
+  exports: [WizardService, StreamService, OpenWizardService],
 })
 export class WizardModule {}

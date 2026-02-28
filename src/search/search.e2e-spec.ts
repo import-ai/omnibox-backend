@@ -13,21 +13,18 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
-import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
-
-// Set environment variable to avoid the error in SearchService constructor
-process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8000';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
-jest.mock('../wizard/api.wizard.service', () => {
+jest.mock('../wizard-api/wizard-api.service', () => {
   return {
     WizardAPIService: jest.fn().mockImplementation(() => ({
-      search: jest.fn().mockImplementation((params) => {
+      search: jest.fn().mockImplementation((req) => {
         const allRecords = [
           {
             id: 'search-result-1',
@@ -64,12 +61,12 @@ jest.mock('../wizard/api.wizard.service', () => {
 
         // Filter records based on type if specified
         let filteredRecords = allRecords;
-        if (params?.type) {
-          if (params.type === IndexRecordType.CHUNK) {
+        if (req?.type) {
+          if (req.type === IndexRecordType.CHUNK) {
             filteredRecords = allRecords.filter(
               (r) => r.type === IndexRecordType.CHUNK,
             );
-          } else if (params.type === IndexRecordType.MESSAGE) {
+          } else if (req.type === IndexRecordType.MESSAGE) {
             filteredRecords = allRecords.filter(
               (r) => r.type === IndexRecordType.MESSAGE,
             );
@@ -94,6 +91,7 @@ describe('SearchController (e2e)', () => {
       controllers: [SearchController, InternalSearchController],
       providers: [
         SearchService,
+        WizardAPIService,
         {
           provide: PermissionsService,
           useValue: {
@@ -123,12 +121,6 @@ describe('SearchController (e2e)', () => {
           provide: MessagesService,
           useValue: {
             findAll: jest.fn().mockResolvedValue([]),
-          },
-        },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn().mockReturnValue('http://localhost:8000'),
           },
         },
         {

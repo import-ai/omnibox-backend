@@ -3,7 +3,6 @@ import {
   Controller,
   Param,
   Post,
-  Req,
   Sse,
   UploadedFile,
   UseInterceptors,
@@ -11,6 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { StreamService } from 'omniboxd/wizard/stream.service';
 import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import {
@@ -58,6 +58,7 @@ export class CollectController {
 export class WizardController {
   constructor(
     private readonly wizardService: WizardService,
+    private readonly streamService: StreamService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -86,7 +87,7 @@ export class WizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.createUserAgentStream(
+    return await this.streamService.createUserAgentStream(
       userId,
       namespaceId,
       body,
@@ -103,7 +104,7 @@ export class WizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.createUserAgentStream(
+    return await this.streamService.createUserAgentStream(
       userId,
       namespaceId,
       body,
@@ -134,17 +135,12 @@ export class WizardController {
       data.parentId,
     );
   }
-
-  @Post('*path')
-  async proxy(@Req() req: Request): Promise<Record<string, any>> {
-    return await this.wizardService.wizardApiService.proxy(req);
-  }
 }
 
 @Controller('api/v1/shares/:shareId/wizard')
 @UseInterceptors(ValidateShareInterceptor)
 export class SharedWizardController {
-  constructor(private readonly wizardService: WizardService) {}
+  constructor(private readonly streamService: StreamService) {}
 
   @Post('ask')
   @Sse()
@@ -155,7 +151,7 @@ export class SharedWizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.createShareAgentStream(
+    return await this.streamService.createShareAgentStream(
       share,
       body,
       requestId,
@@ -172,7 +168,7 @@ export class SharedWizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.createShareAgentStream(
+    return await this.streamService.createShareAgentStream(
       share,
       body,
       requestId,

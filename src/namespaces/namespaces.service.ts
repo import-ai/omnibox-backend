@@ -519,6 +519,27 @@ export class NamespacesService {
         }
       }
 
+      // Prevent demoting the last owner (space must keep at least one owner)
+      if (
+        currentMember.role === NamespaceRole.OWNER &&
+        role !== NamespaceRole.OWNER
+      ) {
+        const ownerCount = await manager.count(NamespaceMember, {
+          where: {
+            namespaceId,
+            role: NamespaceRole.OWNER,
+            deletedAt: IsNull(),
+          },
+        });
+        if (ownerCount <= 1) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.noOwnerAfterwards'),
+            'NO_OWNER_AFTERWARDS',
+            HttpStatus.UNPROCESSABLE_ENTITY,
+          );
+        }
+      }
+
       await manager.update(NamespaceMember, { namespaceId, userId }, { role });
       const hasOwner = await this.hasOwner(namespaceId, manager);
       if (!hasOwner) {

@@ -345,6 +345,17 @@ describe('NamespacesController (e2e)', () => {
         .send({ role: 'invalid_role' })
         .expect(HttpStatus.INTERNAL_SERVER_ERROR);
     });
+
+    it('should prevent sole owner from demoting themselves (keep at least one owner)', async () => {
+      // testNamespace has only one member (client as owner). Demoting self should fail with 422.
+      const res = await client
+        .patch(
+          `/api/v1/namespaces/${testNamespaceId}/members/${client.user.id}`,
+        )
+        .send({ role: NamespaceRole.MEMBER })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+      expect(res.body?.code).toBe('NO_OWNER_AFTERWARDS');
+    });
   });
 
   describe('DELETE /api/v1/namespaces/:namespaceId/members/:userId', () => {

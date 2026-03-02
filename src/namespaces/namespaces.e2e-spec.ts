@@ -354,7 +354,7 @@ describe('NamespacesController (e2e)', () => {
         )
         .send({ role: NamespaceRole.MEMBER })
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
-      expect(res.body?.code).toBe('NO_OWNER_AFTERWARDS');
+      expect(res.body?.code).toBe('no_owner_afterwards');
     });
   });
 

@@ -343,7 +343,7 @@ describe('NamespacesController (e2e)', () => {
           `/api/v1/namespaces/${testNamespaceId}/members/${client.user.id}`,
         )
         .send({ role: 'invalid_role' })
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });
 
     it('should prevent sole owner from demoting themselves (keep at least one owner)', async () => {

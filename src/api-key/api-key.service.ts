@@ -6,7 +6,7 @@ import { I18nService } from 'nestjs-i18n';
 import { randomBytes } from 'crypto';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
-  APIKeyInfoDto,
+  APIKeyInfoResponseDto,
   APIKeyResponseDto,
   CreateAPIKeyDto,
   PatchAPIKeyDto,
@@ -230,7 +230,7 @@ export class APIKeyService {
     }
   }
 
-  async info(apiKey: APIKey): Promise<APIKeyInfoDto> {
+  async info(apiKey: APIKey): Promise<APIKeyInfoResponseDto> {
     // Get the namespace
     const namespace = await this.namespacesService.getNamespace(
       apiKey.namespaceId,
@@ -250,10 +250,10 @@ export class APIKeyService {
     const userDto = UserResponseDto.fromEntity(user);
 
     return {
-      api_key: apiKeyDto,
+      apiKey: apiKeyDto,
       namespace: namespaceDto,
       user: userDto,
-      namespace_usage: namespaceUsage,
-    } as APIKeyInfoDto;
+      namespaceUsage: namespaceUsage,
+    };
   }
 }

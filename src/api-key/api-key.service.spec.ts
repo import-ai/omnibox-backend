@@ -16,6 +16,7 @@ import { Applications } from 'omniboxd/applications/applications.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 
 describe('APIKeyService', () => {
   let service: APIKeyService;
@@ -88,6 +89,11 @@ describe('APIKeyService', () => {
       }),
     };
 
+    const mockNamespacesQuotaService = {
+      getNamespaceUsage: jest.fn(),
+      isNamespaceReadonly: jest.fn().mockResolvedValue(false),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         APIKeyService,
@@ -114,6 +120,10 @@ describe('APIKeyService', () => {
         {
           provide: I18nService,
           useValue: mockI18nService,
+        },
+        {
+          provide: NamespacesQuotaService,
+          useValue: mockNamespacesQuotaService,
         },
       ],
     }).compile();

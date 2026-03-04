@@ -7,7 +7,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { Type } from 'class-transformer';
+import { Type, Expose } from 'class-transformer';
 import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
 import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
 import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
@@ -94,12 +94,13 @@ export class APIKeyResponseDto {
   }
 }
 
-export class APIKeyInfoDto {
+export class APIKeyInfoResponseDto {
   @ApiProperty({
     description: 'API key details',
     type: () => APIKeyResponseDto,
   })
-  api_key: APIKeyResponseDto;
+  @Expose({ name: 'api_key' })
+  apiKey: APIKeyResponseDto;
 
   @ApiProperty({
     description: 'Associated namespace details',
@@ -117,5 +118,6 @@ export class APIKeyInfoDto {
     description: 'Namespace usage and quota information',
     type: () => NamespaceUsageDto,
   })
-  namespace_usage: NamespaceUsageDto;
+  @Expose({ name: 'namespace_usage' })
+  namespaceUsage: NamespaceUsageDto;
 }

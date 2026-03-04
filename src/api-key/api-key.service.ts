@@ -15,6 +15,7 @@ import {
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
@@ -29,6 +30,7 @@ export class APIKeyService {
     private readonly applicationsRepository: Repository<Applications>,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesService: NamespacesService,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
     private readonly userService: UserService,
     private readonly i18n: I18nService,
   ) {}
@@ -237,6 +239,11 @@ export class APIKeyService {
     // Get the user
     const user = await this.userService.find(apiKey.userId);
 
+    // Get the namespace usage
+    const namespaceUsage = await this.namespacesQuotaService.getNamespaceUsage(
+      apiKey.namespaceId,
+    );
+
     // Convert entities to DTOs and return
     const apiKeyDto = APIKeyResponseDto.fromEntity(apiKey);
     const namespaceDto = NamespaceResponseDto.fromEntity(namespace);
@@ -246,6 +253,7 @@ export class APIKeyService {
       api_key: apiKeyDto,
       namespace: namespaceDto,
       user: userDto,
+      namespace_usage: namespaceUsage,
     } as APIKeyInfoDto;
   }
 }

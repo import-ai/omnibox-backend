@@ -6,7 +6,7 @@ import { I18nService } from 'nestjs-i18n';
 import { randomBytes } from 'crypto';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import {
-  APIKeyInfoDto,
+  APIKeyInfoResponseDto,
   APIKeyResponseDto,
   CreateAPIKeyDto,
   PatchAPIKeyDto,
@@ -15,6 +15,7 @@ import {
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
@@ -29,6 +30,7 @@ export class APIKeyService {
     private readonly applicationsRepository: Repository<Applications>,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesService: NamespacesService,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
     private readonly userService: UserService,
     private readonly i18n: I18nService,
   ) {}
@@ -228,7 +230,7 @@ export class APIKeyService {
     }
   }
 
-  async info(apiKey: APIKey): Promise<APIKeyInfoDto> {
+  async info(apiKey: APIKey): Promise<APIKeyInfoResponseDto> {
     // Get the namespace
     const namespace = await this.namespacesService.getNamespace(
       apiKey.namespaceId,
@@ -237,15 +239,21 @@ export class APIKeyService {
     // Get the user
     const user = await this.userService.find(apiKey.userId);
 
+    // Get the namespace usage
+    const namespaceUsage = await this.namespacesQuotaService.getNamespaceUsage(
+      apiKey.namespaceId,
+    );
+
     // Convert entities to DTOs and return
     const apiKeyDto = APIKeyResponseDto.fromEntity(apiKey);
     const namespaceDto = NamespaceResponseDto.fromEntity(namespace);
     const userDto = UserResponseDto.fromEntity(user);
 
     return {
-      api_key: apiKeyDto,
+      apiKey: apiKeyDto,
       namespace: namespaceDto,
       user: userDto,
-    } as APIKeyInfoDto;
+      namespaceUsage: namespaceUsage,
+    };
   }
 }

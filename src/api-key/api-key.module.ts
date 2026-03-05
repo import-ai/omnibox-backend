@@ -7,6 +7,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { UserModule } from 'omniboxd/user/user.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 
 @Module({
   providers: [APIKeyService],
@@ -16,6 +17,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     TypeOrmModule.forFeature([APIKey, Applications]),
     PermissionsModule,
     NamespacesModule,
+    NamespacesQuotaModule,
     UserModule,
   ],
 })

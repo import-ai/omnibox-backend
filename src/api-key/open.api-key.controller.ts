@@ -1,5 +1,5 @@
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
-import { APIKeyInfoDto } from 'omniboxd/api-key/api-key.dto';
+import { APIKeyInfoResponseDto } from 'omniboxd/api-key/api-key.dto';
 import { APIKey as APIKeyEntity } from 'omniboxd/api-key/api-key.entity';
 import { Controller, Delete, Get } from '@nestjs/common';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
@@ -22,11 +22,11 @@ export class OpenAPIKeyController {
   @ApiResponse({
     status: 200,
     description: 'API key information retrieved successfully',
-    type: APIKeyInfoDto,
+    type: APIKeyInfoResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
-  async info(@APIKey() apiKey: APIKeyEntity): Promise<APIKeyInfoDto> {
+  async info(@APIKey() apiKey: APIKeyEntity): Promise<APIKeyInfoResponseDto> {
     return await this.apiKeyService.info(apiKey);
   }
 

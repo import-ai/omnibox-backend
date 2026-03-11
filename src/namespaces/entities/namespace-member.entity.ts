@@ -16,7 +16,7 @@ export const ROLE_LEVEL: Record<NamespaceRole, number> = {
 @Entity('namespace_members')
 export class NamespaceMember extends Base {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: string;
 
   @Column()
   namespaceId: string;

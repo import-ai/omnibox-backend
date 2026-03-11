@@ -28,6 +28,7 @@ import { buffer } from 'node:stream/consumers';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TempfileDto } from './dto/tempfile.dto';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 
 @Injectable()
 export class WizardService {
@@ -311,7 +312,10 @@ export class WizardService {
         const createdTask = await this.tasksService.emitTask({
           namespaceId: parentTask.namespaceId,
           userId: parentTask.userId,
-          priority: nextTask.priority ?? parentTask.priority,
+          priority:
+            nextTask.priority !== undefined
+              ? numberToBigintString(nextTask.priority)
+              : parentTask.priority,
           function: nextTask.function,
           input: nextTask.input,
           payload: {

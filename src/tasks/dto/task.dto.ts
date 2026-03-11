@@ -1,4 +1,5 @@
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { bigintStringToNumber } from 'omniboxd/utils/bigint-utils';
 
 class TaskDtoBase {
   id: string;
@@ -18,7 +19,7 @@ class TaskDtoBase {
     obj.id = task.id;
     obj.namespace_id = task.namespaceId;
     obj.user_id = task.userId;
-    obj.priority = task.priority;
+    obj.priority = bigintStringToNumber(task.priority);
     obj.function = task.function;
     obj.status = task.status;
     obj.created_at = task.createdAt.toISOString();

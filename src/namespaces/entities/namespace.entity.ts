@@ -15,8 +15,8 @@ export class Namespace extends Base {
   @Column()
   name: string;
 
-  @Column({ default: 1 })
-  maxRunningTasks: number;
+  @Column('bigint', { default: '1' })
+  maxRunningTasks: string;
 
   @Column('varchar', { nullable: true })
   rootResourceId: string | null;

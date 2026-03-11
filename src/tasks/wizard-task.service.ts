@@ -13,6 +13,7 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 
 @Injectable()
 export class WizardTaskService {
@@ -190,7 +191,7 @@ export class WizardTaskService {
     return this.tasksService.emitTask(
       {
         function: 'upsert_index',
-        priority,
+        priority: numberToBigintString(priority),
         input: {
           title: resource.name,
           content: resource.content,
@@ -249,7 +250,7 @@ export class WizardTaskService {
     return this.tasksService.emitTask(
       {
         function: 'upsert_message_index',
-        priority,
+        priority: numberToBigintString(priority),
         input: {
           conversation_id: conversationId,
           message_id: message.id,
@@ -273,7 +274,7 @@ export class WizardTaskService {
     return this.tasksService.emitTask(
       {
         function: 'delete_conversation',
-        priority,
+        priority: numberToBigintString(priority),
         input: { conversation_id: conversationId },
         payload: { conversation_id: conversationId },
         namespaceId,

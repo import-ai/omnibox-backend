@@ -14,7 +14,7 @@ export enum StorageType {
 })
 export class StorageUsage extends Base {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: string;
 
   @Column()
   namespaceId: string;
@@ -25,6 +25,6 @@ export class StorageUsage extends Base {
   @Column('enum', { enum: StorageType })
   storageType: StorageType;
 
-  @Column()
-  amount: number;
+  @Column('bigint')
+  amount: string;
 }

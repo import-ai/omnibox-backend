@@ -18,6 +18,10 @@ import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
 import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
+import {
+  bigintStringToNumber,
+  numberToBigintString,
+} from 'omniboxd/utils/bigint-utils';
 
 const TASK_PRIORITY = 5;
 
@@ -444,7 +448,9 @@ export class ResourcesService {
       { namespaceId, id: resourceId },
       {
         ...props,
-        contentSize,
+        ...(contentSize !== undefined && {
+          contentSize: numberToBigintString(contentSize),
+        }),
       },
     );
 
@@ -457,7 +463,9 @@ export class ResourcesService {
 
     // Update storage usage if content changed and userId is present
     if (props.content !== undefined && resource.userId) {
-      const contentSizeDiff = resource.contentSize - oldResource.contentSize;
+      const contentSizeDiff =
+        bigintStringToNumber(resource.contentSize) -
+        bigintStringToNumber(oldResource.contentSize);
       if (contentSizeDiff !== 0) {
         await this.storageUsagesService.updateStorageUsage(
           namespaceId,
@@ -530,7 +538,7 @@ export class ResourcesService {
           props.namespaceId,
           props.userId,
           StorageType.UPLOAD,
-          file.size,
+          bigintStringToNumber(file.size),
           tx,
         );
       }
@@ -544,16 +552,16 @@ export class ResourcesService {
     const resource = await repo.save(
       repo.create({
         ...props,
-        contentSize,
+        contentSize: numberToBigintString(contentSize),
       }),
     );
 
-    if (resource.contentSize > 0 && resource.userId) {
+    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
       await this.storageUsagesService.updateStorageUsage(
         resource.namespaceId,
         resource.userId,
         StorageType.CONTENT,
-        resource.contentSize,
+        bigintStringToNumber(resource.contentSize),
         tx,
       );
     }
@@ -622,12 +630,12 @@ export class ResourcesService {
     if (result.affected !== 1) {
       return;
     }
-    if (resource.contentSize > 0 && resource.userId) {
+    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
       await this.storageUsagesService.updateStorageUsage(
         namespaceId,
         resource.userId,
         StorageType.CONTENT,
-        resource.contentSize,
+        bigintStringToNumber(resource.contentSize),
         tx,
       );
     }
@@ -687,12 +695,12 @@ export class ResourcesService {
       id: resourceId,
     });
 
-    if (resource.contentSize > 0 && resource.userId) {
+    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
       await this.storageUsagesService.updateStorageUsage(
         namespaceId,
         resource.userId,
         StorageType.CONTENT,
-        -resource.contentSize,
+        -bigintStringToNumber(resource.contentSize),
         tx,
       );
     }
@@ -914,7 +922,7 @@ export class ResourcesService {
     while (true) {
       const resources = await this.resourceRepository.find({
         where: {
-          contentSize: 0,
+          contentSize: '0',
           content: Not(''),
           userId: Not(IsNull()),
           namespaceId,
@@ -932,8 +940,8 @@ export class ResourcesService {
         await transaction(this.dataSource.manager, async (tx) => {
           const result = await tx.entityManager.update(
             Resource,
-            { id: resource.id, contentSize: 0 },
-            { contentSize },
+            { id: resource.id, contentSize: '0' },
+            { contentSize: numberToBigintString(contentSize) },
           );
           if (result.affected !== 1) {
             return;

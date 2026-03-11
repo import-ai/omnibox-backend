@@ -32,13 +32,16 @@ describe('Processor (Abstract)', () => {
         payload: null,
         output: null,
         exception: null,
-        priority: 5,
+        priority: '5',
         startedAt: null,
         endedAt: null,
         canceledAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        enqueued: false,
+        resourceId: null,
+        status: 'pending',
       } as Task;
 
       const result = await processor.process(mockTask);
@@ -73,13 +76,16 @@ describe('Processor (Abstract)', () => {
         payload: null,
         output: null,
         exception: null,
-        priority: 5,
+        priority: '5',
         startedAt: null,
         endedAt: null,
         canceledAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        enqueued: false,
+        resourceId: null,
+        status: 'pending',
       } as Task;
 
       const result = await customProcessor.process(mockTask);

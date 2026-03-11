@@ -1,6 +1,7 @@
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { Namespace } from '../entities/namespace.entity';
+import { bigintStringToNumber } from 'omniboxd/utils/bigint-utils';
 
 export class NamespaceResponseDto {
   @IsString({
@@ -37,7 +38,7 @@ export class NamespaceResponseDto {
     const dto = new NamespaceResponseDto();
     dto.id = namespace.id;
     dto.name = namespace.name;
-    dto.maxRunningTasks = namespace.maxRunningTasks;
+    dto.maxRunningTasks = bigintStringToNumber(namespace.maxRunningTasks);
     dto.rootResourceId = namespace.rootResourceId;
     dto.createdAt = namespace.createdAt;
     dto.updatedAt = namespace.updatedAt;

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StorageUsage, StorageType } from './entities/storage-usage.entity';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 
 @Injectable()
 export class StorageUsagesService {
@@ -38,7 +39,7 @@ export class StorageUsagesService {
           namespaceId,
           userId,
           storageType,
-          amount,
+          amount: numberToBigintString(amount),
         }),
       );
     }

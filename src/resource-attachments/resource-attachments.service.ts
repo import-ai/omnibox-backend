@@ -9,6 +9,11 @@ import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.ser
 import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
 import { transaction, Transaction } from 'omniboxd/utils/transaction-utils';
 import { S3Service } from 'omniboxd/s3/s3.service';
+import {
+  bigintStringToNumber,
+  nullableBigintStringToNumber,
+  numberToBigintString,
+} from 'omniboxd/utils/bigint-utils';
 
 @Injectable()
 export class ResourceAttachmentsService {
@@ -74,7 +79,7 @@ export class ResourceAttachmentsService {
         namespaceId,
         resourceId,
         attachmentId,
-        attachmentSize: size,
+        attachmentSize: numberToBigintString(size),
       });
       await repository.save(resourceAttachment);
 
@@ -127,7 +132,7 @@ export class ResourceAttachmentsService {
           namespaceId,
           userId,
           StorageType.ATTACHMENT,
-          -existingAttachment.attachmentSize,
+          -bigintStringToNumber(existingAttachment.attachmentSize),
           tx,
         );
       }
@@ -164,7 +169,8 @@ export class ResourceAttachmentsService {
 
       // Update storage usage for all copied attachments within the same transaction
       const totalSize = sourceRelations.reduce(
-        (sum, relation) => sum + (relation.attachmentSize ?? 0),
+        (sum, relation) =>
+          sum + (nullableBigintStringToNumber(relation.attachmentSize) ?? 0),
         0,
       );
       if (totalSize > 0) {
@@ -242,10 +248,11 @@ export class ResourceAttachmentsService {
               },
             });
             await transaction(this.dataSource.manager, async (tx) => {
+              const attachmentSizeStr = numberToBigintString(attachmentSize);
               const result = await tx.entityManager.update(
                 ResourceAttachment,
                 { id: attachment.id, attachmentSize: IsNull() },
-                { attachmentSize },
+                { attachmentSize: attachmentSizeStr },
               );
               if (result.affected !== 1) {
                 return;

@@ -22,8 +22,8 @@ export class Task extends Base {
   @Column()
   userId: string;
 
-  @Column({ default: 5 })
-  priority: number;
+  @Column('bigint', { default: '5' })
+  priority: string;
 
   @Column()
   function: string;

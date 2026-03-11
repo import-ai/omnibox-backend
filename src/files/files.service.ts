@@ -13,6 +13,7 @@ import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.ser
 import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
 import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
 import { transaction } from 'omniboxd/utils/transaction-utils';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 
 const s3Prefix = 'uploaded-files';
 
@@ -92,7 +93,7 @@ export class FilesService {
         userId,
         name: filename,
         mimetype,
-        size,
+        size: numberToBigintString(size),
       }),
     );
   }
@@ -176,7 +177,7 @@ export class FilesService {
               const result = await tx.entityManager.update(
                 File,
                 { id: file.id, size: IsNull() },
-                { size },
+                { size: numberToBigintString(size) },
               );
               if (result.affected !== 1) {
                 return;

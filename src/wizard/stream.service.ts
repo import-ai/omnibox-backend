@@ -170,6 +170,14 @@ export class StreamService {
         // Do nothing, this is the end of the stream
       } else if (chunk.response_type === 'error') {
         if (context.messageId) {
+          await this.messagesService.updateDelta(context.messageId, {
+            response_type: 'delta',
+            message: {},
+            attrs: {
+              error_message: chunk.message,
+            },
+          });
+
           await this.messagesService.update(
             context.messageId,
             namespaceId,
@@ -180,10 +188,6 @@ export class StreamService {
             true,
           );
         }
-
-        const err = new Error(chunk.message || 'Unknown error');
-        err.name = 'AgentError';
-        throw err;
       } else {
         const message = this.i18n.t('system.errors.unknownResponseType', {
           args: { type: data },

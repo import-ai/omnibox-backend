@@ -231,12 +231,11 @@ export class StreamService {
 
   streamError(subscriber: Subscriber<MessageEvent>, error: Error) {
     this.logger.error({ error });
-    subscriber.error(
-      JSON.stringify({
-        response_type: 'error',
-        error: error.name,
-      }),
-    );
+    const span = trace.getSpan(context.active());
+    if (span) {
+      span.recordException(error);
+    }
+    subscriber.error(error);
   }
 
   private async getUserVisibleResources(

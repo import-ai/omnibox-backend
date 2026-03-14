@@ -181,6 +181,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Determine build SHA
+        id: build_sha
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push app image
         uses: docker/build-push-action@v6
         with:
@@ -194,6 +203,8 @@ jobs:
             linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_SHA=${{ steps.build_sha.outputs.sha }}
 
   webhook:
     runs-on: ubuntu-latest

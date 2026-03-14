@@ -7,6 +7,9 @@ export class AppController {
   @Public()
   @Get()
   healthCheck() {
-    return { uptime: process.uptime() };
+    return {
+      uptime: process.uptime(),
+      build: process.env.BUILD_SHA ?? 'unknown',
+    };
   }
 }

@@ -8,9 +8,6 @@ RUN pnpm run build
 
 FROM ghcr.io/import-ai/omnibox-backend-runtime:latest
 
-ARG BUILD_SHA=unknown
-ENV BUILD_SHA=${BUILD_SHA}
-
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN HUSKY=0 pnpm install --prod

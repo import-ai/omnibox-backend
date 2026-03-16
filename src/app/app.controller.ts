@@ -9,7 +9,6 @@ export class AppController {
   healthCheck() {
     return {
       uptime: process.uptime(),
-      build: process.env.BUILD_SHA ?? 'unknown',
     };
   }
 }

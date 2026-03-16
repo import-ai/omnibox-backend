@@ -201,10 +201,24 @@ jobs:
     steps:
       - name: TEST push webhook
         if: github.event_name == 'push'
+        env:
+          WEBHOOK_URL: ${{ secrets.DEV_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.DEV_WEBHOOK_API_KEY }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
         run: |
-          curl "${{ secrets.DEV_WEBHOOK_URL }}/test?module=backend&pr=${{ github.ref_name }}&commit=${GITHUB_SHA}&tag=sha-${GITHUB_SHA::7}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
+          curl "${WEBHOOK_URL}/test?module=backend&ref=${BRANCH}&commit=${GITHUB_SHA}&tag=sha-${GITHUB_SHA::7}&run_url=${RUN_URL}" -H "Authorization: Bearer ${API_KEY}"
 
       - name: TEST pull request webhook
         if: github.event_name == 'pull_request'
+        env:
+          WEBHOOK_URL: ${{ secrets.DEV_WEBHOOK_URL }}
+          API_KEY: ${{ secrets.DEV_WEBHOOK_API_KEY }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.number }}
         run: |
-          curl "${{ secrets.DEV_WEBHOOK_URL }}/test?module=backend&pr=pr-${{ github.event.number }}&commit=${{ github.event.pull_request.head.sha }}&tag=sha-${GITHUB_SHA::7}" -H "Authorization: Bearer ${{ secrets.DEV_WEBHOOK_API_KEY }}"
+          REF_LINK_TEXT="pr-${PR_NUMBER}"
+          REF_LINK_URL="${{ github.server_url }}/${{ github.repository }}/pull/${PR_NUMBER}"
+          curl "${WEBHOOK_URL}/test?module=backend&ref=${BRANCH}&commit=${HEAD_SHA}&tag=sha-${GITHUB_SHA::7}&run_url=${RUN_URL}&ref_link_text=${REF_LINK_TEXT}&ref_link_url=${REF_LINK_URL}" -H "Authorization: Bearer ${API_KEY}"

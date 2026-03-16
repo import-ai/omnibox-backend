@@ -26,6 +26,7 @@ import { SharesService } from 'omniboxd/shares/shares.service';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WsSpanInterceptor } from 'omniboxd/interceptor/ws-span.interceptor';
+import { context, trace } from '@opentelemetry/api';
 
 @WebSocketGateway({
   cors: {
@@ -138,7 +139,11 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         },
         error: (error) => {
           this.logger.error(`Error in ${eventType} stream`, error);
-          client.emit('error', { error: error.message });
+          const span = trace.getSpan(context.active());
+          if (span) {
+            span.recordException(error);
+          }
+          client.emit('error', { message: 'Unknown error' });
         },
         complete: () => {
           client.emit('complete');
@@ -146,7 +151,11 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (error) {
       this.logger.error(`Error handling ${eventType}`, error);
-      client.emit('error', { error: error.message });
+      const span = trace.getSpan(context.active());
+      if (span) {
+        span.recordException(error);
+      }
+      client.emit('error', { message: 'Unknown error' });
     }
   }
 
@@ -186,7 +195,11 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         },
         error: (error) => {
           this.logger.error(`Error in ${eventType} stream`, error);
-          client.emit('error', { error: error.message });
+          const span = trace.getSpan(context.active());
+          if (span) {
+            span.recordException(error);
+          }
+          client.emit('error', { message: 'Unknown error' });
         },
         complete: () => {
           client.emit('complete');
@@ -194,7 +207,11 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (error) {
       this.logger.error(`Error handling ${eventType}`, error);
-      client.emit('error', { error: error.message });
+      const span = trace.getSpan(context.active());
+      if (span) {
+        span.recordException(error);
+      }
+      client.emit('error', { message: 'Unknown error' });
     }
   }
 }

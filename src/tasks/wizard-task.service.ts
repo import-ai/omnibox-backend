@@ -37,6 +37,25 @@ export class WizardTaskService {
     return undefined;
   }
 
+  async emitWebAnalysisTask(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    input: { html: string; url: string; title?: string },
+    tx?: Transaction,
+  ) {
+    return this.tasksService.emitTask(
+      {
+        function: 'web_analysis',
+        input,
+        namespaceId,
+        payload: { resource_id: resourceId },
+        userId,
+      },
+      tx,
+    );
+  }
+
   async emitCollectTask(
     userId: string,
     namespaceId: string,

@@ -35,7 +35,6 @@ import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 export class WizardService {
   private readonly logger = new Logger(WizardService.name);
   private readonly processors: Record<string, Processor>;
-  private readonly videoPrefixes: string[];
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
@@ -83,24 +82,6 @@ export class WizardService {
         this.i18n,
       ),
     };
-    const videoPrefixes: string =
-      this.configService.get<string>('OB_VIDEO_PREFIXES') || '';
-    if (isEmpty(videoPrefixes)) {
-      this.videoPrefixes = [];
-    } else {
-      this.videoPrefixes = videoPrefixes
-        .split(',')
-        .map((prefix) => prefix.trim());
-    }
-  }
-
-  isVideoUrl(url: string): boolean {
-    for (const prefix of this.videoPrefixes) {
-      if (url.startsWith(prefix)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   async compressedCollect(
@@ -150,23 +131,13 @@ export class WizardService {
       metadata,
     );
 
-    if (this.isVideoUrl(url)) {
-      const task = await this.wizardTaskService.emitGenerateVideoNoteTask(
-        userId,
-        namespaceId,
-        resource.id,
-        { html: objectKey, url, title },
-      );
-      return { task_id: task.id, resource_id: resource.id };
-    } else {
-      const task = await this.wizardTaskService.emitCollectTask(
-        userId,
-        namespaceId,
-        resource.id,
-        { html: objectKey, url, title },
-      );
-      return { task_id: task.id, resource_id: resource.id };
-    }
+    const task = await this.wizardTaskService.emitWebAnalysisTask(
+      userId,
+      namespaceId,
+      resource.id,
+      { html: objectKey, url, title },
+    );
+    return { task_id: task.id, resource_id: resource.id };
   }
 
   /**

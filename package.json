@@ -113,5 +113,5 @@
     "typeorm": "^0.3.28",
     "typeorm-naming-strategies": "^4.1.0"
   },
-  "packageManager": "pnpm@10.26.0"
+  "packageManager": "pnpm@10.32.1"
 }

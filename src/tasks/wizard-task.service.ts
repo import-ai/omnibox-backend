@@ -125,6 +125,31 @@ export class WizardTaskService {
     );
   }
 
+  async emitCollectUrlTask(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    input: { url: string },
+    tx?: Transaction,
+  ) {
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
+      {
+        function: 'collect_url',
+        input,
+        namespaceId,
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
+        userId,
+      },
+      tx,
+    );
+  }
+
   async emitExtractTagsTask(
     userId: string,
     resourceId: string,

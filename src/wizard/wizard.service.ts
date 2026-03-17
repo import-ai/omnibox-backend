@@ -175,13 +175,14 @@ export class WizardService {
     );
 
     // Create a collect_url task that will fetch HTML and create a collect task
-    await this.tasksService.emitTask({
-      function: 'collect_url',
-      input: { url },
-      namespaceId,
-      payload: { resource_id: resource.id },
+    await this.wizardTaskService.emitCollectUrlTask(
       userId,
-    });
+      namespaceId,
+      resource.id,
+      {
+        url,
+      },
+    );
 
     return { resource_id: resource.id };
   }

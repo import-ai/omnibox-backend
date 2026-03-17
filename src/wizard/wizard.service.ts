@@ -403,9 +403,11 @@ export class WizardService {
     task.startedAt = new Date();
     task.status = TaskStatus.RUNNING;
     const newTask = await this.wizardTaskService.taskRepository.save(task);
-    // Fetch HTML content from S3 for collect tasks
+    // Fetch HTML content from S3 for tasks that need HTML analysis
     if (
-      ['collect', 'generate_video_note'].includes(newTask.function) &&
+      ['collect', 'generate_video_note', 'web_analysis'].includes(
+        newTask.function,
+      ) &&
       newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
       newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
     ) {

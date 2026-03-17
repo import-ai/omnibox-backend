@@ -1,4 +1,5 @@
 import { DocType } from '../doc-type.enum';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 export class IndexedResourceDto {
   type: DocType.RESOURCE;
@@ -7,6 +8,7 @@ export class IndexedResourceDto {
   title: string;
   content: string;
   attrs: Record<string, any>;
+  resourceType: ResourceType;
 }
 
 export class IndexedMessageDto {

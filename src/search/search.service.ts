@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
   IndexedDocDto,
   IndexedMessageDto,
@@ -109,6 +110,7 @@ export class SearchService {
           title: chunk.title || 'Untitled',
           content: chunk.text || '',
           attrs: resourceMeta?.attrs || {},
+          resourceType: resourceMeta?.resourceType || ResourceType.DOC,
         };
         items.push(resourceDto);
       } else if (record.type === IndexRecordType.MESSAGE) {

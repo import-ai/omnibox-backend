@@ -6,6 +6,7 @@ export class IndexedResourceDto {
   resourceId: string;
   title: string;
   content: string;
+  attrs: Record<string, any>;
 }
 
 export class IndexedMessageDto {

@@ -58,6 +58,24 @@ export class SearchService {
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
     const seenConversationIds = new Set<string>();
+    const resourceIdsToFetch: string[] = [];
+    for (const record of result?.records || []) {
+      if (record.type === IndexRecordType.CHUNK) {
+        const chunk = record.chunk!;
+        if (!seenResourceIds.has(chunk.resourceId)) {
+          resourceIdsToFetch.push(chunk.resourceId);
+          seenResourceIds.add(chunk.resourceId);
+        }
+      }
+    }
+
+    const resourceMetaMap = await this.resourcesService.batchGetResourceMeta(
+      namespaceId,
+      resourceIdsToFetch,
+    );
+
+    seenResourceIds.clear();
+
     for (const record of result.records) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
@@ -82,12 +100,15 @@ export class SearchService {
         if (!hasPermission) {
           continue;
         }
+
+        const resourceMeta = resourceMetaMap.get(chunk.resourceId);
         const resourceDto: IndexedResourceDto = {
           type: DocType.RESOURCE,
           id: record.id,
           resourceId: chunk.resourceId,
           title: chunk.title || 'Untitled',
           content: chunk.text || '',
+          attrs: resourceMeta?.attrs || {},
         };
         items.push(resourceDto);
       } else if (record.type === IndexRecordType.MESSAGE) {

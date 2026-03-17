@@ -15,6 +15,7 @@ import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
 import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-title.processor';
+import { CollectUrlProcessor } from 'omniboxd/wizard/processors/collect-url.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
@@ -75,6 +76,10 @@ export class WizardService {
         this.namespaceResourcesService,
         this.resourcesService,
         this.tagService,
+        this.i18n,
+      ),
+      collect_url: new CollectUrlProcessor(
+        this.namespaceResourcesService,
         this.i18n,
       ),
     };

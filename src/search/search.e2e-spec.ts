@@ -115,6 +115,7 @@ describe('SearchController (e2e)', () => {
           provide: ResourcesService,
           useValue: {
             getParentResources: jest.fn().mockResolvedValue([]),
+            batchGetResourceMeta: jest.fn().mockResolvedValue(new Map()),
           },
         },
         {

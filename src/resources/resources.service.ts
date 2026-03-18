@@ -328,7 +328,10 @@ export class ResourcesService {
       .createQueryBuilder('resource')
       .where('resource.namespace_id = :namespaceId', { namespaceId });
 
-    if (resourceIds && resourceIds.length > 0) {
+    if (resourceIds) {
+      if (resourceIds.length === 0) {
+        return [];
+      }
       queryBuilder.andWhere('resource.id IN (:...resourceIds)', {
         resourceIds,
       });
@@ -349,7 +352,7 @@ export class ResourcesService {
     if (parentId) {
       queryBuilder.andWhere('resource.parent_id = :parentId', { parentId });
     }
-    if (tagIds && tagIds.length > 0) {
+    if (tagIds) {
       queryBuilder.andWhere('resource.tag_ids && :tagIds', { tagIds });
     }
     if (nameContains) {

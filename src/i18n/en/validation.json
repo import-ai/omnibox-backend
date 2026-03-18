@@ -58,7 +58,8 @@
     },
     "content": {
       "isString": "Content must be a string",
-      "isNotEmpty": "Content is required"
+      "isNotEmpty": "Content is required",
+      "maxLength": "Content must not exceed {constraints.0} characters"
     },
     "mimetype": {
       "isString": "Mimetype must be a string",

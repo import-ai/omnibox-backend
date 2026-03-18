@@ -58,7 +58,8 @@
     },
     "content": {
       "isString": "内容必须是字符串",
-      "isNotEmpty": "内容不能为空"
+      "isNotEmpty": "内容不能为空",
+      "maxLength": "内容不能超过 {constraints.0} 个字符"
     },
     "mimetype": {
       "isString": "文件类型必须是字符串",

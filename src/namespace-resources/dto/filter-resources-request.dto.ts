@@ -1,7 +1,7 @@
 import { IsArray, IsString, IsOptional } from 'class-validator';
 import { Expose } from 'class-transformer';
 
-export class FilterResourcesDto {
+export class FilterResourcesRequestDto {
   @Expose({ name: 'ids' })
   @IsArray()
   @IsOptional()

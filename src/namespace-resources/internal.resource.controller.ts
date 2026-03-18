@@ -4,7 +4,7 @@ import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { FilesService } from 'omniboxd/files/files.service';
-import { FilterResourcesDto } from 'omniboxd/namespace-resources/dto/filter-resources.dto';
+import { FilterResourcesRequestDto } from 'omniboxd/namespace-resources/dto/filter-resources-request.dto';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
@@ -61,7 +61,7 @@ export class InternalResourcesController {
   @Post('namespaces/:namespaceId/resources/query')
   async filterResources(
     @Param('namespaceId') namespaceId: string,
-    @Body() filterDto: FilterResourcesDto,
+    @Body() filterDto: FilterResourcesRequestDto,
   ) {
     return await this.namespaceResourcesService.getResourcesForInternal(
       namespaceId,

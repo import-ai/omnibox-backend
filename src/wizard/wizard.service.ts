@@ -15,6 +15,7 @@ import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
 import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-title.processor';
+import { CollectUrlProcessor } from 'omniboxd/wizard/processors/collect-url.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
@@ -34,7 +35,6 @@ import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 export class WizardService {
   private readonly logger = new Logger(WizardService.name);
   private readonly processors: Record<string, Processor>;
-  private readonly videoPrefixes: string[];
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
@@ -77,25 +77,11 @@ export class WizardService {
         this.tagService,
         this.i18n,
       ),
+      collect_url: new CollectUrlProcessor(
+        this.namespaceResourcesService,
+        this.i18n,
+      ),
     };
-    const videoPrefixes: string =
-      this.configService.get<string>('OB_VIDEO_PREFIXES') || '';
-    if (isEmpty(videoPrefixes)) {
-      this.videoPrefixes = [];
-    } else {
-      this.videoPrefixes = videoPrefixes
-        .split(',')
-        .map((prefix) => prefix.trim());
-    }
-  }
-
-  isVideoUrl(url: string): boolean {
-    for (const prefix of this.videoPrefixes) {
-      if (url.startsWith(prefix)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   async compressedCollect(
@@ -145,23 +131,13 @@ export class WizardService {
       metadata,
     );
 
-    if (this.isVideoUrl(url)) {
-      const task = await this.wizardTaskService.emitGenerateVideoNoteTask(
-        userId,
-        namespaceId,
-        resource.id,
-        { html: objectKey, url, title },
-      );
-      return { task_id: task.id, resource_id: resource.id };
-    } else {
-      const task = await this.wizardTaskService.emitCollectTask(
-        userId,
-        namespaceId,
-        resource.id,
-        { html: objectKey, url, title },
-      );
-      return { task_id: task.id, resource_id: resource.id };
-    }
+    const task = await this.wizardTaskService.emitWebAnalysisTask(
+      userId,
+      namespaceId,
+      resource.id,
+      { html: objectKey, url, title },
+    );
+    return { task_id: task.id, resource_id: resource.id };
   }
 
   /**
@@ -199,13 +175,14 @@ export class WizardService {
     );
 
     // Create a collect_url task that will fetch HTML and create a collect task
-    await this.tasksService.emitTask({
-      function: 'collect_url',
-      input: { url },
-      namespaceId,
-      payload: { resource_id: resource.id },
+    await this.wizardTaskService.emitCollectUrlTask(
       userId,
-    });
+      namespaceId,
+      resource.id,
+      {
+        url,
+      },
+    );
 
     return { resource_id: resource.id };
   }
@@ -427,9 +404,11 @@ export class WizardService {
     task.startedAt = new Date();
     task.status = TaskStatus.RUNNING;
     const newTask = await this.wizardTaskService.taskRepository.save(task);
-    // Fetch HTML content from S3 for collect tasks
+    // Fetch HTML content from S3 for tasks that need HTML analysis
     if (
-      ['collect', 'generate_video_note'].includes(newTask.function) &&
+      ['collect', 'generate_video_note', 'web_analysis'].includes(
+        newTask.function,
+      ) &&
       newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
       newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
     ) {

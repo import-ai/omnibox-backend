@@ -207,7 +207,9 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BRANCH: ${{ github.ref_name }}
         run: |
-          curl "${WEBHOOK_URL}/test?module=backend&ref=${BRANCH}&commit=${GITHUB_SHA}&tag=sha-${GITHUB_SHA::7}&run_url=${RUN_URL}" -H "Authorization: Bearer ${API_KEY}"
+          REF_LINK_TEXT="${BRANCH}"
+          REF_LINK_URL="${{ github.server_url }}/${{ github.repository }}/tree/${BRANCH}"
+          curl "${WEBHOOK_URL}/test?module=backend&ref=${BRANCH}&commit=${GITHUB_SHA}&tag=sha-${GITHUB_SHA::7}&run_url=${RUN_URL}&ref_link_text=${REF_LINK_TEXT}&ref_link_url=${REF_LINK_URL}" -H "Authorization: Bearer ${API_KEY}"
 
       - name: TEST pull request webhook
         if: github.event_name == 'pull_request'

@@ -779,7 +779,7 @@ export class NamespaceResourcesService {
 
   async getResourcesForInternal(
     namespaceId: string,
-    resourceIds: string[],
+    resourceIds?: string[],
     createdAtBefore?: Date,
     createdAtAfter?: Date,
     userId?: string,
@@ -788,13 +788,10 @@ export class NamespaceResourcesService {
     nameContains?: string,
     contentContains?: string,
   ): Promise<InternalResourceDto[]> {
-    let tagIds: string[] | undefined;
-    if (tags && tags.length > 0) {
+    let tagIds: string[] | undefined = undefined;
+    if (tags) {
       const tagEntities = await this.tagService.findByNames(namespaceId, tags);
       tagIds = tagEntities.map((t) => t.id);
-      if (tagIds.length === 0) {
-        return [];
-      }
     }
 
     const resources = await this.resourcesService.batchGetResources(

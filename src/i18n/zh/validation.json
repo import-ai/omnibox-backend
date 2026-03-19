@@ -57,8 +57,7 @@
       "maxLength": "描述不能超过 {constraints.0} 个字符"
     },
     "content": {
-      "isString": "内容必须是字符串",
-      "isNotEmpty": "内容不能为空"
+      "isString": "内容必须是字符串"
     },
     "mimetype": {
       "isString": "文件类型必须是字符串",

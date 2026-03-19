@@ -19,10 +19,11 @@ describe('AppController (e2e)', () => {
     await app.close();
   });
 
-  it('/api/v1/health (GET) should return 200 and empty string', async () => {
+  it('/api/v1/health (GET) should return 200 with uptime', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/health')
       .expect(200);
-    expect(res.text).toMatch(/uptime/);
+    expect(res.body).toHaveProperty('uptime');
+    expect(typeof res.body.uptime).toBe('number');
   });
 });

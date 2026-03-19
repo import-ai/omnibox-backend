@@ -5,7 +5,7 @@ import { ResourcePermission } from '../resource-permission.enum';
 @Entity('group_permissions')
 export class GroupPermission extends Base {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: string;
 
   @Column()
   namespaceId: string;

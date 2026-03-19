@@ -38,6 +38,9 @@ export class Resource extends Base {
   @Column()
   content: string;
 
+  @Column('bigint')
+  contentSize: string;
+
   @Column('jsonb')
   attrs: Record<string, any>;
 

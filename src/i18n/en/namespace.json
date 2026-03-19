@@ -19,6 +19,7 @@
     "adminCannotRemoveAdmin": "Admin cannot remove another admin",
     "adminCannotPromoteToAdmin": "Admin cannot promote user to admin",
     "insufficientPermission": "You do not have permission to modify this user",
-    "cannotAssignHigherRole": "You cannot assign a role equal to or higher than your own"
+    "cannotAssignHigherRole": "You cannot assign a role equal to or higher than your own",
+    "storageQuotaExceeded": "Storage quota exceeded. Please delete some files or upgrade your plan."
   }
 }

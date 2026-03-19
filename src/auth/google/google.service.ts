@@ -76,8 +76,13 @@ export class GoogleService {
     };
   }
 
-  async authUrl(): Promise<string> {
-    const state = await this.socialService.generateState('google');
+  async authUrl(redirectUrl?: string): Promise<string> {
+    const state = await this.socialService.generateState(
+      'google',
+      '',
+      '',
+      redirectUrl,
+    );
 
     const params = new URLSearchParams({
       client_id: this.clientId,
@@ -198,6 +203,7 @@ export class GoogleService {
             sub: googleUser.id,
             username: googleUser.username,
           }),
+          redirectUrl: stateInfo.redirectUrl,
         };
         stateInfo.userInfo = returnValue;
         await this.socialService.updateState(state, stateInfo);
@@ -216,6 +222,7 @@ export class GoogleService {
           sub: existingUser.id,
           username: existingUser.username,
         }),
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -230,6 +237,7 @@ export class GoogleService {
           sub: existingUser.id,
           username: existingUser.username,
         }),
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -250,6 +258,7 @@ export class GoogleService {
           sub: existingUser.id,
           username: existingUser.username,
         }),
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -298,6 +307,7 @@ export class GoogleService {
           sub: googleUser.id,
           username: googleUser.username,
         }),
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);

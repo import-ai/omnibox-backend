@@ -37,6 +37,7 @@ export interface OpenAIMessage {
 
 export interface MessageAttrs {
   citations?: Record<string, any>[];
+  error_message?: string;
 }
 
 @Entity('messages')

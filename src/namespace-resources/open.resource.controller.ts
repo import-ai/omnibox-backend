@@ -32,6 +32,7 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @ApiTags('Resources')
 @ApiSecurity('api-key')
@@ -44,6 +45,7 @@ export class OpenResourcesController {
   ) {}
 
   @Post()
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {
@@ -139,6 +141,7 @@ export class OpenResourcesController {
   }
 
   @Post('upload')
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {

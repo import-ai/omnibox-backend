@@ -192,6 +192,7 @@ export class AuthController {
       groupId,
       emails,
       groupTitles,
+      inviteType,
     } = inviteDto;
 
     // Check if current user is owner or admin of the namespace
@@ -216,19 +217,16 @@ export class AuthController {
       );
     }
     if (emails && emails.length > 0) {
-      await Promise.all(
-        emails.map((email) =>
-          this.authService.invite(req.user.id, email, {
-            role,
-            inviteUrl,
-            registerUrl,
-            namespaceId,
-            resourceId,
-            permission,
-            groupId,
-          }),
-        ),
-      );
+      await this.authService.inviteBatch(req.user.id, emails, {
+        role,
+        inviteUrl,
+        registerUrl,
+        namespaceId,
+        resourceId,
+        permission,
+        groupId,
+        inviteType,
+      });
     }
   }
 

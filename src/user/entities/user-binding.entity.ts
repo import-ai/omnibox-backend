@@ -4,7 +4,7 @@ import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 @Entity('user_bindings')
 export class UserBinding extends Base {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: string;
 
   @Column()
   userId: string;

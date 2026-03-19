@@ -4,7 +4,7 @@ import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 @Entity('group_users')
 export class GroupUser extends Base {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: string;
 
   @Column()
   namespaceId: string;

@@ -8,6 +8,9 @@ export class ResourceSummaryDto {
   @Expose()
   id: string;
 
+  @Expose({ name: 'parent_id' })
+  parentId: string | null;
+
   @Expose()
   name: string;
 
@@ -41,6 +44,7 @@ export class ResourceSummaryDto {
   ): ResourceSummaryDto {
     const dto = new ResourceSummaryDto();
     dto.id = resource.id;
+    dto.parentId = resource.parentId;
     dto.name = resource.name;
     dto.resourceType = resource.resourceType;
     dto.attrs = { ...resource.attrs };

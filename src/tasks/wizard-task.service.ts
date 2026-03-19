@@ -13,6 +13,7 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 
 @Injectable()
 export class WizardTaskService {
@@ -36,19 +37,63 @@ export class WizardTaskService {
     return undefined;
   }
 
-  async emitCollectTask(
+  private async getUserOptions(
+    userId: string,
+  ): Promise<Record<string, string>> {
+    const userOptions = await this.userService.listOption(userId);
+    return userOptions.reduce(
+      (acc: Record<string, string>, opt: { name: string; value: string }) => {
+        acc[opt.name] = opt.value;
+        return acc;
+      },
+      {},
+    );
+  }
+
+  async emitWebAnalysisTask(
     userId: string,
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
     tx?: Transaction,
   ) {
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
+      {
+        function: 'web_analysis',
+        input,
+        namespaceId,
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
+        userId,
+      },
+      tx,
+    );
+  }
+
+  async emitCollectTask(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    input: { url: string },
+    tx?: Transaction,
+  ) {
+    const userOptions = await this.getUserOptions(userId);
     return this.tasksService.emitTask(
       {
         function: 'collect',
         input,
         namespaceId,
-        payload: { resource_id: resourceId },
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
         userId,
       },
       tx,
@@ -59,15 +104,46 @@ export class WizardTaskService {
     userId: string,
     namespaceId: string,
     resourceId: string,
-    input: { html: string; url: string; title?: string },
+    input: { url: string; html?: string; title?: string },
     tx?: Transaction,
   ) {
+    const userOptions = await this.getUserOptions(userId);
     return this.tasksService.emitTask(
       {
         function: 'generate_video_note',
         input,
         namespaceId,
-        payload: { resource_id: resourceId },
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
+        userId,
+      },
+      tx,
+    );
+  }
+
+  async emitCollectUrlTask(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    input: { url: string },
+    tx?: Transaction,
+  ) {
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
+      {
+        function: 'collect_url',
+        input,
+        namespaceId,
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
         userId,
       },
       tx,
@@ -157,6 +233,7 @@ export class WizardTaskService {
     source?: string,
     tx?: Transaction,
   ) {
+    const userOptions = await this.getUserOptions(userId);
     return this.tasksService.emitTask(
       {
         function: 'file_reader',
@@ -170,6 +247,9 @@ export class WizardTaskService {
         payload: {
           resource_id: resource.id,
           source: source || 'default',
+          user: {
+            options: userOptions,
+          },
         },
         namespaceId: resource.namespaceId,
         userId,
@@ -190,7 +270,7 @@ export class WizardTaskService {
     return this.tasksService.emitTask(
       {
         function: 'upsert_index',
-        priority,
+        priority: numberToBigintString(priority),
         input: {
           title: resource.name,
           content: resource.content,
@@ -249,7 +329,7 @@ export class WizardTaskService {
     return this.tasksService.emitTask(
       {
         function: 'upsert_message_index',
-        priority,
+        priority: numberToBigintString(priority),
         input: {
           conversation_id: conversationId,
           message_id: message.id,
@@ -273,7 +353,7 @@ export class WizardTaskService {
     return this.tasksService.emitTask(
       {
         function: 'delete_conversation',
-        priority,
+        priority: numberToBigintString(priority),
         input: { conversation_id: conversationId },
         payload: { conversation_id: conversationId },
         namespaceId,

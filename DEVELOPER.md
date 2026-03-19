@@ -120,6 +120,18 @@ Swagger UI available at:
 - `/docs` - Internal API documentation
 - `/open/api/docs` - Public Open API documentation
 
+### Internal Endpoints
+
+Internal endpoints under `/internal/api/v1/` are for service-to-service communication (e.g., wizard service). They use `@Public()` decorator but should be protected at the network level.
+
+- `internal/api/v1/wizard` - Wizard service callbacks
+- `internal/api/v1/wizard/tasks` - Wizard task management
+- `internal/api/v1/applications` - Application management
+- `internal/api/v1/oauth/clients` - OAuth client registration
+- `internal/api/v1/search` - Search indexing
+- `internal/api/v1/resources` - Resource operations
+- `internal/api/v1/auth` - Auth operations
+
 ### Interceptors
 
 Global interceptors applied in order:

@@ -12,12 +12,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
 @Module({
   exports: [SearchService],
   providers: [SearchService],
   controllers: [SearchController, InternalSearchController],
   imports: [
+    WizardAPIModule,
     PermissionsModule,
     NamespaceResourcesModule,
     ResourcesModule,

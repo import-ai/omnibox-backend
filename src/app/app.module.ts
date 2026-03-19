@@ -75,6 +75,7 @@ import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { ResourceExportsModule } from 'omniboxd/resource-exports/resource-exports.module';
+import { SubscribeMessageModule } from 'omniboxd/subscribe-message/subscribe-message.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
 import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
 import { AddEnqueuedToTasks1765348624000 } from 'omniboxd/migrations/1765348624000-add-enqueued-to-tasks';
@@ -87,6 +88,15 @@ import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/17674414
 import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/1768483850604-add-phone-unique-constraint';
 import { ResourceExports1768556224157 } from 'omniboxd/migrations/1768556224157-resource-exports';
 import { AddExportCanceledStatus1768559000000 } from 'omniboxd/migrations/1768559000000-add-export-canceled-status';
+import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oauth-provider';
+import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
+import { StorageUsages1768556182000 } from 'omniboxd/migrations/1768556182000-storage-usages';
+import { AddAttachmentSize1768560746946 } from 'omniboxd/migrations/1768560746946-add-attachment-size';
+import { AddInsufficientQuotaStatus1768569500000 } from 'omniboxd/migrations/1768569500000-add-insufficient-quota-status';
+import { AddContentSizeToResources1769415718000 } from 'omniboxd/migrations/1769415718000-add-content-size-to-resources';
+import { AddSizeToFiles1769415719000 } from 'omniboxd/migrations/1769415719000-add-size-to-files';
+import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000-make-size-nullable';
+import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -169,6 +179,9 @@ export class AppModule implements NestModule {
         FilesModule,
         OpenAPIModule,
         ResourceExportsModule,
+        SubscribeMessageModule,
+        AppConfigModule,
+        WizardUrlProviderModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],
@@ -228,6 +241,13 @@ export class AppModule implements NestModule {
               AddPhoneUniqueConstraint1768483850604,
               ResourceExports1768556224157,
               AddExportCanceledStatus1768559000000,
+              OAuthProvider1768569496828,
+              StorageUsages1768556182000,
+              AddAttachmentSize1768560746946,
+              AddInsufficientQuotaStatus1768569500000,
+              AddContentSizeToResources1769415718000,
+              AddSizeToFiles1769415719000,
+              MakeSizeNullable1769478367000,
               ...extraMigrations,
             ],
             migrationsRun: true,

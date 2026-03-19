@@ -69,6 +69,48 @@ export class AppleController extends SocialController {
     return res.json(loginData);
   }
 
+  @Public()
+  @Post('mobile')
+  async handleMobileCallback(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body()
+    body: {
+      identity_token: string;
+      authorization_code: string;
+      user?: { name?: { firstName: string; lastName: string }; email?: string };
+      username?: string;
+      lang?: string;
+    },
+  ) {
+    const userId = this.findUserId(req.headers.authorization);
+
+    const loginData = await this.appleService.handleMobileCallback(
+      body.identity_token,
+      body.authorization_code,
+      body.user,
+      body.username,
+      userId,
+      body.lang,
+    );
+
+    if (loginData && loginData.access_token) {
+      const jwtExpireSeconds = parseInt(
+        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+        10,
+      );
+      res.cookie('token', loginData.access_token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        maxAge: jwtExpireSeconds * 1000,
+      });
+    }
+
+    return res.json(loginData);
+  }
+
   @Post('unbind')
   unbind(@UserId() userId: string) {
     return this.appleService.unbind(userId);

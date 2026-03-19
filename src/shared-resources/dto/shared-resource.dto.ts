@@ -7,6 +7,8 @@ export class SharedResourceDto {
   resource_type: ResourceType;
   content: string;
   attrs: Record<string, any>;
+  created_at: string;
+  updated_at: string;
 
   static fromEntity(resource: Resource) {
     const dto = new SharedResourceDto();
@@ -15,6 +17,8 @@ export class SharedResourceDto {
     dto.resource_type = resource.resourceType;
     dto.content = resource.content;
     dto.attrs = resource.attrs;
+    dto.created_at = resource.createdAt.toISOString();
+    dto.updated_at = resource.updatedAt.toISOString();
     return dto;
   }
 }

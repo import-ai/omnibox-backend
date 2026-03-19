@@ -73,7 +73,7 @@ describe('ExtractTagsProcessor', () => {
     payload: { resource_id: 'test-resource-id' },
     output: null,
     exception: null,
-    priority: 5,
+    priority: '5',
     startedAt: new Date(),
     endedAt: null,
     canceledAt: null,

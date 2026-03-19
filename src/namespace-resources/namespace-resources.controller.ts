@@ -19,9 +19,9 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { SidebarChildDto } from './dto/sidebar-child.dto';
 import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -63,6 +63,7 @@ export class NamespaceResourcesController {
   }
 
   @Post()
+  @CheckNamespaceReadonly()
   async create(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -81,6 +82,7 @@ export class NamespaceResourcesController {
   }
 
   @Post(':resourceId/duplicate')
+  @CheckNamespaceReadonly()
   async duplicate(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -121,7 +123,7 @@ export class NamespaceResourcesController {
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
     @Query('summary') summary?: string,
-  ): Promise<SidebarChildDto[] | ResourceSummaryDto[]> {
+  ): Promise<ResourceSummaryDto[]> {
     return this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
@@ -131,6 +133,7 @@ export class NamespaceResourcesController {
   }
 
   @Post(':resourceId/move/:targetId')
+  @CheckNamespaceReadonly()
   async move(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -167,7 +170,7 @@ export class NamespaceResourcesController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Query('summary') summary?: string,
-  ): Promise<SidebarChildDto[] | ResourceSummaryDto[]> {
+  ): Promise<ResourceSummaryDto[]> {
     const take = Number.isFinite(Number(limit)) ? Number(limit) : 10;
     const skip = Number.isFinite(Number(offset)) ? Number(offset) : 0;
     return await this.namespaceResourcesService.recent(
@@ -244,6 +247,7 @@ export class NamespaceResourcesController {
   }
 
   @Patch(':resourceId')
+  @CheckNamespaceReadonly()
   async update(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -294,6 +298,7 @@ export class NamespaceResourcesController {
   }
 
   @Post(':resourceId/restore')
+  @CheckNamespaceReadonly()
   async restore(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,

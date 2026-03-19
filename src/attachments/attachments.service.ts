@@ -102,6 +102,8 @@ export class AttachmentsService {
       namespaceId,
       resourceId,
       objectName,
+      userId,
+      buffer.length,
     );
 
     return objectName;
@@ -196,6 +198,7 @@ export class AttachmentsService {
       namespaceId,
       resourceId,
       attachmentId,
+      userId,
     );
 
     return {

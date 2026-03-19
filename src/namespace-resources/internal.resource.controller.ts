@@ -1,11 +1,18 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, Body } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { FilesService } from 'omniboxd/files/files.service';
+import { FilterResourcesRequestDto } from 'omniboxd/namespace-resources/dto/filter-resources-request.dto';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
+    private readonly resourceAttachmentsService: ResourceAttachmentsService,
+    private readonly filesService: FilesService,
   ) {}
 
   @Public()
@@ -33,8 +40,10 @@ export class InternalResourcesController {
     @Query('nameContains') nameContains?: string,
     @Query('contentContains') contentContains?: string,
   ) {
-    const ids = resourceIds ? resourceIds.split(',').filter((id) => id) : [];
-    const tags = tag ? tag.split(',').filter((t) => t.trim()) : [];
+    const ids = resourceIds
+      ? resourceIds.split(',').filter((id) => id)
+      : undefined;
+    const tags = tag ? tag.split(',').filter((t) => t.trim()) : undefined;
     return await this.namespaceResourcesService.getResourcesForInternal(
       namespaceId,
       ids,
@@ -45,6 +54,25 @@ export class InternalResourcesController {
       tags,
       nameContains,
       contentContains,
+    );
+  }
+
+  @Public()
+  @Post('namespaces/:namespaceId/resources/query')
+  async filterResources(
+    @Param('namespaceId') namespaceId: string,
+    @Body() filterDto: FilterResourcesRequestDto,
+  ) {
+    return await this.namespaceResourcesService.getResourcesForInternal(
+      namespaceId,
+      filterDto.ids,
+      filterDto.createdAtBefore,
+      filterDto.createdAtAfter,
+      filterDto.userId,
+      filterDto.parentId,
+      filterDto.tags,
+      filterDto.nameContains,
+      filterDto.contentContains,
     );
   }
 
@@ -60,5 +88,45 @@ export class InternalResourcesController {
       resourceId,
       depth,
     );
+  }
+
+  @Public()
+  @Post('resources/recalculate-content-sizes')
+  async recalculateContentSizes(
+    @Query('namespaceId') namespaceId?: string,
+    @Query('batchSize') batchSize: number = 100,
+  ) {
+    const result = await this.resourcesService.recalculateContentSizes(
+      namespaceId,
+      batchSize,
+    );
+    return result;
+  }
+
+  @Public()
+  @Post('attachments/recalculate-sizes')
+  async recalculateAttachmentSizes(
+    @Query('namespaceId') namespaceId?: string,
+    @Query('batchSize') batchSize: number = 100,
+  ) {
+    const result =
+      await this.resourceAttachmentsService.recalculateAttachmentSizes(
+        namespaceId,
+        batchSize,
+      );
+    return result;
+  }
+
+  @Public()
+  @Post('files/recalculate-sizes')
+  async recalculateFileSizes(
+    @Query('namespaceId') namespaceId?: string,
+    @Query('batchSize') batchSize: number = 100,
+  ) {
+    const result = await this.filesService.recalculateFileSizes(
+      namespaceId,
+      batchSize,
+    );
+    return result;
   }
 }

@@ -30,6 +30,8 @@ import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
 import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { SmsModule } from 'omniboxd/sms/sms.module';
+import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
   exports: [
@@ -38,6 +40,7 @@ import { SmsModule } from 'omniboxd/sms/sms.module';
     GoogleService,
     AppleService,
     SocialService,
+    OAuthProviderModule,
   ],
   controllers: [
     AuthController,
@@ -79,6 +82,8 @@ import { SmsModule } from 'omniboxd/sms/sms.module';
     GroupsModule,
     PermissionsModule,
     APIKeyModule,
+    OAuthProviderModule,
+    ResourcesModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

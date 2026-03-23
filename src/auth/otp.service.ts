@@ -198,9 +198,16 @@ export class OtpService {
       await this.cacheService.delete(this.otpNamespace, payload.contact);
       return payload.contact;
     } catch (error) {
-      if (error instanceof TokenExpiredError || error instanceof JsonWebTokenError) {
+      if (
+        error instanceof TokenExpiredError ||
+        error instanceof JsonWebTokenError
+      ) {
         const message = this.i18n.t('auth.errors.invalidToken');
-        throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
+        throw new AppException(
+          message,
+          'INVALID_TOKEN',
+          HttpStatus.UNAUTHORIZED,
+        );
       }
       throw error;
     }

@@ -1,5 +1,12 @@
 import { ApplicationsService } from './applications.service';
-import { Body, Controller, Param, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  Post,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { Public } from 'omniboxd/auth';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -36,7 +43,7 @@ export class InternalApplicationsController {
   }
 
   @Public()
-  @Post('wechat_claw/binding-callback')
+  @Post('wechat_clawbot/binding-callback')
   @HttpCode(HttpStatus.OK)
   async wechatClawBindingCallback(
     @Body() data: WechatClawBindingCallbackDto,
@@ -44,7 +51,7 @@ export class InternalApplicationsController {
     // Find the application by session_key
     const application = await this.applicationsRepository
       .createQueryBuilder()
-      .where('app_id = :appId', { appId: 'wechat_claw' })
+      .where('app_id = :appId', { appId: 'wechat_clawbot' })
       .andWhere("attrs->>'session_key' = :sessionKey", {
         sessionKey: data.session_key,
       })
@@ -65,7 +72,7 @@ export class InternalApplicationsController {
       user_id: application.userId,
       namespace_id: application.namespaceId,
       attrs: {
-        related_app_id: 'wechat_claw',
+        related_app_id: 'wechat_clawbot',
         root_resource_id: privateRootResourceId,
         permissions: [
           {

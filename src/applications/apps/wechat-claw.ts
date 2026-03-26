@@ -19,7 +19,7 @@ export interface WechatClawAttrs {
 
 @Injectable()
 export class WechatClaw extends BaseApp {
-  public static readonly appId = 'wechat_claw';
+  public static readonly appId = 'wechat_clawbot';
 
   constructor(
     private readonly configService: ConfigService,
@@ -31,7 +31,8 @@ export class WechatClaw extends BaseApp {
   async getAttrs(
     namespaceId: string,
     userId: string,
-    _createDto: CreateApplicationsDto,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    createDto: CreateApplicationsDto,
   ): Promise<WechatClawAttrs> {
     // Call SDK to initiate binding
     const sdkUrl = this.configService.get<string>('OBB_WECHAT_CLAW_SDK_URL');
@@ -67,7 +68,7 @@ export class WechatClaw extends BaseApp {
         liteapp_url: data.liteappUrl,
         binding_complete: false,
       };
-    } catch (error) {
+    } catch {
       const message = this.i18n.t('application.errors.bindingRequestFailed');
       throw new AppException(
         message,
@@ -77,6 +78,7 @@ export class WechatClaw extends BaseApp {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async callback(data: Record<string, any>): Promise<Record<string, any>> {
     // Handle binding completion callback from bot
     const { session_key, account_id } = data;

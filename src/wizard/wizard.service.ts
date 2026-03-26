@@ -136,6 +136,7 @@ export class WizardService {
       namespaceId,
       resource.id,
       { html: objectKey, url, title },
+      data.content_type || 'page',
     );
     return { task_id: task.id, resource_id: resource.id };
   }

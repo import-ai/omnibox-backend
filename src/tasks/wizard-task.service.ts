@@ -55,6 +55,7 @@ export class WizardTaskService {
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
+    contentType: 'text' | 'page' = 'page',
     tx?: Transaction,
   ) {
     const userOptions = await this.getUserOptions(userId);
@@ -65,6 +66,7 @@ export class WizardTaskService {
         namespaceId,
         payload: {
           resource_id: resourceId,
+          content_type: contentType,
           user: {
             options: userOptions,
           },

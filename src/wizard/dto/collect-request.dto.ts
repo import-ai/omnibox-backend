@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CompressedCollectRequestDto {
@@ -25,4 +25,8 @@ export class CompressedCollectRequestDto {
     message: i18nValidationMessage('validation.errors.parentId.isNotEmpty'),
   })
   parentId: string;
+
+  @IsString()
+  @IsOptional()
+  content_type?: 'text' | 'page';
 }

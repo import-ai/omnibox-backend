@@ -9,6 +9,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
 
 @Injectable()
 export class SharedResourcesService {
@@ -24,7 +25,8 @@ export class SharedResourcesService {
   ): Promise<SharedResourceDto> {
     const resource = await this.getAndValidateResource(share, resourceId);
     const tags = await this.getTagsForResource(share.namespaceId, resource);
-    return SharedResourceDto.fromEntity(resource, tags);
+    const path = await this.getResourcePath(share, resource);
+    return SharedResourceDto.fromEntity(resource, tags, path);
   }
 
   private async getTagsForResource(
@@ -35,6 +37,37 @@ export class SharedResourcesService {
       return [];
     }
     return await this.tagService.getTagsByIds(namespaceId, resource.tagIds);
+  }
+
+  private async getResourcePath(
+    share: Share,
+    resource: Resource,
+  ): Promise<BreadcrumbItemDto[]> {
+    if (resource.id === share.resourceId) {
+      return [];
+    }
+
+    const parentResources =
+      await this.resourcesService.getParentResourcesOrFail(
+        share.namespaceId,
+        resource.parentId,
+      );
+
+    const shareRootIndex = parentResources.findIndex(
+      (r) => r.id === share.resourceId,
+    );
+
+      const pathResources =
+      shareRootIndex === -1
+        ? parentResources
+        : parentResources.slice(0, shareRootIndex + 1);
+
+    const path: BreadcrumbItemDto[] = [
+      ...pathResources.reverse().map((r) => ({ id: r.id, name: r.name })),
+      { id: resource.id, name: resource.name },
+    ];
+
+    return path;
   }
 
   async getSharedResourceChildren(

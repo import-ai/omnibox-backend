@@ -7,11 +7,14 @@ import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 
 @Injectable()
 export class SharedResourcesService {
   constructor(
     private readonly resourcesService: ResourcesService,
+    private readonly tagService: TagService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -20,7 +23,18 @@ export class SharedResourcesService {
     resourceId: string,
   ): Promise<SharedResourceDto> {
     const resource = await this.getAndValidateResource(share, resourceId);
-    return SharedResourceDto.fromEntity(resource);
+    const tags = await this.getTagsForResource(share.namespaceId, resource);
+    return SharedResourceDto.fromEntity(resource, tags);
+  }
+
+  private async getTagsForResource(
+    namespaceId: string,
+    resource: Resource,
+  ): Promise<TagDto[]> {
+    if (!resource.tagIds || resource.tagIds.length === 0) {
+      return [];
+    }
+    return await this.tagService.getTagsByIds(namespaceId, resource.tagIds);
   }
 
   async getSharedResourceChildren(

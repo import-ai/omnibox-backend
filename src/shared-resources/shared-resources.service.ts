@@ -57,7 +57,7 @@ export class SharedResourcesService {
       (r) => r.id === share.resourceId,
     );
 
-      const pathResources =
+    const pathResources =
       shareRootIndex === -1
         ? parentResources
         : parentResources.slice(0, shareRootIndex + 1);

@@ -16,6 +16,10 @@
     "cannotSetParentToSubResource": "无法将父资源设置为子资源",
     "invalidResourceType": "资源类型无效",
     "trashItemNotFound": "回收站中未找到该项目",
-    "cannotPermanentlyDeleteRoot": "无法永久删除根资源"
+    "cannotPermanentlyDeleteRoot": "无法永久删除根资源",
+    "exportJobNotFound": "导出任务未找到",
+    "exportNotCompleted": "导出尚未完成",
+    "exportFileNotAvailable": "导出文件不可用",
+    "exportExpired": "导出已过期"
   }
 }

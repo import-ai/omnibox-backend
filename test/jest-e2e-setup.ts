@@ -91,6 +91,7 @@ export default async () => {
   process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8080';
   process.env.OBB_KAFKA_BROKER = kafkaBroker;
   process.env.MAILHOG_API_URL = mailhogApiUrl;
+  process.env.KAFKAJS_NO_PARTITIONER_WARNING = '1';
 
   (global as any).__POSTGRES_CONTAINER__ = postgresContainer;
   (global as any).__MINIO_CONTAINER__ = minioContainer;

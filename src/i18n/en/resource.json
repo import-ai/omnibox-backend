@@ -16,6 +16,10 @@
     "cannotSetParentToSubResource": "Cannot set parent to a sub-resource",
     "invalidResourceType": "Invalid resource type",
     "trashItemNotFound": "Item not found in trash",
-    "cannotPermanentlyDeleteRoot": "Cannot permanently delete root resource"
+    "cannotPermanentlyDeleteRoot": "Cannot permanently delete root resource",
+    "exportJobNotFound": "Export job not found",
+    "exportNotCompleted": "Export is not completed yet",
+    "exportFileNotAvailable": "Export file is not available",
+    "exportExpired": "Export has expired"
   }
 }

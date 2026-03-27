@@ -54,7 +54,6 @@ export class WizardAPIService {
 
   async search(req: SearchRequestDto): Promise<SearchResponseDto> {
     const resp = await this.request(
-      req.namespaceId,
       'POST',
       '/internal/api/v1/wizard/search',
       instanceToPlain(req),
@@ -71,7 +70,6 @@ export class WizardAPIService {
     },
   ): Promise<{ title: string }> {
     const resp = await this.request(
-      namespaceId,
       'POST',
       '/internal/api/v1/wizard/title',
       body,
@@ -84,7 +82,6 @@ export class WizardAPIService {
     req: UpsertWeaviateResourceRequestDto,
   ): Promise<WeaviateUpsertResponseDto> {
     const resp = await this.request(
-      req.namespaceId,
       'POST',
       '/internal/api/v1/wizard/upsert_weaviate/resource',
       {
@@ -108,7 +105,6 @@ export class WizardAPIService {
     req: UpsertWeaviateMessageRequestDto,
   ): Promise<WeaviateUpsertResponseDto> {
     const resp = await this.request(
-      req.namespaceId,
       'POST',
       '/internal/api/v1/wizard/upsert_weaviate/message',
       {
@@ -132,13 +128,12 @@ export class WizardAPIService {
   }
 
   private async request(
-    namespaceId: string,
     method: string,
     path: string,
     body: Record<string, any>,
     headers: Record<string, string>,
   ): Promise<Record<string, any>> {
-    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(namespaceId);
+    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl();
     const url = `${wizardBaseUrl}${path}`;
     const requestHeaders = {
       'Content-Type': 'application/json',

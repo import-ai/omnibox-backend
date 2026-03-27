@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
@@ -26,6 +26,7 @@ import { Message } from 'omniboxd/messages/entities/message.entity';
 
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
+const WEAVIATE_SYNC_LOG_EVERY = 1000;
 
 type WeaviateSyncStats = {
   scanned: number;
@@ -36,6 +37,8 @@ type WeaviateSyncStats = {
 
 @Injectable()
 export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+
   constructor(
     private readonly wizardApiService: WizardAPIService,
     private readonly permissionsService: PermissionsService,
@@ -224,6 +227,11 @@ export class SearchService {
 
       for (const resource of resources) {
         stats.scanned += 1;
+        if (stats.scanned % WEAVIATE_SYNC_LOG_EVERY === 0) {
+          this.logger.log(
+            `Weaviate resource sync: scanned=${stats.scanned} (synced=${stats.synced}, failed=${stats.failed}, skipped=${stats.skipped})`,
+          );
+        }
         if (!this.shouldSyncResource(resource)) {
           stats.skipped += 1;
           continue;
@@ -281,6 +289,11 @@ export class SearchService {
         );
         for (const message of messages) {
           stats.scanned += 1;
+          if (stats.scanned % WEAVIATE_SYNC_LOG_EVERY === 0) {
+            this.logger.log(
+              `Weaviate message sync: scanned=${stats.scanned} (synced=${stats.synced}, failed=${stats.failed}, skipped=${stats.skipped})`,
+            );
+          }
           if (!this.shouldSyncMessage(message)) {
             stats.skipped += 1;
             continue;

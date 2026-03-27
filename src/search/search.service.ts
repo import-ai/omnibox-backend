@@ -20,8 +20,19 @@ import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
+import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { Message } from 'omniboxd/messages/entities/message.entity';
 
 const TASK_PRIORITY = 4;
+const BACKFILL_PAGE_SIZE = 100;
+
+type WeaviateSyncStats = {
+  scanned: number;
+  synced: number;
+  skipped: number;
+  failed: number;
+};
 
 @Injectable()
 export class SearchService {
@@ -190,5 +201,149 @@ export class SearchService {
         }
       }
     }
+  }
+
+  async syncResourcesToWeaviate(): Promise<WeaviateSyncStats> {
+    const stats: WeaviateSyncStats = {
+      scanned: 0,
+      synced: 0,
+      skipped: 0,
+      failed: 0,
+    };
+    let offset = 0;
+
+    while (true) {
+      const resources = await this.namespaceResourcesService.listAllResources(
+        offset,
+        BACKFILL_PAGE_SIZE,
+      );
+      if (resources.length === 0) {
+        break;
+      }
+      offset += resources.length;
+
+      for (const resource of resources) {
+        stats.scanned += 1;
+        if (!this.shouldSyncResource(resource)) {
+          stats.skipped += 1;
+          continue;
+        }
+        try {
+          const result = await this.wizardApiService.upsertWeaviateResource({
+            namespaceId: resource.namespaceId,
+            title: resource.name || '',
+            content: resource.content || '',
+            metaInfo: {
+              resourceId: resource.id,
+              parentId: resource.parentId!,
+            },
+          });
+          if (result.success) {
+            stats.synced += 1;
+          } else {
+            stats.failed += 1;
+          }
+        } catch {
+          stats.failed += 1;
+        }
+      }
+    }
+
+    return stats;
+  }
+
+  async syncMessagesToWeaviate(): Promise<WeaviateSyncStats> {
+    const stats: WeaviateSyncStats = {
+      scanned: 0,
+      synced: 0,
+      skipped: 0,
+      failed: 0,
+    };
+    let offset = 0;
+
+    while (true) {
+      const conversations = await this.conversationsService.listAll(
+        offset,
+        BACKFILL_PAGE_SIZE,
+      );
+      if (conversations.length === 0) {
+        break;
+      }
+      offset += conversations.length;
+
+      for (const conversation of conversations) {
+        if (!conversation.userId) {
+          continue;
+        }
+        const messages = await this.messagesService.findAll(
+          conversation.userId,
+          conversation.id,
+        );
+        for (const message of messages) {
+          stats.scanned += 1;
+          if (!this.shouldSyncMessage(message)) {
+            stats.skipped += 1;
+            continue;
+          }
+          try {
+            const result = await this.wizardApiService.upsertWeaviateMessage({
+              namespaceId: conversation.namespaceId,
+              userId: conversation.userId,
+              message: {
+                conversationId: conversation.id,
+                messageId: message.id,
+                message: {
+                  role: message.message.role,
+                  content: message.message.content || '',
+                },
+              },
+            });
+            if (result.success) {
+              stats.synced += 1;
+            } else {
+              stats.failed += 1;
+            }
+          } catch {
+            stats.failed += 1;
+          }
+        }
+      }
+    }
+
+    return stats;
+  }
+
+  async syncWeaviateBackfill() {
+    const resources = await this.syncResourcesToWeaviate();
+    const messages = await this.syncMessagesToWeaviate();
+    return { resources, messages };
+  }
+
+  private shouldSyncResource(resource: Resource): boolean {
+    if (resource.resourceType === ResourceType.FOLDER) {
+      return false;
+    }
+    if (!resource.content?.trim()) {
+      return false;
+    }
+    if (!resource.parentId) {
+      return false;
+    }
+    return true;
+  }
+
+  private shouldSyncMessage(message: Message): boolean {
+    const content = message.message.content || '';
+    if (!content.trim()) {
+      return false;
+    }
+    if (
+      [OpenAIMessageRole.TOOL, OpenAIMessageRole.SYSTEM].includes(
+        message.message.role,
+      )
+    ) {
+      return false;
+    }
+    return true;
   }
 }

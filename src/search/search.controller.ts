@@ -29,4 +29,10 @@ export class InternalSearchController {
     await this.searchService.refreshResourceIndex();
     await this.searchService.refreshMessageIndex();
   }
+
+  @Public()
+  @Post('sync_weaviate')
+  async syncWeaviate() {
+    return await this.searchService.syncWeaviateBackfill();
+  }
 }

@@ -3,6 +3,11 @@ import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { propagation, context } from '@opentelemetry/api';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { SearchResponseDto } from 'omniboxd/wizard/dto/search-response.dto';
+import {
+  UpsertWeaviateMessageRequestDto,
+  UpsertWeaviateResourceRequestDto,
+  WeaviateUpsertResponseDto,
+} from 'omniboxd/wizard/dto/weaviate-upsert.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import {
@@ -73,6 +78,57 @@ export class WizardAPIService {
       {},
     );
     return { title: resp.title as string };
+  }
+
+  async upsertWeaviateResource(
+    req: UpsertWeaviateResourceRequestDto,
+  ): Promise<WeaviateUpsertResponseDto> {
+    const resp = await this.request(
+      req.namespaceId,
+      'POST',
+      '/internal/api/v1/wizard/upsert_weaviate/resource',
+      {
+        namespace_id: req.namespaceId,
+        title: req.title,
+        content: req.content,
+        meta_info: {
+          resource_id: req.metaInfo.resourceId,
+          parent_id: req.metaInfo.parentId,
+        },
+      },
+      {},
+    );
+    return {
+      success: Boolean(resp.success),
+      error: resp.error as string | undefined,
+    };
+  }
+
+  async upsertWeaviateMessage(
+    req: UpsertWeaviateMessageRequestDto,
+  ): Promise<WeaviateUpsertResponseDto> {
+    const resp = await this.request(
+      req.namespaceId,
+      'POST',
+      '/internal/api/v1/wizard/upsert_weaviate/message',
+      {
+        namespace_id: req.namespaceId,
+        user_id: req.userId,
+        message: {
+          conversation_id: req.message.conversationId,
+          message_id: req.message.messageId,
+          message: {
+            role: req.message.message.role,
+            content: req.message.message.content,
+          },
+        },
+      },
+      {},
+    );
+    return {
+      success: Boolean(resp.success),
+      error: resp.error as string | undefined,
+    };
   }
 
   private async request(

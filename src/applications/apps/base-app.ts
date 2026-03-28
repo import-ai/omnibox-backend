@@ -10,6 +10,8 @@ export abstract class BaseApp {
     createDto: CreateApplicationsDto,
   ): Promise<Record<string, any>>;
 
+  abstract getApplicationByKey(key: string): Promise<Applications | null>;
+
   abstract callback(data: Record<string, any>): Promise<Record<string, any>>;
 
   postDelete?(application: Applications): Promise<void>;

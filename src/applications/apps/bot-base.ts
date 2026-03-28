@@ -9,13 +9,16 @@ import {
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { ApplicationsResponseDto } from 'omniboxd/applications/applications.dto';
+import {
+  ApplicationsResponseDto,
+  CreateApplicationsDto,
+} from 'omniboxd/applications/applications.dto';
 import { APIKeyResponseDto } from 'omniboxd/api-key/api-key.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 
 export interface BotCallbackRequestDto {
-  verify_code: string;
+  key: string;
 }
 
 export interface BotCallbackResponseDto {
@@ -24,38 +27,38 @@ export interface BotCallbackResponseDto {
 }
 
 @Injectable()
-export class BotBase extends BaseApp {
+export abstract class BotBase extends BaseApp {
   constructor(
     @InjectRepository(Applications)
-    private readonly applicationsRepository: Repository<Applications>,
-    private readonly apiKeyService: APIKeyService,
-    private readonly namespacesService: NamespacesService,
-    private readonly i18n: I18nService,
+    protected readonly applicationsRepository: Repository<Applications>,
+    protected readonly apiKeyService: APIKeyService,
+    protected readonly namespacesService: NamespacesService,
+    protected readonly i18n: I18nService,
   ) {
     super();
   }
 
-  async getEntityByVerifyCode(code: string): Promise<Applications | null> {
+  async getApplicationByKey(key: string): Promise<Applications | null> {
     const constructor = this.constructor as typeof BaseApp;
 
     return await this.applicationsRepository
       .createQueryBuilder()
       .where('app_id = :appId', { appId: constructor.appId })
-      .andWhere("attrs->>'verify_code' = :code", { code })
+      .andWhere("attrs->>'key' = :key", { key })
       .getOne();
   }
 
-  private async generateUniqueVerifyCode(): Promise<string> {
-    let verifyCode = '';
+  async generateUniqueKey(): Promise<string> {
+    let key = '';
     let attempts = 0;
     const maxAttempts = 100;
 
     while (attempts < maxAttempts) {
-      verifyCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const existingAuth = await this.getEntityByVerifyCode(verifyCode);
+      key = Math.floor(100000 + Math.random() * 900000).toString();
+      const existingAuth = await this.getApplicationByKey(key);
 
       if (!existingAuth) {
-        return verifyCode;
+        return key;
       }
 
       attempts++;
@@ -72,21 +75,21 @@ export class BotBase extends BaseApp {
   }
 
   async getAttrs(
-    _namespaceId: string,
-    _userId: string,
-    createDto: any,
-  ): Promise<{ verify_code: string } & Record<string, any>> {
+    namespaceId: string,
+    userId: string,
+    createDto: CreateApplicationsDto,
+  ): Promise<{ key: string } & Record<string, any>> {
     const attrs = createDto.attrs || {};
     return {
       ...attrs,
-      verify_code: await this.generateUniqueVerifyCode(),
+      key: await this.generateUniqueKey(),
     };
   }
 
   async callback(data: BotCallbackRequestDto): Promise<BotCallbackResponseDto> {
-    const { verify_code, ...rest } = data;
+    const { key, ...rest } = data;
 
-    const entity = await this.getEntityByVerifyCode(verify_code);
+    const entity = await this.getApplicationByKey(key);
 
     if (!entity) {
       const message = this.i18n.t('application.errors.invalidVerifyCode');
@@ -132,9 +135,9 @@ export class BotBase extends BaseApp {
 
     entity.apiKeyId = apiKeyResponse.id;
 
-    // Remove verify_code from attrs after successful API key creation
+    // Remove key from attrs after successful API key creation
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { verify_code: _, ...attrsWithoutVerifyCode } = entity.attrs;
+    const { key: _, ...attrsWithoutVerifyCode } = entity.attrs;
     entity.attrs = attrsWithoutVerifyCode;
 
     await this.applicationsRepository.save(entity);

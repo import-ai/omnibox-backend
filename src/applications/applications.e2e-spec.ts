@@ -47,10 +47,10 @@ describe('ApplicationsController (e2e)', () => {
         app_id: 'wechat_bot',
         attrs: {
           additional_field: 'value',
-          verify_code: expect.any(String),
+          key: expect.any(String),
         },
       });
-      expect(response.body.attrs.verify_code).toMatch(/^\d{6}$/);
+      expect(response.body.attrs.key).toMatch(/^\d{6}$/);
       expect(response.body.id).toBeDefined();
     });
 

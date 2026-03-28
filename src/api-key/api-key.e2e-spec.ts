@@ -295,11 +295,11 @@ describe('APIKeyController (e2e)', () => {
     const wechatBotCreateResponse = await client.post(
       `/api/v1/namespaces/${client.namespace.id}/applications/wechat_bot`,
     );
-    const verifyCode: string = wechatBotCreateResponse.body.attrs.verify_code;
+    const key: string = wechatBotCreateResponse.body.attrs.key;
     const wechatBotCallbackResponse = await client
       .post('/internal/api/v1/applications/wechat_bot')
       .send({
-        verify_code: verifyCode,
+        key,
         wechat_user_id: 'wechat-user-123',
         nickname: 'Test WeChat User',
       });

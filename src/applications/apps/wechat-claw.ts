@@ -15,11 +15,11 @@ export class WechatClaw extends BotBase {
   private readonly OBB_BOT_BASE_URL: string;
 
   constructor(
-    private readonly configService: ConfigService,
     applicationsRepository: Repository<Applications>,
     apiKeyService: APIKeyService,
     namespacesService: NamespacesService,
     i18n: I18nService,
+    private readonly configService: ConfigService,
   ) {
     super(applicationsRepository, apiKeyService, namespacesService, i18n);
     this.OBB_BOT_BASE_URL = this.configService.get<string>(

@@ -3,6 +3,7 @@
     "appAuthNotFound": "App authorization not found",
     "appNotFound": "App {appId} not found",
     "invalidVerifyCode": "Invalid verify code",
-    "failedToGenerateVerifyCode": "Failed to generate unique verify code after maximum attempts"
+    "failedToGenerateVerifyCode": "Generate verify code failed",
+    "bindingRequestFailed": "Binding request failed"
   }
 }

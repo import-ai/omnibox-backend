@@ -8,11 +8,12 @@ import { Repository } from 'typeorm';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { BotBase } from 'omniboxd/applications/apps/bot-base';
+import { BaseApp } from 'omniboxd/applications/apps/base-app';
 
 @Injectable()
 export class WechatClaw extends BotBase {
   public static readonly appId = 'wechat_clawbot';
-  private readonly OBB_BOT_BASE_URL: string;
+  private readonly OBBOT_BASE_URL: string;
 
   constructor(
     applicationsRepository: Repository<Applications>,
@@ -22,10 +23,7 @@ export class WechatClaw extends BotBase {
     private readonly configService: ConfigService,
   ) {
     super(applicationsRepository, apiKeyService, namespacesService, i18n);
-    this.OBB_BOT_BASE_URL = this.configService.get<string>(
-      'OBB_BOT_BASE_URL',
-      '',
-    );
+    this.OBBOT_BASE_URL = this.configService.get<string>('OBBOT_BASE_URL', '');
   }
 
   async getAttrs(
@@ -34,7 +32,7 @@ export class WechatClaw extends BotBase {
     createDto: CreateApplicationsDto,
   ): Promise<{ key: string } & Record<string, any>> {
     const attrs = createDto.attrs || {};
-    if (!this.OBB_BOT_BASE_URL) {
+    if (!this.OBBOT_BASE_URL) {
       const message = this.i18n.t(
         'application.errors.failedToGenerateVerifyCode',
       );
@@ -46,32 +44,33 @@ export class WechatClaw extends BotBase {
     }
 
     try {
-      const response = await fetch(`${this.OBB_BOT_BASE_URL}/api/v1/binding`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      const constructor = this.constructor as typeof BaseApp;
+
+      const response = await fetch(
+        `${this.OBBOT_BASE_URL}/api/v1/${constructor.appId}/binding`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            namespace_id: namespaceId,
+            user_id: userId,
+          }),
         },
-        body: JSON.stringify({
-          namespaceId,
-          userId,
-        }),
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = (await response.json()) as {
+        key: string;
         session_key: string;
-        qrcode_url: string;
+        qrcode_content: string;
       };
 
-      return {
-        ...attrs,
-        key: data.session_key,
-        session_key: data.session_key,
-        qrcode_url: data.qrcode_url,
-      };
+      return { ...attrs, ...data };
     } catch {
       const message = this.i18n.t('application.errors.bindingRequestFailed');
       throw new AppException(

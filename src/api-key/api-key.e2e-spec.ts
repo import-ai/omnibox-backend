@@ -292,9 +292,10 @@ describe('APIKeyController (e2e)', () => {
   });
 
   it('should preserve related_app_id during patch operations', async () => {
-    const wechatBotCreateResponse = await client.post(
-      `/api/v1/namespaces/${client.namespace.id}/applications/wechat_bot`,
-    );
+    const wechatBotCreateResponse = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/applications/wechat_bot`)
+      .send({})
+      .expect(201);
     const key: string = wechatBotCreateResponse.body.attrs.key;
     const wechatBotCallbackResponse = await client
       .post('/internal/api/v1/applications/wechat_bot')

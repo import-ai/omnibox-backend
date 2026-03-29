@@ -211,7 +211,7 @@ export class WizardTaskService {
     userId: string,
     namespaceId: string,
     payload: { resource_id: string; parent_task_id?: string },
-    input: { text: string },
+    input: { content: string },
     tx?: Transaction,
   ) {
     const lang = await this.getUserLanguage(userId);

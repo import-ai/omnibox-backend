@@ -123,7 +123,7 @@ export class OpenResourcesController {
           userId,
           apiKey.namespaceId,
           { resource_id: newResource.id },
-          { text: data.content },
+          { content: data.content },
         );
       }
       // Skip extract tags task if user requested or we already have tags

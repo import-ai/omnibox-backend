@@ -16,7 +16,7 @@ import {
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
-import { context, trace } from '@opentelemetry/api';
+import { trace } from '@opentelemetry/api';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
@@ -52,7 +52,7 @@ export class StreamService {
     requestId: string,
     callback: (data: string) => Promise<void>,
   ): Promise<void> {
-    const span = trace.getSpan(context.active());
+    const span = trace.getActiveSpan();
     if (span) {
       span.setAttribute('agent_request', JSON.stringify(body));
     }
@@ -231,7 +231,7 @@ export class StreamService {
 
   streamError(subscriber: Subscriber<MessageEvent>, error: Error) {
     this.logger.error({ error });
-    const span = trace.getSpan(context.active());
+    const span = trace.getActiveSpan();
     if (span) {
       span.recordException(error);
     }

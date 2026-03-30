@@ -18,7 +18,6 @@ import {
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
-import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { WsAuthOptions } from 'omniboxd/auth';
@@ -26,7 +25,7 @@ import { SharesService } from 'omniboxd/shares/shares.service';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WsSpanInterceptor } from 'omniboxd/interceptor/ws-span.interceptor';
-import { context, trace } from '@opentelemetry/api';
+import { trace } from '@opentelemetry/api';
 
 @WebSocketGateway({
   cors: {
@@ -44,7 +43,6 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(WizardGateway.name);
 
   constructor(
-    private readonly wizardService: WizardService,
     private readonly streamService: StreamService,
     private readonly sharesService: SharesService,
     private readonly i18n: I18nService,
@@ -139,7 +137,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         },
         error: (error) => {
           this.logger.error(`Error in ${eventType} stream`, error);
-          const span = trace.getSpan(context.active());
+          const span = trace.getActiveSpan();
           if (span) {
             span.recordException(error);
           }
@@ -151,7 +149,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (error) {
       this.logger.error(`Error handling ${eventType}`, error);
-      const span = trace.getSpan(context.active());
+      const span = trace.getActiveSpan();
       if (span) {
         span.recordException(error);
       }
@@ -195,7 +193,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         },
         error: (error) => {
           this.logger.error(`Error in ${eventType} stream`, error);
-          const span = trace.getSpan(context.active());
+          const span = trace.getActiveSpan();
           if (span) {
             span.recordException(error);
           }
@@ -207,7 +205,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (error) {
       this.logger.error(`Error handling ${eventType}`, error);
-      const span = trace.getSpan(context.active());
+      const span = trace.getActiveSpan();
       if (span) {
         span.recordException(error);
       }

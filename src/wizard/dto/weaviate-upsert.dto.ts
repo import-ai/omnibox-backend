@@ -1,6 +1,7 @@
 export interface WeaviateResourceMetaInfoDto {
   resourceId: string;
   parentId: string;
+  resourceTags: string[];
 }
 
 export interface UpsertWeaviateResourceRequestDto {

@@ -91,6 +91,7 @@ export class WizardAPIService {
         meta_info: {
           resource_id: req.metaInfo.resourceId,
           parent_id: req.metaInfo.parentId,
+          resource_tags: req.metaInfo.resourceTags,
         },
       },
       {},

@@ -244,6 +244,7 @@ export class SearchService {
             metaInfo: {
               resourceId: resource.id,
               parentId: resource.parentId!,
+              resourceTags: resource.tagIds || [],
             },
           });
           if (result.success) {

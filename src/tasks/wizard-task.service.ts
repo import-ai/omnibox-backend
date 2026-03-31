@@ -284,10 +284,8 @@ export class WizardTaskService {
             user_id: resource.userId,
             resource_id: resource.id,
             parent_id: resource.parentId,
-            resource_tags: resourceTags.map((tag) => ({
-              id: tag.id,
-              name: tag.name,
-            })),
+            resource_tag_ids: resourceTags.map((tag) => tag.id),
+            resource_tag_names: resourceTags.map((tag) => tag.name),
           },
         },
         payload: { resource_id: resource.id },

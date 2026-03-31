@@ -1,14 +1,11 @@
-export interface WeaviateResourceMetaInfoDto {
-  resourceId: string;
-  parentId: string;
-  resourceTags: string[];
-}
-
 export interface UpsertWeaviateResourceRequestDto {
   namespaceId: string;
   title: string;
   content: string;
-  metaInfo: WeaviateResourceMetaInfoDto;
+  resourceId: string;
+  parentId: string;
+  resourceTagIds: string[];
+  resourceTagNames: string[];
 }
 
 export interface WeaviateOpenAIMessageDto {

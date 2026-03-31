@@ -23,6 +23,7 @@ import { I18nService } from 'nestjs-i18n';
 import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { Message } from 'omniboxd/messages/entities/message.entity';
+import { TagService } from 'omniboxd/tag/tag.service';
 
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
@@ -50,6 +51,7 @@ export class SearchService {
     private readonly taskRepository: Repository<Task>,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
+    private readonly tagService: TagService,
   ) {}
 
   async search(
@@ -237,15 +239,23 @@ export class SearchService {
           continue;
         }
         try {
+          const resourceTagIds = resource.tagIds || [];
+          const tags = await this.tagService.findByIds(
+            resource.namespaceId,
+            resourceTagIds,
+          );
+          const tagNamesById = new Map(tags.map((tag) => [tag.id, tag.name]));
           const result = await this.wizardApiService.upsertWeaviateResource({
             namespaceId: resource.namespaceId,
             title: resource.name || '',
             content: resource.content || '',
-            metaInfo: {
-              resourceId: resource.id,
-              parentId: resource.parentId!,
-              resourceTags: resource.tagIds || [],
-            },
+            resourceId: resource.id,
+            parentId: resource.parentId!,
+            resourceTagIds,
+            resourceTagNames: resourceTagIds.flatMap((id) => {
+              const name = tagNamesById.get(id);
+              return name ? [name] : [];
+            }),
           });
           if (result.success) {
             stats.synced += 1;

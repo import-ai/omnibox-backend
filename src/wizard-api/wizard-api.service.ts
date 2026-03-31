@@ -88,11 +88,10 @@ export class WizardAPIService {
         namespace_id: req.namespaceId,
         title: req.title,
         content: req.content,
-        meta_info: {
-          resource_id: req.metaInfo.resourceId,
-          parent_id: req.metaInfo.parentId,
-          resource_tags: req.metaInfo.resourceTags,
-        },
+        resource_id: req.resourceId,
+        parent_id: req.parentId,
+        resource_tag_ids: req.resourceTagIds,
+        resource_tag_names: req.resourceTagNames,
       },
       {},
     );

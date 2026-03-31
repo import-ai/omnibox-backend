@@ -359,9 +359,6 @@ export class SearchService {
     if (resource.resourceType === ResourceType.FOLDER) {
       return false;
     }
-    if (!resource.content?.trim()) {
-      return false;
-    }
     if (!resource.parentId) {
       return false;
     }

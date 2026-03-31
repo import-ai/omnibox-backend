@@ -208,7 +208,9 @@ export class SearchService {
     }
   }
 
-  async syncResourcesToWeaviate(): Promise<WeaviateSyncStats> {
+  async syncResourcesToWeaviate(
+    concurrency: number,
+  ): Promise<WeaviateSyncStats> {
     const stats: WeaviateSyncStats = {
       scanned: 0,
       synced: 0,
@@ -227,6 +229,7 @@ export class SearchService {
       }
       offset += resources.length;
 
+      const tasks: (() => Promise<void>)[] = [];
       for (const resource of resources) {
         stats.scanned += 1;
         if (stats.scanned % WEAVIATE_SYNC_LOG_EVERY === 0) {
@@ -238,40 +241,47 @@ export class SearchService {
           stats.skipped += 1;
           continue;
         }
-        try {
-          const resourceTagIds = resource.tagIds || [];
-          const tags = await this.tagService.findByIds(
-            resource.namespaceId,
-            resourceTagIds,
-          );
-          const tagNamesById = new Map(tags.map((tag) => [tag.id, tag.name]));
-          const result = await this.wizardApiService.upsertWeaviateResource({
-            namespaceId: resource.namespaceId,
-            title: resource.name || '',
-            content: resource.content || '',
-            resourceId: resource.id,
-            parentId: resource.parentId!,
-            resourceTagIds,
-            resourceTagNames: resourceTagIds.flatMap((id) => {
-              const name = tagNamesById.get(id);
-              return name ? [name] : [];
-            }),
-          });
-          if (result.success) {
-            stats.synced += 1;
-          } else {
+        tasks.push(async () => {
+          try {
+            const resourceTagIds = resource.tagIds || [];
+            const tags = await this.tagService.findByIds(
+              resource.namespaceId,
+              resourceTagIds,
+            );
+            const tagNamesById = new Map(
+              tags.map((tag) => [tag.id, tag.name]),
+            );
+            const result = await this.wizardApiService.upsertWeaviateResource({
+              namespaceId: resource.namespaceId,
+              title: resource.name || '',
+              content: resource.content || '',
+              resourceId: resource.id,
+              parentId: resource.parentId!,
+              resourceTagIds,
+              resourceTagNames: resourceTagIds.flatMap((id) => {
+                const name = tagNamesById.get(id);
+                return name ? [name] : [];
+              }),
+            });
+            if (result.success) {
+              stats.synced += 1;
+            } else {
+              stats.failed += 1;
+            }
+          } catch {
             stats.failed += 1;
           }
-        } catch {
-          stats.failed += 1;
-        }
+        });
       }
+      await this.runWithConcurrency(tasks, concurrency);
     }
 
     return stats;
   }
 
-  async syncMessagesToWeaviate(): Promise<WeaviateSyncStats> {
+  async syncMessagesToWeaviate(
+    concurrency: number,
+  ): Promise<WeaviateSyncStats> {
     const stats: WeaviateSyncStats = {
       scanned: 0,
       synced: 0,
@@ -290,6 +300,7 @@ export class SearchService {
       }
       offset += conversations.length;
 
+      const tasks: (() => Promise<void>)[] = [];
       for (const conversation of conversations) {
         if (!conversation.userId) {
           continue;
@@ -309,37 +320,40 @@ export class SearchService {
             stats.skipped += 1;
             continue;
           }
-          try {
-            const result = await this.wizardApiService.upsertWeaviateMessage({
-              namespaceId: conversation.namespaceId,
-              userId: conversation.userId,
-              message: {
-                conversationId: conversation.id,
-                messageId: message.id,
+          tasks.push(async () => {
+            try {
+              const result = await this.wizardApiService.upsertWeaviateMessage({
+                namespaceId: conversation.namespaceId,
+                userId: conversation.userId!,
                 message: {
-                  role: message.message.role,
-                  content: message.message.content || '',
+                  conversationId: conversation.id,
+                  messageId: message.id,
+                  message: {
+                    role: message.message.role,
+                    content: message.message.content || '',
+                  },
                 },
-              },
-            });
-            if (result.success) {
-              stats.synced += 1;
-            } else {
+              });
+              if (result.success) {
+                stats.synced += 1;
+              } else {
+                stats.failed += 1;
+              }
+            } catch {
               stats.failed += 1;
             }
-          } catch {
-            stats.failed += 1;
-          }
+          });
         }
       }
+      await this.runWithConcurrency(tasks, concurrency);
     }
 
     return stats;
   }
 
-  async syncWeaviateBackfill() {
-    const resources = await this.syncResourcesToWeaviate();
-    const messages = await this.syncMessagesToWeaviate();
+  async syncWeaviateBackfill(concurrency: number) {
+    const resources = await this.syncResourcesToWeaviate(concurrency);
+    const messages = await this.syncMessagesToWeaviate(concurrency);
     return { resources, messages };
   }
 
@@ -369,5 +383,22 @@ export class SearchService {
       return false;
     }
     return true;
+  }
+
+  private async runWithConcurrency(
+    tasks: (() => Promise<void>)[],
+    concurrency: number,
+  ): Promise<void> {
+    let index = 0;
+    const workers = Array.from(
+      { length: Math.min(concurrency, tasks.length) },
+      async () => {
+        while (index < tasks.length) {
+          const i = index++;
+          await tasks[i]();
+        }
+      },
+    );
+    await Promise.all(workers);
   }
 }

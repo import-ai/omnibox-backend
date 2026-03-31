@@ -19,6 +19,7 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { TagService } from 'omniboxd/tag/tag.service';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
 jest.mock('../wizard-api/wizard-api.service', () => {
@@ -122,6 +123,12 @@ describe('SearchController (e2e)', () => {
           provide: MessagesService,
           useValue: {
             findAll: jest.fn().mockResolvedValue([]),
+          },
+        },
+        {
+          provide: TagService,
+          useValue: {
+            findByIds: jest.fn().mockResolvedValue([]),
           },
         },
         {

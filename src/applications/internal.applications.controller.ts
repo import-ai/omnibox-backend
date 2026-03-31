@@ -7,7 +7,7 @@ export class InternalApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
 
   @Public()
-  @Post(':appId')
+  @Post(':appId/callback')
   async callback(
     @Param('appId') appId: string,
     @Body() data: Record<string, any>,

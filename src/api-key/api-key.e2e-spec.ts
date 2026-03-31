@@ -298,7 +298,7 @@ describe('APIKeyController (e2e)', () => {
       .expect(201);
     const key: string = wechatBotCreateResponse.body.attrs.key;
     const wechatBotCallbackResponse = await client
-      .post('/internal/api/v1/applications/wechat_bot')
+      .post('/internal/api/v1/applications/wechat_bot/callback')
       .send({
         key,
         wechat_user_id: 'wechat-user-123',

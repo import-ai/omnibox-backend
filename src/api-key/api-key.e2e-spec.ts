@@ -292,14 +292,15 @@ describe('APIKeyController (e2e)', () => {
   });
 
   it('should preserve related_app_id during patch operations', async () => {
-    const wechatBotCreateResponse = await client.post(
-      `/api/v1/namespaces/${client.namespace.id}/applications/wechat_bot`,
-    );
-    const verifyCode: string = wechatBotCreateResponse.body.attrs.verify_code;
+    const wechatBotCreateResponse = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/applications/wechat_bot`)
+      .send({})
+      .expect(201);
+    const key: string = wechatBotCreateResponse.body.attrs.key;
     const wechatBotCallbackResponse = await client
-      .post('/internal/api/v1/applications/wechat_bot')
+      .post('/internal/api/v1/applications/wechat_bot/callback')
       .send({
-        verify_code: verifyCode,
+        key,
         wechat_user_id: 'wechat-user-123',
         nickname: 'Test WeChat User',
       });

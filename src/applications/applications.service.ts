@@ -12,6 +12,7 @@ import {
 import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { QQBot } from 'omniboxd/applications/apps/qq-bot';
+import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
 
 export interface FindAllOptions {
   apiKeyId?: string;
@@ -26,6 +27,7 @@ export class ApplicationsService {
     private readonly applicationsRepository: Repository<Applications>,
     private readonly wechatBot: WechatBot,
     private readonly qqBot: QQBot,
+    private readonly wechatClaw: WechatClaw,
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
   ) {
@@ -45,6 +47,9 @@ export class ApplicationsService {
     }
     if (this.isAppEnabled(QQBot.appId, enabledAppIds)) {
       this.apps[QQBot.appId] = this.qqBot;
+    }
+    if (this.isAppEnabled(WechatClaw.appId, enabledAppIds)) {
+      this.apps[WechatClaw.appId] = this.wechatClaw;
     }
   }
 

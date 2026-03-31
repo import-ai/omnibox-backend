@@ -248,9 +248,7 @@ export class SearchService {
               resource.namespaceId,
               resourceTagIds,
             );
-            const tagNamesById = new Map(
-              tags.map((tag) => [tag.id, tag.name]),
-            );
+            const tagNamesById = new Map(tags.map((tag) => [tag.id, tag.name]));
             const result = await this.wizardApiService.upsertWeaviateResource({
               namespaceId: resource.namespaceId,
               title: resource.name || '',

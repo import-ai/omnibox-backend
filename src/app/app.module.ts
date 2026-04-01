@@ -93,6 +93,7 @@ import { AddInsufficientQuotaStatus1768569500000 } from 'omniboxd/migrations/176
 import { AddContentSizeToResources1769415718000 } from 'omniboxd/migrations/1769415718000-add-content-size-to-resources';
 import { AddSizeToFiles1769415719000 } from 'omniboxd/migrations/1769415719000-add-size-to-files';
 import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000-make-size-nullable';
+import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/1774965861436-rename-verify-code-to-key';
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
 
 @Module({})
@@ -242,6 +243,7 @@ export class AppModule implements NestModule {
               AddContentSizeToResources1769415718000,
               AddSizeToFiles1769415719000,
               MakeSizeNullable1769478367000,
+              RenameVerifyCodeToKey1774965861436,
               ...extraMigrations,
             ],
             migrationsRun: true,

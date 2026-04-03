@@ -127,6 +127,18 @@ describe('SearchController (e2e)', () => {
           useValue: {
             getParentResources: jest.fn().mockResolvedValue([]),
             batchGetResourceMeta: jest.fn().mockResolvedValue(new Map()),
+            batchGetParentResources: jest
+              .fn()
+              .mockImplementation((_namespaceId, resourceIds: string[]) => {
+                const entries = (resourceIds || []).map((id) => [
+                  id,
+                  {
+                    id,
+                    attrs: {},
+                  },
+                ]);
+                return Promise.resolve(new Map(entries));
+              }),
           },
         },
         {

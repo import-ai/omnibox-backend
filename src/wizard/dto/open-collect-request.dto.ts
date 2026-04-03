@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -7,9 +7,12 @@ export class OpenCollectRequestDto {
     description: 'URL of the web page to collect',
     example: 'https://example.com/article',
   })
-  @IsString({
-    message: i18nValidationMessage('validation.errors.url.isString'),
-  })
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    {
+      message: i18nValidationMessage('validation.errors.url.isUrl'),
+    },
+  )
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.url.isNotEmpty'),
   })

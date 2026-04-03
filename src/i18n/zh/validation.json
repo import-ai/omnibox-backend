@@ -84,7 +84,8 @@
     },
     "url": {
       "isString": "URL 必须是字符串",
-      "isNotEmpty": "URL 不能为空"
+      "isNotEmpty": "URL 不能为空",
+      "isUrl": "URL 格式不正确"
     },
     "query": {
       "isString": "查询必须是字符串",

@@ -161,6 +161,11 @@ export class WizardService {
       );
     }
 
+    if (!url.toLowerCase().startsWith('http')) {
+      const message = this.i18n.t('wizard.errors.invalidUrl');
+      throw new AppException(message, 'INVALID_URL', HttpStatus.BAD_REQUEST);
+    }
+
     // Create a placeholder resource for the URL
     const resourceDto: CreateResourceDto = {
       name: url,

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
@@ -6,8 +6,12 @@ import {
   IndexedMessageDto,
   IndexedResourceDto,
 } from './dto/indexed-doc.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import {
+  comparePermission,
+  ResourcePermission,
+} from 'omniboxd/permissions/resource-permission.enum';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
@@ -19,6 +23,7 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+
 import { I18nService } from 'nestjs-i18n';
 import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
@@ -60,6 +65,14 @@ export class SearchService {
     query: string,
     type?: DocType,
   ) {
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
     const searchRequest = new SearchRequestDto();
     searchRequest.query = query;
     searchRequest.namespaceId = namespaceId;
@@ -75,46 +88,39 @@ export class SearchService {
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
     const seenConversationIds = new Set<string>();
-    const resourceIdsToFetch: string[] = [];
     for (const record of result?.records || []) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
         if (!seenResourceIds.has(chunk.resourceId)) {
-          resourceIdsToFetch.push(chunk.resourceId);
           seenResourceIds.add(chunk.resourceId);
         }
       }
     }
 
-    const resourceMetaMap = await this.resourcesService.batchGetResourceMeta(
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
       namespaceId,
-      resourceIdsToFetch,
+      [...seenResourceIds],
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
     );
 
     seenResourceIds.clear();
 
-    for (const record of result.records) {
+    for (const record of result?.records || []) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
         if (seenResourceIds.has(chunk.resourceId)) {
           continue;
         }
         seenResourceIds.add(chunk.resourceId);
-        const parentResources = await this.resourcesService.getParentResources(
-          namespaceId,
-          chunk.resourceId,
-        );
-        if (!parentResources) {
-          continue;
-        }
-        const hasPermission = await this.permissionsService.userHasPermission(
-          namespaceId,
-          chunk.resourceId,
-          userId,
-          ResourcePermission.CAN_VIEW,
-          parentResources,
-        );
-        if (!hasPermission) {
+        const permission = permissionMap.get(chunk.resourceId);
+        if (
+          !permission ||
+          comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
+        ) {
           continue;
         }
 

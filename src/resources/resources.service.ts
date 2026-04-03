@@ -99,6 +99,8 @@ export class ResourcesService {
       return new Map();
     }
 
+    resourceIds = [...new Set(resourceIds)];
+
     const resourceRepository = entityManager
       ? entityManager.getRepository(Resource)
       : this.resourceRepository;
@@ -143,6 +145,37 @@ export class ResourcesService {
       );
     }
     return resource;
+  }
+
+  async batchGetParentResources(
+    namespaceId: string,
+    resourceIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<Map<string, ResourceMetaDto>> {
+    const resourceMap: Map<string, ResourceMetaDto> = new Map();
+    while (resourceIds.length > 0) {
+      const resources = await this.batchGetResourceMeta(
+        namespaceId,
+        resourceIds,
+        entityManager,
+      );
+
+      for (const resource of resources.values()) {
+        resourceMap.set(resource.id, resource);
+      }
+
+      resourceIds = [];
+      for (const resource of resources.values()) {
+        if (!resource.parentId) {
+          continue;
+        }
+        if (resourceMap.has(resource.parentId)) {
+          continue;
+        }
+        resourceIds.push(resource.parentId);
+      }
+    }
+    return resourceMap;
   }
 
   /**

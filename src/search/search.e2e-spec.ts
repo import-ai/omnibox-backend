@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { HttpStatus } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
   SearchController,
   InternalSearchController,
@@ -96,7 +97,16 @@ describe('SearchController (e2e)', () => {
         {
           provide: PermissionsService,
           useValue: {
-            userHasPermission: jest.fn().mockResolvedValue(true),
+            userInNamespace: jest.fn().mockResolvedValue(true),
+            getCurrentPermissions: jest
+              .fn()
+              .mockImplementation((_userId, _namespaceId, resources) => {
+                const map = new Map();
+                for (const r of resources || []) {
+                  map.set(r.id, ResourcePermission.CAN_VIEW);
+                }
+                return Promise.resolve(map);
+              }),
           },
         },
         {

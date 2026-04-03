@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { HttpStatus } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
   SearchController,
   InternalSearchController,
@@ -19,6 +20,7 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { TagService } from 'omniboxd/tag/tag.service';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
 jest.mock('../wizard-api/wizard-api.service', () => {
@@ -95,7 +97,16 @@ describe('SearchController (e2e)', () => {
         {
           provide: PermissionsService,
           useValue: {
-            userHasPermission: jest.fn().mockResolvedValue(true),
+            userInNamespace: jest.fn().mockResolvedValue(true),
+            getCurrentPermissions: jest
+              .fn()
+              .mockImplementation((_userId, _namespaceId, resources) => {
+                const map = new Map();
+                for (const r of resources || []) {
+                  map.set(r.id, ResourcePermission.CAN_VIEW);
+                }
+                return Promise.resolve(map);
+              }),
           },
         },
         {
@@ -116,12 +127,32 @@ describe('SearchController (e2e)', () => {
           useValue: {
             getParentResources: jest.fn().mockResolvedValue([]),
             batchGetResourceMeta: jest.fn().mockResolvedValue(new Map()),
+            batchGetParentResources: jest
+              .fn()
+              .mockImplementation((_namespaceId, resourceIds: string[]) => {
+                const entries: Array<
+                  [string, { id: string; attrs: Record<string, unknown> }]
+                > = (resourceIds || []).map((id) => [
+                  id,
+                  {
+                    id,
+                    attrs: {},
+                  },
+                ]);
+                return Promise.resolve(new Map(entries));
+              }),
           },
         },
         {
           provide: MessagesService,
           useValue: {
             findAll: jest.fn().mockResolvedValue([]),
+          },
+        },
+        {
+          provide: TagService,
+          useValue: {
+            findByIds: jest.fn().mockResolvedValue([]),
           },
         },
         {

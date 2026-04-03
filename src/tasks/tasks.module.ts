@@ -11,6 +11,7 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { InternalWizardTasksController } from 'omniboxd/tasks/internal.wizard-tasks.controller';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
+import { TagModule } from 'omniboxd/tag/tag.module';
 
 @Module({
   providers: [TasksService, WizardTaskService],
@@ -19,6 +20,7 @@ import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.modu
     UserModule,
     KafkaModule,
     NamespacesQuotaModule,
+    TagModule,
   ],
   controllers: [
     TasksController,

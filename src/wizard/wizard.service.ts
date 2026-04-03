@@ -161,6 +161,8 @@ export class WizardService {
       );
     }
 
+    console.log('--->', namespaceId, userId, url, parentId);
+
     if (!url.toLowerCase().startsWith('http')) {
       const message = this.i18n.t('wizard.errors.invalidUrl');
       throw new AppException(message, 'INVALID_URL', HttpStatus.BAD_REQUEST);

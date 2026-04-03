@@ -130,7 +130,9 @@ describe('SearchController (e2e)', () => {
             batchGetParentResources: jest
               .fn()
               .mockImplementation((_namespaceId, resourceIds: string[]) => {
-                const entries = (resourceIds || []).map((id) => [
+                const entries: Array<
+                  [string, { id: string; attrs: Record<string, unknown> }]
+                > = (resourceIds || []).map((id) => [
                   id,
                   {
                     id,

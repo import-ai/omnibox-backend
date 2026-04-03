@@ -128,6 +128,10 @@ export class WizardController {
         HttpStatus.BAD_REQUEST,
       );
     }
+    if (!data.url.toLowerCase().startsWith('http')) {
+      const message = this.i18n.t('wizard.errors.invalidUrl');
+      throw new AppException(message, 'INVALID_URL', HttpStatus.BAD_REQUEST);
+    }
     return await this.wizardService.collectUrl(
       namespaceId,
       userId,

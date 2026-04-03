@@ -4,7 +4,6 @@ import {
   Post,
   UploadedFile,
   UseInterceptors,
-  HttpStatus,
 } from '@nestjs/common';
 import { RequestId } from 'omniboxd/decorators/request-id.decorators';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
@@ -33,8 +32,6 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @ApiTags('Wizard')
@@ -44,7 +41,6 @@ export class OpenWizardController {
   constructor(
     private readonly wizardService: WizardService,
     private readonly openWizardService: OpenWizardService,
-    private readonly i18n: I18nService,
   ) {}
 
   @Post('collect/gzip')
@@ -169,10 +165,6 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
     @UserId() userId: string,
     @Body() data: OpenCollectUrlRequestDto,
   ): Promise<CollectUrlResponseDto> {
-    if (!data.url.toLowerCase().startsWith('http')) {
-      const message = this.i18n.t('wizard.errors.invalidUrl');
-      throw new AppException(message, 'INVALID_URL', HttpStatus.BAD_REQUEST);
-    }
     return await this.wizardService.collectUrl(
       apiKey.namespaceId,
       userId,

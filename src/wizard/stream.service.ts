@@ -111,7 +111,7 @@ export class StreamService {
   agentHandler(
     namespaceId: string,
     conversationId: string,
-    userId: string | null,
+    userId: string,
     subscriber: Subscriber<MessageEvent>,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
@@ -337,14 +337,14 @@ export class StreamService {
     requestDto: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write',
-    userId: string | null,
+    userId: string,
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Message[] = [];
     if (requestDto.parent_message_id) {
       parentId = requestDto.parent_message_id;
       const allMessages = await this.messagesService.findAll(
-        userId || undefined,
+        undefined,
         requestDto.conversation_id,
       );
       messages = this.getMessages(allMessages, parentId);
@@ -375,6 +375,7 @@ export class StreamService {
 
       const wizardRequest: WizardAgentRequestDto = {
         namespace_id: namespaceId,
+        user_id: userId,
         conversation_id: requestDto.conversation_id,
         query: requestDto.query,
         messages,
@@ -442,7 +443,7 @@ export class StreamService {
         requestDto,
         requestId,
         mode,
-        null,
+        '',
       );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>

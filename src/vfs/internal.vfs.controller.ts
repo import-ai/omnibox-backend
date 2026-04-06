@@ -31,7 +31,7 @@ export class InternalVFSController {
       );
     }
     const path = resourcePath ? `/${resourcePath}` : '/';
-    return this.vfsService.listChildrenByPath(namespaceId, userId, path);
+    return await this.vfsService.listChildrenByPath(namespaceId, userId, path);
   }
 
   @Public()
@@ -51,7 +51,7 @@ export class InternalVFSController {
       );
     }
     const path = `/${resourcePath}`;
-    return this.vfsService.getContentByPath(namespaceId, userId, path, {
+    return await this.vfsService.getContentByPath(namespaceId, userId, path, {
       offset,
       limit,
     });
@@ -73,7 +73,12 @@ export class InternalVFSController {
       );
     }
     const path = `/${resourcePath}`;
-    return this.vfsService.createByPath(namespaceId, userId, path, content);
+    return await this.vfsService.createByPath(
+      namespaceId,
+      userId,
+      path,
+      content,
+    );
   }
 
   @Public()
@@ -92,6 +97,39 @@ export class InternalVFSController {
       );
     }
     const path = `/${resourcePath}`;
-    return this.vfsService.overwriteByPath(namespaceId, userId, path, content);
+    return await this.vfsService.overwriteByPath(
+      namespaceId,
+      userId,
+      path,
+      content,
+    );
+  }
+
+  @Public()
+  @Patch('replace')
+  async replaceContentByPath(
+    @Param('namespaceId') namespaceId: string,
+    @Body('user_id') userId: string,
+    @Body('path') resourcePath: string,
+    @Body('old_string') oldString: string,
+    @Body('new_string') newString: string,
+    @Body('replace_all') replaceAll: boolean,
+  ) {
+    if (!userId) {
+      throw new AppException(
+        'user_id required',
+        'INVALID_USER_ID',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    const path = `/${resourcePath}`;
+    return await this.vfsService.replaceContentByPath(
+      namespaceId,
+      userId,
+      path,
+      oldString,
+      newString,
+      replaceAll,
+    );
   }
 }

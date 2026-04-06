@@ -344,7 +344,7 @@ export class StreamService {
     if (requestDto.parent_message_id) {
       parentId = requestDto.parent_message_id;
       const allMessages = await this.messagesService.findAll(
-        undefined,
+        userId,
         requestDto.conversation_id,
       );
       messages = this.getMessages(allMessages, parentId);

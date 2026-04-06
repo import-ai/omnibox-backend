@@ -24,4 +24,27 @@ export class InternalVFSController {
     const path = resourcePath ? `/${resourcePath}` : '/';
     return this.vfsService.listChildrenByPath(namespaceId, userId, path);
   }
+
+  @Public()
+  @Get('get')
+  async getContentByPath(
+    @Param('namespaceId') namespaceId: string,
+    @Query('user_id') userId: string,
+    @Query('path') resourcePath?: string,
+    @Query('offset') offset?: number,
+    @Query('limit') limit?: number,
+  ) {
+    if (!userId) {
+      throw new AppException(
+        'user_id required',
+        'INVALID_USER_ID',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    const path = resourcePath ? `/${resourcePath}` : '/';
+    return this.vfsService.getContentByPath(namespaceId, userId, path, {
+      offset,
+      limit,
+    });
+  }
 }

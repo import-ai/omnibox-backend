@@ -1,7 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { SpaceType } from 'omniboxd/namespace-resources/dto/resource.dto';
+import {
+  ResourceDto,
+  SpaceType,
+} from 'omniboxd/namespace-resources/dto/resource.dto';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
@@ -14,6 +17,7 @@ import { ParsedPathDo } from 'omniboxd/vfs/do/parsed-path.do';
 import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
 import { listResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -45,7 +49,15 @@ export class VFSService {
       while (resourceName in map) {
         resourceName = `${resourceName} (${cnt++})`;
       }
-      map[resourceName] = resource;
+      if (
+        resource.hasChildren ||
+        resource.resourceType === ResourceType.FOLDER
+      ) {
+        map[resourceName] = resource;
+      }
+      if (resource.resourceType !== ResourceType.FOLDER) {
+        map[resourceName + '.md'] = resource;
+      }
     }
     return map;
   }
@@ -121,12 +133,12 @@ export class VFSService {
     return fileInfo;
   }
 
-  async listChildrenByParsedPath(
+  async getResourceIdsByParsedPath(
     namespaceId: string,
     userId: string,
     spaceType: SpaceType,
     resourceNames?: string[],
-  ) {
+  ): Promise<string[]> {
     let rootResourceId: string;
     if (spaceType === SpaceType.PRIVATE) {
       rootResourceId = await this.namespacesService.getPrivateRootId(
@@ -139,17 +151,11 @@ export class VFSService {
       rootResourceId = teamRootResource.id;
     }
 
-    const resourceIds = await this.getResourceIdsFromPath(
+    return await this.getResourceIdsFromPath(
       namespaceId,
       userId,
       resourceNames ?? [],
       [rootResourceId],
-    );
-
-    return this.namespaceResourcesService.listChildren(
-      namespaceId,
-      resourceIds[resourceIds.length - 1],
-      userId,
     );
   }
 
@@ -161,22 +167,28 @@ export class VFSService {
     const parsedPath = VFSService.parsePath(path);
 
     if (parsedPath.spaceType) {
-      const resources = await this.listChildrenByParsedPath(
+      const resourceIds = await this.getResourceIdsByParsedPath(
         namespaceId,
         userId,
         parsedPath.spaceType,
         parsedPath.resourceNames,
       );
 
+      const resourceId = resourceIds[resourceIds.length - 1];
+
+      const resources = await this.namespaceResourcesService.listChildren(
+        namespaceId,
+        resourceId,
+        userId,
+      );
+
       const fileInfos: FileInfoDto[] = [];
 
       for (const resource of resources) {
-        const rawFileInfo = FileInfoDto.fromResourceSummaryDto(resource);
-        fileInfos.push(rawFileInfo);
-        if (
-          rawFileInfo.isDir &&
-          resource.resourceType !== ResourceType.FOLDER
-        ) {
+        if (FileInfoDto.isDir(resource)) {
+          fileInfos.push(FileInfoDto.fromResourceSummaryDto(resource));
+        }
+        if (resource.resourceType !== ResourceType.FOLDER) {
           const fileInfo = FileInfoDto.fromResourceSummaryDto(resource);
           fileInfo.name = `${fileInfo.name}.md`;
           fileInfo.isDir = false;
@@ -185,6 +197,7 @@ export class VFSService {
       }
 
       return {
+        id: resourceId,
         path: parsedPath.path,
         resources: fileInfos,
         total: fileInfos.length,
@@ -198,6 +211,7 @@ export class VFSService {
     const teamRootResource: ResourceMetaDto =
       await this.namespacesService.getTeamspaceRoot(namespaceId);
     return {
+      id: namespaceId,
       path: '/',
       resources: [
         VFSService.rootDir('private', privateRootResource),
@@ -205,5 +219,93 @@ export class VFSService {
       ],
       total: 2,
     } as listResponseDto;
+  }
+
+  async getContentByPath(
+    namespaceId: string,
+    userId: string,
+    path: string,
+    options?: {
+      offset?: number;
+      limit?: number;
+    },
+  ) {
+    const parsedPath = VFSService.parsePath(path);
+    const { offset = 0, limit = 2000 } = options || {};
+    if (!parsedPath.spaceType) {
+      throw new AppException(
+        'teamspace or private is required',
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (!parsedPath.resourceNames || parsedPath.resourceNames.length === 0) {
+      throw new AppException(
+        `${parsedPath.spaceType} is a directory`,
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const newPath =
+      '/' +
+      [parsedPath.spaceType, ...parsedPath.resourceNames.slice(0, -1)].join(
+        '/',
+      );
+
+    const listResponseDto = await this.listChildrenByPath(
+      namespaceId,
+      userId,
+      newPath,
+    );
+
+    const resourceName: string =
+      parsedPath.resourceNames[parsedPath.resourceNames.length - 1];
+
+    const filteredResources = listResponseDto.resources.filter(
+      (resource) => resource.name === resourceName,
+    );
+
+    if (filteredResources.length === 0) {
+      throw new AppException(
+        `${resourceName} not found`,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (filteredResources.length > 1) {
+      throw new AppException(
+        `duplicated filename`,
+        'RUNTIME_ERROR',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    const fileInfoDto: FileInfoDto = filteredResources[0];
+    if (fileInfoDto.isDir) {
+      throw new AppException(
+        `${resourceName} is a directory`,
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const resourceId: string = fileInfoDto.id;
+    const resource: ResourceDto =
+      await this.namespaceResourcesService.getResource({
+        userId,
+        namespaceId,
+        resourceId,
+      });
+    const lines = resource.content.split('\n');
+    return {
+      id: resource.id,
+      path: parsedPath.path,
+      content: lines.slice(offset, offset + limit).join('\n'),
+      offset: offset,
+      limit: limit,
+      total: lines.length,
+    } as GetResponseDto;
   }
 }

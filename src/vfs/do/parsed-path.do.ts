@@ -30,7 +30,7 @@ export class ParsedPathDo {
 
     const spaceType = parts[0] as SpaceType;
     if (spaceType !== SpaceType.TEAM && spaceType !== SpaceType.PRIVATE) {
-      throw new Error(`Invalid space type: ${spaceType as string}`);
+      throw new Error(`${spaceType as string} not found`);
     }
 
     result.spaceType = spaceType;

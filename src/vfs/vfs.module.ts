@@ -6,7 +6,6 @@ import { TagModule } from 'omniboxd/tag/tag.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { FilesModule } from 'omniboxd/files/files.module';
-import { I18nModule } from 'nestjs-i18n';
 import { InternalVFSController } from 'omniboxd/vfs/internal.vfs.controller';
 
 @Module({
@@ -19,7 +18,6 @@ import { InternalVFSController } from 'omniboxd/vfs/internal.vfs.controller';
     NamespacesModule,
     ResourcesModule,
     FilesModule,
-    I18nModule,
   ],
 })
 export class VFSModule {}

@@ -1,20 +1,17 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { VFSService } from 'omniboxd/vfs/vfs.service';
 
-@Controller('api/v1/vfs')
+@Controller('api/v1/namespaces/:namespaceId/vfs')
 export class VFSController {
   constructor(private readonly vfsService: VFSService) {}
-  @Get('list/:namespaceId/**')
+  @Get('list')
   async listChildrenByPath(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
-    @Param('0') resourcePath: string, // path captured by '**' is accessed via Param('0')
+    @Query('path') resourcePath?: string,
   ) {
-    return this.vfsService.listChildrenByPath(
-      namespaceId,
-      resourcePath,
-      userId,
-    );
+    const path = resourcePath ? `/${resourcePath}` : '/';
+    return this.vfsService.listChildrenByPath(namespaceId, userId, path);
   }
 }

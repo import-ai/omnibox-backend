@@ -23,7 +23,7 @@ export class FileInfoDto {
   static fromResourceSummaryDto(resource: ResourceSummaryDto): FileInfoDto {
     const fileInfo = new FileInfoDto();
     fileInfo.id = resource.id;
-    fileInfo.name = resource.name;
+    fileInfo.name = resource.name || resource.id;
     fileInfo.createdAt = resource.createdAt.toISOString();
     fileInfo.updatedAt = resource.updatedAt.toISOString();
     fileInfo.isDir = resource.hasChildren;

@@ -13,6 +13,7 @@ import { SpanStatusCode, trace } from '@opentelemetry/api';
 import { ParsedPathDo } from 'omniboxd/vfs/do/parsed-path.do';
 import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
 import { listResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -66,7 +67,11 @@ export class VFSService {
       } catch (err) {
         span.recordException(err);
         span.setStatus({ code: SpanStatusCode.ERROR });
-        throw err;
+        throw new AppException(
+          err.message,
+          'INVALID_PATH',
+          HttpStatus.BAD_REQUEST,
+        );
       } finally {
         span.end();
       }
@@ -163,12 +168,26 @@ export class VFSService {
         parsedPath.resourceNames,
       );
 
+      const fileInfos: FileInfoDto[] = [];
+
+      for (const resource of resources) {
+        const rawFileInfo = FileInfoDto.fromResourceSummaryDto(resource);
+        fileInfos.push(rawFileInfo);
+        if (
+          rawFileInfo.isDir &&
+          resource.resourceType !== ResourceType.FOLDER
+        ) {
+          const fileInfo = FileInfoDto.fromResourceSummaryDto(resource);
+          fileInfo.name = `${fileInfo.name}.md`;
+          fileInfo.isDir = false;
+          fileInfos.push(fileInfo);
+        }
+      }
+
       return {
         path: parsedPath.path,
-        resources: resources.map((resource) =>
-          FileInfoDto.fromResourceSummaryDto(resource),
-        ),
-        total: resources.length,
+        resources: fileInfos,
+        total: fileInfos.length,
       } as listResponseDto;
     }
 

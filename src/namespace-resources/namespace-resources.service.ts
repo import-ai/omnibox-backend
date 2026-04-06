@@ -179,7 +179,7 @@ export class NamespaceResourcesService {
     createReq: CreateResourceDto,
     tx?: Transaction,
     source?: string,
-  ) {
+  ): Promise<Resource> {
     if (!tx) {
       return await transaction(this.dataSource.manager, async (tx) => {
         return await this.create(userId, namespaceId, createReq, tx);

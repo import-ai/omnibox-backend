@@ -6,6 +6,7 @@ import {
   IndexedMessageDto,
   IndexedResourceDto,
 } from './dto/indexed-doc.dto';
+import { WeaviateSyncStatsResponseDto } from './dto/weaviate-sync-stats-response.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import {
@@ -33,13 +34,6 @@ import { TagService } from 'omniboxd/tag/tag.service';
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
 const WEAVIATE_SYNC_LOG_EVERY = 1000;
-
-type WeaviateSyncStats = {
-  scanned: number;
-  synced: number;
-  skipped: number;
-  failed: number;
-};
 
 @Injectable()
 export class SearchService {
@@ -216,8 +210,8 @@ export class SearchService {
 
   async syncResourcesToWeaviate(
     concurrency: number,
-  ): Promise<WeaviateSyncStats> {
-    const stats: WeaviateSyncStats = {
+  ): Promise<WeaviateSyncStatsResponseDto> {
+    const stats: WeaviateSyncStatsResponseDto = {
       scanned: 0,
       synced: 0,
       skipped: 0,
@@ -285,8 +279,8 @@ export class SearchService {
 
   async syncMessagesToWeaviate(
     concurrency: number,
-  ): Promise<WeaviateSyncStats> {
-    const stats: WeaviateSyncStats = {
+  ): Promise<WeaviateSyncStatsResponseDto> {
+    const stats: WeaviateSyncStatsResponseDto = {
       scanned: 0,
       synced: 0,
       skipped: 0,

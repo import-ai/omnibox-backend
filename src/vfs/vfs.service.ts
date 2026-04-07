@@ -328,29 +328,16 @@ export class VFSService {
    * @param path
    * @param options
    */
-  async getContentByPath(
-    namespaceId: string,
-    userId: string,
-    path: string,
-    options?: {
-      offset?: number;
-      limit?: number;
-    },
-  ) {
-    const { offset = 0, limit = 2000 } = options || {};
+  async getContentByPath(namespaceId: string, userId: string, path: string) {
     const { resource, parsedPath } = await this.getResourceByPath(
       namespaceId,
       userId,
       path,
     );
-    const lines = resource.content.split('\n');
     return {
       id: resource.id,
       path: parsedPath.path,
-      content: lines.slice(offset, offset + limit).join('\n'),
-      offset: offset,
-      limit: limit,
-      total: lines.length,
+      content: resource.content,
     } as GetResponseDto;
   }
 

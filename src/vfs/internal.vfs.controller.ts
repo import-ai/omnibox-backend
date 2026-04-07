@@ -40,8 +40,6 @@ export class InternalVFSController {
     @Param('namespaceId') namespaceId: string,
     @Query('user_id') userId: string,
     @Query('path') path: string,
-    @Query('offset') offset?: number,
-    @Query('limit') limit?: number,
   ) {
     if (!userId) {
       throw new AppException(
@@ -50,10 +48,7 @@ export class InternalVFSController {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    return await this.vfsService.getContentByPath(namespaceId, userId, path, {
-      offset,
-      limit,
-    });
+    return await this.vfsService.getContentByPath(namespaceId, userId, path);
   }
 
   @Public()

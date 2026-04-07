@@ -1,12 +1,4 @@
-import {
-  Controller,
-  DefaultValuePipe,
-  Get,
-  Param,
-  ParseIntPipe,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { DocType } from './doc-type.enum';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
@@ -41,9 +33,15 @@ export class InternalSearchController {
   @Public()
   @Post('sync_weaviate')
   async syncWeaviate(
-    @Query('concurrency', new DefaultValuePipe(1), ParseIntPipe)
-    concurrency: number,
+    @Query('concurrency')
+    concurrency: number = 1,
+    @Query('updatedAfter')
+    updatedAfter?: Date,
   ) {
-    return await this.searchService.syncWeaviateBackfill(concurrency);
+    const updatedAfterDate = updatedAfter ? new Date(updatedAfter) : undefined;
+    return await this.searchService.syncWeaviateBackfill(
+      concurrency,
+      updatedAfterDate,
+    );
   }
 }

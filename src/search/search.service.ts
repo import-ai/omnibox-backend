@@ -210,6 +210,7 @@ export class SearchService {
 
   async syncResourcesToWeaviate(
     concurrency: number,
+    updatedAfter?: Date,
   ): Promise<WeaviateSyncStatsResponseDto> {
     const stats: WeaviateSyncStatsResponseDto = {
       scanned: 0,
@@ -237,7 +238,7 @@ export class SearchService {
             `Weaviate resource sync: scanned=${stats.scanned} (synced=${stats.synced}, failed=${stats.failed}, skipped=${stats.skipped})`,
           );
         }
-        if (!this.shouldSyncResource(resource)) {
+        if (!this.shouldSyncResource(resource, updatedAfter)) {
           stats.skipped += 1;
           continue;
         }
@@ -279,6 +280,7 @@ export class SearchService {
 
   async syncMessagesToWeaviate(
     concurrency: number,
+    updatedAfter?: Date,
   ): Promise<WeaviateSyncStatsResponseDto> {
     const stats: WeaviateSyncStatsResponseDto = {
       scanned: 0,
@@ -314,7 +316,7 @@ export class SearchService {
               `Weaviate message sync: scanned=${stats.scanned} (synced=${stats.synced}, failed=${stats.failed}, skipped=${stats.skipped})`,
             );
           }
-          if (!this.shouldSyncMessage(message)) {
+          if (!this.shouldSyncMessage(message, updatedAfter)) {
             stats.skipped += 1;
             continue;
           }
@@ -349,13 +351,26 @@ export class SearchService {
     return stats;
   }
 
-  async syncWeaviateBackfill(concurrency: number) {
-    const resources = await this.syncResourcesToWeaviate(concurrency);
-    const messages = await this.syncMessagesToWeaviate(concurrency);
+  async syncWeaviateBackfill(concurrency: number, updatedAfter?: Date) {
+    const updatedAfterStr = updatedAfter ? updatedAfter.toISOString() : 'undefined';
+    this.logger.log(
+      `syncWeaviateBackfill: concurrency=${concurrency}, updatedAfter=${updatedAfterStr}`,
+    );
+    const resources = await this.syncResourcesToWeaviate(
+      concurrency,
+      updatedAfter,
+    );
+    const messages = await this.syncMessagesToWeaviate(
+      concurrency,
+      updatedAfter,
+    );
     return { resources, messages };
   }
 
-  private shouldSyncResource(resource: Resource): boolean {
+  private shouldSyncResource(resource: Resource, updatedAfter?: Date): boolean {
+    if (updatedAfter && resource.updatedAt <= updatedAfter) {
+      return false;
+    }
     if (resource.resourceType === ResourceType.FOLDER) {
       return false;
     }
@@ -365,7 +380,10 @@ export class SearchService {
     return true;
   }
 
-  private shouldSyncMessage(message: Message): boolean {
+  private shouldSyncMessage(message: Message, updatedAfter?: Date): boolean {
+    if (updatedAfter && message.updatedAt <= updatedAfter) {
+      return false;
+    }
     const content = message.message.content || '';
     if (!content.trim()) {
       return false;

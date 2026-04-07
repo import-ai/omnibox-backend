@@ -678,7 +678,7 @@ export class VFSService {
     namespaceId: string,
     requestDto: VFSFilterResourcesRequestDto,
   ): Promise<{ resources: FileInfoDto[]; total: number }> {
-    let resourceIds: string[] = [];
+    let resourceIds: string[];
     const parsedPath = ParsedPathDo.fromPath(requestDto.path || '/');
     if (!parsedPath.spaceType) {
       const visibleResources: ResourceMetaDto[] =

@@ -122,4 +122,17 @@ export class TagService {
       select: ['id', 'name'],
     });
   }
+
+  async findByPattern(namespaceId: string, pattern: string): Promise<Tag[]> {
+    if (!pattern || pattern.trim() === '') {
+      return [];
+    }
+
+    return await this.tagRepository
+      .createQueryBuilder('tag')
+      .where('tag.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('tag.name ~* :pattern', { pattern })
+      .select(['tag.id', 'tag.name'])
+      .getMany();
+  }
 }

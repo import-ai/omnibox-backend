@@ -19,8 +19,9 @@ export class VFSResourceFilterOptionsDto {
   @IsOptional()
   updatedAtAfter?: Date;
 
+  @Expose({ name: 'tag_pattern' })
   @IsOptional()
-  tags?: string[];
+  tagPattern?: string;
 
   @Expose({ name: 'name_pattern' })
   @IsOptional()

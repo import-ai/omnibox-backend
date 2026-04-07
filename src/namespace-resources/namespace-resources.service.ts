@@ -785,7 +785,7 @@ export class NamespaceResourcesService {
       createdAtAfter?: Date;
       updatedAtBefore?: Date;
       updatedAtAfter?: Date;
-      tags?: string[];
+      tagPattern?: string;
       namePattern?: string;
       contentPattern?: string;
       urlPattern?: string;
@@ -797,10 +797,10 @@ export class NamespaceResourcesService {
     },
   ): Promise<{ resources: InternalResourceDto[]; total: number }> {
     let tagIds: string[] | undefined = undefined;
-    if (options?.tags) {
-      const tagEntities = await this.tagService.findByNames(
+    if (options?.tagPattern) {
+      const tagEntities = await this.tagService.findByPattern(
         namespaceId,
-        options.tags,
+        options.tagPattern,
       );
       tagIds = tagEntities.map((t) => t.id);
     }

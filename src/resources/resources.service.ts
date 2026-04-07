@@ -329,6 +329,113 @@ export class ResourcesService {
     });
   }
 
+  async resourceFilter(
+    namespaceId: string,
+    resourceIds: string[],
+    options?: {
+      createdAtBefore?: Date;
+      createdAtAfter?: Date;
+      updatedAtBefore?: Date;
+      updatedAtAfter?: Date;
+      tagIds?: string[];
+      namePattern?: string;
+      contentPattern?: string;
+      urlPattern?: string;
+      userId?: string;
+      parentId?: string;
+      resourceTypes?: ResourceType[];
+      offset?: number;
+      limit?: number;
+    },
+  ): Promise<Resource[]> {
+    if (!resourceIds || resourceIds.length === 0) {
+      throw new AppException(
+        'Invalid resourceIds',
+        'INVALID_RESOURCE_IDS',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const hasFilter = options && Object.keys(options).length > 0;
+    if (!hasFilter) {
+      throw new AppException(
+        'At least one filter parameter is required',
+        'FILTER_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const queryBuilder = this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.id IN (:...resourceIds)', { resourceIds });
+
+    if (options.createdAtBefore) {
+      queryBuilder.andWhere('resource.created_at < :createdAtBefore', {
+        createdAtBefore: options.createdAtBefore,
+      });
+    }
+    if (options.createdAtAfter) {
+      queryBuilder.andWhere('resource.created_at > :createdAtAfter', {
+        createdAtAfter: options.createdAtAfter,
+      });
+    }
+    if (options.updatedAtBefore) {
+      queryBuilder.andWhere('resource.updated_at < :updatedAtBefore', {
+        updatedAtBefore: options.updatedAtBefore,
+      });
+    }
+    if (options.updatedAtAfter) {
+      queryBuilder.andWhere('resource.updated_at > :updatedAtAfter', {
+        updatedAtAfter: options.updatedAtAfter,
+      });
+    }
+    if (options.tagIds && options.tagIds.length > 0) {
+      queryBuilder.andWhere('resource.tag_ids && :tagIds', {
+        tagIds: options.tagIds,
+      });
+    }
+    if (options.namePattern) {
+      queryBuilder.andWhere('resource.name ~* :namePattern', {
+        namePattern: options.namePattern,
+      });
+    }
+    if (options.contentPattern) {
+      queryBuilder.andWhere('resource.content ~* :contentPattern', {
+        contentPattern: options.contentPattern,
+      });
+    }
+    if (options.urlPattern) {
+      queryBuilder.andWhere("resource.attrs->>'url' ~* :urlPattern", {
+        urlPattern: options.urlPattern,
+      });
+    }
+    if (options.userId) {
+      queryBuilder.andWhere('resource.user_id = :userId', {
+        userId: options.userId,
+      });
+    }
+    if (options.parentId) {
+      queryBuilder.andWhere('resource.parent_id = :parentId', {
+        parentId: options.parentId,
+      });
+    }
+    if (options.resourceTypes && options.resourceTypes.length > 0) {
+      queryBuilder.andWhere('resource.resource_type IN (:...resourceTypes)', {
+        resourceTypes: options.resourceTypes,
+      });
+    }
+    queryBuilder
+      .orderBy('resource.created_at', 'DESC')
+      .addOrderBy('resource.id', 'ASC');
+    if (options?.offset !== undefined) {
+      queryBuilder.skip(options.offset);
+    }
+    if (options?.limit !== undefined) {
+      queryBuilder.take(options.limit);
+    }
+    return await queryBuilder.getMany();
+  }
+
   async batchGetResources(
     namespaceId: string,
     resourceIds?: string[],

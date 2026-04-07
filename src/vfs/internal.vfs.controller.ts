@@ -21,7 +21,7 @@ export class InternalVFSController {
   async listChildrenByPath(
     @Param('namespaceId') namespaceId: string,
     @Query('user_id') userId: string,
-    @Query('path') resourcePath?: string,
+    @Query('path') path: string,
   ) {
     if (!userId) {
       throw new AppException(
@@ -30,7 +30,6 @@ export class InternalVFSController {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    const path = resourcePath ? `/${resourcePath}` : '/';
     return await this.vfsService.listChildrenByPath(namespaceId, userId, path);
   }
 
@@ -39,7 +38,7 @@ export class InternalVFSController {
   async getContentByPath(
     @Param('namespaceId') namespaceId: string,
     @Query('user_id') userId: string,
-    @Query('path') resourcePath: string,
+    @Query('path') path: string,
     @Query('offset') offset?: number,
     @Query('limit') limit?: number,
   ) {
@@ -50,7 +49,6 @@ export class InternalVFSController {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    const path = `/${resourcePath}`;
     return await this.vfsService.getContentByPath(namespaceId, userId, path, {
       offset,
       limit,
@@ -62,7 +60,7 @@ export class InternalVFSController {
   async createByPath(
     @Param('namespaceId') namespaceId: string,
     @Body('user_id') userId: string,
-    @Body('path') resourcePath: string,
+    @Body('path') path: string,
     @Body('content') content: string,
   ) {
     if (!userId) {
@@ -72,7 +70,6 @@ export class InternalVFSController {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    const path = `/${resourcePath}`;
     return await this.vfsService.createByPath(
       namespaceId,
       userId,
@@ -86,7 +83,7 @@ export class InternalVFSController {
   async overwriteByPath(
     @Param('namespaceId') namespaceId: string,
     @Body('user_id') userId: string,
-    @Body('path') resourcePath: string,
+    @Body('path') path: string,
     @Body('content') content: string,
   ) {
     if (!userId) {
@@ -96,7 +93,6 @@ export class InternalVFSController {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    const path = `/${resourcePath}`;
     return await this.vfsService.overwriteByPath(
       namespaceId,
       userId,
@@ -110,7 +106,7 @@ export class InternalVFSController {
   async replaceContentByPath(
     @Param('namespaceId') namespaceId: string,
     @Body('user_id') userId: string,
-    @Body('path') resourcePath: string,
+    @Body('path') path: string,
     @Body('old_string') oldString: string,
     @Body('new_string') newString: string,
     @Body('replace_all') replaceAll: boolean,
@@ -122,7 +118,33 @@ export class InternalVFSController {
         HttpStatus.UNAUTHORIZED,
       );
     }
-    const path = `/${resourcePath}`;
+    return await this.vfsService.replaceContentByPath(
+      namespaceId,
+      userId,
+      path,
+      oldString,
+      newString,
+      replaceAll,
+    );
+  }
+
+  @Public()
+  @Patch('filter')
+  async resourceFilter(
+    @Param('namespaceId') namespaceId: string,
+    @Body('user_id') userId: string,
+    @Body('path') path: string,
+    @Body('old_string') oldString: string,
+    @Body('new_string') newString: string,
+    @Body('replace_all') replaceAll: boolean,
+  ) {
+    if (!userId) {
+      throw new AppException(
+        'user_id required',
+        'INVALID_USER_ID',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
     return await this.vfsService.replaceContentByPath(
       namespaceId,
       userId,

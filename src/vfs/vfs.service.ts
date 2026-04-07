@@ -19,6 +19,7 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { DataSource } from 'typeorm';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -62,6 +63,13 @@ export class VFSService {
     });
   }
 
+  /**
+   * List children of a specific resource in FileInfoDto[] format
+   * @param namespaceId
+   * @param resourceId
+   * @param userId
+   * @return FileInfoDto[]
+   */
   async listChildrenByResourceId(
     namespaceId: string,
     resourceId: string,
@@ -104,7 +112,15 @@ export class VFSService {
     return fileInfos;
   }
 
-  private async getResourcesFromPath(
+  /**
+   * DFS function for getResourcesChainByParsedPath
+   * @param namespaceId
+   * @param userId
+   * @param resourceNames
+   * @param resources
+   * @private
+   */
+  private async getResourcesChainByParsedPathDfs(
     namespaceId: string,
     userId: string,
     resourceNames: string[],
@@ -130,7 +146,7 @@ export class VFSService {
     const fileInfoDto = children.find((x) => x.name === resourceName);
 
     if (fileInfoDto) {
-      return this.getResourcesFromPath(
+      return this.getResourcesChainByParsedPathDfs(
         namespaceId,
         userId,
         resourceNames.slice(1),
@@ -154,7 +170,14 @@ export class VFSService {
     return fileInfo;
   }
 
-  async getResourcesByParsedPath(
+  /**
+   * Get resources chain from root to target path
+   * @param namespaceId
+   * @param userId
+   * @param spaceType
+   * @param resourceNames
+   */
+  async getResourcesChainByParsedPath(
     namespaceId: string,
     userId: string,
     spaceType: SpaceType,
@@ -171,7 +194,7 @@ export class VFSService {
       rootResource = VFSService.rootDir('teamspace', teamRootResource);
     }
 
-    return await this.getResourcesFromPath(
+    return await this.getResourcesChainByParsedPathDfs(
       namespaceId,
       userId,
       resourceNames ?? [],
@@ -179,6 +202,12 @@ export class VFSService {
     );
   }
 
+  /**
+   * Get fileInfoDto children from path
+   * @param namespaceId
+   * @param userId
+   * @param path
+   */
   async listChildrenByPath(
     namespaceId: string,
     userId: string,
@@ -187,7 +216,7 @@ export class VFSService {
     const parsedPath = VFSService.parsePath(path);
 
     if (parsedPath.spaceType) {
-      const resources: FileInfoDto[] = await this.getResourcesByParsedPath(
+      const resources: FileInfoDto[] = await this.getResourcesChainByParsedPath(
         namespaceId,
         userId,
         parsedPath.spaceType,
@@ -236,7 +265,18 @@ export class VFSService {
     } as listResponseDto;
   }
 
-  async getResourceByPath(namespaceId: string, userId: string, path: string) {
+  /**
+   * Get resource and parsedPath from path
+   * @param namespaceId
+   * @param userId
+   * @param path
+   * @returns { ResourceDto, ParsedPathDo }
+   */
+  async getResourceByPath(
+    namespaceId: string,
+    userId: string,
+    path: string,
+  ): Promise<{ resource: ResourceDto; parsedPath: ParsedPathDo }> {
     const parsedPath = VFSService.parsePath(path);
     if (!parsedPath.spaceType) {
       throw new AppException(
@@ -254,7 +294,7 @@ export class VFSService {
       );
     }
 
-    const resources = await this.getResourcesByParsedPath(
+    const resources = await this.getResourcesChainByParsedPath(
       namespaceId,
       userId,
       parsedPath.spaceType,
@@ -281,6 +321,13 @@ export class VFSService {
     return { resource, parsedPath };
   }
 
+  /**
+   * Get resource content by a md path
+   * @param namespaceId
+   * @param userId
+   * @param path
+   * @param options
+   */
   async getContentByPath(
     namespaceId: string,
     userId: string,
@@ -428,7 +475,7 @@ export class VFSService {
 
     let existsFlag: boolean = false;
     try {
-      await this.getResourcesByParsedPath(
+      await this.getResourcesChainByParsedPath(
         namespaceId,
         userId,
         parsedPath.spaceType,
@@ -520,7 +567,7 @@ export class VFSService {
       );
     }
 
-    const resources = await this.getResourcesByParsedPath(
+    const resources = await this.getResourcesChainByParsedPath(
       namespaceId,
       userId,
       parsedPath.spaceType,
@@ -625,5 +672,79 @@ export class VFSService {
       path: parsedPath.path,
       occurrences: replaceAll ? occurrences : 1,
     };
+  }
+
+  async resourceFilter(
+    userId: string,
+    namespaceId: string,
+    filter: VFSFilterResourcesRequestDto,
+  ): Promise<{ resources: FileInfoDto[]; total: number }> {
+    const parsedPath = ParsedPathDo.fromPath(filter.path || '/');
+    if (!parsedPath.spaceType) {
+      const visibleResources: ResourceMetaDto[] =
+        await this.namespaceResourcesService.getAllResourcesByUser(
+          userId,
+          namespaceId,
+        );
+      filter.ids = visibleResources.map((resource) => resource.id);
+    } else {
+      const resourcesChain = await this.getResourcesChainByParsedPath(
+        namespaceId,
+        userId,
+        parsedPath.spaceType,
+        parsedPath.resourceNames,
+      );
+      const lastResource = resourcesChain[resourcesChain.length - 1];
+      const visibleResources =
+        await this.namespaceResourcesService.getAllSubResourcesByUser(
+          userId,
+          namespaceId,
+          lastResource.id,
+        );
+      filter.ids = visibleResources.map((resource) => resource.id);
+    }
+    const filteredResources =
+      await this.namespaceResourcesService.getResourcesForInternal(
+        namespaceId,
+        filter.ids,
+        filter.createdAtBefore,
+        filter.createdAtAfter,
+        filter.userId,
+        filter.parentId,
+        filter.tags,
+        filter.nameContains,
+        filter.contentContains,
+      );
+
+    const { offset = 0, limit = filteredResources.length } = filter;
+
+    const sortedResources = filteredResources.sort((a, b) => {
+      if (a.updatedAt > b.updatedAt) return 1;
+      if (a.updatedAt < b.updatedAt) return -1;
+      return 0;
+    });
+
+    const selectedResources = sortedResources.slice(offset, offset + limit);
+
+    const fileInfoDos: FileInfoDto[] = [];
+    for (const resource of selectedResources) {
+      const fileInfoDo = new FileInfoDto();
+      const parentResources = await this.resourcesService.getParentResources(
+        namespaceId,
+        resource.id,
+      );
+      const parts: string[] = [];
+      for (const parentResource of parentResources.slice(0, -1)) {
+        parts.push(parentResource.name);
+      }
+      parts.push(`${resource.name}.md`);
+      fileInfoDo.id = resource.id;
+      fileInfoDo.name = '/' + parts.join('/');
+      fileInfoDo.createdAt = resource.createdAt;
+      fileInfoDo.updatedAt = resource.updatedAt;
+      fileInfoDo.isDir = false;
+      fileInfoDos.push(fileInfoDo);
+    }
+    return { resources: fileInfoDos, total: filteredResources.length };
   }
 }

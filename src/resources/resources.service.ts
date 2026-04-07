@@ -22,6 +22,7 @@ import {
   bigintStringToNumber,
   numberToBigintString,
 } from 'omniboxd/utils/bigint-utils';
+import { isOptional } from 'omniboxd/utils/is-empty';
 
 const TASK_PRIORITY = 5;
 
@@ -374,7 +375,7 @@ export class ResourcesService {
     if (
       !options ||
       !Object.entries(options).some(
-        ([k, v]) => fields.includes(k) && v !== undefined,
+        ([k, v]) => fields.includes(k) && !isOptional(v),
       )
     ) {
       throw new AppException(
@@ -388,57 +389,57 @@ export class ResourcesService {
       .where('resource.namespace_id = :namespaceId', { namespaceId })
       .andWhere('resource.id IN (:...resourceIds)', { resourceIds });
 
-    if (options.createdAtBefore !== undefined) {
+    if (!isOptional(options.createdAtBefore)) {
       queryBuilder.andWhere('resource.created_at < :createdAtBefore', {
         createdAtBefore: options.createdAtBefore,
       });
     }
-    if (options.createdAtAfter !== undefined) {
+    if (!isOptional(options.createdAtAfter)) {
       queryBuilder.andWhere('resource.created_at > :createdAtAfter', {
         createdAtAfter: options.createdAtAfter,
       });
     }
-    if (options.updatedAtBefore !== undefined) {
+    if (!isOptional(options.updatedAtBefore)) {
       queryBuilder.andWhere('resource.updated_at < :updatedAtBefore', {
         updatedAtBefore: options.updatedAtBefore,
       });
     }
-    if (options.updatedAtAfter !== undefined) {
+    if (!isOptional(options.updatedAtAfter)) {
       queryBuilder.andWhere('resource.updated_at > :updatedAtAfter', {
         updatedAtAfter: options.updatedAtAfter,
       });
     }
-    if (options.tagIds !== undefined) {
+    if (!isOptional(options.tagIds)) {
       queryBuilder.andWhere('resource.tag_ids && :tagIds', {
         tagIds: options.tagIds,
       });
     }
-    if (options.namePattern !== undefined) {
+    if (!isOptional(options.namePattern)) {
       queryBuilder.andWhere('resource.name ~* :namePattern', {
         namePattern: options.namePattern,
       });
     }
-    if (options.contentPattern !== undefined) {
+    if (!isOptional(options.contentPattern)) {
       queryBuilder.andWhere('resource.content ~* :contentPattern', {
         contentPattern: options.contentPattern,
       });
     }
-    if (options.urlPattern !== undefined) {
+    if (!isOptional(options.urlPattern)) {
       queryBuilder.andWhere("resource.attrs->>'url' ~* :urlPattern", {
         urlPattern: options.urlPattern,
       });
     }
-    if (options.userId !== undefined) {
+    if (!isOptional(options.userId)) {
       queryBuilder.andWhere('resource.user_id = :userId', {
         userId: options.userId,
       });
     }
-    if (options.parentId !== undefined) {
+    if (!isOptional(options.parentId)) {
       queryBuilder.andWhere('resource.parent_id = :parentId', {
         parentId: options.parentId,
       });
     }
-    if (options.resourceTypes !== undefined) {
+    if (!isOptional(options.resourceTypes)) {
       queryBuilder.andWhere('resource.resource_type IN (:...resourceTypes)', {
         resourceTypes: options.resourceTypes,
       });
@@ -446,10 +447,10 @@ export class ResourcesService {
     queryBuilder
       .orderBy('resource.created_at', 'DESC')
       .addOrderBy('resource.id', 'ASC');
-    if (options?.offset !== undefined) {
+    if (!isOptional(options.offset)) {
       queryBuilder.skip(options.offset);
     }
-    if (options?.limit !== undefined) {
+    if (!isOptional(options.limit)) {
       queryBuilder.take(options.limit);
     }
     const [resources, total] = await queryBuilder.getManyAndCount();

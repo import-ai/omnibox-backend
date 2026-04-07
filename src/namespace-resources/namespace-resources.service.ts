@@ -46,6 +46,7 @@ import { InternalResourceDto } from './dto/internal-resource.dto';
 import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { isOptional } from 'omniboxd/utils/is-empty';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -797,7 +798,7 @@ export class NamespaceResourcesService {
     },
   ): Promise<{ resources: InternalResourceDto[]; total: number }> {
     let tagIds: string[] | undefined = undefined;
-    if (options?.tagPattern !== undefined) {
+    if (!isOptional(options?.tagPattern)) {
       const tagEntities = await this.tagService.findByPattern(
         namespaceId,
         options.tagPattern,

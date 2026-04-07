@@ -30,7 +30,6 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TempfileDto } from './dto/tempfile.dto';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
-import { validateUrl } from 'omniboxd/utils/url-utils';
 
 @Injectable()
 export class WizardService {
@@ -160,12 +159,6 @@ export class WizardService {
         'MISSING_REQUIRED_FIELDS',
         HttpStatus.BAD_REQUEST,
       );
-    }
-
-    const urlValidation = validateUrl(url);
-    if (!urlValidation.valid) {
-      const message = this.i18n.t('wizard.errors.invalidUrl');
-      throw new AppException(message, 'INVALID_URL', HttpStatus.BAD_REQUEST);
     }
 
     // Create a placeholder resource for the URL

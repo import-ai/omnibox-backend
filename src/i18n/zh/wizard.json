@@ -2,7 +2,6 @@
   "errors": {
     "missingFile": "缺少文件",
     "missingRequiredFields": "缺少必填字段",
-    "invalidUrl": "URL 格式不正确，必须以 http 或 https 开头",
     "invalidTaskPayload": "无效的任务载荷",
     "taskNotStarted": "任务 {taskId} 尚未开始"
   }

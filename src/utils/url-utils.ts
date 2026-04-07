@@ -22,19 +22,3 @@ export function appendTokenToUrl(
 ): string {
   return appendQueryParams(baseUrl, { [paramName]: token });
 }
-
-/**
- * Validates that a URL uses http or https protocol
- * @returns { valid: true, url: URL } if valid, { valid: false, error: string } if invalid
- */
-export function validateUrl(
-  data: string,
-): { valid: true; url: URL } | { valid: false; error: string } {
-  let url: URL;
-  try {
-    url = new URL(data);
-  } catch {
-    return { valid: false, error: 'Invalid URL format' };
-  }
-  return { valid: true, url };
-}

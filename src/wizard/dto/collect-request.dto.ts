@@ -9,7 +9,7 @@ export class CompressedCollectRequestDto {
     message: i18nValidationMessage('validation.errors.url.isNotEmpty'),
   })
   @IsUrl(
-    { protocols: ['http', 'https'] },
+    { protocols: ['http', 'https'], require_protocol: true },
     {
       message: i18nValidationMessage('validation.errors.url.isUrl'),
     },

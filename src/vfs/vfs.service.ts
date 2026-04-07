@@ -735,7 +735,7 @@ export class VFSService {
       }
       parts.push(`${resource.name}.md`);
       fileInfoDo.id = resource.id;
-      fileInfoDo.name = '/' + parts.join('/');
+      fileInfoDo.path = '/' + parts.join('/');
       fileInfoDo.createdAt = resource.createdAt;
       fileInfoDo.updatedAt = resource.updatedAt;
       fileInfoDo.isDir = false;

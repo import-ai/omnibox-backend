@@ -5,7 +5,9 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 export class FileInfoDto {
   id: string;
 
-  name: string;
+  name?: string;
+
+  path?: string;
 
   size?: string;
 

@@ -797,7 +797,7 @@ export class NamespaceResourcesService {
     },
   ): Promise<{ resources: InternalResourceDto[]; total: number }> {
     let tagIds: string[] | undefined = undefined;
-    if (options?.tagPattern) {
+    if (options?.tagPattern !== undefined) {
       const tagEntities = await this.tagService.findByPattern(
         namespaceId,
         options.tagPattern,

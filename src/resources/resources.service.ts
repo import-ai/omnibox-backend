@@ -356,8 +356,27 @@ export class ResourcesService {
       );
     }
 
-    const hasFilter = options && Object.keys(options).length > 0;
-    if (!hasFilter) {
+    const fields = [
+      'createdAtBefore',
+      'createdAtAfter',
+      'updatedAtBefore',
+      'updatedAtAfter',
+      'tagIds',
+      'namePattern',
+      'contentPattern',
+      'urlPattern',
+      'userId',
+      'parentId',
+      'resourceTypes',
+      'offset',
+      'limit',
+    ];
+    if (
+      !options ||
+      !Object.entries(options).some(
+        ([k, v]) => fields.includes(k) && v !== undefined,
+      )
+    ) {
       throw new AppException(
         'At least one filter parameter is required',
         'FILTER_REQUIRED',
@@ -369,57 +388,57 @@ export class ResourcesService {
       .where('resource.namespace_id = :namespaceId', { namespaceId })
       .andWhere('resource.id IN (:...resourceIds)', { resourceIds });
 
-    if (options.createdAtBefore) {
+    if (options.createdAtBefore !== undefined) {
       queryBuilder.andWhere('resource.created_at < :createdAtBefore', {
         createdAtBefore: options.createdAtBefore,
       });
     }
-    if (options.createdAtAfter) {
+    if (options.createdAtAfter !== undefined) {
       queryBuilder.andWhere('resource.created_at > :createdAtAfter', {
         createdAtAfter: options.createdAtAfter,
       });
     }
-    if (options.updatedAtBefore) {
+    if (options.updatedAtBefore !== undefined) {
       queryBuilder.andWhere('resource.updated_at < :updatedAtBefore', {
         updatedAtBefore: options.updatedAtBefore,
       });
     }
-    if (options.updatedAtAfter) {
+    if (options.updatedAtAfter !== undefined) {
       queryBuilder.andWhere('resource.updated_at > :updatedAtAfter', {
         updatedAtAfter: options.updatedAtAfter,
       });
     }
-    if (options.tagIds && options.tagIds.length > 0) {
+    if (options.tagIds !== undefined) {
       queryBuilder.andWhere('resource.tag_ids && :tagIds', {
         tagIds: options.tagIds,
       });
     }
-    if (options.namePattern) {
+    if (options.namePattern !== undefined) {
       queryBuilder.andWhere('resource.name ~* :namePattern', {
         namePattern: options.namePattern,
       });
     }
-    if (options.contentPattern) {
+    if (options.contentPattern !== undefined) {
       queryBuilder.andWhere('resource.content ~* :contentPattern', {
         contentPattern: options.contentPattern,
       });
     }
-    if (options.urlPattern) {
+    if (options.urlPattern !== undefined) {
       queryBuilder.andWhere("resource.attrs->>'url' ~* :urlPattern", {
         urlPattern: options.urlPattern,
       });
     }
-    if (options.userId) {
+    if (options.userId !== undefined) {
       queryBuilder.andWhere('resource.user_id = :userId', {
         userId: options.userId,
       });
     }
-    if (options.parentId) {
+    if (options.parentId !== undefined) {
       queryBuilder.andWhere('resource.parent_id = :parentId', {
         parentId: options.parentId,
       });
     }
-    if (options.resourceTypes && options.resourceTypes.length > 0) {
+    if (options.resourceTypes !== undefined) {
       queryBuilder.andWhere('resource.resource_type IN (:...resourceTypes)', {
         resourceTypes: options.resourceTypes,
       });

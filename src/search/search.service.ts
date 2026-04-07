@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
@@ -6,8 +6,12 @@ import {
   IndexedMessageDto,
   IndexedResourceDto,
 } from './dto/indexed-doc.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import {
+  comparePermission,
+  ResourcePermission,
+} from 'omniboxd/permissions/resource-permission.enum';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
@@ -19,12 +23,28 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+
 import { I18nService } from 'nestjs-i18n';
+import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { Message } from 'omniboxd/messages/entities/message.entity';
+import { TagService } from 'omniboxd/tag/tag.service';
 
 const TASK_PRIORITY = 4;
+const BACKFILL_PAGE_SIZE = 100;
+const WEAVIATE_SYNC_LOG_EVERY = 1000;
+
+type WeaviateSyncStats = {
+  scanned: number;
+  synced: number;
+  skipped: number;
+  failed: number;
+};
 
 @Injectable()
 export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+
   constructor(
     private readonly wizardApiService: WizardAPIService,
     private readonly permissionsService: PermissionsService,
@@ -36,6 +56,7 @@ export class SearchService {
     private readonly taskRepository: Repository<Task>,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
+    private readonly tagService: TagService,
   ) {}
 
   async search(
@@ -44,6 +65,14 @@ export class SearchService {
     query: string,
     type?: DocType,
   ) {
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
     const searchRequest = new SearchRequestDto();
     searchRequest.query = query;
     searchRequest.namespaceId = namespaceId;
@@ -59,46 +88,39 @@ export class SearchService {
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
     const seenConversationIds = new Set<string>();
-    const resourceIdsToFetch: string[] = [];
     for (const record of result?.records || []) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
         if (!seenResourceIds.has(chunk.resourceId)) {
-          resourceIdsToFetch.push(chunk.resourceId);
           seenResourceIds.add(chunk.resourceId);
         }
       }
     }
 
-    const resourceMetaMap = await this.resourcesService.batchGetResourceMeta(
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
       namespaceId,
-      resourceIdsToFetch,
+      [...seenResourceIds],
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
     );
 
     seenResourceIds.clear();
 
-    for (const record of result.records) {
+    for (const record of result?.records || []) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
         if (seenResourceIds.has(chunk.resourceId)) {
           continue;
         }
         seenResourceIds.add(chunk.resourceId);
-        const parentResources = await this.resourcesService.getParentResources(
-          namespaceId,
-          chunk.resourceId,
-        );
-        if (!parentResources) {
-          continue;
-        }
-        const hasPermission = await this.permissionsService.userHasPermission(
-          namespaceId,
-          chunk.resourceId,
-          userId,
-          ResourcePermission.CAN_VIEW,
-          parentResources,
-        );
-        if (!hasPermission) {
+        const permission = permissionMap.get(chunk.resourceId);
+        if (
+          !permission ||
+          comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
+        ) {
           continue;
         }
 
@@ -190,5 +212,194 @@ export class SearchService {
         }
       }
     }
+  }
+
+  async syncResourcesToWeaviate(
+    concurrency: number,
+  ): Promise<WeaviateSyncStats> {
+    const stats: WeaviateSyncStats = {
+      scanned: 0,
+      synced: 0,
+      skipped: 0,
+      failed: 0,
+    };
+    let offset = 0;
+
+    while (true) {
+      const resources = await this.namespaceResourcesService.listAllResources(
+        offset,
+        BACKFILL_PAGE_SIZE,
+      );
+      if (resources.length === 0) {
+        break;
+      }
+      offset += resources.length;
+
+      const tasks: (() => Promise<void>)[] = [];
+      for (const resource of resources) {
+        stats.scanned += 1;
+        if (stats.scanned % WEAVIATE_SYNC_LOG_EVERY === 0) {
+          this.logger.log(
+            `Weaviate resource sync: scanned=${stats.scanned} (synced=${stats.synced}, failed=${stats.failed}, skipped=${stats.skipped})`,
+          );
+        }
+        if (!this.shouldSyncResource(resource)) {
+          stats.skipped += 1;
+          continue;
+        }
+        tasks.push(async () => {
+          try {
+            const resourceTagIds = resource.tagIds || [];
+            const tags = await this.tagService.findByIds(
+              resource.namespaceId,
+              resourceTagIds,
+            );
+            const tagNamesById = new Map(tags.map((tag) => [tag.id, tag.name]));
+            const result = await this.wizardApiService.upsertWeaviateResource({
+              namespaceId: resource.namespaceId,
+              title: resource.name || '',
+              content: resource.content || '',
+              resourceId: resource.id,
+              parentId: resource.parentId!,
+              resourceTagIds,
+              resourceTagNames: resourceTagIds.flatMap((id) => {
+                const name = tagNamesById.get(id);
+                return name ? [name] : [];
+              }),
+            });
+            if (result.success) {
+              stats.synced += 1;
+            } else {
+              stats.failed += 1;
+            }
+          } catch {
+            stats.failed += 1;
+          }
+        });
+      }
+      await this.runWithConcurrency(tasks, concurrency);
+    }
+
+    return stats;
+  }
+
+  async syncMessagesToWeaviate(
+    concurrency: number,
+  ): Promise<WeaviateSyncStats> {
+    const stats: WeaviateSyncStats = {
+      scanned: 0,
+      synced: 0,
+      skipped: 0,
+      failed: 0,
+    };
+    let offset = 0;
+
+    while (true) {
+      const conversations = await this.conversationsService.listAll(
+        offset,
+        BACKFILL_PAGE_SIZE,
+      );
+      if (conversations.length === 0) {
+        break;
+      }
+      offset += conversations.length;
+
+      const tasks: (() => Promise<void>)[] = [];
+      for (const conversation of conversations) {
+        if (!conversation.userId) {
+          continue;
+        }
+        const messages = await this.messagesService.findAll(
+          conversation.userId,
+          conversation.id,
+        );
+        for (const message of messages) {
+          stats.scanned += 1;
+          if (stats.scanned % WEAVIATE_SYNC_LOG_EVERY === 0) {
+            this.logger.log(
+              `Weaviate message sync: scanned=${stats.scanned} (synced=${stats.synced}, failed=${stats.failed}, skipped=${stats.skipped})`,
+            );
+          }
+          if (!this.shouldSyncMessage(message)) {
+            stats.skipped += 1;
+            continue;
+          }
+          tasks.push(async () => {
+            try {
+              const result = await this.wizardApiService.upsertWeaviateMessage({
+                namespaceId: conversation.namespaceId,
+                userId: conversation.userId!,
+                message: {
+                  conversationId: conversation.id,
+                  messageId: message.id,
+                  message: {
+                    role: message.message.role,
+                    content: message.message.content || '',
+                  },
+                },
+              });
+              if (result.success) {
+                stats.synced += 1;
+              } else {
+                stats.failed += 1;
+              }
+            } catch {
+              stats.failed += 1;
+            }
+          });
+        }
+      }
+      await this.runWithConcurrency(tasks, concurrency);
+    }
+
+    return stats;
+  }
+
+  async syncWeaviateBackfill(concurrency: number) {
+    const resources = await this.syncResourcesToWeaviate(concurrency);
+    const messages = await this.syncMessagesToWeaviate(concurrency);
+    return { resources, messages };
+  }
+
+  private shouldSyncResource(resource: Resource): boolean {
+    if (resource.resourceType === ResourceType.FOLDER) {
+      return false;
+    }
+    if (!resource.parentId) {
+      return false;
+    }
+    return true;
+  }
+
+  private shouldSyncMessage(message: Message): boolean {
+    const content = message.message.content || '';
+    if (!content.trim()) {
+      return false;
+    }
+    if (
+      [OpenAIMessageRole.TOOL, OpenAIMessageRole.SYSTEM].includes(
+        message.message.role,
+      )
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private async runWithConcurrency(
+    tasks: (() => Promise<void>)[],
+    concurrency: number,
+  ): Promise<void> {
+    let index = 0;
+    const workers = Array.from(
+      { length: Math.min(concurrency, tasks.length) },
+      async () => {
+        while (index < tasks.length) {
+          const i = index++;
+          await tasks[i]();
+        }
+      },
+    );
+    await Promise.all(workers);
   }
 }

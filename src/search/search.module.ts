@@ -13,6 +13,7 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
+import { TagModule } from 'omniboxd/tag/tag.module';
 
 @Module({
   exports: [SearchService],
@@ -26,6 +27,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     MessagesModule,
     ConversationsModule,
     TasksModule,
+    TagModule,
     TypeOrmModule.forFeature([Task]),
   ],
 })

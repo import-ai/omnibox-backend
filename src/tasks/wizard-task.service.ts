@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserService } from 'omniboxd/user/user.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TagService } from 'omniboxd/tag/tag.service';
 import {
   Resource,
   ResourceType,
@@ -21,6 +22,7 @@ export class WizardTaskService {
     @InjectRepository(Task) public taskRepository: Repository<Task>,
     private readonly userService: UserService,
     private readonly tasksService: TasksService,
+    private readonly tagService: TagService,
   ) {}
 
   private async getUserLanguage(
@@ -267,6 +269,10 @@ export class WizardTaskService {
     if (resource.resourceType === ResourceType.FOLDER || !resource.content) {
       return;
     }
+    const resourceTags = await this.tagService.getTagsByIds(
+      resource.namespaceId,
+      resource.tagIds || [],
+    );
     return this.tasksService.emitTask(
       {
         function: 'upsert_index',
@@ -278,6 +284,8 @@ export class WizardTaskService {
             user_id: resource.userId,
             resource_id: resource.id,
             parent_id: resource.parentId,
+            resource_tag_ids: resourceTags.map((tag) => tag.id),
+            resource_tag_names: resourceTags.map((tag) => tag.name),
           },
         },
         payload: { resource_id: resource.id },

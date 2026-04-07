@@ -675,67 +675,63 @@ export class VFSService {
   }
 
   async resourceFilter(
-    userId: string,
     namespaceId: string,
-    filter: VFSFilterResourcesRequestDto,
+    requestDto: VFSFilterResourcesRequestDto,
   ): Promise<{ resources: FileInfoDto[]; total: number }> {
-    const parsedPath = ParsedPathDo.fromPath(filter.path || '/');
+    let resourceIds: string[] = [];
+    const parsedPath = ParsedPathDo.fromPath(requestDto.path || '/');
     if (!parsedPath.spaceType) {
       const visibleResources: ResourceMetaDto[] =
         await this.namespaceResourcesService.getAllResourcesByUser(
-          userId,
+          requestDto.userId,
           namespaceId,
         );
-      filter.ids = visibleResources.map((resource) => resource.id);
+      resourceIds = visibleResources.map((resource) => resource.id);
     } else {
       const resourcesChain = await this.getResourcesChainByParsedPath(
         namespaceId,
-        userId,
+        requestDto.userId,
         parsedPath.spaceType,
         parsedPath.resourceNames,
       );
       const lastResource = resourcesChain[resourcesChain.length - 1];
       const visibleResources =
         await this.namespaceResourcesService.getAllSubResourcesByUser(
-          userId,
+          requestDto.userId,
           namespaceId,
           lastResource.id,
         );
-      filter.ids = visibleResources.map((resource) => resource.id);
+      resourceIds = visibleResources.map((resource) => resource.id);
     }
     const filteredResources =
-      await this.namespaceResourcesService.getResourcesForInternal(
+      await this.namespaceResourcesService.resourceFilter(
         namespaceId,
-        filter.ids,
-        filter.createdAtBefore,
-        filter.createdAtAfter,
-        filter.userId,
-        filter.parentId,
-        filter.tags,
-        filter.nameContains,
-        filter.contentContains,
+        resourceIds,
+        requestDto.options,
       );
-
-    const { offset = 0, limit = filteredResources.length } = filter;
-
-    const sortedResources = filteredResources.sort((a, b) => {
-      if (a.updatedAt > b.updatedAt) return 1;
-      if (a.updatedAt < b.updatedAt) return -1;
-      return 0;
-    });
-
-    const selectedResources = sortedResources.slice(offset, offset + limit);
 
     const fileInfoDos: FileInfoDto[] = [];
-    for (const resource of selectedResources) {
+
+    for (const resource of filteredResources) {
       const fileInfoDo = new FileInfoDto();
-      const parentResources = await this.resourcesService.getParentResources(
-        namespaceId,
-        resource.id,
-      );
       const parts: string[] = [];
-      for (const parentResource of parentResources.slice(0, -1)) {
-        parts.push(parentResource.name);
+      for (const parentResource of resource.path) {
+        if (parentResource.id === resource.id) {
+          continue;
+        }
+        if (parentResource.parentId !== null) {
+          parts.push(parentResource.name);
+        } else {
+          const spaceType = await this.namespaceResourcesService.getSpaceType(
+            namespaceId,
+            parentResource.id,
+          );
+          if (spaceType === SpaceType.PRIVATE) {
+            parts.push('private');
+          } else {
+            parts.push('teamspace');
+          }
+        }
       }
       parts.push(`${resource.name}.md`);
       fileInfoDo.id = resource.id;
@@ -745,6 +741,6 @@ export class VFSService {
       fileInfoDo.isDir = false;
       fileInfoDos.push(fileInfoDo);
     }
-    return { resources: fileInfoDos, total: filteredResources.length };
+    return { resources: fileInfoDos, total: 0 }; // TODO get total
   }
 }

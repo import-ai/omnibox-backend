@@ -11,6 +11,7 @@ import {
 import { VFSService } from 'omniboxd/vfs/vfs.service';
 import { Public } from 'omniboxd/auth';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs')
 export class InternalVFSController {
@@ -129,29 +130,18 @@ export class InternalVFSController {
   }
 
   @Public()
-  @Patch('filter')
+  @Get('filter')
   async resourceFilter(
     @Param('namespaceId') namespaceId: string,
-    @Body('user_id') userId: string,
-    @Body('path') path: string,
-    @Body('old_string') oldString: string,
-    @Body('new_string') newString: string,
-    @Body('replace_all') replaceAll: boolean,
+    @Query() requestDto: VFSFilterResourcesRequestDto,
   ) {
-    if (!userId) {
+    if (!requestDto.userId) {
       throw new AppException(
         'user_id required',
         'INVALID_USER_ID',
         HttpStatus.UNAUTHORIZED,
       );
     }
-    return await this.vfsService.replaceContentByPath(
-      namespaceId,
-      userId,
-      path,
-      oldString,
-      newString,
-      replaceAll,
-    );
+    return await this.vfsService.resourceFilter(namespaceId, requestDto);
   }
 }

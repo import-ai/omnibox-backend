@@ -777,6 +777,70 @@ export class NamespaceResourcesService {
     return InternalFileInfoDto.new(publicUrl, internalUrl);
   }
 
+  async resourceFilter(
+    namespaceId: string,
+    resourceIds: string[],
+    options?: {
+      createdAtBefore?: Date;
+      createdAtAfter?: Date;
+      updatedAtBefore?: Date;
+      updatedAtAfter?: Date;
+      tags?: string[];
+      namePattern?: string;
+      contentPattern?: string;
+      urlPattern?: string;
+      userId?: string;
+      parentId?: string;
+      resourceTypes?: ResourceType[];
+      offset?: number;
+      limit?: number;
+    },
+  ): Promise<InternalResourceDto[]> {
+    let tagIds: string[] | undefined = undefined;
+    if (options?.tags) {
+      const tagEntities = await this.tagService.findByNames(
+        namespaceId,
+        options.tags,
+      );
+      tagIds = tagEntities.map((t) => t.id);
+    }
+    const resources = await this.resourcesService.resourceFilter(
+      namespaceId,
+      resourceIds,
+      { ...options, tagIds },
+    );
+
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    // Get paths for each resource
+    const result: InternalResourceDto[] = [];
+    for (const resource of resources) {
+      let path: ResourceMetaDto[] = [];
+      if (resource.parentId) {
+        const parentResources =
+          await this.resourcesService.getParentResourcesOrFail(
+            namespaceId,
+            resource.parentId,
+          );
+        path = parentResources.reverse();
+      }
+
+      result.push(
+        InternalResourceDto.fromEntity(
+          resource,
+          path,
+          tagsMap.get(resource.id) || [],
+        ),
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Deprecated
+   */
   async getResourcesForInternal(
     namespaceId: string,
     resourceIds?: string[],

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsUrl } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CompressedCollectRequestDto {
@@ -8,6 +8,12 @@ export class CompressedCollectRequestDto {
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.url.isNotEmpty'),
   })
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    {
+      message: i18nValidationMessage('validation.errors.url.isUrl'),
+    },
+  )
   url: string;
 
   @IsString({

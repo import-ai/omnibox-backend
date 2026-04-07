@@ -84,7 +84,8 @@
     },
     "url": {
       "isString": "URL must be a string",
-      "isNotEmpty": "URL is required"
+      "isNotEmpty": "URL is required",
+      "isUrl": "Invalid URL"
     },
     "query": {
       "isString": "Query must be a string",

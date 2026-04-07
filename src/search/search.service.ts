@@ -352,9 +352,8 @@ export class SearchService {
   }
 
   async syncWeaviateBackfill(concurrency: number, updatedAfter?: Date) {
-    const updatedAfterStr = updatedAfter ? updatedAfter.toISOString() : 'undefined';
     this.logger.log(
-      `syncWeaviateBackfill: concurrency=${concurrency}, updatedAfter=${updatedAfterStr}`,
+      `syncWeaviateBackfill: concurrency=${concurrency}, updatedAfter=${updatedAfter?.toISOString()}`,
     );
     const resources = await this.syncResourcesToWeaviate(
       concurrency,

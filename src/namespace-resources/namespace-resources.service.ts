@@ -795,7 +795,7 @@ export class NamespaceResourcesService {
       offset?: number;
       limit?: number;
     },
-  ): Promise<InternalResourceDto[]> {
+  ): Promise<{ resources: InternalResourceDto[]; total: number }> {
     let tagIds: string[] | undefined = undefined;
     if (options?.tags) {
       const tagEntities = await this.tagService.findByNames(
@@ -804,7 +804,7 @@ export class NamespaceResourcesService {
       );
       tagIds = tagEntities.map((t) => t.id);
     }
-    const resources = await this.resourcesService.resourceFilter(
+    const { resources, total } = await this.resourcesService.resourceFilter(
       namespaceId,
       resourceIds,
       { ...options, tagIds },
@@ -835,7 +835,7 @@ export class NamespaceResourcesService {
       );
     }
 
-    return result;
+    return { resources: result, total };
   }
 
   /**

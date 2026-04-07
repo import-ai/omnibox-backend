@@ -347,7 +347,7 @@ export class ResourcesService {
       offset?: number;
       limit?: number;
     },
-  ): Promise<Resource[]> {
+  ): Promise<{ resources: Resource[]; total: number }> {
     if (!resourceIds || resourceIds.length === 0) {
       throw new AppException(
         'Invalid resourceIds',
@@ -433,7 +433,8 @@ export class ResourcesService {
     if (options?.limit !== undefined) {
       queryBuilder.take(options.limit);
     }
-    return await queryBuilder.getMany();
+    const [resources, total] = await queryBuilder.getManyAndCount();
+    return { resources, total };
   }
 
   async batchGetResources(

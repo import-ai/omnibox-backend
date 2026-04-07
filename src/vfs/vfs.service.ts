@@ -703,7 +703,7 @@ export class VFSService {
         );
       resourceIds = visibleResources.map((resource) => resource.id);
     }
-    const filteredResources =
+    const { resources: filteredResources, total } =
       await this.namespaceResourcesService.resourceFilter(
         namespaceId,
         resourceIds,
@@ -741,6 +741,6 @@ export class VFSService {
       fileInfoDo.isDir = false;
       fileInfoDos.push(fileInfoDo);
     }
-    return { resources: fileInfoDos, total: 0 }; // TODO get total
+    return { resources: fileInfoDos, total };
   }
 }

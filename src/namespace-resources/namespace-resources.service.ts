@@ -964,9 +964,14 @@ export class NamespaceResourcesService {
     return UploadFileInfoDto.new(file.id, postReq.url, postReq.fields);
   }
 
-  async update(userId: string, resourceId: string, data: UpdateResourceDto) {
+  async update(
+    namespaceId: string,
+    userId: string,
+    resourceId: string,
+    data: UpdateResourceDto,
+  ) {
     await this.resourcesService.updateResource(
-      data.namespaceId,
+      namespaceId,
       resourceId,
       userId,
       {

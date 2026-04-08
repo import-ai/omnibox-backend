@@ -522,147 +522,9 @@ export class VFSService {
     );
   }
 
-  /**
-   * Overwrite a file by path
-   *  if the file does not exist, throw the error.
-   * @param namespaceId
-   * @param userId
-   * @param path
-   * @param content
-   */
-  async overwriteByPath(
-    namespaceId: string,
-    userId: string,
-    path: string,
-    content: string,
-  ): Promise<FileInfoDto> {
-    const parsedPath = VFSService.parsePath(path);
-
-    if (!parsedPath.spaceType) {
-      throw new AppException(
-        'teamspace or private is required',
-        'INVALID_PATH',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (!parsedPath.resourceNames || parsedPath.resourceNames.length === 0) {
-      throw new AppException(
-        'filename is required',
-        'INVALID_PATH',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const resources = await this.getResourcesChainByParsedPath(
-      namespaceId,
-      userId,
-      parsedPath.spaceType,
-      parsedPath.resourceNames,
-    );
-
-    const lastResource: FileInfoDto = resources[resources.length - 1];
-
-    if (lastResource.isDir) {
-      throw new AppException(
-        `${lastResource.name} is a directory`,
-        'INVALID_PATH',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    const resourceId: string = lastResource.id;
-
-    // Update the resource content
-    await this.resourcesService.updateResource(
-      namespaceId,
-      resourceId,
-      userId,
-      { content },
-    );
-
-    lastResource.name = parsedPath.path;
-
-    return lastResource;
-  }
-
-  /**
-   * Replace a file's content by path
-   *  if the file does not exist, throw the error.
-   * @param namespaceId
-   * @param userId
-   * @param path Absolute path to the file to edit. Must start with '/'.
-   * @param oldString Exact string to search for and replace.
-   *                Must match exactly including whitespace and indentation.
-   * @param newString String to replace old_string with.
-   *                Must be different from old_string.
-   * @param replaceAll If True, replace all occurrences. If False (default),
-   *                old_string must be unique in the file or the edit fails.
-   */
-  async replaceContentByPath(
-    namespaceId: string,
-    userId: string,
-    path: string,
-    oldString: string,
-    newString: string,
-    replaceAll: boolean,
-  ): Promise<{
-    path: string;
-    occurrences: number;
-  }> {
-    const { resource, parsedPath } = await this.getResourceByPath(
-      namespaceId,
-      userId,
-      path,
-    );
-
-    const content: string = resource.content;
-
-    // Count occurrences of oldString
-    let occurrences = 0;
-    let pos = content.indexOf(oldString);
-    while (pos !== -1) {
-      occurrences++;
-      pos = content.indexOf(oldString, pos + 1);
-    }
-
-    if (occurrences === 0) {
-      throw new AppException(
-        `oldString not found in file`,
-        'STRING_NOT_FOUND',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (!replaceAll && occurrences > 1) {
-      throw new AppException(
-        `oldString is not unique in file (found ${occurrences} occurrences)`,
-        'STRING_NOT_UNIQUE',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Perform replacement
-    const newContent = replaceAll
-      ? content.replaceAll(oldString, newString)
-      : content.replace(oldString, newString);
-
-    // Update the resource content
-    await this.resourcesService.updateResource(
-      namespaceId,
-      resource.id,
-      userId,
-      { content: newContent },
-    );
-
-    return {
-      path: parsedPath.path,
-      occurrences: replaceAll ? occurrences : 1,
-    };
-  }
-
   async resourceFilter(
     namespaceId: string,
+    userId: string,
     requestDto: VFSFilterResourcesRequestDto,
   ): Promise<{ resources: FileInfoDto[]; total: number }> {
     let resourceIds: string[];
@@ -670,21 +532,21 @@ export class VFSService {
     if (!parsedPath.spaceType) {
       const visibleResources: ResourceMetaDto[] =
         await this.namespaceResourcesService.getAllResourcesByUser(
-          requestDto.userId,
+          userId,
           namespaceId,
         );
       resourceIds = visibleResources.map((resource) => resource.id);
     } else {
       const resourcesChain = await this.getResourcesChainByParsedPath(
         namespaceId,
-        requestDto.userId,
+        userId,
         parsedPath.spaceType,
         parsedPath.resourceNames,
       );
       const lastResource = resourcesChain[resourcesChain.length - 1];
       const visibleResources =
         await this.namespaceResourcesService.getAllSubResourcesByUser(
-          requestDto.userId,
+          userId,
           namespaceId,
           lastResource.id,
         );

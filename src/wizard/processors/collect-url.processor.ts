@@ -36,6 +36,7 @@ export class CollectUrlProcessor extends Processor {
       if (typeof scrapedTitle === 'string' && scrapedTitle.trim()) {
         // Update the resource with scraped title
         await this.namespaceResourcesService.update(
+          task.namespaceId,
           task.userId,
           resourceId,
           Object.assign(new UpdateResourceDto(), {

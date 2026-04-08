@@ -36,6 +36,7 @@ export class GenerateTitleProcessor extends Processor {
       if (typeof generatedTitle === 'string' && generatedTitle.trim()) {
         // Update the resource with generated title
         await this.namespaceResourcesService.update(
+          task.namespaceId,
           task.userId,
           resourceId,
           Object.assign(new UpdateResourceDto(), {

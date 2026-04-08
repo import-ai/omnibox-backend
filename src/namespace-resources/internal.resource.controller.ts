@@ -1,10 +1,20 @@
-import { Controller, Get, Param, Post, Query, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  Patch,
+  Query,
+  Body,
+} from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { FilesService } from 'omniboxd/files/files.service';
 import { FilterResourcesRequestDto } from 'omniboxd/namespace-resources/dto/filter-resources-request.dto';
+import type { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
@@ -128,5 +138,21 @@ export class InternalResourcesController {
       batchSize,
     );
     return result;
+  }
+
+  @Public()
+  @Patch('namespaces/:namespaceId/resources/:resourceId')
+  async patchResource(
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @HeaderUserId() userId: string,
+    @Body() updateDto: UpdateResourceDto,
+  ) {
+    return await this.namespaceResourcesService.update(
+      namespaceId,
+      userId,
+      resourceId,
+      updateDto,
+    );
   }
 }

@@ -80,11 +80,6 @@ export class VFSFilterResourcesRequestDto {
   @IsOptional()
   path?: string;
 
-  @Expose({ name: 'user_id' })
-  @IsString()
-  @IsNotEmpty()
-  userId: string;
-
   @Transform(({ value }) => {
     try {
       return plainToInstance(VFSResourceFilterOptionsDto, JSON.parse(value));

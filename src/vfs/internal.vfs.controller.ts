@@ -1,17 +1,8 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpStatus,
-  Param,
-  Patch,
-  Put,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
 import { VFSService } from 'omniboxd/vfs/vfs.service';
 import { Public } from 'omniboxd/auth';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
+import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs')
 export class InternalVFSController {
@@ -21,16 +12,9 @@ export class InternalVFSController {
   @Get('list')
   async listChildrenByPath(
     @Param('namespaceId') namespaceId: string,
-    @Query('user_id') userId: string,
+    @HeaderUserId() userId: string,
     @Query('path') path: string,
   ) {
-    if (!userId) {
-      throw new AppException(
-        'user_id required',
-        'INVALID_USER_ID',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
     return await this.vfsService.listChildrenByPath(namespaceId, userId, path);
   }
 
@@ -38,16 +22,9 @@ export class InternalVFSController {
   @Get()
   async getContentByPath(
     @Param('namespaceId') namespaceId: string,
-    @Query('user_id') userId: string,
+    @HeaderUserId() userId: string,
     @Query('path') path: string,
   ) {
-    if (!userId) {
-      throw new AppException(
-        'user_id required',
-        'INVALID_USER_ID',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
     return await this.vfsService.getContentByPath(namespaceId, userId, path);
   }
 
@@ -55,17 +32,10 @@ export class InternalVFSController {
   @Put()
   async createByPath(
     @Param('namespaceId') namespaceId: string,
-    @Body('user_id') userId: string,
+    @HeaderUserId() userId: string,
     @Body('path') path: string,
     @Body('content') content: string,
   ) {
-    if (!userId) {
-      throw new AppException(
-        'user_id required',
-        'INVALID_USER_ID',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
     return await this.vfsService.createByPath(
       namespaceId,
       userId,
@@ -75,68 +45,16 @@ export class InternalVFSController {
   }
 
   @Public()
-  @Patch()
-  async overwriteByPath(
-    @Param('namespaceId') namespaceId: string,
-    @Body('user_id') userId: string,
-    @Body('path') path: string,
-    @Body('content') content: string,
-  ) {
-    if (!userId) {
-      throw new AppException(
-        'user_id required',
-        'INVALID_USER_ID',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
-    return await this.vfsService.overwriteByPath(
-      namespaceId,
-      userId,
-      path,
-      content,
-    );
-  }
-
-  @Public()
-  @Patch('replace')
-  async replaceContentByPath(
-    @Param('namespaceId') namespaceId: string,
-    @Body('user_id') userId: string,
-    @Body('path') path: string,
-    @Body('old_string') oldString: string,
-    @Body('new_string') newString: string,
-    @Body('replace_all') replaceAll: boolean,
-  ) {
-    if (!userId) {
-      throw new AppException(
-        'user_id required',
-        'INVALID_USER_ID',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
-    return await this.vfsService.replaceContentByPath(
-      namespaceId,
-      userId,
-      path,
-      oldString,
-      newString,
-      replaceAll,
-    );
-  }
-
-  @Public()
   @Get('filter')
   async resourceFilter(
     @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
     @Query() requestDto: VFSFilterResourcesRequestDto,
   ) {
-    if (!requestDto.userId) {
-      throw new AppException(
-        'user_id required',
-        'INVALID_USER_ID',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
-    return await this.vfsService.resourceFilter(namespaceId, requestDto);
+    return await this.vfsService.resourceFilter(
+      namespaceId,
+      userId,
+      requestDto,
+    );
   }
 }

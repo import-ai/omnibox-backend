@@ -265,7 +265,12 @@ export class NamespaceResourcesController {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
-    await this.namespaceResourcesService.update(userId, resourceId, data);
+    await this.namespaceResourcesService.update(
+      namespaceId,
+      userId,
+      resourceId,
+      data,
+    );
     return await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,

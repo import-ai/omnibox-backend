@@ -36,6 +36,7 @@ export class CollectProcessor extends Processor {
     if (task.exception && !isEmpty(task.exception)) {
       const content = this.buildErrorContent(task);
       await this.namespaceResourcesService.update(
+        task.namespaceId,
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {
@@ -75,6 +76,7 @@ export class CollectProcessor extends Processor {
       );
       const mergedAttrs = { ...(resource?.attrs || {}), ...attrs };
       await this.namespaceResourcesService.update(
+        task.namespaceId,
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {

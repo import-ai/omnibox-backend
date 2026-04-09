@@ -39,6 +39,52 @@ export class ResourcesService {
     private readonly storageUsagesService: StorageUsagesService,
   ) {}
 
+  private validateResourceName(name: string | undefined): void {
+    if (name && name.includes('/')) {
+      const message = this.i18n.t('resource.errors.resourceNameContainsSlash');
+      throw new AppException(
+        message,
+        'RESOURCE_NAME_CONTAINS_SLASH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  private async checkNameConflict(
+    namespaceId: string,
+    parentId: string | null,
+    name: string | undefined,
+    excludeId?: string,
+    entityManager?: EntityManager,
+  ): Promise<void> {
+    if (!name) {
+      return;
+    }
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    const qb = repo
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
+        parentId,
+      })
+      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
+      .andWhere('resource.deleted_at IS NULL');
+    if (excludeId) {
+      qb.andWhere('resource.id != :excludeId', { excludeId });
+    }
+    const count = await qb.getCount();
+    if (count > 0) {
+      const message = this.i18n.t('resource.errors.resourceNameConflict');
+      throw new AppException(
+        message,
+        'RESOURCE_NAME_CONFLICT',
+        HttpStatus.CONFLICT,
+      );
+    }
+  }
+
   async getParentResourcesOrFail(
     namespaceId: string,
     resourceId: string | null,
@@ -603,6 +649,32 @@ export class ResourcesService {
       );
     }
 
+    // Validate resource name
+    if (props.name !== undefined) {
+      this.validateResourceName(props.name);
+    }
+    // Check name conflict on rename
+    if (props.name !== undefined && !props.parentId) {
+      await this.checkNameConflict(
+        namespaceId,
+        oldResource.parentId,
+        props.name,
+        resourceId,
+        entityManager,
+      );
+    }
+    // Check name conflict on move (or move + rename)
+    if (props.parentId) {
+      const effectiveName = props.name ?? oldResource.name;
+      await this.checkNameConflict(
+        namespaceId,
+        props.parentId,
+        effectiveName,
+        resourceId,
+        entityManager,
+      );
+    }
+
     const contentSize =
       props.content !== undefined
         ? Buffer.byteLength(props.content, 'utf8')
@@ -683,6 +755,16 @@ export class ResourcesService {
         entityManager,
       );
     }
+
+    // Validate resource name
+    this.validateResourceName(props.name);
+    await this.checkNameConflict(
+      props.namespaceId,
+      props.parentId,
+      props.name,
+      undefined,
+      entityManager,
+    );
 
     if (props.fileId) {
       const file = await this.filesService.getFile(

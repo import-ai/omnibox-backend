@@ -1051,6 +1051,36 @@ export class NamespaceResourcesService {
       }
     }
 
+    // Check for name conflict under the target parent
+    {
+      // Re-read resource to get the updated parentId
+      const updatedResource = await this.resourceRepository.findOne({
+        withDeleted: true,
+        where: { namespaceId, id: resourceId },
+      });
+      const targetParentId = updatedResource?.parentId ?? resource.parentId;
+      const conflictCount = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.namespace_id = :namespaceId', { namespaceId })
+        .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
+          parentId: targetParentId,
+        })
+        .andWhere('LOWER(resource.name) = LOWER(:name)', {
+          name: resource.name,
+        })
+        .andWhere('resource.deleted_at IS NULL')
+        .andWhere('resource.id != :resourceId', { resourceId })
+        .getCount();
+      if (conflictCount > 0) {
+        const message = this.i18n.t('resource.errors.resourceNameConflict');
+        throw new AppException(
+          message,
+          'RESOURCE_NAME_CONFLICT',
+          HttpStatus.CONFLICT,
+        );
+      }
+    }
+
     await this.resourcesService.restoreResource(
       userId,
       namespaceId,

@@ -94,6 +94,7 @@ import { AddContentSizeToResources1769415718000 } from 'omniboxd/migrations/1769
 import { AddSizeToFiles1769415719000 } from 'omniboxd/migrations/1769415719000-add-size-to-files';
 import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000-make-size-nullable';
 import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/1774965861436-rename-verify-code-to-key';
+import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/1775666229211-deduplicate-resource-names';
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
 import { VFSModule } from 'omniboxd/vfs/vfs.module';
 
@@ -246,6 +247,7 @@ export class AppModule implements NestModule {
               AddSizeToFiles1769415719000,
               MakeSizeNullable1769478367000,
               RenameVerifyCodeToKey1774965861436,
+              DeduplicateResourceNames1775666229211,
               ...extraMigrations,
             ],
             migrationsRun: true,

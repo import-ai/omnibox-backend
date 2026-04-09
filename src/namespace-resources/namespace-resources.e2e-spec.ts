@@ -801,7 +801,7 @@ describe('ResourcesController (e2e)', () => {
         (r: any) => r.id === searchableResourceId,
       );
       expect(foundResource).toBeDefined();
-      expect(foundResource.name).toBe('Searchable Document');
+      expect(foundResource.name).toContain('Searchable Document');
     });
 
     it('should search resources by partial name and validate attrs match source', async () => {

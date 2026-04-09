@@ -11,6 +11,7 @@ export class DeduplicateResourceNames1775666229211 implements MigrationInterface
     // Step 2: Deduplicate names using ROW_NUMBER (case-insensitive)
     // For each group of (namespace_id, parent_id, LOWER(name)) with duplicates,
     // keep the oldest unchanged and append " (x)" suffix to the rest
+    // Skip empty resource names (name = '')
     await queryRunner.query(`
       WITH ranked AS (
         SELECT id, name,
@@ -19,7 +20,7 @@ export class DeduplicateResourceNames1775666229211 implements MigrationInterface
             ORDER BY created_at ASC
           ) as rn
         FROM resources
-        WHERE deleted_at IS NULL AND parent_id IS NOT NULL
+        WHERE deleted_at IS NULL AND parent_id IS NOT NULL AND name != ''
       )
       UPDATE resources r SET name = d.name || ' (' || (d.rn - 1) || ')'
       FROM ranked d

@@ -126,6 +126,7 @@ describe('ReaderProcessor', () => {
         });
         expect(resourcesService.getResourceOrFail).toHaveBeenCalled();
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -212,6 +213,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -256,6 +258,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -319,6 +322,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -352,6 +356,7 @@ describe('ReaderProcessor', () => {
 
         // Should call parent's exception handling
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -390,6 +395,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -431,6 +437,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {

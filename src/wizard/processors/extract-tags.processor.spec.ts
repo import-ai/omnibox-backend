@@ -145,6 +145,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -178,6 +179,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -211,6 +213,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -240,6 +243,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -269,6 +273,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -329,6 +334,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {

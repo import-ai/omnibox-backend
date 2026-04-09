@@ -43,6 +43,7 @@ export class CollectUrlProcessor extends Processor {
             namespaceId: task.namespaceId,
             name: scrapedTitle.trim(),
           }),
+          true, // autoRenameOnConflict for scraped titles
         );
 
         return { resourceId, title: scrapedTitle.trim() };

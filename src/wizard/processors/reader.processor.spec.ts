@@ -138,6 +138,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 
@@ -226,6 +227,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 
@@ -271,6 +273,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 
@@ -334,6 +337,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
     });
@@ -361,8 +365,12 @@ describe('ReaderProcessor', () => {
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
+            name: undefined,
             content: 'error',
+            attrs: undefined,
+            tag_ids: undefined,
           },
+          true,
         );
         expect(result).toEqual({});
       });
@@ -407,6 +415,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 
@@ -449,6 +458,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 

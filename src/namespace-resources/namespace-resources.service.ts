@@ -180,10 +180,18 @@ export class NamespaceResourcesService {
     createReq: CreateResourceDto,
     tx?: Transaction,
     source?: string,
+    autoRenameOnConflict: boolean = false,
   ): Promise<Resource> {
     if (!tx) {
       return await transaction(this.dataSource.manager, async (tx) => {
-        return await this.create(userId, namespaceId, createReq, tx);
+        return await this.create(
+          userId,
+          namespaceId,
+          createReq,
+          tx,
+          source,
+          autoRenameOnConflict,
+        );
       });
     }
 
@@ -240,6 +248,7 @@ export class NamespaceResourcesService {
         source,
       },
       tx,
+      autoRenameOnConflict,
     );
   }
 
@@ -969,6 +978,7 @@ export class NamespaceResourcesService {
     userId: string,
     resourceId: string,
     data: UpdateResourceDto,
+    autoRenameOnConflict: boolean = false,
   ) {
     await this.resourcesService.updateResource(
       namespaceId,
@@ -980,6 +990,8 @@ export class NamespaceResourcesService {
         content: data.content,
         attrs: data.attrs,
       },
+      undefined,
+      autoRenameOnConflict,
     );
   }
 
@@ -1119,6 +1131,7 @@ export class NamespaceResourcesService {
       },
       undefined,
       source,
+      true, // autoRenameOnConflict for file uploads
     );
   }
 

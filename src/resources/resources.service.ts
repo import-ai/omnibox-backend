@@ -23,6 +23,10 @@ import {
   numberToBigintString,
 } from 'omniboxd/utils/bigint-utils';
 import { isOptional } from 'omniboxd/utils/is-empty';
+import {
+  sanitizeResourceName,
+  generateUniqueResourceName,
+} from 'omniboxd/utils/sanitize-resource-name';
 
 const TASK_PRIORITY = 5;
 
@@ -39,8 +43,18 @@ export class ResourcesService {
     private readonly storageUsagesService: StorageUsagesService,
   ) {}
 
-  private validateResourceName(name: string | undefined): void {
-    if (name && name.includes('/')) {
+  private validateResourceName(
+    name: string | undefined,
+    autoRenameOnConflict?: boolean,
+  ): string | undefined {
+    if (!name) {
+      return name;
+    }
+    if (name.includes('/')) {
+      if (autoRenameOnConflict) {
+        // Sanitize by replacing '/' with '_'
+        return sanitizeResourceName(name);
+      }
       const message = this.i18n.t('resource.errors.resourceNameContainsSlash');
       throw new AppException(
         message,
@@ -48,6 +62,7 @@ export class ResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
+    return name;
   }
 
   private async checkNameConflict(
@@ -83,6 +98,69 @@ export class ResourcesService {
         HttpStatus.CONFLICT,
       );
     }
+  }
+
+  private async isNameExists(
+    namespaceId: string,
+    parentId: string | null,
+    name: string,
+    excludeId?: string,
+    entityManager?: EntityManager,
+  ): Promise<boolean> {
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    const qb = repo
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
+        parentId,
+      })
+      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
+      .andWhere('resource.deleted_at IS NULL');
+    if (excludeId) {
+      qb.andWhere('resource.id != :excludeId', { excludeId });
+    }
+    const count = await qb.getCount();
+    return count > 0;
+  }
+
+  private async resolveUniqueName(
+    namespaceId: string,
+    parentId: string | null,
+    name: string | undefined,
+    autoRenameOnConflict: boolean,
+    excludeId?: string,
+    entityManager?: EntityManager,
+  ): Promise<string | undefined> {
+    if (!name) {
+      return name;
+    }
+
+    if (!autoRenameOnConflict) {
+      // Just check for conflict, throw if exists
+      await this.checkNameConflict(
+        namespaceId,
+        parentId,
+        name,
+        excludeId,
+        entityManager,
+      );
+      return name;
+    }
+
+    // Auto-rename on conflict
+    const isNameExists = async (candidateName: string): Promise<boolean> => {
+      return this.isNameExists(
+        namespaceId,
+        parentId,
+        candidateName,
+        excludeId,
+        entityManager,
+      );
+    };
+
+    return generateUniqueResourceName(name, isNameExists);
   }
 
   async getParentResourcesOrFail(
@@ -604,10 +682,18 @@ export class ResourcesService {
       attrs?: Record<string, any>;
     },
     tx?: Transaction,
+    autoRenameOnConflict: boolean = false,
   ): Promise<void> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.updateResource(namespaceId, resourceId, userId, props, tx),
+        this.updateResource(
+          namespaceId,
+          resourceId,
+          userId,
+          props,
+          tx,
+          autoRenameOnConflict,
+        ),
       );
     }
 
@@ -649,41 +735,54 @@ export class ResourcesService {
       );
     }
 
-    // Validate resource name
-    if (props.name !== undefined) {
-      this.validateResourceName(props.name);
+    // Validate and sanitize resource name
+    let resolvedName = props.name;
+    if (resolvedName !== undefined) {
+      resolvedName = this.validateResourceName(
+        resolvedName,
+        autoRenameOnConflict,
+      );
     }
-    // Check name conflict on rename
-    if (props.name !== undefined && !props.parentId) {
-      await this.checkNameConflict(
+
+    // Resolve unique name on rename
+    if (resolvedName !== undefined && !props.parentId) {
+      resolvedName = await this.resolveUniqueName(
         namespaceId,
         oldResource.parentId,
-        props.name,
+        resolvedName,
+        autoRenameOnConflict,
         resourceId,
         entityManager,
       );
     }
-    // Check name conflict on move (or move + rename)
+    // Resolve unique name on move (or move + rename)
     if (props.parentId) {
-      const effectiveName = props.name ?? oldResource.name;
-      await this.checkNameConflict(
+      const effectiveName = resolvedName ?? oldResource.name;
+      resolvedName = await this.resolveUniqueName(
         namespaceId,
         props.parentId,
         effectiveName,
+        autoRenameOnConflict,
         resourceId,
         entityManager,
       );
     }
 
+    // Update props with resolved name
+    const updatedProps = {
+      ...props,
+      name: resolvedName,
+    };
+
     const contentSize =
-      props.content !== undefined
-        ? Buffer.byteLength(props.content, 'utf8')
+      updatedProps.content !== undefined
+        ? Buffer.byteLength(updatedProps.content, 'utf8')
         : undefined;
 
     await repo.update(
       { namespaceId, id: resourceId },
       {
-        ...props,
+        ...updatedProps,
         ...(contentSize !== undefined && {
           contentSize: numberToBigintString(contentSize),
         }),
@@ -738,10 +837,11 @@ export class ResourcesService {
       source?: string;
     },
     tx?: Transaction,
+    autoRenameOnConflict: boolean = false,
   ): Promise<Resource> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.createResource(props, tx),
+        this.createResource(props, tx, autoRenameOnConflict),
       );
     }
 
@@ -756,20 +856,31 @@ export class ResourcesService {
       );
     }
 
-    // Validate resource name
-    this.validateResourceName(props.name);
-    await this.checkNameConflict(
+    // Validate and sanitize resource name
+    let resolvedName = this.validateResourceName(
+      props.name,
+      autoRenameOnConflict,
+    );
+    // Resolve unique name (handles auto-rename on conflict)
+    resolvedName = await this.resolveUniqueName(
       props.namespaceId,
       props.parentId,
-      props.name,
+      resolvedName,
+      autoRenameOnConflict,
       undefined,
       entityManager,
     );
 
-    if (props.fileId) {
+    // Create props with resolved name
+    const createProps = {
+      ...props,
+      name: resolvedName,
+    };
+
+    if (createProps.fileId) {
       const file = await this.filesService.getFile(
-        props.namespaceId,
-        props.fileId,
+        createProps.namespaceId,
+        createProps.fileId,
       );
       if (!file) {
         const message = this.i18n.t('resource.errors.fileNotFound');
@@ -779,10 +890,10 @@ export class ResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      if (props.userId && file.size !== null) {
+      if (createProps.userId && file.size !== null) {
         await this.storageUsagesService.updateStorageUsage(
-          props.namespaceId,
-          props.userId,
+          createProps.namespaceId,
+          createProps.userId,
           StorageType.UPLOAD,
           bigintStringToNumber(file.size),
           tx,
@@ -790,14 +901,14 @@ export class ResourcesService {
       }
     }
 
-    const contentSize = props.content
-      ? Buffer.byteLength(props.content, 'utf8')
+    const contentSize = createProps.content
+      ? Buffer.byteLength(createProps.content, 'utf8')
       : 0;
 
     const repo = entityManager.getRepository(Resource);
     const resource = await repo.save(
       repo.create({
-        ...props,
+        ...createProps,
         contentSize: numberToBigintString(contentSize),
       }),
     );
@@ -822,7 +933,7 @@ export class ResourcesService {
       await this.wizardTaskService.emitFileReaderTask(
         resource.userId,
         resource,
-        props.source || 'default',
+        createProps.source || 'default',
         tx,
       );
     } else if (resource.parentId) {

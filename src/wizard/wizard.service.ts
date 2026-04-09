@@ -114,6 +114,9 @@ export class WizardService {
       userId,
       namespaceId,
       resourceDto,
+      undefined,
+      undefined,
+      true, // autoRenameOnConflict for URL-based names
     );
 
     const { objectKey } = await this.s3Service.generateObjectKey(
@@ -172,6 +175,9 @@ export class WizardService {
       userId,
       namespaceId,
       resourceDto,
+      undefined,
+      undefined,
+      true, // autoRenameOnConflict for URL-based names
     );
 
     // Create a collect_url task that will fetch HTML and create a collect task

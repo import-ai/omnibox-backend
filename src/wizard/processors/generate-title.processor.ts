@@ -43,6 +43,7 @@ export class GenerateTitleProcessor extends Processor {
             namespaceId: task.namespaceId,
             name: generatedTitle.trim(),
           }),
+          true, // autoRenameOnConflict for AI-generated titles
         );
 
         return { resourceId, title: generatedTitle.trim() };

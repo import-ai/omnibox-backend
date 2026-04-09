@@ -43,6 +43,7 @@ export class CollectProcessor extends Processor {
           namespaceId: task.namespaceId,
           content,
         }),
+        true, // autoRenameOnConflict for error content updates
       );
       return {};
     } else if (task.output) {
@@ -86,6 +87,7 @@ export class CollectProcessor extends Processor {
           attrs: mergedAttrs,
           tag_ids: tagIds,
         }),
+        true, // autoRenameOnConflict for AI-generated titles
       );
       return { resourceId, tagIds };
     }

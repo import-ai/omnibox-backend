@@ -169,6 +169,7 @@ describe('CollectProcessor', () => {
         const result = await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -216,6 +217,7 @@ describe('CollectProcessor', () => {
           'test-resource-id',
         );
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -255,6 +257,7 @@ describe('CollectProcessor', () => {
         await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -293,6 +296,7 @@ describe('CollectProcessor', () => {
         await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -322,6 +326,7 @@ describe('CollectProcessor', () => {
         await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -365,6 +370,7 @@ describe('CollectProcessor', () => {
           ['tag1', 'tag2', 'tag3'],
         );
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -409,6 +415,7 @@ describe('CollectProcessor', () => {
         const result = await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -457,6 +464,7 @@ describe('CollectProcessor', () => {
         const result = await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {

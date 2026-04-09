@@ -406,7 +406,7 @@ export class VFSService {
             },
             tx,
             undefined,
-            true, // autoRenameOnConflict for path-based folder creation
+            false, // autoRenameOnConflict disabled for path-based folder creation
           );
           resourceIds.push(newFolder.id);
           currentParentId = newFolder.id;
@@ -512,7 +512,7 @@ export class VFSService {
           },
           tx,
           undefined,
-          true, // autoRenameOnConflict for path-based file creation
+          false, // autoRenameOnConflict disabled for path-based file creation
         );
 
         const fileInfoDto = new FileInfoDto();

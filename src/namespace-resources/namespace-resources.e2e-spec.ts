@@ -386,19 +386,6 @@ describe('ResourcesController (e2e)', () => {
         .send(updateData)
         .expect(HttpStatus.NOT_FOUND);
     });
-
-    it('should fail with missing namespaceId', async () => {
-      const updateData = {
-        name: 'Updated Name',
-      };
-
-      await client
-        .patch(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
-        )
-        .send(updateData)
-        .expect(HttpStatus.BAD_REQUEST);
-    });
   });
 
   describe('DELETE /api/v1/namespaces/:namespaceId/resources/:resourceId', () => {

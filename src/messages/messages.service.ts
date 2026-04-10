@@ -109,7 +109,9 @@ export class MessagesService {
       message.message.tool_call_id = deltaMessage.tool_call_id;
     }
     // <<< OpenAI Message
-    message.status = MessageStatus.STREAMING;
+    if (message.status === MessageStatus.PENDING) {
+      message.status = MessageStatus.STREAMING;
+    }
     if (delta.attrs) {
       message.attrs = message.attrs || {};
       Object.assign(message.attrs, delta.attrs);

@@ -20,6 +20,7 @@ import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { DataSource } from 'typeorm';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
+import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -326,7 +327,6 @@ export class VFSService {
    * @param namespaceId
    * @param userId
    * @param path
-   * @param options
    */
   async getContentByPath(namespaceId: string, userId: string, path: string) {
     const { resource, parsedPath } = await this.getResourceByPath(
@@ -526,6 +526,40 @@ export class VFSService {
     );
   }
 
+  async getPath(
+    resource: InternalResourceDto,
+    isDir: boolean = false,
+  ): Promise<string> {
+    const parts: string[] = [];
+    for (const parentResource of resource.path) {
+      if (parentResource.id === resource.id) {
+        continue;
+      }
+      if (parentResource.parentId !== null) {
+        parts.push(parentResource.name);
+      } else {
+        const spaceType = await this.namespaceResourcesService.getSpaceType(
+          resource.namespaceId,
+          parentResource.id,
+        );
+        if (spaceType === SpaceType.PRIVATE) {
+          parts.push('private');
+        } else {
+          parts.push('teamspace');
+        }
+      }
+    }
+    if (resource.resourceType === ResourceType.FOLDER && isDir) {
+      throw new AppException(
+        `${resource.name} is a folder`,
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    parts.push(resource.name + (isDir ? '' : '.md'));
+    return '/' + parts.join('/');
+  }
+
   async resourceFilter(
     namespaceId: string,
     userId: string,
@@ -567,33 +601,30 @@ export class VFSService {
 
     for (const resource of filteredResources) {
       const fileInfoDo = new FileInfoDto();
-      const parts: string[] = [];
-      for (const parentResource of resource.path) {
-        if (parentResource.id === resource.id) {
-          continue;
-        }
-        if (parentResource.parentId !== null) {
-          parts.push(parentResource.name);
-        } else {
-          const spaceType = await this.namespaceResourcesService.getSpaceType(
-            namespaceId,
-            parentResource.id,
-          );
-          if (spaceType === SpaceType.PRIVATE) {
-            parts.push('private');
-          } else {
-            parts.push('teamspace');
-          }
-        }
-      }
-      parts.push(`${resource.name}.md`);
       fileInfoDo.id = resource.id;
-      fileInfoDo.path = '/' + parts.join('/');
+      fileInfoDo.path = await this.getPath(resource);
       fileInfoDo.createdAt = resource.createdAt;
       fileInfoDo.updatedAt = resource.updatedAt;
       fileInfoDo.isDir = false;
       fileInfoDos.push(fileInfoDo);
     }
     return { resources: fileInfoDos, total };
+  }
+
+  async getPathByResourceId(
+    namespaceId: string,
+    userId: string,
+    resourceId: string,
+    isDir: boolean = false,
+  ): Promise<{ path: string }> {
+    const resourceInternalDtoList =
+      await this.namespaceResourcesService.batchGetResourceInternalDto(
+        namespaceId,
+        userId,
+        [resourceId],
+      );
+    const resourceInternalDto = resourceInternalDtoList[0];
+    const path = await this.getPath(resourceInternalDto, isDir);
+    return { path };
   }
 }

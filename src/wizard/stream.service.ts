@@ -168,6 +168,31 @@ export class StreamService {
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
         // Do nothing, this is the end of the stream
+      } else if (chunk.response_type === 'checkpoint') {
+        // Checkpoint response always triggered after message done
+        if (context.messageId) {
+          throw new AppException(
+            this.i18n.t('system.errors.messageIdAlreadySet'),
+            'MESSAGE_ID_ALREADY_SET',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+        if (context.parentId === undefined) {
+          throw new AppException(
+            this.i18n.t('system.errors.messageIdNotSet'),
+            'MESSAGE_ID_NOT_SET',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+        await this.messagesService.updateDelta(context.parentId, {
+          response_type: 'delta',
+          message: {},
+          attrs: {
+            context: {
+              checkpoint: chunk.checkpoint,
+            },
+          },
+        });
       } else if (chunk.response_type === 'error') {
         if (context.messageId) {
           await this.messagesService.updateDelta(context.messageId, {

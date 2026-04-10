@@ -583,74 +583,17 @@ export class ResourcesService {
 
   async batchGetResources(
     namespaceId: string,
-    resourceIds?: string[],
-    createdAtBefore?: Date,
-    createdAtAfter?: Date,
-    userId?: string,
-    parentId?: string,
-    tagIds?: string[],
-    nameContains?: string,
-    contentContains?: string,
+    resourceIds: string[],
   ): Promise<Resource[]> {
-    const hasFilter =
-      (resourceIds && resourceIds.length > 0) ||
-      createdAtBefore ||
-      createdAtAfter ||
-      userId ||
-      parentId ||
-      (tagIds && tagIds.length > 0) ||
-      nameContains ||
-      contentContains;
-    if (!hasFilter) {
-      throw new AppException(
-        'At least one filter parameter is required',
-        'FILTER_REQUIRED',
-        HttpStatus.BAD_REQUEST,
-      );
+    if (resourceIds.length === 0) {
+      return [];
     }
-
     const queryBuilder = this.resourceRepository
       .createQueryBuilder('resource')
-      .where('resource.namespace_id = :namespaceId', { namespaceId });
-
-    if (resourceIds) {
-      if (resourceIds.length === 0) {
-        return [];
-      }
-      queryBuilder.andWhere('resource.id IN (:...resourceIds)', {
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.id IN (:...resourceIds)', {
         resourceIds,
       });
-    }
-    if (createdAtBefore) {
-      queryBuilder.andWhere('resource.created_at <= :createdAtBefore', {
-        createdAtBefore,
-      });
-    }
-    if (createdAtAfter) {
-      queryBuilder.andWhere('resource.created_at >= :createdAtAfter', {
-        createdAtAfter,
-      });
-    }
-    if (userId) {
-      queryBuilder.andWhere('resource.user_id = :userId', { userId });
-    }
-    if (parentId) {
-      queryBuilder.andWhere('resource.parent_id = :parentId', { parentId });
-    }
-    if (tagIds) {
-      queryBuilder.andWhere('resource.tag_ids && :tagIds', { tagIds });
-    }
-    if (nameContains) {
-      queryBuilder.andWhere('resource.name ILIKE :nameContains', {
-        nameContains: `%${nameContains}%`,
-      });
-    }
-    if (contentContains) {
-      queryBuilder.andWhere('resource.content ILIKE :contentContains', {
-        contentContains: `%${contentContains}%`,
-      });
-    }
-
     return await queryBuilder.getMany();
   }
 

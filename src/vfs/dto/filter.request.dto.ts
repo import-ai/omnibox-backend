@@ -63,7 +63,7 @@ export class VFSResourceFilterOptionsDto {
   @IsOptional()
   parentId?: string;
 
-  @Expose({ name: 'resource_type' })
+  @Expose({ name: 'resource_types' })
   @IsOptional()
   resourceTypes?: ResourceType[];
 

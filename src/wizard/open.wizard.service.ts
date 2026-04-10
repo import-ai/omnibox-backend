@@ -3,7 +3,6 @@ import { MessagesService } from 'omniboxd/messages/messages.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
-import { User } from 'omniboxd/user/entities/user.entity';
 import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
@@ -60,10 +59,9 @@ export class OpenWizardService {
       return parentMessage.conversationId;
     } else {
       // Create a new conversation
-      const user = { id: userId } as User;
       const conversation = await this.conversationsService.create(
         namespaceId,
-        user,
+        userId,
       );
       return conversation.id;
     }

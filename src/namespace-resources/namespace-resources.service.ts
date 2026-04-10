@@ -787,6 +787,37 @@ export class NamespaceResourcesService {
     return InternalFileInfoDto.new(publicUrl, internalUrl);
   }
 
+  async BatchResourceToInternalResourceDto(
+    namespaceId: string,
+    resources: Resource[],
+  ): Promise<InternalResourceDto[]> {
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    // Get paths for each resource
+    const result: InternalResourceDto[] = [];
+    for (const resource of resources) {
+      let path: ResourceMetaDto[] = [];
+      if (resource.parentId) {
+        const parentResources =
+          await this.resourcesService.getParentResourcesOrFail(
+            namespaceId,
+            resource.parentId,
+          );
+        path = parentResources.reverse();
+      }
+
+      result.push(
+        InternalResourceDto.fromEntity(
+          resource,
+          path,
+          tagsMap.get(resource.id) || [],
+        ),
+      );
+    }
+    return result;
+  }
+
   async resourceFilter(
     namespaceId: string,
     resourceIds: string[],
@@ -820,92 +851,32 @@ export class NamespaceResourcesService {
       { ...options, tagIds },
     );
 
-    // Populate tags for resources
-    const tagsMap = await this.getTagsForResources(namespaceId, resources);
-
-    // Get paths for each resource
-    const result: InternalResourceDto[] = [];
-    for (const resource of resources) {
-      let path: ResourceMetaDto[] = [];
-      if (resource.parentId) {
-        const parentResources =
-          await this.resourcesService.getParentResourcesOrFail(
-            namespaceId,
-            resource.parentId,
-          );
-        path = parentResources.reverse();
-      }
-
-      result.push(
-        InternalResourceDto.fromEntity(
-          resource,
-          path,
-          tagsMap.get(resource.id) || [],
-        ),
-      );
-    }
+    const result: InternalResourceDto[] =
+      await this.BatchResourceToInternalResourceDto(namespaceId, resources);
 
     return { resources: result, total };
   }
 
-  /**
-   * Deprecated
-   */
-  async getResourcesForInternal(
+  async batchGetResourceInternalDto(
     namespaceId: string,
-    resourceIds?: string[],
-    createdAtBefore?: Date,
-    createdAtAfter?: Date,
-    userId?: string,
-    parentId?: string,
-    tags?: string[],
-    nameContains?: string,
-    contentContains?: string,
+    userId: string,
+    resourceIds: string[],
   ): Promise<InternalResourceDto[]> {
-    let tagIds: string[] | undefined = undefined;
-    if (tags) {
-      const tagEntities = await this.tagService.findByNames(namespaceId, tags);
-      tagIds = tagEntities.map((t) => t.id);
-    }
+    const filteredResourceIds: string[] = await this.permissionFilter(
+      namespaceId,
+      userId,
+      resourceIds,
+    );
 
     const resources = await this.resourcesService.batchGetResources(
       namespaceId,
-      resourceIds,
-      createdAtBefore,
-      createdAtAfter,
-      userId,
-      parentId,
-      tagIds,
-      nameContains,
-      contentContains,
+      filteredResourceIds,
     );
 
-    // Populate tags for resources
-    const tagsMap = await this.getTagsForResources(namespaceId, resources);
-
-    // Get paths for each resource
-    const result: InternalResourceDto[] = [];
-    for (const resource of resources) {
-      let path: ResourceMetaDto[] = [];
-      if (resource.parentId) {
-        const parentResources =
-          await this.resourcesService.getParentResourcesOrFail(
-            namespaceId,
-            resource.parentId,
-          );
-        path = parentResources.reverse();
-      }
-
-      result.push(
-        InternalResourceDto.fromEntity(
-          resource,
-          path,
-          tagsMap.get(resource.id) || [],
-        ),
-      );
-    }
-
-    return result;
+    return await this.BatchResourceToInternalResourceDto(
+      namespaceId,
+      resources,
+    );
   }
 
   async getResourceChildrenForInternal(

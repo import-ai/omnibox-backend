@@ -57,4 +57,20 @@ export class InternalVFSController {
       requestDto,
     );
   }
+
+  @Public()
+  @Get()
+  async getPathByResourceId(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Query('resource_id') resourceId: string,
+    @Query('is_dir') isDir: boolean,
+  ) {
+    return await this.vfsService.getPathByResourceId(
+      namespaceId,
+      userId,
+      resourceId,
+      isDir,
+    );
+  }
 }

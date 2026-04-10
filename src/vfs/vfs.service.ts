@@ -543,7 +543,8 @@ export class VFSService {
 
         const fileInfoDto = new FileInfoDto();
         fileInfoDto.id = resource.id;
-        fileInfoDto.name = parsedPath.path;
+        fileInfoDto.name = resource.name;
+        fileInfoDto.path = parsedPath.path;
         fileInfoDto.createdAt = resource.createdAt.toISOString();
         fileInfoDto.updatedAt = resource.updatedAt.toISOString();
         fileInfoDto.isDir = false;

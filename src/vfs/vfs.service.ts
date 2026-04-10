@@ -275,13 +275,22 @@ export class VFSService {
    * @param namespaceId
    * @param userId
    * @param path
+   * @param targetResourceType Expired resource type
    * @returns { ResourceDto, ParsedPathDo }
    */
   async getResourceByPath(
     namespaceId: string,
     userId: string,
     path: string,
-  ): Promise<{ resource: ResourceDto; parsedPath: ParsedPathDo }> {
+    targetResourceType:
+      | ResourceType.DOC
+      | ResourceType.FOLDER
+      | undefined = ResourceType.DOC,
+  ): Promise<{
+    resource: ResourceDto;
+    fileInfo: FileInfoDto;
+    parsedPath: ParsedPathDo;
+  }> {
     const parsedPath = VFSService.parsePath(path);
     if (!parsedPath.spaceType) {
       throw new AppException(
@@ -308,9 +317,17 @@ export class VFSService {
 
     const lastResource: FileInfoDto = resources[resources.length - 1];
 
-    if (lastResource.isDir) {
+    if (targetResourceType === ResourceType.DOC && lastResource.isDir) {
       throw new AppException(
         `${lastResource.name} is a directory`,
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (targetResourceType === ResourceType.FOLDER && !lastResource.isDir) {
+      throw new AppException(
+        `${lastResource.name} is not a directory`,
         'INVALID_PATH',
         HttpStatus.BAD_REQUEST,
       );
@@ -323,7 +340,7 @@ export class VFSService {
         resourceId: lastResource.id,
       });
 
-    return { resource, parsedPath };
+    return { resource, fileInfo: lastResource, parsedPath };
   }
 
   /**
@@ -618,6 +635,75 @@ export class VFSService {
       fileInfoDos.push(fileInfoDo);
     }
     return { resources: fileInfoDos, total };
+  }
+
+  async deleteByPath(
+    namespaceId: string,
+    userId: string,
+    path: string,
+  ): Promise<boolean> {
+    const { resource } = await this.getResourceByPath(
+      namespaceId,
+      userId,
+      path,
+      undefined,
+    );
+    await this.namespaceResourcesService.delete(
+      userId,
+      namespaceId,
+      resource.id,
+    );
+    return true;
+  }
+
+  async renameByPath(
+    namespaceId: string,
+    userId: string,
+    path: string,
+    newName: string,
+  ): Promise<boolean> {
+    const { resource } = await this.getResourceByPath(
+      namespaceId,
+      userId,
+      path,
+      undefined,
+    );
+    await this.namespaceResourcesService.update(
+      namespaceId,
+      userId,
+      resource.id,
+      { name: newName },
+    );
+    return true;
+  }
+
+  async moveByPath(
+    namespaceId: string,
+    userId: string,
+    path: string,
+    newParentPath: string,
+  ): Promise<boolean> {
+    const { resource } = await this.getResourceByPath(
+      namespaceId,
+      userId,
+      path,
+      undefined,
+    );
+
+    const { resource: parentResource } = await this.getResourceByPath(
+      namespaceId,
+      userId,
+      newParentPath,
+      ResourceType.FOLDER,
+    );
+
+    await this.namespaceResourcesService.move(
+      namespaceId,
+      resource.id,
+      userId,
+      parentResource.id,
+    );
+    return true;
   }
 
   async getPathByResourceId(

@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { VFSService } from 'omniboxd/vfs/vfs.service';
 import { Public } from 'omniboxd/auth';
 import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
@@ -41,6 +50,48 @@ export class InternalVFSController {
       userId,
       path,
       content,
+    );
+  }
+
+  @Public()
+  @Delete()
+  async deleteByPath(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Query('path') path: string,
+  ) {
+    return await this.vfsService.deleteByPath(namespaceId, userId, path);
+  }
+
+  @Public()
+  @Patch('rename')
+  async renameByPath(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Body('path') path: string,
+    @Body('new_name') newName: string,
+  ) {
+    return await this.vfsService.renameByPath(
+      namespaceId,
+      userId,
+      path,
+      newName,
+    );
+  }
+
+  @Public()
+  @Patch('move')
+  async moveByPath(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Body('path') path: string,
+    @Body('new_parent_path') newParentPath: string,
+  ) {
+    return await this.vfsService.moveByPath(
+      namespaceId,
+      userId,
+      path,
+      newParentPath,
     );
   }
 

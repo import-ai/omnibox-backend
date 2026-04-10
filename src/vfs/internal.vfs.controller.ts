@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Put,
@@ -39,6 +41,7 @@ export class InternalVFSController {
 
   @Public()
   @Put()
+  @HttpCode(HttpStatus.CREATED)
   async createByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
@@ -110,7 +113,7 @@ export class InternalVFSController {
   }
 
   @Public()
-  @Get()
+  @Get('path')
   async getPathByResourceId(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,

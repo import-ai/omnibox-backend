@@ -15,3 +15,11 @@ function customAlphabet(alphabet: string, size: number) {
 jest.mock('nanoid', () => ({
   customAlphabet,
 }));
+
+// Mock HandlebarsAdapter to prevent @css-inline native module from loading
+// which causes open handle issues in Jest
+jest.mock('@nestjs-modules/mailer/adapters/handlebars.adapter', () => ({
+  HandlebarsAdapter: jest.fn().mockImplementation(() => ({
+    compile: jest.fn((template: string) => () => template),
+  })),
+}));

@@ -447,7 +447,7 @@ export class VFSService {
    * Create a file by path
    *  if the file exists, throw the error.
    *  the last part of the path is the filename, must ends with `.md`, the rest is the path to the directory.
-   *  if the directory does not exist, create it with `ResourceType.FOLDER`.
+   *  if the directory does not exist, it would be created automatically with `ResourceType.FOLDER`.
    * @param namespaceId
    * @param userId
    * @param path

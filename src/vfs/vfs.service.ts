@@ -17,7 +17,7 @@ import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
 import { listResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
@@ -69,17 +69,21 @@ export class VFSService {
    * @param namespaceId
    * @param resourceId
    * @param userId
+   * @param entityManager
    * @return FileInfoDto[]
    */
   async listChildrenByResourceId(
     namespaceId: string,
     resourceId: string,
     userId: string,
+    entityManager?: EntityManager,
   ) {
     const resources = await this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
       userId,
+      {},
+      entityManager,
     );
     const fileInfos: FileInfoDto[] = [];
     const map: Record<string, boolean> = {};
@@ -357,10 +361,14 @@ export class VFSService {
       rootResourceId = await this.namespacesService.getPrivateRootId(
         userId,
         namespaceId,
+        tx.entityManager,
       );
     } else {
       const teamRootResource: ResourceMetaDto =
-        await this.namespacesService.getTeamspaceRoot(namespaceId);
+        await this.namespacesService.getTeamspaceRoot(
+          namespaceId,
+          tx.entityManager,
+        );
       rootResourceId = teamRootResource.id;
     }
 
@@ -372,6 +380,7 @@ export class VFSService {
         namespaceId,
         currentParentId,
         userId,
+        tx.entityManager,
       );
 
       const resource = children.find((child) => child.name === resourceName);

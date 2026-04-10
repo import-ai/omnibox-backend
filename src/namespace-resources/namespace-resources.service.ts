@@ -2,6 +2,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import duplicateName from 'omniboxd/utils/duplicate-name';
 import {
   DataSource,
+  EntityManager,
   FindOptionsWhere,
   In,
   IsNull,
@@ -582,23 +583,28 @@ export class NamespaceResourcesService {
       limit?: number;
       offset?: number;
     },
+    entityManager?: EntityManager,
   ): Promise<ResourceSummaryDto[]> {
     const { summary = false, limit, offset } = options || {};
 
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
+      entityManager,
     );
 
     let children = await this.resourcesService.getChildren(
       namespaceId,
       [resourceId],
       { summary, limit, offset },
+      entityManager,
     );
 
     let subChildren = await this.resourcesService.getChildren(
       namespaceId,
       children.map((child) => child.id),
+      {},
+      entityManager,
     );
 
     const allResources = [
@@ -610,6 +616,7 @@ export class NamespaceResourcesService {
       userId,
       namespaceId,
       allResources,
+      entityManager,
     );
 
     children = children.filter((res) => {

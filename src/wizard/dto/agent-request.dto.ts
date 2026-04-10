@@ -28,8 +28,12 @@ export interface BaseAgentRequestDto {
   conversation_id: string;
   enable_thinking: boolean;
   lang?: '简体中文' | 'English';
+  tool_call?: {
+    decisions?: Record<string, any>[];
+  };
 }
 
+// AgentRequestDto: web -> backend
 export interface AgentRequestDto extends BaseAgentRequestDto {
   tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
   parent_message_id?: string;
@@ -39,6 +43,7 @@ export interface WizardPrivateSearchToolDto extends PrivateSearchToolDto {
   namespace_id: string;
 }
 
+// WizardAgentRequestDto: backend -> wizard
 export interface WizardAgentRequestDto extends BaseAgentRequestDto {
   namespace_id: string;
   user_id: string;

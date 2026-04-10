@@ -347,6 +347,7 @@ export class ResourcesService {
       limit?: number;
       offset?: number;
     },
+    entityManager?: EntityManager,
   ): Promise<Resource[]> {
     const baseFields: (keyof Resource)[] = [
       'id',
@@ -363,7 +364,11 @@ export class ResourcesService {
       ? [...baseFields, ...summaryFields]
       : baseFields;
 
-    return await this.resourceRepository.find({
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+
+    return await repo.find({
       select,
       where: {
         namespaceId,

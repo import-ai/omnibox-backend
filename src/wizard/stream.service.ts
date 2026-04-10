@@ -170,29 +170,15 @@ export class StreamService {
         // Do nothing, this is the end of the stream
       } else if (chunk.response_type === 'checkpoint') {
         // Checkpoint response always triggered after message done
-        if (context.messageId) {
-          throw new AppException(
-            this.i18n.t('system.errors.messageIdAlreadySet'),
-            'MESSAGE_ID_ALREADY_SET',
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        }
-        if (context.parentId === undefined) {
+        const messageId = context.messageId || context.parentId;
+        if (!messageId) {
           throw new AppException(
             this.i18n.t('system.errors.messageIdNotSet'),
             'MESSAGE_ID_NOT_SET',
             HttpStatus.INTERNAL_SERVER_ERROR,
           );
         }
-        await this.messagesService.updateDelta(context.parentId, {
-          response_type: 'delta',
-          message: {},
-          attrs: {
-            context: {
-              checkpoint: chunk.checkpoint,
-            },
-          },
-        });
+        await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
         if (context.messageId) {
           await this.messagesService.updateDelta(context.messageId, {
@@ -254,7 +240,10 @@ export class StreamService {
     return messages;
   }
 
-  streamError(subscriber: Subscriber<MessageEvent>, error: Error) {
+  streamError(
+    subscriber: Subscriber<MessageEvent>,
+    error: Error | AppException,
+  ) {
     this.logger.error({ error });
     const span = trace.getActiveSpan();
     if (span) {
@@ -407,6 +396,7 @@ export class StreamService {
         tools,
         enable_thinking: requestDto.enable_thinking,
         lang: requestDto.lang,
+        tool_call: requestDto.tool_call,
       };
 
       this.stream(namespaceId, mode, wizardRequest, requestId, async (data) => {

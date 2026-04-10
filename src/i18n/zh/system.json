@@ -10,7 +10,6 @@
     "wizardRequestFailed": "从 wizard 获取数据失败",
     "responseBodyNotReadable": "响应体不可读",
     "messageIdNotSet": "上下文中未设置消息 ID",
-    "messageIdAlreadySet": "上下文中已有消息 ID",
     "messageNotFound": "消息未找到",
     "requestFailed": "请求失败，状态码 {status}"
   }

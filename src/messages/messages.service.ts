@@ -8,7 +8,10 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import { User } from 'omniboxd/user/entities/user.entity';
-import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
+import {
+  ChatCheckpointResponse,
+  ChatDeltaResponse,
+} from '../wizard/dto/chat-response.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 
@@ -86,6 +89,21 @@ export class MessagesService {
     return delta ? (source || '') + delta : source;
   }
 
+  async saveCheckpoint(id: string, chunk: ChatCheckpointResponse) {
+    if (chunk.checkpoint) {
+      const message = await this.messageRepository.findOneOrFail({
+        where: { id },
+      });
+
+      message.attrs = message.attrs || {};
+      message.attrs.context = {
+        checkpoint: chunk.checkpoint,
+      };
+      message.status = MessageStatus.SUCCESS;
+      return await this.messageRepository.save(message);
+    }
+  }
+
   async updateDelta(id: string, delta: ChatDeltaResponse) {
     const deltaMessage: Partial<OpenAIMessage> = delta.message;
 
@@ -109,9 +127,7 @@ export class MessagesService {
       message.message.tool_call_id = deltaMessage.tool_call_id;
     }
     // <<< OpenAI Message
-    if (message.status === MessageStatus.PENDING) {
-      message.status = MessageStatus.STREAMING;
-    }
+    message.status = MessageStatus.STREAMING;
     if (delta.attrs) {
       message.attrs = message.attrs || {};
       Object.assign(message.attrs, delta.attrs);

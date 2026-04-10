@@ -617,11 +617,12 @@ export class VFSService {
         );
       resourceIds = visibleResources.map((resource) => resource.id);
     }
+    const options = requestDto.options;
     const { resources: filteredResources, total } =
       await this.namespaceResourcesService.resourceFilter(
         namespaceId,
         resourceIds,
-        requestDto.options,
+        options,
       );
 
     const fileInfoDos: FileInfoDto[] = [];
@@ -663,12 +664,26 @@ export class VFSService {
     path: string,
     newName: string,
   ): Promise<boolean> {
-    const { resource } = await this.getResourceByPath(
+    const { resource, fileInfo } = await this.getResourceByPath(
       namespaceId,
       userId,
       path,
       undefined,
     );
+
+    // If source is a doc (not a directory), new name must end with .md
+    if (!fileInfo.isDir) {
+      if (!newName.endsWith('.md')) {
+        throw new AppException(
+          'New name must end with .md',
+          'INVALID_NAME',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      // Strip .md suffix before saving to database
+      newName = newName.slice(0, -3);
+    }
+
     await this.namespaceResourcesService.update(
       namespaceId,
       userId,
@@ -713,6 +728,13 @@ export class VFSService {
     resourceId: string,
     isDir: boolean = false,
   ): Promise<{ path: string }> {
+    if (!resourceId) {
+      throw new AppException(
+        'resource_id is required',
+        'RESOURCE_ID_REQUIRED',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     const resourceInternalDtoList =
       await this.namespaceResourcesService.batchGetResourceInternalDto(
         namespaceId,
@@ -720,6 +742,13 @@ export class VFSService {
         [resourceId],
       );
     const resourceInternalDto = resourceInternalDtoList[0];
+    if (!resourceInternalDto) {
+      throw new AppException(
+        'Resource not found',
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
     const path = await this.getPath(resourceInternalDto, isDir);
     return { path };
   }

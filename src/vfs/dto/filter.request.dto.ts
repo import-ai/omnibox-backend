@@ -81,17 +81,25 @@ export class VFSFilterResourcesRequestDto {
   path?: string;
 
   @Transform(({ value }) => {
-    try {
-      return plainToInstance(VFSResourceFilterOptionsDto, JSON.parse(value));
-    } catch {
-      throw new AppException(
-        'Invalid JSON in options',
-        'INVALID_JSON',
-        HttpStatus.BAD_REQUEST,
-      );
+    // If already an object, return as-is
+    if (typeof value === 'object' && value !== null) {
+      return plainToInstance(VFSResourceFilterOptionsDto, value);
     }
+    // If string, try to parse as JSON
+    if (typeof value === 'string') {
+      try {
+        return plainToInstance(VFSResourceFilterOptionsDto, JSON.parse(value));
+      } catch {
+        throw new AppException(
+          'Invalid JSON in options',
+          'INVALID_JSON',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+    return value;
   })
   @ValidateNested()
   @Type(() => VFSResourceFilterOptionsDto)
-  options: VFSResourceFilterOptionsDto;
+  options?: VFSResourceFilterOptionsDto;
 }

@@ -29,10 +29,16 @@ export class FileInfoDto {
     );
   }
 
-  static fromResourceSummaryDto(resource: ResourceSummaryDto): FileInfoDto {
+  static fromResourceSummaryDto(
+    resource: ResourceSummaryDto,
+    parentPath?: string,
+  ): FileInfoDto {
     const fileInfo = new FileInfoDto();
     fileInfo.id = resource.id;
     fileInfo.name = resource.name || resource.id;
+    if (parentPath) {
+      fileInfo.path = `${parentPath}/${resource.name}`;
+    }
     fileInfo.createdAt = resource.createdAt.toISOString();
     fileInfo.updatedAt = resource.updatedAt.toISOString();
     fileInfo.isDir = FileInfoDto.isDir(resource);

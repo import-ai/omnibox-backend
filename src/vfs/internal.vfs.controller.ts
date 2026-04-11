@@ -15,6 +15,7 @@ import { VFSService } from 'omniboxd/vfs/vfs.service';
 import { Public } from 'omniboxd/auth';
 import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
+import { CreateRequestDto } from 'omniboxd/vfs/dto/create.request.dto';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs')
 export class InternalVFSController {
@@ -46,14 +47,13 @@ export class InternalVFSController {
   async createByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
-    @Body('path') path: string,
-    @Body('content') content: string,
+    @Body() requestDto: CreateRequestDto,
   ) {
     return await this.vfsService.createByPath(
       namespaceId,
       userId,
-      path,
-      content,
+      requestDto.path,
+      requestDto.content,
     );
   }
 

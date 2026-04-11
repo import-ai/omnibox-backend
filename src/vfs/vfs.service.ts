@@ -21,6 +21,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
+import { last } from 'omniboxd/utils/arrays';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -69,6 +70,7 @@ export class VFSService {
    * @param namespaceId
    * @param resourceId
    * @param userId
+   * @param parentPath With this field passed, there would be `path` exists in FileInfoDto
    * @param entityManager
    * @return FileInfoDto[]
    */
@@ -76,6 +78,7 @@ export class VFSService {
     namespaceId: string,
     resourceId: string,
     userId: string,
+    parentPath?: string,
     entityManager?: EntityManager,
   ) {
     const resources = await this.namespaceResourcesService.listChildren(
@@ -102,14 +105,21 @@ export class VFSService {
       }
       if (FileInfoDto.isDir(resource)) {
         map[resourceName] = true;
-        const fileInfo = FileInfoDto.fromResourceSummaryDto(resource);
+        const fileInfo = FileInfoDto.fromResourceSummaryDto(
+          resource,
+          parentPath,
+        );
         fileInfo.name = resourceName;
         fileInfos.push(fileInfo);
       }
       if (resource.resourceType !== ResourceType.FOLDER) {
         map[`${resourceName}.md`] = true;
-        const fileInfo = FileInfoDto.fromResourceSummaryDto(resource);
-        fileInfo.name = `${resourceName}.md`;
+        const fileInfo = FileInfoDto.fromResourceSummaryDto(
+          resource,
+          parentPath,
+        );
+        fileInfo.name = `${fileInfo.name}.md`;
+        fileInfo.path = `${fileInfo.path}.md`;
         fileInfo.isDir = false;
         fileInfos.push(fileInfo);
       }
@@ -123,6 +133,7 @@ export class VFSService {
    * @param userId
    * @param resourceNames
    * @param resources
+   * @param parentPath With this field passed, there would be `path` exists in FileInfoDto
    * @private
    */
   private async getResourcesChainByParsedPathDfs(
@@ -130,11 +141,12 @@ export class VFSService {
     userId: string,
     resourceNames: string[],
     resources: FileInfoDto[],
+    parentPath?: string,
   ): Promise<FileInfoDto[]> {
     if (resourceNames.length === 0) {
       return resources;
     }
-    const lastResource: FileInfoDto = resources[resources.length - 1];
+    const lastResource: FileInfoDto = last(resources);
     if (!lastResource.isDir) {
       throw new AppException(
         `${lastResource.name} is not a directory`,
@@ -147,15 +159,17 @@ export class VFSService {
       namespaceId,
       lastResource.id,
       userId,
+      parentPath,
     );
     const fileInfoDto = children.find((x) => x.name === resourceName);
 
     if (fileInfoDto) {
-      return this.getResourcesChainByParsedPathDfs(
+      return await this.getResourcesChainByParsedPathDfs(
         namespaceId,
         userId,
         resourceNames.slice(1),
         [...resources, fileInfoDto],
+        fileInfoDto.path,
       );
     }
     throw new AppException(
@@ -169,6 +183,7 @@ export class VFSService {
     const fileInfo = new FileInfoDto();
     fileInfo.id = resource.id;
     fileInfo.name = name;
+    fileInfo.path = `/${name}`;
     fileInfo.createdAt = resource.createdAt.toISOString();
     fileInfo.updatedAt = resource.updatedAt.toISOString();
     fileInfo.isDir = true;
@@ -204,6 +219,7 @@ export class VFSService {
       userId,
       resourceNames ?? [],
       [rootResource],
+      rootResource.path,
     );
   }
 
@@ -228,7 +244,7 @@ export class VFSService {
         parsedPath.resourceNames,
       );
 
-      const lastResource: FileInfoDto = resources[resources.length - 1];
+      const lastResource: FileInfoDto = last(resources);
 
       if (!lastResource.isDir) {
         throw new AppException(
@@ -243,6 +259,7 @@ export class VFSService {
         namespaceId,
         resourceId,
         userId,
+        lastResource.path,
       );
 
       return {
@@ -315,7 +332,7 @@ export class VFSService {
       parsedPath.resourceNames,
     );
 
-    const lastResource: FileInfoDto = resources[resources.length - 1];
+    const lastResource: FileInfoDto = last(resources);
 
     if (targetResourceType === ResourceType.DOC && lastResource.isDir) {
       throw new AppException(
@@ -350,14 +367,13 @@ export class VFSService {
    * @param path
    */
   async getContentByPath(namespaceId: string, userId: string, path: string) {
-    const { resource, parsedPath } = await this.getResourceByPath(
+    const { resource, fileInfo } = await this.getResourceByPath(
       namespaceId,
       userId,
       path,
     );
     return {
-      id: resource.id,
-      path: parsedPath.path,
+      ...fileInfo,
       content: resource.content,
     } as GetResponseDto;
   }
@@ -397,6 +413,7 @@ export class VFSService {
         namespaceId,
         currentParentId,
         userId,
+        undefined,
         tx.entityManager,
       );
 
@@ -457,7 +474,7 @@ export class VFSService {
     namespaceId: string,
     userId: string,
     path: string,
-    content: string,
+    content?: string,
   ): Promise<FileInfoDto> {
     const parsedPath = VFSService.parsePath(path);
 
@@ -477,8 +494,7 @@ export class VFSService {
       );
     }
 
-    const fileName =
-      parsedPath.resourceNames[parsedPath.resourceNames.length - 1];
+    const fileName = last(parsedPath.resourceNames);
 
     if (!fileName.endsWith('.md')) {
       throw new AppException(
@@ -524,7 +540,7 @@ export class VFSService {
           tx,
         );
 
-        const parentId = parentResourceIds[parentResourceIds.length - 1];
+        const parentId = last(parentResourceIds);
 
         // Create the file resource
         const resource = await this.namespaceResourcesService.create(
@@ -543,7 +559,7 @@ export class VFSService {
 
         const fileInfoDto = new FileInfoDto();
         fileInfoDto.id = resource.id;
-        fileInfoDto.name = resource.name;
+        fileInfoDto.name = resource.name + '.md';
         fileInfoDto.path = parsedPath.path;
         fileInfoDto.createdAt = resource.createdAt.toISOString();
         fileInfoDto.updatedAt = resource.updatedAt.toISOString();
@@ -585,8 +601,7 @@ export class VFSService {
       );
     }
 
-    const folderName =
-      parsedPath.resourceNames[parsedPath.resourceNames.length - 1];
+    const folderName = last(parsedPath.resourceNames);
 
     if (folderName.endsWith('.md')) {
       throw new AppException(
@@ -632,7 +647,7 @@ export class VFSService {
           tx,
         );
 
-        const parentId = parentResourceIds[parentResourceIds.length - 1];
+        const parentId = last(parentResourceIds);
 
         // Create the folder resource
         const resource = await this.namespaceResourcesService.create(
@@ -715,7 +730,7 @@ export class VFSService {
         parsedPath.spaceType,
         parsedPath.resourceNames,
       );
-      const lastResource = resourcesChain[resourcesChain.length - 1];
+      const lastResource = last(resourcesChain);
       const visibleResources =
         await this.namespaceResourcesService.getAllSubResourcesByUser(
           userId,

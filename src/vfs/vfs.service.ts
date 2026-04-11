@@ -553,6 +553,113 @@ export class VFSService {
     );
   }
 
+  /**
+   * Create a folder by path
+   *  if the folder exists, throw the error.
+   *  the last part of the path is the folder name (without .md extension).
+   *  if the parent directories do not exist, they will be created automatically.
+   * @param namespaceId
+   * @param userId
+   * @param path
+   */
+  async createFolderByPath(
+    namespaceId: string,
+    userId: string,
+    path: string,
+  ): Promise<FileInfoDto> {
+    const parsedPath = VFSService.parsePath(path);
+
+    if (!parsedPath.spaceType) {
+      throw new AppException(
+        'teamspace or private is required',
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (!parsedPath.resourceNames || parsedPath.resourceNames.length === 0) {
+      throw new AppException(
+        'folder name is required',
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const folderName =
+      parsedPath.resourceNames[parsedPath.resourceNames.length - 1];
+
+    if (folderName.endsWith('.md')) {
+      throw new AppException(
+        'folder name must not end with .md',
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    let existsFlag: boolean = false;
+    try {
+      await this.getResourcesChainByParsedPath(
+        namespaceId,
+        userId,
+        parsedPath.spaceType,
+        parsedPath.resourceNames,
+      );
+      existsFlag = true;
+    } catch (err) {
+      if (!(err instanceof AppException && err.code === 'RESOURCE_NOT_FOUND')) {
+        throw err;
+      }
+    }
+    if (existsFlag) {
+      throw new AppException(
+        `${folderName} already exists`,
+        'RESOURCE_ALREADY_EXISTS',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    const parentResourceNames = parsedPath.resourceNames.slice(0, -1);
+
+    return await transaction(
+      this.dataSource.manager,
+      async (tx: Transaction) => {
+        // Get or create parent directories
+        const parentResourceIds = await this.getOrCreateParentDirectories(
+          namespaceId,
+          userId,
+          parsedPath.spaceType as SpaceType,
+          parentResourceNames,
+          tx,
+        );
+
+        const parentId = parentResourceIds[parentResourceIds.length - 1];
+
+        // Create the folder resource
+        const resource = await this.namespaceResourcesService.create(
+          userId,
+          namespaceId,
+          {
+            parentId,
+            resourceType: ResourceType.FOLDER,
+            name: folderName,
+          },
+          tx,
+          undefined,
+          false, // autoRenameOnConflict disabled for path-based folder creation
+        );
+
+        const fileInfoDto = new FileInfoDto();
+        fileInfoDto.id = resource.id;
+        fileInfoDto.name = resource.name;
+        fileInfoDto.path = parsedPath.path;
+        fileInfoDto.createdAt = resource.createdAt.toISOString();
+        fileInfoDto.updatedAt = resource.updatedAt.toISOString();
+        fileInfoDto.isDir = true;
+        return fileInfoDto;
+      },
+    );
+  }
+
   async getPath(
     resource: InternalResourceDto,
     isDir: boolean = false,
@@ -698,8 +805,8 @@ export class VFSService {
     userId: string,
     path: string,
     newParentPath: string,
-  ): Promise<boolean> {
-    const { resource } = await this.getResourceByPath(
+  ): Promise<FileInfoDto> {
+    const { resource, fileInfo } = await this.getResourceByPath(
       namespaceId,
       userId,
       path,
@@ -719,7 +826,15 @@ export class VFSService {
       userId,
       parentResource.id,
     );
-    return true;
+
+    // Fetch the updated resource to get the real updatedAt from db
+    const { fileInfo: fileInfoDto } = await this.getResourceByPath(
+      namespaceId,
+      userId,
+      `${newParentPath}/${fileInfo.name}`,
+      fileInfo.isDir ? ResourceType.FOLDER : ResourceType.DOC,
+    );
+    return fileInfoDto;
   }
 
   async getPathByResourceId(

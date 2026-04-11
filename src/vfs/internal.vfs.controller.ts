@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  Post,
   Put,
   Query,
 } from '@nestjs/common';
@@ -126,5 +127,16 @@ export class InternalVFSController {
       resourceId,
       isDir,
     );
+  }
+
+  @Public()
+  @Post('mkdir')
+  @HttpCode(HttpStatus.CREATED)
+  async createFolderByPath(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Body('path') path: string,
+  ) {
+    return await this.vfsService.createFolderByPath(namespaceId, userId, path);
   }
 }

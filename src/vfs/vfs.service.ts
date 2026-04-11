@@ -299,10 +299,7 @@ export class VFSService {
     namespaceId: string,
     userId: string,
     path: string,
-    targetResourceType:
-      | ResourceType.DOC
-      | ResourceType.FOLDER
-      | undefined = ResourceType.DOC,
+    targetResourceType?: ResourceType.DOC | ResourceType.FOLDER,
   ): Promise<{
     resource: ResourceDto;
     fileInfo: FileInfoDto;
@@ -371,6 +368,7 @@ export class VFSService {
       namespaceId,
       userId,
       path,
+      ResourceType.DOC,
     );
     return {
       ...fileInfo,
@@ -765,19 +763,18 @@ export class VFSService {
     namespaceId: string,
     userId: string,
     path: string,
-  ): Promise<boolean> {
-    const { resource } = await this.getResourceByPath(
+  ): Promise<FileInfoDto> {
+    const { resource, fileInfo } = await this.getResourceByPath(
       namespaceId,
       userId,
       path,
-      undefined,
     );
     await this.namespaceResourcesService.delete(
       userId,
       namespaceId,
       resource.id,
     );
-    return true;
+    return fileInfo;
   }
 
   async renameByPath(
@@ -785,12 +782,11 @@ export class VFSService {
     userId: string,
     path: string,
     newName: string,
-  ): Promise<boolean> {
+  ): Promise<FileInfoDto> {
     const { resource, fileInfo } = await this.getResourceByPath(
       namespaceId,
       userId,
       path,
-      undefined,
     );
 
     // If source is a doc (not a directory), new name must end with .md
@@ -812,7 +808,22 @@ export class VFSService {
       resource.id,
       { name: newName },
     );
-    return true;
+
+    // Build the updated file info with new name
+    const updatedFileInfo = new FileInfoDto();
+    updatedFileInfo.id = resource.id;
+    updatedFileInfo.name = fileInfo.isDir ? newName : `${newName}.md`;
+    // Update path: replace the last segment with new name
+    if (fileInfo.path) {
+      const pathParts = fileInfo.path.split('/');
+      pathParts[pathParts.length - 1] = updatedFileInfo.name;
+      updatedFileInfo.path = pathParts.join('/');
+    }
+    updatedFileInfo.createdAt = resource.created_at;
+    updatedFileInfo.updatedAt = new Date().toISOString();
+    updatedFileInfo.isDir = fileInfo.isDir;
+
+    return updatedFileInfo;
   }
 
   async moveByPath(
@@ -825,7 +836,6 @@ export class VFSService {
       namespaceId,
       userId,
       path,
-      undefined,
     );
 
     const { resource: parentResource } = await this.getResourceByPath(

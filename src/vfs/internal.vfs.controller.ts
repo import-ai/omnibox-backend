@@ -63,8 +63,14 @@ export class InternalVFSController {
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
     @Query('path') path: string,
+    @Query('recursive') recursive?: string,
   ) {
-    return await this.vfsService.deleteByPath(namespaceId, userId, path);
+    return await this.vfsService.deleteByPath(
+      namespaceId,
+      userId,
+      path,
+      recursive === 'true',
+    );
   }
 
   @Public()

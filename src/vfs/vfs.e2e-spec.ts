@@ -148,7 +148,7 @@ const testCases: TestCase[] = [
   },
   {
     index: 18,
-    expectedCode: 400,
+    expectedCode: 409,
     op: 'delete',
     body: { path: '/private/path/to' },
   },
@@ -239,6 +239,20 @@ const testCases: TestCase[] = [
     expectedCode: 200,
     op: 'filter',
     body: { path: '/', options: { name_pattern: 'test' } },
+  },
+  // delete folder with children using recursive option
+  {
+    index: 33,
+    expectedCode: 200,
+    op: 'delete',
+    body: { path: '/private/path/to', recursive: true },
+  },
+  // delete empty folder without recursive option - should succeed
+  {
+    index: 34,
+    expectedCode: 200,
+    op: 'delete',
+    body: { path: '/private/myfolder' },
   },
 ];
 
@@ -332,14 +346,20 @@ describe('VFS (e2e)', () => {
         throw new Error('body is required');
       }
       const path: string = testCase.body['path'];
+      const recursive: boolean = testCase.body['recursive'];
+
+      const query: Record<string, any> = { path };
+      if (recursive) {
+        query.recursive = 'true';
+      }
 
       const response = await client
         .delete(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
-        .query({ path })
+        .query(query)
         .expect(testCase.expectedCode);
 
       if (testCase.expectedCode === 200) {
-        // Delete returns boolean true, but serialized as empty object {} in JSON
+        // Delete returns FileInfoDto
         expect(response.body).toBeDefined();
       }
     } else if (testCase.op === 'rename') {

@@ -108,6 +108,138 @@ const testCases: TestCase[] = [
       new_parent_path: '/teamspace',
     },
   },
+  // mkdir operations
+  {
+    index: 12,
+    expectedCode: 201,
+    op: 'mkdir',
+    body: { path: '/private/myfolder' },
+  },
+  {
+    index: 13,
+    expectedCode: 201,
+    op: 'mkdir',
+    body: { path: '/private/path/to/newfolder' },
+  },
+  {
+    index: 14,
+    expectedCode: 400,
+    op: 'mkdir',
+    body: { path: '/newfolder' },
+  },
+  {
+    index: 15,
+    expectedCode: 400,
+    op: 'mkdir',
+    body: { path: '/private/folder.md' },
+  },
+  {
+    index: 16,
+    expectedCode: 409,
+    op: 'mkdir',
+    body: { path: '/private/myfolder' },
+  },
+  // delete operations
+  {
+    index: 17,
+    expectedCode: 200,
+    op: 'delete',
+    body: { path: '/private/path/to/hello.md' },
+  },
+  {
+    index: 18,
+    expectedCode: 400,
+    op: 'delete',
+    body: { path: '/private/path/to' },
+  },
+  {
+    index: 19,
+    expectedCode: 404,
+    op: 'delete',
+    body: { path: '/private/nonexistent/file.md' },
+  },
+  {
+    index: 20,
+    expectedCode: 400,
+    op: 'delete',
+    body: { path: '/private' },
+  },
+  // rename operations
+  {
+    index: 21,
+    expectedCode: 200,
+    op: 'rename',
+    body: { path: '/private/hello.md', new_name: 'renamed.md' },
+  },
+  {
+    index: 22,
+    expectedCode: 400,
+    op: 'rename',
+    body: { path: '/private/renamed.md', new_name: 'invalidname' },
+  },
+  {
+    index: 23,
+    expectedCode: 404,
+    op: 'rename',
+    body: { path: '/private/nonexistent.md', new_name: 'newname.md' },
+  },
+  // read operations
+  {
+    index: 24,
+    expectedCode: 200,
+    op: 'read',
+    body: { path: '/private/renamed.md' },
+  },
+  {
+    index: 25,
+    expectedCode: 400,
+    op: 'read',
+    body: { path: '/private' },
+  },
+  {
+    index: 26,
+    expectedCode: 404,
+    op: 'read',
+    body: { path: '/private/nonexistent.md' },
+  },
+  // list operations
+  {
+    index: 27,
+    expectedCode: 200,
+    op: 'list',
+    body: { path: '/private' },
+  },
+  {
+    index: 28,
+    expectedCode: 200,
+    op: 'list',
+    body: { path: '/private/path/to' },
+  },
+  {
+    index: 29,
+    expectedCode: 400,
+    op: 'list',
+    body: { path: '/private/renamed.md' },
+  },
+  {
+    index: 30,
+    expectedCode: 404,
+    op: 'list',
+    body: { path: '/private/nonexistent/path' },
+  },
+  // filter operations - using name_pattern to search
+  {
+    index: 31,
+    expectedCode: 200,
+    op: 'filter',
+    body: { path: '/private', options: { name_pattern: 'hello' } },
+  },
+  {
+    index: 32,
+    expectedCode: 200,
+    op: 'filter',
+    body: { path: '/', options: { name_pattern: 'test' } },
+  },
 ];
 
 describe('VFS (e2e)', () => {
@@ -175,6 +307,111 @@ describe('VFS (e2e)', () => {
         const newPath: string = `${new_parent_path}/${resourceName}`;
         expect(fileInfoDto.name).toEqual(resourceName);
         expect(fileInfoDto.path).toEqual(newPath);
+      }
+    } else if (testCase.op === 'mkdir') {
+      if (!testCase.body) {
+        throw new Error('body is required');
+      }
+      const path: string = testCase.body['path'];
+
+      const response = await client
+        .post(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/mkdir`)
+        .send({ path })
+        .expect(testCase.expectedCode);
+
+      if (testCase.expectedCode === 201) {
+        const parsedPath = VFSService.parsePath(path);
+        const folderName: string = last(parsedPath.resourceNames);
+        const fileInfoDto = plainToInstance(FileInfoDto, response.body);
+        expect(fileInfoDto.name).toEqual(folderName);
+        expect(fileInfoDto.path).toEqual(path);
+        expect(fileInfoDto.isDir).toEqual(true);
+      }
+    } else if (testCase.op === 'delete') {
+      if (!testCase.body) {
+        throw new Error('body is required');
+      }
+      const path: string = testCase.body['path'];
+
+      const response = await client
+        .delete(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
+        .query({ path })
+        .expect(testCase.expectedCode);
+
+      if (testCase.expectedCode === 200) {
+        // Delete returns boolean true, but serialized as empty object {} in JSON
+        expect(response.body).toBeDefined();
+      }
+    } else if (testCase.op === 'rename') {
+      if (!testCase.body) {
+        throw new Error('body is required');
+      }
+      const path: string = testCase.body['path'];
+      const new_name: string = testCase.body['new_name'];
+
+      const response = await client
+        .patch(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/rename`)
+        .send({ path, new_name })
+        .expect(testCase.expectedCode);
+
+      if (testCase.expectedCode === 200) {
+        // Rename returns boolean true, but serialized as empty object {} in JSON
+        expect(response.body).toBeDefined();
+      }
+    } else if (testCase.op === 'read') {
+      if (!testCase.body) {
+        throw new Error('body is required');
+      }
+      const path: string = testCase.body['path'];
+
+      const response = await client
+        .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
+        .query({ path })
+        .expect(testCase.expectedCode);
+
+      if (testCase.expectedCode === 200) {
+        const resourceDto = plainToInstance(GetResponseDto, response.body);
+        expect(resourceDto.path).toEqual(path);
+        expect(resourceDto.isDir).toEqual(false);
+        expect(resourceDto.content).toBeDefined();
+      }
+    } else if (testCase.op === 'list') {
+      if (!testCase.body) {
+        throw new Error('body is required');
+      }
+      const path: string = testCase.body['path'];
+
+      const response = await client
+        .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/list`)
+        .query({ path })
+        .expect(testCase.expectedCode);
+
+      if (testCase.expectedCode === 200) {
+        expect(response.body).toHaveProperty('resources');
+        expect(response.body).toHaveProperty('total');
+        expect(response.body).toHaveProperty('path');
+        expect(response.body.path).toEqual(path);
+      }
+    } else if (testCase.op === 'filter') {
+      if (!testCase.body) {
+        throw new Error('body is required');
+      }
+      const path: string = testCase.body['path'];
+      const options: Record<string, any> = testCase.body['options'];
+
+      const query: Record<string, any> = { path };
+      if (options) {
+        query.options = JSON.stringify(options);
+      }
+
+      const response = await client
+        .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/filter`)
+        .query(query)
+        .expect(testCase.expectedCode);
+
+      if (testCase.expectedCode === 200) {
+        expect(response.body).toHaveProperty('resources');
+        expect(response.body).toHaveProperty('total');
       }
     }
   });

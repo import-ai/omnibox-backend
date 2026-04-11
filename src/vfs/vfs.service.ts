@@ -763,7 +763,7 @@ export class VFSService {
     namespaceId: string,
     userId: string,
     path: string,
-    recursive?: boolean,
+    recursive: boolean,
   ): Promise<FileInfoDto> {
     const { resource, fileInfo } = await this.getResourceByPath(
       namespaceId,
@@ -771,20 +771,19 @@ export class VFSService {
       path,
     );
 
-    // Check if folder has children and recursive option is not set
-    if (fileInfo.isDir && !recursive) {
-      const hasChildren = await this.namespaceResourcesService.hasChildren(
-        userId,
-        namespaceId,
-        resource.id,
+    const hasChildren = await this.namespaceResourcesService.hasChildren(
+      userId,
+      namespaceId,
+      resource.id,
+    );
+
+    // Cannot delete resources that have children (even with recursive=true)
+    if (hasChildren && !recursive) {
+      throw new AppException(
+        'Resource has children and cannot be deleted',
+        'RESOURCE_HAS_CHILDREN',
+        HttpStatus.CONFLICT,
       );
-      if (hasChildren) {
-        throw new AppException(
-          'Folder has children, use recursive option to delete',
-          'FOLDER_HAS_CHILDREN',
-          HttpStatus.CONFLICT,
-        );
-      }
     }
 
     await this.namespaceResourcesService.delete(

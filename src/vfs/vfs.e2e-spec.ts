@@ -150,7 +150,7 @@ const testCases: TestCase[] = [
     index: 18,
     expectedCode: 409,
     op: 'delete',
-    body: { path: '/private/path/to' },
+    body: { path: '/private/path/to', recursive: false },
   },
   {
     index: 19,
@@ -240,14 +240,14 @@ const testCases: TestCase[] = [
     op: 'filter',
     body: { path: '/', options: { name_pattern: 'test' } },
   },
-  // delete folder with children using recursive option
+  // delete folder with children - should return 200 with recursive=true
   {
     index: 33,
     expectedCode: 200,
     op: 'delete',
     body: { path: '/private/path/to', recursive: true },
   },
-  // delete empty folder without recursive option - should succeed
+  // delete empty folder without children - should succeed
   {
     index: 34,
     expectedCode: 200,

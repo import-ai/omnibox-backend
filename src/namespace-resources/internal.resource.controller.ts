@@ -12,7 +12,7 @@ import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { FilesService } from 'omniboxd/files/files.service';
-import type { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 
 @Controller('internal/api/v1')

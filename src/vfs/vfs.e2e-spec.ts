@@ -256,6 +256,35 @@ const testCases: TestCase[] = [
   },
 ];
 
+async function getByPath(
+  client: TestClient,
+  path: string,
+): Promise<GetResponseDto> {
+  const response = await client
+    .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
+    .query({ path })
+    .expect(200);
+  return plainToInstance(GetResponseDto, response.body);
+}
+
+export async function createResourceByPath(
+  client: TestClient,
+  path: string,
+  content: string,
+) {
+  const response = await client
+    .put(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
+    .send({ path, content })
+    .expect(201);
+  const parsedPath = VFSService.parsePath(path);
+  const resourceName: string = last(parsedPath.resourceNames);
+  const fileInfoDto = plainToInstance(FileInfoDto, response.body);
+  expect(fileInfoDto.name).toEqual(resourceName);
+  expect(fileInfoDto.path).toEqual(path);
+  expect(fileInfoDto.isDir).toEqual(false);
+  return { fileInfo: fileInfoDto, resource: await getByPath(client, path) };
+}
+
 describe('VFS (e2e)', () => {
   let client: TestClient;
   const resource = { name: 'hello', content: 'Hello World!' };
@@ -268,14 +297,6 @@ describe('VFS (e2e)', () => {
     await client.close();
   });
 
-  async function getByPath(path: string): Promise<GetResponseDto> {
-    const response = await client
-      .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
-      .query({ path })
-      .expect(200);
-    return plainToInstance(GetResponseDto, response.body);
-  }
-
   test.each(testCases)('($index) $op $expectedCode', async (testCase) => {
     if (testCase.op === 'create') {
       if (!testCase.body) {
@@ -283,22 +304,18 @@ describe('VFS (e2e)', () => {
       }
       const path: string = testCase.body['path'];
       const content: string = testCase.body['content'] || resource.content;
-      const response = await client
-        .put(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
-        .send({ path, content })
-        .expect(testCase.expectedCode);
       if (testCase.expectedCode === 201) {
-        const parsedPath = VFSService.parsePath(path);
-        const resourceName: string = last(parsedPath.resourceNames);
-        const fileInfoDto = plainToInstance(FileInfoDto, response.body);
-        expect(fileInfoDto.name).toEqual(resourceName);
-        expect(fileInfoDto.path).toEqual(path);
-        expect(fileInfoDto.isDir).toEqual(false);
-        const resourceDto = await getByPath(path);
+        const { fileInfo: fileInfoDto, resource: resourceDto } =
+          await createResourceByPath(client, path, content);
         expect(resourceDto).toEqual({
           ...fileInfoDto,
           content: resource.content,
         } as GetResponseDto);
+      } else {
+        await client
+          .put(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
+          .send({ path, content })
+          .expect(testCase.expectedCode);
       }
     } else if (testCase.op === 'move') {
       if (!testCase.body) {

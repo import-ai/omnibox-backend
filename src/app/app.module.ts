@@ -8,6 +8,7 @@ import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.intercept
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { ResourceTagsModule } from 'omniboxd/resource-tags/resource-tags.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { UserModule } from 'omniboxd/user/user.module';
@@ -97,6 +98,7 @@ import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/17749658
 import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/1775666229211-deduplicate-resource-names';
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
 import { VFSModule } from 'omniboxd/vfs/vfs.module';
+import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -152,6 +154,8 @@ export class AppModule implements NestModule {
         TelemetryModule,
         KafkaModule,
         TagModule,
+        ResourceTagsModule,
+        VfsTagsModule,
         MailModule,
         AuthModule,
         UserModule,

@@ -1,5 +1,5 @@
 import { Tag } from 'omniboxd/tag/tag.entity';
-import { Repository, In, Like, EntityManager } from 'typeorm';
+import { EntityManager, In, Like, Repository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateTagDto } from 'omniboxd/tag/dto/create-tag.dto';
@@ -68,6 +68,32 @@ export class TagService {
     });
 
     return tags.map((tag) => TagDto.fromEntity(tag));
+  }
+
+  async getOrCreateTagByName(
+    namespaceId: string,
+    name: string,
+    manager?: EntityManager,
+  ): Promise<Tag> {
+    if (!name || name.length === 0) {
+      throw new Error('Empty name');
+    }
+    const repo = manager ? manager.getRepository(Tag) : this.tagRepository;
+    // Find existing tags
+    const existingTag = await repo.findOne({
+      where: {
+        namespaceId,
+        name: name,
+      },
+    });
+    if (existingTag) {
+      return existingTag;
+    }
+    const newTag = repo.create({
+      namespaceId,
+      name: name,
+    });
+    return await repo.save(newTag);
   }
 
   async getOrCreateTagsByNames(

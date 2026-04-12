@@ -415,6 +415,7 @@ export class ResourcesService {
         'createdAt',
         'updatedAt',
         'attrs',
+        'tagIds',
       ],
       where: {
         namespaceId,

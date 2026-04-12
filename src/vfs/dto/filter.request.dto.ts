@@ -3,10 +3,11 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { Expose, plainToInstance, Transform, Type } from 'class-transformer';
 import {
+  IsInt,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
+  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -67,12 +68,16 @@ export class VFSResourceFilterOptionsDto {
   @IsOptional()
   resourceTypes?: ResourceType[];
 
-  @IsNumber()
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   offset?: number;
 
-  @IsNumber()
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   limit?: number;
 }
 

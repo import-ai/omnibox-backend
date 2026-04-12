@@ -25,6 +25,11 @@ import { last } from 'omniboxd/utils/arrays';
 
 const tracer = trace.getTracer('VFSService');
 
+export enum VfsFileType {
+  MARKDOWN = 'MARKDOWN',
+  FOLDER = 'FOLDER',
+}
+
 @Injectable()
 export class VFSService {
   constructor(
@@ -299,7 +304,7 @@ export class VFSService {
     namespaceId: string,
     userId: string,
     path: string,
-    targetResourceType?: ResourceType.DOC | ResourceType.FOLDER,
+    targetResourceType?: VfsFileType.MARKDOWN | VfsFileType.FOLDER,
   ): Promise<{
     resource: ResourceDto;
     fileInfo: FileInfoDto;
@@ -331,7 +336,7 @@ export class VFSService {
 
     const lastResource: FileInfoDto = last(resources);
 
-    if (targetResourceType === ResourceType.DOC && lastResource.isDir) {
+    if (targetResourceType === VfsFileType.MARKDOWN && lastResource.isDir) {
       throw new AppException(
         `${lastResource.name} is a directory`,
         'INVALID_PATH',
@@ -339,7 +344,7 @@ export class VFSService {
       );
     }
 
-    if (targetResourceType === ResourceType.FOLDER && !lastResource.isDir) {
+    if (targetResourceType === VfsFileType.FOLDER && !lastResource.isDir) {
       throw new AppException(
         `${lastResource.name} is not a directory`,
         'INVALID_PATH',
@@ -368,7 +373,7 @@ export class VFSService {
       namespaceId,
       userId,
       path,
-      ResourceType.DOC,
+      VfsFileType.MARKDOWN,
     );
     return {
       ...fileInfo,
@@ -859,7 +864,7 @@ export class VFSService {
       namespaceId,
       userId,
       newParentPath,
-      ResourceType.FOLDER,
+      VfsFileType.FOLDER,
     );
 
     await this.namespaceResourcesService.move(
@@ -874,7 +879,7 @@ export class VFSService {
       namespaceId,
       userId,
       `${newParentPath}/${fileInfo.name}`,
-      fileInfo.isDir ? ResourceType.FOLDER : ResourceType.DOC,
+      fileInfo.isDir ? VfsFileType.FOLDER : VfsFileType.MARKDOWN,
     );
     return fileInfoDto;
   }

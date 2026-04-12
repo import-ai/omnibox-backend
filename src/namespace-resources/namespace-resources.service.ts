@@ -1117,11 +1117,13 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     includeRoot: boolean = false,
+    requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
   ): Promise<ResourceMetaDto[]> {
     const resources = await this.permissionsService.filterResourcesByPermission(
       userId,
       namespaceId,
       await this.resourcesService.getAllResources(namespaceId),
+      requiredPermission,
     );
     return resources.filter((res) => res.parentId !== null || includeRoot);
   }

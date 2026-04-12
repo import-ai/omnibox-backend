@@ -12,6 +12,19 @@ function customAlphabet(alphabet: string, size: number) {
   };
 }
 
+expect.extend({
+  withResponseFailedLog(received, expected, onFail) {
+    const pass = this.equals(received, expected);
+    if (!pass && onFail) {
+      onFail(received);
+    }
+    return {
+      pass,
+      message: () => `expected ${received} to equal ${expected}`,
+    };
+  },
+});
+
 jest.mock('nanoid', () => ({
   customAlphabet,
 }));

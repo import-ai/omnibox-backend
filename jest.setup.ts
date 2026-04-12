@@ -29,6 +29,8 @@ jest.mock('nanoid', () => ({
   customAlphabet,
 }));
 
+/**
+ * Don't mock, the mail related e2e test would failed.
 // Mock HandlebarsAdapter to prevent @css-inline native module from loading
 // which causes open handle issues in Jest
 jest.mock('@nestjs-modules/mailer/adapters/handlebars.adapter', () => ({
@@ -36,3 +38,4 @@ jest.mock('@nestjs-modules/mailer/adapters/handlebars.adapter', () => ({
     compile: jest.fn((template: string) => () => template),
   })),
 }));
+ **/

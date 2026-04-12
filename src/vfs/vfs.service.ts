@@ -102,7 +102,7 @@ export class VFSService {
     for (const resource of sortedResources) {
       let resourceName: string = resource.name;
       if (resourceName === '') {
-        resourceName = resource.id;
+        resourceName = `Untitled-${resource.id}`;
       }
       let cnt = 1;
       while (resourceName in map) {

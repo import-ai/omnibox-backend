@@ -1,14 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
 import {
   ResourceDto,
   SpaceType,
 } from 'omniboxd/namespace-resources/dto/resource.dto';
-import { TagService } from 'omniboxd/tag/tag.service';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { FilesService } from 'omniboxd/files/files.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
@@ -35,11 +31,7 @@ export class VFSService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly namespaceResourcesService: NamespaceResourcesService,
-    private readonly tagService: TagService,
     private readonly namespacesService: NamespacesService,
-    private readonly resourcesService: ResourcesService,
-    private readonly filesService: FilesService,
-    private readonly i18n: I18nService,
   ) {}
 
   /**
@@ -94,39 +86,20 @@ export class VFSService {
       entityManager,
     );
     const fileInfos: FileInfoDto[] = [];
-    const map: Record<string, boolean> = {};
     // Sort by create time asc
     const sortedResources = resources.sort((a, b) => {
       return a.createdAt.getTime() - b.createdAt.getTime();
     });
     for (const resource of sortedResources) {
-      let resourceName: string = resource.name;
-      if (resourceName === '') {
-        resourceName = `Untitled-${resource.id}`;
-      }
-      let cnt = 1;
-      while (resourceName in map) {
-        resourceName = `${resourceName} (${cnt++})`;
-      }
       if (FileInfoDto.isDir(resource)) {
-        map[resourceName] = true;
-        const fileInfo = FileInfoDto.fromResourceSummaryDto(
-          resource,
-          parentPath,
+        fileInfos.push(
+          FileInfoDto.fromResourceSummaryDto(resource, true, parentPath),
         );
-        fileInfo.name = resourceName;
-        fileInfos.push(fileInfo);
       }
       if (resource.resourceType !== ResourceType.FOLDER) {
-        map[`${resourceName}.md`] = true;
-        const fileInfo = FileInfoDto.fromResourceSummaryDto(
-          resource,
-          parentPath,
+        fileInfos.push(
+          FileInfoDto.fromResourceSummaryDto(resource, false, parentPath),
         );
-        fileInfo.name = `${fileInfo.name}.md`;
-        fileInfo.path = `${fileInfo.path}.md`;
-        fileInfo.isDir = false;
-        fileInfos.push(fileInfo);
       }
     }
     return fileInfos;
@@ -562,7 +535,11 @@ export class VFSService {
 
         const fileInfoDto = new FileInfoDto();
         fileInfoDto.id = resource.id;
-        fileInfoDto.name = resource.name + '.md';
+        fileInfoDto.name = FileInfoDto.getName(
+          resource.name,
+          resource.id,
+          false,
+        );
         fileInfoDto.path = parsedPath.path;
         fileInfoDto.createdAt = resource.createdAt.toISOString();
         fileInfoDto.updatedAt = resource.updatedAt.toISOString();
@@ -688,7 +665,9 @@ export class VFSService {
         continue;
       }
       if (parentResource.parentId !== null) {
-        parts.push(parentResource.name);
+        parts.push(
+          FileInfoDto.getName(parentResource.name, parentResource.id, isDir),
+        );
       } else {
         const spaceType = await this.namespaceResourcesService.getSpaceType(
           resource.namespaceId,
@@ -708,7 +687,7 @@ export class VFSService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    parts.push(resource.name + (isDir ? '' : '.md'));
+    parts.push(FileInfoDto.getName(resource.name, resource.id, isDir));
     return '/' + parts.join('/');
   }
 
@@ -755,6 +734,7 @@ export class VFSService {
     for (const resource of filteredResources) {
       const fileInfoDo = new FileInfoDto();
       fileInfoDo.id = resource.id;
+      fileInfoDo.name = FileInfoDto.getName(resource.name, resource.id, false);
       fileInfoDo.path = await this.getPath(resource);
       fileInfoDo.createdAt = resource.createdAt;
       fileInfoDo.updatedAt = resource.updatedAt;
@@ -805,11 +785,13 @@ export class VFSService {
     path: string,
     newName: string,
   ): Promise<FileInfoDto> {
-    const { resource, fileInfo } = await this.getResourceByPath(
+    const { resource, fileInfo, parsedPath } = await this.getResourceByPath(
       namespaceId,
       userId,
       path,
     );
+
+    let dbName: string = newName;
 
     // If source is a doc (not a directory), new name must end with .md
     if (!fileInfo.isDir) {
@@ -821,31 +803,32 @@ export class VFSService {
         );
       }
       // Strip .md suffix before saving to database
-      newName = newName.slice(0, -3);
+      dbName = newName.slice(0, -3);
     }
 
     await this.namespaceResourcesService.update(
       namespaceId,
       userId,
       resource.id,
-      { name: newName },
+      { name: dbName },
     );
 
-    // Build the updated file info with new name
-    const updatedFileInfo = new FileInfoDto();
-    updatedFileInfo.id = resource.id;
-    updatedFileInfo.name = fileInfo.isDir ? newName : `${newName}.md`;
-    // Update path: replace the last segment with new name
-    if (fileInfo.path) {
-      const pathParts = fileInfo.path.split('/');
-      pathParts[pathParts.length - 1] = updatedFileInfo.name;
-      updatedFileInfo.path = pathParts.join('/');
-    }
-    updatedFileInfo.createdAt = resource.created_at;
-    updatedFileInfo.updatedAt = new Date().toISOString();
-    updatedFileInfo.isDir = fileInfo.isDir;
+    const newPath: string =
+      '/' +
+      [
+        parsedPath.spaceType,
+        ...(parsedPath.resourceNames ?? []).slice(0, -1),
+        newName,
+      ].join('/');
 
-    return updatedFileInfo;
+    // Fetch the updated resource to get the real updatedAt from db
+    const { fileInfo: fileInfoDto } = await this.getResourceByPath(
+      namespaceId,
+      userId,
+      newPath,
+      fileInfo.isDir ? VfsFileType.FOLDER : VfsFileType.MARKDOWN,
+    );
+    return fileInfoDto;
   }
 
   async moveByPath(

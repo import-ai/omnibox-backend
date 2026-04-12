@@ -125,13 +125,13 @@ export class InternalVFSController {
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
     @Query('resource_id') resourceId: string,
-    @Query('is_dir') isDir: boolean,
+    @Query('is_dir') isDir: string,
   ) {
     return await this.vfsService.getPathByResourceId(
       namespaceId,
       userId,
       resourceId,
-      isDir,
+      isDir === 'true',
     );
   }
 

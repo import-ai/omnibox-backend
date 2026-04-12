@@ -151,6 +151,7 @@ export class StreamService {
           chunk,
         );
 
+        delete chunk.attrs?.context;
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
         const message: Message = await this.messagesService.update(
@@ -209,7 +210,10 @@ export class StreamService {
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
-      if (context?.message?.role !== OpenAIMessageRole.SYSTEM) {
+      if (
+        chunk.response_type !== 'checkpoint' &&
+        context?.message?.role !== OpenAIMessageRole.SYSTEM
+      ) {
         subscriber.next({ data: JSON.stringify(chunk) });
       }
     };

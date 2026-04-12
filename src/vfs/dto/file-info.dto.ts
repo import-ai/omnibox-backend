@@ -23,6 +23,20 @@ export class FileInfoDto {
   @Expose({ name: 'mime_type' })
   mimeType?: string;
 
+  static getName(
+    resourceName: string,
+    resourceId: string,
+    getDir: boolean,
+  ): string {
+    if (resourceName === '') {
+      resourceName = `Untitled-${resourceId}`;
+    }
+    if (!getDir) {
+      resourceName = `${resourceName}.md`;
+    }
+    return resourceName;
+  }
+
   static isDir(resource: ResourceSummaryDto): boolean {
     return (
       resource.hasChildren || resource.resourceType === ResourceType.FOLDER
@@ -31,17 +45,21 @@ export class FileInfoDto {
 
   static fromResourceSummaryDto(
     resource: ResourceSummaryDto,
+    getDir: boolean,
     parentPath?: string,
   ): FileInfoDto {
     const fileInfo = new FileInfoDto();
     fileInfo.id = resource.id;
-    fileInfo.name = resource.name || resource.id;
+    fileInfo.name = FileInfoDto.getName(resource.name, resource.id, getDir);
     if (parentPath) {
-      fileInfo.path = `${parentPath}/${resource.name}`;
+      fileInfo.path = `${parentPath}/${fileInfo.name}`;
     }
     fileInfo.createdAt = resource.createdAt.toISOString();
     fileInfo.updatedAt = resource.updatedAt.toISOString();
-    fileInfo.isDir = FileInfoDto.isDir(resource);
+    if (!FileInfoDto.isDir(resource) && getDir) {
+      throw new Error(`${resource.id} is not a directory`);
+    }
+    fileInfo.isDir = getDir;
     return fileInfo;
   }
 }

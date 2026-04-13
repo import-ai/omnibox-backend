@@ -196,6 +196,16 @@ export class MailService {
     const lang = userLang || I18nContext.current()?.lang;
     const subject = this.i18n.t('mail.subjects.accountDeletion', { lang });
 
+    console.log(
+      '--->',
+      email,
+      username,
+      userLang,
+      lang,
+      subject,
+      confirmationUrl,
+    );
+
     try {
       await this.mailerService.sendMail({
         to: email,

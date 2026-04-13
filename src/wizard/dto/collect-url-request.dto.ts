@@ -1,6 +1,7 @@
 import { IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Expose } from 'class-transformer';
 
 export class BaseCollectUrlRequestDto {
   @ApiProperty({
@@ -54,5 +55,12 @@ export class CollectUrlResponseDto {
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.resource_id.isNotEmpty'),
   })
-  resource_id: string;
+  @Expose({ name: 'resource_id' })
+  resourceId: string;
+
+  static fromResourceId(resourceId: string): CollectUrlResponseDto {
+    const dto = new CollectUrlResponseDto();
+    dto.resourceId = resourceId;
+    return dto;
+  }
 }

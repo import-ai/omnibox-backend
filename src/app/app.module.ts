@@ -99,6 +99,7 @@ import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/17756
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
 import { VFSModule } from 'omniboxd/vfs/vfs.module';
 import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
+import { VfsWizardService } from 'omniboxd/vfs-wizard/vfs-wizard.service';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -186,6 +187,7 @@ export class AppModule implements NestModule {
         AppConfigModule,
         WizardUrlProviderModule,
         VFSModule,
+        VfsWizardService,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

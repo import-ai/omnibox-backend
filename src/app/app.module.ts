@@ -74,6 +74,7 @@ import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
+import { ResourceExportsModule } from 'omniboxd/resource-exports/resource-exports.module';
 import { SubscribeMessageModule } from 'omniboxd/subscribe-message/subscribe-message.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
 import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
@@ -85,6 +86,8 @@ import { AddNamespaceIdIndexToResources1766053289000 } from 'omniboxd/migrations
 import { AddStatusToTasks1766127168000 } from 'omniboxd/migrations/1766127168000-add-status-to-tasks';
 import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/1767441415360-add-permanent-deleted-at';
 import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/1768483850604-add-phone-unique-constraint';
+import { ResourceExports1768556224157 } from 'omniboxd/migrations/1768556224157-resource-exports';
+import { AddExportCanceledStatus1768559000000 } from 'omniboxd/migrations/1768559000000-add-export-canceled-status';
 import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oauth-provider';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
 import { StorageUsages1768556182000 } from 'omniboxd/migrations/1768556182000-storage-usages';
@@ -176,6 +179,7 @@ export class AppModule implements NestModule {
         WebSocketModule,
         FilesModule,
         OpenAPIModule,
+        ResourceExportsModule,
         SubscribeMessageModule,
         AppConfigModule,
         WizardUrlProviderModule,
@@ -236,6 +240,8 @@ export class AppModule implements NestModule {
               AddStatusToTasks1766127168000,
               AddPermanentDeletedAt1767441415360,
               AddPhoneUniqueConstraint1768483850604,
+              ResourceExports1768556224157,
+              AddExportCanceledStatus1768559000000,
               OAuthProvider1768569496828,
               StorageUsages1768556182000,
               AddAttachmentSize1768560746946,

@@ -5,7 +5,7 @@ import { VfsWizardService } from 'omniboxd/vfs-wizard/vfs-wizard.service';
 import { VfsCollectUrlRequestDto } from 'omniboxd/vfs-wizard/dto/vfs-collect-url.request.dto';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 
-@Controller('internal/api/v1/namespaces/:namespaceId/wizard')
+@Controller('internal/api/v1/namespaces/:namespaceId/vfs/wizard')
 export class InternalVfsWizardController {
   constructor(private readonly vfsWizardService: VfsWizardService) {}
 

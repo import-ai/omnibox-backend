@@ -13,7 +13,7 @@ import { ResourceTagRequestDto } from 'omniboxd/vfs-tags/dto/resource-tag-reques
 import { VfsTagsService } from 'omniboxd/vfs-tags/vfs-tags.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
-@Controller('internal/api/v1/namespaces/:namespaceId/vfs/resource-tags')
+@Controller('internal/api/v1/namespaces/:namespaceId/vfs/tags')
 export class InternalVfsTagsController {
   constructor(private readonly vfsTagsService: VfsTagsService) {}
 

@@ -1,9 +1,17 @@
 import { Expose } from 'class-transformer';
 import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
+import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 export class FileInfoDto {
   id: string;
+
+  @Expose({ name: 'parent_id' })
+  parentId?: string | null;
 
   name?: string;
 
@@ -43,23 +51,71 @@ export class FileInfoDto {
     );
   }
 
+  static fromResource(
+    resource: Resource,
+    path: string,
+    getDir: boolean,
+  ): FileInfoDto {
+    const dto = new FileInfoDto();
+    dto.id = resource.id;
+    dto.parentId = resource.parentId;
+    dto.name = FileInfoDto.getName(resource.name, resource.id, getDir);
+    dto.path = path;
+    dto.createdAt = resource.createdAt.toISOString();
+    dto.updatedAt = resource.updatedAt.toISOString();
+    dto.isDir = getDir;
+    return dto;
+  }
+
+  static fromRootResourceMetoDto(
+    name: string,
+    resource: ResourceMetaDto,
+  ): FileInfoDto {
+    const dto = new FileInfoDto();
+    dto.id = resource.id;
+    dto.parentId = resource.parentId;
+    dto.name = name;
+    dto.path = `/${name}`;
+    dto.createdAt = resource.createdAt.toISOString();
+    dto.updatedAt = resource.updatedAt.toISOString();
+    dto.isDir = true;
+    return dto;
+  }
+
+  static fromInternalResourceDto(
+    resource: InternalResourceDto,
+    path: string,
+    getDir: boolean,
+  ): FileInfoDto {
+    const dto = new FileInfoDto();
+    dto.id = resource.id;
+    dto.parentId = resource.parentId;
+    dto.name = FileInfoDto.getName(resource.name, resource.id, getDir);
+    dto.path = path;
+    dto.createdAt = resource.createdAt;
+    dto.updatedAt = resource.updatedAt;
+    dto.isDir = getDir;
+    return dto;
+  }
+
   static fromResourceSummaryDto(
     resource: ResourceSummaryDto,
     getDir: boolean,
     parentPath?: string,
   ): FileInfoDto {
-    const fileInfo = new FileInfoDto();
-    fileInfo.id = resource.id;
-    fileInfo.name = FileInfoDto.getName(resource.name, resource.id, getDir);
+    const dto = new FileInfoDto();
+    dto.id = resource.id;
+    dto.parentId = resource.parentId;
+    dto.name = FileInfoDto.getName(resource.name, resource.id, getDir);
     if (parentPath) {
-      fileInfo.path = `${parentPath}/${fileInfo.name}`;
+      dto.path = `${parentPath}/${dto.name}`;
     }
-    fileInfo.createdAt = resource.createdAt.toISOString();
-    fileInfo.updatedAt = resource.updatedAt.toISOString();
+    dto.createdAt = resource.createdAt.toISOString();
+    dto.updatedAt = resource.updatedAt.toISOString();
     if (!FileInfoDto.isDir(resource) && getDir) {
       throw new Error(`${resource.id} is not a directory`);
     }
-    fileInfo.isDir = getDir;
-    return fileInfo;
+    dto.isDir = getDir;
+    return dto;
   }
 }

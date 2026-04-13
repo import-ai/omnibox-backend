@@ -49,12 +49,19 @@ const testCases: TestCase[] = [
       content: 'hello',
     },
   },
+  /**
+   * /private/hello.md
+   */
   {
     index: 1,
     expectedCode: 201,
     op: 'create',
     body: { path: '/private/path/to/hello.md', content: 'hello' },
   },
+  /**
+   * /private/hello.md
+   * /private/path/to/hello.md
+   */
   {
     index: 2,
     expectedCode: 400,
@@ -123,13 +130,17 @@ const testCases: TestCase[] = [
   },
   {
     index: 11,
-    expectedCode: 400,
+    expectedCode: 200,
     op: 'move',
     body: {
       path: '/private/hello.md',
       new_parent_path: '/teamspace',
     },
   },
+  /**
+   * /teamspace/hello.md
+   * /private/path/to/hello.md
+   */
   // mkdir operations
   {
     index: 12,
@@ -137,12 +148,23 @@ const testCases: TestCase[] = [
     op: 'mkdir',
     body: { path: '/private/myfolder' },
   },
+  /**
+   * /teamspace/hello.md
+   * /private/path/to/hello.md
+   * /private/myfolder
+   */
   {
     index: 13,
     expectedCode: 201,
     op: 'mkdir',
     body: { path: '/private/path/to/newfolder' },
   },
+  /**
+   * /teamspace/hello.md
+   * /private/path/to/hello.md
+   * /private/myfolder
+   * /private/path/to/newfolder
+   */
   {
     index: 14,
     expectedCode: 400,
@@ -168,6 +190,11 @@ const testCases: TestCase[] = [
     op: 'delete',
     body: { path: '/private/path/to/hello.md' },
   },
+  /**
+   * /teamspace/hello.md
+   * /private/myfolder
+   * /private/path/to/newfolder
+   */
   {
     index: 18,
     expectedCode: 409,
@@ -191,13 +218,18 @@ const testCases: TestCase[] = [
     index: 21,
     expectedCode: 200,
     op: 'rename',
-    body: { path: '/private/hello.md', new_name: 'renamed.md' },
+    body: { path: '/teamspace/hello.md', new_name: 'renamed.md' },
   },
+  /**
+   * /teamspace/renamed.md
+   * /private/myfolder
+   * /private/path/to/newfolder
+   */
   {
     index: 22,
     expectedCode: 400,
     op: 'rename',
-    body: { path: '/private/renamed.md', new_name: 'invalidname' },
+    body: { path: '/teamspace/renamed.md', new_name: 'invalidname' },
   },
   {
     index: 23,
@@ -210,7 +242,7 @@ const testCases: TestCase[] = [
     index: 24,
     expectedCode: 200,
     op: 'read',
-    body: { path: '/private/renamed.md' },
+    body: { path: '/teamspace/renamed.md' },
   },
   {
     index: 25,
@@ -241,7 +273,7 @@ const testCases: TestCase[] = [
     index: 29,
     expectedCode: 400,
     op: 'list',
-    body: { path: '/private/renamed.md' },
+    body: { path: '/teamspace/renamed.md' },
   },
   {
     index: 30,
@@ -269,12 +301,21 @@ const testCases: TestCase[] = [
     op: 'delete',
     body: { path: '/private/path/to', recursive: true },
   },
-  // delete empty folder without children - should succeed
   {
     index: 34,
     expectedCode: 200,
+    op: 'move',
+    body: {
+      path: '/private/myfolder',
+      new_parent_path: '/teamspace',
+    },
+  },
+  // delete empty folder without children - should succeed
+  {
+    index: 35,
+    expectedCode: 200,
     op: 'delete',
-    body: { path: '/private/myfolder' },
+    body: { path: '/teamspace/myfolder' },
   },
 ];
 

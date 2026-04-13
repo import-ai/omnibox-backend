@@ -3,7 +3,7 @@ import { DataSource } from 'typeorm';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { VfsFileType, VFSService } from 'omniboxd/vfs/vfs.service';
+import { VFSService } from 'omniboxd/vfs/vfs.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
@@ -23,12 +23,18 @@ export class VfsTagsService {
     tagName: string,
   ): Promise<TagDto[]> {
     return await transaction(this.dataSource.manager, async (tx) => {
-      const { resource } = await this.vfsService.getResourceByPath(
+      const { resource } = await this.vfsService.getResourceDtoByPath(
         namespaceId,
         userId,
         mdPath,
-        VfsFileType.MARKDOWN,
       );
+      if (!resource.parent_id) {
+        throw new AppException(
+          'can not add tag to root resource',
+          'INVALID_PATH',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
       if (resource.tags.map((tag) => tag.name).includes(tagName)) {
         throw new AppException(
           `${mdPath} already has tag ${tagName}`,
@@ -62,12 +68,18 @@ export class VfsTagsService {
     tagName: string,
   ): Promise<TagDto[]> {
     return await transaction(this.dataSource.manager, async (tx) => {
-      const { resource } = await this.vfsService.getResourceByPath(
+      const { resource } = await this.vfsService.getResourceDtoByPath(
         namespaceId,
         userId,
         mdPath,
-        VfsFileType.MARKDOWN,
       );
+      if (!resource.parent_id) {
+        throw new AppException(
+          'can not remove tag from root resource',
+          'INVALID_PATH',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
       if (resource.tags.map((tag) => tag.name).includes(tagName)) {
         const newTags = resource.tags.filter((tag) => tag.name !== tagName);
         await this.resourcesService.updateResource(

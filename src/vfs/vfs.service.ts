@@ -125,10 +125,10 @@ export class VFSService {
     if (resourceNames.length === 0) {
       return resources;
     }
-    const lastResource: FileInfoDto = last(resources);
-    if (!lastResource.isDir) {
+    const parentResource: FileInfoDto = last(resources);
+    if (!parentResource.isDir) {
       throw new AppException(
-        `${lastResource.name} is not a directory`,
+        `${parentResource.name} is not a directory`,
         'INVALID_PATH',
         HttpStatus.BAD_REQUEST,
       );
@@ -136,7 +136,7 @@ export class VFSService {
     const resourceName: string = resourceNames[0];
     const children: FileInfoDto[] = await this.listChildrenByResourceId(
       namespaceId,
-      lastResource.id,
+      parentResource.id,
       userId,
       parentPath,
     );
@@ -158,17 +158,6 @@ export class VFSService {
     );
   }
 
-  static rootDir(name: string, resource: ResourceMetaDto): FileInfoDto {
-    const fileInfo = new FileInfoDto();
-    fileInfo.id = resource.id;
-    fileInfo.name = name;
-    fileInfo.path = `/${name}`;
-    fileInfo.createdAt = resource.createdAt.toISOString();
-    fileInfo.updatedAt = resource.updatedAt.toISOString();
-    fileInfo.isDir = true;
-    return fileInfo;
-  }
-
   /**
    * Get resources chain from root to target path
    * @param namespaceId
@@ -186,11 +175,17 @@ export class VFSService {
     if (spaceType === SpaceType.PRIVATE) {
       const privateRootResource: ResourceMetaDto =
         await this.namespacesService.getPrivateRoot(userId, namespaceId);
-      rootResource = VFSService.rootDir('private', privateRootResource);
+      rootResource = FileInfoDto.fromRootResourceMetoDto(
+        'private',
+        privateRootResource,
+      );
     } else {
       const teamRootResource: ResourceMetaDto =
         await this.namespacesService.getTeamspaceRoot(namespaceId);
-      rootResource = VFSService.rootDir('teamspace', teamRootResource);
+      rootResource = FileInfoDto.fromRootResourceMetoDto(
+        'teamspace',
+        teamRootResource,
+      );
     }
 
     return await this.getResourcesChainByParsedPathDfs(
@@ -259,28 +254,27 @@ export class VFSService {
       id: namespaceId,
       path: '/',
       resources: [
-        VFSService.rootDir('private', privateRootResource),
-        VFSService.rootDir('teamspace', teamRootResource),
+        FileInfoDto.fromRootResourceMetoDto('private', privateRootResource),
+        FileInfoDto.fromRootResourceMetoDto('teamspace', teamRootResource),
       ],
       total: 2,
     } as listResponseDto;
   }
 
   /**
-   * Get resource and parsedPath from path
+   * Get fileInfo and parsedPath from path
    * @param namespaceId
    * @param userId
    * @param path
    * @param targetResourceType Expired resource type
-   * @returns { ResourceDto, ParsedPathDo }
+   * @returns { FileInfoDto, ParsedPathDo }
    */
-  async getResourceByPath(
+  async getFileInfoDtoByPath(
     namespaceId: string,
     userId: string,
     path: string,
     targetResourceType?: VfsFileType.MARKDOWN | VfsFileType.FOLDER,
   ): Promise<{
-    resource: ResourceDto;
     fileInfo: FileInfoDto;
     parsedPath: ParsedPathDo;
   }> {
@@ -293,7 +287,10 @@ export class VFSService {
       );
     }
 
-    if (!parsedPath.resourceNames || parsedPath.resourceNames.length === 0) {
+    if (
+      (!parsedPath.resourceNames || parsedPath.resourceNames.length === 0) &&
+      targetResourceType === VfsFileType.MARKDOWN
+    ) {
       throw new AppException(
         `${parsedPath.spaceType} is a directory`,
         'INVALID_PATH',
@@ -326,14 +323,50 @@ export class VFSService {
       );
     }
 
+    return { fileInfo: lastResource, parsedPath };
+  }
+
+  /**
+   * Get resource, fileInfo and parsedPath from path
+   * @param namespaceId
+   * @param userId
+   * @param path
+   * @param targetResourceType Expired resource type
+   * @returns { ResourceDto, FileInfoDto, ParsedPathDo }
+   */
+  async getResourceDtoByPath(
+    namespaceId: string,
+    userId: string,
+    path: string,
+    targetResourceType?: VfsFileType.MARKDOWN | VfsFileType.FOLDER,
+  ): Promise<{
+    resource: ResourceDto;
+    fileInfo: FileInfoDto;
+    parsedPath: ParsedPathDo;
+  }> {
+    if ((VFSService.parsePath(path).resourceNames ?? []).length === 0) {
+      throw new AppException(
+        'can not get root resource',
+        'INVALID_PATH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const { fileInfo, parsedPath } = await this.getFileInfoDtoByPath(
+      namespaceId,
+      userId,
+      path,
+      targetResourceType,
+    );
+
     const resource: ResourceDto =
       await this.namespaceResourcesService.getResource({
         userId,
         namespaceId,
-        resourceId: lastResource.id,
+        resourceId: fileInfo.id,
       });
 
-    return { resource, fileInfo: lastResource, parsedPath };
+    return { resource, fileInfo, parsedPath };
   }
 
   /**
@@ -343,7 +376,7 @@ export class VFSService {
    * @param path
    */
   async getContentByPath(namespaceId: string, userId: string, path: string) {
-    const { resource, fileInfo } = await this.getResourceByPath(
+    const { resource, fileInfo } = await this.getResourceDtoByPath(
       namespaceId,
       userId,
       path,
@@ -534,18 +567,7 @@ export class VFSService {
           false, // autoRenameOnConflict disabled for path-based file creation
         );
 
-        const fileInfoDto = new FileInfoDto();
-        fileInfoDto.id = resource.id;
-        fileInfoDto.name = FileInfoDto.getName(
-          resource.name,
-          resource.id,
-          false,
-        );
-        fileInfoDto.path = parsedPath.path;
-        fileInfoDto.createdAt = resource.createdAt.toISOString();
-        fileInfoDto.updatedAt = resource.updatedAt.toISOString();
-        fileInfoDto.isDir = false;
-        return fileInfoDto;
+        return FileInfoDto.fromResource(resource, parsedPath.path, false);
       },
     );
   }
@@ -644,21 +666,14 @@ export class VFSService {
           false, // autoRenameOnConflict disabled for path-based folder creation
         );
 
-        const fileInfoDto = new FileInfoDto();
-        fileInfoDto.id = resource.id;
-        fileInfoDto.name = resource.name;
-        fileInfoDto.path = parsedPath.path;
-        fileInfoDto.createdAt = resource.createdAt.toISOString();
-        fileInfoDto.updatedAt = resource.updatedAt.toISOString();
-        fileInfoDto.isDir = true;
-        return fileInfoDto;
+        return FileInfoDto.fromResource(resource, parsedPath.path, true);
       },
     );
   }
 
   async getPath(
     resource: InternalResourceDto,
-    isDir: boolean = false,
+    getDir: boolean = false,
   ): Promise<string> {
     const parts: string[] = [];
     for (const parentResource of resource.path) {
@@ -667,7 +682,7 @@ export class VFSService {
       }
       if (parentResource.parentId !== null) {
         parts.push(
-          FileInfoDto.getName(parentResource.name, parentResource.id, isDir),
+          FileInfoDto.getName(parentResource.name, parentResource.id, getDir),
         );
       } else {
         const spaceType = await this.namespaceResourcesService.getSpaceType(
@@ -681,14 +696,14 @@ export class VFSService {
         }
       }
     }
-    if (resource.resourceType === ResourceType.FOLDER && !isDir) {
+    if (resource.resourceType === ResourceType.FOLDER && !getDir) {
       throw new AppException(
         `${resource.name} is a folder`,
         'INVALID_PATH',
         HttpStatus.BAD_REQUEST,
       );
     }
-    parts.push(FileInfoDto.getName(resource.name, resource.id, isDir));
+    parts.push(FileInfoDto.getName(resource.name, resource.id, getDir));
     return '/' + parts.join('/');
   }
 
@@ -733,13 +748,11 @@ export class VFSService {
     const fileInfoDos: FileInfoDto[] = [];
 
     for (const resource of filteredResources) {
-      const fileInfoDo = new FileInfoDto();
-      fileInfoDo.id = resource.id;
-      fileInfoDo.name = FileInfoDto.getName(resource.name, resource.id, false);
-      fileInfoDo.path = await this.getPath(resource);
-      fileInfoDo.createdAt = resource.createdAt;
-      fileInfoDo.updatedAt = resource.updatedAt;
-      fileInfoDo.isDir = false;
+      const fileInfoDo = FileInfoDto.fromInternalResourceDto(
+        resource,
+        await this.getPath(resource, false),
+        false,
+      );
       fileInfoDos.push(fileInfoDo);
     }
     return { resources: fileInfoDos, total };
@@ -751,16 +764,24 @@ export class VFSService {
     path: string,
     recursive: boolean,
   ): Promise<FileInfoDto> {
-    const { resource, fileInfo } = await this.getResourceByPath(
+    const { fileInfo } = await this.getFileInfoDtoByPath(
       namespaceId,
       userId,
       path,
     );
 
+    if (!fileInfo.parentId) {
+      throw new AppException(
+        'Cannot delete root directory',
+        'CANNOT_DELETE_ROOT_DIRECTORY',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const hasChildren = await this.namespaceResourcesService.hasChildren(
       userId,
       namespaceId,
-      resource.id,
+      fileInfo.id,
     );
 
     // Cannot delete resources that have children (even with recursive=true)
@@ -775,7 +796,7 @@ export class VFSService {
     await this.namespaceResourcesService.delete(
       userId,
       namespaceId,
-      resource.id,
+      fileInfo.id,
     );
     return fileInfo;
   }
@@ -786,7 +807,7 @@ export class VFSService {
     path: string,
     newName: string,
   ): Promise<FileInfoDto> {
-    const { resource, fileInfo, parsedPath } = await this.getResourceByPath(
+    const { fileInfo, parsedPath } = await this.getFileInfoDtoByPath(
       namespaceId,
       userId,
       path,
@@ -810,7 +831,7 @@ export class VFSService {
     await this.namespaceResourcesService.update(
       namespaceId,
       userId,
-      resource.id,
+      fileInfo.id,
       { name: dbName },
     );
 
@@ -823,7 +844,7 @@ export class VFSService {
       ].join('/');
 
     // Fetch the updated resource to get the real updatedAt from db
-    const { fileInfo: fileInfoDto } = await this.getResourceByPath(
+    const { fileInfo: fileInfoDto } = await this.getFileInfoDtoByPath(
       namespaceId,
       userId,
       newPath,
@@ -838,13 +859,21 @@ export class VFSService {
     path: string,
     newParentPath: string,
   ): Promise<FileInfoDto> {
-    const { resource, fileInfo } = await this.getResourceByPath(
+    const { fileInfo: resource } = await this.getFileInfoDtoByPath(
       namespaceId,
       userId,
       path,
     );
 
-    const { resource: parentResource } = await this.getResourceByPath(
+    if (!resource.parentId) {
+      throw new AppException(
+        'Cannot move root resource',
+        'CANNOT_MOVE_ROOT_RESOURCE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const { fileInfo: parentResource } = await this.getFileInfoDtoByPath(
       namespaceId,
       userId,
       newParentPath,
@@ -859,11 +888,11 @@ export class VFSService {
     );
 
     // Fetch the updated resource to get the real updatedAt from db
-    const { fileInfo: fileInfoDto } = await this.getResourceByPath(
+    const { fileInfo: fileInfoDto } = await this.getFileInfoDtoByPath(
       namespaceId,
       userId,
-      `${newParentPath}/${fileInfo.name}`,
-      fileInfo.isDir ? VfsFileType.FOLDER : VfsFileType.MARKDOWN,
+      `${newParentPath}/${resource.name}`,
+      resource.isDir ? VfsFileType.FOLDER : VfsFileType.MARKDOWN,
     );
     return fileInfoDto;
   }
@@ -904,7 +933,7 @@ export class VFSService {
     userId: string,
     path: string,
   ) {
-    const { resource, fileInfo } = await this.getResourceByPath(
+    const { resource, fileInfo } = await this.getResourceDtoByPath(
       namespaceId,
       userId,
       path,

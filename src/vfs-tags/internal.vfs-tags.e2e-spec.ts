@@ -300,18 +300,14 @@ describe('Tag (e2e)', () => {
       const body: Record<string, any> = {};
       Object.assign(body, testCase.body);
       await client
-        .post(
-          `/internal/api/v1/namespaces/${client.namespace.id}/vfs/resource-tags`,
-        )
+        .post(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/tags`)
         .send(body)
         .expect(testCase.expectedCode);
     } else if (testCase.op === 'remove_tag_from_resource') {
       const body: Record<string, any> = {};
       Object.assign(body, testCase.body);
       await client
-        .delete(
-          `/internal/api/v1/namespaces/${client.namespace.id}/vfs/resource-tags`,
-        )
+        .delete(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/tags`)
         .send(body)
         .expect(testCase.expectedCode);
     }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { VfsCollectUrlResponseDto } from 'omniboxd/vfs-wizard/dto/vfs-collect-url.response.dto';
 
 @Injectable()
 export class VfsWizardService {
@@ -20,11 +21,15 @@ export class VfsWizardService {
       userId,
       parentPath,
     );
-    return await this.wizardService.collectUrl(
+    const { resourceId } = await this.wizardService.collectUrl(
       namespaceId,
       userId,
       url,
       fileInfo.id,
     );
+    const dto = new VfsCollectUrlResponseDto();
+    dto.resourceId = resourceId;
+    dto.parentId = fileInfo.id;
+    return dto;
   }
 }

@@ -15,13 +15,28 @@ type Operation =
   | 'filter'
   | 'list'
   | 'path'
-  | 'rename';
+  | 'rename'
+  | 'get';
 
 interface TestCase {
   index: number;
   expectedCode: number;
   op: Operation;
-  body?: Record<string, any>;
+  body?: {
+    path?: string;
+
+    content?: string;
+
+    new_parent_path?: string;
+
+    new_name?: string;
+
+    options?: {
+      name_pattern?: string;
+    };
+
+    recursive?: boolean;
+  };
 }
 
 const testCases: TestCase[] = [
@@ -31,38 +46,44 @@ const testCases: TestCase[] = [
     op: 'create',
     body: {
       path: '/private/hello.md',
+      content: 'hello',
     },
   },
   {
     index: 1,
     expectedCode: 201,
     op: 'create',
-    body: { path: '/private/path/to/hello.md' },
+    body: { path: '/private/path/to/hello.md', content: 'hello' },
   },
   {
     index: 2,
     expectedCode: 400,
     op: 'create',
-    body: { path: '/private/hello' },
+    body: { path: '/private/hello', content: 'hello' },
   },
   {
     index: 3,
     expectedCode: 400,
     op: 'create',
-    body: { path: '/private/path/to/hello' },
+    body: { path: '/private/path/to/hello', content: 'hello' },
   },
-  { index: 4, expectedCode: 400, op: 'create', body: { path: '/hello.md' } },
+  {
+    index: 4,
+    expectedCode: 400,
+    op: 'create',
+    body: { path: '/hello.md', content: 'hello' },
+  },
   {
     index: 5,
     expectedCode: 400,
     op: 'create',
-    body: { path: '/foo/hello.md' },
+    body: { path: '/foo/hello.md', content: 'hello' },
   },
   {
     index: 6,
     expectedCode: 409,
     op: 'create',
-    body: { path: '/private/hello.md' },
+    body: { path: '/private/hello.md', content: 'hello' },
   },
   {
     index: 7,
@@ -259,7 +280,6 @@ const testCases: TestCase[] = [
 
 describe('VFS (e2e)', () => {
   let client: TestClient;
-  const resource = { name: 'hello', content: 'Hello World!' };
 
   beforeAll(async () => {
     client = await TestClient.create();
@@ -271,17 +291,17 @@ describe('VFS (e2e)', () => {
 
   test.each(testCases)('($index) $op $expectedCode', async (testCase) => {
     if (testCase.op === 'create') {
-      if (!testCase.body) {
+      if (!testCase.body?.path || !testCase.body?.content) {
         throw new Error('body is required');
       }
-      const path: string = testCase.body['path'];
-      const content: string = testCase.body['content'] || resource.content;
+      const path: string = testCase.body.path;
+      const content: string = testCase.body.content;
       if (testCase.expectedCode === 201) {
         const { fileInfo: fileInfoDto, resource: resourceDto } =
           await createResourceByPath(client, path, content);
         expect(resourceDto).toEqual({
           ...fileInfoDto,
-          content: resource.content,
+          content: content,
         } as GetResponseDto);
       } else {
         await client
@@ -290,7 +310,7 @@ describe('VFS (e2e)', () => {
           .expect(testCase.expectedCode);
       }
     } else if (testCase.op === 'move') {
-      if (!testCase.body) {
+      if (!testCase.body?.path || !testCase.body?.new_parent_path) {
         throw new Error('body is required');
       }
       const path: string = testCase.body['path'];
@@ -298,10 +318,7 @@ describe('VFS (e2e)', () => {
 
       const response = await client
         .patch(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/move`)
-        .send({
-          path,
-          new_parent_path,
-        })
+        .send(testCase.body)
         .expect(testCase.expectedCode);
       if (testCase.expectedCode === 200) {
         const parsedPath = VFSService.parsePath(path);
@@ -312,10 +329,10 @@ describe('VFS (e2e)', () => {
         expect(fileInfoDto.path).toEqual(newPath);
       }
     } else if (testCase.op === 'mkdir') {
-      if (!testCase.body) {
+      if (!testCase.body?.path) {
         throw new Error('body is required');
       }
-      const path: string = testCase.body['path'];
+      const path: string = testCase.body.path;
 
       const response = await client
         .post(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/mkdir`)
@@ -331,14 +348,13 @@ describe('VFS (e2e)', () => {
         expect(fileInfoDto.isDir).toEqual(true);
       }
     } else if (testCase.op === 'delete') {
-      if (!testCase.body) {
+      if (!testCase.body?.path) {
         throw new Error('body is required');
       }
-      const path: string = testCase.body['path'];
-      const recursive: boolean = testCase.body['recursive'];
+      const path: string = testCase.body.path;
 
       const query: Record<string, any> = { path };
-      if (recursive) {
+      if (testCase.body.recursive) {
         query.recursive = 'true';
       }
 
@@ -352,11 +368,11 @@ describe('VFS (e2e)', () => {
         expect(response.body).toBeDefined();
       }
     } else if (testCase.op === 'rename') {
-      if (!testCase.body) {
+      if (!testCase.body?.path || !testCase.body?.new_name) {
         throw new Error('body is required');
       }
-      const path: string = testCase.body['path'];
-      const new_name: string = testCase.body['new_name'];
+      const path: string = testCase.body.path;
+      const new_name: string = testCase.body.new_name;
 
       const response = await client
         .patch(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/rename`)
@@ -368,13 +384,13 @@ describe('VFS (e2e)', () => {
         expect(response.body).toBeDefined();
       }
     } else if (testCase.op === 'read') {
-      if (!testCase.body) {
+      if (!testCase.body?.path) {
         throw new Error('body is required');
       }
-      const path: string = testCase.body['path'];
+      const path: string = testCase.body.path;
 
       const response = await client
-        .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
+        .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/content`)
         .query({ path })
         .expect(testCase.expectedCode);
 
@@ -385,10 +401,10 @@ describe('VFS (e2e)', () => {
         expect(resourceDto.content).toBeDefined();
       }
     } else if (testCase.op === 'list') {
-      if (!testCase.body) {
+      if (!testCase.body?.path) {
         throw new Error('body is required');
       }
-      const path: string = testCase.body['path'];
+      const path: string = testCase.body.path;
 
       const response = await client
         .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/list`)
@@ -402,11 +418,11 @@ describe('VFS (e2e)', () => {
         expect(response.body.path).toEqual(path);
       }
     } else if (testCase.op === 'filter') {
-      if (!testCase.body) {
+      if (!testCase.body?.path) {
         throw new Error('body is required');
       }
       const path: string = testCase.body['path'];
-      const options: Record<string, any> = testCase.body['options'];
+      const options: Record<string, any> | undefined = testCase.body['options'];
 
       const query: Record<string, any> = { path };
       if (options) {

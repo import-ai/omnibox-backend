@@ -10,7 +10,7 @@ async function getByPath(
   path: string,
 ): Promise<GetResponseDto> {
   const response = await client
-    .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
+    .get(`/internal/api/v1/namespaces/${client.namespace.id}/vfs/content`)
     .query({ path })
     .expect(200);
   return plainToInstance(GetResponseDto, response.body);

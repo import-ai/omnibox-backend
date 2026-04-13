@@ -1,10 +1,10 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { VFSService } from 'omniboxd/vfs/vfs.service';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
 
 @Controller('api/v1/namespaces/:namespaceId/vfs')
-export class VFSController {
-  constructor(private readonly vfsService: VFSService) {}
+export class VfsController {
+  constructor(private readonly vfsService: VfsService) {}
   @Get('list')
   async listChildrenByPath(
     @Param('namespaceId') namespaceId: string,

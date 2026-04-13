@@ -97,9 +97,9 @@ import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000
 import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/1774965861436-rename-verify-code-to-key';
 import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/1775666229211-deduplicate-resource-names';
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
-import { VFSModule } from 'omniboxd/vfs/vfs.module';
+import { VfsModule } from 'omniboxd/vfs/vfs.module';
 import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
-import { VfsWizardService } from 'omniboxd/vfs-wizard/vfs-wizard.service';
+import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -156,7 +156,6 @@ export class AppModule implements NestModule {
         KafkaModule,
         TagModule,
         ResourceTagsModule,
-        VfsTagsModule,
         MailModule,
         AuthModule,
         UserModule,
@@ -186,8 +185,9 @@ export class AppModule implements NestModule {
         SubscribeMessageModule,
         AppConfigModule,
         WizardUrlProviderModule,
-        VFSModule,
-        VfsWizardService,
+        VfsModule,
+        VfsTagsModule,
+        VfsWizardModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

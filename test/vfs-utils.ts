@@ -1,7 +1,7 @@
 import { TestClient } from 'test/test-client';
 import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { plainToInstance } from 'class-transformer';
-import { VFSService } from 'omniboxd/vfs/vfs.service';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { last } from 'omniboxd/utils/arrays';
 import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
 
@@ -25,7 +25,7 @@ export async function createResourceByPath(
     .put(`/internal/api/v1/namespaces/${client.namespace.id}/vfs`)
     .send({ path, content })
     .expect(201);
-  const parsedPath = VFSService.parsePath(path);
+  const parsedPath = VfsService.parsePath(path);
   const resourceName: string = last(parsedPath.resourceNames);
   const fileInfoDto = plainToInstance(FileInfoDto, response.body);
   expect(fileInfoDto.name).toEqual(resourceName);

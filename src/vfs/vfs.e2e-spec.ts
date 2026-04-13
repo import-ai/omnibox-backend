@@ -2,7 +2,7 @@ import { TestClient } from 'test/test-client';
 import { createResourceByPath } from 'test/vfs-utils';
 import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
 import { plainToInstance } from 'class-transformer';
-import { VFSService } from 'omniboxd/vfs/vfs.service';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { last } from 'omniboxd/utils/arrays';
 
@@ -362,7 +362,7 @@ describe('VFS (e2e)', () => {
         .send(testCase.body)
         .expect(testCase.expectedCode);
       if (testCase.expectedCode === 200) {
-        const parsedPath = VFSService.parsePath(path);
+        const parsedPath = VfsService.parsePath(path);
         const resourceName: string = last(parsedPath.resourceNames);
         const fileInfoDto = plainToInstance(FileInfoDto, response.body);
         const newPath: string = `${new_parent_path}/${resourceName}`;
@@ -381,7 +381,7 @@ describe('VFS (e2e)', () => {
         .expect(testCase.expectedCode);
 
       if (testCase.expectedCode === 201) {
-        const parsedPath = VFSService.parsePath(path);
+        const parsedPath = VfsService.parsePath(path);
         const folderName: string = last(parsedPath.resourceNames);
         const fileInfoDto = plainToInstance(FileInfoDto, response.body);
         expect(fileInfoDto.name).toEqual(folderName);

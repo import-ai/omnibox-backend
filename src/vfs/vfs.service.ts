@@ -28,7 +28,7 @@ export enum VfsFileType {
 }
 
 @Injectable()
-export class VFSService {
+export class VfsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly namespaceResourcesService: NamespaceResourcesService,
@@ -208,7 +208,7 @@ export class VFSService {
     userId: string,
     path: string,
   ): Promise<listResponseDto> {
-    const parsedPath = VFSService.parsePath(path);
+    const parsedPath = VfsService.parsePath(path);
 
     if (parsedPath.spaceType) {
       const resources: FileInfoDto[] = await this.getResourcesChainByParsedPath(
@@ -278,7 +278,7 @@ export class VFSService {
     fileInfo: FileInfoDto;
     parsedPath: ParsedPathDo;
   }> {
-    const parsedPath = VFSService.parsePath(path);
+    const parsedPath = VfsService.parsePath(path);
     if (!parsedPath.spaceType) {
       throw new AppException(
         'teamspace or private is required',
@@ -344,7 +344,7 @@ export class VFSService {
     fileInfo: FileInfoDto;
     parsedPath: ParsedPathDo;
   }> {
-    if ((VFSService.parsePath(path).resourceNames ?? []).length === 0) {
+    if ((VfsService.parsePath(path).resourceNames ?? []).length === 0) {
       throw new AppException(
         'can not get root resource',
         'INVALID_PATH',
@@ -486,7 +486,7 @@ export class VFSService {
     path: string,
     content?: string,
   ): Promise<FileInfoDto> {
-    const parsedPath = VFSService.parsePath(path);
+    const parsedPath = VfsService.parsePath(path);
 
     if (!parsedPath.spaceType) {
       throw new AppException(
@@ -586,7 +586,7 @@ export class VFSService {
     userId: string,
     path: string,
   ): Promise<FileInfoDto> {
-    const parsedPath = VFSService.parsePath(path);
+    const parsedPath = VfsService.parsePath(path);
 
     if (!parsedPath.spaceType) {
       throw new AppException(

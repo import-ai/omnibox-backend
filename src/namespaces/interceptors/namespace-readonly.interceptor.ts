@@ -26,6 +26,9 @@ export class NamespaceReadonlyInterceptor implements NestInterceptor {
     const namespaceId =
       request.params?.namespaceId ??
       request.body?.namespace_id ??
+      request.body?.namespaceId ??
+      request.query?.namespace_id ??
+      request.query?.namespaceId ??
       request.apiKey?.namespaceId;
 
     if (!namespaceId) {

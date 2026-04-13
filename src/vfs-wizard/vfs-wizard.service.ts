@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { VFSService } from 'omniboxd/vfs/vfs.service';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 
 @Injectable()
 export class VfsWizardService {
   constructor(
     private readonly wizardService: WizardService,
-    private readonly vfsService: VFSService,
+    private readonly vfsService: VfsService,
   ) {}
 
   async collectUrl(

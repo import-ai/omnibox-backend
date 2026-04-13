@@ -11,6 +11,7 @@ import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { ResourceTagRequestDto } from 'omniboxd/vfs-tags/dto/resource-tag-request.dto';
 import { VfsTagsService } from 'omniboxd/vfs-tags/vfs-tags.service';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs/resource-tags')
 export class InternalVfsTagsController {
@@ -19,6 +20,7 @@ export class InternalVfsTagsController {
   @Public()
   @Post()
   @HttpCode(HttpStatus.OK)
+  @CheckNamespaceReadonly()
   async addTagToResource(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
@@ -35,6 +37,7 @@ export class InternalVfsTagsController {
   @Public()
   @Delete()
   @HttpCode(HttpStatus.OK)
+  @CheckNamespaceReadonly()
   async removeTagFromResource(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,

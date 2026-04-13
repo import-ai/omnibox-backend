@@ -11,15 +11,16 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
-import { VFSService } from 'omniboxd/vfs/vfs.service';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { Public } from 'omniboxd/auth';
 import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { CreateRequestDto } from 'omniboxd/vfs/dto/create.request.dto';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs')
-export class InternalVFSController {
-  constructor(private readonly vfsService: VFSService) {}
+export class InternalVfsController {
+  constructor(private readonly vfsService: VfsService) {}
 
   @Public()
   @Get('list')
@@ -58,6 +59,7 @@ export class InternalVFSController {
   @Public()
   @Put()
   @HttpCode(HttpStatus.CREATED)
+  @CheckNamespaceReadonly()
   async createByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
@@ -73,6 +75,7 @@ export class InternalVFSController {
 
   @Public()
   @Delete()
+  @CheckNamespaceReadonly()
   async deleteByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
@@ -89,6 +92,7 @@ export class InternalVFSController {
 
   @Public()
   @Patch('rename')
+  @CheckNamespaceReadonly()
   async renameByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
@@ -105,6 +109,7 @@ export class InternalVFSController {
 
   @Public()
   @Patch('move')
+  @CheckNamespaceReadonly()
   async moveByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
@@ -152,6 +157,7 @@ export class InternalVFSController {
   @Public()
   @Post('mkdir')
   @HttpCode(HttpStatus.CREATED)
+  @CheckNamespaceReadonly()
   async createFolderByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,

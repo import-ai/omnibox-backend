@@ -3,7 +3,7 @@ import { DataSource } from 'typeorm';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { VFSService } from 'omniboxd/vfs/vfs.service';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
@@ -11,7 +11,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 export class VfsTagsService {
   constructor(
     private readonly tagService: TagService,
-    private readonly vfsService: VFSService,
+    private readonly vfsService: VfsService,
     private readonly resourcesService: ResourcesService,
     private readonly dataSource: DataSource,
   ) {}

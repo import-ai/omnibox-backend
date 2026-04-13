@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
-import { VFSController } from './vfs.controller';
-import { VFSService } from './vfs.service';
+import { VfsController } from './vfs.controller';
+import { VfsService } from './vfs.service';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
-import { InternalVFSController } from 'omniboxd/vfs/internal.vfs.controller';
+import { InternalVfsController } from 'omniboxd/vfs/internal.vfs.controller';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 
 @Module({
-  exports: [VFSService],
-  providers: [VFSService],
-  controllers: [VFSController, InternalVFSController],
-  imports: [NamespaceResourcesModule, NamespacesModule],
+  exports: [VfsService],
+  providers: [VfsService],
+  controllers: [VfsController, InternalVfsController],
+  imports: [NamespaceResourcesModule, NamespacesModule, NamespacesQuotaModule],
 })
-export class VFSModule {}
+export class VfsModule {}

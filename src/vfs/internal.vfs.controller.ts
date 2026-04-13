@@ -32,13 +32,27 @@ export class InternalVFSController {
   }
 
   @Public()
-  @Get()
+  @Get('content')
   async getContentByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
     @Query('path') path: string,
   ) {
     return await this.vfsService.getContentByPath(namespaceId, userId, path);
+  }
+
+  @Public()
+  @Get()
+  async getVfsResourceByPath(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Query('path') path: string,
+  ) {
+    return await this.vfsService.getVfsResourceByPath(
+      namespaceId,
+      userId,
+      path,
+    );
   }
 
   @Public()

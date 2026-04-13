@@ -18,6 +18,7 @@ import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
 import { last } from 'omniboxd/utils/arrays';
+import { VfsResourceResponseDto } from 'omniboxd/vfs/dto/vfs.resource.response.dto';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -680,7 +681,7 @@ export class VFSService {
         }
       }
     }
-    if (resource.resourceType === ResourceType.FOLDER && isDir) {
+    if (resource.resourceType === ResourceType.FOLDER && !isDir) {
       throw new AppException(
         `${resource.name} is a folder`,
         'INVALID_PATH',
@@ -896,5 +897,18 @@ export class VFSService {
     }
     const path = await this.getPath(resourceInternalDto, isDir);
     return { path };
+  }
+
+  async getVfsResourceByPath(
+    namespaceId: string,
+    userId: string,
+    path: string,
+  ) {
+    const { resource, fileInfo } = await this.getResourceByPath(
+      namespaceId,
+      userId,
+      path,
+    );
+    return VfsResourceResponseDto.fromDto(resource, fileInfo);
   }
 }

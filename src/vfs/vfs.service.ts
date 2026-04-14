@@ -86,9 +86,9 @@ export class VfsService {
       {},
       entityManager,
     );
-    // Sort by create time asc
+    // Sort by create time desc
     const sortedResources = resources.sort((a, b) => {
-      return a.createdAt.getTime() - b.createdAt.getTime();
+      return b.createdAt.getTime() - a.createdAt.getTime();
     });
     return sortedResources.map((r) =>
       FileInfoDto.fromResourceSummaryDto(r, parentPath),
@@ -191,11 +191,15 @@ export class VfsService {
    * @param namespaceId
    * @param userId
    * @param path
+   * @param offset
+   * @param limit
    */
   async listChildrenByPath(
     namespaceId: string,
     userId: string,
     path: string,
+    offset: number = 0,
+    limit: number = 20,
   ): Promise<listResponseDto> {
     const parsedPath = VfsService.parsePath(path);
 
@@ -220,7 +224,7 @@ export class VfsService {
       return {
         parentId: resourceId,
         parentPath: parsedPath.path,
-        resources: fileInfos,
+        resources: fileInfos.slice(offset, offset + limit),
         total: fileInfos.length,
       } as listResponseDto;
     }
@@ -230,7 +234,7 @@ export class VfsService {
       resources: [
         await this.getRoot(namespaceId, userId, SpaceType.PRIVATE),
         await this.getRoot(namespaceId, userId, SpaceType.TEAM),
-      ],
+      ].slice(offset, offset + limit),
       total: 2,
     } as listResponseDto;
   }

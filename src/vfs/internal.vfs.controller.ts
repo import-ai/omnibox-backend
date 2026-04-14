@@ -28,8 +28,16 @@ export class InternalVfsController {
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
     @Query('path') path: string,
+    @Query('offset') offset: number = 0,
+    @Query('limit') limit: number = 20,
   ) {
-    return await this.vfsService.listChildrenByPath(namespaceId, userId, path);
+    return await this.vfsService.listChildrenByPath(
+      namespaceId,
+      userId,
+      path,
+      offset,
+      limit,
+    );
   }
 
   @Public()

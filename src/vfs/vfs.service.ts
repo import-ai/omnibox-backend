@@ -218,15 +218,15 @@ export class VfsService {
       );
 
       return {
-        id: resourceId,
-        path: parsedPath.path,
+        parentId: resourceId,
+        parentPath: parsedPath.path,
         resources: fileInfos,
         total: fileInfos.length,
       } as listResponseDto;
     }
     return {
-      id: namespaceId,
-      path: '/',
+      parentId: namespaceId,
+      parentPath: '/',
       resources: [
         await this.getRoot(namespaceId, userId, SpaceType.PRIVATE),
         await this.getRoot(namespaceId, userId, SpaceType.TEAM),
@@ -314,7 +314,7 @@ export class VfsService {
       userId,
       path,
     );
-    if (fileInfo.isFolder) {
+    if (fileInfo.isFolder()) {
       throw new AppException(
         `${fileInfo.name} is a directory`,
         'FOLDER_NOT_ALLOWED',

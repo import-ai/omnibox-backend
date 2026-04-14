@@ -18,17 +18,27 @@ export class FileInfoDto {
 
   path?: string;
 
-  @Expose({ name: 'is_folder' })
-  isFolder: boolean;
+  type: ResourceType.FOLDER | ResourceType.FILE;
 
   @Expose({ name: 'has_children' })
   hasChildren: boolean;
+
+  public isFolder() {
+    return this.type === ResourceType.FOLDER;
+  }
 
   static getName(resourceName: string, resourceId: string): string {
     if (resourceName === '') {
       resourceName = `Untitled-${resourceId}`;
     }
     return resourceName;
+  }
+
+  static getType(resourceType: ResourceType) {
+    if (resourceType === ResourceType.FOLDER) {
+      return ResourceType.FOLDER;
+    }
+    return ResourceType.FILE;
   }
 
   static fromResource(
@@ -41,7 +51,7 @@ export class FileInfoDto {
     dto.parentId = resource.parentId;
     dto.name = FileInfoDto.getName(resource.name, resource.id);
     dto.path = path;
-    dto.isFolder = resource.resourceType === ResourceType.FOLDER;
+    dto.type = FileInfoDto.getType(resource.resourceType);
     dto.hasChildren = hasChildren;
     return dto;
   }
@@ -56,7 +66,7 @@ export class FileInfoDto {
     dto.parentId = resource.parentId;
     dto.name = spaceType;
     dto.path = `/${spaceType}`;
-    dto.isFolder = resource.resourceType === ResourceType.FOLDER;
+    dto.type = FileInfoDto.getType(resource.resourceType);
     dto.hasChildren = hasChildren;
     return dto;
   }
@@ -72,7 +82,7 @@ export class FileInfoDto {
     if (parentPath) {
       dto.path = `${parentPath}/${dto.name}`;
     }
-    dto.isFolder = resource.resourceType === ResourceType.FOLDER;
+    dto.type = FileInfoDto.getType(resource.resourceType);
     dto.hasChildren = resource.hasChildren;
     return dto;
   }

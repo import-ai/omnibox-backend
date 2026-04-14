@@ -7,7 +7,6 @@ import {
   HttpStatus,
   Param,
   Patch,
-  Post,
   Put,
   Query,
 } from '@nestjs/common';
@@ -17,6 +16,7 @@ import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dt
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { CreateRequestDto } from 'omniboxd/vfs/dto/create.request.dto';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { MkdirRequestDto } from 'omniboxd/vfs/dto/mkdir.request.dto';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs')
 export class InternalVfsController {
@@ -79,14 +79,14 @@ export class InternalVfsController {
   async deleteByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
-    @Query('path') path: string,
-    @Query('recursive') recursive?: string,
+    @Body('path') path: string,
+    @Body('recursive') recursive?: boolean,
   ) {
     return await this.vfsService.deleteByPath(
       namespaceId,
       userId,
       path,
-      recursive === 'true',
+      recursive,
     );
   }
 
@@ -144,25 +144,28 @@ export class InternalVfsController {
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
     @Query('resource_id') resourceId: string,
-    @Query('is_dir') isDir: string,
   ) {
     return await this.vfsService.getPathByResourceId(
       namespaceId,
       userId,
       resourceId,
-      isDir === 'true',
     );
   }
 
   @Public()
-  @Post('mkdir')
+  @Put('mkdir')
   @HttpCode(HttpStatus.CREATED)
   @CheckNamespaceReadonly()
   async createFolderByPath(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
-    @Body('path') path: string,
+    @Body() dto: MkdirRequestDto,
   ) {
-    return await this.vfsService.createFolderByPath(namespaceId, userId, path);
+    return await this.vfsService.createFolderByPath(
+      namespaceId,
+      userId,
+      dto.path,
+      dto.createParents,
+    );
   }
 }

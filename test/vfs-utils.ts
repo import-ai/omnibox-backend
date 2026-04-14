@@ -30,6 +30,5 @@ export async function createResourceByPath(
   const fileInfoDto = plainToInstance(FileInfoDto, response.body);
   expect(fileInfoDto.name).toEqual(resourceName);
   expect(fileInfoDto.path).toEqual(path);
-  expect(fileInfoDto.isDir).toEqual(false);
   return { fileInfo: fileInfoDto, resource: await getByPath(client, path) };
 }

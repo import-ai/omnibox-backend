@@ -9,8 +9,11 @@ export class VfsResourceResponseDto extends ResourceDto {
   @Expose({ name: 'vfs_path' })
   vfsPath: string;
 
-  @Expose({ name: 'is_vfs_dir' })
-  isVfsDir: boolean;
+  @Expose({ name: 'is_folder' })
+  isFolder: boolean;
+
+  @Expose({ name: 'has_children' })
+  hasChildren: boolean;
 
   static fromDto(
     resourceDto: ResourceDto,
@@ -26,7 +29,8 @@ export class VfsResourceResponseDto extends ResourceDto {
       throw new Error('vfs path is empty');
     }
     dto.vfsPath = fileInfoDto.path;
-    dto.isVfsDir = fileInfoDto.isDir;
+    dto.isFolder = fileInfoDto.isFolder;
+    dto.hasChildren = fileInfoDto.hasChildren;
     return dto;
   }
 }

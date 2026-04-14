@@ -6,6 +6,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { SpaceType } from 'omniboxd/namespace-resources/dto/resource.dto';
 
 export class FileInfoDto {
   id: string;
@@ -17,105 +18,62 @@ export class FileInfoDto {
 
   path?: string;
 
-  size?: string;
+  @Expose({ name: 'is_folder' })
+  isFolder: boolean;
 
-  @Expose({ name: 'created_at' })
-  createdAt: string;
+  @Expose({ name: 'has_children' })
+  hasChildren: boolean;
 
-  @Expose({ name: 'updated_at' })
-  updatedAt: string;
-
-  @Expose({ name: 'is_dir' })
-  isDir: boolean;
-
-  @Expose({ name: 'mime_type' })
-  mimeType?: string;
-
-  static getName(
-    resourceName: string,
-    resourceId: string,
-    getDir: boolean,
-  ): string {
+  static getName(resourceName: string, resourceId: string): string {
     if (resourceName === '') {
       resourceName = `Untitled-${resourceId}`;
-    }
-    if (!getDir) {
-      resourceName = `${resourceName}.md`;
     }
     return resourceName;
   }
 
-  static isDir(resource: ResourceSummaryDto): boolean {
-    return (
-      resource.hasChildren || resource.resourceType === ResourceType.FOLDER
-    );
-  }
-
   static fromResource(
-    resource: Resource,
+    resource: Resource | InternalResourceDto,
     path: string,
-    getDir: boolean,
+    hasChildren: boolean,
   ): FileInfoDto {
     const dto = new FileInfoDto();
     dto.id = resource.id;
     dto.parentId = resource.parentId;
-    dto.name = FileInfoDto.getName(resource.name, resource.id, getDir);
+    dto.name = FileInfoDto.getName(resource.name, resource.id);
     dto.path = path;
-    dto.createdAt = resource.createdAt.toISOString();
-    dto.updatedAt = resource.updatedAt.toISOString();
-    dto.isDir = getDir;
+    dto.isFolder = resource.resourceType === ResourceType.FOLDER;
+    dto.hasChildren = hasChildren;
     return dto;
   }
 
   static fromRootResourceMetoDto(
-    name: string,
+    spaceType: SpaceType,
     resource: ResourceMetaDto,
+    hasChildren: boolean,
   ): FileInfoDto {
     const dto = new FileInfoDto();
     dto.id = resource.id;
     dto.parentId = resource.parentId;
-    dto.name = name;
-    dto.path = `/${name}`;
-    dto.createdAt = resource.createdAt.toISOString();
-    dto.updatedAt = resource.updatedAt.toISOString();
-    dto.isDir = true;
-    return dto;
-  }
-
-  static fromInternalResourceDto(
-    resource: InternalResourceDto,
-    path: string,
-    getDir: boolean,
-  ): FileInfoDto {
-    const dto = new FileInfoDto();
-    dto.id = resource.id;
-    dto.parentId = resource.parentId;
-    dto.name = FileInfoDto.getName(resource.name, resource.id, getDir);
-    dto.path = path;
-    dto.createdAt = resource.createdAt;
-    dto.updatedAt = resource.updatedAt;
-    dto.isDir = getDir;
+    dto.name = spaceType;
+    dto.path = `/${spaceType}`;
+    dto.isFolder = resource.resourceType === ResourceType.FOLDER;
+    dto.hasChildren = hasChildren;
     return dto;
   }
 
   static fromResourceSummaryDto(
     resource: ResourceSummaryDto,
-    getDir: boolean,
     parentPath?: string,
   ): FileInfoDto {
     const dto = new FileInfoDto();
     dto.id = resource.id;
     dto.parentId = resource.parentId;
-    dto.name = FileInfoDto.getName(resource.name, resource.id, getDir);
+    dto.name = FileInfoDto.getName(resource.name, resource.id);
     if (parentPath) {
       dto.path = `${parentPath}/${dto.name}`;
     }
-    dto.createdAt = resource.createdAt.toISOString();
-    dto.updatedAt = resource.updatedAt.toISOString();
-    if (!FileInfoDto.isDir(resource) && getDir) {
-      throw new Error(`${resource.id} is not a directory`);
-    }
-    dto.isDir = getDir;
+    dto.isFolder = resource.resourceType === ResourceType.FOLDER;
+    dto.hasChildren = resource.hasChildren;
     return dto;
   }
 }

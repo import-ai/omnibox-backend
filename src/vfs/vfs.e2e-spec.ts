@@ -549,7 +549,7 @@ describe('VFS (e2e)', () => {
       if (testCase.expectedCode === 200) {
         expect(response.body).toHaveProperty('resources');
         expect(response.body).toHaveProperty('total');
-        expect(response.body).toHaveProperty('path');
+        expect(response.body).toHaveProperty('parent_path');
       }
     } else if (testCase.op === 'filter') {
       if (!testCase.body?.path) {

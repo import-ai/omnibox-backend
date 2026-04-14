@@ -13,6 +13,7 @@ import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { QQBot } from 'omniboxd/applications/apps/qq-bot';
 import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
+import { NotificationService } from 'omniboxd/notification/notification.service';
 
 export interface FindAllOptions {
   apiKeyId?: string;
@@ -30,6 +31,7 @@ export class ApplicationsService {
     private readonly wechatClaw: WechatClaw,
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
   ) {
     const enabledApps = this.configService.get<string>(
       'OBB_ENABLED_APPLICATIONS',
@@ -149,7 +151,42 @@ export class ApplicationsService {
   }
 
   async callback(appId: string, data: Record<string, any>) {
-    return await this.apps[appId].callback(data);
+    const result = await this.apps[appId].callback(data);
+    await this.createApplicationNotification(appId, result);
+    return result;
+  }
+
+  private async createApplicationNotification(
+    appId: string,
+    result: Record<string, any>,
+  ) {
+    const userId = result?.application?.user_id;
+
+    if (!userId) {
+      return;
+    }
+
+    const appTitleMap: Record<string, string> = {
+      wechat_bot: this.i18n.t('application.notifications.wechatBotTitle'),
+      wechat_clawbot: this.i18n.t('application.notifications.wechatClawTitle'),
+      qq_bot: this.i18n.t('application.notifications.qqBotTitle'),
+    };
+
+    await this.notificationService.createInternal({
+      userId: userId,
+      title: appTitleMap[appId] || `${appId} 通知`,
+      content: this.i18n.t('application.notifications.callbackCompleted', {
+        args: { appId },
+      }),
+      actionType: 'none',
+      target: {},
+      tags: [this.i18n.t('application.notifications.tag')],
+      attrs: {
+        source: 'applications.callback',
+        app_id: appId,
+        namespace_id: result?.application?.namespace_id,
+      },
+    });
   }
 
   async delete(id: string, namespaceId: string, userId: string): Promise<void> {

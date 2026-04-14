@@ -5,5 +5,12 @@
     "invalidVerifyCode": "Invalid verify code",
     "failedToGenerateVerifyCode": "Generate verify code failed",
     "bindingRequestFailed": "Binding request failed"
+  },
+  "notifications": {
+    "wechatBotTitle": "WeChat Assistant Notification",
+    "wechatClawTitle": "HeiYou Community Notification",
+    "qqBotTitle": "QQ Assistant Notification",
+    "callbackCompleted": "{appId} callback completed",
+    "tag": "Application Notification"
   }
 }

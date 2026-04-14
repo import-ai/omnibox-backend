@@ -5,5 +5,12 @@
     "invalidVerifyCode": "无效的验证码",
     "failedToGenerateVerifyCode": "验证码生成失败",
     "bindingRequestFailed": "绑定请求失败"
+  },
+  "notifications": {
+    "wechatBotTitle": "微信助手通知",
+    "wechatClawTitle": "黑友社区通知",
+    "qqBotTitle": "QQ 助手通知",
+    "callbackCompleted": "{appId} 回调处理完成",
+    "tag": "应用通知"
   }
 }

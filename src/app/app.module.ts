@@ -95,6 +95,8 @@ import { AddSizeToFiles1769415719000 } from 'omniboxd/migrations/1769415719000-a
 import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000-make-size-nullable';
 import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/1774965861436-rename-verify-code-to-key';
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
+import { NotificationModule } from 'omniboxd/notification/notification.module';
+import { AddNotifications1776070800000 } from 'omniboxd/migrations/1776070800000-add-notifications';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -179,6 +181,7 @@ export class AppModule implements NestModule {
         SubscribeMessageModule,
         AppConfigModule,
         WizardUrlProviderModule,
+        NotificationModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],
@@ -244,6 +247,7 @@ export class AppModule implements NestModule {
               AddSizeToFiles1769415719000,
               MakeSizeNullable1769478367000,
               RenameVerifyCodeToKey1774965861436,
+              AddNotifications1776070800000,
               ...extraMigrations,
             ],
             migrationsRun: true,

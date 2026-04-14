@@ -4,11 +4,13 @@ import { CollectUrlResponseDto } from 'omniboxd/wizard/dto/collect-url-request.d
 import { VfsWizardService } from 'omniboxd/vfs-wizard/vfs-wizard.service';
 import { VfsCollectUrlRequestDto } from 'omniboxd/vfs-wizard/dto/vfs-collect-url.request.dto';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs/wizard')
 export class InternalVfsWizardController {
   constructor(private readonly vfsWizardService: VfsWizardService) {}
 
+  @Public()
   @Post('collect/url')
   @CheckNamespaceReadonly()
   async collectUrl(

@@ -9,6 +9,6 @@ export class VfsCollectUrlRequestDto {
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   @IsNotEmpty()
   @IsString()
-  @Expose({ name: 'tag_name' })
+  @Expose({ name: 'url' })
   url: string;
 }

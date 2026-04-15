@@ -10,7 +10,7 @@ import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
 import { ParsedPathDo } from 'omniboxd/vfs/do/parsed-path.do';
 import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
-import { listResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
+import { ListResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { DataSource, EntityManager } from 'typeorm';
@@ -19,6 +19,7 @@ import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dt
 import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
 import { last } from 'omniboxd/utils/arrays';
 import { VfsResourceResponseDto } from 'omniboxd/vfs/dto/vfs.resource.response.dto';
+import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -200,7 +201,7 @@ export class VfsService {
     path: string,
     offset: number = 0,
     limit: number = 20,
-  ): Promise<listResponseDto> {
+  ): Promise<ListResponseDto> {
     const parsedPath = VfsService.parsePath(path);
 
     if (parsedPath.spaceType) {
@@ -226,7 +227,7 @@ export class VfsService {
         parentPath: parsedPath.path,
         resources: fileInfos.slice(offset, offset + limit),
         total: fileInfos.length,
-      } as listResponseDto;
+      } as ListResponseDto;
     }
     return {
       parentId: namespaceId,
@@ -236,7 +237,7 @@ export class VfsService {
         await this.getRoot(namespaceId, userId, SpaceType.TEAM),
       ].slice(offset, offset + limit),
       total: 2,
-    } as listResponseDto;
+    } as ListResponseDto;
   }
 
   /**
@@ -313,6 +314,7 @@ export class VfsService {
    * @param path
    */
   async getContentByPath(namespaceId: string, userId: string, path: string) {
+    this.assertParsedPathValid(VfsService.parsePath(path));
     const { resource, fileInfo } = await this.getResourceDtoByPath(
       namespaceId,
       userId,
@@ -600,7 +602,7 @@ export class VfsService {
       );
       fileInfoDos.push(fileInfoDo);
     }
-    return { resources: fileInfoDos, total };
+    return { resources: fileInfoDos, total } as FilterResponseDto;
   }
 
   async deleteByPath(

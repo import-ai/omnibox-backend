@@ -5,6 +5,8 @@ import { plainToInstance } from 'class-transformer';
 import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { last } from 'omniboxd/utils/arrays';
+import { ListResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
+import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
 
 type Operation =
   | 'create'
@@ -41,7 +43,8 @@ interface TestCase {
   };
   expected?: {
     content?: string;
-    expected_names?: string[];
+    names?: string[];
+    total?: number;
   };
 }
 const testCases: TestCase[] = [
@@ -70,7 +73,7 @@ const testCases: TestCase[] = [
       content: 'hi',
     },
     expected: {
-      content: 'hello',
+      content: 'hi',
     },
   },
   /**
@@ -100,13 +103,22 @@ const testCases: TestCase[] = [
       create_parents: true,
     },
   },
+  {
+    index: 5,
+    expectedCode: 201,
+    op: 'mkdir',
+    body: {
+      path: '/teamspace/path',
+    },
+  },
   /**
    * /private/hello
    * /teamspace/hi.md
+   * /teamspace/path
    * /private/path/to
    */
   {
-    index: 5,
+    index: 6,
     expectedCode: 201,
     op: 'create',
     body: { path: '/private/path/to/hello', content: 'hello' },
@@ -114,41 +126,63 @@ const testCases: TestCase[] = [
   /**
    * /private/hello
    * /teamspace/hi.md
+   * /teamspace/path
    * /private/path/to/hello
    */
   {
-    index: 6,
+    index: 7,
     expectedCode: 404,
     op: 'create',
     body: { path: '/teamspace/path/to/hi', content: 'hi' },
   },
   {
-    index: 7,
+    index: 8,
     expectedCode: 409,
     op: 'create',
     body: { path: '/private/hello', content: 'hello' },
   },
   {
-    index: 8,
+    index: 9,
     expectedCode: 409,
     op: 'create',
     body: { path: '/teamspace/hi.md', content: 'hi' },
   },
   {
-    index: 9,
+    index: 10,
+    expectedCode: 201,
+    op: 'create',
+    body: { path: '/teamspace/hi', content: 'hihi' },
+  },
+  {
+    index: 11,
     expectedCode: 400,
     op: 'create',
     body: { path: '/hello.md', content: 'hello' },
   },
   {
-    index: 10,
+    index: 12,
     expectedCode: 400,
     op: 'create',
     body: { path: '/foo/hello.md', content: 'hello' },
   },
+  {
+    index: 13,
+    expectedCode: 201,
+    op: 'mkdir',
+    body: {
+      path: '/teamspace/path/to',
+    },
+  },
+  /**
+   * /private/hello
+   * /private/path/to/hello
+   * /teamspace/hi.md
+   * /teamspace/hi
+   * /teamspace/path/to
+   */
   // move operations
   {
-    index: 11,
+    index: 14,
     expectedCode: 404,
     op: 'move',
     body: {
@@ -157,7 +191,7 @@ const testCases: TestCase[] = [
     },
   },
   {
-    index: 12,
+    index: 15,
     expectedCode: 404,
     op: 'move',
     body: {
@@ -166,7 +200,7 @@ const testCases: TestCase[] = [
     },
   },
   {
-    index: 13,
+    index: 16,
     expectedCode: 400,
     op: 'move',
     body: {
@@ -175,7 +209,7 @@ const testCases: TestCase[] = [
     },
   },
   {
-    index: 14,
+    index: 17,
     expectedCode: 400,
     op: 'move',
     body: {
@@ -184,7 +218,7 @@ const testCases: TestCase[] = [
     },
   },
   {
-    index: 15,
+    index: 18,
     expectedCode: 200,
     op: 'move',
     body: {
@@ -195,21 +229,48 @@ const testCases: TestCase[] = [
   /**
    * /teamspace/hello
    * /teamspace/hi.md
+   * /teamspace/hi
+   * /teamspace/path/to
    * /private/path/to/hello
    */
   {
-    index: 16,
+    index: 19,
     expectedCode: 200,
     op: 'list',
     body: {
       path: '/teamspace',
     },
     expected: {
-      expected_names: ['hello', 'hi.md'],
+      names: ['hi', 'path', 'hello', 'hi.md'],
+      total: 4,
     },
   },
   {
-    index: 17,
+    index: 20,
+    expectedCode: 200,
+    op: 'list',
+    body: {
+      path: '/teamspace/path',
+    },
+    expected: {
+      names: ['to'],
+      total: 1,
+    },
+  },
+  {
+    index: 20,
+    expectedCode: 200,
+    op: 'list',
+    body: {
+      path: '/private',
+    },
+    expected: {
+      names: ['path'],
+      total: 1,
+    },
+  },
+  {
+    index: 21,
     expectedCode: 200,
     op: 'move',
     body: {
@@ -217,26 +278,17 @@ const testCases: TestCase[] = [
       new_parent_path: '/private',
     },
   },
-  /**
-   * /teamspace/hello
-   * /private/hi.md
-   * /private/path/to/hello
-   */
   {
-    index: 18,
+    index: 22,
     expectedCode: 200,
     op: 'move',
     body: {
       path: '/private/path',
-      new_parent_path: '/private/hi.md',
+      new_parent_path: '/teamspace/hello',
     },
   },
-  /**
-   * /teamspace/hello
-   * /private/hi.md/path/to/hello
-   */
   {
-    index: 19,
+    index: 23,
     expectedCode: 404,
     op: 'move',
     body: {
@@ -245,80 +297,28 @@ const testCases: TestCase[] = [
     },
   },
   {
-    index: 20,
-    expectedCode: 200,
-    op: 'move',
-    body: {
-      path: '/private/hi.md/path/to',
-      new_parent_path: '/teamspace',
-    },
-  },
-  /**
-   * /teamspace/hello
-   * /teamspace/to/hello
-   * /private/hi.md/path
-   */
-  {
-    index: 21,
-    expectedCode: 200,
-    op: 'list',
-    body: {
-      path: '/teamspace',
-    },
-    expected: {
-      expected_names: ['hello', 'to'],
-    },
-  },
-  {
-    index: 22,
-    expectedCode: 200,
-    op: 'move',
-    body: {
-      path: '/teamspace/to/hello',
-      new_parent_path: '/private',
-    },
-  },
-  /**
-   * /teamspace/hello
-   * /teamspace/to
-   * /private/hi.md/path
-   * /private/hello
-   */
-  {
-    index: 23,
-    expectedCode: 200,
-    op: 'list',
-    body: {
-      path: '/private',
-    },
-    expected: {
-      expected_names: ['hello', 'hi.md'],
-    },
-  },
-  {
     index: 24,
     expectedCode: 200,
     op: 'move',
     body: {
-      path: '/teamspace/hello',
-      new_parent_path: '/private/hi.md',
+      path: '/teamspace/hello/path/to',
+      new_parent_path: '/private',
     },
   },
   /**
-   * /teamspace/to
-   * /private/hi.md/path
-   * /private/hi.md/hello
-   * /private/hello
+   * /teamspace/hello/path
+   * /teamspace/path/to
+   * /teamspace/hi
+   * /private/hi.md
+   * /private/to/hello
    */
   {
     index: 25,
     expectedCode: 200,
-    op: 'list',
+    op: 'move',
     body: {
-      path: '/private/hi.md',
-    },
-    expected: {
-      expected_names: ['hello', 'path'],
+      path: '/teamspace/hello',
+      new_parent_path: '/teamspace/hi',
     },
   },
   {
@@ -326,95 +326,208 @@ const testCases: TestCase[] = [
     expectedCode: 200,
     op: 'move',
     body: {
-      path: '/private/hi.md/hello',
-      new_parent_path: '/teamspace/to',
+      path: '/teamspace/hi/hello/path',
+      new_parent_path: '/private',
     },
   },
-  /**
-   * /teamspace/to/hello
-   * /private/hi.md/path
-   * /private/hello
-   */
   {
     index: 27,
     expectedCode: 200,
     op: 'move',
     body: {
-      path: '/private/hello',
-      new_parent_path: '/teamspace',
+      path: '/private/to',
+      new_parent_path: '/private/path',
+    },
+  },
+  {
+    index: 28,
+    expectedCode: 200,
+    op: 'move',
+    body: {
+      path: '/teamspace/hi/hello',
+      new_parent_path: '/teamspace/path/to',
     },
   },
   /**
-   * /teamspace/to/hello
-   * /private/hi.md/path
-   * /teamspace/hello
+   * /teamspace/hi
+   * /teamspace/path/to/hello
+   * /private/hi.md
+   * /private/path/to/hello
+   */
+  {
+    index: 29,
+    expectedCode: 200,
+    op: 'list',
+    body: {
+      path: '/private',
+    },
+    expected: {
+      names: ['path', 'hi.md'],
+      total: 2,
+    },
+  },
+  {
+    index: 30,
+    expectedCode: 409,
+    op: 'move',
+    body: {
+      path: '/teamspace/path',
+      new_parent_path: '/private',
+    },
+  },
+  /**
+   * /teamspace/hi
+   * /teamspace/path/to/hello
+   * /private/hi.md
+   * /private/path/to/hello
    */
   // mkdir operations
   {
-    index: 28,
+    index: 31,
     expectedCode: 201,
     op: 'mkdir',
     body: { path: '/private/myfolder' },
   },
   /**
-   * /teamspace/to/hello
-   * /private/hi.md/path
-   * /teamspace/hello
+   * /teamspace/hi
+   * /teamspace/path/to/hello
+   * /private/hi.md
+   * /private/path/to/hello
    * /private/myfolder
    */
   {
-    index: 29,
+    index: 32,
     expectedCode: 409,
     op: 'mkdir',
     body: { path: '/private/myfolder' },
   },
   {
-    index: 30,
+    index: 33,
     expectedCode: 201,
     op: 'mkdir',
-    body: { path: '/teamspace/to/hello/newfolder' },
+    body: { path: '/teamspace/path/to/hello/newfolder' },
   },
-  /**
-   * /teamspace/to/hello/newfolder
-   * /private/hi.md/path
-   * /teamspace/hello
-   * /private/myfolder
-   */
   {
-    index: 31,
+    index: 34,
     expectedCode: 400,
     op: 'mkdir',
     body: { path: '/' },
   },
   {
-    index: 32,
+    index: 35,
     expectedCode: 400,
     op: 'mkdir',
     body: { path: '/newfolder' },
   },
+  /**
+   * /teamspace/hi
+   * /teamspace/path/to/hello/newfolder
+   * /private/hi.md
+   * /private/path/to/hello
+   * /private/myfolder
+   */
+  // read operations
   {
-    index: 33,
-    expectedCode: 409, // /teamspace/to has children
-    op: 'delete',
-    body: { path: '/teamspace/to' },
+    index: 36,
+    expectedCode: 400,
+    op: 'read',
+    body: { path: '/private' },
   },
   {
-    index: 34,
+    index: 37,
+    expectedCode: 400,
+    op: 'read',
+    body: { path: '/private/myfolder' },
+  },
+  {
+    index: 38,
     expectedCode: 200,
-    op: 'delete',
-    body: { path: '/teamspace/to/hello/newfolder' },
+    op: 'read',
+    body: { path: '/private/hi.md' },
+    expected: { content: 'hi' },
+  },
+  {
+    index: 39,
+    expectedCode: 404,
+    op: 'read',
+    body: { path: '/private/unexsists.md' },
+  },
+  {
+    index: 40,
+    expectedCode: 200,
+    op: 'read',
+    body: { path: '/teamspace/path/to/hello' },
+    expected: { content: 'hello' },
   },
   /**
-   * /teamspace/to/hello
-   * /private/hi.md/path
-   * /teamspace/hello
+   * /teamspace/hi
+   * /teamspace/path/to/hello/newfolder
+   * /private/hi.md
+   * /private/path/to/hello
+   * /private/myfolder
+   */
+  // delete operations
+  {
+    index: 41,
+    expectedCode: 409, // /private/path/to has children
+    op: 'delete',
+    body: { path: '/private/path/to' },
+  },
+  {
+    index: 42,
+    expectedCode: 200,
+    op: 'delete',
+    body: {
+      path: '/private/path/to',
+      recursive: true,
+    },
+  },
+  {
+    index: 43,
+    expectedCode: 200,
+    op: 'delete',
+    body: { path: '/teamspace/path/to/hello/newfolder' },
+  },
+  {
+    index: 44,
+    expectedCode: 200,
+    op: 'delete',
+    body: { path: '/teamspace/hi' },
+  },
+  {
+    index: 45,
+    expectedCode: 200,
+    op: 'delete',
+    body: { path: '/private/path' },
+  },
+  /**
+   * /teamspace/path/to/hello
+   * /private/hi.md
    * /private/myfolder
    */
   {
-    index: 35,
+    index: 46,
     expectedCode: 200,
     op: 'list',
-    body: { path: '/teamspace/to/hello' },
+    body: {
+      path: '/private',
+    },
+    expected: {
+      names: ['myfolder', 'hi.md'],
+      total: 2,
+    },
+  },
+  {
+    index: 47,
+    expectedCode: 200,
+    op: 'list',
+    body: {
+      path: '/teamspace',
+    },
+    expected: {
+      names: ['path'],
+      total: 1,
+    },
   },
 ];
 
@@ -535,6 +648,7 @@ describe('VFS (e2e)', () => {
         const resourceDto = plainToInstance(GetResponseDto, response.body);
         expect(resourceDto.path).toEqual(path);
         expect(resourceDto.content).toBeDefined();
+        expect(resourceDto.content).toEqual(testCase.expected?.content);
       }
     } else if (testCase.op === 'list') {
       if (!testCase.body) {
@@ -547,9 +661,19 @@ describe('VFS (e2e)', () => {
         .expect(testCase.expectedCode);
 
       if (testCase.expectedCode === 200) {
-        expect(response.body).toHaveProperty('resources');
-        expect(response.body).toHaveProperty('total');
-        expect(response.body).toHaveProperty('parent_path');
+        const listResponseDto: ListResponseDto = plainToInstance(
+          ListResponseDto,
+          response.body,
+        );
+        expect(listResponseDto.total).toEqual(testCase.expected?.total);
+        expect(listResponseDto.parentPath).toEqual(testCase.body.path);
+        for (const name of testCase.expected?.names ?? []) {
+          expect(
+            listResponseDto.resources.some(
+              (resource) => resource.name === name,
+            ),
+          ).toBeTruthy();
+        }
       }
     } else if (testCase.op === 'filter') {
       if (!testCase.body?.path) {
@@ -569,8 +693,18 @@ describe('VFS (e2e)', () => {
         .expect(testCase.expectedCode);
 
       if (testCase.expectedCode === 200) {
-        expect(response.body).toHaveProperty('resources');
-        expect(response.body).toHaveProperty('total');
+        const filterResponseDto: FilterResponseDto = plainToInstance(
+          FilterResponseDto,
+          response.body,
+        );
+        expect(filterResponseDto).toEqual(testCase.expected?.total);
+        for (const name of testCase.expected?.names ?? []) {
+          expect(
+            filterResponseDto.resources.some(
+              (resource) => resource.name === name,
+            ),
+          ).toBeTruthy();
+        }
       }
     }
   });

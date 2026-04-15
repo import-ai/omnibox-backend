@@ -90,7 +90,7 @@ export class ClearNotificationsResponseDto {
 }
 
 export class NotificationActionResponseDto {
-  actionType: string;
+  notificationType: string;
   targetType: string;
   targetId: string | null;
   targetUrl: string | null;
@@ -110,7 +110,7 @@ export class NotificationActionResponseDto {
       }
     });
 
-    dto.actionType = notification.actionType || 'none';
+    dto.notificationType = notification.notificationType || 'none';
     dto.targetType =
       target.type ||
       (target.task_id

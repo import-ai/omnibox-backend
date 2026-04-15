@@ -47,23 +47,14 @@ export class NotificationController {
   @Post('unread/clear')
   async clearUnread(
     @UserId() userId: string,
-    @Body() ClearNotificationsRequestDto: ClearNotificationsRequestDto,
+    @Body() clearNotifications: ClearNotificationsRequestDto,
     @Query('namespaceId') namespaceId: string | undefined,
   ) {
     return await this.notificationService.clearUnread(
       userId,
       namespaceId,
-      ClearNotificationsRequestDto,
+      clearNotifications,
     );
-  }
-
-  @Get(':id/action')
-  async getAction(
-    @Param('id') id: string,
-    @UserId() userId: string,
-    @Query('namespaceId') namespaceId: string | undefined,
-  ) {
-    return await this.notificationService.getAction(id, userId, namespaceId);
   }
 
   @Get(':id')
@@ -79,14 +70,14 @@ export class NotificationController {
   async patch(
     @Param('id') id: string,
     @UserId() userId: string,
-    @Body() UpdateNotificationRequestDto: UpdateNotificationRequestDto,
+    @Body() updateNotification: UpdateNotificationRequestDto,
     @Query('namespaceId') namespaceId: string | undefined,
   ) {
     return await this.notificationService.markAsRead(
       id,
       userId,
       namespaceId,
-      UpdateNotificationRequestDto,
+      updateNotification,
     );
   }
 }

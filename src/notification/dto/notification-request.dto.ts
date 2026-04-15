@@ -60,8 +60,8 @@ export class CreateNotificationRequestDto {
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.isNotEmpty'),
   })
-  @Expose({ name: 'action_type' })
-  actionType: string;
+  @Expose({ name: 'type' })
+  notificationType: string;
 
   @IsOptional()
   @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })

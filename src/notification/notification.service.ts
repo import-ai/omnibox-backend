@@ -11,7 +11,6 @@ import {
   ClearNotificationsRequestDto,
   CreateNotificationRequestDto,
   ClearNotificationsResponseDto,
-  NotificationActionResponseDto,
   NotificationDetailResponseDto,
   NotificationItemDto,
   NotificationListResponseDto,
@@ -23,7 +22,14 @@ import {
   Notification,
   NotificationStatus,
 } from './entities/notification.entity';
-import { FindOptionsWhere, In, IsNull, LessThan, Repository } from 'typeorm';
+import {
+  Brackets,
+  FindOptionsWhere,
+  In,
+  IsNull,
+  LessThan,
+  Repository,
+} from 'typeorm';
 
 const NOTIFICATION_RETENTION_DAYS = 30;
 const NOTIFICATION_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -69,15 +75,12 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
       namespaceId: createNotificationDto.namespaceId || null,
       title: createNotificationDto.title,
       content: createNotificationDto.content || null,
-      status:
-        createNotificationDto.status === 'read'
-          ? NotificationStatus.READ
-          : NotificationStatus.UNREAD,
-      actionType: createNotificationDto.actionType,
+      status: NotificationStatus.UNREAD,
+      notificationType: createNotificationDto.notificationType,
       target: createNotificationDto.target || {},
       tags: createNotificationDto.tags || [],
       attrs: createNotificationDto.attrs || {},
-      readAt: createNotificationDto.status === 'read' ? new Date() : null,
+      readAt: null,
     });
 
     return await this.notificationRepository.save(notification);
@@ -101,15 +104,27 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
 
     if (namespaceId) {
       queryBuilder.where(
-        `(
-          (notification.user_id IS NULL AND notification.namespace_id = :namespaceId)
-          OR (notification.user_id = :userId AND notification.namespace_id IS NULL)
-          OR (notification.user_id = :userId AND notification.namespace_id = :namespaceId)
-        )`,
-        {
-          userId,
-          namespaceId,
-        },
+        new Brackets((qb) => {
+          qb.where(
+            'notification.user_id IS NULL AND notification.namespace_id = :namespaceId',
+            {
+              namespaceId,
+            },
+          )
+            .orWhere(
+              'notification.user_id = :userId AND notification.namespace_id IS NULL',
+              {
+                userId,
+              },
+            )
+            .orWhere(
+              'notification.user_id = :userId AND notification.namespace_id = :namespaceId',
+              {
+                userId,
+                namespaceId,
+              },
+            );
+        }),
       );
     } else {
       queryBuilder.where(
@@ -191,7 +206,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     id: string,
     userId: string,
     namespaceId: string | undefined,
-    UpdateNotificationRequestDto: UpdateNotificationRequestDto,
+    updateNotification: UpdateNotificationRequestDto,
   ): Promise<UpdateNotificationResponseDto> {
     const notification = await this.findVisibleNotification(
       id,
@@ -212,7 +227,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     const saved = await this.notificationRepository.save({
       ...notification,
       status:
-        UpdateNotificationRequestDto.status === 'read'
+        updateNotification.status === 'read'
           ? NotificationStatus.READ
           : notification.status,
       readAt,
@@ -228,9 +243,9 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   async clearUnread(
     userId: string,
     namespaceId: string | undefined,
-    ClearNotificationsRequestDto: ClearNotificationsRequestDto,
+    clearNotifications: ClearNotificationsRequestDto,
   ): Promise<ClearNotificationsResponseDto> {
-    if (ClearNotificationsRequestDto.status === 'read') {
+    if (clearNotifications.status === 'read') {
       return {
         readedCount: 0,
       };
@@ -238,9 +253,8 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
 
     const where = this.buildVisibilityWhere(userId, namespaceId, {
       status: NotificationStatus.UNREAD,
-      ...(ClearNotificationsRequestDto.ids &&
-      ClearNotificationsRequestDto.ids.length > 0
-        ? { id: In(ClearNotificationsRequestDto.ids) }
+      ...(clearNotifications.ids && clearNotifications.ids.length > 0
+        ? { id: In(clearNotifications.ids) }
         : {}),
     });
 
@@ -266,29 +280,6 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     return {
       readedCount: notifications.length,
     };
-  }
-
-  async getAction(
-    id: string,
-    userId: string,
-    namespaceId?: string,
-  ): Promise<NotificationActionResponseDto> {
-    const notification = await this.findVisibleNotification(
-      id,
-      userId,
-      namespaceId,
-    );
-
-    if (!notification) {
-      const message = this.i18n.t('notification.errors.notificationNotFound');
-      throw new AppException(
-        message,
-        'NOTIFICATION_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
-    return NotificationActionResponseDto.fromEntity(notification);
   }
 
   async softDeleteExpiredNotifications(): Promise<number> {

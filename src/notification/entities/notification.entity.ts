@@ -27,8 +27,8 @@ export class Notification extends Base {
   @Column('varchar', { length: 16, default: NotificationStatus.UNREAD })
   status: NotificationStatus;
 
-  @Column('varchar', { length: 32 })
-  actionType: string;
+  @Column('varchar', { length: 32, name: 'notification_type' })
+  notificationType: string;
 
   @Column('jsonb', { default: {} })
   target: Record<string, any>;

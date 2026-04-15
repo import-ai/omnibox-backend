@@ -35,7 +35,7 @@ export class AddNotifications1776070800000 implements MigrationInterface {
           default: "'unread'",
         },
         {
-          name: 'action_type',
+          name: 'notification_type',
           type: 'character varying',
           length: '32',
           isNullable: false,

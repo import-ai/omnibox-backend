@@ -4,14 +4,5 @@
     "missingRequiredFields": "Missing required fields",
     "invalidTaskPayload": "Invalid task payload",
     "taskNotStarted": "Task {taskId} has not been started yet"
-  },
-  "notifications": {
-    "fileReaderSuccessTitle": "File parsing succeeded",
-    "fileReaderFailedTitle": "File parsing failed",
-    "contentProcessingSuccessTitle": "Content processing succeeded",
-    "contentProcessingFailedTitle": "Content processing failed",
-    "taskCompletedContent": "{resourceName} processed successfully",
-    "taskFailedContent": "{resourceName} processing failed",
-    "tag": "Parsing Result"
   }
 }

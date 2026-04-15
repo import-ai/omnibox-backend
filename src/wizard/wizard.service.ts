@@ -30,7 +30,6 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TempfileDto } from './dto/tempfile.dto';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
-import { NotificationService } from 'omniboxd/notification/notification.service';
 
 @Injectable()
 export class WizardService {
@@ -49,7 +48,6 @@ export class WizardService {
     private readonly s3Service: S3Service,
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
-    private readonly notificationService: NotificationService,
   ) {
     this.processors = {
       collect: new CollectProcessor(
@@ -260,7 +258,6 @@ export class WizardService {
       }
 
       await this.wizardTaskService.taskRepository.save(task);
-      await this.createTaskResultNotification(task);
 
       const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
       const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
@@ -281,65 +278,6 @@ export class WizardService {
     } finally {
       await this.tasksService.checkTaskMessage(task.namespaceId);
     }
-  }
-
-  private async createTaskResultNotification(task: Task) {
-    if (!this.shouldNotifyTask(task.function)) {
-      return;
-    }
-
-    const isFailed = task.status === TaskStatus.ERROR;
-    const resourceName =
-      task.input?.title ||
-      task.input?.original_name ||
-      task.input?.url ||
-      task.id;
-    const titleKey = this.getTaskNotificationTitleKey(task.function, isFailed);
-    const contentKey = isFailed
-      ? 'wizard.notifications.taskFailedContent'
-      : 'wizard.notifications.taskCompletedContent';
-
-    await this.notificationService.createInternal({
-      userId: task.userId,
-      title: this.i18n.t(titleKey),
-      content: this.i18n.t(contentKey, {
-        args: { resourceName },
-      }),
-      actionType: 'none',
-      target: {
-        resource_id: task.payload?.resource_id || task.payload?.resourceId,
-        task_id: task.id,
-      },
-      tags: [this.i18n.t('wizard.notifications.tag')],
-      attrs: {
-        source: 'wizard.task_done',
-        function: task.function,
-        namespace_id: task.namespaceId,
-        task_status: task.status,
-        exception: task.exception,
-      },
-    });
-  }
-
-  private shouldNotifyTask(taskFunction: string) {
-    return [
-      'file_reader',
-      'collect',
-      'generate_video_note',
-      'web_analysis',
-    ].includes(taskFunction);
-  }
-
-  private getTaskNotificationTitleKey(taskFunction: string, isFailed: boolean) {
-    if (taskFunction === 'file_reader') {
-      return isFailed
-        ? 'wizard.notifications.fileReaderFailedTitle'
-        : 'wizard.notifications.fileReaderSuccessTitle';
-    }
-
-    return isFailed
-      ? 'wizard.notifications.contentProcessingFailedTitle'
-      : 'wizard.notifications.contentProcessingSuccessTitle';
   }
 
   private async dispatchNextTasks(

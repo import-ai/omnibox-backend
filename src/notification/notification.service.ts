@@ -1,4 +1,9 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
+import {
+  Injectable,
+  HttpStatus,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
@@ -18,7 +23,10 @@ import {
   Notification,
   NotificationStatus,
 } from './entities/notification.entity';
-import { In, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
+
+const NOTIFICATION_RETENTION_DAYS = 30;
+const NOTIFICATION_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 interface ListNotificationsOptions {
   status?: string;
@@ -28,12 +36,28 @@ interface ListNotificationsOptions {
 }
 
 @Injectable()
-export class NotificationService {
+export class NotificationService implements OnModuleInit, OnModuleDestroy {
+  private cleanupTimer: NodeJS.Timeout | null = null;
+
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
     private readonly i18n: I18nService,
   ) {}
+
+  onModuleInit() {
+    this.softDeleteExpiredNotifications().catch(() => null);
+    this.cleanupTimer = setInterval(() => {
+      this.softDeleteExpiredNotifications().catch(() => null);
+    }, NOTIFICATION_CLEANUP_INTERVAL_MS);
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+  }
 
   /**
    * Write the notification into the notification database
@@ -246,5 +270,17 @@ export class NotificationService {
     }
 
     return NotificationActionResponseDto.fromEntity(notification);
+  }
+
+  async softDeleteExpiredNotifications(): Promise<number> {
+    const expiredBefore = new Date(
+      Date.now() -
+        NOTIFICATION_RETENTION_DAYS * NOTIFICATION_CLEANUP_INTERVAL_MS,
+    );
+    const result = await this.notificationRepository.softDelete({
+      updatedAt: LessThan(expiredBefore),
+    });
+
+    return result.affected || 0;
   }
 }

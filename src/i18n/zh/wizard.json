@@ -4,14 +4,5 @@
     "missingRequiredFields": "缺少必填字段",
     "invalidTaskPayload": "无效的任务载荷",
     "taskNotStarted": "任务 {taskId} 尚未开始"
-  },
-  "notifications": {
-    "fileReaderSuccessTitle": "文件解析成功",
-    "fileReaderFailedTitle": "文件解析失败",
-    "contentProcessingSuccessTitle": "内容解析成功",
-    "contentProcessingFailedTitle": "内容解析失败",
-    "taskCompletedContent": "{resourceName} 处理完成",
-    "taskFailedContent": "{resourceName} 处理失败",
-    "tag": "解析结果"
   }
 }

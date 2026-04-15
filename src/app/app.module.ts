@@ -97,6 +97,7 @@ import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/17749658
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
 import { NotificationModule } from 'omniboxd/notification/notification.module';
 import { AddNotifications1776070800000 } from 'omniboxd/migrations/1776070800000-add-notifications';
+import { UpdateNotificationsNamespace1776200000000 } from 'omniboxd/migrations/1776200000000-update-notifications-namespace';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -248,6 +249,7 @@ export class AppModule implements NestModule {
               MakeSizeNullable1769478367000,
               RenameVerifyCodeToKey1774965861436,
               AddNotifications1776070800000,
+              UpdateNotificationsNamespace1776200000000,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -1,5 +1,9 @@
 import { Expose } from 'class-transformer';
 import {
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  ValidationArguments,
+  Validate,
   IsArray,
   IsIn,
   IsInt,
@@ -12,12 +16,30 @@ import {
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
+@ValidatorConstraint({ name: 'notificationReceiverRequired', async: false })
+class NotificationReceiverRequiredConstraint implements ValidatorConstraintInterface {
+  validate(_: unknown, args: ValidationArguments) {
+    const dto = args.object as CreateNotificationRequestDto;
+    return Boolean(dto.userId || dto.namespaceId);
+  }
+
+  defaultMessage() {
+    return 'user_id or namespace_id is required';
+  }
+}
+
 export class CreateNotificationRequestDto {
+  @IsOptional()
   @IsUUID(undefined, {
     message: i18nValidationMessage('validation.errors.isUUID'),
   })
   @Expose({ name: 'user_id' })
-  userId: string;
+  userId?: string;
+
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @Expose({ name: 'namespace_id' })
+  namespaceId?: string;
 
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsNotEmpty({
@@ -52,9 +74,17 @@ export class CreateNotificationRequestDto {
   @IsOptional()
   @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   attrs?: Record<string, any>;
+
+  @Validate(NotificationReceiverRequiredConstraint)
+  receiverRequired?: boolean;
 }
 
-export class ListNotificationsDto {
+export class ListNotificationsRequestDto {
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @Expose({ name: 'namespaceId' })
+  namespaceId?: string;
+
   @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsIn(['all', 'unread', 'read'])
@@ -79,7 +109,7 @@ export class ListNotificationsDto {
   limit?: number;
 }
 
-export class UpdateNotificationDto {
+export class UpdateNotificationRequestDto {
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsIn(['read'], {
     message: i18nValidationMessage('validation.errors.isIn'),
@@ -87,7 +117,7 @@ export class UpdateNotificationDto {
   status: 'read';
 }
 
-export class ClearNotificationsDto {
+export class ClearNotificationsRequestDto {
   @IsOptional()
   @IsIn(['all', 'unread', 'read'], {
     message: i18nValidationMessage('validation.errors.isIn'),

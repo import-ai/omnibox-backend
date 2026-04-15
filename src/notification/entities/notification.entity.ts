@@ -1,5 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum NotificationStatus {
   UNREAD = 'unread',
@@ -7,12 +7,16 @@ export enum NotificationStatus {
 }
 
 @Entity('notifications')
+@Check(`("userId" IS NOT NULL OR "namespaceId" IS NOT NULL)`)
 export class Notification extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('uuid')
-  userId: string;
+  @Column('uuid', { nullable: true })
+  userId: string | null;
+
+  @Column('varchar', { nullable: true })
+  namespaceId: string | null;
 
   @Column()
   title: string;

@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import {
-  ClearNotificationsDto,
+  ClearNotificationsRequestDto,
   CreateNotificationRequestDto,
   ClearNotificationsResponseDto,
   NotificationActionResponseDto,
@@ -17,18 +17,19 @@ import {
   NotificationListResponseDto,
   NotificationUnreadCountResponseDto,
   UpdateNotificationResponseDto,
-  UpdateNotificationDto,
+  UpdateNotificationRequestDto,
 } from './dto';
 import {
   Notification,
   NotificationStatus,
 } from './entities/notification.entity';
-import { In, LessThan, Repository } from 'typeorm';
+import { FindOptionsWhere, In, IsNull, LessThan, Repository } from 'typeorm';
 
 const NOTIFICATION_RETENTION_DAYS = 30;
 const NOTIFICATION_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 interface ListNotificationsOptions {
+  namespaceId?: string;
   status?: string;
   tags?: string;
   offset?: number;
@@ -64,7 +65,8 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
    */
   async createInternal(createNotificationDto: CreateNotificationRequestDto) {
     const notification = this.notificationRepository.create({
-      userId: createNotificationDto.userId,
+      userId: createNotificationDto.userId || null,
+      namespaceId: createNotificationDto.namespaceId || null,
       title: createNotificationDto.title,
       content: createNotificationDto.content || null,
       status:
@@ -85,6 +87,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     userId: string,
     query: ListNotificationsOptions,
   ): Promise<NotificationListResponseDto> {
+    const namespaceId = query.namespaceId;
     const offset = query.offset || 1;
     const limit = query.limit || 20;
     const status = query.status || 'all';
@@ -93,9 +96,29 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
       .map((tag) => tag.trim())
       .filter((tag) => tag.length > 0);
 
-    const queryBuilder = this.notificationRepository
-      .createQueryBuilder('notification')
-      .where('notification.user_id = :userId', { userId });
+    const queryBuilder =
+      this.notificationRepository.createQueryBuilder('notification');
+
+    if (namespaceId) {
+      queryBuilder.where(
+        `(
+          (notification.user_id IS NULL AND notification.namespace_id = :namespaceId)
+          OR (notification.user_id = :userId AND notification.namespace_id IS NULL)
+          OR (notification.user_id = :userId AND notification.namespace_id = :namespaceId)
+        )`,
+        {
+          userId,
+          namespaceId,
+        },
+      );
+    } else {
+      queryBuilder.where(
+        'notification.user_id = :userId AND notification.namespace_id IS NULL',
+        {
+          userId,
+        },
+      );
+    }
 
     if (status !== 'all') {
       queryBuilder.andWhere('notification.status = :status', { status });
@@ -129,13 +152,13 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   async findOne(
     id: string,
     userId: string,
+    namespaceId?: string,
   ): Promise<NotificationDetailResponseDto> {
-    const notification = await this.notificationRepository.findOne({
-      where: {
-        id,
-        userId,
-      },
-    });
+    const notification = await this.findVisibleNotification(
+      id,
+      userId,
+      namespaceId,
+    );
 
     if (!notification) {
       const message = this.i18n.t('notification.errors.notificationNotFound');
@@ -151,12 +174,12 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
 
   async getUnreadCount(
     userId: string,
+    namespaceId?: string,
   ): Promise<NotificationUnreadCountResponseDto> {
     const unreadCount = await this.notificationRepository.count({
-      where: {
-        userId,
+      where: this.buildVisibilityWhere(userId, namespaceId, {
         status: NotificationStatus.UNREAD,
-      },
+      }),
     });
 
     return {
@@ -167,14 +190,14 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   async markAsRead(
     id: string,
     userId: string,
-    updateNotificationDto: UpdateNotificationDto,
+    namespaceId: string | undefined,
+    UpdateNotificationRequestDto: UpdateNotificationRequestDto,
   ): Promise<UpdateNotificationResponseDto> {
-    const notification = await this.notificationRepository.findOne({
-      where: {
-        id,
-        userId,
-      },
-    });
+    const notification = await this.findVisibleNotification(
+      id,
+      userId,
+      namespaceId,
+    );
 
     if (!notification) {
       const message = this.i18n.t('notification.errors.notificationNotFound');
@@ -189,7 +212,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     const saved = await this.notificationRepository.save({
       ...notification,
       status:
-        updateNotificationDto.status === 'read'
+        UpdateNotificationRequestDto.status === 'read'
           ? NotificationStatus.READ
           : notification.status,
       readAt,
@@ -204,26 +227,22 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
 
   async clearUnread(
     userId: string,
-    clearNotificationsDto: ClearNotificationsDto,
+    namespaceId: string | undefined,
+    ClearNotificationsRequestDto: ClearNotificationsRequestDto,
   ): Promise<ClearNotificationsResponseDto> {
-    if (clearNotificationsDto.status === 'read') {
+    if (ClearNotificationsRequestDto.status === 'read') {
       return {
         readedCount: 0,
       };
     }
 
-    const where: {
-      userId: string;
-      status: NotificationStatus;
-      id?: ReturnType<typeof In>;
-    } = {
-      userId,
+    const where = this.buildVisibilityWhere(userId, namespaceId, {
       status: NotificationStatus.UNREAD,
-    };
-
-    if (clearNotificationsDto.ids && clearNotificationsDto.ids.length > 0) {
-      where.id = In(clearNotificationsDto.ids);
-    }
+      ...(ClearNotificationsRequestDto.ids &&
+      ClearNotificationsRequestDto.ids.length > 0
+        ? { id: In(ClearNotificationsRequestDto.ids) }
+        : {}),
+    });
 
     const notifications = await this.notificationRepository.find({
       where,
@@ -252,13 +271,13 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   async getAction(
     id: string,
     userId: string,
+    namespaceId?: string,
   ): Promise<NotificationActionResponseDto> {
-    const notification = await this.notificationRepository.findOne({
-      where: {
-        id,
-        userId,
-      },
-    });
+    const notification = await this.findVisibleNotification(
+      id,
+      userId,
+      namespaceId,
+    );
 
     if (!notification) {
       const message = this.i18n.t('notification.errors.notificationNotFound');
@@ -282,5 +301,49 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     });
 
     return result.affected || 0;
+  }
+
+  private buildVisibilityWhere(
+    userId: string,
+    namespaceId?: string,
+    extra: FindOptionsWhere<Notification> = {},
+  ): FindOptionsWhere<Notification>[] | FindOptionsWhere<Notification> {
+    if (!namespaceId) {
+      return {
+        ...extra,
+        userId,
+        namespaceId: IsNull(),
+      };
+    }
+
+    return [
+      {
+        ...extra,
+        userId: IsNull(),
+        namespaceId,
+      },
+      {
+        ...extra,
+        userId,
+        namespaceId: IsNull(),
+      },
+      {
+        ...extra,
+        userId,
+        namespaceId,
+      },
+    ];
+  }
+
+  private async findVisibleNotification(
+    id: string,
+    userId: string,
+    namespaceId?: string,
+  ): Promise<Notification | null> {
+    return await this.notificationRepository.findOne({
+      where: this.buildVisibilityWhere(userId, namespaceId, {
+        id,
+      }),
+    });
   }
 }

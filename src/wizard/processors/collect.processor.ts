@@ -36,12 +36,14 @@ export class CollectProcessor extends Processor {
     if (task.exception && !isEmpty(task.exception)) {
       const content = this.buildErrorContent(task);
       await this.namespaceResourcesService.update(
+        task.namespaceId,
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {
           namespaceId: task.namespaceId,
           content,
         }),
+        true, // autoRenameOnConflict for error content updates
       );
       return {};
     } else if (task.output) {
@@ -75,6 +77,7 @@ export class CollectProcessor extends Processor {
       );
       const mergedAttrs = { ...(resource?.attrs || {}), ...attrs };
       await this.namespaceResourcesService.update(
+        task.namespaceId,
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {
@@ -84,6 +87,7 @@ export class CollectProcessor extends Processor {
           attrs: mergedAttrs,
           tag_ids: tagIds,
         }),
+        true, // autoRenameOnConflict for AI-generated titles
       );
       return { resourceId, tagIds };
     }

@@ -36,12 +36,14 @@ export class GenerateTitleProcessor extends Processor {
       if (typeof generatedTitle === 'string' && generatedTitle.trim()) {
         // Update the resource with generated title
         await this.namespaceResourcesService.update(
+          task.namespaceId,
           task.userId,
           resourceId,
           Object.assign(new UpdateResourceDto(), {
             namespaceId: task.namespaceId,
             name: generatedTitle.trim(),
           }),
+          true, // autoRenameOnConflict for AI-generated titles
         );
 
         return { resourceId, title: generatedTitle.trim() };

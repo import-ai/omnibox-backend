@@ -169,12 +169,19 @@ describe('CollectProcessor', () => {
         const result = await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
+            name: undefined,
             content: 'error',
+            attrs: undefined,
+            tag_ids: undefined,
+            parentId: undefined,
+            resourceType: undefined,
           },
+          true,
         );
         expect(result).toEqual({});
       });
@@ -216,6 +223,7 @@ describe('CollectProcessor', () => {
           'test-resource-id',
         );
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -227,6 +235,7 @@ describe('CollectProcessor', () => {
               customAttr: 'custom value',
             },
           },
+          true,
         );
         expect(result).toEqual({ resourceId: 'test-resource-id' });
       });
@@ -255,6 +264,7 @@ describe('CollectProcessor', () => {
         await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -267,6 +277,7 @@ describe('CollectProcessor', () => {
               url: 'https://updated.com',
             },
           },
+          true,
         );
       });
 
@@ -293,6 +304,7 @@ describe('CollectProcessor', () => {
         await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -303,6 +315,7 @@ describe('CollectProcessor', () => {
               newAttr: 'new value',
             },
           },
+          true,
         );
       });
 
@@ -322,6 +335,7 @@ describe('CollectProcessor', () => {
         await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -332,6 +346,7 @@ describe('CollectProcessor', () => {
               url: 'https://example.com',
             },
           },
+          true,
         );
       });
 
@@ -365,6 +380,7 @@ describe('CollectProcessor', () => {
           ['tag1', 'tag2', 'tag3'],
         );
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -379,6 +395,7 @@ describe('CollectProcessor', () => {
             },
             tag_ids: ['id1', 'id2', 'id3'],
           },
+          true,
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',
@@ -409,6 +426,7 @@ describe('CollectProcessor', () => {
         const result = await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -420,6 +438,7 @@ describe('CollectProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',
@@ -457,6 +476,7 @@ describe('CollectProcessor', () => {
         const result = await processor.process(task);
 
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -468,6 +488,7 @@ describe('CollectProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',

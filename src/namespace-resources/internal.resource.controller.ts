@@ -1,10 +1,19 @@
-import { Controller, Get, Param, Post, Query, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Post,
+  Patch,
+  Query,
+  Body,
+} from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { FilesService } from 'omniboxd/files/files.service';
-import { FilterResourcesRequestDto } from 'omniboxd/namespace-resources/dto/filter-resources-request.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
@@ -24,55 +33,6 @@ export class InternalResourcesController {
     return await this.namespaceResourcesService.getResourceFileForInternal(
       namespaceId,
       resourceId,
-    );
-  }
-
-  @Public()
-  @Get('namespaces/:namespaceId/resources')
-  async getResources(
-    @Param('namespaceId') namespaceId: string,
-    @Query('id') resourceIds?: string,
-    @Query('createdAtBefore') createdAtBefore?: Date,
-    @Query('createdAtAfter') createdAtAfter?: Date,
-    @Query('userId') userId?: string,
-    @Query('parentId') parentId?: string,
-    @Query('tag') tag?: string,
-    @Query('nameContains') nameContains?: string,
-    @Query('contentContains') contentContains?: string,
-  ) {
-    const ids = resourceIds
-      ? resourceIds.split(',').filter((id) => id)
-      : undefined;
-    const tags = tag ? tag.split(',').filter((t) => t.trim()) : undefined;
-    return await this.namespaceResourcesService.getResourcesForInternal(
-      namespaceId,
-      ids,
-      createdAtBefore,
-      createdAtAfter,
-      userId,
-      parentId,
-      tags,
-      nameContains,
-      contentContains,
-    );
-  }
-
-  @Public()
-  @Post('namespaces/:namespaceId/resources/query')
-  async filterResources(
-    @Param('namespaceId') namespaceId: string,
-    @Body() filterDto: FilterResourcesRequestDto,
-  ) {
-    return await this.namespaceResourcesService.getResourcesForInternal(
-      namespaceId,
-      filterDto.ids,
-      filterDto.createdAtBefore,
-      filterDto.createdAtAfter,
-      filterDto.userId,
-      filterDto.parentId,
-      filterDto.tags,
-      filterDto.nameContains,
-      filterDto.contentContains,
     );
   }
 
@@ -128,5 +88,21 @@ export class InternalResourcesController {
       batchSize,
     );
     return result;
+  }
+
+  @Public()
+  @Patch('namespaces/:namespaceId/resources/:resourceId')
+  async patchResource(
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @HeaderUserId() userId: string,
+    @Body() updateDto: UpdateResourceDto,
+  ) {
+    return await this.namespaceResourcesService.update(
+      namespaceId,
+      userId,
+      resourceId,
+      updateDto,
+    );
   }
 }

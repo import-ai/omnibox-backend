@@ -4,7 +4,6 @@ import { I18nService, I18nContext } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
-import { User } from 'omniboxd/user/entities/user.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
@@ -36,10 +35,10 @@ export class ConversationsService {
     private readonly i18n: I18nService,
   ) {}
 
-  async create(namespaceId: string, user: User) {
+  async create(namespaceId: string, userId: string) {
     const conversation = this.conversationRepository.create({
       namespaceId,
-      userId: user.id,
+      userId: userId,
       title: '',
     });
     return await this.conversationRepository.save(conversation);
@@ -217,6 +216,7 @@ export class ConversationsService {
       if (msg.message.role === OpenAIMessageRole.SYSTEM) {
         continue;
       }
+      delete msg.attrs?.context;
       detail.mapping[msg.id] = {
         id: msg.id,
         message: msg.message,
@@ -235,13 +235,13 @@ export class ConversationsService {
 
   async getConversationForUser(
     conversationId: string,
-    user: User,
+    userId: string,
   ): Promise<ConversationDetailDto> {
     const conversation = await this.conversationRepository.findOneOrFail({
-      where: { id: conversationId, userId: user.id },
+      where: { id: conversationId, userId: userId },
     });
     const messages = await this.messagesService.findAll(
-      user.id,
+      userId,
       conversation.id,
     );
     return this.convertToConversationDetail(conversation, messages);

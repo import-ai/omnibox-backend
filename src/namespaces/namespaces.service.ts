@@ -95,8 +95,15 @@ export class NamespacesService {
     );
   }
 
-  async getPrivateRootId(userId: string, namespaceId: string): Promise<string> {
-    const member = await this.namespaceMemberRepository.findOne({
+  async getPrivateRootId(
+    userId: string,
+    namespaceId: string,
+    manager?: EntityManager,
+  ): Promise<string> {
+    const repo = manager
+      ? manager.getRepository(NamespaceMember)
+      : this.namespaceMemberRepository;
+    const member = await repo.findOne({
       where: {
         userId,
         namespaceId,

@@ -22,6 +22,11 @@ import {
   bigintStringToNumber,
   numberToBigintString,
 } from 'omniboxd/utils/bigint-utils';
+import { isOptional } from 'omniboxd/utils/is-empty';
+import {
+  sanitizeResourceName,
+  generateUniqueResourceName,
+} from 'omniboxd/utils/sanitize-resource-name';
 
 const TASK_PRIORITY = 5;
 
@@ -37,6 +42,126 @@ export class ResourcesService {
     private readonly filesService: FilesService,
     private readonly storageUsagesService: StorageUsagesService,
   ) {}
+
+  private validateResourceName(
+    name: string | undefined,
+    autoRenameOnConflict?: boolean,
+  ): string | undefined {
+    if (!name) {
+      return name;
+    }
+    if (name.includes('/')) {
+      if (autoRenameOnConflict) {
+        // Sanitize by replacing '/' with '_'
+        return sanitizeResourceName(name);
+      }
+      const message = this.i18n.t('resource.errors.resourceNameContainsSlash');
+      throw new AppException(
+        message,
+        'RESOURCE_NAME_CONTAINS_SLASH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return name;
+  }
+
+  private async checkNameConflict(
+    namespaceId: string,
+    parentId: string | null,
+    name: string | undefined,
+    excludeId?: string,
+    entityManager?: EntityManager,
+  ): Promise<void> {
+    if (!name) {
+      return;
+    }
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    const qb = repo
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
+        parentId,
+      })
+      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
+      .andWhere('resource.deleted_at IS NULL');
+    if (excludeId) {
+      qb.andWhere('resource.id != :excludeId', { excludeId });
+    }
+    const count = await qb.getCount();
+    if (count > 0) {
+      const message = this.i18n.t('resource.errors.resourceNameConflict');
+      throw new AppException(
+        message,
+        'RESOURCE_NAME_CONFLICT',
+        HttpStatus.CONFLICT,
+      );
+    }
+  }
+
+  private async isNameExists(
+    namespaceId: string,
+    parentId: string | null,
+    name: string,
+    excludeId?: string,
+    entityManager?: EntityManager,
+  ): Promise<boolean> {
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    const qb = repo
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
+        parentId,
+      })
+      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
+      .andWhere('resource.deleted_at IS NULL');
+    if (excludeId) {
+      qb.andWhere('resource.id != :excludeId', { excludeId });
+    }
+    const count = await qb.getCount();
+    return count > 0;
+  }
+
+  private async resolveUniqueName(
+    namespaceId: string,
+    parentId: string | null,
+    name: string | undefined,
+    autoRenameOnConflict: boolean,
+    excludeId?: string,
+    entityManager?: EntityManager,
+  ): Promise<string | undefined> {
+    if (!name) {
+      return name;
+    }
+
+    if (!autoRenameOnConflict) {
+      // Just check for conflict, throw if exists
+      await this.checkNameConflict(
+        namespaceId,
+        parentId,
+        name,
+        excludeId,
+        entityManager,
+      );
+      return name;
+    }
+
+    // Auto-rename on conflict
+    const isNameExists = async (candidateName: string): Promise<boolean> => {
+      return this.isNameExists(
+        namespaceId,
+        parentId,
+        candidateName,
+        excludeId,
+        entityManager,
+      );
+    };
+
+    return generateUniqueResourceName(name, isNameExists);
+  }
 
   async getParentResourcesOrFail(
     namespaceId: string,
@@ -222,6 +347,7 @@ export class ResourcesService {
       limit?: number;
       offset?: number;
     },
+    entityManager?: EntityManager,
   ): Promise<Resource[]> {
     const baseFields: (keyof Resource)[] = [
       'id',
@@ -238,7 +364,11 @@ export class ResourcesService {
       ? [...baseFields, ...summaryFields]
       : baseFields;
 
-    return await this.resourceRepository.find({
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+
+    return await repo.find({
       select,
       where: {
         namespaceId,
@@ -285,6 +415,7 @@ export class ResourcesService {
         'createdAt',
         'updatedAt',
         'attrs',
+        'tagIds',
       ],
       where: {
         namespaceId,
@@ -329,76 +460,146 @@ export class ResourcesService {
     });
   }
 
-  async batchGetResources(
+  async resourceFilter(
     namespaceId: string,
-    resourceIds?: string[],
-    createdAtBefore?: Date,
-    createdAtAfter?: Date,
-    userId?: string,
-    parentId?: string,
-    tagIds?: string[],
-    nameContains?: string,
-    contentContains?: string,
-  ): Promise<Resource[]> {
-    const hasFilter =
-      (resourceIds && resourceIds.length > 0) ||
-      createdAtBefore ||
-      createdAtAfter ||
-      userId ||
-      parentId ||
-      (tagIds && tagIds.length > 0) ||
-      nameContains ||
-      contentContains;
-    if (!hasFilter) {
+    resourceIds: string[],
+    options?: {
+      createdAtBefore?: Date;
+      createdAtAfter?: Date;
+      updatedAtBefore?: Date;
+      updatedAtAfter?: Date;
+      tagIds?: string[];
+      namePattern?: string;
+      contentPattern?: string;
+      urlPattern?: string;
+      userId?: string;
+      parentId?: string;
+      resourceTypes?: ResourceType[];
+      offset?: number;
+      limit?: number;
+    },
+  ): Promise<{ resources: Resource[]; total: number }> {
+    if (!resourceIds || resourceIds.length === 0) {
+      throw new AppException(
+        'Invalid resourceIds',
+        'INVALID_RESOURCE_IDS',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const fields = [
+      'createdAtBefore',
+      'createdAtAfter',
+      'updatedAtBefore',
+      'updatedAtAfter',
+      'tagIds',
+      'namePattern',
+      'contentPattern',
+      'urlPattern',
+      'userId',
+      'parentId',
+      'resourceTypes',
+      'offset',
+      'limit',
+    ];
+    if (
+      !options ||
+      !Object.entries(options).some(
+        ([k, v]) => fields.includes(k) && !isOptional(v),
+      )
+    ) {
       throw new AppException(
         'At least one filter parameter is required',
         'FILTER_REQUIRED',
         HttpStatus.BAD_REQUEST,
       );
     }
-
     const queryBuilder = this.resourceRepository
       .createQueryBuilder('resource')
-      .where('resource.namespace_id = :namespaceId', { namespaceId });
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.id IN (:...resourceIds)', { resourceIds });
 
-    if (resourceIds) {
-      if (resourceIds.length === 0) {
-        return [];
-      }
-      queryBuilder.andWhere('resource.id IN (:...resourceIds)', {
+    if (!isOptional(options.createdAtBefore)) {
+      queryBuilder.andWhere('resource.created_at < :createdAtBefore', {
+        createdAtBefore: options.createdAtBefore,
+      });
+    }
+    if (!isOptional(options.createdAtAfter)) {
+      queryBuilder.andWhere('resource.created_at > :createdAtAfter', {
+        createdAtAfter: options.createdAtAfter,
+      });
+    }
+    if (!isOptional(options.updatedAtBefore)) {
+      queryBuilder.andWhere('resource.updated_at < :updatedAtBefore', {
+        updatedAtBefore: options.updatedAtBefore,
+      });
+    }
+    if (!isOptional(options.updatedAtAfter)) {
+      queryBuilder.andWhere('resource.updated_at > :updatedAtAfter', {
+        updatedAtAfter: options.updatedAtAfter,
+      });
+    }
+    if (!isOptional(options.tagIds)) {
+      queryBuilder.andWhere('resource.tag_ids && :tagIds', {
+        tagIds: options.tagIds,
+      });
+    }
+    if (!isOptional(options.namePattern)) {
+      queryBuilder.andWhere('resource.name ~* :namePattern', {
+        namePattern: options.namePattern,
+      });
+    }
+    if (!isOptional(options.contentPattern)) {
+      queryBuilder.andWhere('resource.content ~* :contentPattern', {
+        contentPattern: options.contentPattern,
+      });
+    }
+    if (!isOptional(options.urlPattern)) {
+      queryBuilder.andWhere("resource.attrs->>'url' ~* :urlPattern", {
+        urlPattern: options.urlPattern,
+      });
+    }
+    if (!isOptional(options.userId)) {
+      queryBuilder.andWhere('resource.user_id = :userId', {
+        userId: options.userId,
+      });
+    }
+    if (!isOptional(options.parentId)) {
+      queryBuilder.andWhere('resource.parent_id = :parentId', {
+        parentId: options.parentId,
+      });
+    }
+    if (!isOptional(options.resourceTypes)) {
+      queryBuilder.andWhere('resource.resource_type IN (:...resourceTypes)', {
+        resourceTypes: options.resourceTypes,
+      });
+    }
+    queryBuilder
+      .orderBy('resource.created_at', 'DESC')
+      .addOrderBy('resource.id', 'ASC');
+    if (!isOptional(options.offset)) {
+      queryBuilder.skip(options.offset);
+    }
+    if (!isOptional(options.limit)) {
+      queryBuilder.take(options.limit);
+    }
+    const [resources, total] = await queryBuilder.getManyAndCount();
+    return { resources, total };
+  }
+
+  async batchGetResources(
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<Resource[]> {
+    if (resourceIds.length === 0) {
+      return [];
+    }
+    const queryBuilder = this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.id IN (:...resourceIds)', {
         resourceIds,
       });
-    }
-    if (createdAtBefore) {
-      queryBuilder.andWhere('resource.created_at <= :createdAtBefore', {
-        createdAtBefore,
-      });
-    }
-    if (createdAtAfter) {
-      queryBuilder.andWhere('resource.created_at >= :createdAtAfter', {
-        createdAtAfter,
-      });
-    }
-    if (userId) {
-      queryBuilder.andWhere('resource.user_id = :userId', { userId });
-    }
-    if (parentId) {
-      queryBuilder.andWhere('resource.parent_id = :parentId', { parentId });
-    }
-    if (tagIds) {
-      queryBuilder.andWhere('resource.tag_ids && :tagIds', { tagIds });
-    }
-    if (nameContains) {
-      queryBuilder.andWhere('resource.name ILIKE :nameContains', {
-        nameContains: `%${nameContains}%`,
-      });
-    }
-    if (contentContains) {
-      queryBuilder.andWhere('resource.content ILIKE :contentContains', {
-        contentContains: `%${contentContains}%`,
-      });
-    }
-
     return await queryBuilder.getMany();
   }
 
@@ -430,10 +631,18 @@ export class ResourcesService {
       attrs?: Record<string, any>;
     },
     tx?: Transaction,
+    autoRenameOnConflict: boolean = false,
   ): Promise<void> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.updateResource(namespaceId, resourceId, userId, props, tx),
+        this.updateResource(
+          namespaceId,
+          resourceId,
+          userId,
+          props,
+          tx,
+          autoRenameOnConflict,
+        ),
       );
     }
 
@@ -475,15 +684,54 @@ export class ResourcesService {
       );
     }
 
+    // Validate and sanitize resource name
+    let resolvedName = props.name;
+    if (resolvedName !== undefined) {
+      resolvedName = this.validateResourceName(
+        resolvedName,
+        autoRenameOnConflict,
+      );
+    }
+
+    // Resolve unique name on rename
+    if (resolvedName !== undefined && !props.parentId) {
+      resolvedName = await this.resolveUniqueName(
+        namespaceId,
+        oldResource.parentId,
+        resolvedName,
+        autoRenameOnConflict,
+        resourceId,
+        entityManager,
+      );
+    }
+    // Resolve unique name on move (or move + rename)
+    if (props.parentId) {
+      const effectiveName = resolvedName ?? oldResource.name;
+      resolvedName = await this.resolveUniqueName(
+        namespaceId,
+        props.parentId,
+        effectiveName,
+        autoRenameOnConflict,
+        resourceId,
+        entityManager,
+      );
+    }
+
+    // Update props with resolved name
+    const updatedProps = {
+      ...props,
+      name: resolvedName,
+    };
+
     const contentSize =
-      props.content !== undefined
-        ? Buffer.byteLength(props.content, 'utf8')
+      updatedProps.content !== undefined
+        ? Buffer.byteLength(updatedProps.content, 'utf8')
         : undefined;
 
     await repo.update(
       { namespaceId, id: resourceId },
       {
-        ...props,
+        ...updatedProps,
         ...(contentSize !== undefined && {
           contentSize: numberToBigintString(contentSize),
         }),
@@ -538,10 +786,11 @@ export class ResourcesService {
       source?: string;
     },
     tx?: Transaction,
+    autoRenameOnConflict: boolean = false,
   ): Promise<Resource> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.createResource(props, tx),
+        this.createResource(props, tx, autoRenameOnConflict),
       );
     }
 
@@ -556,10 +805,31 @@ export class ResourcesService {
       );
     }
 
-    if (props.fileId) {
+    // Validate and sanitize resource name
+    let resolvedName = this.validateResourceName(
+      props.name,
+      autoRenameOnConflict,
+    );
+    // Resolve unique name (handles auto-rename on conflict)
+    resolvedName = await this.resolveUniqueName(
+      props.namespaceId,
+      props.parentId,
+      resolvedName,
+      autoRenameOnConflict,
+      undefined,
+      entityManager,
+    );
+
+    // Create props with resolved name
+    const createProps = {
+      ...props,
+      name: resolvedName,
+    };
+
+    if (createProps.fileId) {
       const file = await this.filesService.getFile(
-        props.namespaceId,
-        props.fileId,
+        createProps.namespaceId,
+        createProps.fileId,
       );
       if (!file) {
         const message = this.i18n.t('resource.errors.fileNotFound');
@@ -569,10 +839,10 @@ export class ResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      if (props.userId && file.size !== null) {
+      if (createProps.userId && file.size !== null) {
         await this.storageUsagesService.updateStorageUsage(
-          props.namespaceId,
-          props.userId,
+          createProps.namespaceId,
+          createProps.userId,
           StorageType.UPLOAD,
           bigintStringToNumber(file.size),
           tx,
@@ -580,14 +850,14 @@ export class ResourcesService {
       }
     }
 
-    const contentSize = props.content
-      ? Buffer.byteLength(props.content, 'utf8')
+    const contentSize = createProps.content
+      ? Buffer.byteLength(createProps.content, 'utf8')
       : 0;
 
     const repo = entityManager.getRepository(Resource);
     const resource = await repo.save(
       repo.create({
-        ...props,
+        ...createProps,
         contentSize: numberToBigintString(contentSize),
       }),
     );
@@ -612,7 +882,7 @@ export class ResourcesService {
       await this.wizardTaskService.emitFileReaderTask(
         resource.userId,
         resource,
-        props.source || 'default',
+        createProps.source || 'default',
         tx,
       );
     } else if (resource.parentId) {

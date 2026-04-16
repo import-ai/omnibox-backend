@@ -16,6 +16,8 @@
     "cannotSetParentToSubResource": "Cannot set parent to a sub-resource",
     "invalidResourceType": "Invalid resource type",
     "trashItemNotFound": "Item not found in trash",
-    "cannotPermanentlyDeleteRoot": "Cannot permanently delete root resource"
+    "cannotPermanentlyDeleteRoot": "Cannot permanently delete root resource",
+    "resourceNameContainsSlash": "Resource name cannot contain '/'",
+    "resourceNameConflict": "Resource name already exists in this directory"
   }
 }

@@ -26,7 +26,8 @@ export class UpdateResourceDto {
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.namespaceId.isNotEmpty'),
   })
-  namespaceId: string;
+  @IsOptional()
+  namespaceId?: string;
 
   @IsEnum(ResourceType, {
     message: i18nValidationMessage('validation.errors.resourceType.isEnum'),

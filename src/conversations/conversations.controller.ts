@@ -10,9 +10,9 @@ import {
   Patch,
   Post,
   Query,
-  Req,
 } from '@nestjs/common';
 import { ConversationSummaryDto } from './dto/conversation-summary.dto';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/conversations')
 export class ConversationsController {
@@ -20,7 +20,7 @@ export class ConversationsController {
 
   @Get()
   async list(
-    @Req() req,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
@@ -29,20 +29,19 @@ export class ConversationsController {
     total: number;
     data: ConversationSummaryDto[];
   }> {
-    return await this.conversationsService.listSummary(
-      namespaceId,
-      req.user.id,
-      {
-        limit: limit ? Number(limit) : undefined,
-        offset: offset ? Number(offset) : undefined,
-        order,
-      },
-    );
+    return await this.conversationsService.listSummary(namespaceId, userId, {
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+      order,
+    });
   }
 
   @Post()
-  async create(@Req() req, @Param('namespaceId') namespaceId: string) {
-    return await this.conversationsService.create(namespaceId, req.user);
+  async create(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+  ) {
+    return await this.conversationsService.create(namespaceId, userId);
   }
 
   @Patch(':id')
@@ -56,38 +55,38 @@ export class ConversationsController {
   @Get(':id')
   async get(
     @Param('id') id: string,
-    @Req() req,
+    @UserId() userId: string,
   ): Promise<ConversationDetailDto> {
-    return await this.conversationsService.getConversationForUser(id, req.user);
+    return await this.conversationsService.getConversationForUser(id, userId);
   }
 
   @Post(':id/title')
-  async createTitle(@Param('id') id: string, @Req() req) {
-    return await this.conversationsService.createTitle(id, req.user.id);
+  async createTitle(@Param('id') id: string, @UserId() userId: string) {
+    return await this.conversationsService.createTitle(id, userId);
   }
 
   @Delete(':id')
   async remove(
-    @Req() req,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('id') conversationId: string,
   ) {
     return await this.conversationsService.remove(
       namespaceId,
-      req.user.id,
+      userId,
       conversationId,
     );
   }
 
   @Post(':id/restore')
   async restore(
-    @Req() req,
+    @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('id') conversationId: string,
   ) {
     return await this.conversationsService.restore(
       namespaceId,
-      req.user.id,
+      userId,
       conversationId,
     );
   }

@@ -125,6 +125,7 @@ export class TestClient {
   get(url: string) {
     return this.request()
       .get(url)
+      .set('X-User-Id', this.user.id)
       .set('Authorization', `Bearer ${this.user.token}`)
       .set('Cookie', `token=${this.user.token}`);
   }
@@ -132,6 +133,7 @@ export class TestClient {
   post(url: string) {
     return this.request()
       .post(url)
+      .set('X-User-Id', this.user.id)
       .set('Authorization', `Bearer ${this.user.token}`)
       .set('Cookie', `token=${this.user.token}`);
   }
@@ -139,6 +141,7 @@ export class TestClient {
   patch(url: string) {
     return this.request()
       .patch(url)
+      .set('X-User-Id', this.user.id)
       .set('Authorization', `Bearer ${this.user.token}`)
       .set('Cookie', `token=${this.user.token}`);
   }
@@ -146,6 +149,7 @@ export class TestClient {
   put(url: string) {
     return this.request()
       .put(url)
+      .set('X-User-Id', this.user.id)
       .set('Authorization', `Bearer ${this.user.token}`)
       .set('Cookie', `token=${this.user.token}`);
   }
@@ -153,6 +157,7 @@ export class TestClient {
   delete(url: string) {
     return this.request()
       .delete(url)
+      .set('X-User-Id', this.user.id)
       .set('Authorization', `Bearer ${this.user.token}`)
       .set('Cookie', `token=${this.user.token}`);
   }

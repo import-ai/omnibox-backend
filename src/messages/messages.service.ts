@@ -8,7 +8,10 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import { User } from 'omniboxd/user/entities/user.entity';
-import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
+import {
+  ChatCheckpointResponse,
+  ChatDeltaResponse,
+} from '../wizard/dto/chat-response.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 
@@ -84,6 +87,21 @@ export class MessagesService {
 
   add(source?: string, delta?: string): string | undefined {
     return delta ? (source || '') + delta : source;
+  }
+
+  async saveCheckpoint(id: string, chunk: ChatCheckpointResponse) {
+    if (chunk.checkpoint) {
+      const message = await this.messageRepository.findOneOrFail({
+        where: { id },
+      });
+
+      message.attrs = message.attrs || {};
+      message.attrs.context = {
+        checkpoint: chunk.checkpoint,
+      };
+      message.status = MessageStatus.SUCCESS;
+      return await this.messageRepository.save(message);
+    }
   }
 
   async updateDelta(id: string, delta: ChatDeltaResponse) {

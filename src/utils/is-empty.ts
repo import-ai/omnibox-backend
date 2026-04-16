@@ -30,3 +30,7 @@ export function isEmpty(
     'Expected a string, array, or record, but received: ' + typeof value,
   );
 }
+
+export function isOptional(value: any): value is undefined | null {
+  return value === undefined || value === null;
+}

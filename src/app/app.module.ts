@@ -8,6 +8,7 @@ import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.intercept
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { ResourceTagsModule } from 'omniboxd/resource-tags/resource-tags.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { UserModule } from 'omniboxd/user/user.module';
@@ -94,11 +95,15 @@ import { AddContentSizeToResources1769415718000 } from 'omniboxd/migrations/1769
 import { AddSizeToFiles1769415719000 } from 'omniboxd/migrations/1769415719000-add-size-to-files';
 import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000-make-size-nullable';
 import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/1774965861436-rename-verify-code-to-key';
+import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/1775666229211-deduplicate-resource-names';
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
 import { NotificationModule } from 'omniboxd/notification/notification.module';
 import { AddNotifications1776070800000 } from 'omniboxd/migrations/1776070800000-add-notifications';
 import { UpdateNotificationsNamespace1776200000000 } from 'omniboxd/migrations/1776200000000-update-notifications-namespace';
 import { RenameNotificationType1776201000000 } from 'omniboxd/migrations/1776201000000-rename-notification-type';
+import { VfsModule } from 'omniboxd/vfs/vfs.module';
+import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
+import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -154,6 +159,7 @@ export class AppModule implements NestModule {
         TelemetryModule,
         KafkaModule,
         TagModule,
+        ResourceTagsModule,
         MailModule,
         AuthModule,
         UserModule,
@@ -184,6 +190,9 @@ export class AppModule implements NestModule {
         AppConfigModule,
         WizardUrlProviderModule,
         NotificationModule,
+        VfsModule,
+        VfsTagsModule,
+        VfsWizardModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],
@@ -252,6 +261,7 @@ export class AppModule implements NestModule {
               AddNotifications1776070800000,
               UpdateNotificationsNamespace1776200000000,
               RenameNotificationType1776201000000,
+              DeduplicateResourceNames1775666229211,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -1,6 +1,6 @@
 import { Base } from 'omniboxd/common/base.entity';
 import generateId from 'omniboxd/utils/generate-id';
-import { Column, Entity, PrimaryColumn, BeforeInsert } from 'typeorm';
+import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 export enum ResourceType {
@@ -30,7 +30,7 @@ export class Resource extends Base {
   parentId: string | null;
 
   @Column()
-  name: string;
+  name: string; // "" by default
 
   @Column('enum', { enum: ResourceType })
   resourceType: ResourceType;

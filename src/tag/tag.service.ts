@@ -1,5 +1,5 @@
 import { Tag } from 'omniboxd/tag/tag.entity';
-import { Repository, In, Like, EntityManager } from 'typeorm';
+import { EntityManager, In, Like, Repository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateTagDto } from 'omniboxd/tag/dto/create-tag.dto';
@@ -70,6 +70,32 @@ export class TagService {
     return tags.map((tag) => TagDto.fromEntity(tag));
   }
 
+  async getOrCreateTagByName(
+    namespaceId: string,
+    name: string,
+    manager?: EntityManager,
+  ): Promise<Tag> {
+    if (!name || name.length === 0) {
+      throw new Error('Empty name');
+    }
+    const repo = manager ? manager.getRepository(Tag) : this.tagRepository;
+    // Find existing tags
+    const existingTag = await repo.findOne({
+      where: {
+        namespaceId,
+        name: name,
+      },
+    });
+    if (existingTag) {
+      return existingTag;
+    }
+    const newTag = repo.create({
+      namespaceId,
+      name: name,
+    });
+    return await repo.save(newTag);
+  }
+
   async getOrCreateTagsByNames(
     namespaceId: string,
     tagNames: string[],
@@ -121,5 +147,18 @@ export class TagService {
       },
       select: ['id', 'name'],
     });
+  }
+
+  async findByPattern(namespaceId: string, pattern: string): Promise<Tag[]> {
+    if (!pattern || pattern.trim() === '') {
+      return [];
+    }
+
+    return await this.tagRepository
+      .createQueryBuilder('tag')
+      .where('tag.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('tag.name ~* :pattern', { pattern })
+      .select(['tag.id', 'tag.name'])
+      .getMany();
   }
 }

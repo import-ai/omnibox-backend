@@ -30,6 +30,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TempfileDto } from './dto/tempfile.dto';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
+import { CollectUrlResponseDto } from 'omniboxd/wizard/dto/collect-url-request.dto';
 
 @Injectable()
 export class WizardService {
@@ -114,6 +115,9 @@ export class WizardService {
       userId,
       namespaceId,
       resourceDto,
+      undefined,
+      undefined,
+      true, // autoRenameOnConflict for URL-based names
     );
 
     const { objectKey } = await this.s3Service.generateObjectKey(
@@ -151,7 +155,7 @@ export class WizardService {
     userId: string,
     url: string,
     parentId: string,
-  ): Promise<{ resource_id: string }> {
+  ): Promise<CollectUrlResponseDto> {
     if (!namespaceId || !parentId || !url) {
       const message = this.i18n.t('wizard.errors.missingRequiredFields');
       throw new AppException(
@@ -172,6 +176,9 @@ export class WizardService {
       userId,
       namespaceId,
       resourceDto,
+      undefined,
+      undefined,
+      true, // autoRenameOnConflict for URL-based names
     );
 
     // Create a collect_url task that will fetch HTML and create a collect task
@@ -184,7 +191,7 @@ export class WizardService {
       },
     );
 
-    return { resource_id: resource.id };
+    return CollectUrlResponseDto.fromResourceId(resource.id);
   }
 
   async createTaskUploadUrl(taskId: string): Promise<string> {

@@ -111,7 +111,7 @@ export class StreamService {
   agentHandler(
     namespaceId: string,
     conversationId: string,
-    userId: string | null,
+    userId: string,
     subscriber: Subscriber<MessageEvent>,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
@@ -151,6 +151,7 @@ export class StreamService {
           chunk,
         );
 
+        delete chunk.attrs?.context;
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
         const message: Message = await this.messagesService.update(
@@ -168,6 +169,17 @@ export class StreamService {
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
         // Do nothing, this is the end of the stream
+      } else if (chunk.response_type === 'checkpoint') {
+        // Checkpoint response always triggered after message done
+        const messageId = context.messageId || context.parentId;
+        if (!messageId) {
+          throw new AppException(
+            this.i18n.t('system.errors.messageIdNotSet'),
+            'MESSAGE_ID_NOT_SET',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+        await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
         if (context.messageId) {
           await this.messagesService.updateDelta(context.messageId, {
@@ -198,7 +210,10 @@ export class StreamService {
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
-      if (context?.message?.role !== OpenAIMessageRole.SYSTEM) {
+      if (
+        chunk.response_type !== 'checkpoint' &&
+        context?.message?.role !== OpenAIMessageRole.SYSTEM
+      ) {
         subscriber.next({ data: JSON.stringify(chunk) });
       }
     };
@@ -229,7 +244,10 @@ export class StreamService {
     return messages;
   }
 
-  streamError(subscriber: Subscriber<MessageEvent>, error: Error) {
+  streamError(
+    subscriber: Subscriber<MessageEvent>,
+    error: Error | AppException,
+  ) {
     this.logger.error({ error });
     const span = trace.getActiveSpan();
     if (span) {
@@ -337,14 +355,14 @@ export class StreamService {
     requestDto: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write',
-    userId: string | null,
+    userId: string,
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Message[] = [];
     if (requestDto.parent_message_id) {
       parentId = requestDto.parent_message_id;
       const allMessages = await this.messagesService.findAll(
-        userId || undefined,
+        userId,
         requestDto.conversation_id,
       );
       messages = this.getMessages(allMessages, parentId);
@@ -375,12 +393,14 @@ export class StreamService {
 
       const wizardRequest: WizardAgentRequestDto = {
         namespace_id: namespaceId,
+        user_id: userId,
         conversation_id: requestDto.conversation_id,
         query: requestDto.query,
         messages,
         tools,
         enable_thinking: requestDto.enable_thinking,
         lang: requestDto.lang,
+        tool_call: requestDto.tool_call,
       };
 
       this.stream(namespaceId, mode, wizardRequest, requestId, async (data) => {
@@ -442,7 +462,7 @@ export class StreamService {
         requestDto,
         requestId,
         mode,
-        null,
+        '',
       );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>

@@ -31,6 +31,9 @@ export class ResourceMetaDto {
 
   fileId: string | null;
 
+  @Expose({ name: 'tag_ids' })
+  tagIds: string[];
+
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
     dto.id = resource.id;
@@ -44,6 +47,7 @@ export class ResourceMetaDto {
     delete dto.attrs.transcript;
     delete dto.attrs.video_info;
     dto.fileId = resource.fileId;
+    dto.tagIds = resource.tagIds ?? [];
     return dto;
   }
 }

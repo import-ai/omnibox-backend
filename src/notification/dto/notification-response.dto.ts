@@ -20,7 +20,7 @@ export class NotificationItemDto {
     const dto = new NotificationItemDto();
     dto.id = notification.id;
     dto.title = notification.title;
-    dto.summary = (notification.content || '').slice(0, 20);
+    dto.summary = (notification.content || '').slice(0, 128);
     dto.status = notification.status;
     dto.action = NotificationActionResponseDto.fromEntity(notification);
     dto.readAt = notification.readAt?.toISOString() || null;

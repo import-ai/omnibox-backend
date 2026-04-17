@@ -1,4 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Reflector } from '@nestjs/core';
 import { WsException } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
@@ -8,6 +10,7 @@ import {
   WsAuthConfig,
 } from 'omniboxd/auth/decorators/ws-auth-options.decorator';
 import { I18nService } from 'nestjs-i18n';
+import { User } from 'omniboxd/user/entities/user.entity';
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
@@ -15,9 +18,11 @@ export class WsJwtGuard implements CanActivate {
     private readonly authService: AuthService,
     private readonly reflector: Reflector,
     private readonly i18n: I18nService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const wsAuthConfig = this.reflector.getAllAndOverride<WsAuthConfig>(
       WS_AUTH_CONFIG_KEY,
       [context.getHandler(), context.getClass()],
@@ -31,6 +36,17 @@ export class WsJwtGuard implements CanActivate {
         throw new WsException(`Unauthorized: ${message}`);
       }
       const payload = this.authService.jwtVerify(token);
+
+      // Check if user exists - TypeORM automatically excludes soft-deleted
+      const user = await this.userRepository.findOne({
+        where: { id: payload.sub },
+      });
+
+      if (!user) {
+        const message = this.i18n.t('auth.errors.invalidToken');
+        throw new WsException(message);
+      }
+
       client.data.userId = payload.sub;
       return true;
     } catch (error) {

@@ -108,7 +108,7 @@ describe('UserController (e2e)', () => {
 
   describe('POST /api/v1/user/email/validate', () => {
     it('should validate new email address', async () => {
-      const testEmail = `test-${Date.now()}@example.com`;
+      const testEmail = `test-${Date.now()}@gmail.com`;
 
       await client
         .post('/api/v1/user/email/validate')
@@ -135,7 +135,7 @@ describe('UserController (e2e)', () => {
       await client
         .request()
         .post('/api/v1/user/email/validate')
-        .send({ email: 'test@example.com' })
+        .send({ email: 'test@gmail.com' })
         .expect(HttpStatus.UNAUTHORIZED);
     });
   });
@@ -155,13 +155,9 @@ describe('UserController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(response.body.username).toBe(newUsername);
-    });
 
-    it('should fail to update non-existent user', async () => {
-      await client
-        .patch('/api/v1/user/00000000-0000-0000-0000-000000000000')
-        .send({ username: 'newname' })
-        .expect(HttpStatus.NOT_FOUND);
+      // Update in-memory username to match DB for subsequent tests
+      client.user.username = newUsername;
     });
 
     it('should fail without authentication', async () => {
@@ -190,29 +186,108 @@ describe('UserController (e2e)', () => {
         .send({ email: 'invalid-email' })
         .expect(HttpStatus.BAD_REQUEST);
     });
+
+    it('should fail to update another user', async () => {
+      await client
+        .patch(`/api/v1/user/${secondClient.user.id}`)
+        .send({ username: 'hacker' })
+        .expect(HttpStatus.FORBIDDEN);
+    });
   });
 
-  describe('DELETE /api/v1/user/:id', () => {
-    it('should soft delete user', async () => {
-      // Create a user to delete
-      const userToDelete = await TestClient.create();
+  describe('Account Deletion', () => {
+    describe('POST /api/v1/user/account/delete/initiate', () => {
+      it('should fail with wrong username', async () => {
+        await client
+          .post('/api/v1/user/account/delete/initiate')
+          .send({ username: 'wrong-username', url: 'http://localhost/confirm' })
+          .expect(HttpStatus.BAD_REQUEST);
+      });
 
-      await client
-        .delete(`/api/v1/user/${userToDelete.user.id}`)
-        .expect(HttpStatus.OK);
+      it('should fail without authentication', async () => {
+        await client
+          .request()
+          .post('/api/v1/user/account/delete/initiate')
+          .send({ username: 'test', url: 'http://localhost/confirm' })
+          .expect(HttpStatus.UNAUTHORIZED);
+      });
 
-      // User should be soft deleted and not returned by find
-      await client
-        .get(`/api/v1/user/${userToDelete.user.id}`)
-        .expect(HttpStatus.NOT_FOUND);
-      await userToDelete.close();
+      it('should fail with missing username', async () => {
+        await client
+          .post('/api/v1/user/account/delete/initiate')
+          .send({ url: 'http://localhost/confirm' })
+          .expect(HttpStatus.BAD_REQUEST);
+      });
+
+      it('should fail with missing url', async () => {
+        await client
+          .post('/api/v1/user/account/delete/initiate')
+          .send({ username: client.user.username })
+          .expect(HttpStatus.BAD_REQUEST);
+      });
+
+      it('should fail when owner has other members in namespace (case 28)', async () => {
+        // Create a namespace and add secondClient as a member
+        const tempNamespace = await client
+          .post('/api/v1/namespaces')
+          .send({ name: `Delete Account Test ${Date.now()}` })
+          .expect(HttpStatus.CREATED);
+
+        const tempNamespaceId = tempNamespace.body.id;
+
+        // Create invitation for secondClient
+        const invitation = await client
+          .post(`/api/v1/namespaces/${tempNamespaceId}/invitations`)
+          .send({
+            namespaceRole: 'member',
+            rootPermission: 'can_view',
+          })
+          .expect(HttpStatus.CREATED);
+
+        // secondClient accepts invitation
+        await secondClient
+          .post(
+            `/api/v1/namespaces/${tempNamespaceId}/invitations/${invitation.body.id}/accept`,
+          )
+          .expect(HttpStatus.CREATED);
+
+        // Now client (owner) tries to delete account - should fail (403 Forbidden)
+        await client
+          .post('/api/v1/user/account/delete/initiate')
+          .send({
+            username: client.user.username,
+            url: 'http://localhost/confirm',
+          })
+          .expect(HttpStatus.FORBIDDEN);
+
+        // Cleanup: remove secondClient from namespace
+        await client
+          .delete(
+            `/api/v1/namespaces/${tempNamespaceId}/members/${secondClient.user.id}`,
+          )
+          .expect(HttpStatus.OK);
+
+        // Cleanup: delete the namespace
+        await client.delete(`/api/v1/namespaces/${tempNamespaceId}`);
+      });
     });
 
-    it('should fail without authentication', async () => {
-      await client
-        .request()
-        .delete(`/api/v1/user/${client.user.id}`)
-        .expect(HttpStatus.UNAUTHORIZED);
+    describe('POST /api/v1/user/account/delete/confirm', () => {
+      it('should fail with invalid token', async () => {
+        await client
+          .request()
+          .post('/api/v1/user/account/delete/confirm')
+          .send({ token: 'invalid-token' })
+          .expect(HttpStatus.BAD_REQUEST);
+      });
+
+      it('should fail with missing token', async () => {
+        await client
+          .request()
+          .post('/api/v1/user/account/delete/confirm')
+          .send({})
+          .expect(HttpStatus.BAD_REQUEST);
+      });
     });
   });
 

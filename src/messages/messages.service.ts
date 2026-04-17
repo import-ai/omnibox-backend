@@ -8,9 +8,12 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import { User } from 'omniboxd/user/entities/user.entity';
-import { ChatDeltaResponse } from '../wizard/dto/chat-response.dto';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import {
+  ChatCheckpointResponse,
+  ChatDeltaResponse,
+} from '../wizard/dto/chat-response.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 
 const TASK_PRIORITY = 5;
 
@@ -37,16 +40,17 @@ export class MessagesService {
       parentId: dto.parentId,
       attrs: dto.attrs,
     });
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
       const savedMsg = await manager.save(message);
       if (index && userId) {
-        await this.wizardTaskService.createMessageIndexTask(
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
           TASK_PRIORITY,
           userId,
           namespaceId,
           conversationId,
           savedMsg,
-          manager.getRepository(Task),
+          tx,
         );
       }
       return savedMsg;
@@ -64,16 +68,17 @@ export class MessagesService {
       where: { id },
     });
     Object.assign(message, dto);
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
       const updatedMsg = await manager.save(message);
       if (index && message.userId) {
-        await this.wizardTaskService.createMessageIndexTask(
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
           TASK_PRIORITY,
           message.userId,
           namespaceId,
           conversationId,
           message,
-          manager.getRepository(Task),
+          tx,
         );
       }
       return updatedMsg;
@@ -82,6 +87,21 @@ export class MessagesService {
 
   add(source?: string, delta?: string): string | undefined {
     return delta ? (source || '') + delta : source;
+  }
+
+  async saveCheckpoint(id: string, chunk: ChatCheckpointResponse) {
+    if (chunk.checkpoint) {
+      const message = await this.messageRepository.findOneOrFail({
+        where: { id },
+      });
+
+      message.attrs = message.attrs || {};
+      message.attrs.context = {
+        checkpoint: chunk.checkpoint,
+      };
+      message.status = MessageStatus.SUCCESS;
+      return await this.messageRepository.save(message);
+    }
   }
 
   async updateDelta(id: string, delta: ChatDeltaResponse) {

@@ -1,13 +1,13 @@
 {
   "errors": {
-    "apiKeyNotFound": "API密钥未找到",
+    "apiKeyNotFound": "API 密钥未找到",
     "authorizationHeaderRequired": "需要授权头",
-    "invalidApiKeyFormat": "API密钥格式无效",
-    "invalidApiKey": "API密钥无效",
-    "noPermissionForTarget": "API密钥没有目标的权限: {target}",
-    "noSpecificPermission": "API密钥没有目标 {target} 的 {permission} 权限",
-    "noPermissionForNamespace": "用户 {userId} 没有命名空间 {namespaceId} 的权限",
-    "noWritePermission": "用户 {userId} 没有命名空间 {namespaceId} 中资源 {resourceId} 的写入权限",
+    "invalidApiKeyFormat": "API 密钥格式无效",
+    "invalidApiKey": "API 密钥无效",
+    "noPermissionForTarget": "API 密钥没有 {target} 的权限",
+    "noSpecificPermission": "API 密钥没有 {target} 的 {permission} 权限",
+    "noPermissionForNamespace": "用户 {userId} 没有空间 {namespaceId} 的权限",
+    "noWritePermission": "用户 {userId} 没有空间 {namespaceId} 中资源 {resourceId} 的写入权限",
     "userOrNamespaceRequired": "需要提供 user_id 或 namespace_id 参数"
   }
 }

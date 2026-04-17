@@ -4,6 +4,8 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 describe('ResourcesController (e2e)', () => {
   let client: TestClient;
+  let uid = 0;
+  const uniqueName = (base: string) => `${base} ${++uid}`;
 
   beforeAll(async () => {
     client = await TestClient.create();
@@ -18,7 +20,7 @@ describe('ResourcesController (e2e)', () => {
       const tagIds = await client.createTags(['test', 'document']);
 
       const resourceData = {
-        name: 'Test Document',
+        name: uniqueName('Test Document'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -45,7 +47,7 @@ describe('ResourcesController (e2e)', () => {
 
     it('should create a new folder resource', async () => {
       const resourceData = {
-        name: 'Test Folder',
+        name: uniqueName('Test Folder'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.FOLDER,
         parentId: client.namespace.root_resource_id,
@@ -66,7 +68,7 @@ describe('ResourcesController (e2e)', () => {
 
     it('should create a new link resource', async () => {
       const resourceData = {
-        name: 'Test Link',
+        name: uniqueName('Test Link'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.LINK,
         parentId: client.namespace.root_resource_id,
@@ -88,7 +90,7 @@ describe('ResourcesController (e2e)', () => {
 
     it('should fail with invalid resource type', async () => {
       const resourceData = {
-        name: 'Invalid Resource',
+        name: uniqueName('Invalid Resource'),
         namespaceId: client.namespace.id,
         resourceType: 'invalid_type',
         parentId: client.namespace.root_resource_id,
@@ -103,7 +105,7 @@ describe('ResourcesController (e2e)', () => {
 
     it('should fail with missing required fields', async () => {
       const resourceData = {
-        name: 'Incomplete Resource',
+        name: uniqueName('Incomplete Resource'),
         // Missing namespaceId, resourceType, parentId
       };
 
@@ -115,7 +117,7 @@ describe('ResourcesController (e2e)', () => {
 
     it('should fail with empty parentId', async () => {
       const resourceData = {
-        name: 'Test Resource',
+        name: uniqueName('Test Resource'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: '',
@@ -140,7 +142,7 @@ describe('ResourcesController (e2e)', () => {
     beforeEach(async () => {
       // Create a resource for testing
       const resourceData = {
-        name: 'Test Resource for Query',
+        name: uniqueName('Test Resource for Query'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -177,7 +179,7 @@ describe('ResourcesController (e2e)', () => {
         boolean: true,
       };
       const resourceData2 = {
-        name: 'Second Test Resource',
+        name: uniqueName('Second Test Resource'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -239,7 +241,7 @@ describe('ResourcesController (e2e)', () => {
       // Create a resource for testing
       const tagIds = await client.createTags(['get-test']);
       const resourceData = {
-        name: 'Test Resource for Get',
+        name: uniqueName('Test Resource for Get'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -263,7 +265,7 @@ describe('ResourcesController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(response.body).toHaveProperty('id', resourceId);
-      expect(response.body).toHaveProperty('name', 'Test Resource for Get');
+      expect(response.body.name).toContain('Test Resource for Get');
       expect(response.body).toHaveProperty('content', 'Test content for get');
       expect(response.body).toHaveProperty('tags');
       expect(response.body.tags.map((tag) => tag.name)).toContain('get-test');
@@ -290,7 +292,7 @@ describe('ResourcesController (e2e)', () => {
     beforeEach(async () => {
       // Create a resource for testing
       const resourceData = {
-        name: 'Test Resource for Update',
+        name: uniqueName('Test Resource for Update'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -386,19 +388,6 @@ describe('ResourcesController (e2e)', () => {
         .send(updateData)
         .expect(HttpStatus.NOT_FOUND);
     });
-
-    it('should fail with missing namespaceId', async () => {
-      const updateData = {
-        name: 'Updated Name',
-      };
-
-      await client
-        .patch(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
-        )
-        .send(updateData)
-        .expect(HttpStatus.BAD_REQUEST);
-    });
   });
 
   describe('DELETE /api/v1/namespaces/:namespaceId/resources/:resourceId', () => {
@@ -407,7 +396,7 @@ describe('ResourcesController (e2e)', () => {
     beforeEach(async () => {
       // Create a resource for testing
       const resourceData = {
-        name: 'Test Resource for Delete',
+        name: uniqueName('Test Resource for Delete'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -454,7 +443,7 @@ describe('ResourcesController (e2e)', () => {
       // Create a resource for testing
       const tagIds = await client.createTags(['duplicate-test']);
       const resourceData = {
-        name: 'Test Resource for Duplicate',
+        name: uniqueName('Test Resource for Duplicate'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -509,7 +498,7 @@ describe('ResourcesController (e2e)', () => {
 
       // Create a parent folder
       const folderData = {
-        name: 'Parent Folder',
+        name: uniqueName('Parent Folder'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.FOLDER,
         parentId: client.namespace.root_resource_id,
@@ -526,7 +515,7 @@ describe('ResourcesController (e2e)', () => {
 
       // Create a child resource
       const childData = {
-        name: 'Child Resource',
+        name: uniqueName('Child Resource'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: parentFolderId,
@@ -555,7 +544,7 @@ describe('ResourcesController (e2e)', () => {
         (r: any) => r.id === childResourceId,
       );
       expect(childResource).toBeDefined();
-      expect(childResource.name).toBe('Child Resource');
+      expect(childResource.name).toContain('Child Resource');
       expect(childResource.attrs).toEqual(childAttrs);
     });
 
@@ -614,7 +603,7 @@ describe('ResourcesController (e2e)', () => {
     beforeEach(async () => {
       // Create a parent folder
       const folderData = {
-        name: 'Parent Folder for Children',
+        name: uniqueName('Parent Folder for Children'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.FOLDER,
         parentId: client.namespace.root_resource_id,
@@ -631,7 +620,7 @@ describe('ResourcesController (e2e)', () => {
 
       // Create a child resource
       const childData = {
-        name: 'Child Resource for List',
+        name: uniqueName('Child Resource for List'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: parentFolderId,
@@ -660,7 +649,7 @@ describe('ResourcesController (e2e)', () => {
         (r: any) => r.id === childResourceId,
       );
       expect(childResource).toBeDefined();
-      expect(childResource.name).toBe('Child Resource for List');
+      expect(childResource.name).toContain('Child Resource for List');
     });
 
     it('should return empty array for resource with no children', async () => {
@@ -690,7 +679,7 @@ describe('ResourcesController (e2e)', () => {
     beforeEach(async () => {
       // Create a target folder
       const targetFolderData = {
-        name: 'Target Folder',
+        name: uniqueName('Target Folder'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.FOLDER,
         parentId: client.namespace.root_resource_id,
@@ -707,7 +696,7 @@ describe('ResourcesController (e2e)', () => {
 
       // Create a source resource to move
       const sourceData = {
-        name: 'Resource to Move',
+        name: uniqueName('Resource to Move'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -773,7 +762,7 @@ describe('ResourcesController (e2e)', () => {
     beforeEach(async () => {
       // Create a resource for searching
       const resourceData = {
-        name: 'Searchable Document',
+        name: uniqueName('Searchable Document'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -791,7 +780,10 @@ describe('ResourcesController (e2e)', () => {
       anotherSearchableResourceId = (
         await client
           .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
-          .send(resourceData)
+          .send({
+            ...resourceData,
+            name: uniqueName('Searchable Document'),
+          })
           .expect(HttpStatus.CREATED)
       ).body.id;
     });
@@ -809,7 +801,7 @@ describe('ResourcesController (e2e)', () => {
         (r: any) => r.id === searchableResourceId,
       );
       expect(foundResource).toBeDefined();
-      expect(foundResource.name).toBe('Searchable Document');
+      expect(foundResource.name).toContain('Searchable Document');
     });
 
     it('should search resources by partial name and validate attrs match source', async () => {
@@ -872,7 +864,7 @@ describe('ResourcesController (e2e)', () => {
     beforeEach(async () => {
       // Create a resource for testing restore
       const resourceData = {
-        name: 'Resource to Restore',
+        name: uniqueName('Resource to Restore'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -903,7 +895,7 @@ describe('ResourcesController (e2e)', () => {
         .expect(HttpStatus.CREATED);
 
       expect(response.body).toHaveProperty('id', deletedResourceId);
-      expect(response.body.name).toBe('Resource to Restore');
+      expect(response.body.name).toContain('Resource to Restore');
 
       // Verify the resource can be accessed again
       await client
@@ -960,7 +952,7 @@ describe('ResourcesController (e2e)', () => {
     beforeEach(async () => {
       // Create a parent folder
       const folderData = {
-        name: 'Attrs Test Folder',
+        name: uniqueName('Attrs Test Folder'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.FOLDER,
         parentId: client.namespace.root_resource_id,
@@ -977,7 +969,7 @@ describe('ResourcesController (e2e)', () => {
 
       // Create a test resource with complex attrs
       const resourceData = {
-        name: 'Attrs Test Resource',
+        name: uniqueName('Attrs Test Resource'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: parentFolderId,
@@ -1102,7 +1094,9 @@ describe('ResourcesController (e2e)', () => {
   describe('Edge Cases and Error Handling', () => {
     it('should handle special characters in resource name', async () => {
       const resourceData = {
-        name: '🚀 Test Resource with émojis & spëcial chars! 中文 العربية',
+        name: uniqueName(
+          '🚀 Test Resource with émojis & spëcial chars! 中文 العربية',
+        ),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,
@@ -1134,7 +1128,7 @@ describe('ResourcesController (e2e)', () => {
       };
 
       const resourceData = {
-        name: 'Complex Attrs Resource',
+        name: uniqueName('Complex Attrs Resource'),
         namespaceId: client.namespace.id,
         resourceType: ResourceType.DOC,
         parentId: client.namespace.root_resource_id,

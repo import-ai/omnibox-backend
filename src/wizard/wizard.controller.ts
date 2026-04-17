@@ -3,18 +3,20 @@ import {
   Controller,
   Param,
   Post,
-  Req,
   Sse,
   UploadedFile,
   UseInterceptors,
   ValidationPipe,
+  HttpStatus,
 } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
-import {
-  CollectRequestDto,
-  CompressedCollectRequestDto,
-} from 'omniboxd/wizard/dto/collect-request.dto';
+import { StreamService } from 'omniboxd/wizard/stream.service';
+import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
+import {
+  CollectUrlRequestDto,
+  CollectUrlResponseDto,
+} from 'omniboxd/wizard/dto/collect-url-request.dto';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { RequestId } from 'omniboxd/decorators/request-id.decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
@@ -26,21 +28,16 @@ import {
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { I18nService } from 'nestjs-i18n';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('api/v1/wizard')
 export class CollectController {
   constructor(private readonly wizardService: WizardService) {}
 
-  @Post('collect')
-  async collect(
-    @UserId() userId: string,
-    @Body() data: CollectRequestDto,
-    @Body('namespace_id', new ValidationPipe()) namespaceId: string,
-  ): Promise<CollectResponseDto> {
-    return await this.wizardService.collect(namespaceId, userId, data);
-  }
-
   @Post('collect/gzip')
+  @CheckNamespaceReadonly()
   @UseInterceptors(FileInterceptor('html'))
   async collectGzip(
     @UserId() userId: string,
@@ -59,18 +56,14 @@ export class CollectController {
 
 @Controller('api/v1/namespaces/:namespaceId/wizard')
 export class WizardController {
-  constructor(private readonly wizardService: WizardService) {}
-
-  @Post('collect')
-  async collect(
-    @Param('namespaceId') namespaceId: string,
-    @UserId() userId: string,
-    @Body() data: CollectRequestDto,
-  ): Promise<CollectResponseDto> {
-    return await this.wizardService.collect(namespaceId, userId, data);
-  }
+  constructor(
+    private readonly wizardService: WizardService,
+    private readonly streamService: StreamService,
+    private readonly i18n: I18nService,
+  ) {}
 
   @Post('collect/gzip')
+  @CheckNamespaceReadonly()
   @UseInterceptors(FileInterceptor('html'))
   async collectGzip(
     @Param('namespaceId') namespaceId: string,
@@ -94,7 +87,7 @@ export class WizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.createUserAgentStream(
+    return await this.streamService.createUserAgentStream(
       userId,
       namespaceId,
       body,
@@ -111,7 +104,7 @@ export class WizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.createUserAgentStream(
+    return await this.streamService.createUserAgentStream(
       userId,
       namespaceId,
       body,
@@ -120,16 +113,34 @@ export class WizardController {
     );
   }
 
-  @Post('*path')
-  async proxy(@Req() req: Request): Promise<Record<string, any>> {
-    return await this.wizardService.wizardApiService.proxy(req);
+  @Post('collect/url')
+  @CheckNamespaceReadonly()
+  async collectUrl(
+    @Param('namespaceId') namespaceId: string,
+    @UserId() userId: string,
+    @Body() data: CollectUrlRequestDto,
+  ): Promise<CollectUrlResponseDto> {
+    if (!namespaceId || !data.parentId || !data.url) {
+      const message = this.i18n.t('wizard.errors.missingRequiredFields');
+      throw new AppException(
+        message,
+        'MISSING_REQUIRED_FIELDS',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return await this.wizardService.collectUrl(
+      namespaceId,
+      userId,
+      data.url,
+      data.parentId,
+    );
   }
 }
 
 @Controller('api/v1/shares/:shareId/wizard')
 @UseInterceptors(ValidateShareInterceptor)
 export class SharedWizardController {
-  constructor(private readonly wizardService: WizardService) {}
+  constructor(private readonly streamService: StreamService) {}
 
   @Post('ask')
   @Sse()
@@ -140,7 +151,7 @@ export class SharedWizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.createShareAgentStream(
+    return await this.streamService.createShareAgentStream(
       share,
       body,
       requestId,
@@ -157,7 +168,7 @@ export class SharedWizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
   ) {
-    return await this.wizardService.streamService.createShareAgentStream(
+    return await this.streamService.createShareAgentStream(
       share,
       body,
       requestId,

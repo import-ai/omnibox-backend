@@ -8,11 +8,18 @@ import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto'
 import { Logger, Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 
 export interface WechatUserInfo {
-  unionid: string;
-  nickname: string;
   openid: string;
+  nickname: string;
+  sex: number;
+  province: string;
+  city: string;
+  country: string;
+  headimgurl: string;
+  privilege: Array<string>;
+  unionid: string;
 }
 
 @Injectable()
@@ -21,6 +28,8 @@ export class WechatService {
 
   private readonly appId: string;
   private readonly appSecret: string;
+  private readonly nativeAppId: string;
+  private readonly nativeAppSecret: string;
   private readonly openAppId: string;
   private readonly openAppSecret: string;
   private readonly oldAppId: string;
@@ -29,6 +38,8 @@ export class WechatService {
   private readonly oldOpenAppSecret: string;
   private readonly redirectUri: string;
   private readonly migrationRedirectUri: string;
+  private readonly miniProgramAppId: string;
+  private readonly miniProgramAppSecret: string;
 
   constructor(
     private readonly configService: ConfigService,
@@ -42,6 +53,14 @@ export class WechatService {
     this.appId = this.configService.get<string>('OBB_WECHAT_APP_ID', '');
     this.appSecret = this.configService.get<string>(
       'OBB_WECHAT_APP_SECRET',
+      '',
+    );
+    this.nativeAppId = this.configService.get<string>(
+      'OBB_WECHAT_APP_NATIVE_ID',
+      '',
+    );
+    this.nativeAppSecret = this.configService.get<string>(
+      'OBB_WECHAT_APP_NATIVE_SECRET',
       '',
     );
     this.openAppId = this.configService.get<string>(
@@ -73,6 +92,15 @@ export class WechatService {
       'OBB_WECHAT_MIGRATION_REDIRECT_URI',
       '',
     );
+
+    this.miniProgramAppId = this.configService.get<string>(
+      'OBB_MINI_PROGRAM_APP_ID',
+      '',
+    );
+    this.miniProgramAppSecret = this.configService.get<string>(
+      'OBB_MINI_PROGRAM_APP_SECRET',
+      '',
+    );
   }
 
   available() {
@@ -87,8 +115,13 @@ export class WechatService {
     };
   }
 
-  async getQrCodeParams() {
-    const state = await this.socialService.generateState('open_weixin');
+  async getQrCodeParams(redirectUrl?: string) {
+    const state = await this.socialService.generateState(
+      'open_weixin',
+      '',
+      '',
+      redirectUrl,
+    );
     return {
       state,
       appId: this.openAppId,
@@ -97,8 +130,25 @@ export class WechatService {
     };
   }
 
-  async authUrl(): Promise<string> {
-    const state = await this.socialService.generateState('weixin');
+  async authUrl(
+    source: 'h5' | 'web' = 'web',
+    h5Redirect?: string,
+    redirectUrl?: string,
+  ): Promise<string> {
+    const state = await this.socialService.generateState(
+      'weixin',
+      '',
+      '',
+      redirectUrl,
+    );
+    const stateInfo = await this.socialService.getState(state);
+    if (stateInfo) {
+      stateInfo['source'] = source;
+      if (h5Redirect) {
+        stateInfo['h5_redirect'] = h5Redirect;
+      }
+      await this.socialService.updateState(state, stateInfo);
+    }
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
@@ -120,6 +170,125 @@ export class WechatService {
     const isWeixin = stateInfo.type === 'weixin';
     const appId = isWeixin ? this.appId : this.openAppId;
     const appSecret = isWeixin ? this.appSecret : this.openAppSecret;
+    const userData = await this.fetchWechatUserData(appId, appSecret, code);
+
+    if (userId) {
+      const wechatUser = await this.userService.findByLoginId(userData.unionid);
+      if (wechatUser) {
+        if (wechatUser.id !== userId) {
+          const providerName = this.i18n.t('auth.providers.wechat');
+          const message = this.i18n.t('auth.errors.invalidProviderData', {
+            args: { provider: providerName },
+          });
+          throw new AppException(
+            message,
+            'ACCOUNT_ALREADY_BOUND',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        // Update metadata if it's empty to ensure openid is available for payments
+        await this.userService.updateUserBindingWhenMetadataEmpty(
+          wechatUser.id,
+          'wechat',
+          userData,
+        );
+        const returnValue = {
+          isBinding: true,
+          id: wechatUser.id,
+          access_token: this.jwtService.sign({
+            sub: wechatUser.id,
+            username: wechatUser.username,
+          }),
+          source: stateInfo['source'] || 'web',
+          h5_redirect: stateInfo['h5_redirect'],
+          redirectUrl: stateInfo.redirectUrl,
+        };
+        stateInfo.userInfo = returnValue;
+        await this.socialService.updateState(state, stateInfo);
+        return returnValue;
+      }
+      const existingUser = await this.userService.bindingExistUser({
+        userId,
+        loginType: 'wechat',
+        loginId: userData.unionid,
+        metadata: userData,
+      });
+      const returnValue = {
+        isBinding: true,
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+        source: stateInfo['source'] || 'web',
+        h5_redirect: stateInfo['h5_redirect'],
+        redirectUrl: stateInfo.redirectUrl,
+      };
+      stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
+      return returnValue;
+    }
+    const wechatUser = await this.userService.findByLoginId(userData.unionid);
+    if (wechatUser) {
+      const returnValue = {
+        id: wechatUser.id,
+        access_token: this.jwtService.sign({
+          sub: wechatUser.id,
+          username: wechatUser.username,
+        }),
+        source: stateInfo['source'] || 'web',
+        h5_redirect: stateInfo['h5_redirect'],
+        redirectUrl: stateInfo.redirectUrl,
+      };
+      stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
+      return returnValue;
+    }
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
+      const nickname: string = userData.nickname;
+      const username: string = await this.socialService.getValidUsername(
+        nickname,
+        manager,
+      );
+      this.logger.debug({ nickname, username });
+      const wechatUser = await this.userService.createUserBinding(
+        {
+          username,
+          loginType: 'wechat',
+          loginId: userData.unionid,
+          lang,
+          metadata: userData,
+        } as CreateUserBindingDto,
+        manager,
+      );
+      await this.namespaceService.createUserNamespace(
+        wechatUser.id,
+        wechatUser.username,
+        tx,
+      );
+      const returnValue = {
+        id: wechatUser.id,
+        access_token: this.jwtService.sign({
+          sub: wechatUser.id,
+          username: wechatUser.username,
+        }),
+        source: stateInfo['source'] || 'web',
+        h5_redirect: stateInfo['h5_redirect'],
+        redirectUrl: stateInfo.redirectUrl,
+      };
+      stateInfo.userInfo = returnValue;
+      await this.socialService.updateState(state, stateInfo);
+      return returnValue;
+    });
+  }
+
+  private async fetchWechatUserData(
+    appId: string,
+    appSecret: string,
+    code: string,
+  ): Promise<WechatUserInfo> {
     const accessTokenResponse = await fetch(
       `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${appId}&secret=${appSecret}&code=${code}&grant_type=authorization_code`,
     );
@@ -172,87 +341,66 @@ export class WechatService {
       );
     }
 
-    if (userId) {
-      const wechatUser = await this.userService.findByLoginId(userData.unionid);
-      if (wechatUser) {
-        if (wechatUser.id !== userId) {
-          const providerName = this.i18n.t('auth.providers.wechat');
-          const message = this.i18n.t('auth.errors.invalidProviderData', {
-            args: { provider: providerName },
-          });
-          throw new AppException(
-            message,
-            'ACCOUNT_ALREADY_BOUND',
-            HttpStatus.BAD_REQUEST,
-          );
-        }
-        const returnValue = {
-          id: wechatUser.id,
-          access_token: this.jwtService.sign({
-            sub: wechatUser.id,
-          }),
-        };
-        stateInfo.userInfo = returnValue;
-        await this.socialService.updateState(state, stateInfo);
-        return returnValue;
-      }
-      const existingUser = await this.userService.bindingExistUser({
-        userId,
-        loginType: 'wechat',
-        loginId: userData.unionid,
-      });
-      const returnValue = {
-        id: existingUser.id,
-        access_token: this.jwtService.sign({
-          sub: existingUser.id,
-        }),
-      };
-      stateInfo.userInfo = returnValue;
-      await this.socialService.updateState(state, stateInfo);
-      return returnValue;
-    }
+    return userData;
+  }
+
+  async nativeLogin(
+    code: string,
+    source?: string,
+    lang?: string,
+  ): Promise<any> {
+    const userData = await this.fetchWechatUserData(
+      this.nativeAppId || this.appId,
+      this.nativeAppSecret || this.appSecret,
+      code,
+    );
+
     const wechatUser = await this.userService.findByLoginId(userData.unionid);
     if (wechatUser) {
-      const returnValue = {
+      return {
         id: wechatUser.id,
+        username: wechatUser.username,
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
+          username: wechatUser.username,
         }),
+        source: source || 'native_ios',
       };
-      stateInfo.userInfo = returnValue;
-      await this.socialService.updateState(state, stateInfo);
-      return returnValue;
     }
-    return await this.dataSource.transaction(async (manager) => {
+
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       const nickname: string = userData.nickname;
       const username: string = await this.socialService.getValidUsername(
         nickname,
         manager,
       );
       this.logger.debug({ nickname, username });
-      const wechatUser = await this.userService.createUserBinding(
+      const createdUser = await this.userService.createUserBinding(
         {
           username,
           loginType: 'wechat',
           loginId: userData.unionid,
           lang,
+          metadata: userData,
         } as CreateUserBindingDto,
         manager,
       );
       await this.namespaceService.createUserNamespace(
-        wechatUser.id,
-        wechatUser.username,
-        manager,
+        createdUser.id,
+        createdUser.username,
+        tx,
       );
-      const returnValue = {
-        id: wechatUser.id,
+      return {
+        id: createdUser.id,
+        username: createdUser.username,
         access_token: this.jwtService.sign({
-          sub: wechatUser.id,
+          sub: createdUser.id,
+          username: createdUser.username,
         }),
+        source: source || 'native_ios',
       };
-      stateInfo.userInfo = returnValue;
-      await this.socialService.updateState(state, stateInfo);
-      return returnValue;
     });
   }
 
@@ -364,5 +512,113 @@ export class WechatService {
       );
     }
     await this.userService.unbindByLoginType(userId, 'wechat');
+  }
+
+  async miniProgramLogin(code: string, lang?: string): Promise<any> {
+    if (!this.miniProgramAppId || !this.miniProgramAppSecret) {
+      const message = this.i18n.t('auth.errors.miniProgramNotConfigured', {
+        defaultValue: 'WeChat MiniProgram is not configured',
+      });
+      throw new AppException(
+        message,
+        'MINI_PROGRAM_NOT_CONFIGURED',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
+    this.logger.debug({ code });
+    const jscode2sessionResponse = await fetch(
+      `https://api.weixin.qq.com/sns/jscode2session?appid=${this.miniProgramAppId}&secret=${this.miniProgramAppSecret}&js_code=${code}&grant_type=authorization_code`,
+    );
+
+    if (!jscode2sessionResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.oauthFailed', {
+        args: { provider: providerName },
+      });
+      throw new AppException(message, 'OAUTH_FAILED', HttpStatus.UNAUTHORIZED);
+    }
+
+    const sessionData = await jscode2sessionResponse.json();
+    if (sessionData.errcode) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: ${sessionData.errmsg}`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    // check if openid is present
+    if (!sessionData.openid) {
+      const providerName = this.i18n.t('auth.providers.wechat');
+      const message = this.i18n.t('auth.errors.invalidProviderData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        `${message}: missing openid`,
+        'INVALID_WECHAT_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Prioritize using unionid, if not available, use openid (add prefix distinction)
+    const loginId = sessionData.unionid
+      ? sessionData.unionid
+      : `miniprogram_${sessionData.openid}`;
+
+    const wechatUser = await this.userService.findByLoginId(loginId);
+
+    if (wechatUser) {
+      // Save miniprogram openid for existing users (needed for subscribe messages)
+      await this.userService.updateBindingMetadata(loginId, {
+        mini_program_openid: sessionData.openid,
+      });
+
+      return {
+        id: wechatUser.id,
+        username: wechatUser.username,
+        access_token: this.jwtService.sign({
+          sub: wechatUser.id,
+        }),
+      };
+    }
+
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+      const nickname: string =
+        sessionData?.nickname || `wx_${sessionData.openid.substring(0, 10)}`;
+      const username: string = await this.socialService.getValidUsername(
+        nickname,
+        manager,
+      );
+      this.logger.debug({ username });
+      const wechatUser = await this.userService.createUserBinding(
+        {
+          username,
+          loginType: 'wechat',
+          loginId: loginId,
+          lang,
+          metadata: {
+            ...sessionData,
+            mini_program_openid: sessionData.openid,
+          },
+        } as CreateUserBindingDto,
+        manager,
+      );
+      await this.namespaceService.createUserNamespace(
+        wechatUser.id,
+        wechatUser.username,
+        tx,
+      );
+      return {
+        id: wechatUser.id,
+        username: wechatUser.username,
+        access_token: this.jwtService.sign({
+          sub: wechatUser.id,
+        }),
+      };
+    });
   }
 }

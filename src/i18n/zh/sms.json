@@ -1,0 +1,8 @@
+{
+  "errors": {
+    "sendFailed": "短信发送失败，请稍后重试。",
+    "serviceUnavailable": "短信服务暂时不可用。",
+    "invalidPhone": "手机号格式无效。",
+    "countryNotSupported": "暂不支持该国家/地区的短信服务。"
+  }
+}

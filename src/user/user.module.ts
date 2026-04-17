@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MailModule } from 'omniboxd/mail/mail.module';
+import { SmsModule } from 'omniboxd/sms/sms.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserService } from 'omniboxd/user/user.service';
 import { User } from 'omniboxd/user/entities/user.entity';
@@ -15,6 +16,7 @@ import { CacheService } from 'omniboxd/common/cache.service';
   imports: [
     TypeOrmModule.forFeature([User, UserOption, UserBinding]),
     MailModule,
+    SmsModule,
   ],
 })
 export class UserModule {}

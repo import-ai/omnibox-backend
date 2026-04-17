@@ -17,11 +17,21 @@
     "email": {
       "isString": "邮箱必须是字符串",
       "isNotEmpty": "邮箱不能为空",
-      "isEmail": "邮箱必须是有效的邮箱地址"
+      "isEmail": "邮箱必须是有效的邮箱地址",
+      "domainNotAllowed": "邮箱域名不被允许。允许的域名：{constraints.1}"
     },
     "password": {
       "isString": "密码必须是字符串",
       "isNotEmpty": "密码不能为空"
+    },
+    "phone": {
+      "isNotEmpty": "手机号不能为空",
+      "invalid": "请输入有效的手机号",
+      "invalidForCountry": "手机号不属于允许的国家/地区"
+    },
+    "code": {
+      "isNotEmpty": "验证码不能为空",
+      "length": "验证码必须是6位数字"
     },
     "username": {
       "isString": "用户名必须是字符串",
@@ -47,8 +57,7 @@
       "maxLength": "描述不能超过 {constraints.0} 个字符"
     },
     "content": {
-      "isString": "内容必须是字符串",
-      "isNotEmpty": "内容不能为空"
+      "isString": "内容必须是字符串"
     },
     "mimetype": {
       "isString": "文件类型必须是字符串",
@@ -62,8 +71,8 @@
       "isEnum": "资源类型必须是有效的值"
     },
     "namespaceId": {
-      "isString": "命名空间 ID 必须是字符串",
-      "isNotEmpty": "命名空间 ID 不能为空"
+      "isString": "空间 ID 必须是字符串",
+      "isNotEmpty": "空间 ID 不能为空"
     },
     "userId": {
       "isString": "用户 ID 必须是字符串",
@@ -75,7 +84,8 @@
     },
     "url": {
       "isString": "URL 必须是字符串",
-      "isNotEmpty": "URL 不能为空"
+      "isNotEmpty": "URL 不能为空",
+      "isUrl": "URL 格式不正确"
     },
     "query": {
       "isString": "查询必须是字符串",

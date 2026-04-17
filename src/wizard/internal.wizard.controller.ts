@@ -1,12 +1,9 @@
-import { Response } from 'express';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { transformKeysToSnakeCase } from 'omniboxd/interceptor/utils';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
-import { Body, Controller, Get, Param, Post, Query, Res } from '@nestjs/common';
-import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
+import { Body, Controller, Param, Post, Query } from '@nestjs/common';
 import { CreateTempfileReqDto } from './dto/create-tempfile-req.dto';
 
 @Controller('internal/api/v1/wizard')
@@ -15,16 +12,6 @@ export class InternalWizardController {
     private readonly wizardService: WizardService,
     private readonly chunkManagerService: ChunkManagerService,
   ) {}
-
-  @Public()
-  @Get('task')
-  async fetchTask(
-    @Res() res: Response,
-    @Query() query: FetchTaskRequest,
-  ): Promise<void> {
-    const task = await this.wizardService.fetchTask(query);
-    res.status(task ? 200 : 204).json(transformKeysToSnakeCase(task));
-  }
 
   @Public()
   @Post('callback')
@@ -45,6 +32,12 @@ export class InternalWizardController {
   @Post('tasks/:taskId/callback')
   async handleUploadedTaskCallback(@Param('taskId') taskId: string) {
     return await this.wizardService.uploadedTaskDoneCallback(taskId);
+  }
+
+  @Public()
+  @Post('tasks/:taskId/start')
+  async startTask(@Param('taskId') taskId: string) {
+    return await this.wizardService.startTask(taskId);
   }
 
   @Public()
@@ -93,5 +86,14 @@ export class InternalWizardController {
   @Post('tempfiles')
   async createTempfile(@Body() createReq: CreateTempfileReqDto) {
     return await this.wizardService.createTempfile(createReq.filename);
+  }
+
+  @Public()
+  @Post('tasks/reproduce')
+  async reproduceTaskMessages(
+    @Query('offset') offset?: number,
+    @Query('limit') limit: number = 100,
+  ) {
+    return await this.wizardService.reproduceTaskMessages(offset, limit);
   }
 }

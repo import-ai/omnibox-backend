@@ -1,7 +1,16 @@
 import { UserService } from 'omniboxd/user/user.service';
 import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
+import { ValidateEmailDto } from 'omniboxd/user/dto/validate-email.dto';
+import {
+  SendPhoneCodeRequestDto,
+  BindPhoneRequestDto,
+} from 'omniboxd/user/dto/phone-binding.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
+import {
+  InitiateAccountDeletionDto,
+  ConfirmAccountDeletionDto,
+} from 'omniboxd/user/dto/delete-account.dto';
 import {
   Req,
   Get,
@@ -9,12 +18,15 @@ import {
   Patch,
   Query,
   Param,
-  Delete,
   Post,
   Controller,
   ParseIntPipe,
+  HttpStatus,
+  HttpCode,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
 @Controller('api/v1/user')
 export class UserController {
@@ -41,10 +53,13 @@ export class UserController {
   async get(@Param('id') id: string) {
     return await this.userService.find(id);
   }
-
+  @Get('wx/profile')
+  async wxProfile(@UserId() userId: string) {
+    return await this.userService.find(userId);
+  }
   @Post('email/validate')
-  async validateEmail(@UserId() userId: string, @Body('email') email: string) {
-    const result = await this.userService.validateEmail(userId, email);
+  async validateEmail(@UserId() userId: string, @Body() dto: ValidateEmailDto) {
+    const result = await this.userService.validateEmail(userId, dto.email);
     const message = this.i18n.t('user.success.emailVerificationSent');
     return {
       ...result,
@@ -52,8 +67,53 @@ export class UserController {
     };
   }
 
+  @Post('phone/send-code')
+  @HttpCode(200)
+  async sendPhoneCode(
+    @UserId() userId: string,
+    @Body() dto: SendPhoneCodeRequestDto,
+  ) {
+    const result = await this.userService.sendPhoneBindingCode(
+      userId,
+      dto.phone,
+    );
+    const message = this.i18n.t('user.success.phoneVerificationSent');
+    return {
+      ...result,
+      message,
+    };
+  }
+
+  @Post('phone/bind')
+  @HttpCode(200)
+  async bindPhone(@UserId() userId: string, @Body() dto: BindPhoneRequestDto) {
+    const result = await this.userService.bindPhone(
+      userId,
+      dto.phone,
+      dto.code,
+    );
+    const message = this.i18n.t('user.success.phoneBoundSuccessfully');
+    return {
+      ...result,
+      message,
+    };
+  }
+
   @Patch(':id')
-  async update(@Param('id') id: string, @Body() account: UpdateUserDto) {
+  async update(
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() account: UpdateUserDto,
+  ) {
+    if (userId !== id) {
+      const message = this.i18n.t('user.errors.cannotUpdateOtherUser');
+      throw new AppException(
+        message,
+        'CANNOT_UPDATE_OTHER_USER',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const result = await this.userService.update(id, account);
     // If email was updated, add success message
     if (account.email) {
@@ -64,11 +124,6 @@ export class UserController {
       };
     }
     return result;
-  }
-
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return await this.userService.remove(id);
   }
 
   @Post('option')
@@ -103,5 +158,26 @@ export class UserController {
   @Get('binding/list')
   async listBinding(@UserId() userId: string) {
     return await this.userService.listBinding(userId);
+  }
+
+  @Post('account/delete/initiate')
+  async initiateAccountDeletion(
+    @UserId() userId: string,
+    @Body() dto: InitiateAccountDeletionDto,
+  ) {
+    return await this.userService.initiateAccountDeletion(
+      userId,
+      dto.username,
+      dto.url,
+    );
+  }
+
+  @Public()
+  @Post('account/delete/confirm')
+  @HttpCode(200)
+  async confirmAccountDeletion(@Body() dto: ConfirmAccountDeletionDto) {
+    await this.userService.confirmAccountDeletion(dto.token);
+    const message = this.i18n.t('user.success.accountDeleted');
+    return { message };
   }
 }

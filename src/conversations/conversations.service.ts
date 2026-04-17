@@ -4,11 +4,9 @@ import { I18nService, I18nContext } from 'nestjs-i18n';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
-import { User } from 'omniboxd/user/entities/user.entity';
 import { UserService } from 'omniboxd/user/user.service';
-import { ConfigService } from '@nestjs/config';
 import { MessagesService } from 'omniboxd/messages/messages.service';
-import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import {
   ConversationDetailDto,
   ConversationMessageMappingDto,
@@ -19,41 +17,28 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 
 const TASK_PRIORITY = 5;
 
 @Injectable()
 export class ConversationsService {
-  private readonly wizardApiService: WizardAPIService;
-
   constructor(
     @InjectRepository(Conversation)
     private readonly conversationRepository: Repository<Conversation>,
     private readonly dataSource: DataSource,
     private readonly messagesService: MessagesService,
     private readonly userService: UserService,
-    private readonly configService: ConfigService,
+    private readonly wizardApiService: WizardAPIService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
-  ) {
-    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
-    if (!baseUrl) {
-      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
-      throw new AppException(
-        message,
-        'MISSING_WIZARD_BASE_URL',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
-  }
+  ) {}
 
-  async create(namespaceId: string, user: User) {
+  async create(namespaceId: string, userId: string) {
     const conversation = this.conversationRepository.create({
       namespaceId,
-      userId: user.id,
+      userId: userId,
       title: '',
     });
     return await this.conversationRepository.save(conversation);
@@ -144,9 +129,8 @@ export class ConversationsService {
       if (content.length > 0) {
         const currentLanguage = I18nContext.current()?.lang;
         const lang = currentLanguage?.includes('zh') ? '简体中文' : 'English';
-        const titleCreateResponse = await this.wizardApiService.request(
-          'POST',
-          '/internal/api/v1/wizard/title',
+        const titleCreateResponse = await this.wizardApiService.createTitle(
+          conversation.namespaceId,
           {
             text: content,
             lang,
@@ -232,6 +216,7 @@ export class ConversationsService {
       if (msg.message.role === OpenAIMessageRole.SYSTEM) {
         continue;
       }
+      delete msg.attrs?.context;
       detail.mapping[msg.id] = {
         id: msg.id,
         message: msg.message,
@@ -250,13 +235,13 @@ export class ConversationsService {
 
   async getConversationForUser(
     conversationId: string,
-    user: User,
+    userId: string,
   ): Promise<ConversationDetailDto> {
     const conversation = await this.conversationRepository.findOneOrFail({
-      where: { id: conversationId, userId: user.id },
+      where: { id: conversationId, userId: userId },
     });
     const messages = await this.messagesService.findAll(
-      user.id,
+      userId,
       conversation.id,
     );
     return this.convertToConversationDetail(conversation, messages);
@@ -283,14 +268,15 @@ export class ConversationsService {
   }
 
   async remove(namespaceId: string, userId: string, conversationId: string) {
-    await this.dataSource.transaction(async (manager) => {
-      await this.wizardTaskService.deleteConversationTask(
+    await transaction(this.dataSource.manager, async (tx) => {
+      await this.wizardTaskService.emitDeleteConversationTask(
         namespaceId,
         userId,
         conversationId,
         TASK_PRIORITY,
-        manager.getRepository(Task),
+        tx,
       );
+      const manager = tx.entityManager;
       return await manager.softDelete(Conversation, {
         namespaceId,
         userId,
@@ -301,18 +287,18 @@ export class ConversationsService {
 
   async restore(namespaceId: string, userId: string, conversationId: string) {
     const messages = await this.messagesService.findAll(userId, conversationId);
-    return await this.dataSource.transaction(async (manager) => {
-      const taskRepo = manager.getRepository(Task);
+    return await transaction(this.dataSource.manager, async (tx) => {
       for (const message of messages) {
-        await this.wizardTaskService.createMessageIndexTask(
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
           TASK_PRIORITY,
           userId,
           namespaceId,
           conversationId,
           message,
-          taskRepo,
+          tx,
         );
       }
+      const manager = tx.entityManager;
       await manager.restore(Conversation, {
         namespaceId,
         userId,

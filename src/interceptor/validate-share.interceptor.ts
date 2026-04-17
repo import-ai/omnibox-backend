@@ -1,9 +1,9 @@
 import {
+  CallHandler,
+  ExecutionContext,
+  HttpStatus,
   Injectable,
   NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-  HttpStatus,
 } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
@@ -50,7 +50,16 @@ export class ValidateShareInterceptor implements NestInterceptor {
       throw new AppException(
         message,
         'SHARE_ID_NOT_FOUND',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (typeof shareId !== 'string') {
+      const message = this.i18n.t('share.errors.shareIdNotFound');
+      throw new AppException(
+        message,
+        'SHARE_ID_NOT_FOUND',
+        HttpStatus.BAD_REQUEST,
       );
     }
 

@@ -19,7 +19,9 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { ChildrenMetaDto } from './dto/list-children-resp.dto';
+import { ResourceSummaryDto } from './dto/resource-summary.dto';
+import { TrashListResponseDto } from './dto/trash-list-response.dto';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -61,6 +63,7 @@ export class NamespaceResourcesController {
   }
 
   @Post()
+  @CheckNamespaceReadonly()
   async create(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -79,6 +82,7 @@ export class NamespaceResourcesController {
   }
 
   @Post(':resourceId/duplicate')
+  @CheckNamespaceReadonly()
   async duplicate(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -118,17 +122,18 @@ export class NamespaceResourcesController {
     @Param('resourceId') resourceId: string,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
-  ): Promise<ChildrenMetaDto[]> {
+    @Query('summary') summary?: string,
+  ): Promise<ResourceSummaryDto[]> {
     return this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
       userId,
-      limit,
-      offset,
+      { summary: summary === 'true', limit, offset },
     );
   }
 
   @Post(':resourceId/move/:targetId')
+  @CheckNamespaceReadonly()
   async move(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -163,12 +168,55 @@ export class NamespaceResourcesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Query('limit') limit?: string,
-  ): Promise<ResourceMetaDto[]> {
+    @Query('offset') offset?: string,
+    @Query('summary') summary?: string,
+  ): Promise<ResourceSummaryDto[]> {
     const take = Number.isFinite(Number(limit)) ? Number(limit) : 10;
+    const skip = Number.isFinite(Number(offset)) ? Number(offset) : 0;
     return await this.namespaceResourcesService.recent(
       namespaceId,
       userId,
       take,
+      skip,
+      { summary: summary === 'true' },
+    );
+  }
+
+  // Trash routes must be defined before :resourceId routes to avoid
+  // 'trash' being matched as a resourceId parameter
+  @Get('trash')
+  async listTrash(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Query('search') search?: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
+  ): Promise<TrashListResponseDto> {
+    return await this.namespaceResourcesService.listTrash(namespaceId, userId, {
+      search,
+      limit,
+      offset,
+    });
+  }
+
+  @Delete('trash')
+  async emptyTrash(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+  ): Promise<{ deleted_count: number }> {
+    return await this.namespaceResourcesService.emptyTrash(userId, namespaceId);
+  }
+
+  @Delete('trash/:resourceId')
+  async permanentlyDelete(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ): Promise<void> {
+    await this.namespaceResourcesService.permanentlyDeleteResource(
+      userId,
+      namespaceId,
+      resourceId,
     );
   }
 
@@ -199,6 +247,7 @@ export class NamespaceResourcesController {
   }
 
   @Patch(':resourceId')
+  @CheckNamespaceReadonly()
   async update(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
@@ -216,7 +265,12 @@ export class NamespaceResourcesController {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
-    await this.namespaceResourcesService.update(userId, resourceId, data);
+    await this.namespaceResourcesService.update(
+      namespaceId,
+      userId,
+      resourceId,
+      data,
+    );
     return await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,
@@ -249,12 +303,17 @@ export class NamespaceResourcesController {
   }
 
   @Post(':resourceId/restore')
+  @CheckNamespaceReadonly()
   async restore(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    await this.namespaceResourcesService.restore(userId, resourceId);
+    await this.namespaceResourcesService.restore(
+      userId,
+      namespaceId,
+      resourceId,
+    );
     const resource = await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,

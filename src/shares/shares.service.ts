@@ -99,13 +99,13 @@ export class SharesService {
       });
       throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
-    const subResources = await this.resourcesService.getSubResources(
+    const children = await this.resourcesService.getChildren(
       share.namespaceId,
       [share.resourceId],
     );
     const resourceMeta = SharedResourceMetaDto.fromResourceMeta(
       resource,
-      subResources.length > 0,
+      children.length > 0,
     );
     const user = await this.userService.find(share.userId!);
     return PublicShareInfoDto.fromResourceMeta(

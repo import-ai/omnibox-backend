@@ -7,6 +7,7 @@ import {
 
 describe('ConversationsController (e2e)', () => {
   let client: TestClient;
+  const tempClients: TestClient[] = [];
 
   beforeAll(async () => {
     client = await TestClient.create();
@@ -14,6 +15,9 @@ describe('ConversationsController (e2e)', () => {
 
   afterAll(async () => {
     await client.close();
+    for (const tempClient of tempClients) {
+      await tempClient.close();
+    }
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/conversations', () => {
@@ -362,17 +366,14 @@ describe('ConversationsController (e2e)', () => {
     it("should fail when accessing another user's conversation", async () => {
       // Create another user
       const anotherClient = await TestClient.create();
+      tempClients.push(anotherClient);
 
-      try {
-        // Try to access the first user's conversation with the second user's token
-        await anotherClient
-          .get(
-            `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
-          )
-          .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from FORBIDDEN
-      } finally {
-        await anotherClient.close();
-      }
+      // Try to access the first user's conversation with the second user's token
+      await anotherClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
+        )
+        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from FORBIDDEN
     });
   });
 

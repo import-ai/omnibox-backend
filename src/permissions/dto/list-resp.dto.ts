@@ -1,4 +1,5 @@
 import { Group } from 'omniboxd/groups/entities/group.entity';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { ResourcePermission } from '../resource-permission.enum';
 import { User } from 'omniboxd/user/entities/user.entity';
 
@@ -31,14 +32,17 @@ export class UserDto {
 export class UserPermissionDto {
   user: UserDto;
   permission: ResourcePermission;
+  role?: NamespaceRole;
 
   static new(
     user: User,
     permission: ResourcePermission | null,
+    role?: NamespaceRole,
   ): UserPermissionDto {
     return {
       user: UserDto.fromUserEntity(user),
       permission: permission || ResourcePermission.NO_ACCESS,
+      role,
     };
   }
 }
@@ -62,4 +66,6 @@ export class ListRespDto {
   globalPermission: ResourcePermission;
   users: UserPermissionDto[];
   groups: GroupPermissionDto[];
+  currentPermission: ResourcePermission;
+  currentRole: NamespaceRole;
 }

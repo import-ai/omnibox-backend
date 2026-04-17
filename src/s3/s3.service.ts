@@ -118,17 +118,14 @@ export class S3Service implements OnModuleInit {
 
   private generateId(filename?: string, length: number = 32): string {
     const uuid = generateId(length);
-    // Get the original filename to extract the proper extension
     const originalFilename = getOriginalFileName(filename);
-    const extIndex = originalFilename.lastIndexOf('.');
-    if (extIndex === -1) {
+    const match = originalFilename.match(/\.([a-zA-Z0-9]{1,10})$/);
+
+    if (!match) {
       return uuid;
     }
-    const ext: string = originalFilename.substring(
-      extIndex,
-      originalFilename.length,
-    );
-    return `${uuid}${ext}`;
+
+    return `${uuid}.${match[1]}`;
   }
 
   // There might still be race conditions but the probability should be low enough

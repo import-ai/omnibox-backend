@@ -4,12 +4,15 @@ import {
   Injectable,
   HttpStatus,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Reflector } from '@nestjs/core';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { IS_COOKIE_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
 import { CookieAuthOptions } from 'omniboxd/auth/cookie/cookie.auth.decorator';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { User } from 'omniboxd/user/entities/user.entity';
 
 @Injectable()
 export class CookieAuthGuard implements CanActivate {
@@ -17,9 +20,11 @@ export class CookieAuthGuard implements CanActivate {
     private reflector: Reflector,
     private authService: AuthService,
     private i18n: I18nService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -64,6 +69,23 @@ export class CookieAuthGuard implements CanActivate {
         throw new AppException(
           message,
           'INVALID_TOKEN_PAYLOAD',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      // Check if user exists - TypeORM automatically excludes soft-deleted
+      const user = await this.userRepository.findOne({
+        where: { id: payload.sub },
+      });
+
+      if (!user) {
+        if (onAuthFail === 'continue') {
+          return true; // Continue without authentication
+        }
+        const message = this.i18n.t('auth.errors.invalidToken');
+        throw new AppException(
+          message,
+          'INVALID_TOKEN',
           HttpStatus.UNAUTHORIZED,
         );
       }

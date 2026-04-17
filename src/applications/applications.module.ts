@@ -7,9 +7,11 @@ import { InternalApplicationsController } from './internal.applications.controll
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { WechatBot } from './apps/wechat-bot';
+import { QQBot } from './apps/qq-bot';
+import { WechatClaw } from './apps/wechat-claw';
 
 @Module({
-  providers: [ApplicationsService, WechatBot],
+  providers: [ApplicationsService, WechatBot, QQBot, WechatClaw],
   controllers: [ApplicationsController, InternalApplicationsController],
   exports: [ApplicationsService],
   imports: [

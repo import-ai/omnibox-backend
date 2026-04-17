@@ -28,15 +28,8 @@ export class AccessLogMiddleware implements NestMiddleware {
       } else if (status >= 400) {
         logLevel = 'warn';
       }
-      if (logLevel === 'info') {
-        if (url.startsWith('/api/v1/health')) {
-          logLevel = 'debug';
-        } else if (
-          url.startsWith('/internal/api/v1/wizard/task') &&
-          status === 204
-        ) {
-          logLevel = 'debug';
-        }
+      if (logLevel === 'info' && url.startsWith('/api/v1/health')) {
+        logLevel = 'debug';
       }
 
       const logMessage: Record<string, any> = {

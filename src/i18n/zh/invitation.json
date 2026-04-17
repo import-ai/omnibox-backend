@@ -1,6 +1,7 @@
 {
   "errors": {
     "invitationAlreadyExists": "邀请已存在",
-    "invitationNotFound": "邀请未找到"
+    "invitationNotFound": "邀请未找到",
+    "groupsNotFound": "找不到以下群组: {titles}"
   }
 }

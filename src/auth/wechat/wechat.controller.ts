@@ -28,14 +28,75 @@ export class WechatController extends SocialController {
 
   @Public()
   @Get('auth-url')
-  getAuthUrl() {
-    return this.wechatService.authUrl();
+  getAuthUrl(
+    @Query('isH5') isH5?: boolean,
+    @Query('source') source?: 'h5' | 'web',
+    @Query('h5_redirect') h5Redirect?: string,
+    @Query('redirect') redirect?: string,
+  ) {
+    const finalSource = source || (isH5 ? 'h5' : 'web');
+    return this.wechatService.authUrl(finalSource, h5Redirect, redirect);
+  }
+
+  @Public()
+  @Post('login/native')
+  async nativeLogin(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body('code') code: string,
+    @Body('source') source?: string,
+    @Body('lang') lang?: string,
+  ) {
+    const loginData = await this.wechatService.nativeLogin(code, source, lang);
+
+    if (loginData && loginData.access_token) {
+      const jwtExpireSeconds = parseInt(
+        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+        10,
+      );
+      res.cookie('token', loginData.access_token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        maxAge: jwtExpireSeconds * 1000,
+      });
+    }
+
+    return res.json(loginData);
+  }
+
+  @Public()
+  @Post('login/mini_program')
+  async miniProgramLogin(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body('code') code: string,
+    @Body('lang') lang?: string,
+  ) {
+    const loginData = await this.wechatService.miniProgramLogin(code, lang);
+
+    if (loginData && loginData.access_token) {
+      const jwtExpireSeconds = parseInt(
+        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+        10,
+      );
+      res.cookie('token', loginData.access_token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        maxAge: jwtExpireSeconds * 1000,
+      });
+    }
+
+    return res.json(loginData);
   }
 
   @Public()
   @Get('qrcode')
-  getQrCode() {
-    return this.wechatService.getQrCodeParams();
+  getQrCode(@Query('redirect') redirect?: string) {
+    return this.wechatService.getQrCodeParams(redirect);
   }
 
   @Public()

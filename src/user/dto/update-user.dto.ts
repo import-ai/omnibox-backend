@@ -7,6 +7,7 @@ import {
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { Transform } from 'class-transformer';
+import { IsAllowedEmailDomain } from 'omniboxd/utils/email-validation';
 
 export class UpdateUserDto {
   @IsString({
@@ -26,6 +27,9 @@ export class UpdateUserDto {
     {},
     { message: i18nValidationMessage('validation.errors.email.isEmail') },
   )
+  @IsAllowedEmailDomain({
+    message: i18nValidationMessage('validation.errors.email.domainNotAllowed'),
+  })
   @IsOptional()
   email?: string;
 

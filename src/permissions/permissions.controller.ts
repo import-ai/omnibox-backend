@@ -12,6 +12,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
 import { PermissionsService } from './permissions.service';
 import { PermissionDto } from './dto/permission.dto';
+import { ResourcePermission } from './resource-permission.enum';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')
 export class PermissionsController {
@@ -52,6 +53,7 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       req.user.id,
+      ResourcePermission.FULL_ACCESS,
     );
     if (!hasPermission) {
       const message = i18n.t('auth.errors.notAuthorized');
@@ -77,10 +79,19 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       req.user.id,
+      ResourcePermission.FULL_ACCESS,
     );
     if (!hasPermission) {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const groupExists = await this.permissionsService.groupExistsInNamespace(
+      groupId,
+      namespaceId,
+    );
+    if (!groupExists) {
+      const message = i18n.t('group.errors.groupNotFound');
+      throw new AppException(message, 'GROUP_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
     await this.permissionsService.updateGroupPermission(
       namespaceId,
@@ -102,6 +113,7 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       req.user.id,
+      ResourcePermission.FULL_ACCESS,
     );
     if (!hasPermission) {
       const message = i18n.t('auth.errors.notAuthorized');
@@ -127,8 +139,23 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       req.user.id,
+      ResourcePermission.FULL_ACCESS,
     );
     if (!hasPermission) {
+      const message = i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const userExists = await this.permissionsService.userExists(userId);
+    if (!userExists) {
+      const message = i18n.t('user.errors.userNotFound');
+      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    const canModify = await this.permissionsService.canModifyUserPermission(
+      namespaceId,
+      req.user.id,
+      userId,
+    );
+    if (!canModify) {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
@@ -152,8 +179,18 @@ export class PermissionsController {
       namespaceId,
       resourceId,
       req.user.id,
+      ResourcePermission.FULL_ACCESS,
     );
     if (!hasPermission) {
+      const message = i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const canModify = await this.permissionsService.canModifyUserPermission(
+      namespaceId,
+      req.user.id,
+      userId,
+    );
+    if (!canModify) {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }

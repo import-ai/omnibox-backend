@@ -1,22 +1,144 @@
-import { Repository } from 'typeorm';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { IsNull, Repository } from 'typeorm';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { TaskDto, TaskMetaDto } from './dto/task.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { KafkaService } from 'omniboxd/kafka/kafka.service';
+import { ConfigService } from '@nestjs/config';
+import { Transaction } from 'omniboxd/utils/transaction-utils';
+import { context, propagation } from '@opentelemetry/api';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 
 @Injectable()
 export class TasksService {
+  private readonly kafkaTasksTopic: string;
+
   constructor(
     @InjectRepository(Task)
-    private taskRepository: Repository<Task>,
+    private readonly taskRepository: Repository<Task>,
     private readonly i18n: I18nService,
-  ) {}
+    private readonly kafkaService: KafkaService,
+    private readonly configService: ConfigService,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
+  ) {
+    this.kafkaTasksTopic = this.configService.get<string>(
+      'OBB_TASKS_TOPIC',
+      'omnibox-tasks',
+    );
+  }
 
-  async create(data: Partial<Task>) {
-    const newTask = this.taskRepository.create(data);
-    return await this.taskRepository.save(newTask);
+  injectTraceHeaders(task: Partial<Task>) {
+    const traceHeaders: Record<string, string> = {};
+    propagation.inject(context.active(), traceHeaders);
+    task.payload = { ...(task.payload || {}), trace_headers: traceHeaders };
+    return task;
+  }
+
+  async checkTaskMessage(namespaceId: string): Promise<void> {
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+    const topicName = `${this.kafkaTasksTopic}-${usage.taskPriority}`;
+    while (true) {
+      const task = await this.getNextTask(namespaceId);
+      if (!task) {
+        break;
+      }
+      const count = await this.countEnqueuedTasks(namespaceId);
+      if (count >= usage.taskParallelism) {
+        break;
+      }
+      await this.kafkaService.produce(topicName, [
+        {
+          value: JSON.stringify({
+            task_id: task.id,
+            namespace_id: namespaceId,
+            function: task.function,
+            meta: { file_name: task.input?.filename },
+          }),
+        },
+      ]);
+      await this.setTaskEnqueued(namespaceId, task.id);
+    }
+  }
+
+  async emitTask(data: Partial<Task>, tx?: Transaction) {
+    const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
+    const task = await repo.save(
+      repo.create({
+        ...this.injectTraceHeaders(data),
+        resourceId: data.resourceId || data.payload?.resource_id,
+      }),
+    );
+    if (tx) {
+      tx.afterCommitHooks.push(() => this.checkTaskMessage(task.namespaceId));
+    } else {
+      await this.checkTaskMessage(task.namespaceId);
+    }
+    return task;
+  }
+
+  async countEnqueuedTasks(namespaceId: string): Promise<number> {
+    return await this.taskRepository.count({
+      where: {
+        namespaceId,
+        endedAt: IsNull(),
+        canceledAt: IsNull(),
+        enqueued: true,
+      },
+    });
+  }
+
+  async getNextTask(namespaceId: string): Promise<Task | null> {
+    return await this.taskRepository.findOne({
+      where: {
+        namespaceId,
+        endedAt: IsNull(),
+        canceledAt: IsNull(),
+        enqueued: false,
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+  }
+
+  async setTaskEnqueued(namespaceId: string, taskId: string): Promise<void> {
+    await this.taskRepository.update(
+      { namespaceId, id: taskId },
+      { enqueued: true },
+    );
+  }
+
+  async cancelResourceTasks(
+    namespaceId: string,
+    resourceId: string,
+    tx: Transaction,
+  ) {
+    if (!namespaceId || !resourceId) {
+      return;
+    }
+    await tx.entityManager.update(
+      Task,
+      { namespaceId, resourceId, canceledAt: IsNull(), endedAt: IsNull() },
+      { canceledAt: new Date(), status: TaskStatus.CANCELED },
+    );
+  }
+
+  async cancelUserTasks(
+    namespaceId: string,
+    userId: string,
+    tx: Transaction,
+  ): Promise<void> {
+    if (!namespaceId || !userId) {
+      return;
+    }
+    await tx.entityManager.update(
+      Task,
+      { namespaceId, userId, canceledAt: IsNull(), endedAt: IsNull() },
+      { canceledAt: new Date() },
+    );
   }
 
   async list(
@@ -65,7 +187,7 @@ export class TasksService {
     await this.taskRepository.softRemove(task);
   }
 
-  async cancelTask(id: string): Promise<TaskDto> {
+  async cancelTaskOrFail(id: string): Promise<TaskDto> {
     const task = await this.get(id);
 
     if (task.canceledAt) {
@@ -86,6 +208,7 @@ export class TasksService {
     }
 
     task.canceledAt = new Date();
+    task.status = TaskStatus.CANCELED;
     const updatedTask = await this.taskRepository.save(task);
 
     return TaskDto.fromEntity(updatedTask);
@@ -103,7 +226,7 @@ export class TasksService {
       );
     }
 
-    const newTask = await this.create({
+    const newTask = await this.emitTask({
       namespaceId: originalTask.namespaceId,
       userId: originalTask.userId,
       priority: originalTask.priority,

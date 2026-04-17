@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ExtractTagsProcessor } from './extract-tags.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
@@ -73,13 +73,16 @@ describe('ExtractTagsProcessor', () => {
     payload: { resource_id: 'test-resource-id' },
     output: null,
     exception: null,
-    priority: 5,
+    priority: '5',
     startedAt: new Date(),
     endedAt: null,
     canceledAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
+    enqueued: false,
+    resourceId: 'test-resource-id',
+    status: TaskStatus.PENDING,
     ...overrides,
   });
 
@@ -142,6 +145,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -175,6 +179,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -208,6 +213,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -237,6 +243,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -266,6 +273,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {
@@ -326,6 +334,7 @@ describe('ExtractTagsProcessor', () => {
       );
 
       expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+        'test-namespace',
         'test-user',
         'test-resource-id',
         {

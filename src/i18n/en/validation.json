@@ -17,11 +17,21 @@
     "email": {
       "isString": "Email must be a string",
       "isNotEmpty": "Email is required",
-      "isEmail": "Email must be a valid email address"
+      "isEmail": "Email must be a valid email address",
+      "domainNotAllowed": "Email domain is not allowed. Allowed domains: {constraints.0}"
     },
     "password": {
       "isString": "Password must be a string",
       "isNotEmpty": "Password is required"
+    },
+    "phone": {
+      "isNotEmpty": "Phone number is required",
+      "invalid": "Please enter a valid phone number",
+      "invalidForCountry": "Phone number is not from an allowed country"
+    },
+    "code": {
+      "isNotEmpty": "Verification code is required",
+      "length": "Verification code must be 6 digits"
     },
     "username": {
       "isString": "Username must be a string",
@@ -47,8 +57,7 @@
       "maxLength": "Description must not exceed {constraints.0} characters"
     },
     "content": {
-      "isString": "Content must be a string",
-      "isNotEmpty": "Content is required"
+      "isString": "Content must be a string"
     },
     "mimetype": {
       "isString": "Mimetype must be a string",
@@ -75,7 +84,8 @@
     },
     "url": {
       "isString": "URL must be a string",
-      "isNotEmpty": "URL is required"
+      "isNotEmpty": "URL is required",
+      "isUrl": "Invalid URL"
     },
     "query": {
       "isString": "Query must be a string",

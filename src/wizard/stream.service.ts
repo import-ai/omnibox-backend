@@ -1,6 +1,6 @@
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { HttpStatus, Injectable, Logger, MessageEvent } from '@nestjs/common';
 import { Observable, Subscriber } from 'rxjs';
-import { HttpStatus, Logger, MessageEvent } from '@nestjs/common';
 import {
   Message,
   MessageStatus,
@@ -16,13 +16,14 @@ import {
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
-import { context, propagation, trace } from '@opentelemetry/api';
+import { trace } from '@opentelemetry/api';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Span } from 'nestjs-otel';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 
 interface HandlerContext {
   parentId?: string;
@@ -30,11 +31,12 @@ interface HandlerContext {
   message?: OpenAIMessage;
 }
 
+@Injectable()
 export class StreamService {
   private readonly logger = new Logger(StreamService.name);
 
   constructor(
-    private readonly wizardBaseUrl: string,
+    private readonly wizardApiService: WizardAPIService,
     private readonly messagesService: MessagesService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
@@ -44,27 +46,23 @@ export class StreamService {
 
   @Span('stream')
   async stream(
-    url: string,
+    namespaceId: string,
+    mode: 'ask' | 'write',
     body: Record<string, any>,
     requestId: string,
     callback: (data: string) => Promise<void>,
   ): Promise<void> {
-    const span = trace.getSpan(context.active());
+    const span = trace.getActiveSpan();
     if (span) {
       span.setAttribute('agent_request', JSON.stringify(body));
     }
 
-    const traceHeaders: Record<string, string> = {};
-    propagation.inject(context.active(), traceHeaders);
-    const response = await fetch(`${this.wizardBaseUrl}${url}`, {
-      method: 'POST',
-      headers: {
-        ...traceHeaders,
-        'Content-Type': 'application/json',
-        'X-Request-Id': requestId,
-      },
-      body: JSON.stringify(body),
-    });
+    const response = await this.wizardApiService.createAgentStream(
+      namespaceId,
+      mode,
+      body,
+      requestId,
+    );
     if (!response.ok) {
       const message = this.i18n.t('system.errors.wizardRequestFailed');
       throw new AppException(
@@ -113,7 +111,7 @@ export class StreamService {
   agentHandler(
     namespaceId: string,
     conversationId: string,
-    userId: string | null,
+    userId: string,
     subscriber: Subscriber<MessageEvent>,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
@@ -153,6 +151,7 @@ export class StreamService {
           chunk,
         );
 
+        delete chunk.attrs?.context;
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
         const message: Message = await this.messagesService.update(
@@ -170,8 +169,29 @@ export class StreamService {
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
         // Do nothing, this is the end of the stream
+      } else if (chunk.response_type === 'metrics') {
+        // Do nothing, frontend only
+      } else if (chunk.response_type === 'checkpoint') {
+        // Checkpoint response always triggered after message done
+        const messageId = context.messageId || context.parentId;
+        if (!messageId) {
+          throw new AppException(
+            this.i18n.t('system.errors.messageIdNotSet'),
+            'MESSAGE_ID_NOT_SET',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+        await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
         if (context.messageId) {
+          await this.messagesService.updateDelta(context.messageId, {
+            response_type: 'delta',
+            message: {},
+            attrs: {
+              error_message: chunk.message,
+            },
+          });
+
           await this.messagesService.update(
             context.messageId,
             namespaceId,
@@ -182,10 +202,6 @@ export class StreamService {
             true,
           );
         }
-
-        const err = new Error(chunk.message || 'Unknown error');
-        err.name = 'AgentError';
-        throw err;
       } else {
         const message = this.i18n.t('system.errors.unknownResponseType', {
           args: { type: data },
@@ -196,7 +212,10 @@ export class StreamService {
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
-      if (context?.message?.role !== OpenAIMessageRole.SYSTEM) {
+      if (
+        chunk.response_type !== 'checkpoint' &&
+        context?.message?.role !== OpenAIMessageRole.SYSTEM
+      ) {
         subscriber.next({ data: JSON.stringify(chunk) });
       }
     };
@@ -227,14 +246,16 @@ export class StreamService {
     return messages;
   }
 
-  streamError(subscriber: Subscriber<MessageEvent>, error: Error) {
+  streamError(
+    subscriber: Subscriber<MessageEvent>,
+    error: Error | AppException,
+  ) {
     this.logger.error({ error });
-    subscriber.error(
-      JSON.stringify({
-        response_type: 'error',
-        error: error.name,
-      }),
-    );
+    const span = trace.getActiveSpan();
+    if (span) {
+      span.recordException(error);
+    }
+    subscriber.error(error);
   }
 
   private async getUserVisibleResources(
@@ -311,7 +332,7 @@ export class StreamService {
         reqResource.id,
       );
       if (reqResource.type === 'folder') {
-        const subResources = await this.resourcesService.getSubResources(
+        const subResources = await this.resourcesService.getChildren(
           share.namespaceId,
           [reqResource.id],
         );
@@ -336,14 +357,14 @@ export class StreamService {
     requestDto: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write',
-    userId: string | null,
+    userId: string,
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Message[] = [];
     if (requestDto.parent_message_id) {
       parentId = requestDto.parent_message_id;
       const allMessages = await this.messagesService.findAll(
-        userId || undefined,
+        userId,
         requestDto.conversation_id,
       );
       messages = this.getMessages(allMessages, parentId);
@@ -374,22 +395,19 @@ export class StreamService {
 
       const wizardRequest: WizardAgentRequestDto = {
         namespace_id: namespaceId,
+        user_id: userId,
         conversation_id: requestDto.conversation_id,
         query: requestDto.query,
         messages,
         tools,
         enable_thinking: requestDto.enable_thinking,
         lang: requestDto.lang,
+        tool_call: requestDto.tool_call,
       };
 
-      this.stream(
-        `/api/v1/wizard/${mode}`,
-        wizardRequest,
-        requestId,
-        async (data) => {
-          await handler(data, handlerContext);
-        },
-      )
+      this.stream(namespaceId, mode, wizardRequest, requestId, async (data) => {
+        await handler(data, handlerContext);
+      })
         .then(() => subscriber.complete())
         .catch((err: Error) => this.streamError(subscriber, err));
     });
@@ -446,7 +464,7 @@ export class StreamService {
         requestDto,
         requestId,
         mode,
-        null,
+        '',
       );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>

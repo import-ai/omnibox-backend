@@ -8,9 +8,11 @@ import { MessagesModule } from '../messages/messages.module';
 import { UserModule } from '../user/user.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
+import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
 @Module({
   imports: [
+    WizardAPIModule,
     MessagesModule,
     UserModule,
     TasksModule,

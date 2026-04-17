@@ -18,9 +18,12 @@ export class CreateUserBindingDto {
     { message: i18nValidationMessage('validation.errors.email.isEmail') },
   )
   @IsOptional()
-  email: string;
+  email?: string;
 
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsOptional()
   lang?: string;
+
+  @IsOptional()
+  metadata?: Record<string, any>;
 }

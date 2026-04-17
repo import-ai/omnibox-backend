@@ -8,7 +8,7 @@ Migrations are used to version control database schema changes and ensure consis
 
 ## File Structure
 
-- **Migration files**: Named with timestamp prefix (e.g., `1751900000000-init.ts`)
+- **Migration files**: Named with timestamp prefix (e.g., `1754550165406-api-keys.ts`)
 - **base-columns.ts**: Common column definitions used across multiple tables
 
 ## Migration Naming Convention
@@ -18,10 +18,14 @@ Migration files follow the pattern: `{timestamp}-{description}.ts`
 - **Timestamp**: Unix timestamp in milliseconds when the migration was created
 - **Description**: Brief description of the changes (kebab-case)
 
+Generate timestamp with:
+```bash
+date +%s%3N
+```
+
 Examples:
-- `1751900000000-init.ts` - Initial database setup
 - `1754550165406-api-keys.ts` - API keys table creation
-- `1751905414493-tags.ts` - Tags functionality
+- `1768569496828-oauth-provider.ts` - OAuth provider tables
 
 ## Common Patterns
 
@@ -106,7 +110,8 @@ Migrations run automatically when the application starts. The deployment process
 ### Manual Creation Process
 
 1. **Create migration file**:
-   - Use timestamp prefix: `{Date.now()}-description.ts`
+   - Generate timestamp: `date +%s%3N`
+   - Use timestamp prefix: `{timestamp}-description.ts`
    - Example: `1754550165406-add-new-feature.ts`
 
 2. **Implement migration class**:
@@ -178,7 +183,6 @@ import { YourFeatureName1234567890123 } from 'omniboxd/migrations/1234567890123-
 
 // Add to migrations array
 migrations: [
-  Init1751900000000,
   Tags1751905414493,
   UserOptions1751904560034,
   UserBindings1752652489640,

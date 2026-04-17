@@ -1,6 +1,16 @@
 import { Base } from 'omniboxd/common/base.entity';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
+export enum TaskStatus {
+  PENDING = 'pending',
+  RUNNING = 'running',
+  FINISHED = 'finished',
+  ERROR = 'error',
+  CANCELED = 'canceled',
+  TIMEOUT = 'timeout',
+  INSUFFICIENT_QUOTA = 'insufficient_quota',
+}
+
 @Entity('tasks')
 export class Task extends Base {
   @PrimaryGeneratedColumn()
@@ -12,8 +22,8 @@ export class Task extends Base {
   @Column()
   userId: string;
 
-  @Column({ default: 5 })
-  priority: number;
+  @Column('bigint', { default: '5' })
+  priority: string;
 
   @Column()
   function: string;
@@ -38,4 +48,13 @@ export class Task extends Base {
 
   @Column('timestamptz', { nullable: true })
   canceledAt: Date | null;
+
+  @Column({ default: false })
+  enqueued: boolean;
+
+  @Column('varchar', { nullable: true })
+  resourceId: string | null;
+
+  @Column('enum', { enum: TaskStatus, default: TaskStatus.PENDING })
+  status: TaskStatus;
 }

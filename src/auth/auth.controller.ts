@@ -13,20 +13,28 @@ import {
   Controller,
   HttpCode,
   Query,
+  HttpStatus,
 } from '@nestjs/common';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import {
   SendEmailOtpDto,
   VerifyEmailOtpDto,
   SendEmailOtpResponseDto,
 } from './dto/email-otp.dto';
+import {
+  SendPhoneOtpRequestDto,
+  VerifyPhoneOtpRequestDto,
+  SendPhoneOtpResponseDto,
+} from './dto/phone-otp.dto';
+import { InviteDto } from './dto/invite.dto';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 @Controller('api/v1')
 export class AuthController {
   constructor(
     private authService: AuthService,
     private configService: ConfigService,
+    private namespacesService: NamespacesService,
   ) {}
 
   @UseGuards(LocalAuthGuard)
@@ -125,20 +133,82 @@ export class AuthController {
     return res.json(authData);
   }
 
-  @Post('invite')
-  async invite(
-    @Request() req,
-    @Body('inviteUrl') inviteUrl: string,
-    @Body('registerUrl') registerUrl: string,
-    @Body('namespace') namespaceId: string,
-    @Body('role') role: NamespaceRole,
-    @Body('resourceId') resourceId: string,
-    @Body('permission') permission: ResourcePermission,
-    @Body('groupId') groupId: string,
-    @Body('emails') emails: Array<string>,
-    @Body('groupTitles') groupTitles: Array<string>,
+  @Public()
+  @Post('auth/send-phone-otp')
+  @HttpCode(200)
+  async sendPhoneOtp(
+    @Body() dto: SendPhoneOtpRequestDto,
+  ): Promise<SendPhoneOtpResponseDto> {
+    return await this.authService.sendPhoneOTP(dto.phone);
+  }
+
+  @Public()
+  @Post('auth/send-signup-phone-otp')
+  @HttpCode(200)
+  async sendSignupPhoneOtp(
+    @Body() dto: SendPhoneOtpRequestDto,
+  ): Promise<SendPhoneOtpResponseDto> {
+    return await this.authService.sendSignupPhoneOTP(dto.phone);
+  }
+
+  @Public()
+  @Post('auth/verify-phone-otp')
+  @HttpCode(200)
+  async verifyPhoneOtp(
+    @Body() dto: VerifyPhoneOtpRequestDto,
+    @Res() res: Response,
+    @Body('lang') lang?: string,
   ) {
-    if (groupTitles && groupTitles.length > 0) {
+    const authData = await this.authService.verifyPhoneOTP(
+      dto.phone,
+      dto.code,
+      lang,
+    );
+
+    const jwtExpireSeconds = parseInt(
+      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+      10,
+    );
+    res.cookie('token', authData.access_token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+      path: '/',
+      maxAge: jwtExpireSeconds * 1000,
+    });
+
+    return res.json(authData);
+  }
+
+  @Post('invite')
+  async invite(@Request() req, @Body() inviteDto: InviteDto) {
+    const {
+      inviteUrl,
+      registerUrl,
+      namespace: namespaceId,
+      role,
+      resourceId,
+      permission,
+      groupId,
+      emails,
+      groupTitles,
+      inviteType,
+    } = inviteDto;
+
+    // Check if current user is owner or admin of the namespace
+    const isOwnerOrAdmin = await this.namespacesService.userIsOwnerOrAdmin(
+      namespaceId,
+      req.user.id,
+    );
+    if (!isOwnerOrAdmin) {
+      throw new AppException(
+        'Only owner or admin can invite users',
+        'USER_NOT_OWNER_OR_ADMIN',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    if (groupTitles && groupTitles.length > 0 && resourceId && permission) {
       await this.authService.inviteGroup(
         namespaceId,
         resourceId,
@@ -147,19 +217,16 @@ export class AuthController {
       );
     }
     if (emails && emails.length > 0) {
-      await Promise.all(
-        emails.map((email) =>
-          this.authService.invite(req.user.id, email, {
-            role,
-            inviteUrl,
-            registerUrl,
-            namespaceId,
-            resourceId,
-            permission,
-            groupId,
-          }),
-        ),
-      );
+      await this.authService.inviteBatch(req.user.id, emails, {
+        role,
+        inviteUrl,
+        registerUrl,
+        namespaceId,
+        resourceId,
+        permission,
+        groupId,
+        inviteType,
+      });
     }
   }
 

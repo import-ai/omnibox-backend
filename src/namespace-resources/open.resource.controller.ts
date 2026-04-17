@@ -32,6 +32,7 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @ApiTags('Resources')
 @ApiSecurity('api-key')
@@ -44,6 +45,7 @@ export class OpenResourcesController {
   ) {}
 
   @Post()
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {
@@ -117,16 +119,16 @@ export class OpenResourcesController {
 
     if (!isEmpty(newResource.content?.trim())) {
       if (isEmpty(newResource.name?.trim())) {
-        await this.wizardTaskService.createGenerateTitleTask(
+        await this.wizardTaskService.emitGenerateTitleTask(
           userId,
           apiKey.namespaceId,
           { resource_id: newResource.id },
-          { text: data.content },
+          { content: data.content },
         );
       }
       // Skip extract tags task if user requested or we already have tags
       if (!data.skip_parsing_tags_from_content && isEmpty(newResource.tagIds)) {
-        await this.wizardTaskService.createExtractTagsTask(
+        await this.wizardTaskService.emitExtractTagsTask(
           userId,
           newResource.id,
           apiKey.namespaceId,
@@ -139,6 +141,7 @@ export class OpenResourcesController {
   }
 
   @Post('upload')
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {

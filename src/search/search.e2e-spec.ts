@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { HttpStatus } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
   SearchController,
   InternalSearchController,
@@ -13,21 +14,19 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
-import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
-
-// Set environment variable to avoid the error in SearchService constructor
-process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8000';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { TagService } from 'omniboxd/tag/tag.service';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
-jest.mock('../wizard/api.wizard.service', () => {
+jest.mock('../wizard-api/wizard-api.service', () => {
   return {
     WizardAPIService: jest.fn().mockImplementation(() => ({
-      search: jest.fn().mockImplementation((params) => {
+      search: jest.fn().mockImplementation((req) => {
         const allRecords = [
           {
             id: 'search-result-1',
@@ -64,12 +63,12 @@ jest.mock('../wizard/api.wizard.service', () => {
 
         // Filter records based on type if specified
         let filteredRecords = allRecords;
-        if (params?.type) {
-          if (params.type === IndexRecordType.CHUNK) {
+        if (req?.type) {
+          if (req.type === IndexRecordType.CHUNK) {
             filteredRecords = allRecords.filter(
               (r) => r.type === IndexRecordType.CHUNK,
             );
-          } else if (params.type === IndexRecordType.MESSAGE) {
+          } else if (req.type === IndexRecordType.MESSAGE) {
             filteredRecords = allRecords.filter(
               (r) => r.type === IndexRecordType.MESSAGE,
             );
@@ -94,10 +93,20 @@ describe('SearchController (e2e)', () => {
       controllers: [SearchController, InternalSearchController],
       providers: [
         SearchService,
+        WizardAPIService,
         {
           provide: PermissionsService,
           useValue: {
-            userHasPermission: jest.fn().mockResolvedValue(true),
+            userInNamespace: jest.fn().mockResolvedValue(true),
+            getCurrentPermissions: jest
+              .fn()
+              .mockImplementation((_userId, _namespaceId, resources) => {
+                const map = new Map();
+                for (const r of resources || []) {
+                  map.set(r.id, ResourcePermission.CAN_VIEW);
+                }
+                return Promise.resolve(map);
+              }),
           },
         },
         {
@@ -117,6 +126,21 @@ describe('SearchController (e2e)', () => {
           provide: ResourcesService,
           useValue: {
             getParentResources: jest.fn().mockResolvedValue([]),
+            batchGetResourceMeta: jest.fn().mockResolvedValue(new Map()),
+            batchGetParentResources: jest
+              .fn()
+              .mockImplementation((_namespaceId, resourceIds: string[]) => {
+                const entries: Array<
+                  [string, { id: string; attrs: Record<string, unknown> }]
+                > = (resourceIds || []).map((id) => [
+                  id,
+                  {
+                    id,
+                    attrs: {},
+                  },
+                ]);
+                return Promise.resolve(new Map(entries));
+              }),
           },
         },
         {
@@ -126,9 +150,9 @@ describe('SearchController (e2e)', () => {
           },
         },
         {
-          provide: ConfigService,
+          provide: TagService,
           useValue: {
-            get: jest.fn().mockReturnValue('http://localhost:8000'),
+            findByIds: jest.fn().mockResolvedValue([]),
           },
         },
         {

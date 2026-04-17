@@ -4,7 +4,7 @@ import { ReaderProcessor } from './reader.processor';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -94,13 +94,16 @@ describe('ReaderProcessor', () => {
       payload: { resource_id: 'test-resource-id' },
       output: null,
       exception: null,
-      priority: 5,
+      priority: '5',
       startedAt: new Date(),
       endedAt: null,
       canceledAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,
+      enqueued: false,
+      resourceId: 'test-resource-id',
+      status: TaskStatus.PENDING,
       ...overrides,
     });
 
@@ -123,6 +126,7 @@ describe('ReaderProcessor', () => {
         });
         expect(resourcesService.getResourceOrFail).toHaveBeenCalled();
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -134,6 +138,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 
@@ -209,6 +214,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -221,6 +227,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 
@@ -253,6 +260,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -265,6 +273,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 
@@ -316,6 +325,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -327,6 +337,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
     });
@@ -349,12 +360,17 @@ describe('ReaderProcessor', () => {
 
         // Should call parent's exception handling
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
+            name: undefined,
             content: 'error',
+            attrs: undefined,
+            tag_ids: undefined,
           },
+          true,
         );
         expect(result).toEqual({});
       });
@@ -387,6 +403,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -398,6 +415,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 
@@ -428,6 +446,7 @@ describe('ReaderProcessor', () => {
           tagIds: undefined,
         });
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
           'test-user',
           'test-resource-id',
           {
@@ -439,6 +458,7 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
+          true,
         );
       });
 

@@ -8,6 +8,7 @@ import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.intercept
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { ResourceTagsModule } from 'omniboxd/resource-tags/resource-tags.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { UserModule } from 'omniboxd/user/user.module';
@@ -27,6 +28,7 @@ import {
 } from 'nestjs-i18n';
 import * as path from 'path';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
@@ -51,6 +53,7 @@ import { ResourceAttachments1755059371000 } from 'omniboxd/migrations/1755059371
 import { AddTagIdsToResources1755248141570 } from 'omniboxd/migrations/1755248141570-add-tag-ids-to-resources';
 import { TelemetryModule } from 'omniboxd/telemetry';
 import { SeoModule } from 'omniboxd/seo/seo.module';
+import { PhoneModule } from 'omniboxd/phone/phone.module';
 import { CleanResourceNames1755396702021 } from 'omniboxd/migrations/1755396702021-clean-resource-names';
 import { UpdateAttachmentUrls1755499552000 } from 'omniboxd/migrations/1755499552000-update-attachment-urls';
 import { ScanResourceAttachments1755504936756 } from 'omniboxd/migrations/1755504936756-scan-resource-attachments';
@@ -59,8 +62,6 @@ import { Applications1756914379375 } from 'omniboxd/migrations/1756914379375-app
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TraceModule } from 'omniboxd/trace/trace.module';
 import { ApplicationsModule } from 'omniboxd/applications/applications.module';
-import { FeedbackModule } from 'omniboxd/feedback/feedback.module';
-import { Feedback1757100000000 } from 'omniboxd/migrations/1757100000000-feedback';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WebSocketModule } from 'omniboxd/websocket/websocket.module';
 import { NullableUserId1757844448000 } from 'omniboxd/migrations/1757844448000-nullable-user-id';
@@ -74,11 +75,35 @@ import { Files1761556143000 } from 'omniboxd/migrations/1761556143000-files';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { AddFileIdToResources1761726974942 } from 'omniboxd/migrations/1761726974942-add-file-id-to-resources';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
+import { SubscribeMessageModule } from 'omniboxd/subscribe-message/subscribe-message.module';
 import { UserUsernameNotNull1763533615604 } from 'omniboxd/migrations/1763533615604-user-username-not-null';
+import { AddMetadataToUserBindings1762847685000 } from 'omniboxd/migrations/1762847685000-add-metadata-to-user-bindings';
+import { AddEnqueuedToTasks1765348624000 } from 'omniboxd/migrations/1765348624000-add-enqueued-to-tasks';
+import { AddResourceIdToTasks1765443191000 } from 'omniboxd/migrations/1765443191000-add-resource-id-to-tasks';
+import { AddAdminRole1766339893375 } from 'omniboxd/migrations/1766339893375-add-admin-role';
+import { KafkaModule } from 'omniboxd/kafka/kafka.module';
+import { AddNamespaceIdIndexToResources1766053289000 } from 'omniboxd/migrations/1766053289000-add-namespace-id-index-to-resources';
+import { AddStatusToTasks1766127168000 } from 'omniboxd/migrations/1766127168000-add-status-to-tasks';
+import { AddPermanentDeletedAt1767441415360 } from 'omniboxd/migrations/1767441415360-add-permanent-deleted-at';
+import { AddPhoneUniqueConstraint1768483850604 } from 'omniboxd/migrations/1768483850604-add-phone-unique-constraint';
+import { OAuthProvider1768569496828 } from 'omniboxd/migrations/1768569496828-oauth-provider';
+import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
+import { StorageUsages1768556182000 } from 'omniboxd/migrations/1768556182000-storage-usages';
+import { AddAttachmentSize1768560746946 } from 'omniboxd/migrations/1768560746946-add-attachment-size';
+import { AddInsufficientQuotaStatus1768569500000 } from 'omniboxd/migrations/1768569500000-add-insufficient-quota-status';
+import { AddContentSizeToResources1769415718000 } from 'omniboxd/migrations/1769415718000-add-content-size-to-resources';
+import { AddSizeToFiles1769415719000 } from 'omniboxd/migrations/1769415719000-add-size-to-files';
+import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000-make-size-nullable';
+import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/1774965861436-rename-verify-code-to-key';
+import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/1775666229211-deduplicate-resource-names';
+import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
+import { VfsModule } from 'omniboxd/vfs/vfs.module';
+import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
+import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
 
 @Module({})
 export class AppModule implements NestModule {
-  static forRoot(extraMigrations: Array<() => void>): DynamicModule {
+  static forRoot(extraMigrations: Array<new () => any> = []): DynamicModule {
     return {
       module: AppModule,
       controllers: [AppController],
@@ -128,13 +153,16 @@ export class AppModule implements NestModule {
           ],
         }),
         TelemetryModule,
+        KafkaModule,
         TagModule,
+        ResourceTagsModule,
         MailModule,
         AuthModule,
         UserModule,
         APIKeyModule,
         NamespacesModule,
         NamespaceResourcesModule,
+        NamespaceTasksModule,
         ResourcesModule,
         TasksModule,
         WizardModule,
@@ -148,12 +176,18 @@ export class AppModule implements NestModule {
         SharesModule,
         SharedResourcesModule,
         SeoModule,
+        PhoneModule,
         TraceModule,
-        FeedbackModule,
         ApplicationsModule,
         WebSocketModule,
         FilesModule,
         OpenAPIModule,
+        SubscribeMessageModule,
+        AppConfigModule,
+        WizardUrlProviderModule,
+        VfsModule,
+        VfsTagsModule,
+        VfsWizardModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],
@@ -197,13 +231,29 @@ export class AppModule implements NestModule {
               ScanResourceAttachments1755504936756,
               SharesAllResources1754471311959,
               Applications1756914379375,
-              Feedback1757100000000,
               NullableUserId1757844448000,
               AddShareIdToConversations1757844449000,
               ShareUser1760171824000,
               Files1761556143000,
               AddFileIdToResources1761726974942,
               UserUsernameNotNull1763533615604,
+              AddMetadataToUserBindings1762847685000,
+              AddEnqueuedToTasks1765348624000,
+              AddResourceIdToTasks1765443191000,
+              AddAdminRole1766339893375,
+              AddNamespaceIdIndexToResources1766053289000,
+              AddStatusToTasks1766127168000,
+              AddPermanentDeletedAt1767441415360,
+              AddPhoneUniqueConstraint1768483850604,
+              OAuthProvider1768569496828,
+              StorageUsages1768556182000,
+              AddAttachmentSize1768560746946,
+              AddInsufficientQuotaStatus1768569500000,
+              AddContentSizeToResources1769415718000,
+              AddSizeToFiles1769415719000,
+              MakeSizeNullable1769478367000,
+              RenameVerifyCodeToKey1774965861436,
+              DeduplicateResourceNames1775666229211,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -32,21 +32,30 @@
   </style>
 </head>
 <body>
-  <h1>{{t "mail.templates.invite.heading"}}</h1>
+  {{#if isShareInvite}}
+    <h1>{{t "mail.templates.invite.shareHeading"}}</h1>
+    <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.shareBodyPrefix"}} <strong>{{namespaceName}}</strong> {{t "mail.templates.invite.shareBodyMiddle"}} <strong>{{resourceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
 
-  {{#if isExistingUser}}
-    {{#if receiverUsername}}
-      <p>{{t "mail.templates.invite.bodyExistingUserPrefix"}} <strong>{{receiverUsername}}</strong>, <strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyExistingUserMiddle"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
-    {{else}}
-      <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyExistingUserNoUsernamePrefix"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
-    {{/if}}
+    <div class="magic-link">
+      <a href="{{resetUrl}}">{{t "mail.templates.invite.buttonText"}}</a>
+    </div>
   {{else}}
-    <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyNewUserPrefix"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyNewUserSuffix"}}</p>
-  {{/if}}
+    <h1>{{t "mail.templates.invite.heading"}}</h1>
 
-  <div class="magic-link">
-    <a href="{{resetUrl}}">{{t "mail.templates.invite.buttonText"}}</a>
-  </div>
+    {{#if isExistingUser}}
+      {{#if receiverUsername}}
+        <p>{{t "mail.templates.invite.bodyExistingUserPrefix"}} <strong>{{receiverUsername}}</strong>, <strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyExistingUserMiddle"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
+      {{else}}
+        <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyExistingUserNoUsernamePrefix"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyExistingUserAction"}}</p>
+      {{/if}}
+    {{else}}
+      <p><strong>{{senderUsername}}</strong> {{t "mail.templates.invite.bodyNewUserPrefix"}} <strong>{{namespaceName}}</strong>. {{t "mail.templates.invite.bodyNewUserSuffix"}}</p>
+    {{/if}}
+
+    <div class="magic-link">
+      <a href="{{resetUrl}}">{{t "mail.templates.invite.buttonText"}}</a>
+    </div>
+  {{/if}}
 
   <p class="expiry">{{t "mail.templates.invite.expireText"}}</p>
 

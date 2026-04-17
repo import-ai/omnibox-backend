@@ -1,6 +1,7 @@
 {
   "errors": {
     "invitationAlreadyExists": "Invitation already exists",
-    "invitationNotFound": "Invitation not found"
+    "invitationNotFound": "Invitation not found",
+    "groupsNotFound": "Groups not found: {titles}"
   }
 }

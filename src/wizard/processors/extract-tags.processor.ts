@@ -46,6 +46,7 @@ export class ExtractTagsProcessor extends Processor {
 
       // Update the resource with extracted tag IDs from external service
       await this.namespaceResourcesService.update(
+        task.namespaceId,
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {

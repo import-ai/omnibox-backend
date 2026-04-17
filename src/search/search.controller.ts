@@ -15,7 +15,7 @@ export class SearchController {
     @Query('query') query: string,
     @Query('type') type?: DocType,
   ) {
-    return await this.searchService.search(namespaceId, query, type, userId);
+    return await this.searchService.search(userId, namespaceId, query, type);
   }
 }
 
@@ -28,5 +28,20 @@ export class InternalSearchController {
   async refreshIndex() {
     await this.searchService.refreshResourceIndex();
     await this.searchService.refreshMessageIndex();
+  }
+
+  @Public()
+  @Post('sync_weaviate')
+  async syncWeaviate(
+    @Query('concurrency')
+    concurrency: number = 1,
+    @Query('updatedAfter')
+    updatedAfter?: Date,
+  ) {
+    const updatedAfterDate = updatedAfter ? new Date(updatedAfter) : undefined;
+    return await this.searchService.syncWeaviateBackfill(
+      concurrency,
+      updatedAfterDate,
+    );
   }
 }

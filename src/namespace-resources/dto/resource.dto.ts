@@ -1,10 +1,10 @@
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+import { BreadcrumbItemDto } from './breadcrumb-item.dto';
 
 export enum SpaceType {
   PRIVATE = 'private',
@@ -22,7 +22,7 @@ export class ResourceDto {
   attrs: Record<string, any>;
   global_permission: ResourcePermission | null;
   current_permission: ResourcePermission;
-  path: ResourceMetaDto[];
+  path: BreadcrumbItemDto[];
   space_type: SpaceType;
   created_at: string;
   updated_at: string;
@@ -30,7 +30,7 @@ export class ResourceDto {
   static fromEntity(
     resource: Resource,
     currentPermission: ResourcePermission,
-    path: ResourceMetaDto[],
+    path: BreadcrumbItemDto[],
     spaceType: SpaceType,
     tags: TagDto[] = [],
   ) {

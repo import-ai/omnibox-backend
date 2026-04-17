@@ -1,7 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { Injectable, BadRequestException, HttpStatus } from '@nestjs/common';
+import { JwtService, JsonWebTokenError, TokenExpiredError } from '@nestjs/jwt';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 type DeliveryChannel = 'email' | 'sms';
 
@@ -175,25 +176,40 @@ export class OtpService {
    * Returns contact (email or phone) if valid, throws error if invalid
    */
   async verifyMagicToken(token: string): Promise<string> {
-    const payload = this.jwtService.verify(token);
+    try {
+      const payload = this.jwtService.verify(token);
 
-    if (payload.type !== 'otp-magic') {
-      throw new BadRequestException('Invalid magic link');
-    }
+      if (payload.type !== 'otp-magic') {
+        throw new BadRequestException('Invalid magic link');
+      }
 
-    // Verify the code still exists and matches
-    const record = await this.cacheService.get<OtpRecord>(
-      this.otpNamespace,
-      payload.contact,
-    );
-    if (!record || record.code !== payload.code) {
-      throw new BadRequestException(
-        'Magic link has already been used or expired',
+      // Verify the code still exists and matches
+      const record = await this.cacheService.get<OtpRecord>(
+        this.otpNamespace,
+        payload.contact,
       );
-    }
+      if (!record || record.code !== payload.code) {
+        throw new BadRequestException(
+          'Magic link has already been used or expired',
+        );
+      }
 
-    // Success - remove the OTP (one-time use)
-    await this.cacheService.delete(this.otpNamespace, payload.contact);
-    return payload.contact;
+      // Success - remove the OTP (one-time use)
+      await this.cacheService.delete(this.otpNamespace, payload.contact);
+      return payload.contact;
+    } catch (error) {
+      if (
+        error instanceof TokenExpiredError ||
+        error instanceof JsonWebTokenError
+      ) {
+        const message = this.i18n.t('auth.errors.invalidToken');
+        throw new AppException(
+          message,
+          'INVALID_TOKEN',
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+      throw error;
+    }
   }
 }

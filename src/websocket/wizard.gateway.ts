@@ -18,13 +18,14 @@ import {
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
-import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { StreamService } from 'omniboxd/wizard/stream.service';
 import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { WsAuthOptions } from 'omniboxd/auth';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WsSpanInterceptor } from 'omniboxd/interceptor/ws-span.interceptor';
+import { trace } from '@opentelemetry/api';
 
 @WebSocketGateway({
   cors: {
@@ -42,7 +43,7 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(WizardGateway.name);
 
   constructor(
-    private readonly wizardService: WizardService,
+    private readonly streamService: StreamService,
     private readonly sharesService: SharesService,
     private readonly i18n: I18nService,
   ) {}
@@ -122,14 +123,13 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const requestId = client.handshake.headers['x-request-id'] as string;
 
     try {
-      const observable =
-        await this.wizardService.streamService.createUserAgentStream(
-          userId,
-          namespaceId,
-          agentRequest,
-          requestId,
-          eventType,
-        );
+      const observable = await this.streamService.createUserAgentStream(
+        userId,
+        namespaceId,
+        agentRequest,
+        requestId,
+        eventType,
+      );
 
       observable.subscribe({
         next: (message) => {
@@ -137,7 +137,11 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         },
         error: (error) => {
           this.logger.error(`Error in ${eventType} stream`, error);
-          client.emit('error', { error: error.message });
+          const span = trace.getActiveSpan();
+          if (span) {
+            span.recordException(error);
+          }
+          client.emit('error', { message: 'Unknown error' });
         },
         complete: () => {
           client.emit('complete');
@@ -145,7 +149,11 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (error) {
       this.logger.error(`Error handling ${eventType}`, error);
-      client.emit('error', { error: error.message });
+      const span = trace.getActiveSpan();
+      if (span) {
+        span.recordException(error);
+      }
+      client.emit('error', { message: 'Unknown error' });
     }
   }
 
@@ -173,20 +181,23 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
-      const observable =
-        await this.wizardService.streamService.createShareAgentStream(
-          share,
-          agentRequest,
-          requestId,
-          eventType,
-        );
+      const observable = await this.streamService.createShareAgentStream(
+        share,
+        agentRequest,
+        requestId,
+        eventType,
+      );
       observable.subscribe({
         next: (message) => {
           client.emit('message', message.data);
         },
         error: (error) => {
           this.logger.error(`Error in ${eventType} stream`, error);
-          client.emit('error', { error: error.message });
+          const span = trace.getActiveSpan();
+          if (span) {
+            span.recordException(error);
+          }
+          client.emit('error', { message: 'Unknown error' });
         },
         complete: () => {
           client.emit('complete');
@@ -194,7 +205,11 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     } catch (error) {
       this.logger.error(`Error handling ${eventType}`, error);
-      client.emit('error', { error: error.message });
+      const span = trace.getActiveSpan();
+      if (span) {
+        span.recordException(error);
+      }
+      client.emit('error', { message: 'Unknown error' });
     }
   }
 }

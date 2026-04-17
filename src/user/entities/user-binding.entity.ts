@@ -4,7 +4,7 @@ import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 @Entity('user_bindings')
 export class UserBinding extends Base {
   @PrimaryGeneratedColumn()
-  id: number;
+  id: string;
 
   @Column()
   userId: string;
@@ -14,4 +14,7 @@ export class UserBinding extends Base {
 
   @Column()
   loginId: string;
+
+  @Column('jsonb', { nullable: true })
+  metadata: Record<string, any> | null;
 }

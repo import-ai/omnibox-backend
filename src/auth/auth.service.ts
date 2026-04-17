@@ -1,6 +1,6 @@
 import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
 import { User } from 'omniboxd/user/entities/user.entity';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 import { MailService } from 'omniboxd/mail/mail.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
@@ -19,7 +19,11 @@ import { isEmail } from 'class-validator';
 import { OtpService } from './otp.service';
 import { SocialService } from './social.service';
 import { SendEmailOtpResponseDto } from './dto/email-otp.dto';
+import { SendPhoneOtpResponseDto } from './dto/phone-otp.dto';
 import { appendQueryParams, appendTokenToUrl } from 'omniboxd/utils/url-utils';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { SmsService } from 'omniboxd/sms/sms.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Injectable()
 export class AuthService {
@@ -30,6 +34,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly mailService: MailService,
+    private readonly smsService: SmsService,
     private readonly namespaceService: NamespacesService,
     private readonly groupsService: GroupsService,
     private readonly permissionsService: PermissionsService,
@@ -37,13 +42,28 @@ export class AuthService {
     private readonly i18n: I18nService,
     private readonly otpService: OtpService,
     private readonly socialService: SocialService,
+    private readonly resourcesService: ResourcesService,
   ) {}
 
-  async verify(email: string, password: string): Promise<any> {
-    const user = await this.userService.verify(email, password);
+  async verify(
+    identifier: string,
+    password: string,
+    type?: 'email' | 'phone',
+  ): Promise<any> {
+    const user = await this.userService.verify(identifier, password, type);
     if (!user) {
-      if (isEmail(email)) {
-        const userUseEmail = await this.userService.findByEmail(email);
+      if (type === 'phone') {
+        const userByPhone = await this.userService.findByPhone(identifier);
+        if (!userByPhone) {
+          const message = this.i18n.t('auth.errors.phoneNotFoundToSignUp');
+          throw new AppException(
+            message,
+            'USER_NOT_FOUND',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+      } else if (isEmail(identifier)) {
+        const userUseEmail = await this.userService.findByEmail(identifier);
         if (!userUseEmail) {
           const message = this.i18n.t('auth.errors.userNotFoundToSignUp');
           throw new AppException(
@@ -172,7 +192,9 @@ export class AuthService {
     }
 
     // User doesn't exist - register
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       // Extract username from email
       const emailUsername = email.split('@')[0];
 
@@ -197,7 +219,7 @@ export class AuthService {
       await this.namespaceService.createUserNamespace(
         user.id,
         user.username,
-        manager,
+        tx,
       );
 
       return {
@@ -208,6 +230,141 @@ export class AuthService {
         }),
       };
     });
+  }
+
+  /**
+   * Send OTP to phone for login only
+   * Does NOT send SMS if user doesn't exist
+   */
+  async sendPhoneOTP(phone: string): Promise<SendPhoneOtpResponseDto> {
+    const account = await this.userService.findByPhone(phone);
+    const exists = !!account;
+
+    // Don't send SMS for unregistered users (login only)
+    if (!exists) {
+      return { exists: false, sent: false };
+    }
+
+    // Generate OTP code
+    const { code } = await this.otpService.generateOtp(phone, 'sms');
+
+    // Send SMS with code
+    await this.smsService.sendOtp(phone, code);
+
+    return { exists: true, sent: true };
+  }
+
+  /**
+   * Send OTP to phone for signup only
+   */
+  async sendSignupPhoneOTP(phone: string): Promise<SendPhoneOtpResponseDto> {
+    const account = await this.userService.findByPhone(phone);
+
+    if (account) {
+      // User already exists, should login instead
+      return { exists: true, sent: false };
+    }
+
+    // Generate OTP code for new user
+    const { code } = await this.otpService.generateOtp(phone, 'sms');
+
+    // Send SMS with code
+    await this.smsService.sendOtp(phone, code);
+
+    return { exists: false, sent: true };
+  }
+
+  /**
+   * Verify phone OTP and complete registration or login
+   */
+  async verifyPhoneOTP(phone: string, code: string, lang?: string) {
+    // Verify the OTP code
+    await this.otpService.verifyOtp(phone, code);
+    return this.handlePhoneAuthenticationOrRegistration(phone, lang);
+  }
+
+  /**
+   * Handle authentication for existing users or registration for new users (phone)
+   */
+  private async handlePhoneAuthenticationOrRegistration(
+    phone: string,
+    lang?: string,
+  ) {
+    // Check if user already exists
+    const existingUser = await this.userService.findByPhone(phone);
+
+    if (existingUser) {
+      // User exists - login
+      return {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    // Attempt to create new user
+    try {
+      return await transaction(this.dataSource.manager, async (tx) => {
+        const manager = tx.entityManager;
+
+        // Extract username from phone (last 4 digits + random suffix)
+        const phoneSuffix = phone.slice(-4);
+        const phoneUsername = `user_${phoneSuffix}`;
+
+        // Generate valid username (handles conflicts)
+        const username = await this.socialService.getValidUsername(
+          phoneUsername,
+          manager,
+        );
+
+        // Create user with phone binding
+        const user = await this.userService.createUserWithPhone(
+          {
+            phone,
+            username,
+            lang,
+          },
+          manager,
+        );
+
+        // Create user namespace
+        await this.namespaceService.createUserNamespace(
+          user.id,
+          user.username,
+          tx,
+        );
+
+        return {
+          id: user.id,
+          access_token: this.jwtService.sign({
+            sub: user.id,
+            username: user.username,
+          }),
+        };
+      });
+    } catch (error) {
+      // Handle race condition: if another request created the user first,
+      // look them up and return their token
+      if (
+        error.code === '23505' ||
+        error?.query?.includes('IDX_user_bindings_login_type_login_id') ||
+        error?.detail?.includes('IDX_user_bindings_login_type_login_id')
+      ) {
+        const retryUser = await this.userService.findByPhone(phone);
+        if (retryUser) {
+          return {
+            id: retryUser.id,
+            access_token: this.jwtService.sign({
+              sub: retryUser.id,
+              username: retryUser.username,
+            }),
+          };
+        }
+      }
+      throw error;
+    }
   }
 
   private async getSignUpToken(email: string) {
@@ -242,7 +399,9 @@ export class AuthService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       const user = await this.userService.create(
         {
           email: payload.email,
@@ -255,15 +414,16 @@ export class AuthService {
       await this.namespaceService.createUserNamespace(
         user.id,
         user.username,
-        manager,
+        tx,
       );
       if (payload.invitation) {
-        await this.handleUserInvitation(user.id, payload.invitation, manager);
+        await this.handleUserInvitation(user.id, payload.invitation, tx);
       }
       return {
         id: user.id,
         access_token: this.jwtService.sign({
           sub: user.id,
+          username: user.username,
         }),
       };
     });
@@ -285,6 +445,7 @@ export class AuthService {
       resourceId?: string;
       permission?: ResourcePermission;
       groupId?: string;
+      inviteType?: 'normal' | 'share';
     },
   ) {
     const invitation: UserInvitationDto = {
@@ -316,6 +477,16 @@ export class AuthService {
     const senderUsername = sender.username;
     const namespaceName = namespace.name;
 
+    // Query resource name for share invite
+    let resourceName: string | undefined;
+    if (data.inviteType === 'share' && data.resourceId) {
+      const resource = await this.resourcesService.getResourceMeta(
+        data.namespaceId,
+        data.resourceId,
+      );
+      resourceName = resource?.name;
+    }
+
     const account = await this.userService.findByEmail(email);
     if (account) {
       const namespaceMembers = await this.namespaceService.listMembers(
@@ -326,7 +497,11 @@ export class AuthService {
       );
       if (userInNamespace) {
         // User already in namespace
-        return;
+        throw new AppException(
+          this.i18n.t('auth.errors.userAlreadyMember'),
+          'USER_ALREADY_MEMBER',
+          HttpStatus.CONFLICT,
+        );
       }
       const payload: InvitePayloadDto = {
         userId: account.id,
@@ -356,6 +531,8 @@ export class AuthService {
         account.username,
         true,
         receiverLang,
+        data.inviteType,
+        resourceName,
       );
       return;
     }
@@ -374,6 +551,67 @@ export class AuthService {
       namespaceName,
       undefined,
       false,
+      undefined,
+      data.inviteType,
+      resourceName,
+    );
+  }
+
+  async inviteBatch(
+    userId: string,
+    emails: string[],
+    data: {
+      inviteUrl: string;
+      registerUrl: string;
+      namespaceId: string;
+      role: NamespaceRole;
+      resourceId?: string;
+      permission?: ResourcePermission;
+      groupId?: string;
+      inviteType?: 'normal' | 'share';
+    },
+  ) {
+    // Deduplicate and filter invalid emails
+    const uniqueEmails = [
+      ...new Set(
+        emails.map((e) => e?.trim()).filter((e) => e && e.includes('@')),
+      ),
+    ];
+
+    if (uniqueEmails.length === 0) {
+      return;
+    }
+
+    // Get all namespace members
+    const namespaceMembers = await this.namespaceService.listMembers(
+      data.namespaceId,
+    );
+    const memberEmails = new Set(namespaceMembers.map((m) => m.email));
+
+    // Check which emails already exist
+    const alreadyMemberEmails = uniqueEmails.filter((email) =>
+      memberEmails.has(email),
+    );
+
+    // If there are already member emails, throw error with specific emails
+    if (alreadyMemberEmails.length > 0) {
+      const i18nKey =
+        alreadyMemberEmails.length === 1
+          ? 'auth.errors.userAlreadyMember'
+          : 'auth.errors.usersAlreadyMember';
+      const message = this.i18n.t(i18nKey, {
+        args: { emails: alreadyMemberEmails.join('、') },
+      });
+      throw new AppException(
+        message,
+        'USER_ALREADY_MEMBER',
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    // All emails are not members, send invites
+    await Promise.all(
+      uniqueEmails.map((email) => this.invite(userId, email, data)),
     );
   }
 
@@ -393,9 +631,12 @@ export class AuthService {
       );
     }
 
+    // Validate namespace is still active
+    await this.validateNamespaceHasMembers(payload.invitation.namespaceId);
+
     const user = await this.userService.find(payload.userId);
-    await this.dataSource.transaction(async (manager) => {
-      await this.handleUserInvitation(user.id, payload.invitation, manager);
+    await transaction(this.dataSource.manager, async (tx) => {
+      await this.handleUserInvitation(user.id, payload.invitation, tx);
     });
   }
 
@@ -404,19 +645,22 @@ export class AuthService {
     const payload: SignUpPayloadDto = this.jwtVerify(token);
 
     if (!payload.email || !payload.invitation) {
-      const message = this.i18n.t('auth.errors.tokenInvalid');
+      const message = this.i18n.t('auth.errors.invalidToken');
       throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
 
     const { email, invitation } = payload;
+
+    // Validate namespace is still active before processing
+    await this.validateNamespaceHasMembers(invitation.namespaceId);
 
     // Check if user already exists
     const existingUser = await this.userService.findByEmail(email);
 
     if (existingUser) {
       // User exists - just add to namespace
-      await this.dataSource.transaction(async (manager) => {
-        await this.handleUserInvitation(existingUser.id, invitation, manager);
+      await transaction(this.dataSource.manager, async (tx) => {
+        await this.handleUserInvitation(existingUser.id, invitation, tx);
       });
 
       return {
@@ -430,7 +674,9 @@ export class AuthService {
     }
 
     // User doesn't exist - create account and add to namespace
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       // Extract username from email (e.g., foo@example.com -> foo)
       const emailUsername = email.split('@')[0];
 
@@ -455,11 +701,11 @@ export class AuthService {
       await this.namespaceService.createUserNamespace(
         user.id,
         user.username,
-        manager,
+        tx,
       );
 
       // Add user to the invited namespace
-      await this.handleUserInvitation(user.id, invitation, manager);
+      await this.handleUserInvitation(user.id, invitation, tx);
 
       return {
         id: user.id,
@@ -482,6 +728,18 @@ export class AuthService {
       namespaceId,
       groupTitles,
     );
+    const foundTitles = groups.map((g) => g.title);
+    const missingTitles = groupTitles.filter((t) => !foundTitles.includes(t));
+    if (missingTitles.length > 0) {
+      const message = this.i18n.t('invitation.errors.groupsNotFound', {
+        args: { titles: missingTitles.join(', ') },
+      });
+      throw new AppException(
+        message,
+        'GROUPS_NOT_FOUND',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     for (const group of groups) {
       await this.permissionsService.updateGroupPermission(
         namespaceId,
@@ -495,17 +753,22 @@ export class AuthService {
   async handleUserInvitation(
     userId: string,
     invitation: UserInvitationDto,
-    manager?: EntityManager,
+    tx?: Transaction,
   ) {
-    if (!manager) {
-      manager = this.dataSource.manager;
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.handleUserInvitation(userId, invitation, tx),
+      );
     }
+
+    const manager = tx.entityManager;
+
     await this.namespaceService.addMember(
       invitation.namespaceId,
       userId,
       invitation.namespaceRole,
       getRootPermission(invitation),
-      manager,
+      tx,
     );
     if (invitation.groupId) {
       await this.groupsService.addGroupUser(
@@ -526,6 +789,38 @@ export class AuthService {
     }
   }
 
+  async validateNamespaceHasMembers(namespaceId: string): Promise<void> {
+    try {
+      // getNamespace will throw WORKSPACE_NOT_FOUND if namespace is soft-deleted
+      await this.namespaceService.getNamespace(namespaceId);
+    } catch (error) {
+      // Show invitationNotFound if namespace doesn't exist
+      if (
+        error instanceof AppException &&
+        error.code === 'WORKSPACE_NOT_FOUND'
+      ) {
+        const message = this.i18n.t('invitation.errors.invitationNotFound');
+        throw new AppException(
+          message,
+          'INVITATION_NOT_FOUND',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+      throw error;
+    }
+
+    // Ensure namespace has at least one active member
+    const memberCount = await this.namespaceService.countMembers(namespaceId);
+    if (memberCount === 0) {
+      const message = this.i18n.t('invitation.errors.invitationNotFound');
+      throw new AppException(
+        message,
+        'INVITATION_NOT_FOUND',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
   jwtVerify(token: string) {
     if (!token) {
       const message = this.i18n.t('auth.errors.noToken');
@@ -537,7 +832,7 @@ export class AuthService {
       if (!this.knownErrors.some((cls) => error instanceof cls)) {
         this.logger.error({ error });
       }
-      const message = this.i18n.t('auth.errors.tokenInvalid');
+      const message = this.i18n.t('auth.errors.invalidToken');
       throw new AppException(message, 'INVALID_TOKEN', HttpStatus.UNAUTHORIZED);
     }
   }

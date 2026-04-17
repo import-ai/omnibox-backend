@@ -5,6 +5,7 @@ import {
   IsString,
   IsOptional,
   IsNotEmpty,
+  MaxLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
@@ -12,6 +13,9 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 export class UpdateResourceDto {
   @IsString({
     message: i18nValidationMessage('validation.errors.name.isString'),
+  })
+  @MaxLength(128, {
+    message: i18nValidationMessage('validation.errors.name.maxLength'),
   })
   @IsOptional()
   name?: string;
@@ -22,7 +26,8 @@ export class UpdateResourceDto {
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.namespaceId.isNotEmpty'),
   })
-  namespaceId: string;
+  @IsOptional()
+  namespaceId?: string;
 
   @IsEnum(ResourceType, {
     message: i18nValidationMessage('validation.errors.resourceType.isEnum'),

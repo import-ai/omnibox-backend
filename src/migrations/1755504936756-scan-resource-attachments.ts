@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class ScanResourceAttachments1755504936756
-  implements MigrationInterface
-{
+export class ScanResourceAttachments1755504936756 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     const batchSize = 100;
     let offset = 0;

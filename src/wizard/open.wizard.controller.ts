@@ -9,6 +9,10 @@ import { RequestId } from 'omniboxd/decorators/request-id.decorators';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
+import {
+  CollectUrlResponseDto,
+  OpenCollectUrlRequestDto,
+} from 'omniboxd/wizard/dto/collect-url-request.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import {
@@ -28,6 +32,7 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @ApiTags('Wizard')
 @ApiSecurity('api-key')
@@ -38,7 +43,8 @@ export class OpenWizardController {
     private readonly openWizardService: OpenWizardService,
   ) {}
 
-  @Post('collect')
+  @Post('collect/gzip')
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {
@@ -50,6 +56,22 @@ export class OpenWizardController {
   @UseInterceptors(FileInterceptor('html'))
   @ApiOperation({
     summary: 'Collect web content and create a resource',
+    description: `Collects and saves a web page by uploading its HTML content along with metadata.
+
+## Example
+
+\`\`\`bash
+# First, create a gzip-compressed HTML file
+echo '<html><body>Page content</body></html>' | gzip > /tmp/html.gz
+
+# Then, make the API request
+curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
+  -H 'Authorization: Bearer your-api-key' \\
+  -F 'url=https://example.com/page' \\
+  -F 'title=Example Page' \\
+  -F 'html=@/tmp/html.gz;type=application/gzip;filename=html.gz'
+\`\`\`
+`,
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -82,6 +104,7 @@ export class OpenWizardController {
   }
 
   @Post('ask')
+  @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [
       {
@@ -112,6 +135,41 @@ export class OpenWizardController {
       apiKey.namespaceId,
       requestId,
       data,
+    );
+  }
+
+  @Post('collect/url')
+  @CheckNamespaceReadonly()
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.CREATE],
+      },
+    ],
+  })
+  @ApiOperation({ summary: 'Collect content from a URL' })
+  @ApiBody({
+    description: 'URL to collect content from',
+    type: OpenCollectUrlRequestDto,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'URL collection task created successfully',
+    type: CollectUrlResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async collectUrl(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Body() data: OpenCollectUrlRequestDto,
+  ): Promise<CollectUrlResponseDto> {
+    return await this.wizardService.collectUrl(
+      apiKey.namespaceId,
+      userId,
+      data.url,
+      data.parentId || apiKey.attrs.root_resource_id,
     );
   }
 }

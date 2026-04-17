@@ -9,6 +9,7 @@ import { Injectable, Logger, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { fetchWithRetry } from 'omniboxd/utils/fetch-with-retry';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -75,8 +76,13 @@ export class GoogleService {
     };
   }
 
-  async authUrl(): Promise<string> {
-    const state = await this.socialService.generateState('google');
+  async authUrl(redirectUrl?: string): Promise<string> {
+    const state = await this.socialService.generateState(
+      'google',
+      '',
+      '',
+      redirectUrl,
+    );
 
     const params = new URLSearchParams({
       client_id: this.clientId,
@@ -191,10 +197,13 @@ export class GoogleService {
           );
         }
         const returnValue = {
+          isBinding: true,
           id: googleUser.id,
           access_token: this.jwtService.sign({
             sub: googleUser.id,
+            username: googleUser.username,
           }),
+          redirectUrl: stateInfo.redirectUrl,
         };
         stateInfo.userInfo = returnValue;
         await this.socialService.updateState(state, stateInfo);
@@ -204,12 +213,16 @@ export class GoogleService {
         userId,
         loginType: 'google',
         loginId: userData.sub,
+        metadata: userData,
       });
       const returnValue = {
+        isBinding: true,
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -222,7 +235,9 @@ export class GoogleService {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
@@ -235,19 +250,24 @@ export class GoogleService {
         userId: linkedAccount.id,
         loginType: 'google',
         loginId: userData.sub,
+        metadata: userData,
       });
       const returnValue = {
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
+          username: existingUser.username,
         }),
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
       return returnValue;
     }
 
-    return await this.dataSource.transaction(async (manager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
       let nickname = userData.name;
       if (!nickname) {
         nickname = userData.given_name;
@@ -270,6 +290,7 @@ export class GoogleService {
           loginId: userData.sub,
           email: userData.email,
           lang,
+          metadata: userData,
         } as CreateUserBindingDto,
         manager,
       );
@@ -277,14 +298,16 @@ export class GoogleService {
       await this.namespaceService.createUserNamespace(
         googleUser.id,
         googleUser.username,
-        manager,
+        tx,
       );
 
       const returnValue = {
         id: googleUser.id,
         access_token: this.jwtService.sign({
           sub: googleUser.id,
+          username: googleUser.username,
         }),
+        redirectUrl: stateInfo.redirectUrl,
       };
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);

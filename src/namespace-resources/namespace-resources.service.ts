@@ -19,15 +19,14 @@ import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resou
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 import { S3Service } from 'omniboxd/s3/s3.service';
-import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import {
   comparePermission,
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { ResourceDto, SpaceType } from './dto/resource.dto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
@@ -35,7 +34,7 @@ import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { ChildrenMetaDto } from './dto/list-children-resp.dto';
+import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
 import {
@@ -44,8 +43,12 @@ import {
   DownloadFileInfoDto,
 } from './dto/file-info.dto';
 import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
+import { InternalResourceDto } from './dto/internal-resource.dto';
+import { TrashItemDto } from './dto/trash-item.dto';
+import { TrashListResponseDto } from './dto/trash-list-response.dto';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { isOptional } from 'omniboxd/utils/is-empty';
 
-const TASK_PRIORITY = 5;
 @Injectable()
 export class NamespaceResourcesService {
   constructor(
@@ -58,10 +61,10 @@ export class NamespaceResourcesService {
     private readonly s3Service: S3Service,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
-    private readonly wizardTaskService: WizardTaskService,
     private readonly resourcesService: ResourcesService,
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
   ) {}
 
   private async getTagsByIds(
@@ -176,14 +179,24 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     createReq: CreateResourceDto,
-    manager?: EntityManager,
+    tx?: Transaction,
     source?: string,
-  ) {
-    if (!manager) {
-      return await this.dataSource.transaction(async (manager) => {
-        return await this.create(userId, namespaceId, createReq, manager);
+    autoRenameOnConflict: boolean = false,
+  ): Promise<Resource> {
+    if (!tx) {
+      return await transaction(this.dataSource.manager, async (tx) => {
+        return await this.create(
+          userId,
+          namespaceId,
+          createReq,
+          tx,
+          source,
+          autoRenameOnConflict,
+        );
       });
     }
+
+    const manager = tx.entityManager;
 
     const ok = await this.permissionsService.userHasPermission(
       namespaceId,
@@ -235,7 +248,8 @@ export class NamespaceResourcesService {
         fileId: createReq.file_id,
         source,
       },
-      manager,
+      tx,
+      autoRenameOnConflict,
     );
   }
 
@@ -269,13 +283,13 @@ export class NamespaceResourcesService {
       (newResource as any).tag_ids = resource.tagIds;
     }
 
-    return await this.dataSource.transaction(async (entityManager) => {
+    return await transaction(this.dataSource.manager, async (tx) => {
       // Create the duplicated resource within the transaction
       const duplicatedResource = await this.create(
         userId,
         namespaceId,
         newResource,
-        entityManager,
+        tx,
       );
 
       // Copy attachment relations to the duplicated resource within the same transaction
@@ -283,7 +297,8 @@ export class NamespaceResourcesService {
         resource.namespaceId,
         resource.id,
         duplicatedResource.id,
-        entityManager,
+        userId,
+        tx,
       );
       return duplicatedResource;
     });
@@ -440,13 +455,48 @@ export class NamespaceResourcesService {
     namespaceId: string,
     userId: string,
     limit: number = 10,
-  ): Promise<ResourceMetaDto[]> {
+    offset: number = 0,
+    options?: { summary?: boolean },
+  ): Promise<ResourceSummaryDto[]> {
+    const { summary = false } = options || {};
     const allVisible = await this.getUserVisibleResources(userId, namespaceId);
     const sorted = allVisible
       .filter((r) => r.parentId !== null)
+      .filter((r) => r.resourceType !== ResourceType.FOLDER)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const take = Math.max(1, Math.min(100, limit));
-    return sorted.slice(0, take);
+    const skip = Math.max(0, offset);
+    const paged = sorted.slice(skip, skip + take);
+
+    // Fetch resources with or without content based on summary flag
+    const resources = await this.resourcesService.getChildren(
+      namespaceId,
+      paged.map((r) => r.parentId!),
+      { summary },
+    );
+    const resourceMap = new Map(resources.map((r) => [r.id, r]));
+
+    // Get the final list of resources
+    const finalResources = paged
+      .map((r) => resourceMap.get(r.id))
+      .filter((r): r is Resource => !!r);
+
+    if (summary) {
+      // Fetch first attachments only when summary is true
+      const firstAttachments =
+        await this.resourceAttachmentsService.getFirstAttachments(
+          namespaceId,
+          finalResources.map((r) => r.id),
+        );
+
+      // For recent api, hasChildren is always false
+      return finalResources.map((r) =>
+        ResourceSummaryDto.fromEntity(r, false, firstAttachments.get(r.id)),
+      );
+    }
+
+    // For non-summary, return lightweight ResourceSummaryDto
+    return finalResources.map((r) => ResourceSummaryDto.fromEntity(r, false));
   }
 
   // Alias for clarity and reuse across modules
@@ -466,10 +516,10 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    const subResources = await this.resourcesService.getSubResources(
-      namespaceId,
-      [resourceId],
-    );
+    const children = await this.resourcesService.getChildren(namespaceId, [
+      resourceId,
+    ]);
+    const subResources = children.map((r) => ResourceMetaDto.fromEntity(r));
     const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,
@@ -528,30 +578,45 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-    limit?: number,
-    offset?: number,
-  ): Promise<ChildrenMetaDto[]> {
+    options?: {
+      summary?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+    entityManager?: EntityManager,
+  ): Promise<ResourceSummaryDto[]> {
+    const { summary = false, limit, offset } = options || {};
+
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
       resourceId,
+      entityManager,
     );
 
-    // Apply pagination at database level
-    let children = await this.resourcesService.getSubResources(
+    let children = await this.resourcesService.getChildren(
       namespaceId,
       [resourceId],
-      { limit, offset },
+      { summary, limit, offset },
+      entityManager,
     );
 
-    let subChildren = await this.resourcesService.getSubResources(
+    let subChildren = await this.resourcesService.getChildren(
       namespaceId,
       children.map((child) => child.id),
+      {},
+      entityManager,
     );
 
+    const allResources = [
+      ...parents,
+      ...children.map((r) => ResourceMetaDto.fromEntity(r)),
+      ...subChildren.map((r) => ResourceMetaDto.fromEntity(r)),
+    ];
     const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,
-      [...parents, ...children, ...subChildren],
+      allResources,
+      entityManager,
     );
 
     children = children.filter((res) => {
@@ -577,8 +642,22 @@ export class NamespaceResourcesService {
       }
     }
 
-    return children.map(
-      (res) => new ChildrenMetaDto(res, !!hasChildrenMap.get(res.id)),
+    if (summary) {
+      const firstAttachments =
+        await this.resourceAttachmentsService.getFirstAttachments(
+          namespaceId,
+          children.map((r) => r.id),
+        );
+      return children.map((res) =>
+        ResourceSummaryDto.fromEntity(
+          res,
+          !!hasChildrenMap.get(res.id),
+          firstAttachments.get(res.id),
+        ),
+      );
+    }
+    return children.map((res) =>
+      ResourceSummaryDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
     );
   }
 
@@ -639,7 +718,9 @@ export class NamespaceResourcesService {
 
     // Load tags of the resource
     const tagsMap = await this.getTagsForResources(namespaceId, [resource]);
-    const path = [resourceMeta, ...parentResources].reverse();
+    const path = [resourceMeta, ...parentResources]
+      .reverse()
+      .map((r) => ({ id: r.id, name: r.name }));
     return ResourceDto.fromEntity(
       resource,
       curPermission,
@@ -713,6 +794,127 @@ export class NamespaceResourcesService {
     return InternalFileInfoDto.new(publicUrl, internalUrl);
   }
 
+  async BatchResourceToInternalResourceDto(
+    namespaceId: string,
+    resources: Resource[],
+  ): Promise<InternalResourceDto[]> {
+    // Populate tags for resources
+    const tagsMap = await this.getTagsForResources(namespaceId, resources);
+
+    // Get paths for each resource
+    const result: InternalResourceDto[] = [];
+    for (const resource of resources) {
+      let path: ResourceMetaDto[] = [];
+      if (resource.parentId) {
+        const parentResources =
+          await this.resourcesService.getParentResourcesOrFail(
+            namespaceId,
+            resource.parentId,
+          );
+        path = parentResources.reverse();
+      }
+
+      result.push(
+        InternalResourceDto.fromEntity(
+          resource,
+          path,
+          tagsMap.get(resource.id) || [],
+        ),
+      );
+    }
+    return result;
+  }
+
+  async resourceFilter(
+    namespaceId: string,
+    resourceIds: string[],
+    options?: {
+      createdAtBefore?: Date;
+      createdAtAfter?: Date;
+      updatedAtBefore?: Date;
+      updatedAtAfter?: Date;
+      tagPattern?: string;
+      namePattern?: string;
+      contentPattern?: string;
+      urlPattern?: string;
+      userId?: string;
+      parentId?: string;
+      resourceTypes?: ResourceType[];
+      offset?: number;
+      limit?: number;
+    },
+  ): Promise<{ resources: InternalResourceDto[]; total: number }> {
+    let tagIds: string[] | undefined = undefined;
+    if (!isOptional(options?.tagPattern)) {
+      const tagEntities = await this.tagService.findByPattern(
+        namespaceId,
+        options.tagPattern,
+      );
+      tagIds = tagEntities.map((t) => t.id);
+    }
+    const { resources, total } = await this.resourcesService.resourceFilter(
+      namespaceId,
+      resourceIds,
+      { ...options, tagIds },
+    );
+
+    const result: InternalResourceDto[] =
+      await this.BatchResourceToInternalResourceDto(namespaceId, resources);
+
+    return { resources: result, total };
+  }
+
+  async batchGetResourceInternalDto(
+    namespaceId: string,
+    userId: string,
+    resourceIds: string[],
+  ): Promise<InternalResourceDto[]> {
+    const filteredResourceIds: string[] = await this.permissionFilter(
+      namespaceId,
+      userId,
+      resourceIds,
+    );
+
+    const resources = await this.resourcesService.batchGetResources(
+      namespaceId,
+      filteredResourceIds,
+    );
+
+    return await this.BatchResourceToInternalResourceDto(
+      namespaceId,
+      resources,
+    );
+  }
+
+  async getResourceChildrenForInternal(
+    namespaceId: string,
+    resourceId: string,
+    depth: number,
+  ): Promise<ResourceMetaDto[]> {
+    if (depth < 1 || depth > 3) {
+      throw new AppException(
+        'Depth must be between 1 and 3',
+        'INVALID_DEPTH',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const allChildren: ResourceMetaDto[] = [];
+    let resourceIds = [resourceId];
+    for (let currentDepth = 0; currentDepth < depth; currentDepth++) {
+      const children = await this.resourcesService.getChildren(
+        namespaceId,
+        resourceIds,
+      );
+      if (children.length === 0) {
+        break;
+      }
+      const childMetas = children.map((r) => ResourceMetaDto.fromEntity(r));
+      allChildren.push(...childMetas);
+      resourceIds = children.map((child) => child.id);
+    }
+    return allChildren;
+  }
+
   async createResourceFile(
     userId: string,
     namespaceId: string,
@@ -730,6 +932,7 @@ export class NamespaceResourcesService {
       userId,
       namespaceId,
       createReq.name,
+      createReq.size,
       createReq.mimetype,
     );
   }
@@ -748,9 +951,15 @@ export class NamespaceResourcesService {
     return UploadFileInfoDto.new(file.id, postReq.url, postReq.fields);
   }
 
-  async update(userId: string, resourceId: string, data: UpdateResourceDto) {
+  async update(
+    namespaceId: string,
+    userId: string,
+    resourceId: string,
+    data: UpdateResourceDto,
+    autoRenameOnConflict: boolean = false,
+  ) {
     await this.resourcesService.updateResource(
-      data.namespaceId,
+      namespaceId,
       resourceId,
       userId,
       {
@@ -759,6 +968,8 @@ export class NamespaceResourcesService {
         content: data.content,
         attrs: data.attrs,
       },
+      undefined,
+      autoRenameOnConflict,
     );
   }
 
@@ -775,21 +986,15 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    await this.dataSource.transaction(async (manager) => {
-      await manager.softDelete(Resource, id);
-      await this.wizardTaskService.deleteIndexTask(
-        userId,
-        resource,
-        manager.getRepository(Task),
-      );
-    });
+    await this.resourcesService.deleteResource(userId, namespaceId, id);
   }
 
-  async restore(userId: string, id: string) {
+  async restore(userId: string, namespaceId: string, resourceId: string) {
     const resource = await this.resourceRepository.findOne({
       withDeleted: true,
       where: {
-        id,
+        namespaceId,
+        id: resourceId,
       },
     });
     if (!resource) {
@@ -808,15 +1013,69 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    await this.dataSource.transaction(async (manager) => {
-      await manager.restore(Resource, id);
-      await this.wizardTaskService.createIndexTask(
-        TASK_PRIORITY,
-        userId,
-        resource,
-        manager.getRepository(Task),
-      );
-    });
+
+    // Check if parent is deleted, if so restore to root
+    const isParentDeleted = await this.resourcesService.isParentDeleted(
+      namespaceId,
+      resource.parentId,
+    );
+
+    if (isParentDeleted) {
+      // Find user's root resource to restore to
+      const userRoot = resource.userId
+        ? await this.resourceRepository.findOne({
+            where: {
+              namespaceId,
+              userId: resource.userId,
+              parentId: IsNull(),
+            },
+          })
+        : null;
+
+      if (userRoot) {
+        // Update parentId to user's root before restoring
+        await this.resourceRepository.update(
+          { id: resourceId },
+          { parentId: userRoot.id },
+        );
+      }
+    }
+
+    // Check for name conflict under the target parent
+    {
+      // Re-read resource to get the updated parentId
+      const updatedResource = await this.resourceRepository.findOne({
+        withDeleted: true,
+        where: { namespaceId, id: resourceId },
+      });
+      const targetParentId = updatedResource?.parentId ?? resource.parentId;
+      const conflictCount = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .where('resource.namespace_id = :namespaceId', { namespaceId })
+        .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
+          parentId: targetParentId,
+        })
+        .andWhere('LOWER(resource.name) = LOWER(:name)', {
+          name: resource.name,
+        })
+        .andWhere('resource.deleted_at IS NULL')
+        .andWhere('resource.id != :resourceId', { resourceId })
+        .getCount();
+      if (conflictCount > 0) {
+        const message = this.i18n.t('resource.errors.resourceNameConflict');
+        throw new AppException(
+          message,
+          'RESOURCE_NAME_CONFLICT',
+          HttpStatus.CONFLICT,
+        );
+      }
+    }
+
+    await this.resourcesService.restoreResource(
+      userId,
+      namespaceId,
+      resourceId,
+    );
   }
 
   s3Path(resourceId: string) {
@@ -835,6 +1094,7 @@ export class NamespaceResourcesService {
     const resourceFile = await this.createResourceFile(userId, namespaceId, {
       name: originalFilename,
       mimetype: file.mimetype,
+      size: file.buffer.length,
     });
     await this.filesService.uploadFile(resourceFile, file.buffer);
     return await this.create(
@@ -849,6 +1109,7 @@ export class NamespaceResourcesService {
       },
       undefined,
       source,
+      true, // autoRenameOnConflict for file uploads
     );
   }
 
@@ -856,11 +1117,13 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     includeRoot: boolean = false,
+    requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
   ): Promise<ResourceMetaDto[]> {
     const resources = await this.permissionsService.filterResourcesByPermission(
       userId,
       namespaceId,
       await this.resourcesService.getAllResources(namespaceId),
+      requiredPermission,
     );
     return resources.filter((res) => res.parentId !== null || includeRoot);
   }
@@ -870,5 +1133,86 @@ export class NamespaceResourcesService {
       skip: offset,
       take: limit,
     });
+  }
+
+  async listTrash(
+    namespaceId: string,
+    userId: string,
+    options?: {
+      search?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<TrashListResponseDto> {
+    const { search, limit = 20, offset = 0 } = options || {};
+
+    // Check if user has access to this namespace
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+
+    const { items, total } = await this.resourcesService.getDeletedResources(
+      namespaceId,
+      usage.trashRetentionDays,
+      { search, limit, offset },
+    );
+
+    const trashItems = items.map((resource) =>
+      TrashItemDto.fromEntity(resource, false),
+    );
+
+    return TrashListResponseDto.create(
+      trashItems,
+      total,
+      limit,
+      offset,
+      usage.trashRetentionDays,
+    );
+  }
+
+  async permanentlyDeleteResource(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<void> {
+    // Check if user has access to this namespace
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    await this.resourcesService.hardDeleteResource(namespaceId, resourceId);
+  }
+
+  async emptyTrash(
+    userId: string,
+    namespaceId: string,
+  ): Promise<{ deleted_count: number }> {
+    // Check if user has access to this namespace
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    const deletedCount =
+      await this.resourcesService.hardDeleteAllTrash(namespaceId);
+
+    return { deleted_count: deletedCount };
   }
 }

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserService } from 'omniboxd/user/user.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TagService } from 'omniboxd/tag/tag.service';
 import {
   Resource,
   ResourceType,
@@ -11,21 +12,18 @@ import {
   Message,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
-import { context, propagation } from '@opentelemetry/api';
+import { Transaction } from 'omniboxd/utils/transaction-utils';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 
 @Injectable()
 export class WizardTaskService {
   constructor(
     @InjectRepository(Task) public taskRepository: Repository<Task>,
     private readonly userService: UserService,
+    private readonly tasksService: TasksService,
+    private readonly tagService: TagService,
   ) {}
-
-  injectTraceHeaders(task: Partial<Task>) {
-    const traceHeaders: Record<string, string> = {};
-    propagation.inject(context.active(), traceHeaders);
-    task.payload = { ...(task.payload || {}), trace_headers: traceHeaders };
-    return task;
-  }
 
   private async getUserLanguage(
     userId: string,
@@ -41,56 +39,125 @@ export class WizardTaskService {
     return undefined;
   }
 
-  async create(data: Partial<Task>, repo?: Repository<Task>) {
-    const repository = repo || this.taskRepository;
-    const task = repository.create(this.injectTraceHeaders(data));
-    return await repository.save(task);
+  private async getUserOptions(
+    userId: string,
+  ): Promise<Record<string, string>> {
+    const userOptions = await this.userService.listOption(userId);
+    return userOptions.reduce(
+      (acc: Record<string, string>, opt: { name: string; value: string }) => {
+        acc[opt.name] = opt.value;
+        return acc;
+      },
+      {},
+    );
   }
 
-  async createCollectTask(
+  async emitWebAnalysisTask(
     userId: string,
     namespaceId: string,
     resourceId: string,
     input: { html: string; url: string; title?: string },
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
-    return this.create(
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
+      {
+        function: 'web_analysis',
+        input,
+        namespaceId,
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
+        userId,
+      },
+      tx,
+    );
+  }
+
+  async emitCollectTask(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    input: { url: string },
+    tx?: Transaction,
+  ) {
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
       {
         function: 'collect',
         input,
         namespaceId,
-        payload: { resource_id: resourceId },
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createGenerateVideoNoteTask(
+  async emitGenerateVideoNoteTask(
     userId: string,
     namespaceId: string,
     resourceId: string,
-    input: { html: string; url: string; title?: string },
-    repo?: Repository<Task>,
+    input: { url: string; html?: string; title?: string },
+    tx?: Transaction,
   ) {
-    return this.create(
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
       {
         function: 'generate_video_note',
         input,
         namespaceId,
-        payload: { resource_id: resourceId },
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createExtractTagsTask(
+  async emitCollectUrlTask(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    input: { url: string },
+    tx?: Transaction,
+  ) {
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
+      {
+        function: 'collect_url',
+        input,
+        namespaceId,
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
+        userId,
+      },
+      tx,
+    );
+  }
+
+  async emitExtractTagsTask(
     userId: string,
     resourceId: string,
     namespaceId: string,
     text: string,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     // Check if auto-tag is enabled for this user
     const isEnabled = await this.userService.isAutoTagEnabled(userId);
@@ -99,7 +166,7 @@ export class WizardTaskService {
     }
 
     const lang = await this.getUserLanguage(userId);
-    return this.create(
+    return this.tasksService.emitTask(
       {
         function: 'extract_tags',
         input: { text, lang },
@@ -109,14 +176,11 @@ export class WizardTaskService {
         },
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createExtractTagsTaskFromTask(
-    parentTask: Task,
-    repo?: Repository<Task>,
-  ) {
+  async emitExtractTagsTaskFromTask(parentTask: Task, tx?: Transaction) {
     // Check if auto-tag is enabled for this user
     const isEnabled = await this.userService.isAutoTagEnabled(
       parentTask.userId,
@@ -126,7 +190,7 @@ export class WizardTaskService {
     }
 
     const lang = await this.getUserLanguage(parentTask.userId);
-    return this.create(
+    return this.tasksService.emitTask(
       {
         function: 'extract_tags',
         input: {
@@ -141,19 +205,19 @@ export class WizardTaskService {
         },
         userId: parentTask.userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createGenerateTitleTask(
+  async emitGenerateTitleTask(
     userId: string,
     namespaceId: string,
     payload: { resource_id: string; parent_task_id?: string },
-    input: { text: string },
-    repo?: Repository<Task>,
+    input: { content: string },
+    tx?: Transaction,
   ) {
     const lang = await this.getUserLanguage(userId);
-    return this.create(
+    return this.tasksService.emitTask(
       {
         function: 'generate_title',
         input: { lang, ...input },
@@ -161,17 +225,18 @@ export class WizardTaskService {
         payload,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createFileReaderTask(
+  async emitFileReaderTask(
     userId: string,
     resource: Resource,
     source?: string,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
-    return this.create(
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
       {
         function: 'file_reader',
         input: {
@@ -184,27 +249,34 @@ export class WizardTaskService {
         payload: {
           resource_id: resource.id,
           source: source || 'default',
+          user: {
+            options: userOptions,
+          },
         },
         namespaceId: resource.namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async createIndexTask(
+  async emitUpsertIndexTask(
     priority: number,
     userId: string,
     resource: Resource,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     if (resource.resourceType === ResourceType.FOLDER || !resource.content) {
       return;
     }
-    return this.create(
+    const resourceTags = await this.tagService.getTagsByIds(
+      resource.namespaceId,
+      resource.tagIds || [],
+    );
+    return this.tasksService.emitTask(
       {
         function: 'upsert_index',
-        priority,
+        priority: numberToBigintString(priority),
         input: {
           title: resource.name,
           content: resource.content,
@@ -212,42 +284,45 @@ export class WizardTaskService {
             user_id: resource.userId,
             resource_id: resource.id,
             parent_id: resource.parentId,
+            resource_tag_ids: resourceTags.map((tag) => tag.id),
+            resource_tag_names: resourceTags.map((tag) => tag.name),
           },
         },
         payload: { resource_id: resource.id },
         namespaceId: resource.namespaceId,
         userId: userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async deleteIndexTask(
+  async emitDeleteIndexTask(
     userId: string,
-    resource: Resource,
-    repo?: Repository<Task>,
+    namespaceId: string,
+    resourceId: string,
+    tx?: Transaction,
   ) {
-    return this.create(
+    return this.tasksService.emitTask(
       {
         function: 'delete_index',
         input: {
-          resource_id: resource.id,
+          resource_id: resourceId,
         },
-        namespaceId: resource.namespaceId,
+        namespaceId,
         userId,
-        payload: { resource_id: resource.id },
+        payload: { resource_id: resourceId },
       },
-      repo,
+      tx,
     );
   }
 
-  async createMessageIndexTask(
+  async emitUpsertMessageIndexTask(
     priority: number,
     userId: string,
     namespaceId: string,
     conversationId: string,
     message: Message,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
     if (!message.message.content?.trim()) {
       return;
@@ -259,10 +334,10 @@ export class WizardTaskService {
     ) {
       return;
     }
-    return this.create(
+    return this.tasksService.emitTask(
       {
         function: 'upsert_message_index',
-        priority,
+        priority: numberToBigintString(priority),
         input: {
           conversation_id: conversationId,
           message_id: message.id,
@@ -272,27 +347,27 @@ export class WizardTaskService {
         namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 
-  async deleteConversationTask(
+  async emitDeleteConversationTask(
     namespaceId: string,
     userId: string,
     conversationId: string,
     priority: number,
-    repo?: Repository<Task>,
+    tx?: Transaction,
   ) {
-    return this.create(
+    return this.tasksService.emitTask(
       {
         function: 'delete_conversation',
-        priority,
+        priority: numberToBigintString(priority),
         input: { conversation_id: conversationId },
         payload: { conversation_id: conversationId },
         namespaceId,
         userId,
       },
-      repo,
+      tx,
     );
   }
 }

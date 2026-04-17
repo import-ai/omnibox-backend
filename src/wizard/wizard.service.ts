@@ -1,58 +1,52 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import {
-  CollectRequestDto,
-  CompressedCollectRequestDto,
-} from 'omniboxd/wizard/dto/collect-request.dto';
-import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
-import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
+  NextTaskRequestDto,
+  TaskCallbackDto,
+} from 'omniboxd/wizard/dto/task-callback.dto';
 import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
 import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-title.processor';
+import { CollectUrlProcessor } from 'omniboxd/wizard/processors/collect-url.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
-import { MessagesService } from 'omniboxd/messages/messages.service';
-import { StreamService } from 'omniboxd/wizard/stream.service';
-import { WizardAPIService } from 'omniboxd/wizard/api.wizard.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { isEmpty } from 'omniboxd/utils/is-empty';
-import { FetchTaskRequest } from 'omniboxd/wizard/dto/fetch-task-request.dto';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { createGunzip } from 'zlib';
 import { buffer } from 'node:stream/consumers';
-import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { TempfileDto } from './dto/tempfile.dto';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
+import { CollectUrlResponseDto } from 'omniboxd/wizard/dto/collect-url-request.dto';
 
 @Injectable()
 export class WizardService {
   private readonly logger = new Logger(WizardService.name);
   private readonly processors: Record<string, Processor>;
-  readonly streamService: StreamService;
-  readonly wizardApiService: WizardAPIService;
-  private readonly videoPrefixes: string[];
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
   constructor(
     private readonly wizardTaskService: WizardTaskService,
+    private readonly tasksService: TasksService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
-    private readonly messagesService: MessagesService,
     private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
     private readonly s3Service: S3Service,
-    private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
   ) {
@@ -84,47 +78,11 @@ export class WizardService {
         this.tagService,
         this.i18n,
       ),
+      collect_url: new CollectUrlProcessor(
+        this.namespaceResourcesService,
+        this.i18n,
+      ),
     };
-    const baseUrl = this.configService.get<string>('OBB_WIZARD_BASE_URL');
-    if (!baseUrl) {
-      const message = this.i18n.t('system.errors.missingWizardBaseUrl');
-      throw new AppException(
-        message,
-        'MISSING_WIZARD_BASE_URL',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-    this.streamService = new StreamService(
-      baseUrl,
-      this.messagesService,
-      this.namespaceResourcesService,
-      this.sharedResourcesService,
-      this.resourcesService,
-      this.i18n,
-    );
-    this.wizardApiService = new WizardAPIService(baseUrl, this.i18n);
-    const videoPrefixes: string =
-      this.configService.get<string>('OB_VIDEO_PREFIXES') || '';
-    if (isEmpty(videoPrefixes)) {
-      this.videoPrefixes = [];
-    } else {
-      this.videoPrefixes = videoPrefixes
-        .split(',')
-        .map((prefix) => prefix.trim());
-    }
-  }
-
-  async create(partialTask: Partial<Task>) {
-    return await this.wizardTaskService.create(partialTask);
-  }
-
-  isVideoUrl(url: string): boolean {
-    for (const prefix of this.videoPrefixes) {
-      if (url.startsWith(prefix)) {
-        return true;
-      }
-    }
-    return false;
   }
 
   async compressedCollect(
@@ -157,6 +115,9 @@ export class WizardService {
       userId,
       namespaceId,
       resourceDto,
+      undefined,
+      undefined,
+      true, // autoRenameOnConflict for URL-based names
     );
 
     const { objectKey } = await this.s3Service.generateObjectKey(
@@ -174,32 +135,28 @@ export class WizardService {
       metadata,
     );
 
-    if (this.isVideoUrl(url)) {
-      const task = await this.wizardTaskService.createGenerateVideoNoteTask(
-        userId,
-        namespaceId,
-        resource.id,
-        { html: objectKey, url, title },
-      );
-      return { task_id: task.id, resource_id: resource.id };
-    } else {
-      const task = await this.wizardTaskService.createCollectTask(
-        userId,
-        namespaceId,
-        resource.id,
-        { html: objectKey, url, title },
-      );
-      return { task_id: task.id, resource_id: resource.id };
-    }
+    const task = await this.wizardTaskService.emitWebAnalysisTask(
+      userId,
+      namespaceId,
+      resource.id,
+      { html: objectKey, url, title },
+    );
+    return { task_id: task.id, resource_id: resource.id };
   }
 
-  async collect(
+  /**
+   * Collect content from a URL using the crawl service.
+   * Creates a collect_url task that will:
+   * 1. Fetch title and HTML from the crawl service
+   * 2. Create a collect task via the task chain dispatch system
+   */
+  async collectUrl(
     namespaceId: string,
     userId: string,
-    data: CollectRequestDto,
-  ): Promise<CollectResponseDto> {
-    const { html, url, title, parentId } = data;
-    if (!namespaceId || !parentId || !url || !html) {
+    url: string,
+    parentId: string,
+  ): Promise<CollectUrlResponseDto> {
+    if (!namespaceId || !parentId || !url) {
       const message = this.i18n.t('wizard.errors.missingRequiredFields');
       throw new AppException(
         message,
@@ -208,8 +165,9 @@ export class WizardService {
       );
     }
 
+    // Create a placeholder resource for the URL
     const resourceDto: CreateResourceDto = {
-      name: title || url,
+      name: url,
       resourceType: ResourceType.LINK,
       parentId,
       attrs: { url },
@@ -218,15 +176,22 @@ export class WizardService {
       userId,
       namespaceId,
       resourceDto,
+      undefined,
+      undefined,
+      true, // autoRenameOnConflict for URL-based names
     );
 
-    const task = await this.wizardTaskService.createCollectTask(
+    // Create a collect_url task that will fetch HTML and create a collect task
+    await this.wizardTaskService.emitCollectUrlTask(
       userId,
       namespaceId,
       resource.id,
-      { html, url, title },
+      {
+        url,
+      },
     );
-    return { task_id: task.id, resource_id: resource.id };
+
+    return CollectUrlResponseDto.fromResourceId(resource.id);
   }
 
   async createTaskUploadUrl(taskId: string): Promise<string> {
@@ -263,37 +228,100 @@ export class WizardService {
     const task = await this.wizardTaskService.taskRepository.findOneOrFail({
       where: { id: data.id },
     });
+    try {
+      if (!task.startedAt) {
+        const message = this.i18n.t('wizard.errors.taskNotStarted', {
+          args: { taskId: task.id },
+        });
+        throw new AppException(
+          message,
+          'TASK_NOT_STARTED',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
-    if (!task.startedAt) {
-      const message = this.i18n.t('wizard.errors.taskNotStarted', {
-        args: { taskId: task.id },
-      });
-      throw new AppException(
-        message,
-        'TASK_NOT_STARTED',
-        HttpStatus.BAD_REQUEST,
-      );
+      task.endedAt = new Date();
+      task.exception = data.exception || null;
+
+      // Extract next_tasks from output before saving (task chain dispatch)
+      const nextTasks: NextTaskRequestDto[] = data.output?.next_tasks || [];
+      if (data.output) {
+        // Save output without next_tasks
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { next_tasks, ...outputWithoutNextTasks } = data.output;
+        task.output = outputWithoutNextTasks;
+      } else {
+        task.output = null;
+      }
+
+      await this.preprocessTask(task);
+
+      if (data.status) {
+        task.status = data.status;
+      } else if (!isEmpty(task.exception)) {
+        task.status = TaskStatus.ERROR;
+      } else {
+        task.status = TaskStatus.FINISHED;
+      }
+
+      await this.wizardTaskService.taskRepository.save(task);
+
+      const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
+      const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
+      this.logger.debug({ taskId: task.id, cost, wait });
+
+      if (task.canceledAt) {
+        this.logger.warn(`Task ${task.id} was canceled.`);
+        return { taskId: task.id, function: task.function, status: 'canceled' };
+      }
+
+      const postprocessResult = await this.postprocess(task);
+
+      if (task.status === TaskStatus.FINISHED && nextTasks.length > 0) {
+        await this.dispatchNextTasks(task, nextTasks);
+      }
+
+      return { taskId: task.id, function: task.function, ...postprocessResult };
+    } finally {
+      await this.tasksService.checkTaskMessage(task.namespaceId);
     }
+  }
 
-    task.endedAt = new Date();
-    task.exception = data.exception || null;
-    task.output = data.output || null;
-    await this.preprocessTask(task);
-
-    await this.wizardTaskService.taskRepository.save(task);
-
-    const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
-    const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
-    this.logger.debug({ taskId: task.id, cost, wait });
-
-    if (task.canceledAt) {
-      this.logger.warn(`Task ${task.id} was canceled.`);
-      return { taskId: task.id, function: task.function, status: 'canceled' };
+  private async dispatchNextTasks(
+    parentTask: Task,
+    nextTasks: NextTaskRequestDto[],
+  ): Promise<void> {
+    for (const nextTask of nextTasks) {
+      try {
+        const createdTask = await this.tasksService.emitTask({
+          namespaceId: parentTask.namespaceId,
+          userId: parentTask.userId,
+          priority:
+            nextTask.priority !== undefined
+              ? numberToBigintString(nextTask.priority)
+              : parentTask.priority,
+          function: nextTask.function,
+          input: nextTask.input,
+          payload: {
+            ...nextTask.payload,
+            parent_task_id: parentTask.id,
+          },
+        });
+        this.logger.debug({
+          parentTaskId: parentTask.id,
+          parentTaskFunction: parentTask.function,
+          nextTaskId: createdTask.id,
+          nextTaskFunction: nextTask.function,
+        });
+      } catch (error) {
+        this.logger.error({
+          parentTaskId: parentTask.id,
+          parentTaskFunction: parentTask.function,
+          nextTaskFunction: nextTask.function,
+          error,
+        });
+      }
     }
-
-    const postprocessResult = await this.postprocess(task);
-
-    return { taskId: task.id, function: task.function, ...postprocessResult };
   }
 
   async postprocess(task: Task): Promise<Record<string, any>> {
@@ -303,71 +331,7 @@ export class WizardService {
       const processor = this.processors[task.function];
       result = await processor.process(task);
     }
-
-    // Trigger extract_tags after collect or file_reader tasks finish
-    if (
-      ['collect', 'file_reader', 'generate_video_note'].includes(
-        task.function,
-      ) &&
-      !isEmpty(task.output?.markdown) &&
-      isEmpty(result.tagIds)
-    ) {
-      await this.triggerExtractTags(task);
-    }
-
-    // Trigger generate_title after file_reader task finishes (only for open_api uploads)
-    if (
-      task.function === 'file_reader' &&
-      task.output?.markdown &&
-      task.payload?.source === 'open_api'
-    ) {
-      await this.triggerGenerateTitle(task);
-    }
-
     return result;
-  }
-
-  private async triggerExtractTags(parentTask: Task): Promise<void> {
-    try {
-      const extractTagsTask =
-        await this.wizardTaskService.createExtractTagsTaskFromTask(parentTask);
-
-      if (extractTagsTask) {
-        this.logger.debug(
-          `Triggered extract_tags task ${extractTagsTask.id} for parent task ${parentTask.id}`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        `Failed to trigger extract_tags task for parent task ${parentTask.id}:`,
-        error,
-      );
-    }
-  }
-
-  private async triggerGenerateTitle(parentTask: Task): Promise<void> {
-    try {
-      const generateTitleTask =
-        await this.wizardTaskService.createGenerateTitleTask(
-          parentTask.userId,
-          parentTask.namespaceId,
-          {
-            resource_id:
-              parentTask.payload?.resource_id || parentTask.payload?.resourceId,
-            parent_task_id: parentTask.id,
-          },
-          { text: parentTask.output?.markdown },
-        );
-
-      this.logger.debug(
-        `Triggered generate_title task ${generateTitleTask.id} for parent task ${parentTask.id}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to trigger generate_title task for parent task ${parentTask.id}:`,
-        error,
-      );
-    }
   }
 
   /**
@@ -416,111 +380,51 @@ export class WizardService {
     task.output.images = processedImages;
   }
 
-  async fetchTask(query: FetchTaskRequest): Promise<InternalTaskDto | null> {
-    const andConditions: string[] = [];
-    if (query.namespace_id) {
-      andConditions.push(`tasks.namespace_id = '${query.namespace_id}'`);
+  async startTask(taskId: string): Promise<InternalTaskDto> {
+    const task = await this.wizardTaskService.taskRepository.findOne({
+      where: { id: taskId },
+    });
+    if (!task) {
+      throw new AppException(
+        `Task ${taskId} not found`,
+        'TASK_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     }
-    if (query.functions) {
-      const condition = query.functions
-        .split(',')
-        .map((x) => `'${x}'`)
-        .join(', ');
-      andConditions.push(`tasks.function IN (${condition})`);
-    }
+    await this.tasksService.checkTaskMessage(task.namespaceId);
 
-    // Filter by file extensions for file_reader tasks
-    let fileExtFilter: string;
-    if (query.file_extensions) {
-      const supportedExtensions = query.file_extensions
-        .split(',')
-        .map((ext) => ext.replace(/'/g, "''"));
-      const extConditions = supportedExtensions
-        .map((ext) => `LOWER(tasks.input->>'filename') LIKE '%${ext}'`)
-        .join(' OR ');
-      fileExtFilter = `
-        AND (
-          tasks.function != 'file_reader'
-          OR (${extConditions})
-        )
-      `;
-    } else {
-      // If file_extensions not provided, exclude all file_reader tasks
-      fileExtFilter = `AND tasks.function != 'file_reader'`;
+    if (task.canceledAt) {
+      throw new AppException(
+        `Task ${taskId} has been canceled`,
+        'TASK_CANCELED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (task.endedAt) {
+      throw new AppException(
+        `Task ${taskId} has already ended`,
+        'TASK_ENDED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
 
-    const andCondition: string = andConditions.map((x) => `AND ${x}`).join(' ');
-    const rawQuery = `
-      WITH
-        cutoff_time AS (
-          SELECT NOW() - INTERVAL '10 minutes' AS time
-        ),
-        running_tasks_sub_query AS (
-          SELECT
-            namespace_id,
-            COUNT(id) AS running_count
-          FROM tasks
-          CROSS JOIN cutoff_time
-          WHERE started_at IS NOT NULL
-          AND started_at > cutoff_time.time
-          AND ended_at IS NULL
-          AND canceled_at IS NULL
-          AND deleted_at IS NULL
-          GROUP BY namespace_id
-        ),
-        id_subquery AS (
-          SELECT tasks.id
-          FROM tasks
-          LEFT OUTER JOIN running_tasks_sub_query
-          ON tasks.namespace_id = running_tasks_sub_query.namespace_id
-          LEFT OUTER JOIN namespaces
-          ON tasks.namespace_id = namespaces.id
-          WHERE tasks.started_at IS NULL
-          AND tasks.ended_at IS NULL
-          AND tasks.canceled_at IS NULL
-          AND tasks.deleted_at IS NULL
-          AND COALESCE(running_tasks_sub_query.running_count, 0) < COALESCE(namespaces.max_running_tasks, 0)
-          ${andCondition}
-          ${fileExtFilter}
-          ORDER BY
-            priority DESC,
-            tasks.created_at
-          LIMIT 1
-      )
-      SELECT *
-      FROM tasks
-      WHERE id IN (SELECT id FROM id_subquery);
-    `;
-
-    const queryResult =
-      await this.wizardTaskService.taskRepository.query(rawQuery);
-
-    if (queryResult.length > 0) {
-      const record = queryResult[0];
-      const task = this.wizardTaskService.taskRepository.create({
-        ...(record as Task),
-        createdAt: record.created_at,
-        updatedAt: record.updated_at,
-        startedAt: new Date(),
-        userId: record.user_id,
-        namespaceId: record.namespace_id,
-      });
-      const newTask = await this.wizardTaskService.taskRepository.save(task);
-      // Fetch HTML content from S3 for collect tasks
-      if (
-        ['collect', 'generate_video_note'].includes(newTask.function) &&
-        newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
-        newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
-      ) {
-        const htmlContent = await this.getHtmlFromMinioGzipFile(
-          newTask.input.html,
-        );
-        newTask.input = { ...newTask.input, html: htmlContent };
-      }
-      return InternalTaskDto.fromEntity(newTask);
+    task.startedAt = new Date();
+    task.status = TaskStatus.RUNNING;
+    const newTask = await this.wizardTaskService.taskRepository.save(task);
+    // Fetch HTML content from S3 for tasks that need HTML analysis
+    if (
+      ['collect', 'generate_video_note', 'web_analysis'].includes(
+        newTask.function,
+      ) &&
+      newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
+      newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
+    ) {
+      const htmlContent = await this.getHtmlFromMinioGzipFile(
+        newTask.input.html,
+      );
+      newTask.input = { ...newTask.input, html: htmlContent };
     }
-
-    return null;
+    return InternalTaskDto.fromEntity(newTask);
   }
 
   async getHtmlFromMinioGzipFile(path: string) {
@@ -536,5 +440,33 @@ export class WizardService {
         })
         .on('error', reject);
     });
+  }
+
+  async reproduceTaskMessages(offset?: number, limit?: number) {
+    const queryBuilder = this.wizardTaskService.taskRepository
+      .createQueryBuilder('task')
+      .select('DISTINCT task.namespace_id', 'namespaceId')
+      .where('task.ended_at IS NULL')
+      .andWhere('task.canceled_at IS NULL');
+
+    if (offset !== undefined) {
+      queryBuilder.offset(offset);
+    }
+    if (limit !== undefined) {
+      queryBuilder.limit(limit);
+    }
+
+    const results = await queryBuilder.getRawMany<{ namespaceId: string }>();
+    const namespaceIds = results.map((r) => r.namespaceId);
+
+    for (const namespaceId of namespaceIds) {
+      await this.tasksService.checkTaskMessage(namespaceId);
+    }
+
+    return {
+      message: `Reproduced task messages for ${namespaceIds.length} namespaces`,
+      count: namespaceIds.length,
+      namespaceIds,
+    };
   }
 }

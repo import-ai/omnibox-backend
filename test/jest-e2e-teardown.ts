@@ -10,6 +10,8 @@ export default async () => {
     .__MINIO_CONTAINER__ as StartedTestContainer;
   const mailhogContainer = (global as any)
     .__MAILHOG_CONTAINER__ as StartedTestContainer;
+  const kafkaContainer = (global as any)
+    .__KAFKA_CONTAINER__ as StartedTestContainer;
 
   if (postgresContainer) {
     await postgresContainer.stop();
@@ -24,6 +26,11 @@ export default async () => {
   if (mailhogContainer) {
     await mailhogContainer.stop();
     console.log('MailHog container stopped');
+  }
+
+  if (kafkaContainer) {
+    await kafkaContainer.stop();
+    console.log('Kafka container stopped');
   }
 
   console.log('Test containers teardown complete');

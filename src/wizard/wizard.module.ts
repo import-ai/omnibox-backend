@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { StreamService } from 'omniboxd/wizard/stream.service';
+import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 import {
   CollectController,
   SharedWizardController,
@@ -8,6 +10,7 @@ import {
 import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -24,11 +27,18 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
-  providers: [WizardService, ChunkManagerService, OpenWizardService],
+  providers: [
+    WizardService,
+    StreamService,
+    ChunkManagerService,
+    OpenWizardService,
+  ],
   imports: [
+    WizardAPIModule,
     UserModule,
     SharesModule,
     NamespacesModule,
+    NamespacesQuotaModule,
     NamespaceResourcesModule,
     ResourcesModule,
     TagModule,
@@ -46,6 +56,6 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     SharedWizardController,
     InternalWizardController,
   ],
-  exports: [WizardService, OpenWizardService],
+  exports: [WizardService, StreamService, OpenWizardService],
 })
 export class WizardModule {}

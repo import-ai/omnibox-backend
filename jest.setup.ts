@@ -12,6 +12,30 @@ function customAlphabet(alphabet: string, size: number) {
   };
 }
 
+expect.extend({
+  withResponseFailedLog(received, expected, onFail) {
+    const pass = this.equals(received, expected);
+    if (!pass && onFail) {
+      onFail(received);
+    }
+    return {
+      pass,
+      message: () => `expected ${received} to equal ${expected}`,
+    };
+  },
+});
+
 jest.mock('nanoid', () => ({
   customAlphabet,
 }));
+
+/**
+ * Don't mock, the mail related e2e test would failed.
+// Mock HandlebarsAdapter to prevent @css-inline native module from loading
+// which causes open handle issues in Jest
+jest.mock('@nestjs-modules/mailer/adapters/handlebars.adapter', () => ({
+  HandlebarsAdapter: jest.fn().mockImplementation(() => ({
+    compile: jest.fn((template: string) => () => template),
+  })),
+}));
+ **/

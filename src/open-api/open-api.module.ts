@@ -7,6 +7,7 @@ import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { WizardModule } from 'omniboxd/wizard/wizard.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 
 @Module({
   providers: [],
@@ -22,6 +23,7 @@ import { TagModule } from 'omniboxd/tag/tag.module';
     WizardModule,
     TasksModule,
     TagModule,
+    NamespacesQuotaModule,
   ],
 })
 export class OpenAPIModule {}

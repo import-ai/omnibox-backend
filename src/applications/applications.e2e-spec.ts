@@ -1,6 +1,8 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
+import { QQBot } from 'omniboxd/applications/apps/qq-bot';
+import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
 
 describe('ApplicationsController (e2e)', () => {
   let client: TestClient;
@@ -19,7 +21,14 @@ describe('ApplicationsController (e2e)', () => {
         .get(`/api/v1/namespaces/${client.namespace.id}/applications`)
         .expect(200);
 
-      expect(getAllResponse.body).toEqual([{ app_id: WechatBot.appId }]);
+      expect(getAllResponse.body).toEqual(
+        expect.arrayContaining([
+          { app_id: WechatBot.appId },
+          { app_id: QQBot.appId },
+          { app_id: WechatClaw.appId },
+        ]),
+      );
+      expect(getAllResponse.body).toHaveLength(3);
 
       const appData = {
         attrs: {
@@ -40,10 +49,10 @@ describe('ApplicationsController (e2e)', () => {
         app_id: 'wechat_bot',
         attrs: {
           additional_field: 'value',
-          verify_code: expect.any(String),
+          key: expect.any(String),
         },
       });
-      expect(response.body.attrs.verify_code).toMatch(/^\d{6}$/);
+      expect(response.body.attrs.key).toMatch(/^\d{6}$/);
       expect(response.body.id).toBeDefined();
     });
 
@@ -87,9 +96,14 @@ describe('ApplicationsController (e2e)', () => {
         .get(`/api/v1/namespaces/${client.namespace.id}/applications`)
         .expect(200);
 
-      // Should always have at least the wechat_bot app available
-      expect(initialResponse.body).toHaveLength(1);
-      expect(initialResponse.body[0].app_id).toBe(WechatBot.appId);
+      // Should always have the registered apps available
+      expect(initialResponse.body).toHaveLength(3);
+      const appIds = initialResponse.body.map(
+        (app: { app_id: string }) => app.app_id,
+      );
+      expect(appIds).toContain(WechatBot.appId);
+      expect(appIds).toContain(QQBot.appId);
+      expect(appIds).toContain(WechatClaw.appId);
 
       // The test passes if we can retrieve applications without query parameters
       // The specific content depends on test execution order

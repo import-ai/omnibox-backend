@@ -7,6 +7,8 @@ export class AppController {
   @Public()
   @Get()
   healthCheck() {
-    return { uptime: process.uptime() };
+    return {
+      uptime: process.uptime(),
+    };
   }
 }

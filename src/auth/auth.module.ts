@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { APP_GUARD } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { MailModule } from 'omniboxd/mail/mail.module';
 import { UserModule } from 'omniboxd/user/user.module';
+import { User } from 'omniboxd/user/entities/user.entity';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { JwtStrategy } from 'omniboxd/auth/jwt.strategy';
 import { JwtAuthGuard } from 'omniboxd/auth/jwt-auth.guard';
@@ -19,20 +21,33 @@ import { WechatService } from 'omniboxd/auth/wechat/wechat.service';
 import { WechatController } from 'omniboxd/auth/wechat/wechat.controller';
 import { GoogleService } from 'omniboxd/auth/google/google.service';
 import { GoogleController } from 'omniboxd/auth/google/google.controller';
+import { AppleService } from 'omniboxd/auth/apple/apple.service';
+import { AppleController } from 'omniboxd/auth/apple/apple.controller';
 import { SocialService } from 'omniboxd/auth/social.service';
 import { OtpService } from 'omniboxd/auth/otp.service';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { APIKeyAuthGuard } from 'omniboxd/auth/api-key/api-key-auth.guard';
 import { CookieAuthGuard } from 'omniboxd/auth/cookie/cookie-auth.guard';
 import { CacheService } from 'omniboxd/common/cache.service';
+import { SmsModule } from 'omniboxd/sms/sms.module';
+import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
-  exports: [AuthService, WechatService, GoogleService, SocialService],
+  exports: [
+    AuthService,
+    WechatService,
+    GoogleService,
+    AppleService,
+    SocialService,
+    OAuthProviderModule,
+  ],
   controllers: [
     AuthController,
     InternalAuthController,
     WechatController,
     GoogleController,
+    AppleController,
   ],
   providers: [
     AuthService,
@@ -40,6 +55,7 @@ import { CacheService } from 'omniboxd/common/cache.service';
     OtpService,
     WechatService,
     GoogleService,
+    AppleService,
     JwtStrategy,
     LocalStrategy,
     CacheService,
@@ -57,13 +73,17 @@ import { CacheService } from 'omniboxd/common/cache.service';
     },
   ],
   imports: [
+    TypeOrmModule.forFeature([User]),
     UserModule,
     MailModule,
+    SmsModule,
     PassportModule,
     NamespacesModule,
     GroupsModule,
     PermissionsModule,
     APIKeyModule,
+    OAuthProviderModule,
+    ResourcesModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],

@@ -4,7 +4,14 @@ import {
   MessageAttrs,
 } from 'omniboxd/messages/entities/message.entity';
 
-export type ChatResponseType = 'bos' | 'delta' | 'eos' | 'done' | 'error';
+export type ChatResponseType =
+  | 'bos'
+  | 'delta'
+  | 'eos'
+  | 'done'
+  | 'error'
+  | 'checkpoint'
+  | 'metrics';
 
 export interface ChatBaseResponse {
   response_type: ChatResponseType;
@@ -21,6 +28,7 @@ export interface ChatBOSResponse extends ChatBaseResponse {
 
 export interface ChatEOSResponse extends ChatBaseResponse {
   response_type: 'eos';
+  role: OpenAIMessageRole;
 }
 
 export interface ChatDeltaResponse extends ChatBaseResponse {
@@ -33,9 +41,18 @@ export interface ChatDoneResponse extends ChatBaseResponse {
   response_type: 'done';
 }
 
+export interface ChatMetricsResponse extends ChatBaseResponse {
+  response_type: 'metrics';
+}
+
 export interface ChatErrorResponse extends ChatBaseResponse {
   response_type: 'error';
   message: string;
+}
+
+export interface ChatCheckpointResponse extends ChatBaseResponse {
+  response_type: 'checkpoint';
+  checkpoint: Record<string, any>;
 }
 
 export type ChatResponse =
@@ -43,4 +60,6 @@ export type ChatResponse =
   | ChatDeltaResponse
   | ChatEOSResponse
   | ChatDoneResponse
-  | ChatErrorResponse;
+  | ChatMetricsResponse
+  | ChatErrorResponse
+  | ChatCheckpointResponse;

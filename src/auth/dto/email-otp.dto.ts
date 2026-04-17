@@ -1,13 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsString, Length } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
+import { IsAllowedEmailDomain } from '../../utils/email-validation';
 
 export class SendEmailOtpDto {
   @ApiProperty({
     description: 'Email address to send OTP to',
     example: 'user@example.com',
   })
+  @Transform(({ value }) => value?.toLowerCase?.())
   @IsEmail()
   @IsNotEmpty()
+  @IsAllowedEmailDomain({
+    message: i18nValidationMessage('validation.errors.email.domainNotAllowed'),
+  })
   email: string;
 }
 
@@ -16,8 +23,12 @@ export class VerifyEmailOtpDto {
     description: 'Email address',
     example: 'user@example.com',
   })
+  @Transform(({ value }) => value?.toLowerCase?.())
   @IsEmail()
   @IsNotEmpty()
+  @IsAllowedEmailDomain({
+    message: i18nValidationMessage('validation.errors.email.domainNotAllowed'),
+  })
   email: string;
 
   @ApiProperty({

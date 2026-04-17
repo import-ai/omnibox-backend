@@ -1,0 +1,8 @@
+{
+  "errors": {
+    "sendFailed": "Failed to send SMS. Please try again later.",
+    "serviceUnavailable": "SMS service is temporarily unavailable.",
+    "invalidPhone": "Invalid phone number format.",
+    "countryNotSupported": "SMS is not available for this country/region."
+  }
+}

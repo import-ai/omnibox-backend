@@ -10,7 +10,8 @@ export type ChatResponseType =
   | 'eos'
   | 'done'
   | 'error'
-  | 'checkpoint';
+  | 'checkpoint'
+  | 'metrics';
 
 export interface ChatBaseResponse {
   response_type: ChatResponseType;
@@ -40,6 +41,10 @@ export interface ChatDoneResponse extends ChatBaseResponse {
   response_type: 'done';
 }
 
+export interface ChatMetricsResponse extends ChatBaseResponse {
+  response_type: 'metrics';
+}
+
 export interface ChatErrorResponse extends ChatBaseResponse {
   response_type: 'error';
   message: string;
@@ -55,5 +60,6 @@ export type ChatResponse =
   | ChatDeltaResponse
   | ChatEOSResponse
   | ChatDoneResponse
+  | ChatMetricsResponse
   | ChatErrorResponse
   | ChatCheckpointResponse;

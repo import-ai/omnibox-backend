@@ -169,6 +169,8 @@ export class StreamService {
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
         // Do nothing, this is the end of the stream
+      } else if (chunk.response_type === 'metrics') {
+        // Do nothing, frontend only
       } else if (chunk.response_type === 'checkpoint') {
         // Checkpoint response always triggered after message done
         const messageId = context.messageId || context.parentId;

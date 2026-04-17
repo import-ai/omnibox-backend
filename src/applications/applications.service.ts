@@ -13,6 +13,7 @@ import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { QQBot } from 'omniboxd/applications/apps/qq-bot';
 import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
+import { NotificationService } from 'omniboxd/notification/notification.service';
 
 export interface FindAllOptions {
   apiKeyId?: string;
@@ -30,6 +31,7 @@ export class ApplicationsService {
     private readonly wechatClaw: WechatClaw,
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
   ) {
     const enabledApps = this.configService.get<string>(
       'OBB_ENABLED_APPLICATIONS',

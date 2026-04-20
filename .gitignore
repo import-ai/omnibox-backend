@@ -49,6 +49,9 @@ lerna-debug.log*
 .claude
 CLAUDE.md
 
+AGENTS.md
+.helloagents/
+
 # Runtime data
 pids
 *.pid

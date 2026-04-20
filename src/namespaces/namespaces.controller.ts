@@ -14,6 +14,7 @@ import { CreateNamespaceDto } from './dto/create-namespace.dto';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceOwner } from './decorators/namespace-owner.decorator';
 import { NamespaceAdmin } from './decorators/namespace-admin.decorator';
+import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {
@@ -39,6 +40,14 @@ export class NamespacesController {
 @Controller('api/v1/namespaces/:namespaceId')
 export class NamespacesSingleController {
   constructor(private readonly namespacesService: NamespacesService) {}
+
+  @Get('me')
+  async me(
+    @Param('namespaceId') namespaceId: string,
+    @UserId() userId: string,
+  ): Promise<MeNamespaceResponseDto> {
+    return await this.namespacesService.getMe(namespaceId, userId);
+  }
 
   @Get()
   async get(@Param('namespaceId') namespaceId: string) {

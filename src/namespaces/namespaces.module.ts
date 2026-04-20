@@ -3,7 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from 'omniboxd/user/user.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { NamespacesController } from 'omniboxd/namespaces/namespaces.controller';
+import {
+  NamespacesController,
+  NamespacesSingleController,
+} from 'omniboxd/namespaces/namespaces.controller';
 import { NamespaceMember } from './entities/namespace-member.entity';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
@@ -20,7 +23,7 @@ import { NamespaceAdminInterceptor } from './interceptors/namespace-admin.interc
     NamespaceOwnerInterceptor,
     NamespaceAdminInterceptor,
   ],
-  controllers: [NamespacesController],
+  controllers: [NamespacesController, NamespacesSingleController],
   imports: [
     UserModule,
     NamespaceResourcesModule,

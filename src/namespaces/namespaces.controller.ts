@@ -1,7 +1,6 @@
 import { NamespaceRole } from './entities/namespace-member.entity';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import {
-  Req,
   Get,
   Post,
   Body,
@@ -21,29 +20,45 @@ export class NamespacesController {
   constructor(private readonly namespacesService: NamespacesService) {}
 
   @Get()
-  async listNamespaces(@Req() req) {
-    return await this.namespacesService.listNamespaces(req.user.id);
+  async listNamespaces(@UserId() userId: string) {
+    return await this.namespacesService.listNamespaces(userId);
   }
 
-  @Get(':namespaceId')
+  @Post()
+  async create(
+    @UserId() userId: string,
+    @Body() createDto: CreateNamespaceDto,
+  ) {
+    return await this.namespacesService.createAndJoinNamespace(
+      userId,
+      createDto.name,
+    );
+  }
+}
+
+@Controller('api/v1/namespaces/:namespaceId')
+export class NamespacesSingleController {
+  constructor(private readonly namespacesService: NamespacesService) {}
+
+  @Get()
   async get(@Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.getNamespace(namespaceId);
   }
 
   @NamespaceAdmin()
-  @Get(':namespaceId/members')
+  @Get('members')
   async listMembers(@Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.listMembers(namespaceId);
   }
 
-  @Get(':namespaceId/members/count')
+  @Get('members/count')
   async countMembers(@Param('namespaceId') namespaceId: string) {
     const count = await this.namespacesService.countMembers(namespaceId);
     return { count };
   }
 
   @NamespaceAdmin()
-  @Get(':namespaceId/members/:userId')
+  @Get('members/:userId')
   async getMemberByUserId(
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
@@ -52,7 +67,7 @@ export class NamespacesController {
   }
 
   @NamespaceAdmin()
-  @Patch(':namespaceId/members/:userId')
+  @Patch('members/:userId')
   async UpdateMemberRole(
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
@@ -67,7 +82,7 @@ export class NamespacesController {
     );
   }
 
-  @Delete(':namespaceId/members/:userId')
+  @Delete('members/:userId')
   async deleteMember(
     @Param('namespaceId') namespaceId: string,
     @Param('userId') userId: string,
@@ -80,7 +95,7 @@ export class NamespacesController {
     );
   }
 
-  @Get(':namespaceId/root')
+  @Get('root')
   async getRoot(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
@@ -88,7 +103,7 @@ export class NamespacesController {
     return await this.namespacesService.getRoot(namespaceId, userId);
   }
 
-  @Get(':namespaceId/private')
+  @Get('private')
   async getPrivateRoot(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
@@ -96,16 +111,8 @@ export class NamespacesController {
     return await this.namespacesService.getPrivateRoot(userId, namespaceId);
   }
 
-  @Post()
-  async create(@Req() req, @Body() createDto: CreateNamespaceDto) {
-    return await this.namespacesService.createAndJoinNamespace(
-      req.user.id,
-      createDto.name,
-    );
-  }
-
   @NamespaceAdmin()
-  @Patch(':namespaceId')
+  @Patch()
   async update(
     @Param('namespaceId') namespaceId: string,
     @Body() updateDto: UpdateNamespaceDto,
@@ -114,7 +121,7 @@ export class NamespacesController {
   }
 
   @NamespaceOwner()
-  @Post(':namespaceId/transfer-ownership')
+  @Post('transfer-ownership')
   async transferOwnership(
     @Param('namespaceId') namespaceId: string,
     @Body('newOwnerId') newOwnerId: string,
@@ -128,7 +135,7 @@ export class NamespacesController {
   }
 
   @NamespaceOwner()
-  @Delete(':namespaceId')
+  @Delete()
   async delete(@Param('namespaceId') namespaceId: string) {
     return await this.namespacesService.delete(namespaceId);
   }

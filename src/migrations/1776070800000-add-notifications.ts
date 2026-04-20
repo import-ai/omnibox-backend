@@ -1,8 +1,15 @@
-import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableCheck } from 'typeorm';
 import { BaseColumns } from './base-columns';
 
 export class AddNotifications1776070800000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
+      CREATE TYPE notification_status AS ENUM (
+        'unread',
+        'read'
+      );
+    `);
+
     const table = new Table({
       name: 'notifications',
       columns: [
@@ -15,7 +22,12 @@ export class AddNotifications1776070800000 implements MigrationInterface {
         {
           name: 'user_id',
           type: 'uuid',
-          isNullable: false,
+          isNullable: true,
+        },
+        {
+          name: 'namespace_id',
+          type: 'character varying',
+          isNullable: true,
         },
         {
           name: 'title',
@@ -29,10 +41,9 @@ export class AddNotifications1776070800000 implements MigrationInterface {
         },
         {
           name: 'status',
-          type: 'character varying',
-          length: '16',
+          type: 'notification_status',
           isNullable: false,
-          default: "'unread'",
+          default: "'unread'::notification_status",
         },
         {
           name: 'notification_type',
@@ -84,6 +95,18 @@ export class AddNotifications1776070800000 implements MigrationInterface {
           referencedColumnNames: ['id'],
           onDelete: 'CASCADE',
         },
+        {
+          columnNames: ['namespace_id'],
+          referencedTableName: 'namespaces',
+          referencedColumnNames: ['id'],
+          onDelete: 'CASCADE',
+        },
+      ],
+      checks: [
+        new TableCheck({
+          name: 'chk_notifications_user_or_namespace',
+          expression: '"user_id" IS NOT NULL OR "namespace_id" IS NOT NULL',
+        }),
       ],
     });
 

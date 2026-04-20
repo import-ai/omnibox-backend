@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  HttpStatus,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
@@ -27,12 +22,11 @@ import {
   FindOptionsWhere,
   In,
   IsNull,
-  LessThan,
+  MoreThanOrEqual,
   Repository,
 } from 'typeorm';
 
 const NOTIFICATION_RETENTION_DAYS = 30;
-const NOTIFICATION_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 interface ListNotificationsOptions {
   namespaceId?: string;
@@ -43,28 +37,12 @@ interface ListNotificationsOptions {
 }
 
 @Injectable()
-export class NotificationService implements OnModuleInit, OnModuleDestroy {
-  private cleanupTimer: NodeJS.Timeout | null = null;
-
+export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
     private readonly i18n: I18nService,
   ) {}
-
-  onModuleInit() {
-    this.softDeleteExpiredNotifications().catch(() => null);
-    this.cleanupTimer = setInterval(() => {
-      this.softDeleteExpiredNotifications().catch(() => null);
-    }, NOTIFICATION_CLEANUP_INTERVAL_MS);
-  }
-
-  onModuleDestroy() {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = null;
-    }
-  }
 
   /**
    * Write the notification into the notification database
@@ -80,7 +58,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
       target: createNotificationDto.target || {},
       tags: createNotificationDto.tags || [],
       attrs: createNotificationDto.attrs || {},
-      readAt: null,
+      readedAt: null,
     });
 
     return await this.notificationRepository.save(notification);
@@ -91,8 +69,8 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     query: ListNotificationsOptions,
   ): Promise<NotificationListResponseDto> {
     const namespaceId = query.namespaceId;
-    const offset = query.offset || 1;
-    const limit = query.limit || 20;
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 20;
     const status = query.status || 'all';
     const tagList = query.tags
       ?.split(',')
@@ -145,9 +123,13 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
+    queryBuilder.andWhere('notification.created_at >= :retainedAfter', {
+      retainedAfter: this.getRetainedAfter(),
+    });
+
     const [notifications, total] = await queryBuilder
       .orderBy('notification.created_at', 'DESC')
-      .skip((offset - 1) * limit)
+      .skip(offset)
       .take(limit)
       .getManyAndCount();
 
@@ -159,7 +141,6 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
         offset,
         limit,
         total,
-        hasMore: offset * limit < total,
       },
     };
   }
@@ -198,7 +179,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     });
 
     return {
-      unreadCount,
+      unread_count: unreadCount,
     };
   }
 
@@ -223,20 +204,20 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    const readAt = notification.readAt || new Date();
+    const readedAt = notification.readedAt || new Date();
     const saved = await this.notificationRepository.save({
       ...notification,
       status:
         updateNotification.status === 'read'
           ? NotificationStatus.READ
           : notification.status,
-      readAt,
+      readedAt,
     });
 
     return {
       id: saved.id,
       status: saved.status,
-      readAt: saved.readAt.toISOString(),
+      readed_at: saved.readedAt.toISOString(),
     };
   }
 
@@ -247,7 +228,7 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
   ): Promise<ClearNotificationsResponseDto> {
     if (clearNotifications.status === 'read') {
       return {
-        readedCount: 0,
+        readed_count: 0,
       };
     }
 
@@ -264,34 +245,22 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
 
     if (notifications.length === 0) {
       return {
-        readedCount: 0,
+        readed_count: 0,
       };
     }
 
-    const readAt = new Date();
+    const readedAt = new Date();
     await this.notificationRepository.save(
       notifications.map((notification) => ({
         ...notification,
         status: NotificationStatus.READ,
-        readAt,
+        readedAt,
       })),
     );
 
     return {
-      readedCount: notifications.length,
+      readed_count: notifications.length,
     };
-  }
-
-  async softDeleteExpiredNotifications(): Promise<number> {
-    const expiredBefore = new Date(
-      Date.now() -
-        NOTIFICATION_RETENTION_DAYS * NOTIFICATION_CLEANUP_INTERVAL_MS,
-    );
-    const result = await this.notificationRepository.softDelete({
-      updatedAt: LessThan(expiredBefore),
-    });
-
-    return result.affected || 0;
   }
 
   private buildVisibilityWhere(
@@ -299,8 +268,11 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
     namespaceId?: string,
     extra: FindOptionsWhere<Notification> = {},
   ): FindOptionsWhere<Notification>[] | FindOptionsWhere<Notification> {
+    const retainedAfter = this.getRetainedAfter();
+
     if (!namespaceId) {
       return {
+        createdAt: MoreThanOrEqual(retainedAfter),
         ...extra,
         userId,
         namespaceId: IsNull(),
@@ -309,16 +281,19 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
 
     return [
       {
+        createdAt: MoreThanOrEqual(retainedAfter),
         ...extra,
         userId: IsNull(),
         namespaceId,
       },
       {
+        createdAt: MoreThanOrEqual(retainedAfter),
         ...extra,
         userId,
         namespaceId: IsNull(),
       },
       {
+        createdAt: MoreThanOrEqual(retainedAfter),
         ...extra,
         userId,
         namespaceId,
@@ -336,5 +311,11 @@ export class NotificationService implements OnModuleInit, OnModuleDestroy {
         id,
       }),
     });
+  }
+
+  private getRetainedAfter(): Date {
+    return new Date(
+      Date.now() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
   }
 }

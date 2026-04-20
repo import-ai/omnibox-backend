@@ -1,17 +1,17 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { NotificationService } from './notification.service';
-import { NotificationController } from './notification.controller';
-import { InternalNotificationController } from './internal.notification.controller';
+import { NotificationsService } from './notifications.service';
+import { NotificationsController } from './notifications.controller';
+import { InternalNotificationsController } from './internal.notifications.controller';
 import { UserModule } from 'omniboxd/user/user.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { Notification } from './entities/notification.entity';
 
 @Module({
-  controllers: [NotificationController, InternalNotificationController],
-  providers: [NotificationService],
-  exports: [NotificationService],
+  controllers: [NotificationsController, InternalNotificationsController],
+  providers: [NotificationsService],
+  exports: [NotificationsService],
   imports: [
     TypeOrmModule.forFeature([Notification]),
     UserModule,
@@ -19,4 +19,4 @@ import { Notification } from './entities/notification.entity';
     ResourcesModule,
   ],
 })
-export class NotificationModule {}
+export class NotificationsModule {}

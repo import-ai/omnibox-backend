@@ -7,7 +7,7 @@ export enum NotificationStatus {
 }
 
 @Entity('notifications')
-@Check(`("userId" IS NOT NULL OR "namespaceId" IS NOT NULL)`)
+@Check('"user_id" IS NOT NULL OR "namespace_id" IS NOT NULL')
 export class Notification extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -24,7 +24,10 @@ export class Notification extends Base {
   @Column('text', { nullable: true })
   content: string | null;
 
-  @Column('varchar', { length: 16, default: NotificationStatus.UNREAD })
+  @Column('enum', {
+    enum: NotificationStatus,
+    default: NotificationStatus.UNREAD,
+  })
   status: NotificationStatus;
 
   @Column('varchar', { length: 32, name: 'notification_type' })
@@ -39,6 +42,6 @@ export class Notification extends Base {
   @Column('jsonb', { default: {} })
   attrs: Record<string, any>;
 
-  @Column('timestamptz', { nullable: true })
-  readAt: Date | null;
+  @Column('timestamptz', { nullable: true, name: 'read_at' })
+  readedAt: Date | null;
 }

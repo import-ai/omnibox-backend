@@ -97,10 +97,8 @@ import { MakeSizeNullable1769478367000 } from 'omniboxd/migrations/1769478367000
 import { RenameVerifyCodeToKey1774965861436 } from 'omniboxd/migrations/1774965861436-rename-verify-code-to-key';
 import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/1775666229211-deduplicate-resource-names';
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
-import { NotificationModule } from 'omniboxd/notification/notification.module';
+import { NotificationsModule } from 'omniboxd/notifications/notifications.module';
 import { AddNotifications1776070800000 } from 'omniboxd/migrations/1776070800000-add-notifications';
-import { UpdateNotificationsNamespace1776200000000 } from 'omniboxd/migrations/1776200000000-update-notifications-namespace';
-import { RenameNotificationType1776201000000 } from 'omniboxd/migrations/1776201000000-rename-notification-type';
 import { VfsModule } from 'omniboxd/vfs/vfs.module';
 import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
 import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
@@ -189,7 +187,7 @@ export class AppModule implements NestModule {
         SubscribeMessageModule,
         AppConfigModule,
         WizardUrlProviderModule,
-        NotificationModule,
+        NotificationsModule,
         VfsModule,
         VfsTagsModule,
         VfsWizardModule,
@@ -259,8 +257,6 @@ export class AppModule implements NestModule {
               MakeSizeNullable1769478367000,
               RenameVerifyCodeToKey1774965861436,
               AddNotifications1776070800000,
-              UpdateNotificationsNamespace1776200000000,
-              RenameNotificationType1776201000000,
               DeduplicateResourceNames1775666229211,
               ...extraMigrations,
             ],

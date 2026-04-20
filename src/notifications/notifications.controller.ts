@@ -12,11 +12,11 @@ import {
   ClearNotificationsRequestDto,
   UpdateNotificationRequestDto,
 } from './dto';
-import { NotificationService } from './notification.service';
+import { NotificationsService } from './notifications.service';
 
 @Controller('api/v1/notifications')
-export class NotificationController {
-  constructor(private readonly notificationService: NotificationService) {}
+export class NotificationsController {
+  constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
   async findAll(
@@ -27,11 +27,11 @@ export class NotificationController {
     @Query('offset') offset?: string,
     @Query('limit') limit?: string,
   ) {
-    return await this.notificationService.list(userId, {
+    return await this.notificationsService.list(userId, {
       namespaceId,
       status: status || 'all',
       tags,
-      offset: Number.isFinite(Number(offset)) ? Number(offset) : 1,
+      offset: Number.isFinite(Number(offset)) ? Number(offset) : 0,
       limit: Number.isFinite(Number(limit)) ? Number(limit) : 20,
     });
   }
@@ -41,7 +41,7 @@ export class NotificationController {
     @UserId() userId: string,
     @Query('namespaceId') namespaceId: string | undefined,
   ) {
-    return await this.notificationService.getUnreadCount(userId, namespaceId);
+    return await this.notificationsService.getUnreadCount(userId, namespaceId);
   }
 
   @Post('unread/clear')
@@ -50,7 +50,7 @@ export class NotificationController {
     @Body() clearNotifications: ClearNotificationsRequestDto,
     @Query('namespaceId') namespaceId: string | undefined,
   ) {
-    return await this.notificationService.clearUnread(
+    return await this.notificationsService.clearUnread(
       userId,
       namespaceId,
       clearNotifications,
@@ -63,7 +63,7 @@ export class NotificationController {
     @UserId() userId: string,
     @Query('namespaceId') namespaceId: string | undefined,
   ) {
-    return await this.notificationService.findOne(id, userId, namespaceId);
+    return await this.notificationsService.findOne(id, userId, namespaceId);
   }
 
   @Patch(':id')
@@ -73,7 +73,7 @@ export class NotificationController {
     @Body() updateNotification: UpdateNotificationRequestDto,
     @Query('namespaceId') namespaceId: string | undefined,
   ) {
-    return await this.notificationService.markAsRead(
+    return await this.notificationsService.markAsRead(
       id,
       userId,
       namespaceId,

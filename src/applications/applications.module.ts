@@ -9,7 +9,7 @@ import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { WechatBot } from './apps/wechat-bot';
 import { QQBot } from './apps/qq-bot';
 import { WechatClaw } from './apps/wechat-claw';
-import { NotificationModule } from 'omniboxd/notification/notification.module';
+import { NotificationsModule } from 'omniboxd/notifications/notifications.module';
 
 @Module({
   providers: [ApplicationsService, WechatBot, QQBot, WechatClaw],
@@ -19,7 +19,7 @@ import { NotificationModule } from 'omniboxd/notification/notification.module';
     TypeOrmModule.forFeature([Applications]),
     APIKeyModule,
     NamespacesModule,
-    NotificationModule,
+    NotificationsModule,
   ],
 })
 export class ApplicationsModule {}

@@ -23,6 +23,18 @@ export interface WebSearchToolDto extends ToolDto {
   updated_at?: FloatPair;
 }
 
+export enum AgentRequestChannel {
+  WEB = 'web',
+  MOBILE = 'mobile',
+  MINI_PROGRAM = 'mini_program',
+
+  OPEN_API = 'open_api',
+
+  WEB_SHARE = 'web_share',
+  MOBILE_SHARE = 'mobile_share',
+  MINI_PROGRAM_SHARE = 'mini_program_share',
+}
+
 export interface BaseAgentRequestDto {
   query: string;
   conversation_id: string;
@@ -31,6 +43,7 @@ export interface BaseAgentRequestDto {
   tool_call?: {
     decisions?: Record<string, any>[];
   };
+  channel: AgentRequestChannel;
 }
 
 // AgentRequestDto: web -> backend

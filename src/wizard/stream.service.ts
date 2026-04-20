@@ -48,7 +48,7 @@ export class StreamService {
   async stream(
     namespaceId: string,
     mode: 'ask' | 'write',
-    body: Record<string, any>,
+    body: WizardAgentRequestDto,
     requestId: string,
     callback: (data: string) => Promise<void>,
   ): Promise<void> {
@@ -403,6 +403,7 @@ export class StreamService {
         enable_thinking: requestDto.enable_thinking,
         lang: requestDto.lang,
         tool_call: requestDto.tool_call,
+        channel: requestDto.channel,
       };
 
       this.stream(namespaceId, mode, wizardRequest, requestId, async (data) => {

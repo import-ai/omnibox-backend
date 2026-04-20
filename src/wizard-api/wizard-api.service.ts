@@ -14,6 +14,7 @@ import {
   IWizardUrlProvider,
   WIZARD_URL_PROVIDER,
 } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
+import { WizardAgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 
 @Injectable()
 export class WizardAPIService {
@@ -32,10 +33,13 @@ export class WizardAPIService {
   async createAgentStream(
     namespaceId: string,
     mode: 'ask' | 'write',
-    body: Record<string, any>,
+    body: WizardAgentRequestDto,
     requestId: string,
   ): Promise<Response> {
-    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(namespaceId);
+    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(
+      namespaceId,
+      body,
+    );
     const url = `${wizardBaseUrl}/api/v1/wizard/${mode}`;
     const requestHeaders = {
       'Content-Type': 'application/json',

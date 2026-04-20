@@ -4,7 +4,10 @@ import { ConversationsService } from 'omniboxd/conversations/conversations.servi
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
-import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
+import {
+  AgentRequestChannel,
+  AgentRequestDto,
+} from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
@@ -35,6 +38,7 @@ export class OpenWizardService {
       ...data,
       conversation_id: conversationId,
       enable_thinking: data.enable_thinking ?? false,
+      channel: AgentRequestChannel.OPEN_API,
     };
 
     const chunks: ChatResponse[] = await this.streamService.chat(

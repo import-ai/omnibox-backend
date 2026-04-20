@@ -28,6 +28,7 @@ import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
 
 @Injectable()
 export class NamespacesService {
@@ -621,6 +622,31 @@ export class NamespacesService {
         deletedAt: IsNull(),
       },
     });
+  }
+
+  async getMe(
+    namespaceId: string,
+    userId: string,
+  ): Promise<MeNamespaceResponseDto> {
+    const user = await this.userService.find(userId);
+    const member: NamespaceMember | null = await this.getMemberByUserId(
+      namespaceId,
+      userId,
+    );
+    if (!member) {
+      throw new AppException(
+        this.i18n.t('namespace.errors.notAMember'),
+        'NOT_A_MEMBER',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    return {
+      userId,
+      namespaceId,
+      email: user.email,
+      username: user.username,
+      role: member.role,
+    } as MeNamespaceResponseDto;
   }
 
   async deleteMember(

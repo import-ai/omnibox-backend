@@ -121,7 +121,7 @@ export class StreamService {
         const message: Message = await this.messagesService.create(
           namespaceId,
           conversationId,
-          userId,
+          userId || null,
           {
             message: {
               role: chunk.role,

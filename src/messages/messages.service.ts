@@ -96,7 +96,9 @@ export class MessagesService {
       });
 
       message.attrs = message.attrs || {};
+      message.attrs.context = message.attrs.context || {};
       message.attrs.context = {
+        ...message.attrs.context,
         checkpoint: chunk.checkpoint,
       };
       message.status = MessageStatus.SUCCESS;

@@ -358,6 +358,7 @@ export class StreamService {
     requestId: string,
     mode: 'ask' | 'write',
     userId: string,
+    shareId: string = '',
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Message[] = [];
@@ -404,6 +405,7 @@ export class StreamService {
         lang: requestDto.lang,
         tool_call: requestDto.tool_call,
         channel: requestDto.channel,
+        share_id: shareId,
       };
 
       this.stream(namespaceId, mode, wizardRequest, requestId, async (data) => {
@@ -466,6 +468,7 @@ export class StreamService {
         requestId,
         mode,
         '',
+        share.id,
       );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>

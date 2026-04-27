@@ -104,6 +104,7 @@ export class SharesService {
       [share.resourceId],
     );
     const resourceMeta = SharedResourceMetaDto.fromResourceMeta(
+      share,
       resource,
       children.length > 0,
     );

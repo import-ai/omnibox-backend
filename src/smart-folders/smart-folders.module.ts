@@ -13,6 +13,7 @@ import { SmartFolderEntitlementsService } from 'omniboxd/smart-folders/smart-fol
 import { SmartFoldersController } from 'omniboxd/smart-folders/smart-folders.controller';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
+import { TagModule } from 'omniboxd/tag/tag.module';
 
 @Global()
 @Module({
@@ -23,6 +24,7 @@ import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.servic
     NamespacesQuotaModule,
     PermissionsModule,
     ResourcesModule,
+    TagModule,
   ],
   providers: [
     SmartFoldersService,

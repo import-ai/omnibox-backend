@@ -24,6 +24,7 @@ import {
   SMART_FOLDER_ENTITLEMENTS_PROVIDER,
 } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
+import { TagService } from 'omniboxd/tag/tag.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { DataSource, In, Repository } from 'typeorm';
 import { CreateSmartFolderRequestDto } from './dto/create-smart-folder-request.dto';
@@ -43,6 +44,7 @@ export class SmartFoldersService {
     private readonly permissionsService: PermissionsService,
     private readonly resourcesService: ResourcesService,
     private readonly ruleService: SmartFoldersRuleService,
+    private readonly tagService: TagService,
     @Inject(SMART_FOLDER_ENTITLEMENTS_PROVIDER)
     private readonly entitlementsProvider: ISmartFolderEntitlementsProvider,
   ) {}
@@ -174,6 +176,10 @@ export class SmartFoldersService {
         id: In(visibleIds),
       },
     });
+    const resourcesWithTagNames = await this.withTagNames(
+      namespaceId,
+      resources,
+    );
     const visibleIdSet = new Set(visibleIds);
     const hasChildrenMap = new Map<string, boolean>();
     for (const resource of visibleResources) {
@@ -182,7 +188,7 @@ export class SmartFoldersService {
       }
     }
 
-    const matched = resources
+    const matched = resourcesWithTagNames
       .filter((resource) =>
         this.matches(resource, config.conditions, config.matchMode),
       )
@@ -445,6 +451,10 @@ export class SmartFoldersService {
     resource: Resource,
     condition: SmartFolderCondition,
   ): boolean {
+    if (condition.field === SmartFolderField.CREATED_AT) {
+      return this.matchesDateCondition(resource.createdAt, condition);
+    }
+
     const operator = condition.operator;
     const candidate = this.getConditionCandidate(resource, condition.field);
     const expected = this.getConditionTextValue(condition);
@@ -492,10 +502,155 @@ export class SmartFoldersService {
       case SmartFolderField.CONTENT:
         return this.getContentCandidate(resource);
       case SmartFolderField.TAGS:
-        return (resource.tagIds || []).join(' ').toLowerCase();
+        return this.getTagsCandidate(resource);
       default:
         return '';
     }
+  }
+
+  private matchesDateCondition(
+    createdAt: Date,
+    condition: SmartFolderCondition,
+  ): boolean {
+    const operator = condition.operator;
+    const value =
+      typeof condition.value === 'object' && condition.value !== null
+        ? condition.value
+        : {};
+    const createdAtTime = createdAt.getTime();
+
+    switch (operator) {
+      case SmartFolderOperator.RECENT: {
+        const since = this.getRecentSince(value.amount, value.unit);
+        return since === null ? false : createdAtTime >= since.getTime();
+      }
+      case SmartFolderOperator.EARLIER_THAN: {
+        const since = this.getRecentSince(value.amount, value.unit);
+        return since === null ? false : createdAtTime < since.getTime();
+      }
+      case SmartFolderOperator.BEFORE: {
+        const range = this.getDayRange(value.date);
+        return range === null ? false : createdAtTime < range.start.getTime();
+      }
+      case SmartFolderOperator.AFTER: {
+        const range = this.getDayRange(value.date);
+        return range === null ? false : createdAtTime >= range.end.getTime();
+      }
+      case SmartFolderOperator.ON: {
+        const range = this.getDayRange(value.date);
+        return range === null
+          ? false
+          : createdAtTime >= range.start.getTime() &&
+              createdAtTime < range.end.getTime();
+      }
+      case SmartFolderOperator.NOT_ON: {
+        const range = this.getDayRange(value.date);
+        return range === null
+          ? false
+          : createdAtTime < range.start.getTime() ||
+              createdAtTime >= range.end.getTime();
+      }
+      case SmartFolderOperator.BETWEEN: {
+        const start = this.getDayRange(value.startDate);
+        const end = this.getDayRange(value.endDate);
+        return start === null || end === null
+          ? false
+          : createdAtTime >= start.start.getTime() &&
+              createdAtTime < end.end.getTime();
+      }
+      default:
+        return false;
+    }
+  }
+
+  private getRecentSince(
+    amount?: number,
+    unit?: string,
+    now = new Date(),
+  ): Date | null {
+    if (!amount || amount <= 0 || !unit) {
+      return null;
+    }
+
+    const since = new Date(now);
+    switch (unit) {
+      case 'day':
+        since.setUTCDate(since.getUTCDate() - amount);
+        return since;
+      case 'week':
+        since.setUTCDate(since.getUTCDate() - amount * 7);
+        return since;
+      case 'month':
+        since.setUTCMonth(since.getUTCMonth() - amount);
+        return since;
+      case 'quarter':
+        since.setUTCMonth(since.getUTCMonth() - amount * 3);
+        return since;
+      case 'year':
+        since.setUTCFullYear(since.getUTCFullYear() - amount);
+        return since;
+      default:
+        return null;
+    }
+  }
+
+  private getDayRange(date?: string): { start: Date; end: Date } | null {
+    if (!date) {
+      return null;
+    }
+
+    const dateOnly = date.includes('T') ? date.split('T')[0] : date;
+    const start = new Date(`${dateOnly}T00:00:00.000Z`);
+    if (Number.isNaN(start.getTime())) {
+      return null;
+    }
+
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return { start, end };
+  }
+
+  private getTagsCandidate(resource: Resource): string {
+    const values = [...(resource.tagIds || [])];
+    const tagNames = [resource.attrs?.tags, resource.attrs?.tag_names]
+      .flatMap((value) => (Array.isArray(value) ? value : []))
+      .map((value) =>
+        typeof value === 'string'
+          ? value
+          : typeof value?.name === 'string'
+            ? value.name
+            : '',
+      )
+      .filter((value) => value.length > 0);
+
+    return [...values, ...tagNames].join(' ').toLowerCase();
+  }
+
+  private async withTagNames(
+    namespaceId: string,
+    resources: Resource[],
+  ): Promise<Resource[]> {
+    const tagIds = Array.from(
+      new Set(resources.flatMap((resource) => resource.tagIds || [])),
+    );
+    if (tagIds.length <= 0) {
+      return resources;
+    }
+
+    const tags = await this.tagService.getTagsByIds(namespaceId, tagIds);
+    const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
+    return resources.map((resource) => {
+      const resourceTags = (resource.tagIds || [])
+        .map((tagId) => tagsById.get(tagId))
+        .filter((tag) => tag !== undefined);
+      return {
+        ...resource,
+        attrs: {
+          ...resource.attrs,
+          tags: resourceTags,
+        },
+      } as Resource;
+    });
   }
 
   private getContentCandidate(resource: Resource): string {

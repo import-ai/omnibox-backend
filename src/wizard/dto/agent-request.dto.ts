@@ -60,6 +60,7 @@ export interface WizardPrivateSearchToolDto extends PrivateSearchToolDto {
 export interface WizardAgentRequestDto extends BaseAgentRequestDto {
   namespace_id: string;
   user_id: string;
+  share_id: string;
   tools: Array<WizardPrivateSearchToolDto | WebSearchToolDto>;
   messages: Message[];
 }

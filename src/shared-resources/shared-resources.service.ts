@@ -10,6 +10,8 @@ import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
+import { VFSResourceFilterOptionsDto } from 'omniboxd/vfs/dto/filter.request.dto';
+import { last } from 'omniboxd/utils/arrays';
 
 @Injectable()
 export class SharedResourcesService {
@@ -70,6 +72,49 @@ export class SharedResourcesService {
     return path;
   }
 
+  async batchGetResourcePath(
+    share: Share,
+    resourceIds: string[],
+  ): Promise<Map<string, ResourceMetaDto[]>> {
+    const pathMap = new Map<string, ResourceMetaDto[]>();
+    const resourceMap = await this.resourcesService.batchGetParentResources(
+      share.namespaceId,
+      resourceIds,
+    );
+    for (const resourceId of resourceIds) {
+      if (resourceId !== share.resourceId && !share.allResources) {
+        throw new AppException(
+          this.i18n.t('resource.errors.resourceNotFound'),
+          'RESOURCE_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      const resource = resourceMap.get(resourceId);
+      if (!resource) {
+        throw new AppException(
+          this.i18n.t('resource.errors.resourceNotFound'),
+          'RESOURCE_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      const path: ResourceMetaDto[] = [resource];
+      while (last(path).id != share.resourceId) {
+        const parentId = last(path).parentId;
+        if (!parentId || !resourceMap.has(parentId)) {
+          throw new AppException(
+            this.i18n.t('resource.errors.resourceNotFound'),
+            'RESOURCE_NOT_FOUND',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+        path.push(resourceMap.get(parentId)!);
+      }
+      pathMap.set(resourceId, path.reverse());
+    }
+
+    return pathMap;
+  }
+
   async getSharedResourceChildren(
     share: Share,
     resourceId: string,
@@ -78,24 +123,31 @@ export class SharedResourcesService {
     if (!share.allResources) {
       return [];
     }
+
     const children = await this.resourcesService.getChildren(
       share.namespaceId,
       [resource.id],
     );
-    const childMetas = children.map((r) => ResourceMetaDto.fromEntity(r));
-    const resourceMetas: SharedResourceMetaDto[] = [];
-    for (const child of childMetas) {
-      const subChildren = await this.resourcesService.getChildren(
-        share.namespaceId,
-        [child.id],
-      );
-      const meta = SharedResourceMetaDto.fromResourceMeta(
-        child,
-        subChildren.length > 0,
-      );
-      resourceMetas.push(meta);
+    if (children.length === 0) {
+      return [];
     }
-    return resourceMetas;
+
+    const subChildren = await this.resourcesService.getChildren(
+      share.namespaceId,
+      children.map((child) => child.id),
+    );
+    const parentIds = new Set(
+      subChildren
+        .map((child) => child.parentId)
+        .filter((parentId): parentId is string => parentId !== null),
+    );
+    return children.map((child) =>
+      SharedResourceMetaDto.fromResourceMeta(
+        share,
+        ResourceMetaDto.fromEntity(child),
+        parentIds.has(child.id),
+      ),
+    );
   }
 
   async getAndValidateResource(
@@ -115,6 +167,14 @@ export class SharedResourcesService {
       );
     }
     if (resource.id !== share.resourceId) {
+      if (!share.allResources) {
+        const message = this.i18n.t('resource.errors.resourceNotFound');
+        throw new AppException(
+          message,
+          'RESOURCE_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
       const parents = await this.resourcesService.getParentResourcesOrFail(
         share.namespaceId,
         resource.parentId,
@@ -131,25 +191,93 @@ export class SharedResourcesService {
     return resource;
   }
 
-  async getAllSharedResources(share: Share): Promise<SharedResourceMetaDto[]> {
-    const rootResource = await this.resourcesService.getResource(
-      share.namespaceId,
-      share.resourceId,
-    );
-    if (!rootResource) {
-      return [];
+  async getAndValidateResourceMeta(
+    share: Share,
+    resourceId: string,
+  ): Promise<SharedResourceMetaDto> {
+    const resource = await this.getAndValidateResource(share, resourceId);
+    let hasChildren = false;
+    if (share.allResources) {
+      const children = await this.resourcesService.getChildren(
+        share.namespaceId,
+        [resource.id],
+      );
+      hasChildren = children.length > 0;
     }
 
+    return SharedResourceMetaDto.fromResourceMeta(
+      share,
+      ResourceMetaDto.fromEntity(resource),
+      hasChildren,
+    );
+  }
+
+  async getAllSharedResources(share: Share): Promise<SharedResourceMetaDto[]> {
+    return await this.getAllSubResources(share, share.resourceId);
+  }
+
+  async getAllSubResources(
+    share: Share,
+    parentId: string,
+  ): Promise<SharedResourceMetaDto[]> {
+    const parent = await this.getAndValidateResourceMeta(share, parentId);
+    if (!parent) {
+      return [];
+    }
     const subResources = share.allResources
       ? await this.resourcesService.getAllSubResources(share.namespaceId, [
-          rootResource.id,
+          parent.id,
         ])
       : [];
+    const parentIdsWithChildren = new Set(
+      subResources
+        .map((resource) => resource.parentId)
+        .filter((parentId) => parentId !== null),
+    );
+    const subResMeta = subResources.map((r) =>
+      SharedResourceMetaDto.fromResourceMeta(
+        share,
+        r,
+        parentIdsWithChildren.has(r.id),
+      ),
+    );
+    return [parent, ...subResMeta];
+  }
 
-    const allResources = [
-      ResourceMetaDto.fromEntity(rootResource),
-      ...subResources,
-    ];
-    return allResources.map((r) => SharedResourceMetaDto.fromResourceMeta(r));
+  async resourceFilter(
+    share: Share,
+    rootResourceId: string,
+    options?: VFSResourceFilterOptionsDto,
+  ): Promise<{ resources: SharedResourceMetaDto[]; total: number }> {
+    const allResources = await this.getAllSubResources(share, rootResourceId);
+    const allResourceMap = new Map(
+      allResources.map((resource) => [resource.id, resource]),
+    );
+    const resourceIds = allResources.map((resource) => resource.id);
+    if (resourceIds.length === 0) {
+      return { resources: [], total: 0 };
+    }
+    let tagIds: string[] | undefined = undefined;
+    if (options?.tagPattern) {
+      const tagEntities = await this.tagService.findByPattern(
+        share.namespaceId,
+        options.tagPattern,
+      );
+      tagIds = tagEntities.map((tag) => tag.id);
+    }
+    const { resources, total } = await this.resourcesService.resourceFilter(
+      share.namespaceId,
+      resourceIds,
+      {
+        ...options,
+        tagIds,
+      },
+    );
+    return {
+      resources: resources
+        .map((resource) => allResourceMap.get(resource.id))
+        .filter((r) => r !== undefined),
+      total,
+    };
   }
 }

@@ -102,6 +102,8 @@ import { AddNotifications1776070800000 } from 'omniboxd/migrations/1776070800000
 import { VfsModule } from 'omniboxd/vfs/vfs.module';
 import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
 import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
+import { SharedVfsModule } from 'omniboxd/shared-vfs/shared-vfs.module';
+import { SharedResourceTagsModule } from 'omniboxd/shared-resource-tags/shared-resource-tags.module';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -191,6 +193,8 @@ export class AppModule implements NestModule {
         VfsModule,
         VfsTagsModule,
         VfsWizardModule,
+        SharedVfsModule,
+        SharedResourceTagsModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

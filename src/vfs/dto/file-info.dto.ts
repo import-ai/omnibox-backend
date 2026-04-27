@@ -7,6 +7,7 @@ import {
 import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { SpaceType } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
 
 export class FileInfoDto {
   id: string;
@@ -84,6 +85,21 @@ export class FileInfoDto {
     }
     dto.type = FileInfoDto.getType(resource.resourceType);
     dto.hasChildren = resource.hasChildren;
+    return dto;
+  }
+
+  static fromSharedResourceMetaDto(
+    resource: SharedResourceMetaDto,
+    parentId: string,
+    parentPath: string,
+  ): FileInfoDto {
+    const dto = new FileInfoDto();
+    dto.id = resource.id;
+    dto.parentId = parentId;
+    dto.name = FileInfoDto.getName(resource.name, resource.id);
+    dto.path = `${parentPath}/${dto.name}`;
+    dto.type = FileInfoDto.getType(resource.resourceType);
+    dto.hasChildren = resource.hasChildren ?? false;
     return dto;
   }
 }

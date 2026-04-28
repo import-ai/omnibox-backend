@@ -1,4 +1,10 @@
-import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+import {
+  MigrationInterface,
+  QueryRunner,
+  Table,
+  TableColumn,
+  TableIndex,
+} from 'typeorm';
 import { BaseColumns } from './base-columns';
 
 export class AddSmartFolders1776852000000 implements MigrationInterface {
@@ -6,6 +12,12 @@ export class AddSmartFolders1776852000000 implements MigrationInterface {
     await queryRunner.query(`
       ALTER TYPE resource_type ADD VALUE IF NOT EXISTS 'smart_folder';
     `);
+
+    const existingTable = await queryRunner.getTable('smart_folder_configs');
+    if (existingTable) {
+      await this.ensureOwnerScope(queryRunner, existingTable);
+      return;
+    }
 
     const table = new Table({
       name: 'smart_folder_configs',
@@ -83,6 +95,50 @@ export class AddSmartFolders1776852000000 implements MigrationInterface {
     });
 
     await queryRunner.createTable(table, true, true, true);
+  }
+
+  private async ensureOwnerScope(
+    queryRunner: QueryRunner,
+    table: Table,
+  ): Promise<void> {
+    if (!table.findColumnByName('owner_scope')) {
+      await queryRunner.addColumn(
+        'smart_folder_configs',
+        new TableColumn({
+          name: 'owner_scope',
+          type: 'character varying',
+          isNullable: false,
+          default: "'private'",
+        }),
+      );
+
+      await queryRunner.query(`
+        UPDATE smart_folder_configs
+        SET owner_scope = root_scope
+        WHERE root_scope IN ('private', 'teamspace');
+      `);
+    }
+
+    const oldIndex = table.indices.find(
+      (index) => index.name === 'idx_smart_folder_configs_owner_root',
+    );
+    if (oldIndex) {
+      await queryRunner.dropIndex('smart_folder_configs', oldIndex);
+    }
+
+    const refreshedTable = await queryRunner.getTable('smart_folder_configs');
+    const hasOwnerScopeIndex = refreshedTable?.indices.some(
+      (index) => index.name === 'idx_smart_folder_configs_owner_scope',
+    );
+    if (!hasOwnerScopeIndex) {
+      await queryRunner.createIndex(
+        'smart_folder_configs',
+        new TableIndex({
+          name: 'idx_smart_folder_configs_owner_scope',
+          columnNames: ['namespace_id', 'owner_user_id', 'owner_scope'],
+        }),
+      );
+    }
   }
 
   public down(): Promise<void> {

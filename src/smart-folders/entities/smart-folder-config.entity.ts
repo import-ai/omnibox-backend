@@ -4,6 +4,12 @@ import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
 export enum SmartFolderRootScope {
   PRIVATE = 'private',
   TEAMSPACE = 'teamspace',
+  ALL = 'all',
+}
+
+export enum SmartFolderOwnerScope {
+  PRIVATE = 'private',
+  TEAMSPACE = 'teamspace',
 }
 
 export enum SmartFolderMatchMode {
@@ -60,7 +66,7 @@ export interface SmartFolderCondition {
 
 @Entity('smart_folder_configs')
 @Index(['namespaceId', 'rootScope'])
-@Index(['namespaceId', 'ownerUserId', 'rootScope'])
+@Index(['namespaceId', 'ownerUserId', 'ownerScope'])
 export class SmartFolderConfig extends Base {
   @PrimaryColumn()
   resourceId: string;
@@ -70,6 +76,12 @@ export class SmartFolderConfig extends Base {
 
   @Column('uuid', { nullable: true })
   ownerUserId: string | null;
+
+  @Column('enum', {
+    enum: SmartFolderOwnerScope,
+    default: SmartFolderOwnerScope.PRIVATE,
+  })
+  ownerScope: SmartFolderOwnerScope;
 
   @Column('enum', { enum: SmartFolderRootScope })
   rootScope: SmartFolderRootScope;

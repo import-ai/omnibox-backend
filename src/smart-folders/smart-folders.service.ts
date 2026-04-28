@@ -17,6 +17,7 @@ import {
   SmartFolderConfig,
   SmartFolderMatchMode,
   SmartFolderOperator,
+  SmartFolderOwnerScope,
   SmartFolderRootScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import {
@@ -56,12 +57,16 @@ export class SmartFoldersService {
   ): Promise<SmartFolderResponseDto> {
     const conditions = this.ruleService.normalize(dto.conditions);
     const matchMode = dto.matchMode ?? SmartFolderMatchMode.ALL;
+    const ownerScope = dto.ownerScope ?? SmartFolderOwnerScope.PRIVATE;
+    const rootScope = dto.rootScope;
+    this.assertValidScope(ownerScope, rootScope);
     await this.assertEntitlements(
       namespaceId,
       userId,
-      dto.rootScope,
+      ownerScope,
       conditions.length,
     );
+    const parentId = await this.getOwnerRootId(userId, namespaceId, ownerScope);
 
     const resource = await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
@@ -70,7 +75,7 @@ export class SmartFoldersService {
         namespaceId,
         {
           name: dto.name,
-          parentId: dto.parentId,
+          parentId,
           resourceType: ResourceType.SMART_FOLDER,
           content: '',
           attrs: {},
@@ -84,7 +89,8 @@ export class SmartFoldersService {
           resourceId: createdResource.id,
           namespaceId,
           ownerUserId: userId,
-          rootScope: dto.rootScope,
+          ownerScope,
+          rootScope,
           matchMode,
           conditions,
         }),
@@ -218,21 +224,31 @@ export class SmartFoldersService {
     rootScope: SmartFolderRootScope,
     visibleResourceIds: string[],
   ): Promise<Set<string>> {
-    const rootResourceId =
-      rootScope === SmartFolderRootScope.PRIVATE
-        ? await this.namespacesService.getPrivateRootId(userId, namespaceId)
-        : (await this.namespacesService.getTeamspaceRoot(namespaceId)).id;
-    const scopedResources = await this.resourcesService.getAllSubResources(
-      namespaceId,
-      [rootResourceId],
-    );
+    const scopes: Array<
+      SmartFolderRootScope.PRIVATE | SmartFolderRootScope.TEAMSPACE
+    > =
+      rootScope === SmartFolderRootScope.ALL
+        ? [SmartFolderRootScope.PRIVATE, SmartFolderRootScope.TEAMSPACE]
+        : [rootScope];
+    const scopedVisibleResourceIds = new Set<string>();
 
-    const scopedVisibleResourceIds = new Set<string>([rootResourceId]);
-    const visibleResourceIdSet = new Set(visibleResourceIds);
+    for (const scope of scopes) {
+      const rootResourceId = await this.getOwnerRootId(
+        userId,
+        namespaceId,
+        scope,
+      );
+      const scopedResources = await this.resourcesService.getAllSubResources(
+        namespaceId,
+        [rootResourceId],
+      );
+      const visibleResourceIdSet = new Set(visibleResourceIds);
+      scopedVisibleResourceIds.add(rootResourceId);
 
-    for (const resource of scopedResources) {
-      if (visibleResourceIdSet.has(resource.id)) {
-        scopedVisibleResourceIds.add(resource.id);
+      for (const resource of scopedResources) {
+        if (visibleResourceIdSet.has(resource.id)) {
+          scopedVisibleResourceIds.add(resource.id);
+        }
       }
     }
 
@@ -252,16 +268,45 @@ export class SmartFoldersService {
       dto.conditions === undefined
         ? config.conditions
         : this.ruleService.normalize(dto.conditions);
-    await this.assertRuleLimit(namespaceId, userId, conditions.length);
+    const ownerScope = dto.ownerScope ?? config.ownerScope;
+    const rootScope = dto.rootScope ?? config.rootScope;
+    this.assertValidScope(ownerScope, rootScope);
+    if (dto.ownerScope !== undefined && dto.ownerScope !== config.ownerScope) {
+      await this.assertEntitlements(
+        namespaceId,
+        userId,
+        ownerScope,
+        conditions.length,
+      );
+    } else {
+      await this.assertRuleLimit(namespaceId, userId, conditions.length);
+    }
 
     await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
+      const resourceUpdates: { name?: string; parentId?: string } = {};
+
       if (dto.name !== undefined) {
+        resourceUpdates.name = dto.name;
+      }
+
+      if (
+        dto.ownerScope !== undefined &&
+        dto.ownerScope !== config.ownerScope
+      ) {
+        resourceUpdates.parentId = await this.getOwnerRootId(
+          userId,
+          namespaceId,
+          ownerScope,
+        );
+      }
+
+      if (Object.keys(resourceUpdates).length > 0) {
         await this.namespaceResourcesService.update(
           namespaceId,
           userId,
           resourceId,
-          { name: dto.name },
+          resourceUpdates,
         );
       }
 
@@ -269,6 +314,8 @@ export class SmartFoldersService {
         SmartFolderConfig,
         { resourceId, namespaceId },
         {
+          ownerScope,
+          rootScope,
           matchMode: dto.matchMode ?? config.matchMode,
           conditions,
         },
@@ -292,26 +339,46 @@ export class SmartFoldersService {
     );
   }
 
-  private async assertEntitlements(
-    namespaceId: string,
-    userId: string,
+  private assertValidScope(
+    ownerScope: SmartFolderOwnerScope,
     rootScope: SmartFolderRootScope,
-    ruleCount: number,
-  ): Promise<void> {
-    const entitlements = await this.entitlementsProvider.getEntitlements(
-      namespaceId,
-      userId,
-    );
-    if (ruleCount > entitlements.ruleLimit) {
+  ): void {
+    if (
+      ownerScope === SmartFolderOwnerScope.TEAMSPACE &&
+      rootScope !== SmartFolderRootScope.TEAMSPACE
+    ) {
       throw new AppException(
-        'Smart folder rule limit exceeded',
-        'SMART_FOLDER_RULE_LIMIT_EXCEEDED',
+        'Team smart folder can only filter teamspace resources',
+        'SMART_FOLDER_SCOPE_INVALID',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
+  }
+
+  private async getOwnerRootId(
+    userId: string,
+    namespaceId: string,
+    scope: 'private' | 'teamspace',
+  ): Promise<string> {
+    return scope === 'private'
+      ? await this.namespacesService.getPrivateRootId(userId, namespaceId)
+      : (await this.namespacesService.getTeamspaceRoot(namespaceId)).id;
+  }
+
+  private async assertEntitlements(
+    namespaceId: string,
+    userId: string,
+    ownerScope: SmartFolderOwnerScope,
+    ruleCount: number,
+  ): Promise<void> {
+    const entitlements = await this.assertRuleLimit(
+      namespaceId,
+      userId,
+      ruleCount,
+    );
 
     const limit =
-      rootScope === SmartFolderRootScope.PRIVATE
+      ownerScope === SmartFolderOwnerScope.PRIVATE
         ? entitlements.privateLimit
         : entitlements.teamLimit;
     // A negative limit is treated as unlimited.
@@ -319,7 +386,7 @@ export class SmartFoldersService {
       return;
     }
 
-    const count = await this.countActive(namespaceId, userId, rootScope);
+    const count = await this.countActive(namespaceId, userId, ownerScope);
     if (count >= limit) {
       throw new AppException(
         'Smart folder quota exceeded',
@@ -333,7 +400,7 @@ export class SmartFoldersService {
     namespaceId: string,
     userId: string,
     ruleCount: number,
-  ): Promise<void> {
+  ) {
     const entitlements = await this.entitlementsProvider.getEntitlements(
       namespaceId,
       userId,
@@ -345,21 +412,22 @@ export class SmartFoldersService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
+    return entitlements;
   }
 
   private async countActive(
     namespaceId: string,
     userId: string,
-    rootScope: SmartFolderRootScope,
+    ownerScope: SmartFolderOwnerScope,
   ): Promise<number> {
     const queryBuilder = this.smartFolderConfigRepository
       .createQueryBuilder('config')
       .innerJoin('resources', 'resource', 'resource.id = config.resource_id')
       .where('config.namespace_id = :namespaceId', { namespaceId })
-      .andWhere('config.root_scope = :rootScope', { rootScope })
+      .andWhere('config.owner_scope = :ownerScope', { ownerScope })
       .andWhere('resource.deleted_at IS NULL');
 
-    if (rootScope === SmartFolderRootScope.PRIVATE) {
+    if (ownerScope === SmartFolderOwnerScope.PRIVATE) {
       queryBuilder.andWhere('config.owner_user_id = :userId', { userId });
     }
 

@@ -10,6 +10,7 @@ import { i18nValidationMessage } from 'nestjs-i18n';
 import {
   SmartFolderCondition,
   SmartFolderMatchMode,
+  SmartFolderOwnerScope,
   SmartFolderRootScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 
@@ -25,13 +26,20 @@ export class CreateSmartFolderRequestDto {
   })
   name: string;
 
+  @IsOptional()
   @IsString({
     message: i18nValidationMessage('validation.errors.parentId.isString'),
   })
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.parentId.isNotEmpty'),
   })
-  parentId: string;
+  parentId?: string;
+
+  @IsOptional()
+  @IsEnum(SmartFolderOwnerScope, {
+    message: i18nValidationMessage('validation.errors.isEnum'),
+  })
+  ownerScope?: SmartFolderOwnerScope;
 
   @IsEnum(SmartFolderRootScope, {
     message: i18nValidationMessage('validation.errors.isEnum'),

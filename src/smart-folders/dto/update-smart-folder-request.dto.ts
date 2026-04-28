@@ -9,6 +9,8 @@ import { i18nValidationMessage } from 'nestjs-i18n';
 import {
   SmartFolderCondition,
   SmartFolderMatchMode,
+  SmartFolderOwnerScope,
+  SmartFolderRootScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 
 export class UpdateSmartFolderRequestDto {
@@ -26,6 +28,18 @@ export class UpdateSmartFolderRequestDto {
     message: i18nValidationMessage('validation.errors.isEnum'),
   })
   matchMode?: SmartFolderMatchMode;
+
+  @IsOptional()
+  @IsEnum(SmartFolderOwnerScope, {
+    message: i18nValidationMessage('validation.errors.isEnum'),
+  })
+  ownerScope?: SmartFolderOwnerScope;
+
+  @IsOptional()
+  @IsEnum(SmartFolderRootScope, {
+    message: i18nValidationMessage('validation.errors.isEnum'),
+  })
+  rootScope?: SmartFolderRootScope;
 
   @IsOptional()
   @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })

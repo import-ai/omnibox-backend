@@ -3,11 +3,13 @@ import {
   SmartFolderCondition,
   SmartFolderConfig,
   SmartFolderMatchMode,
+  SmartFolderOwnerScope,
   SmartFolderRootScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 
 export class SmartFolderResponseDto {
   resource: ResourceDto;
+  ownerScope: SmartFolderOwnerScope;
   rootScope: SmartFolderRootScope;
   matchMode: SmartFolderMatchMode;
   conditions: SmartFolderCondition[];
@@ -20,6 +22,7 @@ export class SmartFolderResponseDto {
   }): SmartFolderResponseDto {
     const dto = new SmartFolderResponseDto();
     dto.resource = params.resource;
+    dto.ownerScope = params.config.ownerScope;
     dto.rootScope = params.config.rootScope;
     dto.matchMode = params.config.matchMode;
     dto.conditions = params.config.conditions;

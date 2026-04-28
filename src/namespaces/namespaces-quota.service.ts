@@ -12,6 +12,9 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
   fileUploadSizeLimit: 20 * 1024 * 1024, // 20MB
   trashRetentionDays: 7,
   readonly: false,
+  smartFolderPrivateLimit: 1,
+  smartFolderTeamLimit: 1,
+  smartFolderRuleLimit: 3,
 };
 
 @Injectable()

@@ -21,4 +21,13 @@ export class NamespaceUsageDto {
 
   @Expose({ name: 'readonly' })
   readonly: boolean;
+
+  @Expose({ name: 'smart_folder_private_limit' })
+  smartFolderPrivateLimit?: number;
+
+  @Expose({ name: 'smart_folder_team_limit' })
+  smartFolderTeamLimit?: number;
+
+  @Expose({ name: 'smart_folder_rule_limit' })
+  smartFolderRuleLimit?: number;
 }

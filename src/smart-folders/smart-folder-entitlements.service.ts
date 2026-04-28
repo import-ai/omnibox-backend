@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import {
   SmartFolderConfig,
   SmartFolderRootScope,
@@ -23,6 +24,7 @@ export class SmartFolderEntitlementsService implements ISmartFolderEntitlementsP
   constructor(
     @InjectRepository(SmartFolderConfig)
     private readonly smartFolderConfigRepository: Repository<SmartFolderConfig>,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
   ) {}
 
   async getEntitlements(
@@ -34,10 +36,24 @@ export class SmartFolderEntitlementsService implements ISmartFolderEntitlementsP
       this.countActive(namespaceId, userId, SmartFolderRootScope.TEAMSPACE),
     ]);
 
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+
+    const privateLimit =
+      usage.smartFolderPrivateLimit ?? DEFAULT_ENTITLEMENTS.privateLimit;
+    const teamLimit =
+      usage.smartFolderTeamLimit ?? DEFAULT_ENTITLEMENTS.teamLimit;
+    const ruleLimit =
+      usage.smartFolderRuleLimit ?? DEFAULT_ENTITLEMENTS.ruleLimit;
+
     return SmartFolderEntitlementsResponseDto.fromValues({
-      ...DEFAULT_ENTITLEMENTS,
+      tier: ruleLimit > DEFAULT_ENTITLEMENTS.ruleLimit ? 'premium' : 'basic',
+      privateLimit,
+      teamLimit,
+      trashRetentionDays: usage.trashRetentionDays,
       privateUsed,
       teamUsed,
+      ruleLimit,
     });
   }
 

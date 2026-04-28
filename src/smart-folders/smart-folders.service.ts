@@ -56,6 +56,7 @@ export class SmartFoldersService {
     dto: CreateSmartFolderRequestDto,
   ): Promise<SmartFolderResponseDto> {
     const conditions = this.ruleService.normalize(dto.conditions);
+
     const matchMode = dto.matchMode ?? SmartFolderMatchMode.ALL;
     const ownerScope = dto.ownerScope ?? SmartFolderOwnerScope.PRIVATE;
     const rootScope = dto.rootScope;
@@ -66,6 +67,7 @@ export class SmartFoldersService {
       ownerScope,
       conditions.length,
     );
+
     const parentId = await this.getOwnerRootId(userId, namespaceId, ownerScope);
 
     const resource = await transaction(this.dataSource.manager, async (tx) => {

@@ -12,9 +12,10 @@ import { InternalWizardTasksController } from 'omniboxd/tasks/internal.wizard-ta
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { TasksCronService } from 'omniboxd/tasks/tasks.cron.service';
 
 @Module({
-  providers: [TasksService, WizardTaskService],
+  providers: [TasksService, WizardTaskService, TasksCronService],
   imports: [
     TypeOrmModule.forFeature([Task]),
     UserModule,

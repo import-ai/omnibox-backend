@@ -40,7 +40,7 @@ export class TasksCronService {
     }
   }
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_10_SECONDS)
   @Span('TasksCronService.logOldestPendingOrRunningTask')
   async logOldestPendingOrRunningTask(): Promise<void> {
     const span = trace.getActiveSpan();

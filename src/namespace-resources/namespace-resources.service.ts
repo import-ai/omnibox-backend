@@ -1136,8 +1136,9 @@ export class NamespaceResourcesService {
       .getCount();
 
     if (count >= limit) {
+      const message = this.i18n.t('resource.errors.smartFolderQuotaExhausted');
       throw new AppException(
-        'Smart folder quota exceeded',
+        message,
         'SMART_FOLDER_QUOTA_EXCEEDED',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );

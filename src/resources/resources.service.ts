@@ -219,6 +219,7 @@ export class ResourcesService {
     namespaceId: string,
     resourceIds: string[],
     entityManager?: EntityManager,
+    includeDeleted: boolean = false,
   ): Promise<Map<string, ResourceMetaDto>> {
     if (resourceIds.length === 0) {
       return new Map();
@@ -241,6 +242,7 @@ export class ResourcesService {
         'createdAt',
         'updatedAt',
       ],
+      ...(includeDeleted ? { withDeleted: true } : {}),
       where: { namespaceId, id: In(resourceIds) },
     });
 
@@ -276,6 +278,7 @@ export class ResourcesService {
     namespaceId: string,
     resourceIds: string[],
     entityManager?: EntityManager,
+    includeDeleted: boolean = false,
   ): Promise<Map<string, ResourceMetaDto>> {
     const resourceMap: Map<string, ResourceMetaDto> = new Map();
     while (resourceIds.length > 0) {
@@ -283,6 +286,7 @@ export class ResourcesService {
         namespaceId,
         resourceIds,
         entityManager,
+        includeDeleted,
       );
 
       for (const resource of resources.values()) {

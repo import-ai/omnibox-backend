@@ -1177,7 +1177,28 @@ export class NamespaceResourcesService {
       { search, limit, offset },
     );
 
-    const trashItems = items.map((resource) =>
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      items.map((resource) => resource.id),
+      undefined,
+      true,
+    );
+
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+
+    const filteredItems = items.filter((resource) => {
+      const permission = permissionMap.get(resource.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
+      );
+    });
+
+    const trashItems = filteredItems.map((resource) =>
       TrashItemDto.fromEntity(resource, false),
     );
 

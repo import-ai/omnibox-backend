@@ -11,6 +11,7 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
   taskParallelism: 1,
   fileUploadSizeLimit: 20 * 1024 * 1024, // 20MB
   trashRetentionDays: 7,
+  resourceRevisionLimit: 3,
   readonly: false,
 };
 
@@ -37,7 +38,8 @@ export class NamespacesQuotaService {
       );
     }
     const data = await response.json();
-    return plainToInstance(NamespaceUsageDto, data);
+    const usage = plainToInstance(NamespaceUsageDto, data);
+    return { ...DEFAULT_USAGE, ...usage };
   }
 
   async isNamespaceReadonly(namespaceId: string): Promise<boolean> {

@@ -19,6 +19,9 @@ export class NamespaceUsageDto {
   @Expose({ name: 'trash_retention_days' })
   trashRetentionDays: number;
 
+  @Expose({ name: 'resource_revision_limit' })
+  resourceRevisionLimit: number;
+
   @Expose({ name: 'readonly' })
   readonly: boolean;
 }

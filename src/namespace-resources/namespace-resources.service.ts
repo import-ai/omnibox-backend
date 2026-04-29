@@ -48,6 +48,9 @@ import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
+import { ResourceRevisionDto } from './dto/resource-revision.dto';
+import { ResourceRevisionsService } from 'omniboxd/resources/resource-revisions.service';
+import { ResourceRevisionRestoreService } from 'omniboxd/resources/resource-revision-restore.service';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -62,6 +65,8 @@ export class NamespaceResourcesService {
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly resourcesService: ResourcesService,
+    private readonly resourceRevisionsService: ResourceRevisionsService,
+    private readonly resourceRevisionRestoreService: ResourceRevisionRestoreService,
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
@@ -971,6 +976,35 @@ export class NamespaceResourcesService {
       undefined,
       autoRenameOnConflict,
     );
+  }
+
+  async listRevisions(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<ResourceRevisionDto[]> {
+    await this.resourcesService.getResourceOrFail(namespaceId, resourceId);
+    const revisions = await this.resourceRevisionsService.listRevisions(
+      namespaceId,
+      resourceId,
+    );
+    return revisions.map((revision) =>
+      ResourceRevisionDto.fromEntity(revision),
+    );
+  }
+
+  async restoreRevision(
+    namespaceId: string,
+    userId: string,
+    resourceId: string,
+    revisionId: string,
+  ): Promise<ResourceDto> {
+    await this.resourceRevisionRestoreService.restoreRevision(
+      namespaceId,
+      resourceId,
+      revisionId,
+      userId,
+    );
+    return await this.getResource({ namespaceId, userId, resourceId });
   }
 
   async delete(userId: string, namespaceId: string, id: string) {

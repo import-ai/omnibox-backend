@@ -27,6 +27,7 @@ import {
   sanitizeResourceName,
   generateUniqueResourceName,
 } from 'omniboxd/utils/sanitize-resource-name';
+import { ResourceRevisionsService } from './resource-revisions.service';
 
 const TASK_PRIORITY = 5;
 
@@ -41,6 +42,7 @@ export class ResourcesService {
     private readonly i18n: I18nService,
     private readonly filesService: FilesService,
     private readonly storageUsagesService: StorageUsagesService,
+    private readonly resourceRevisionsService: ResourceRevisionsService,
   ) {}
 
   private validateResourceName(
@@ -727,6 +729,17 @@ export class ResourcesService {
       updatedProps.content !== undefined
         ? Buffer.byteLength(updatedProps.content, 'utf8')
         : undefined;
+
+    await this.resourceRevisionsService.createForUpdate(
+      oldResource,
+      {
+        name: updatedProps.name,
+        content: updatedProps.content,
+        tagIds: updatedProps.tagIds,
+      },
+      userId,
+      tx,
+    );
 
     await repo.update(
       { namespaceId, id: resourceId },

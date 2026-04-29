@@ -1,6 +1,10 @@
 import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
+import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
+import { bigintStringToNumber } from 'omniboxd/utils/bigint-utils';
 
 describe('ResourcesController (e2e)', () => {
   let client: TestClient;
@@ -387,6 +391,242 @@ describe('ResourcesController (e2e)', () => {
         )
         .send(updateData)
         .expect(HttpStatus.NOT_FOUND);
+    });
+  });
+
+  describe('resource revisions', () => {
+    const quotaUsage = {
+      storageQuota: 0,
+      storageUsage: 0,
+      taskPriority: 1,
+      taskParallelism: 1,
+      fileUploadSizeLimit: 20 * 1024 * 1024,
+      trashRetentionDays: 7,
+      resourceRevisionLimit: 7,
+      readonly: false,
+    };
+
+    let quotaSpy: jest.SpyInstance | undefined;
+
+    afterEach(() => {
+      quotaSpy?.mockRestore();
+      quotaSpy = undefined;
+    });
+
+    async function createRevisionResource(content = 'Original content') {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Revision Resource'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content,
+          tag_ids: [],
+          attrs: { version: 'initial' },
+        })
+        .expect(HttpStatus.CREATED);
+      return response.body;
+    }
+
+    it('should create revisions for tracked fields and skip unchanged updates', async () => {
+      quotaSpy = jest
+        .spyOn(client.app.get(NamespacesQuotaService), 'getNamespaceUsage')
+        .mockResolvedValue(quotaUsage);
+
+      const resource = await createRevisionResource();
+      const tagIds = await client.createTags([uniqueName('revision tag')]);
+
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ namespaceId: client.namespace.id, content: 'Content v1' })
+        .expect(HttpStatus.OK);
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ namespaceId: client.namespace.id, name: 'Revision Name v2' })
+        .expect(HttpStatus.OK);
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ namespaceId: client.namespace.id, tag_ids: tagIds })
+        .expect(HttpStatus.OK);
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ namespaceId: client.namespace.id, tag_ids: tagIds })
+        .expect(HttpStatus.OK);
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ namespaceId: client.namespace.id, attrs: { version: 'v2' } })
+        .expect(HttpStatus.OK);
+
+      const revisions = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(revisions.body).toHaveLength(3);
+      expect(revisions.body[0].tag_ids).toEqual([]);
+      expect(revisions.body[0]).not.toHaveProperty('attrs');
+      expect(revisions.body[1].name).toBe(resource.name);
+      expect(revisions.body[2].content).toBe('Original content');
+    });
+
+    it('should keep only the latest 3 revisions by default', async () => {
+      const resource = await createRevisionResource('Default v0');
+
+      for (let i = 1; i <= 5; i++) {
+        await client
+          .patch(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+          )
+          .send({ namespaceId: client.namespace.id, content: `Default v${i}` })
+          .expect(HttpStatus.OK);
+      }
+
+      const revisions = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(revisions.body).toHaveLength(3);
+      expect(revisions.body.map((revision) => revision.content)).toEqual([
+        'Default v4',
+        'Default v3',
+        'Default v2',
+      ]);
+    });
+
+    it('should keep 7 revisions when namespace usage allows it', async () => {
+      quotaSpy = jest
+        .spyOn(client.app.get(NamespacesQuotaService), 'getNamespaceUsage')
+        .mockResolvedValue(quotaUsage);
+
+      const resource = await createRevisionResource('Pro v0');
+      for (let i = 1; i <= 9; i++) {
+        await client
+          .patch(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+          )
+          .send({ namespaceId: client.namespace.id, content: `Pro v${i}` })
+          .expect(HttpStatus.OK);
+      }
+
+      const revisions = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(revisions.body).toHaveLength(7);
+      expect(revisions.body.map((revision) => revision.content)).toEqual([
+        'Pro v8',
+        'Pro v7',
+        'Pro v6',
+        'Pro v5',
+        'Pro v4',
+        'Pro v3',
+        'Pro v2',
+      ]);
+    });
+
+    it('should restore a revision and keep an undo revision', async () => {
+      const storageUsagesService = client.app.get(StorageUsagesService);
+      const originalContent = 'short';
+      const updatedContent = 'a longer content value';
+      const resource = await createRevisionResource(originalContent);
+
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ namespaceId: client.namespace.id, content: updatedContent })
+        .expect(HttpStatus.OK);
+
+      const revisions = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions`,
+        )
+        .expect(HttpStatus.OK);
+      const usageBefore = await storageUsagesService.getUsage(
+        client.namespace.id,
+        client.user.id,
+        StorageType.CONTENT,
+      );
+
+      const restored = await client
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions/${revisions.body[0].id}/restore`,
+        )
+        .expect(HttpStatus.CREATED);
+
+      const usageAfter = await storageUsagesService.getUsage(
+        client.namespace.id,
+        client.user.id,
+        StorageType.CONTENT,
+      );
+      const expectedDiff =
+        Buffer.byteLength(originalContent, 'utf8') -
+        Buffer.byteLength(updatedContent, 'utf8');
+
+      expect(restored.body.content).toBe(originalContent);
+      expect(
+        bigintStringToNumber(usageAfter!.amount) -
+          bigintStringToNumber(usageBefore!.amount),
+      ).toBe(expectedDiff);
+
+      const afterRestore = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions`,
+        )
+        .expect(HttpStatus.OK);
+      expect(afterRestore.body[0].content).toBe(updatedContent);
+    });
+
+    it('should enforce edit permission and namespace readonly checks', async () => {
+      const resource = await createRevisionResource('Permission v0');
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ namespaceId: client.namespace.id, content: 'Permission v1' })
+        .expect(HttpStatus.OK);
+
+      const revisions = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions`,
+        )
+        .expect(HttpStatus.OK);
+
+      const secondClient = await TestClient.create();
+      try {
+        await secondClient
+          .get(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions`,
+          )
+          .expect(HttpStatus.FORBIDDEN);
+
+        quotaSpy = jest
+          .spyOn(client.app.get(NamespacesQuotaService), 'isNamespaceReadonly')
+          .mockResolvedValue(true);
+        await client
+          .post(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/revisions/${revisions.body[0].id}/restore`,
+          )
+          .expect(HttpStatus.FORBIDDEN);
+      } finally {
+        await secondClient.close();
+      }
     });
   });
 

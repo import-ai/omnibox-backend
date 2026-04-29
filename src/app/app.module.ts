@@ -100,6 +100,7 @@ import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url
 import { NotificationsModule } from 'omniboxd/notifications/notifications.module';
 import { AddNotifications1776070800000 } from 'omniboxd/migrations/1776070800000-add-notifications';
 import { AddStatusEnqueuedIndexToTasks1776071000000 } from 'omniboxd/migrations/1776071000000-add-status-enqueued-index-to-tasks';
+import { AddResourceRevisions1777437989199 } from 'omniboxd/migrations/1777437989199-add-resource-revisions';
 import { VfsModule } from 'omniboxd/vfs/vfs.module';
 import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
 import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
@@ -266,6 +267,7 @@ export class AppModule implements NestModule {
               AddNotifications1776070800000,
               AddStatusEnqueuedIndexToTasks1776071000000,
               DeduplicateResourceNames1775666229211,
+              AddResourceRevisions1777437989199,
               ...extraMigrations,
             ],
             migrationsRun: true,

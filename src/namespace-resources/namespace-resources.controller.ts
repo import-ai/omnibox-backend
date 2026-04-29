@@ -22,6 +22,8 @@ import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { ResourceRevisionDto } from './dto/resource-revision.dto';
+import { ResourceDto } from './dto/resource.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -29,6 +31,24 @@ export class NamespaceResourcesController {
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly permissionsService: PermissionsService,
   ) {}
+
+  private async ensureCanEdit(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    i18n: I18nContext,
+  ): Promise<void> {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (!hasPermission) {
+      const message = i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+  }
 
   @Get()
   async findById(
@@ -220,6 +240,38 @@ export class NamespaceResourcesController {
     );
   }
 
+  @Get(':resourceId/revisions')
+  async listRevisions(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @I18n() i18n: I18nContext,
+  ): Promise<ResourceRevisionDto[]> {
+    await this.ensureCanEdit(namespaceId, resourceId, userId, i18n);
+    return await this.namespaceResourcesService.listRevisions(
+      namespaceId,
+      resourceId,
+    );
+  }
+
+  @Post(':resourceId/revisions/:revisionId/restore')
+  @CheckNamespaceReadonly()
+  async restoreRevision(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('revisionId') revisionId: string,
+    @I18n() i18n: I18nContext,
+  ): Promise<ResourceDto> {
+    await this.ensureCanEdit(namespaceId, resourceId, userId, i18n);
+    return await this.namespaceResourcesService.restoreRevision(
+      namespaceId,
+      userId,
+      resourceId,
+      revisionId,
+    );
+  }
+
   @Get(':resourceId')
   async get(
     @UserId() userId: string,
@@ -255,16 +307,7 @@ export class NamespaceResourcesController {
     @Body() data: UpdateResourceDto,
     @I18n() i18n: I18nContext,
   ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
-      namespaceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    if (!hasPermission) {
-      const message = i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
+    await this.ensureCanEdit(namespaceId, resourceId, userId, i18n);
     await this.namespaceResourcesService.update(
       namespaceId,
       userId,
@@ -285,16 +328,7 @@ export class NamespaceResourcesController {
     @Param('resourceId') resourceId: string,
     @I18n() i18n: I18nContext,
   ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
-      namespaceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    if (!hasPermission) {
-      const message = i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
+    await this.ensureCanEdit(namespaceId, resourceId, userId, i18n);
     return await this.namespaceResourcesService.delete(
       userId,
       namespaceId,

@@ -16,7 +16,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { Inject, Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { S3Service } from 'omniboxd/s3/s3.service';
@@ -48,6 +48,14 @@ import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
+import {
+  SmartFolderConfig,
+  SmartFolderOwnerScope,
+} from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import {
+  ISmartFolderEntitlementsProvider,
+  SMART_FOLDER_ENTITLEMENTS_PROVIDER,
+} from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -65,6 +73,8 @@ export class NamespaceResourcesService {
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    @Inject(SMART_FOLDER_ENTITLEMENTS_PROVIDER)
+    private readonly entitlementsProvider: ISmartFolderEntitlementsProvider,
   ) {}
 
   private async getTagsByIds(
@@ -1014,6 +1024,15 @@ export class NamespaceResourcesService {
       );
     }
 
+    // Check smart folder quota before restoring
+    if (resource.resourceType === ResourceType.SMART_FOLDER) {
+      await this.assertSmartFolderRestoreEntitlements(
+        namespaceId,
+        userId,
+        resourceId,
+      );
+    }
+
     // Check if parent is deleted, if so restore to root
     const isParentDeleted = await this.resourcesService.isParentDeleted(
       namespaceId,
@@ -1076,6 +1095,53 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
+  }
+
+  private async assertSmartFolderRestoreEntitlements(
+    namespaceId: string,
+    userId: string,
+    resourceId: string,
+  ): Promise<void> {
+    const config = await this.dataSource
+      .getRepository(SmartFolderConfig)
+      .findOne({
+        where: { resourceId },
+      });
+    if (!config) return;
+
+    const ownerScope = config.ownerScope || SmartFolderOwnerScope.PRIVATE;
+    const entitlements = await this.entitlementsProvider.getEntitlements(
+      namespaceId,
+      userId,
+    );
+    const limit =
+      ownerScope === SmartFolderOwnerScope.PRIVATE
+        ? entitlements.privateLimit
+        : entitlements.teamLimit;
+    if (limit < 0) return;
+
+    const count = await this.dataSource
+      .getRepository(SmartFolderConfig)
+      .createQueryBuilder('config')
+      .innerJoin('resources', 'resource', 'resource.id = config.resource_id')
+      .where('config.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('config.owner_scope = :ownerScope', { ownerScope })
+      .andWhere('resource.deleted_at IS NULL')
+      .andWhere(
+        ownerScope === SmartFolderOwnerScope.PRIVATE
+          ? 'config.owner_user_id = :userId'
+          : '1=1',
+        ownerScope === SmartFolderOwnerScope.PRIVATE ? { userId } : {},
+      )
+      .getCount();
+
+    if (count >= limit) {
+      throw new AppException(
+        'Smart folder quota exceeded',
+        'SMART_FOLDER_QUOTA_EXCEEDED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
   }
 
   s3Path(resourceId: string) {

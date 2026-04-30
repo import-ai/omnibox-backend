@@ -1174,7 +1174,7 @@ export class NamespaceResourcesService {
     const { items, total } = await this.resourcesService.getDeletedResources(
       namespaceId,
       usage.trashRetentionDays,
-      { search, limit, offset },
+      { search },
     );
 
     const resourceMetaMap = await this.resourcesService.batchGetParentResources(
@@ -1190,13 +1190,15 @@ export class NamespaceResourcesService {
       [...resourceMetaMap.values()],
     );
 
-    const filteredItems = items.filter((resource) => {
-      const permission = permissionMap.get(resource.id);
-      return (
-        permission &&
-        comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
-      );
-    });
+    const filteredItems = items
+      .filter((resource) => {
+        const permission = permissionMap.get(resource.id);
+        return (
+          permission &&
+          comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
+        );
+      })
+      .slice(offset, offset + limit);
 
     const trashItems = filteredItems.map((resource) =>
       TrashItemDto.fromEntity(resource, false),

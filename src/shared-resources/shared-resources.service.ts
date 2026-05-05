@@ -2,11 +2,15 @@ import { Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { SharedResourceDto } from './dto/shared-resource.dto';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
@@ -17,6 +21,7 @@ import { last } from 'omniboxd/utils/arrays';
 export class SharedResourcesService {
   constructor(
     private readonly resourcesService: ResourcesService,
+    private readonly smartFoldersService: SmartFoldersService,
     private readonly tagService: TagService,
     private readonly i18n: I18nService,
   ) {}
@@ -120,8 +125,35 @@ export class SharedResourcesService {
     resourceId: string,
   ): Promise<SharedResourceMetaDto[]> {
     const resource = await this.getAndValidateResource(share, resourceId);
-    if (!share.allResources) {
+
+    if (
+      !share.allResources &&
+      resource.resourceType !== ResourceType.SMART_FOLDER
+    ) {
       return [];
+    }
+
+    if (resource.resourceType === ResourceType.SMART_FOLDER) {
+      const userId = share.userId!;
+      const children = await this.smartFoldersService.listChildren(
+        userId,
+        share.namespaceId,
+        resource.id,
+      );
+      return children.map((child) => {
+        const dto = new SharedResourceMetaDto();
+        dto.id = child.id;
+        dto.parentId = child.id === share.resourceId ? null : child.parentId;
+        dto.name = child.name;
+        dto.resourceType = child.resourceType;
+        dto.createdAt = child.createdAt;
+        dto.updatedAt = child.updatedAt;
+        dto.hasChildren = !!child.hasChildren;
+        dto.attrs = { ...child.attrs };
+        delete dto.attrs.transcript;
+        delete dto.attrs.video_info;
+        return dto;
+      });
     }
 
     const children = await this.resourcesService.getChildren(
@@ -167,6 +199,27 @@ export class SharedResourcesService {
       );
     }
     if (resource.id !== share.resourceId) {
+      const rootResource = await this.resourcesService.getResource(
+        share.namespaceId,
+        share.resourceId,
+      );
+      if (rootResource?.resourceType === ResourceType.SMART_FOLDER) {
+        const matched = await this.smartFoldersService.isResourceMatched(
+          share.userId!,
+          share.namespaceId,
+          share.resourceId,
+          resource.id,
+        );
+        if (matched) {
+          return resource;
+        }
+        const message = this.i18n.t('resource.errors.resourceNotFound');
+        throw new AppException(
+          message,
+          'RESOURCE_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
       if (!share.allResources) {
         const message = this.i18n.t('resource.errors.resourceNotFound');
         throw new AppException(
@@ -197,12 +250,26 @@ export class SharedResourcesService {
   ): Promise<SharedResourceMetaDto> {
     const resource = await this.getAndValidateResource(share, resourceId);
     let hasChildren = false;
-    if (share.allResources) {
-      const children = await this.resourcesService.getChildren(
-        share.namespaceId,
-        [resource.id],
-      );
-      hasChildren = children.length > 0;
+    if (
+      share.allResources ||
+      resource.resourceType === ResourceType.SMART_FOLDER
+    ) {
+      if (resource.resourceType === ResourceType.SMART_FOLDER) {
+        const userId = share.userId!;
+        const children = await this.smartFoldersService.listChildren(
+          userId,
+          share.namespaceId,
+          resource.id,
+          { limit: 1 },
+        );
+        hasChildren = children.length > 0;
+      } else {
+        const children = await this.resourcesService.getChildren(
+          share.namespaceId,
+          [resource.id],
+        );
+        hasChildren = children.length > 0;
+      }
     }
 
     return SharedResourceMetaDto.fromResourceMeta(

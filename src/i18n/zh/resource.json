@@ -19,6 +19,7 @@
     "cannotPermanentlyDeleteRoot": "无法永久删除根资源",
     "resourceNameContainsSlash": "资源名称不能包含 '/'",
     "resourceNameConflict": "资源名称在该目录下已存在",
-    "smartFolderQuotaExhausted": "智能文件夹额度已用尽，无法恢复，请清理或升级"
+    "smartFolderQuotaExhausted": "智能文件夹额度已用尽，无法恢复，请清理或升级",
+    "smartFolderQuotaExceeded": "智能文件夹额度已用尽，请升级后继续创建"
   }
 }

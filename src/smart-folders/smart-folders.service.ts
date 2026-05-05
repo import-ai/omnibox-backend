@@ -27,6 +27,7 @@ import {
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
+import { I18nService } from 'nestjs-i18n';
 import { DataSource, In, Repository } from 'typeorm';
 import { CreateSmartFolderRequestDto } from './dto/create-smart-folder-request.dto';
 import { SmartFolderResponseDto } from './dto/smart-folder-response.dto';
@@ -46,6 +47,7 @@ export class SmartFoldersService {
     private readonly resourcesService: ResourcesService,
     private readonly ruleService: SmartFoldersRuleService,
     private readonly tagService: TagService,
+    private readonly i18n: I18nService,
     @Inject(SMART_FOLDER_ENTITLEMENTS_PROVIDER)
     private readonly entitlementsProvider: ISmartFolderEntitlementsProvider,
   ) {}
@@ -220,6 +222,20 @@ export class SmartFoldersService {
     );
   }
 
+  async isResourceMatched(
+    userId: string,
+    namespaceId: string,
+    smartFolderId: string,
+    resourceId: string,
+  ): Promise<boolean> {
+    const children = await this.listChildren(
+      userId,
+      namespaceId,
+      smartFolderId,
+    );
+    return children.some((child) => child.id === resourceId);
+  }
+
   private async getScopedVisibleResourceIds(
     userId: string,
     namespaceId: string,
@@ -390,8 +406,9 @@ export class SmartFoldersService {
 
     const count = await this.countActive(namespaceId, userId, ownerScope);
     if (count >= limit) {
+      const message = this.i18n.t('resource.errors.smartFolderQuotaExceeded');
       throw new AppException(
-        'Smart folder quota exceeded',
+        message,
         'SMART_FOLDER_QUOTA_EXCEEDED',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );

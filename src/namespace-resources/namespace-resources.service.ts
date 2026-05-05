@@ -1186,10 +1186,12 @@ export class NamespaceResourcesService {
     includeRoot: boolean = false,
     requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
   ): Promise<ResourceMetaDto[]> {
+    const allResources =
+      await this.resourcesService.getAllResources(namespaceId);
     const resources = await this.permissionsService.filterResourcesByPermission(
       userId,
       namespaceId,
-      await this.resourcesService.getAllResources(namespaceId),
+      allResources,
       requiredPermission,
     );
     return resources.filter((res) => res.parentId !== null || includeRoot);

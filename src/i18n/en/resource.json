@@ -19,6 +19,7 @@
     "cannotPermanentlyDeleteRoot": "Cannot permanently delete root resource",
     "resourceNameContainsSlash": "Resource name cannot contain '/'",
     "resourceNameConflict": "Resource name already exists in this directory",
-    "smartFolderQuotaExhausted": "Smart folder quota exhausted. Unable to restore. Please clean up or upgrade."
+    "smartFolderQuotaExhausted": "Smart folder quota exhausted. Unable to restore. Please clean up or upgrade.",
+    "smartFolderQuotaExceeded": "Smart folder quota exceeded. Upgrade to create more smart folders"
   }
 }

@@ -749,6 +749,148 @@ describe('ResourcesController (e2e)', () => {
     });
   });
 
+  describe('POST /api/v1/namespaces/:namespaceId/resources/batch-*', () => {
+    async function createFolder(name: string, parentId: string) {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName(name),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.FOLDER,
+          parentId,
+          content: '',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      return response.body;
+    }
+
+    async function createDoc(name: string, parentId: string) {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName(name),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId,
+          content: 'batch resource content',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      return response.body;
+    }
+
+    it('should move selected resources to trash', async () => {
+      const first = await createDoc(
+        'Batch Trash First',
+        client.namespace.root_resource_id,
+      );
+      const second = await createDoc(
+        'Batch Trash Second',
+        client.namespace.root_resource_id,
+      );
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`)
+        .send({ resourceIds: [first.id, second.id] })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toEqual({ deleted_count: 2, failed_count: 0 });
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources/${first.id}`)
+        .expect(HttpStatus.NOT_FOUND);
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources/${second.id}`)
+        .expect(HttpStatus.NOT_FOUND);
+    });
+
+    it('should move selected resources to target folder', async () => {
+      const target = await createFolder(
+        'Batch Move Target',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc(
+        'Batch Move First',
+        client.namespace.root_resource_id,
+      );
+      const second = await createDoc(
+        'Batch Move Second',
+        client.namespace.root_resource_id,
+      );
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({ resourceIds: [first.id, second.id], targetId: target.id })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toEqual({ moved_count: 2, failed_count: 0 });
+      const childrenResponse = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${target.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(childrenResponse.body.map((r: any) => r.id)).toEqual(
+        expect.arrayContaining([first.id, second.id]),
+      );
+    });
+
+    it('should create a folder with selected resources inside it', async () => {
+      const parent = await createFolder(
+        'Batch Folder Parent',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc('Batch Folder First', parent.id);
+      const second = await createDoc('Batch Folder Second', parent.id);
+
+      const response = await client
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/batch-folder`,
+        )
+        .send({
+          name: uniqueName('Selected Resources'),
+          parentId: parent.id,
+          resourceIds: [first.id, second.id],
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body.resource_type).toBe(ResourceType.FOLDER);
+      expect(response.body.parent_id).toBe(parent.id);
+      expect(response.body.failed_count).toBe(0);
+      const childrenResponse = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${response.body.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(childrenResponse.body.map((r: any) => r.id)).toEqual(
+        expect.arrayContaining([first.id, second.id]),
+      );
+    });
+
+    it('should report failed count without failing successful batch items', async () => {
+      const valid = await createDoc(
+        'Batch Partial Valid',
+        client.namespace.root_resource_id,
+      );
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`)
+        .send({ resourceIds: [valid.id, 'missing-batch-resource'] })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toEqual({ deleted_count: 1, failed_count: 1 });
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources/${valid.id}`)
+        .expect(HttpStatus.NOT_FOUND);
+    });
+
+    it('should reject empty batch resource ids', async () => {
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`)
+        .send({ resourceIds: [] })
+        .expect(HttpStatus.BAD_REQUEST);
+    });
+  });
+
   describe('GET /api/v1/namespaces/:namespaceId/resources/search', () => {
     let searchableResourceId: string;
     let anotherSearchableResourceId: string;

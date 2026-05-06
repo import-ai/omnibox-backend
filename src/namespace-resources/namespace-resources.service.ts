@@ -48,6 +48,7 @@ import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
+import { BatchCreateFolderDto } from './dto/batch-resource-actions.dto';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -411,6 +412,149 @@ export class NamespaceResourcesService {
       userId,
       { parentId: targetId },
     );
+  }
+
+  private async getEditableResourceIds(
+    namespaceId: string,
+    userId: string,
+    resourceIds: string[],
+    manager: EntityManager,
+  ): Promise<Set<string>> {
+    const parents = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+      manager,
+    );
+    const permissions = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...parents.values()],
+      manager,
+    );
+    const editableIds = new Set<string>();
+    for (const resourceId of resourceIds) {
+      const resource = parents.get(resourceId);
+      const permission = permissions.get(resourceId);
+      if (
+        resource?.parentId &&
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
+      ) {
+        editableIds.add(resourceId);
+      }
+    }
+    return editableIds;
+  }
+
+  async batchMoveToTrash(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<{ deleted: number; failed: number }> {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const editableIds = await this.getEditableResourceIds(
+        namespaceId,
+        userId,
+        resourceIds,
+        tx.entityManager,
+      );
+      const deleteIds = resourceIds.filter((id) => editableIds.has(id));
+      const deletedIds = await this.resourcesService.batchDeleteResources(
+        userId,
+        namespaceId,
+        deleteIds,
+        tx,
+      );
+      return {
+        deleted: deletedIds.length,
+        failed: resourceIds.length - deletedIds.length,
+      };
+    });
+  }
+
+  async batchMove(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+    targetId: string,
+  ): Promise<{ moved: number; failed: number }> {
+    const userHasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      targetId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (!userHasPermission) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const editableIds = await this.getEditableResourceIds(
+        namespaceId,
+        userId,
+        resourceIds,
+        tx.entityManager,
+      );
+      const moveIds = resourceIds.filter((id) => editableIds.has(id));
+      const movedIds = await this.resourcesService.batchMoveResources(
+        userId,
+        namespaceId,
+        moveIds,
+        targetId,
+        tx,
+      );
+      return {
+        moved: movedIds.length,
+        failed: resourceIds.length - movedIds.length,
+      };
+    });
+  }
+
+  async batchCreateFolder(
+    userId: string,
+    namespaceId: string,
+    data: BatchCreateFolderDto,
+  ): Promise<{ resource: Resource; failed: number }> {
+    const userHasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      data.parentId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (!userHasPermission) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const folder = await this.create(
+        userId,
+        namespaceId,
+        {
+          name: data.name,
+          parentId: data.parentId,
+          resourceType: ResourceType.FOLDER,
+        },
+        tx,
+      );
+      const editableIds = await this.getEditableResourceIds(
+        namespaceId,
+        userId,
+        data.resourceIds,
+        tx.entityManager,
+      );
+      const moveIds = data.resourceIds.filter((id) => editableIds.has(id));
+      const movedIds = await this.resourcesService.batchMoveResources(
+        userId,
+        namespaceId,
+        moveIds,
+        folder.id,
+        tx,
+      );
+      return {
+        resource: folder,
+        failed: data.resourceIds.length - movedIds.length,
+      };
+    });
   }
 
   async search({ namespaceId, excludeResourceId, name, userId }) {

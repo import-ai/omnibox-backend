@@ -5,6 +5,7 @@ import { ResourcesService } from './resources.service';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { StorageUsagesModule } from 'omniboxd/storage-usages/storage-usages.module';
+import { TagModule } from 'omniboxd/tag/tag.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { StorageUsagesModule } from 'omniboxd/storage-usages/storage-usages.modu
     TasksModule,
     FilesModule,
     StorageUsagesModule,
+    TagModule,
   ],
   providers: [ResourcesService],
   exports: [ResourcesService],

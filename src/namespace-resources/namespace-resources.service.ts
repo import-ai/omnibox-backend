@@ -1245,8 +1245,53 @@ export class NamespaceResourcesService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
-    const deletedCount =
-      await this.resourcesService.hardDeleteAllTrash(namespaceId);
+    // Fetch all trash items
+    const trashItems = await this.resourceRepository.find({
+      where: {
+        namespaceId,
+        deletedAt: Not(IsNull()),
+        parentId: Not(IsNull()),
+        permanentDeletedAt: IsNull(),
+      },
+    });
+
+    if (trashItems.length === 0) {
+      return { deleted_count: 0 };
+    }
+
+    // Get current permissions for all trash items
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      trashItems.map((resource) => resource.id),
+      undefined,
+      true,
+    );
+
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+
+    // Filter to only items the user has CAN_EDIT permission on
+    const editableIds = trashItems
+      .filter((resource) => {
+        const permission = permissionMap.get(resource.id);
+        return (
+          permission &&
+          comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
+        );
+      })
+      .map((resource) => resource.id);
+
+    if (editableIds.length === 0) {
+      return { deleted_count: 0 };
+    }
+
+    const deletedCount = await this.resourcesService.hardDeleteAllTrash(
+      namespaceId,
+      editableIds,
+    );
 
     return { deleted_count: deletedCount };
   }

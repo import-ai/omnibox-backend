@@ -1247,6 +1247,7 @@ export class NamespaceResourcesService {
 
     // Fetch all trash items
     const trashItems = await this.resourceRepository.find({
+      withDeleted: true,
       where: {
         namespaceId,
         deletedAt: Not(IsNull()),

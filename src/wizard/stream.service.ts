@@ -24,6 +24,7 @@ import { Span } from 'nestjs-otel';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 
 interface HandlerContext {
   parentId?: string;
@@ -41,6 +42,7 @@ export class StreamService {
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
+    private readonly smartFoldersService: SmartFoldersService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -286,23 +288,51 @@ export class StreamService {
       );
     for (const resource of resources) {
       if (resource.type === 'folder') {
-        const resources =
-          await this.namespaceResourcesService.getAllSubResourcesByUser(
+        const meta = await this.resourcesService.getResourceMeta(
+          namespaceId,
+          resource.id,
+        );
+        if (meta?.resourceType === ResourceType.SMART_FOLDER) {
+          // Smart folders are virtual — expand via conditions, not parentId
+          const children = await this.smartFoldersService.listChildren(
             userId,
             namespaceId,
             resource.id,
           );
-        resource.child_ids = resources.map((r) => r.id);
-        visibleResources.push(
-          ...resources.map((r) => {
-            return {
-              id: r.id,
-              name: r.name || '',
-              type:
-                r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-            } as PrivateSearchResourceDto;
-          }),
-        );
+          resource.child_ids = children.map((r) => r.id);
+          visibleResources.push(
+            ...children.map((r) => {
+              return {
+                id: r.id,
+                name: r.name || '',
+                type:
+                  r.resourceType === ResourceType.FOLDER
+                    ? 'folder'
+                    : 'resource',
+              } as PrivateSearchResourceDto;
+            }),
+          );
+        } else {
+          const subResources =
+            await this.namespaceResourcesService.getAllSubResourcesByUser(
+              userId,
+              namespaceId,
+              resource.id,
+            );
+          resource.child_ids = subResources.map((r) => r.id);
+          visibleResources.push(
+            ...subResources.map((r) => {
+              return {
+                id: r.id,
+                name: r.name || '',
+                type:
+                  r.resourceType === ResourceType.FOLDER
+                    ? 'folder'
+                    : 'resource',
+              } as PrivateSearchResourceDto;
+            }),
+          );
+        }
       }
     }
     return visibleResources;

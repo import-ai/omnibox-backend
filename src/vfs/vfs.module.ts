@@ -4,11 +4,17 @@ import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { InternalVfsController } from 'omniboxd/vfs/internal.vfs.controller';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 
 @Module({
   exports: [VfsService],
   providers: [VfsService],
   controllers: [InternalVfsController],
-  imports: [NamespaceResourcesModule, NamespacesModule, NamespacesQuotaModule],
+  imports: [
+    NamespaceResourcesModule,
+    NamespacesModule,
+    NamespacesQuotaModule,
+    ResourcesModule,
+  ],
 })
 export class VfsModule {}

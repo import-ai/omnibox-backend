@@ -977,6 +977,7 @@ export class NamespaceResourcesService {
         tagIds: data.tag_ids,
         content: data.content,
         attrs: data.attrs,
+        parentId: data.parentId,
       },
       undefined,
       autoRenameOnConflict,

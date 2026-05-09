@@ -542,6 +542,13 @@ export class SmartFoldersService {
       return this.matchesDateCondition(resource.createdAt, condition);
     }
 
+    if (
+      condition.field === SmartFolderField.URL &&
+      resource.resourceType !== ResourceType.LINK
+    ) {
+      return false;
+    }
+
     const operator = condition.operator;
     const candidate = this.getConditionCandidate(resource, condition.field);
     const expected = this.getConditionTextValue(condition);
@@ -581,10 +588,7 @@ export class SmartFoldersService {
         return String(resource.attrs?.url || '').toLowerCase();
       case SmartFolderField.FILE_NAME:
         return String(
-          resource.attrs?.original_name ||
-            resource.attrs?.filename ||
-            resource.name ||
-            '',
+          resource.attrs?.original_name || resource.attrs?.filename || '',
         ).toLowerCase();
       case SmartFolderField.CONTENT:
         return this.getContentCandidate(resource);

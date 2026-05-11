@@ -9,9 +9,7 @@ import { BaseColumns } from './base-columns';
 
 export class AddSmartFolders1776852000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`
-      ALTER TYPE resource_type ADD VALUE IF NOT EXISTS 'smart_folder';
-    `);
+    await this.addSmartFolderResourceType(queryRunner);
 
     const existingTable = await queryRunner.getTable('smart_folder_configs');
     if (existingTable) {
@@ -95,6 +93,26 @@ export class AddSmartFolders1776852000000 implements MigrationInterface {
     });
 
     await queryRunner.createTable(table, true, true, true);
+  }
+
+  private async addSmartFolderResourceType(
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    const enumExists = await queryRunner.query(`
+      SELECT 1 FROM pg_enum
+      WHERE enumlabel = 'smart_folder'
+      AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'resource_type')
+    `);
+
+    if (enumExists.length > 0) {
+      return;
+    }
+
+    await queryRunner.commitTransaction();
+    await queryRunner.query(`
+      ALTER TYPE resource_type ADD VALUE 'smart_folder'
+    `);
+    await queryRunner.startTransaction();
   }
 
   private async ensureOwnerScope(

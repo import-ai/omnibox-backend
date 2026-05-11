@@ -1,3 +1,4 @@
+import { Expose } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
@@ -33,23 +34,27 @@ export class CreateSmartFolderRequestDto {
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.parentId.isNotEmpty'),
   })
+  @Expose({ name: 'parent_id' })
   parentId?: string;
 
   @IsOptional()
   @IsEnum(SmartFolderOwnerScope, {
     message: i18nValidationMessage('validation.errors.isEnum'),
   })
+  @Expose({ name: 'owner_scope' })
   ownerScope?: SmartFolderOwnerScope;
 
   @IsEnum(SmartFolderRootScope, {
     message: i18nValidationMessage('validation.errors.isEnum'),
   })
+  @Expose({ name: 'root_scope' })
   rootScope: SmartFolderRootScope;
 
   @IsOptional()
   @IsEnum(SmartFolderMatchMode, {
     message: i18nValidationMessage('validation.errors.isEnum'),
   })
+  @Expose({ name: 'match_mode' })
   matchMode?: SmartFolderMatchMode;
 
   @IsOptional()

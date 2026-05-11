@@ -54,6 +54,8 @@ export interface SmartFolderConditionValue {
   amount?: number;
   unit?: SmartFolderDateUnit;
   date?: string;
+  start_date?: string;
+  end_date?: string;
   startDate?: string;
   endDate?: string;
 }

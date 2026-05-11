@@ -642,8 +642,8 @@ export class SmartFoldersService {
               createdAtTime >= range.end.getTime();
       }
       case SmartFolderOperator.BETWEEN: {
-        const start = this.getDayRange(value.startDate);
-        const end = this.getDayRange(value.endDate);
+        const start = this.getDayRange(value.start_date || value.startDate);
+        const end = this.getDayRange(value.end_date || value.endDate);
         return start === null || end === null
           ? false
           : createdAtTime >= start.start.getTime() &&

@@ -54,6 +54,17 @@ export class SharedResourcesService {
       return [];
     }
 
+    const shareRoot = await this.resourcesService.getResource(
+      share.namespaceId,
+      share.resourceId,
+    );
+    if (shareRoot?.resourceType === ResourceType.SMART_FOLDER) {
+      return [
+        BreadcrumbItemDto.fromEntity(shareRoot),
+        BreadcrumbItemDto.fromEntity(resource),
+      ];
+    }
+
     const parentResources =
       await this.resourcesService.getParentResourcesOrFail(
         share.namespaceId,
@@ -143,7 +154,7 @@ export class SharedResourcesService {
       return children.map((child) => {
         const dto = new SharedResourceMetaDto();
         dto.id = child.id;
-        dto.parentId = child.id === share.resourceId ? null : child.parentId;
+        dto.parentId = resource.id;
         dto.name = child.name;
         dto.resourceType = child.resourceType;
         dto.createdAt = child.createdAt;

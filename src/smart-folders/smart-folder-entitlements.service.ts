@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import {
   SmartFolderConfig,
-  SmartFolderRootScope,
+  SmartFolderOwnerScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { SmartFolderEntitlementsResponseDto } from 'omniboxd/smart-folders/dto/smart-folder-entitlements-response.dto';
 import { ISmartFolderEntitlementsProvider } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
@@ -32,8 +32,8 @@ export class SmartFolderEntitlementsService implements ISmartFolderEntitlementsP
     userId: string,
   ): Promise<SmartFolderEntitlementsResponseDto> {
     const [privateUsed, teamUsed] = await Promise.all([
-      this.countActive(namespaceId, userId, SmartFolderRootScope.PRIVATE),
-      this.countActive(namespaceId, userId, SmartFolderRootScope.TEAMSPACE),
+      this.countActive(namespaceId, userId, SmartFolderOwnerScope.PRIVATE),
+      this.countActive(namespaceId, userId, SmartFolderOwnerScope.TEAMSPACE),
     ]);
 
     const usage =
@@ -60,16 +60,16 @@ export class SmartFolderEntitlementsService implements ISmartFolderEntitlementsP
   private async countActive(
     namespaceId: string,
     userId: string,
-    rootScope: SmartFolderRootScope,
+    ownerScope: SmartFolderOwnerScope,
   ): Promise<number> {
     const queryBuilder = this.smartFolderConfigRepository
       .createQueryBuilder('config')
       .innerJoin('resources', 'resource', 'resource.id = config.resource_id')
       .where('config.namespace_id = :namespaceId', { namespaceId })
-      .andWhere('config.root_scope = :rootScope', { rootScope })
+      .andWhere('config.owner_scope = :ownerScope', { ownerScope })
       .andWhere('resource.deleted_at IS NULL');
 
-    if (rootScope === SmartFolderRootScope.PRIVATE) {
+    if (ownerScope === SmartFolderOwnerScope.PRIVATE) {
       queryBuilder.andWhere('config.owner_user_id = :userId', { userId });
     }
 

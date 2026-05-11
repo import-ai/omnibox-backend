@@ -83,20 +83,24 @@ export class SmartFoldersRuleService {
 
     if (operator === SmartFolderOperator.BETWEEN) {
       const value = condition.value;
-      if (typeof value !== 'object' || !value.startDate || !value.endDate) {
+      if (typeof value !== 'object') {
         this.throwIncomplete();
       }
-      if (value.endDate < value.startDate) {
-        return {
-          field,
-          operator,
-          value: {
-            ...value,
-            startDate: value.endDate,
-            endDate: value.startDate,
-          },
-        };
+
+      const startDate = value.start_date || value.startDate;
+      const endDate = value.end_date || value.endDate;
+      if (!startDate || !endDate) {
+        this.throwIncomplete();
       }
+
+      return {
+        field,
+        operator,
+        value:
+          endDate < startDate
+            ? { start_date: endDate, end_date: startDate }
+            : { start_date: startDate, end_date: endDate },
+      };
     }
 
     return condition;

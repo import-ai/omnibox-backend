@@ -1,3 +1,4 @@
+import { Expose } from 'class-transformer';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import {
   SmartFolderCondition,
@@ -8,12 +9,19 @@ import {
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 
 export class SmartFolderResponseDto {
+  @Expose()
   resource: ResourceDto;
+  @Expose({ name: 'owner_scope' })
   ownerScope: SmartFolderOwnerScope;
+  @Expose({ name: 'root_scope' })
   rootScope: SmartFolderRootScope;
+  @Expose({ name: 'match_mode' })
   matchMode: SmartFolderMatchMode;
+  @Expose()
   conditions: SmartFolderCondition[];
+  @Expose({ name: 'created_at' })
   createdAt: string;
+  @Expose({ name: 'updated_at' })
   updatedAt: string;
 
   static fromData(params: {

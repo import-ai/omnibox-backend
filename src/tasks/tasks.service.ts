@@ -1,4 +1,4 @@
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Injectable, HttpStatus } from '@nestjs/common';
@@ -49,18 +49,20 @@ export class TasksService {
       if (count >= usage.taskParallelism) {
         break;
       }
-      await this.kafkaService.produce(topicName, [
-        {
-          value: JSON.stringify({
-            task_id: task.id,
-            namespace_id: namespaceId,
-            function: task.function,
-            meta: { file_name: task.input?.filename },
-          }),
-        },
-      ]);
+      await this.produceTaskMessage(topicName, task, namespaceId);
       await this.setTaskEnqueued(namespaceId, task.id);
     }
+  }
+
+  async listActiveTaskNamespaceIds(): Promise<string[]> {
+    const rows = await this.taskRepository
+      .createQueryBuilder('task')
+      .select('DISTINCT task.namespaceId', 'namespaceId')
+      .where('task.status IN (:...statuses)', {
+        statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
+      })
+      .getRawMany<{ namespaceId: string }>();
+    return rows.map((row) => row.namespaceId);
   }
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {
@@ -109,6 +111,53 @@ export class TasksService {
       { namespaceId, id: taskId },
       { enqueued: true },
     );
+  }
+
+  async listStaleEnqueuedTasks(minAgeMs = 60_000): Promise<Task[]> {
+    const staleAt = new Date(Date.now() - minAgeMs);
+    return await this.taskRepository.find({
+      where: {
+        enqueued: true,
+        status: In([TaskStatus.PENDING, TaskStatus.RUNNING]),
+        createdAt: LessThanOrEqual(staleAt),
+      },
+    });
+  }
+
+  async findOldestPendingOrRunningTask(): Promise<Task | null> {
+    return await this.taskRepository.findOne({
+      where: {
+        status: In([TaskStatus.PENDING, TaskStatus.RUNNING]),
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+  }
+
+  async reproduceTaskMessage(task: Task): Promise<void> {
+    const usage = await this.namespacesQuotaService.getNamespaceUsage(
+      task.namespaceId,
+    );
+    const topicName = `${this.kafkaTasksTopic}-${usage.taskPriority}`;
+    await this.produceTaskMessage(topicName, task, task.namespaceId);
+  }
+
+  private async produceTaskMessage(
+    topicName: string,
+    task: Pick<Task, 'id' | 'function' | 'input'>,
+    namespaceId: string,
+  ): Promise<void> {
+    await this.kafkaService.produce(topicName, [
+      {
+        value: JSON.stringify({
+          task_id: task.id,
+          namespace_id: namespaceId,
+          function: task.function,
+          meta: { file_name: task.input?.filename },
+        }),
+      },
+    ]);
   }
 
   async cancelResourceTasks(

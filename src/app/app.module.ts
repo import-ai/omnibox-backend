@@ -99,6 +99,7 @@ import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/17756
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
 import { NotificationsModule } from 'omniboxd/notifications/notifications.module';
 import { AddNotifications1776070800000 } from 'omniboxd/migrations/1776070800000-add-notifications';
+import { AddStatusEnqueuedIndexToTasks1776071000000 } from 'omniboxd/migrations/1776071000000-add-status-enqueued-index-to-tasks';
 import { VfsModule } from 'omniboxd/vfs/vfs.module';
 import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
 import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
@@ -106,6 +107,7 @@ import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module'
 import { AddSmartFolders1776852000000 } from 'omniboxd/migrations/1776852000000-add-smart-folders';
 import { SharedVfsModule } from 'omniboxd/shared-vfs/shared-vfs.module';
 import { SharedResourceTagsModule } from 'omniboxd/shared-resource-tags/shared-resource-tags.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -146,6 +148,7 @@ export class AppModule implements NestModule {
           cache: true,
           isGlobal: true,
         }),
+        ScheduleModule.forRoot(),
         I18nModule.forRoot({
           fallbackLanguage: 'en',
           loaderOptions: {
@@ -264,6 +267,7 @@ export class AppModule implements NestModule {
               MakeSizeNullable1769478367000,
               RenameVerifyCodeToKey1774965861436,
               AddNotifications1776070800000,
+              AddStatusEnqueuedIndexToTasks1776071000000,
               DeduplicateResourceNames1775666229211,
               AddSmartFolders1776852000000,
               ...extraMigrations,

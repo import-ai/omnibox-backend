@@ -1,14 +1,26 @@
 import { DataSource, QueryRunner } from 'typeorm';
+import {
+  destroyDataSource,
+  getTestPostgresUrl,
+  releaseQueryRunner,
+} from 'test/migration-test-utils';
 import { CleanResourceNames1755396702021 } from './1755396702021-clean-resource-names';
 
 describe('CleanResourceNames Migration E2E', () => {
   let dataSource: DataSource;
-  let queryRunner: QueryRunner;
+  let queryRunner: QueryRunner | undefined;
+
+  const getQueryRunner = (): QueryRunner => {
+    if (!queryRunner) {
+      throw new Error('Query runner was not initialized');
+    }
+    return queryRunner;
+  };
 
   beforeAll(async () => {
     dataSource = new DataSource({
       type: 'postgres',
-      url: process.env.OBB_POSTGRES_URL,
+      url: getTestPostgresUrl(),
       entities: [],
       migrations: [],
       synchronize: false,
@@ -18,13 +30,13 @@ describe('CleanResourceNames Migration E2E', () => {
 
   beforeEach(async () => {
     queryRunner = dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await getQueryRunner().connect();
+    await getQueryRunner().startTransaction();
 
-    await queryRunner.query('DROP TABLE IF EXISTS resources CASCADE');
+    await getQueryRunner().query('DROP TABLE IF EXISTS resources CASCADE');
 
     // Create resources table structure for testing
-    await queryRunner.query(`
+    await getQueryRunner().query(`
       CREATE TABLE IF NOT EXISTS resources (
         id character varying PRIMARY KEY,
         name character varying NOT NULL DEFAULT '',
@@ -44,18 +56,17 @@ describe('CleanResourceNames Migration E2E', () => {
   });
 
   afterEach(async () => {
-    await queryRunner.rollbackTransaction();
-    await queryRunner.release();
+    await releaseQueryRunner(queryRunner);
   });
 
   afterAll(async () => {
-    await dataSource.destroy();
+    await destroyDataSource(dataSource);
   });
 
   describe('URL-encoded names', () => {
     it('should decode URL-encoded resource names', async () => {
       // Setup: Insert URL-encoded names
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name) VALUES
         ('res1', 'Hello%20World'),
         ('res2', 'My%20Document%2Etxt'),
@@ -65,10 +76,10 @@ describe('CleanResourceNames Migration E2E', () => {
 
       // Execute migration
       const migration = new CleanResourceNames1755396702021();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify results
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT id, name FROM resources ORDER BY id
       `);
 
@@ -81,15 +92,15 @@ describe('CleanResourceNames Migration E2E', () => {
     });
 
     it('should handle double-encoded names', async () => {
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name) VALUES
         ('res1', 'Hello%2520World')
       `);
 
       const migration = new CleanResourceNames1755396702021();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT name FROM resources WHERE id = 'res1'
       `);
 
@@ -102,7 +113,7 @@ describe('CleanResourceNames Migration E2E', () => {
       // Setup: Insert mojibake names (UTF-8 bytes interpreted as Latin-1)
       const mojibakeText = Buffer.from('Café', 'utf8').toString('latin1');
 
-      await queryRunner.query(
+      await getQueryRunner().query(
         `
         INSERT INTO resources (id, name) VALUES
         ('res1', $1),
@@ -113,10 +124,10 @@ describe('CleanResourceNames Migration E2E', () => {
 
       // Execute migration
       const migration = new CleanResourceNames1755396702021();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify results
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT id, name FROM resources ORDER BY id
       `);
 
@@ -132,7 +143,7 @@ describe('CleanResourceNames Migration E2E', () => {
       const mojibakeText = Buffer.from(text, 'utf8').toString('latin1');
       const urlEncodedMojibake = encodeURIComponent(mojibakeText);
 
-      await queryRunner.query(
+      await getQueryRunner().query(
         `
         INSERT INTO resources (id, name) VALUES
         ('res1', $1)
@@ -141,9 +152,9 @@ describe('CleanResourceNames Migration E2E', () => {
       );
 
       const migration = new CleanResourceNames1755396702021();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT name FROM resources WHERE id = 'res1'
       `);
 
@@ -153,7 +164,7 @@ describe('CleanResourceNames Migration E2E', () => {
 
   describe('Edge cases', () => {
     it('should not modify already clean names', async () => {
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name) VALUES
         ('res1', 'Clean Name'),
         ('res2', 'Another Clean Name 123'),
@@ -162,9 +173,9 @@ describe('CleanResourceNames Migration E2E', () => {
       `);
 
       const migration = new CleanResourceNames1755396702021();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT name FROM resources ORDER BY id
       `);
 
@@ -175,16 +186,16 @@ describe('CleanResourceNames Migration E2E', () => {
     });
 
     it('should handle empty and null names gracefully', async () => {
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name) VALUES
         ('res1', ''),
         ('res2', 'Valid Name')
       `);
 
       const migration = new CleanResourceNames1755396702021();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT name FROM resources ORDER BY id
       `);
 

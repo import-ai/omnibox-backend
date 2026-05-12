@@ -396,12 +396,24 @@ export class NamespaceResourcesService {
     userId: string,
     targetId: string,
   ) {
-    const ok = await this.permissionsService.userHasPermission(
+    const canEditResource = await this.permissionsService.userHasPermission(
       namespaceId,
       resourceId,
       userId,
+      ResourcePermission.CAN_EDIT,
     );
-    if (!ok) {
+    if (!canEditResource) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    const canEditTarget = await this.permissionsService.userHasPermission(
+      namespaceId,
+      targetId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (!canEditTarget) {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }

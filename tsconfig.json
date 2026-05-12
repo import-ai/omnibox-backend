@@ -22,5 +22,5 @@
       "omniboxd/*": ["src/*"]
     },
   },
-  "include": ["src/**/*", "src/types/**/*"]
+  "include": ["src/**/*", "src/types/**/*", "jest.setup.ts"]
 }

@@ -5,6 +5,7 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 
 describe('ResourcesController (e2e)', () => {
   let client: TestClient;
+  let memberClient: TestClient;
   let uid = 0;
   const uniqueName = (base: string) => `${base} ${++uid}`;
 
@@ -13,6 +14,7 @@ describe('ResourcesController (e2e)', () => {
   });
 
   afterAll(async () => {
+    await memberClient?.close();
     await client.close();
   });
 
@@ -676,7 +678,6 @@ describe('ResourcesController (e2e)', () => {
   describe('POST /api/v1/namespaces/:namespaceId/resources/:resourceId/move/:targetId', () => {
     let sourceResourceId: string;
     let targetFolderId: string;
-    let memberClient: TestClient;
 
     const createMoveResource = async (
       name: string,
@@ -732,10 +733,6 @@ describe('ResourcesController (e2e)', () => {
           `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}`,
         )
         .expect(HttpStatus.OK);
-    });
-
-    afterAll(async () => {
-      await memberClient.close();
     });
 
     beforeEach(async () => {

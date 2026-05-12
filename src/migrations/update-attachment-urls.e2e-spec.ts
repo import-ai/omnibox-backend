@@ -1,4 +1,9 @@
 import { DataSource, QueryRunner } from 'typeorm';
+import {
+  destroyDataSource,
+  getTestPostgresUrl,
+  releaseQueryRunner,
+} from 'test/migration-test-utils';
 import { UpdateAttachmentUrls1755499552000 } from './1755499552000-update-attachment-urls';
 
 // Import all prior migrations in chronological order
@@ -15,12 +20,19 @@ import { CleanResourceNames1755396702021 } from './1755396702021-clean-resource-
 
 describe('UpdateAttachmentUrls Migration E2E', () => {
   let dataSource: DataSource;
-  let queryRunner: QueryRunner;
+  let queryRunner: QueryRunner | undefined;
+
+  const getQueryRunner = (): QueryRunner => {
+    if (!queryRunner) {
+      throw new Error('Query runner was not initialized');
+    }
+    return queryRunner;
+  };
 
   beforeAll(async () => {
     dataSource = new DataSource({
       type: 'postgres',
-      url: process.env.OBB_POSTGRES_URL,
+      url: getTestPostgresUrl(),
       entities: [],
       migrations: [
         Init1751900000000,
@@ -48,29 +60,28 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
   beforeEach(async () => {
     queryRunner = dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await getQueryRunner().connect();
+    await getQueryRunner().startTransaction();
 
     // Create a test namespace specific to this migration test
-    await queryRunner.query(`
+    await getQueryRunner().query(`
       INSERT INTO namespaces (id, name) VALUES ('update-attachment-urls-test', 'UpdateAttachmentUrls Migration Test')
       ON CONFLICT (id) DO NOTHING
     `);
   });
 
   afterEach(async () => {
-    await queryRunner.rollbackTransaction();
-    await queryRunner.release();
+    await releaseQueryRunner(queryRunner);
   });
 
   afterAll(async () => {
-    await dataSource.destroy();
+    await destroyDataSource(dataSource);
   });
 
   describe('URL replacement functionality', () => {
     it('should replace /api/v1/attachments/images/ URLs with attachments/', async () => {
       // Setup: Insert resources with old-style image attachment URLs
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Test Document 1', 'update-attachment-urls-test', 'doc', 'Here is an image: /api/v1/attachments/images/abc123.jpg'),
         ('res2', 'Test Document 2', 'update-attachment-urls-test', 'doc', 'Multiple images: /api/v1/attachments/images/test1.png and /api/v1/attachments/images/test2.gif'),
@@ -79,10 +90,10 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
       // Execute migration
       const migration = new UpdateAttachmentUrls1755499552000();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify results for our specific test resources only
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT id, content FROM resources
         WHERE namespace_id = 'update-attachment-urls-test' AND id IN ('res1', 'res2', 'res3')
         ORDER BY id
@@ -101,7 +112,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
     it('should replace /api/v1/attachments/media/ URLs with attachments/', async () => {
       // Setup: Insert resources with old-style media attachment URLs
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Audio Document', 'update-attachment-urls-test', 'doc', 'Audio file: /api/v1/attachments/media/audio123.wav'),
         ('res2', 'Video Document', 'update-attachment-urls-test', 'doc', 'Video: /api/v1/attachments/media/video456.mp4'),
@@ -110,10 +121,10 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
       // Execute migration
       const migration = new UpdateAttachmentUrls1755499552000();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify results for our specific test resources only
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT id, content FROM resources
         WHERE namespace_id = 'update-attachment-urls-test' AND id IN ('res1', 'res2', 'res3')
         ORDER BY id
@@ -131,7 +142,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
     it('should not affect already converted URLs', async () => {
       // Setup: Insert resources with mix of old and new URLs
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Mixed URLs', 'update-attachment-urls-test', 'doc',
          'Old: /api/v1/attachments/images/old.jpg New: attachments/new.png Already converted: attachments/existing.gif')
@@ -139,10 +150,10 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
       // Execute migration
       const migration = new UpdateAttachmentUrls1755499552000();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify results
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT content FROM resources WHERE id = 'res1'
       `);
 
@@ -153,7 +164,7 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
     it('should not affect other /api/v1/ URLs', async () => {
       // Setup: Insert resources with other API URLs that should not be changed
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Other APIs', 'update-attachment-urls-test', 'doc',
          'These should not change: /api/v1/resources/123 /api/v1/auth/login /api/v1/users/profile
@@ -163,10 +174,10 @@ describe('UpdateAttachmentUrls Migration E2E', () => {
 
       // Execute migration
       const migration = new UpdateAttachmentUrls1755499552000();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify results
-      const results = await queryRunner.query(`
+      const results = await getQueryRunner().query(`
         SELECT content FROM resources WHERE id = 'res1'
       `);
 

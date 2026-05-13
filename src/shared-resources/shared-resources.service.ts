@@ -137,10 +137,7 @@ export class SharedResourcesService {
   ): Promise<SharedResourceMetaDto[]> {
     const resource = await this.getAndValidateResource(share, resourceId);
 
-    if (
-      !share.allResources &&
-      resource.resourceType !== ResourceType.SMART_FOLDER
-    ) {
+    if (!share.allResources) {
       return [];
     }
 
@@ -215,6 +212,14 @@ export class SharedResourcesService {
         share.resourceId,
       );
       if (rootResource?.resourceType === ResourceType.SMART_FOLDER) {
+        if (!share.allResources) {
+          const message = this.i18n.t('resource.errors.resourceNotFound');
+          throw new AppException(
+            message,
+            'RESOURCE_NOT_FOUND',
+            HttpStatus.NOT_FOUND,
+          );
+        }
         const matched = await this.smartFoldersService.isResourceMatched(
           share.userId!,
           share.namespaceId,

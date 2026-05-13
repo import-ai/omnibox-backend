@@ -145,7 +145,26 @@ export class SharedResourcesService {
     }
 
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
-      return [];
+      const userId = share.userId!;
+      const children = await this.smartFoldersService.listChildren(
+        userId,
+        share.namespaceId,
+        resource.id,
+      );
+      return children.map((child) => {
+        const dto = new SharedResourceMetaDto();
+        dto.id = child.id;
+        dto.parentId = resource.id;
+        dto.name = child.name;
+        dto.resourceType = child.resourceType;
+        dto.createdAt = child.createdAt;
+        dto.updatedAt = child.updatedAt;
+        dto.hasChildren = !!child.hasChildren;
+        dto.attrs = { ...child.attrs };
+        delete dto.attrs.transcript;
+        delete dto.attrs.video_info;
+        return dto;
+      });
     }
 
     const children = await this.resourcesService.getChildren(
@@ -196,6 +215,15 @@ export class SharedResourcesService {
         share.resourceId,
       );
       if (rootResource?.resourceType === ResourceType.SMART_FOLDER) {
+        const matched = await this.smartFoldersService.isResourceMatched(
+          share.userId!,
+          share.namespaceId,
+          share.resourceId,
+          resource.id,
+        );
+        if (matched) {
+          return resource;
+        }
         const message = this.i18n.t('resource.errors.resourceNotFound');
         throw new AppException(
           message,

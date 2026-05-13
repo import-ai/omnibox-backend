@@ -11,7 +11,10 @@ import { SmartFolderEntitlementsController } from 'omniboxd/smart-folders/smart-
 import { SMART_FOLDER_ENTITLEMENTS_PROVIDER } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 import { SmartFolderEntitlementsService } from 'omniboxd/smart-folders/smart-folder-entitlements.service';
 import { SmartFoldersController } from 'omniboxd/smart-folders/smart-folders.controller';
+import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
+import { SmartFoldersQuotaService } from 'omniboxd/smart-folders/smart-folders-quota.service';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
+import { SmartFoldersScopeService } from 'omniboxd/smart-folders/smart-folders-scope.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { TagModule } from 'omniboxd/tag/tag.module';
 
@@ -29,6 +32,9 @@ import { TagModule } from 'omniboxd/tag/tag.module';
   providers: [
     SmartFoldersService,
     SmartFoldersRuleService,
+    SmartFoldersMatcherService,
+    SmartFoldersScopeService,
+    SmartFoldersQuotaService,
     {
       provide: SMART_FOLDER_ENTITLEMENTS_PROVIDER,
       useClass: SmartFolderEntitlementsService,

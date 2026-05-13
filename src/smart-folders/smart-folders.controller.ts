@@ -84,6 +84,7 @@ export class SmartFoldersController {
   }
 
   @Delete(':resourceId')
+  @CheckNamespaceReadonly()
   async delete(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,

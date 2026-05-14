@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { context, propagation } from '@opentelemetry/api';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { WizardCapabilitiesService } from 'omniboxd/tasks/wizard-capabilities.service';
 
 @Injectable()
 export class TasksService {
@@ -23,6 +24,7 @@ export class TasksService {
     private readonly kafkaService: KafkaService,
     private readonly configService: ConfigService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    private readonly wizardCapabilitiesService: WizardCapabilitiesService,
   ) {
     this.kafkaTasksTopic = this.configService.get<string>(
       'OBB_TASKS_TOPIC',
@@ -51,9 +53,31 @@ export class TasksService {
       if (count >= usage.taskParallelism) {
         break;
       }
+      const supported = await this.wizardCapabilitiesService.isSupported(
+        task.function,
+        task.input?.filename,
+      );
+      if (!supported) {
+        await this.markTaskUnsupported(task);
+        continue;
+      }
       await this.produceTaskMessage(topicName, task, namespaceId);
       await this.setTaskEnqueued(namespaceId, task.id);
     }
+  }
+
+  private async markTaskUnsupported(task: Task): Promise<void> {
+    await this.taskRepository.update(
+      { id: task.id },
+      {
+        status: TaskStatus.ERROR,
+        exception: {
+          error: `Function '${task.function}' is not supported`,
+          type: 'UnsupportedFunctionError',
+        } as Record<string, any>,
+        endedAt: new Date(),
+      },
+    );
   }
 
   async listActiveTaskNamespaceIds(): Promise<string[]> {
@@ -138,6 +162,15 @@ export class TasksService {
   }
 
   async reproduceTaskMessage(task: Task): Promise<void> {
+    const supported = await this.wizardCapabilitiesService.isSupported(
+      task.function,
+      task.input?.filename,
+    );
+    if (!supported) {
+      await this.markTaskUnsupported(task);
+      return;
+    }
+
     const usage = await this.namespacesQuotaService.getNamespaceUsage(
       task.namespaceId,
     );

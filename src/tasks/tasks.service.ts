@@ -14,6 +14,7 @@ import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.ser
 @Injectable()
 export class TasksService {
   private readonly kafkaTasksTopic: string;
+  private readonly proUrl: string | undefined;
 
   constructor(
     @InjectRepository(Task)
@@ -27,6 +28,7 @@ export class TasksService {
       'OBB_TASKS_TOPIC',
       'omnibox-tasks',
     );
+    this.proUrl = this.configService.get<string>('OBB_PRO_URL');
   }
 
   injectTraceHeaders(task: Partial<Task>) {
@@ -168,11 +170,23 @@ export class TasksService {
     if (!namespaceId || !resourceId) {
       return;
     }
+    const tasksToCancel = await tx.entityManager.find(Task, {
+      where: {
+        namespaceId,
+        resourceId,
+        canceledAt: IsNull(),
+        endedAt: IsNull(),
+      },
+      select: ['id'],
+    });
     await tx.entityManager.update(
       Task,
       { namespaceId, resourceId, canceledAt: IsNull(), endedAt: IsNull() },
       { canceledAt: new Date(), status: TaskStatus.CANCELED },
     );
+    for (const task of tasksToCancel) {
+      tx.afterCommitHooks.push(() => this.callTaskHook(namespaceId, task.id));
+    }
   }
 
   async cancelUserTasks(
@@ -259,8 +273,27 @@ export class TasksService {
     task.canceledAt = new Date();
     task.status = TaskStatus.CANCELED;
     const updatedTask = await this.taskRepository.save(task);
+    await this.callTaskHook(task.namespaceId, task.id);
 
     return TaskDto.fromEntity(updatedTask);
+  }
+
+  async callTaskHook(namespaceId: string, taskId: string): Promise<void> {
+    if (!this.proUrl) {
+      return;
+    }
+    const url = `${this.proUrl}/internal/api/v1/namespaces/${namespaceId}/tasks/${taskId}/hook`;
+    const response = await fetch(url, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new AppException(
+        data.message ?? `Pro API error: ${response.statusText}`,
+        data.code ?? 'PRO_TASK_HOOK_FAILED',
+        response.status as HttpStatus,
+      );
+    }
   }
 
   async rerunTask(id: string): Promise<TaskDto> {

@@ -35,16 +35,20 @@ export class WizardCapabilitiesService {
   }
 
   async isSupported(functionName: string, fileName?: string): Promise<boolean> {
-    const caps = await this.getWizardCapabilities();
-    if (this.checkCapabilities(caps, functionName, fileName)) {
-      return true;
-    }
+    try {
+      const caps = await this.getWizardCapabilities();
+      if (this.checkCapabilities(caps, functionName, fileName)) {
+        return true;
+      }
 
-    const proCaps = await this.getProCapabilities();
-    if (proCaps && this.checkCapabilities(proCaps, functionName, fileName)) {
+      const proCaps = await this.getProCapabilities();
+      if (proCaps && this.checkCapabilities(proCaps, functionName, fileName)) {
+        return true;
+      }
+      return false;
+    } catch {
       return true;
     }
-    return false;
   }
 
   private async getWizardCapabilities(): Promise<WizardCapabilities> {

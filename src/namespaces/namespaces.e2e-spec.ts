@@ -238,7 +238,7 @@ describe('NamespacesController (e2e)', () => {
       // Create another namespace where we can test role changes
       const tempNamespace = await client
         .post('/api/v1/namespaces')
-        .send({ name: 'Temp Role Test Workspace' })
+        .send({ name: uniqueNs('Temp Role Test Workspace') })
         .expect(HttpStatus.CREATED);
 
       const tempNamespaceId = tempNamespace.body.id;

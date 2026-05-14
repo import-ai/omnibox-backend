@@ -406,12 +406,24 @@ export class NamespaceResourcesService {
     userId: string,
     targetId: string,
   ) {
-    const ok = await this.permissionsService.userHasPermission(
+    const canEditResource = await this.permissionsService.userHasPermission(
       namespaceId,
       resourceId,
       userId,
+      ResourcePermission.CAN_EDIT,
     );
-    if (!ok) {
+    if (!canEditResource) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    const canEditTarget = await this.permissionsService.userHasPermission(
+      namespaceId,
+      targetId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (!canEditTarget) {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
@@ -1232,10 +1244,33 @@ export class NamespaceResourcesService {
     const { items, total } = await this.resourcesService.getDeletedResources(
       namespaceId,
       usage.trashRetentionDays,
-      { search, limit, offset },
+      { search },
     );
 
-    const trashItems = items.map((resource) =>
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      items.map((resource) => resource.id),
+      undefined,
+      true,
+    );
+
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+
+    const filteredItems = items
+      .filter((resource) => {
+        const permission = permissionMap.get(resource.id);
+        return (
+          permission &&
+          comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
+        );
+      })
+      .slice(offset, offset + limit);
+
+    const trashItems = filteredItems.map((resource) =>
       TrashItemDto.fromEntity(resource, false),
     );
 
@@ -1280,8 +1315,54 @@ export class NamespaceResourcesService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
-    const deletedCount =
-      await this.resourcesService.hardDeleteAllTrash(namespaceId);
+    // Fetch all trash items
+    const trashItems = await this.resourceRepository.find({
+      withDeleted: true,
+      where: {
+        namespaceId,
+        deletedAt: Not(IsNull()),
+        parentId: Not(IsNull()),
+        permanentDeletedAt: IsNull(),
+      },
+    });
+
+    if (trashItems.length === 0) {
+      return { deleted_count: 0 };
+    }
+
+    // Get current permissions for all trash items
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      trashItems.map((resource) => resource.id),
+      undefined,
+      true,
+    );
+
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+
+    // Filter to only items the user has CAN_EDIT permission on
+    const editableIds = trashItems
+      .filter((resource) => {
+        const permission = permissionMap.get(resource.id);
+        return (
+          permission &&
+          comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
+        );
+      })
+      .map((resource) => resource.id);
+
+    if (editableIds.length === 0) {
+      return { deleted_count: 0 };
+    }
+
+    const deletedCount = await this.resourcesService.hardDeleteAllTrash(
+      namespaceId,
+      editableIds,
+    );
 
     return { deleted_count: deletedCount };
   }

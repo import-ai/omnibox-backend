@@ -1,4 +1,9 @@
 import { DataSource, QueryRunner } from 'typeorm';
+import {
+  destroyDataSource,
+  getTestPostgresUrl,
+  releaseQueryRunner,
+} from 'test/migration-test-utils';
 import { ScanResourceAttachments1755504936756 } from './1755504936756-scan-resource-attachments';
 
 // Import all prior migrations in chronological order
@@ -16,12 +21,19 @@ import { UpdateAttachmentUrls1755499552000 } from './1755499552000-update-attach
 
 describe('ScanResourceAttachments Migration E2E', () => {
   let dataSource: DataSource;
-  let queryRunner: QueryRunner;
+  let queryRunner: QueryRunner | undefined;
+
+  const getQueryRunner = (): QueryRunner => {
+    if (!queryRunner) {
+      throw new Error('Query runner was not initialized');
+    }
+    return queryRunner;
+  };
 
   beforeAll(async () => {
     dataSource = new DataSource({
       type: 'postgres',
-      url: process.env.OBB_POSTGRES_URL,
+      url: getTestPostgresUrl(),
       entities: [],
       migrations: [
         Init1751900000000,
@@ -50,39 +62,38 @@ describe('ScanResourceAttachments Migration E2E', () => {
 
   beforeEach(async () => {
     queryRunner = dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await getQueryRunner().connect();
+    await getQueryRunner().startTransaction();
 
     // Create a test namespace specific to this migration test
-    await queryRunner.query(`
+    await getQueryRunner().query(`
       INSERT INTO namespaces (id, name) VALUES ('scan-resource-attachments-test', 'ScanResourceAttachments Migration Test')
       ON CONFLICT (id) DO NOTHING
     `);
   });
 
   afterEach(async () => {
-    await queryRunner.rollbackTransaction();
-    await queryRunner.release();
+    await releaseQueryRunner(queryRunner);
   });
 
   afterAll(async () => {
-    await dataSource.destroy();
+    await destroyDataSource(dataSource);
   });
 
   describe('Attachment relation creation', () => {
     it('should create resource-attachment relations for single attachment', async () => {
       // Setup: Insert resource with attachment reference
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Test Document', 'scan-resource-attachments-test', 'doc', 'Here is an image: attachments/abc123.jpg')
       `);
 
       // Execute migration
       const migration = new ScanResourceAttachments1755504936756();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify resource_attachments table entry was created for our specific resource
-      const relations = await queryRunner.query(`
+      const relations = await getQueryRunner().query(`
         SELECT namespace_id, resource_id, attachment_id FROM resource_attachments
         WHERE namespace_id = 'scan-resource-attachments-test' AND resource_id = 'res1' AND attachment_id = 'abc123.jpg'
         ORDER BY attachment_id
@@ -98,7 +109,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
 
     it('should create multiple resource-attachment relations for multiple attachments', async () => {
       // Setup: Insert resource with multiple attachment references
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Multi-attachment Doc', 'scan-resource-attachments-test', 'doc',
          'Images: attachments/photo1.png and attachments/photo2.gif
@@ -108,10 +119,10 @@ describe('ScanResourceAttachments Migration E2E', () => {
 
       // Execute migration
       const migration = new ScanResourceAttachments1755504936756();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify all relations were created
-      const relations = await queryRunner.query(`
+      const relations = await getQueryRunner().query(`
         SELECT attachment_id FROM resource_attachments
         WHERE namespace_id = 'scan-resource-attachments-test' AND resource_id = 'res1'
         ORDER BY attachment_id
@@ -127,7 +138,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
 
     it('should handle various file extensions correctly', async () => {
       // Setup: Insert resource with different file types
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Various Extensions', 'scan-resource-attachments-test', 'doc',
          'Files: attachments/image.jpeg attachments/doc.pdf attachments/audio.mp3
@@ -137,10 +148,10 @@ describe('ScanResourceAttachments Migration E2E', () => {
 
       // Execute migration
       const migration = new ScanResourceAttachments1755504936756();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify all relations were created
-      const relations = await queryRunner.query(`
+      const relations = await getQueryRunner().query(`
         SELECT attachment_id FROM resource_attachments
         WHERE namespace_id = 'scan-resource-attachments-test' AND resource_id = 'res1'
         ORDER BY attachment_id
@@ -160,7 +171,7 @@ describe('ScanResourceAttachments Migration E2E', () => {
 
     it('should handle complex filenames with underscores and hyphens', async () => {
       // Setup: Insert resource with complex attachment filenames
-      await queryRunner.query(`
+      await getQueryRunner().query(`
         INSERT INTO resources (id, name, namespace_id, resource_type, content) VALUES
         ('res1', 'Complex Filenames', 'scan-resource-attachments-test', 'doc',
          'Files: attachments/file-with-hyphens.png attachments/file_with_underscores.jpg
@@ -169,10 +180,10 @@ describe('ScanResourceAttachments Migration E2E', () => {
 
       // Execute migration
       const migration = new ScanResourceAttachments1755504936756();
-      await migration.up(queryRunner);
+      await migration.up(getQueryRunner());
 
       // Verify all relations were created
-      const relations = await queryRunner.query(`
+      const relations = await getQueryRunner().query(`
         SELECT attachment_id FROM resource_attachments
         WHERE namespace_id = 'scan-resource-attachments-test' AND resource_id = 'res1'
         ORDER BY attachment_id

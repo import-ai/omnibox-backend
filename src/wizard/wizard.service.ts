@@ -265,6 +265,7 @@ export class WizardService {
       }
 
       await this.wizardTaskService.taskRepository.save(task);
+      await this.tasksService.callTaskHook(task.namespaceId, task.id);
 
       const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
       const wait: number = task.startedAt.getTime() - task.createdAt.getTime();

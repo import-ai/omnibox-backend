@@ -136,8 +136,19 @@ export class SharedResourcesService {
     resourceId: string,
   ): Promise<SharedResourceMetaDto[]> {
     const resource = await this.getAndValidateResource(share, resourceId);
+    const shareRoot = await this.resourcesService.getResource(
+      share.namespaceId,
+      share.resourceId,
+    );
 
     if (!share.allResources) {
+      return [];
+    }
+
+    if (
+      shareRoot?.resourceType === ResourceType.SMART_FOLDER &&
+      resource.id !== share.resourceId
+    ) {
       return [];
     }
 
@@ -156,7 +167,7 @@ export class SharedResourcesService {
         dto.resourceType = child.resourceType;
         dto.createdAt = child.createdAt;
         dto.updatedAt = child.updatedAt;
-        dto.hasChildren = !!child.hasChildren;
+        dto.hasChildren = false;
         dto.attrs = { ...child.attrs };
         delete dto.attrs.transcript;
         delete dto.attrs.video_info;

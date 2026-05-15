@@ -193,7 +193,10 @@ export class NamespaceResourcesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Body() data: BatchResourceIdsDto,
-  ): Promise<{ deleted: number; failed: number }> {
+  ): Promise<{
+    success_ids: string[];
+    failed_ids: string[];
+  }> {
     return await this.namespaceResourcesService.batchMoveToTrash(
       userId,
       namespaceId,
@@ -207,7 +210,10 @@ export class NamespaceResourcesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Body() data: BatchMoveResourcesDto,
-  ): Promise<{ moved: number; failed: number }> {
+  ): Promise<{
+    success_ids: string[];
+    failed_ids: string[];
+  }> {
     return await this.namespaceResourcesService.batchMove(
       userId,
       namespaceId,
@@ -228,12 +234,22 @@ export class NamespaceResourcesController {
       namespaceId,
       data,
     );
+    if (!folder.resource) {
+      return {
+        success_ids: folder.success_ids,
+        failed_ids: folder.failed_ids,
+      };
+    }
     const resource = await this.namespaceResourcesService.getResource({
       namespaceId,
       userId,
       resourceId: folder.resource.id,
     });
-    return { ...resource, failed: folder.failed };
+    return {
+      ...resource,
+      success_ids: folder.success_ids,
+      failed_ids: folder.failed_ids,
+    };
   }
 
   // Trash routes must be defined before :resourceId routes to avoid

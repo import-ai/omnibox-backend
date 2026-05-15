@@ -462,7 +462,10 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     resourceIds: string[],
-  ): Promise<{ deleted: number; failed: number }> {
+  ): Promise<{
+    success_ids: string[];
+    failed_ids: string[];
+  }> {
     return await transaction(this.dataSource.manager, async (tx) => {
       const editableIds = await this.getEditableResourceIds(
         namespaceId,
@@ -471,15 +474,22 @@ export class NamespaceResourcesService {
         tx.entityManager,
       );
       const deleteIds = resourceIds.filter((id) => editableIds.has(id));
+      if (deleteIds.length === 0) {
+        return {
+          success_ids: [],
+          failed_ids: resourceIds,
+        };
+      }
       const deletedIds = await this.resourcesService.batchDeleteResources(
         userId,
         namespaceId,
         deleteIds,
         tx,
       );
+      const successIds = resourceIds.filter((id) => deletedIds.includes(id));
       return {
-        deleted: deletedIds.length,
-        failed: resourceIds.length - deletedIds.length,
+        success_ids: successIds,
+        failed_ids: resourceIds.filter((id) => !successIds.includes(id)),
       };
     });
   }
@@ -489,18 +499,23 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceIds: string[],
     targetId: string,
-  ): Promise<{ moved: number; failed: number }> {
-    const userHasPermission = await this.permissionsService.userHasPermission(
-      namespaceId,
-      targetId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    if (!userHasPermission) {
-      const message = this.i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
+  ): Promise<{
+    success_ids: string[];
+    failed_ids: string[];
+  }> {
     return await transaction(this.dataSource.manager, async (tx) => {
+      const userHasPermission = await this.permissionsService.userHasPermission(
+        namespaceId,
+        targetId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+        undefined,
+        tx.entityManager,
+      );
+      if (!userHasPermission) {
+        const message = this.i18n.t('auth.errors.notAuthorized');
+        throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+      }
       const editableIds = await this.getEditableResourceIds(
         namespaceId,
         userId,
@@ -508,6 +523,12 @@ export class NamespaceResourcesService {
         tx.entityManager,
       );
       const moveIds = resourceIds.filter((id) => editableIds.has(id));
+      if (moveIds.length === 0) {
+        return {
+          success_ids: [],
+          failed_ids: resourceIds,
+        };
+      }
       const movedIds = await this.resourcesService.batchMoveResources(
         userId,
         namespaceId,
@@ -515,9 +536,10 @@ export class NamespaceResourcesService {
         targetId,
         tx,
       );
+      const successIds = resourceIds.filter((id) => movedIds.includes(id));
       return {
-        moved: movedIds.length,
-        failed: resourceIds.length - movedIds.length,
+        success_ids: successIds,
+        failed_ids: resourceIds.filter((id) => !successIds.includes(id)),
       };
     });
   }
@@ -526,7 +548,11 @@ export class NamespaceResourcesService {
     userId: string,
     namespaceId: string,
     data: BatchCreateFolderDto,
-  ): Promise<{ resource: Resource; failed: number }> {
+  ): Promise<{
+    resource: Resource | null;
+    success_ids: string[];
+    failed_ids: string[];
+  }> {
     const userHasPermission = await this.permissionsService.userHasPermission(
       namespaceId,
       data.parentId,
@@ -538,6 +564,27 @@ export class NamespaceResourcesService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
     return await transaction(this.dataSource.manager, async (tx) => {
+      await this.ensureResourceNameNotExists(
+        namespaceId,
+        data.parentId,
+        data.name,
+        tx.entityManager,
+      );
+      const editableIds = await this.getEditableResourceIds(
+        namespaceId,
+        userId,
+        data.resourceIds,
+        tx.entityManager,
+      );
+      const moveIds = data.resourceIds.filter((id) => editableIds.has(id));
+      if (moveIds.length === 0) {
+        return {
+          resource: null,
+          success_ids: [],
+          failed_ids: data.resourceIds,
+        };
+      }
+
       const folder = await this.create(
         userId,
         namespaceId,
@@ -548,13 +595,6 @@ export class NamespaceResourcesService {
         },
         tx,
       );
-      const editableIds = await this.getEditableResourceIds(
-        namespaceId,
-        userId,
-        data.resourceIds,
-        tx.entityManager,
-      );
-      const moveIds = data.resourceIds.filter((id) => editableIds.has(id));
       const movedIds = await this.resourcesService.batchMoveResources(
         userId,
         namespaceId,
@@ -562,11 +602,39 @@ export class NamespaceResourcesService {
         folder.id,
         tx,
       );
+      const successIds = data.resourceIds.filter((id) => movedIds.includes(id));
       return {
         resource: folder,
-        failed: data.resourceIds.length - movedIds.length,
+        success_ids: successIds,
+        failed_ids: data.resourceIds.filter((id) => !successIds.includes(id)),
       };
     });
+  }
+
+  private async ensureResourceNameNotExists(
+    namespaceId: string,
+    parentId: string,
+    name: string,
+    entityManager: EntityManager,
+  ): Promise<void> {
+    const count = await entityManager
+      .getRepository(Resource)
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
+        parentId,
+      })
+      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
+      .andWhere('resource.deleted_at IS NULL')
+      .getCount();
+    if (count > 0) {
+      const message = this.i18n.t('resource.errors.resourceNameConflict');
+      throw new AppException(
+        message,
+        'RESOURCE_NAME_CONFLICT',
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
   async search({ namespaceId, excludeResourceId, name, userId }) {

@@ -463,8 +463,8 @@ export class NamespaceResourcesService {
     namespaceId: string,
     resourceIds: string[],
   ): Promise<{
-    success_ids: string[];
-    failed_ids: string[];
+    successIds: string[];
+    failedIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
       const editableIds = await this.getEditableResourceIds(
@@ -476,8 +476,8 @@ export class NamespaceResourcesService {
       const deleteIds = resourceIds.filter((id) => editableIds.has(id));
       if (deleteIds.length === 0) {
         return {
-          success_ids: [],
-          failed_ids: resourceIds,
+          successIds: [],
+          failedIds: resourceIds,
         };
       }
       const deletedIds = await this.resourcesService.batchDeleteResources(
@@ -488,8 +488,8 @@ export class NamespaceResourcesService {
       );
       const successIds = resourceIds.filter((id) => deletedIds.includes(id));
       return {
-        success_ids: successIds,
-        failed_ids: resourceIds.filter((id) => !successIds.includes(id)),
+        successIds: successIds,
+        failedIds: resourceIds.filter((id) => !successIds.includes(id)),
       };
     });
   }
@@ -500,8 +500,8 @@ export class NamespaceResourcesService {
     resourceIds: string[],
     targetId: string,
   ): Promise<{
-    success_ids: string[];
-    failed_ids: string[];
+    successIds: string[];
+    failedIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
       const userHasPermission = await this.permissionsService.userHasPermission(
@@ -525,8 +525,8 @@ export class NamespaceResourcesService {
       const moveIds = resourceIds.filter((id) => editableIds.has(id));
       if (moveIds.length === 0) {
         return {
-          success_ids: [],
-          failed_ids: resourceIds,
+          successIds: [],
+          failedIds: resourceIds,
         };
       }
       const movedIds = await this.resourcesService.batchMoveResources(
@@ -538,8 +538,8 @@ export class NamespaceResourcesService {
       );
       const successIds = resourceIds.filter((id) => movedIds.includes(id));
       return {
-        success_ids: successIds,
-        failed_ids: resourceIds.filter((id) => !successIds.includes(id)),
+        successIds: successIds,
+        failedIds: resourceIds.filter((id) => !successIds.includes(id)),
       };
     });
   }
@@ -550,20 +550,22 @@ export class NamespaceResourcesService {
     data: BatchCreateFolderDto,
   ): Promise<{
     resource: Resource | null;
-    success_ids: string[];
-    failed_ids: string[];
+    successIds: string[];
+    failedIds: string[];
   }> {
-    const userHasPermission = await this.permissionsService.userHasPermission(
-      namespaceId,
-      data.parentId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    if (!userHasPermission) {
-      const message = this.i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
     return await transaction(this.dataSource.manager, async (tx) => {
+      const userHasPermission = await this.permissionsService.userHasPermission(
+        namespaceId,
+        data.parentId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+        undefined,
+        tx.entityManager,
+      );
+      if (!userHasPermission) {
+        const message = this.i18n.t('auth.errors.notAuthorized');
+        throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+      }
       await this.ensureResourceNameNotExists(
         namespaceId,
         data.parentId,
@@ -580,8 +582,8 @@ export class NamespaceResourcesService {
       if (moveIds.length === 0) {
         return {
           resource: null,
-          success_ids: [],
-          failed_ids: data.resourceIds,
+          successIds: [],
+          failedIds: data.resourceIds,
         };
       }
 
@@ -605,8 +607,8 @@ export class NamespaceResourcesService {
       const successIds = data.resourceIds.filter((id) => movedIds.includes(id));
       return {
         resource: folder,
-        success_ids: successIds,
-        failed_ids: data.resourceIds.filter((id) => !successIds.includes(id)),
+        successIds: successIds,
+        failedIds: data.resourceIds.filter((id) => !successIds.includes(id)),
       };
     });
   }

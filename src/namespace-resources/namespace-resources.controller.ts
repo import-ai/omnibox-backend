@@ -194,8 +194,8 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Body() data: BatchResourceIdsDto,
   ): Promise<{
-    success_ids: string[];
-    failed_ids: string[];
+    successIds: string[];
+    failedIds: string[];
   }> {
     return await this.namespaceResourcesService.batchMoveToTrash(
       userId,
@@ -211,8 +211,8 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Body() data: BatchMoveResourcesDto,
   ): Promise<{
-    success_ids: string[];
-    failed_ids: string[];
+    successIds: string[];
+    failedIds: string[];
   }> {
     return await this.namespaceResourcesService.batchMove(
       userId,
@@ -236,8 +236,8 @@ export class NamespaceResourcesController {
     );
     if (!folder.resource) {
       return {
-        success_ids: folder.success_ids,
-        failed_ids: folder.failed_ids,
+        successIds: folder.successIds,
+        failedIds: folder.failedIds,
       };
     }
     const resource = await this.namespaceResourcesService.getResource({
@@ -247,8 +247,8 @@ export class NamespaceResourcesController {
     });
     return {
       ...resource,
-      success_ids: folder.success_ids,
-      failed_ids: folder.failed_ids,
+      successIds: folder.successIds,
+      failedIds: folder.failedIds,
     };
   }
 

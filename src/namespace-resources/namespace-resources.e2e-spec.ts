@@ -976,7 +976,7 @@ describe('ResourcesController (e2e)', () => {
       );
       await setUserPermission(readonlySource.id, ResourcePermission.CAN_VIEW);
 
-      await memberClient
+      const response = await memberClient
         .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
         .send({
           resourceIds: [readonlySource.id, editableSource.id],
@@ -1095,7 +1095,7 @@ describe('ResourcesController (e2e)', () => {
       await setUserPermission(second.id, ResourcePermission.CAN_VIEW);
       const folderName = uniqueName('Readonly Selected Resources');
 
-      await memberClient
+      const response = await memberClient
         .post(
           `/api/v1/namespaces/${client.namespace.id}/resources/batch-folder`,
         )

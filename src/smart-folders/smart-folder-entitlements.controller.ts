@@ -7,6 +7,7 @@ import {
   ISmartFolderEntitlementsProvider,
   SMART_FOLDER_ENTITLEMENTS_PROVIDER,
 } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
+import { I18nService } from 'nestjs-i18n';
 
 @Controller('api/v1/namespaces/:namespaceId/smart-folders/entitlements')
 export class SmartFolderEntitlementsController {
@@ -14,6 +15,7 @@ export class SmartFolderEntitlementsController {
     private readonly permissionsService: PermissionsService,
     @Inject(SMART_FOLDER_ENTITLEMENTS_PROVIDER)
     private readonly entitlementsProvider: ISmartFolderEntitlementsProvider,
+    private readonly i18n: I18nService,
   ) {}
 
   @Get()
@@ -26,11 +28,8 @@ export class SmartFolderEntitlementsController {
       namespaceId,
     );
     if (!allowed) {
-      throw new AppException(
-        'Not authorized',
-        'NOT_AUTHORIZED',
-        HttpStatus.FORBIDDEN,
-      );
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
     return await this.entitlementsProvider.getEntitlements(namespaceId, userId);

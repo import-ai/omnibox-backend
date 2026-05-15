@@ -339,8 +339,9 @@ export class SmartFoldersService {
       ownerScope === SmartFolderOwnerScope.TEAMSPACE &&
       rootScope !== SmartFolderRootScope.TEAMSPACE
     ) {
+      const message = this.i18n.t('resource.errors.smartFolderScopeInvalid');
       throw new AppException(
-        'Team smart folder can only filter teamspace resources',
+        message,
         'SMART_FOLDER_SCOPE_INVALID',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
@@ -363,8 +364,9 @@ export class SmartFoldersService {
       .getOne();
 
     if (!config) {
+      const message = this.i18n.t('resource.errors.smartFolderNotFound');
       throw new AppException(
-        'Smart folder not found',
+        message,
         'SMART_FOLDER_NOT_FOUND',
         HttpStatus.NOT_FOUND,
       );
@@ -385,11 +387,8 @@ export class SmartFoldersService {
       ResourcePermission.CAN_EDIT,
     );
     if (!allowed) {
-      throw new AppException(
-        'Not authorized',
-        'NOT_AUTHORIZED',
-        HttpStatus.FORBIDDEN,
-      );
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
   }
 
@@ -405,11 +404,8 @@ export class SmartFoldersService {
       ResourcePermission.CAN_VIEW,
     );
     if (!allowed) {
-      throw new AppException(
-        'Not authorized',
-        'NOT_AUTHORIZED',
-        HttpStatus.FORBIDDEN,
-      );
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
   }
 

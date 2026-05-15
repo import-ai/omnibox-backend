@@ -20,6 +20,11 @@
     "resourceNameContainsSlash": "资源名称不能包含 '/'",
     "resourceNameConflict": "资源名称在该目录下已存在",
     "smartFolderQuotaExhausted": "智能文件夹额度已用尽，无法恢复，请清理或升级",
-    "smartFolderQuotaExceeded": "智能文件夹额度已用尽，请升级后继续创建"
+    "smartFolderQuotaExceeded": "智能文件夹额度已用尽，请升级后继续创建",
+    "smartFolderRuleLimitExceeded": "智能文件夹规则数量已超出限制",
+    "smartFolderScopeInvalid": "团队智能文件夹只能筛选团队空间资源",
+    "smartFolderNotFound": "智能文件夹未找到",
+    "smartFolderConditionOperatorInvalid": "智能文件夹条件操作符无效",
+    "smartFolderConditionIncomplete": "请补全智能文件夹条件"
   }
 }

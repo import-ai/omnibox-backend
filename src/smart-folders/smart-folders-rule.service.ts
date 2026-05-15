@@ -5,6 +5,7 @@ import {
   SmartFolderField,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { I18nService } from 'nestjs-i18n';
 
 const TEXT_FIELDS = new Set<SmartFolderField>([
   SmartFolderField.TITLE,
@@ -40,6 +41,8 @@ const VALUELESS_OPERATORS = new Set<SmartFolderOperator>([
 
 @Injectable()
 export class SmartFoldersRuleService {
+  constructor(private readonly i18n: I18nService) {}
+
   normalize(conditions: SmartFolderCondition[] = []): SmartFolderCondition[] {
     return conditions
       .filter((condition) => condition.field)
@@ -62,8 +65,11 @@ export class SmartFoldersRuleService {
       (isTextField && !TEXT_OPERATORS.has(operator)) ||
       (isDateField && !DATE_OPERATORS.has(operator))
     ) {
+      const message = this.i18n.t(
+        'resource.errors.smartFolderConditionOperatorInvalid',
+      );
       throw new AppException(
-        'Invalid smart folder condition operator',
+        message,
         'SMART_FOLDER_CONDITION_OPERATOR_INVALID',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
@@ -107,8 +113,11 @@ export class SmartFoldersRuleService {
   }
 
   private throwIncomplete(): never {
+    const message = this.i18n.t(
+      'resource.errors.smartFolderConditionIncomplete',
+    );
     throw new AppException(
-      'Please complete this smart folder condition',
+      message,
       'SMART_FOLDER_CONDITION_INCOMPLETE',
       HttpStatus.UNPROCESSABLE_ENTITY,
     );

@@ -52,6 +52,39 @@ export class SmartFoldersScopeService {
     return scopedVisibleResourceIds;
   }
 
+  async isResourceInScope(
+    userId: string,
+    namespaceId: string,
+    rootScope: SmartFolderRootScope,
+    resourceId: string,
+  ): Promise<boolean> {
+    const parentResources =
+      await this.resourcesService.getParentResourcesOrFail(
+        namespaceId,
+        resourceId,
+      );
+    const resourceIds = parentResources.map((resource) => resource.id);
+    const scopes: Array<
+      SmartFolderRootScope.PRIVATE | SmartFolderRootScope.TEAMSPACE
+    > =
+      rootScope === SmartFolderRootScope.ALL
+        ? [SmartFolderRootScope.PRIVATE, SmartFolderRootScope.TEAMSPACE]
+        : [rootScope];
+
+    for (const scope of scopes) {
+      const rootResourceId = await this.getOwnerRootId(
+        userId,
+        namespaceId,
+        scope,
+      );
+      if (resourceIds.includes(rootResourceId)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   async getOwnerRootId(
     userId: string,
     namespaceId: string,

@@ -89,6 +89,34 @@ export class SmartFoldersQuotaService {
     return entitlements;
   }
 
+  async assertRestoreEntitlements(
+    namespaceId: string,
+    userId: string,
+    ownerScope: SmartFolderOwnerScope,
+  ): Promise<void> {
+    const entitlements = await this.entitlementsProvider.getEntitlements(
+      namespaceId,
+      userId,
+    );
+    const limit =
+      ownerScope === SmartFolderOwnerScope.PRIVATE
+        ? entitlements.privateLimit
+        : entitlements.teamLimit;
+    if (limit < 0) {
+      return;
+    }
+
+    const count = await this.countActive(namespaceId, userId, ownerScope);
+    if (count >= limit) {
+      const message = this.i18n.t('resource.errors.smartFolderQuotaExhausted');
+      throw new AppException(
+        message,
+        'SMART_FOLDER_QUOTA_EXCEEDED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
   async countActive(
     namespaceId: string,
     userId: string,

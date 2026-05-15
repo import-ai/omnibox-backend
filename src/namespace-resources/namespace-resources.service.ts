@@ -16,7 +16,8 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { Inject, Injectable, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpStatus } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { S3Service } from 'omniboxd/s3/s3.service';
@@ -49,12 +50,8 @@ import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
 import {
-  SmartFolderConfig,
-  SmartFolderOwnerScope,
-} from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
-import {
-  ISmartFolderEntitlementsProvider,
-  SMART_FOLDER_ENTITLEMENTS_PROVIDER,
+  ISmartFoldersService,
+  SMART_FOLDERS_SERVICE,
 } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 
 @Injectable()
@@ -73,8 +70,7 @@ export class NamespaceResourcesService {
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
-    @Inject(SMART_FOLDER_ENTITLEMENTS_PROVIDER)
-    private readonly entitlementsProvider: ISmartFolderEntitlementsProvider,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   private async getTagsByIds(
@@ -614,6 +610,19 @@ export class NamespaceResourcesService {
       resourceId,
       entityManager,
     );
+    const resource = parents[parents.length - 1];
+
+    if (resource?.resourceType === ResourceType.SMART_FOLDER) {
+      return await this.getSmartFoldersService().listChildren(
+        userId,
+        namespaceId,
+        resourceId,
+        {
+          limit,
+          offset,
+        },
+      );
+    }
 
     let children = await this.resourcesService.getChildren(
       namespaceId,
@@ -1039,7 +1048,7 @@ export class NamespaceResourcesService {
 
     // Check smart folder quota before restoring
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
-      await this.assertSmartFolderRestoreEntitlements(
+      await this.getSmartFoldersService().assertRestoreEntitlements(
         namespaceId,
         userId,
         resourceId,
@@ -1110,56 +1119,14 @@ export class NamespaceResourcesService {
     );
   }
 
-  private async assertSmartFolderRestoreEntitlements(
-    namespaceId: string,
-    userId: string,
-    resourceId: string,
-  ): Promise<void> {
-    const config = await this.dataSource
-      .getRepository(SmartFolderConfig)
-      .findOne({
-        where: { resourceId },
-      });
-    if (!config) return;
-
-    const ownerScope = config.ownerScope || SmartFolderOwnerScope.PRIVATE;
-    const entitlements = await this.entitlementsProvider.getEntitlements(
-      namespaceId,
-      userId,
-    );
-    const limit =
-      ownerScope === SmartFolderOwnerScope.PRIVATE
-        ? entitlements.privateLimit
-        : entitlements.teamLimit;
-    if (limit < 0) return;
-
-    const count = await this.dataSource
-      .getRepository(SmartFolderConfig)
-      .createQueryBuilder('config')
-      .innerJoin('resources', 'resource', 'resource.id = config.resource_id')
-      .where('config.namespace_id = :namespaceId', { namespaceId })
-      .andWhere('config.owner_scope = :ownerScope', { ownerScope })
-      .andWhere('resource.deleted_at IS NULL')
-      .andWhere(
-        ownerScope === SmartFolderOwnerScope.PRIVATE
-          ? 'config.owner_user_id = :userId'
-          : '1=1',
-        ownerScope === SmartFolderOwnerScope.PRIVATE ? { userId } : {},
-      )
-      .getCount();
-
-    if (count >= limit) {
-      const message = this.i18n.t('resource.errors.smartFolderQuotaExhausted');
-      throw new AppException(
-        message,
-        'SMART_FOLDER_QUOTA_EXCEEDED',
-        HttpStatus.UNPROCESSABLE_ENTITY,
-      );
-    }
-  }
-
   s3Path(resourceId: string) {
     return `resources/${resourceId}`;
+  }
+
+  private getSmartFoldersService(): ISmartFoldersService {
+    return this.moduleRef.get<ISmartFoldersService>(SMART_FOLDERS_SERVICE, {
+      strict: false,
+    });
   }
 
   async uploadFile(

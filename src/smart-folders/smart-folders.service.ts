@@ -15,6 +15,7 @@ import {
   SmartFolderOwnerScope,
   SmartFolderRootScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { ISmartFoldersService } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
 import { SmartFoldersQuotaService } from 'omniboxd/smart-folders/smart-folders-quota.service';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
@@ -28,7 +29,7 @@ import { SmartFolderResponseDto } from './dto/smart-folder-response.dto';
 import { UpdateSmartFolderRequestDto } from './dto/update-smart-folder-request.dto';
 
 @Injectable()
-export class SmartFoldersService {
+export class SmartFoldersService implements ISmartFoldersService {
   constructor(
     @InjectRepository(SmartFolderConfig)
     private readonly smartFolderConfigRepository: Repository<SmartFolderConfig>,
@@ -230,12 +231,65 @@ export class SmartFoldersService {
     smartFolderId: string,
     resourceId: string,
   ): Promise<boolean> {
-    const children = await this.listChildren(
+    if (smartFolderId === resourceId) {
+      return false;
+    }
+
+    const config = await this.getConfigOrFail(namespaceId, smartFolderId);
+    const resource = await this.resourceRepository.findOne({
+      where: { namespaceId, id: resourceId },
+    });
+    if (!resource || resource.resourceType === ResourceType.SMART_FOLDER) {
+      return false;
+    }
+
+    const allowed = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    if (!allowed) {
+      return false;
+    }
+
+    const inScope = await this.scopeService.isResourceInScope(
       userId,
       namespaceId,
-      smartFolderId,
+      config.rootScope,
+      resourceId,
     );
-    return children.some((child) => child.id === resourceId);
+    if (!inScope) {
+      return false;
+    }
+
+    const [resourceWithTagNames] = await this.withTagNames(namespaceId, [
+      resource,
+    ]);
+    return this.matcherService.matches(
+      resourceWithTagNames,
+      config.conditions,
+      config.matchMode,
+    );
+  }
+
+  async assertRestoreEntitlements(
+    namespaceId: string,
+    userId: string,
+    resourceId: string,
+  ): Promise<void> {
+    const config = await this.smartFolderConfigRepository.findOne({
+      where: { resourceId },
+    });
+    if (!config) {
+      return;
+    }
+
+    await this.quotaService.assertRestoreEntitlements(
+      namespaceId,
+      userId,
+      config.ownerScope || SmartFolderOwnerScope.PRIVATE,
+    );
   }
 
   async update(

@@ -8,7 +8,10 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { SmartFolderConfig } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { SmartFolderEntitlementsController } from 'omniboxd/smart-folders/smart-folder-entitlements.controller';
-import { SMART_FOLDER_ENTITLEMENTS_PROVIDER } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
+import {
+  SMART_FOLDER_ENTITLEMENTS_PROVIDER,
+  SMART_FOLDERS_SERVICE,
+} from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 import { SmartFolderEntitlementsService } from 'omniboxd/smart-folders/smart-folder-entitlements.service';
 import { SmartFoldersController } from 'omniboxd/smart-folders/smart-folders.controller';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
@@ -39,8 +42,16 @@ import { TagModule } from 'omniboxd/tag/tag.module';
       provide: SMART_FOLDER_ENTITLEMENTS_PROVIDER,
       useClass: SmartFolderEntitlementsService,
     },
+    {
+      provide: SMART_FOLDERS_SERVICE,
+      useExisting: SmartFoldersService,
+    },
   ],
   controllers: [SmartFolderEntitlementsController, SmartFoldersController],
-  exports: [SmartFoldersService, SMART_FOLDER_ENTITLEMENTS_PROVIDER],
+  exports: [
+    SmartFoldersService,
+    SMART_FOLDERS_SERVICE,
+    SMART_FOLDER_ENTITLEMENTS_PROVIDER,
+  ],
 })
 export class SmartFoldersModule {}

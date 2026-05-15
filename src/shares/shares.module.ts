@@ -9,12 +9,14 @@ import {
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { UserModule } from 'omniboxd/user/user.module';
+import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Share]),
     ResourcesModule,
     NamespacesModule,
+    SmartFoldersModule,
     UserModule,
   ],
   providers: [SharesService],

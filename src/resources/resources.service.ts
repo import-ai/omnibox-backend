@@ -224,6 +224,7 @@ export class ResourcesService {
     namespaceId: string,
     resourceIds: string[],
     entityManager?: EntityManager,
+    includeDeleted: boolean = false,
   ): Promise<Map<string, ResourceMetaDto>> {
     if (resourceIds.length === 0) {
       return new Map();
@@ -246,6 +247,7 @@ export class ResourcesService {
         'createdAt',
         'updatedAt',
       ],
+      ...(includeDeleted ? { withDeleted: true } : {}),
       where: { namespaceId, id: In(resourceIds) },
     });
 
@@ -281,6 +283,7 @@ export class ResourcesService {
     namespaceId: string,
     resourceIds: string[],
     entityManager?: EntityManager,
+    includeDeleted: boolean = false,
   ): Promise<Map<string, ResourceMetaDto>> {
     const resourceMap: Map<string, ResourceMetaDto> = new Map();
     while (resourceIds.length > 0) {
@@ -288,6 +291,7 @@ export class ResourcesService {
         namespaceId,
         resourceIds,
         entityManager,
+        includeDeleted,
       );
 
       for (const resource of resources.values()) {
@@ -1422,38 +1426,31 @@ export class ResourcesService {
 
   async hardDeleteAllTrash(
     namespaceId: string,
+    resourceIds?: string[],
     tx?: Transaction,
   ): Promise<number> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.hardDeleteAllTrash(namespaceId, tx),
+        this.hardDeleteAllTrash(namespaceId, resourceIds, tx),
       );
     }
 
     const repo = tx.entityManager.getRepository(Resource);
     const now = new Date();
 
-    // Find all deleted resources that haven't been permanently deleted yet
-    // (excluding root resources)
-    const deletedResources = await repo.find({
-      withDeleted: true,
-      where: {
+    // Bulk update all resources with permanent_deleted_at
+    const result = await repo.update(
+      {
         namespaceId,
         deletedAt: Not(IsNull()),
         parentId: Not(IsNull()),
         permanentDeletedAt: IsNull(),
+        ...(resourceIds ? { id: In(resourceIds) } : {}),
       },
-    });
+      { permanentDeletedAt: now },
+    );
 
-    if (deletedResources.length === 0) {
-      return 0;
-    }
-
-    // Bulk update all resources with permanent_deleted_at
-    const resourceIds = deletedResources.map((r) => r.id);
-    await repo.update({ id: In(resourceIds) }, { permanentDeletedAt: now });
-
-    return deletedResources.length;
+    return result.affected ?? 0;
   }
 
   async getDeletedResourceOrFail(

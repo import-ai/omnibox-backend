@@ -40,7 +40,11 @@ export class TagService {
     });
   }
 
-  async findAll(namespaceId: string, name: string) {
+  async findAll(
+    namespaceId: string,
+    name?: string,
+    options?: { offset?: number; limit?: number },
+  ) {
     const where: any = {
       namespaceId,
     };
@@ -49,8 +53,8 @@ export class TagService {
     }
     return await this.tagRepository.find({
       where,
-      skip: 0,
-      take: 10,
+      skip: options?.offset ?? 0,
+      take: options?.limit ?? 10,
       order: { updatedAt: 'DESC' },
     });
   }

@@ -10,6 +10,7 @@ describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;
   let apiKeyValue: string;
   let readOnlyApiKeyValue: string;
+  let lifecycleApiKeyValue: string;
 
   beforeAll(async () => {
     client = await TestClient.create();
@@ -60,6 +61,32 @@ describe('OpenResourcesController (e2e)', () => {
       .expect(201);
 
     readOnlyApiKeyValue = readOnlyResponse.body.value;
+
+    const lifecycleApiKeyData = {
+      user_id: client.user.id,
+      namespace_id: client.namespace.id,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [
+              APIKeyPermissionType.CREATE,
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.UPDATE,
+              APIKeyPermissionType.DELETE,
+            ],
+          },
+        ],
+      },
+    };
+
+    const lifecycleResponse = await client
+      .post('/api/v1/api-keys')
+      .send(lifecycleApiKeyData)
+      .expect(201);
+
+    lifecycleApiKeyValue = lifecycleResponse.body.value;
   });
 
   afterAll(async () => {
@@ -258,6 +285,106 @@ describe('OpenResourcesController (e2e)', () => {
         .set('Authorization', `Bearer ${apiKeyValue}`)
         .send(resourceData)
         .expect(400);
+    });
+  });
+
+  describe('resource lifecycle open APIs', () => {
+    it('should list and get resources with READ permission', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Lifecycle Read',
+          content: 'Content for open lifecycle read',
+        })
+        .expect(201);
+
+      const resourceId = resourceResponse.body.id;
+
+      const listResponse = await client
+        .request()
+        .get('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(Array.isArray(listResponse.body)).toBe(true);
+      expect(
+        listResponse.body.some((item: any) => item.id === resourceId),
+      ).toBe(true);
+
+      const getResponse = await client
+        .request()
+        .get(`/open/api/v1/resources/${resourceId}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(getResponse.body).toMatchObject({
+        id: resourceId,
+        name: 'Open Lifecycle Read',
+        content: 'Content for open lifecycle read',
+      });
+    });
+
+    it('should update and delete resources with lifecycle permissions', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Lifecycle Update',
+          content: 'Initial open lifecycle content',
+        })
+        .expect(201);
+
+      const resourceId = resourceResponse.body.id;
+
+      const updateResponse = await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceId}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Lifecycle Updated',
+          content: 'Updated open lifecycle content',
+        })
+        .expect(200);
+
+      expect(updateResponse.body).toMatchObject({
+        id: resourceId,
+        name: 'Open Lifecycle Updated',
+        content: 'Updated open lifecycle content',
+      });
+
+      await client
+        .request()
+        .delete(`/open/api/v1/resources/${resourceId}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .expect(200);
+
+      await client
+        .request()
+        .get(`/open/api/v1/resources/${resourceId}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(404);
+    });
+
+    it('should reject update when API key lacks UPDATE permission', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Lifecycle Permission',
+          content: 'Permission test content',
+        })
+        .expect(201);
+
+      await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceResponse.body.id}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .send({ name: 'Should not update' })
+        .expect(403);
     });
   });
 

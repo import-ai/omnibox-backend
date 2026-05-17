@@ -9,6 +9,7 @@ import {
   SearchController,
   InternalSearchController,
 } from './search.controller';
+import { OpenSearchController } from 'omniboxd/search/open.search.controller';
 import { SearchService } from './search.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
@@ -21,6 +22,12 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { TagService } from 'omniboxd/tag/tag.service';
+import {
+  APIKey,
+  APIKeyPermissionTarget,
+  APIKeyPermissionType,
+} from 'omniboxd/api-key/api-key.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
 jest.mock('../wizard-api/wizard-api.service', () => {
@@ -90,7 +97,11 @@ describe('SearchController (e2e)', () => {
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      controllers: [SearchController, InternalSearchController],
+      controllers: [
+        SearchController,
+        OpenSearchController,
+        InternalSearchController,
+      ],
       providers: [
         SearchService,
         WizardAPIService,
@@ -120,13 +131,37 @@ describe('SearchController (e2e)', () => {
           provide: NamespaceResourcesService,
           useValue: {
             listAllResources: jest.fn().mockResolvedValue([]),
+            filterOpenResourceScope: jest
+              .fn()
+              .mockResolvedValue(['550e8400-e29b-41d4-a716-446655440000']),
           },
         },
         {
           provide: ResourcesService,
           useValue: {
             getParentResources: jest.fn().mockResolvedValue([]),
-            batchGetResourceMeta: jest.fn().mockResolvedValue(new Map()),
+            batchGetResourceMeta: jest
+              .fn()
+              .mockImplementation((_namespaceId, resourceIds: string[]) => {
+                const entries: Array<
+                  [
+                    string,
+                    {
+                      id: string;
+                      attrs: Record<string, unknown>;
+                      resourceType: ResourceType;
+                    },
+                  ]
+                > = (resourceIds || []).map((id) => [
+                  id,
+                  {
+                    id,
+                    attrs: {},
+                    resourceType: ResourceType.DOC,
+                  },
+                ]);
+                return Promise.resolve(new Map(entries));
+              }),
             batchGetParentResources: jest
               .fn()
               .mockImplementation((_namespaceId, resourceIds: string[]) => {
@@ -347,6 +382,36 @@ describe('SearchController (e2e)', () => {
         HttpStatus.OK,
         HttpStatus.INTERNAL_SERVER_ERROR,
       ]).toContain(response.status);
+    });
+  });
+
+  describe('openSearch', () => {
+    it('should return resource-only results filtered by open resource scope', async () => {
+      const apiKey = {
+        id: 'test-api-key-id',
+        value: 'sk-test',
+        userId: 'test-user',
+        namespaceId: 'test-namespace',
+        attrs: {
+          root_resource_id: 'test-root-resource',
+          permissions: [
+            {
+              target: APIKeyPermissionTarget.SEARCH,
+              permissions: [APIKeyPermissionType.READ],
+            },
+          ],
+        },
+      } as APIKey;
+
+      const result = await searchService.openSearch(apiKey, 'test');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        type: DocType.RESOURCE,
+        resourceId: '550e8400-e29b-41d4-a716-446655440000',
+        title: 'Test Document',
+      });
+      expect((result[0] as any).conversationId).toBeUndefined();
     });
   });
 

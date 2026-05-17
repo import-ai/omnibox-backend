@@ -78,6 +78,12 @@ describe('APIKeyService', () => {
             'User {{userId}} does not have permission to namespace {{namespaceId}}',
           'apikey.errors.noWritePermission':
             'User {{userId}} does not have write permission to resource {{resourceId}} in namespace {{namespaceId}}',
+          'apikey.errors.invalidPermissionTarget':
+            'Invalid API key permission target: {{target}}',
+          'apikey.errors.invalidPermissionAction':
+            'Invalid API key permission action: {{action}} for target: {{target}}',
+          'apikey.errors.invalidPermissionCombination':
+            'API key permission action {{action}} is not allowed for target: {{target}}',
         };
         let translation = translations[key] || key;
         if (options?.args) {
@@ -288,6 +294,101 @@ describe('APIKeyService', () => {
       expect(apiKeyRepository.save).toHaveBeenCalled();
       expect(result).toBeDefined();
     });
+
+    it('should allow tags and search permissions', async () => {
+      const createApiKeyDtoWithOpenPermissions: CreateAPIKeyDto = {
+        user_id: 'test-user-id',
+        namespace_id: 'test-namespace-id',
+        attrs: {
+          root_resource_id: 'test-resource-id',
+          permissions: [
+            {
+              target: APIKeyPermissionTarget.TAGS,
+              permissions: [
+                APIKeyPermissionType.CREATE,
+                APIKeyPermissionType.READ,
+              ],
+            },
+            {
+              target: APIKeyPermissionTarget.SEARCH,
+              permissions: [APIKeyPermissionType.READ],
+            },
+          ],
+        },
+      };
+
+      namespacesService.getMemberByUserId.mockResolvedValue({
+        id: 1,
+        namespaceId: 'test-namespace-id',
+        userId: 'test-user-id',
+        role: 'member',
+        rootResourceId: 'test-root-resource-id',
+      } as any);
+      permissionsService.userHasPermission.mockResolvedValue(true);
+      apiKeyRepository.findOne.mockResolvedValue(null);
+      apiKeyRepository.create.mockReturnValue({
+        ...mockApiKey,
+        attrs: createApiKeyDtoWithOpenPermissions.attrs,
+      } as any);
+      apiKeyRepository.save.mockResolvedValue({
+        ...mockApiKey,
+        attrs: createApiKeyDtoWithOpenPermissions.attrs,
+      } as any);
+
+      const result = await service.create(createApiKeyDtoWithOpenPermissions);
+
+      expect(result.attrs.permissions).toEqual(
+        createApiKeyDtoWithOpenPermissions.attrs!.permissions,
+      );
+    });
+
+    it('should reject unknown permission targets', async () => {
+      const createApiKeyDtoWithInvalidTarget: CreateAPIKeyDto = {
+        user_id: 'test-user-id',
+        namespace_id: 'test-namespace-id',
+        attrs: {
+          root_resource_id: 'test-resource-id',
+          permissions: [
+            {
+              target: 'vfs' as APIKeyPermissionTarget,
+              permissions: [APIKeyPermissionType.READ],
+            },
+          ],
+        },
+      };
+
+      await expect(
+        service.create(createApiKeyDtoWithInvalidTarget),
+      ).rejects.toThrow('Invalid API key permission target: vfs');
+
+      expect(namespacesService.getMemberByUserId).not.toHaveBeenCalled();
+      expect(apiKeyRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('should reject illegal target-action combinations', async () => {
+      const createApiKeyDtoWithInvalidCombination: CreateAPIKeyDto = {
+        user_id: 'test-user-id',
+        namespace_id: 'test-namespace-id',
+        attrs: {
+          root_resource_id: 'test-resource-id',
+          permissions: [
+            {
+              target: APIKeyPermissionTarget.SEARCH,
+              permissions: [APIKeyPermissionType.CREATE],
+            },
+          ],
+        },
+      };
+
+      await expect(
+        service.create(createApiKeyDtoWithInvalidCombination),
+      ).rejects.toThrow(
+        'API key permission action create is not allowed for target: search',
+      );
+
+      expect(namespacesService.getMemberByUserId).not.toHaveBeenCalled();
+      expect(apiKeyRepository.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('findByValue', () => {
@@ -313,6 +414,27 @@ describe('APIKeyService', () => {
       expect(apiKeyRepository.findOne).toHaveBeenCalledWith({
         where: { value: 'sk-nonexistent' },
       });
+    });
+  });
+
+  describe('patch', () => {
+    it('should reject illegal permissions while preserving existing attrs', async () => {
+      apiKeyRepository.findOne.mockResolvedValue(mockApiKey as any);
+
+      await expect(
+        service.patch('test-api-key-id', {
+          permissions: [
+            {
+              target: APIKeyPermissionTarget.TAGS,
+              permissions: [APIKeyPermissionType.DELETE],
+            },
+          ],
+        }),
+      ).rejects.toThrow(
+        'API key permission action delete is not allowed for target: tags',
+      );
+
+      expect(apiKeyRepository.update).not.toHaveBeenCalled();
     });
   });
 

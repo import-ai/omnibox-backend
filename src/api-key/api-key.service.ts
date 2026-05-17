@@ -4,7 +4,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { randomBytes } from 'crypto';
-import { APIKey } from 'omniboxd/api-key/api-key.entity';
+import {
+  API_KEY_PERMISSION_MATRIX,
+  APIKey,
+  APIKeyAttrs,
+  APIKeyPermission,
+  APIKeyPermissionTarget,
+  APIKeyPermissionType,
+} from 'omniboxd/api-key/api-key.entity';
 import {
   APIKeyInfoResponseDto,
   APIKeyResponseDto,
@@ -36,6 +43,8 @@ export class APIKeyService {
   ) {}
 
   async create(createApiKeyDto: CreateAPIKeyDto): Promise<APIKeyResponseDto> {
+    this.validateAttrs(createApiKeyDto.attrs);
+
     // Validate user has permission to the namespace
     await this.validateUserNamespacePermission(
       createApiKeyDto.user_id,
@@ -98,8 +107,10 @@ export class APIKeyService {
     updateApiKeyDto: UpdateAPIKeyDto,
   ): Promise<APIKeyResponseDto> {
     const updateData: Partial<APIKey> = {};
-    if (updateApiKeyDto.attrs !== undefined)
+    if (updateApiKeyDto.attrs !== undefined) {
+      this.validateAttrs(updateApiKeyDto.attrs);
       updateData.attrs = updateApiKeyDto.attrs;
+    }
 
     await this.apiKeyRepository.update(id, updateData);
     return await this.findOne(id);
@@ -141,6 +152,7 @@ export class APIKeyService {
     if (patchApiKeyDto.permissions !== undefined) {
       updatedAttrs.permissions = patchApiKeyDto.permissions;
     }
+    this.validateAttrs(updatedAttrs);
 
     // Update the API key with the merged attrs
     await this.apiKeyRepository.update(id, { attrs: updatedAttrs });
@@ -182,6 +194,88 @@ export class APIKeyService {
     }
 
     return value!;
+  }
+
+  private validateAttrs(attrs?: APIKeyAttrs): void {
+    if (attrs?.permissions === undefined) {
+      return;
+    }
+    if (!Array.isArray(attrs.permissions)) {
+      const message = this.i18n.t('apikey.errors.invalidPermissions');
+      throw new AppException(
+        message,
+        'INVALID_PERMISSIONS',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    this.validatePermissions(attrs.permissions);
+  }
+
+  private validatePermissions(permissions: APIKeyPermission[]): void {
+    for (const permission of permissions) {
+      const target = permission?.target;
+      if (!this.isValidTarget(target)) {
+        const message = this.i18n.t('apikey.errors.invalidPermissionTarget', {
+          args: { target },
+        });
+        throw new AppException(
+          message,
+          'INVALID_PERMISSION_TARGET',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (!Array.isArray(permission.permissions)) {
+        const message = this.i18n.t('apikey.errors.invalidPermissionAction', {
+          args: { action: String(permission.permissions), target },
+        });
+        throw new AppException(
+          message,
+          'INVALID_PERMISSION_ACTION',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const allowedActions = API_KEY_PERMISSION_MATRIX[target];
+      for (const action of permission.permissions) {
+        if (!this.isValidAction(action)) {
+          const message = this.i18n.t('apikey.errors.invalidPermissionAction', {
+            args: { action, target },
+          });
+          throw new AppException(
+            message,
+            'INVALID_PERMISSION_ACTION',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        if (!allowedActions.includes(action)) {
+          const message = this.i18n.t(
+            'apikey.errors.invalidPermissionCombination',
+            {
+              args: { action, target },
+            },
+          );
+          throw new AppException(
+            message,
+            'INVALID_PERMISSION_COMBINATION',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      }
+    }
+  }
+
+  private isValidTarget(target: unknown): target is APIKeyPermissionTarget {
+    return Object.values(APIKeyPermissionTarget).includes(
+      target as APIKeyPermissionTarget,
+    );
+  }
+
+  private isValidAction(action: unknown): action is APIKeyPermissionType {
+    return Object.values(APIKeyPermissionType).includes(
+      action as APIKeyPermissionType,
+    );
   }
 
   private async validateUserNamespacePermission(

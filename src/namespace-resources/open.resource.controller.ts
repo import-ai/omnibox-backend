@@ -1,7 +1,13 @@
 import {
   Body,
   Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
   HttpStatus,
@@ -24,6 +30,9 @@ import { isEmpty } from 'omniboxd/utils/is-empty';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { parseHashtags } from 'omniboxd/utils/parse-hashtags';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -43,6 +52,44 @@ export class OpenResourcesController {
     private readonly wizardTaskService: WizardTaskService,
     private readonly tagService: TagService,
   ) {}
+
+  @Get()
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.READ],
+      },
+    ],
+  })
+  @ApiOperation({ summary: 'List resources under the API key root' })
+  @ApiResponse({
+    status: 200,
+    description: 'Resources listed successfully',
+    type: [ResourceSummaryDto],
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async list(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Query('parent_id') parentId?: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
+    @Query('summary') summary?: string,
+  ): Promise<ResourceSummaryDto[]> {
+    return await this.namespaceResourcesService.listOpenResources(
+      apiKey.namespaceId,
+      apiKey.attrs.root_resource_id,
+      userId,
+      {
+        parentId,
+        limit,
+        offset,
+        summary: summary === 'true',
+      },
+    );
+  }
 
   @Post()
   @CheckNamespaceReadonly()
@@ -102,13 +149,20 @@ export class OpenResourcesController {
       }
     }
 
+    const parentId = await this.namespaceResourcesService.resolveOpenResourceId(
+      apiKey.namespaceId,
+      apiKey.attrs.root_resource_id,
+      data.parent_id,
+      userId,
+    );
+
     const createResourceDto = {
       name: data.name || '',
       content: data.content,
       tag_ids: tagIds,
       attrs: data.attrs || {},
       resourceType: ResourceType.DOC,
-      parentId: apiKey.attrs.root_resource_id,
+      parentId,
     } as CreateResourceDto;
 
     const newResource = await this.namespaceResourcesService.create(
@@ -204,5 +258,101 @@ export class OpenResourcesController {
       parsedContent,
     );
     return { id: newResource.id, name: newResource.name };
+  }
+
+  @Get(':resourceId')
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.READ],
+      },
+    ],
+  })
+  @ApiOperation({ summary: 'Get a resource under the API key root' })
+  @ApiResponse({
+    status: 200,
+    description: 'Resource retrieved successfully',
+    type: ResourceDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
+  async get(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Param('resourceId') resourceId: string,
+  ): Promise<ResourceDto> {
+    return await this.namespaceResourcesService.getOpenResource({
+      namespaceId: apiKey.namespaceId,
+      rootResourceId: apiKey.attrs.root_resource_id,
+      resourceId,
+      userId,
+    });
+  }
+
+  @Patch(':resourceId')
+  @CheckNamespaceReadonly()
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.UPDATE],
+      },
+    ],
+  })
+  @ApiOperation({ summary: 'Update a resource under the API key root' })
+  @ApiBody({
+    description: 'Resource fields to update',
+    type: UpdateResourceDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Resource updated successfully',
+    type: ResourceDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
+  async update(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Param('resourceId') resourceId: string,
+    @Body() data: UpdateResourceDto,
+  ): Promise<ResourceDto> {
+    return await this.namespaceResourcesService.updateOpenResource(
+      apiKey.namespaceId,
+      userId,
+      apiKey.attrs.root_resource_id,
+      resourceId,
+      data,
+    );
+  }
+
+  @Delete(':resourceId')
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.DELETE],
+      },
+    ],
+  })
+  @ApiOperation({ summary: 'Delete a resource under the API key root' })
+  @ApiResponse({ status: 200, description: 'Resource deleted successfully' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
+  async delete(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Param('resourceId') resourceId: string,
+  ): Promise<void> {
+    await this.namespaceResourcesService.deleteOpenResource(
+      userId,
+      apiKey.namespaceId,
+      apiKey.attrs.root_resource_id,
+      resourceId,
+    );
   }
 }

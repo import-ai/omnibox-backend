@@ -3,6 +3,7 @@ import { StreamService } from 'omniboxd/wizard/stream.service';
 
 function createService(mocks: {
   namespaceResourcesService?: Record<string, jest.Mock>;
+  sharedResourcesService?: Record<string, jest.Mock>;
   resourcesService?: Record<string, jest.Mock>;
   smartFoldersService?: Record<string, jest.Mock>;
 }) {
@@ -10,7 +11,7 @@ function createService(mocks: {
     {} as any,
     {} as any,
     mocks.namespaceResourcesService as any,
-    {} as any,
+    mocks.sharedResourcesService as any,
     mocks.resourcesService as any,
     mocks.smartFoldersService as any,
     {} as any,
@@ -97,6 +98,96 @@ describe('StreamService private_search visible resources', () => {
     expect(
       namespaceResourcesService.getAllSubResourcesByUser,
     ).not.toHaveBeenCalled();
+    expect(result).toEqual([
+      {
+        id: 'smart-folder-id',
+        name: 'Smart folder',
+        type: 'folder',
+        child_ids: ['matched-doc-id'],
+      },
+      {
+        id: 'matched-doc-id',
+        name: 'Matched doc',
+        type: 'resource',
+      },
+    ]);
+  });
+
+  it('treats shared smart folders as folders when all shared resources are exposed', async () => {
+    const sharedResourcesService = {
+      getAllSharedResources: jest.fn().mockResolvedValue([
+        {
+          id: 'smart-folder-id',
+          name: 'Smart folder',
+          resourceType: ResourceType.SMART_FOLDER,
+        },
+      ]),
+    };
+    const service = createService({
+      sharedResourcesService,
+      resourcesService: {},
+    });
+
+    const result = await (service as any).getShareVisibleResources(
+      {
+        namespaceId: 'namespace-id',
+      },
+      [],
+    );
+
+    expect(result).toEqual([
+      {
+        id: 'smart-folder-id',
+        name: 'Smart folder',
+        type: 'folder',
+      },
+    ]);
+  });
+
+  it('expands selected shared smart folders through shared resource children', async () => {
+    const sharedResourcesService = {
+      getAndValidateResource: jest.fn().mockResolvedValue({
+        id: 'smart-folder-id',
+        resourceType: ResourceType.SMART_FOLDER,
+      }),
+      getSharedResourceChildren: jest.fn().mockResolvedValue([
+        {
+          id: 'matched-doc-id',
+          name: 'Matched doc',
+          resourceType: ResourceType.DOC,
+        },
+      ]),
+    };
+    const resourcesService = {
+      getChildren: jest.fn(),
+    };
+    const service = createService({
+      sharedResourcesService,
+      resourcesService,
+    });
+
+    const result = await (service as any).getShareVisibleResources(
+      {
+        namespaceId: 'namespace-id',
+      },
+      [
+        {
+          id: 'smart-folder-id',
+          name: 'Smart folder',
+          type: 'folder',
+        },
+      ],
+    );
+
+    expect(
+      sharedResourcesService.getSharedResourceChildren,
+    ).toHaveBeenCalledWith(
+      {
+        namespaceId: 'namespace-id',
+      },
+      'smart-folder-id',
+    );
+    expect(resourcesService.getChildren).not.toHaveBeenCalled();
     expect(result).toEqual([
       {
         id: 'smart-folder-id',

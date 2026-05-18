@@ -298,16 +298,7 @@ export class StreamService {
           );
           resource.child_ids = children.map((r) => r.id);
           visibleResources.push(
-            ...children.map((r) => {
-              return {
-                id: r.id,
-                name: r.name || '',
-                type:
-                  r.resourceType === ResourceType.FOLDER
-                    ? 'folder'
-                    : 'resource',
-              } as PrivateSearchResourceDto;
-            }),
+            ...children.map((r) => this.toPrivateSearchResource(r)),
           );
         } else {
           const subResources =
@@ -318,16 +309,7 @@ export class StreamService {
             );
           resource.child_ids = subResources.map((r) => r.id);
           visibleResources.push(
-            ...subResources.map((r) => {
-              return {
-                id: r.id,
-                name: r.name || '',
-                type:
-                  r.resourceType === ResourceType.FOLDER
-                    ? 'folder'
-                    : 'resource',
-              } as PrivateSearchResourceDto;
-            }),
+            ...subResources.map((r) => this.toPrivateSearchResource(r)),
           );
         }
       }
@@ -417,37 +399,29 @@ export class StreamService {
     if (reqResources.length === 0) {
       const resources =
         await this.sharedResourcesService.getAllSharedResources(share);
-      return resources.map((r) => {
-        return {
-          id: r.id,
-          name: r.name || '',
-          type: r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-        } as PrivateSearchResourceDto;
-      });
+      return resources.map((r) => this.toPrivateSearchResource(r));
     }
 
     const visibleResources: PrivateSearchResourceDto[] = [...reqResources];
     for (const reqResource of reqResources) {
       // Check if the resource is in the share
-      await this.sharedResourcesService.getAndValidateResource(
+      const resource = await this.sharedResourcesService.getAndValidateResource(
         share,
         reqResource.id,
       );
       if (reqResource.type === 'folder') {
-        const subResources = await this.resourcesService.getChildren(
-          share.namespaceId,
-          [reqResource.id],
-        );
+        const subResources =
+          resource.resourceType === ResourceType.SMART_FOLDER
+            ? await this.sharedResourcesService.getSharedResourceChildren(
+                share,
+                reqResource.id,
+              )
+            : await this.resourcesService.getChildren(share.namespaceId, [
+                reqResource.id,
+              ]);
         reqResource.child_ids = subResources.map((r) => r.id);
         visibleResources.push(
-          ...subResources.map((r) => {
-            return {
-              id: r.id,
-              name: r.name || '',
-              type:
-                r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-            } as PrivateSearchResourceDto;
-          }),
+          ...subResources.map((r) => this.toPrivateSearchResource(r)),
         );
       }
     }

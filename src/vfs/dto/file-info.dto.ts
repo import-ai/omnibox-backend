@@ -36,7 +36,10 @@ export class FileInfoDto {
   }
 
   static getType(resourceType: ResourceType) {
-    if (resourceType === ResourceType.FOLDER) {
+    if (
+      resourceType === ResourceType.FOLDER ||
+      resourceType === ResourceType.SMART_FOLDER
+    ) {
       return ResourceType.FOLDER;
     }
     return ResourceType.FILE;

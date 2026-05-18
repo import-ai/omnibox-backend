@@ -35,7 +35,6 @@ describe('NamespaceResourcesService.listChildren', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       moduleRef as any,
     );
 

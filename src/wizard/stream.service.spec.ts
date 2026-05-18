@@ -4,6 +4,7 @@ import { StreamService } from 'omniboxd/wizard/stream.service';
 function createService(mocks: {
   namespaceResourcesService?: Record<string, jest.Mock>;
   resourcesService?: Record<string, jest.Mock>;
+  smartFoldersService?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
     {} as any,
@@ -11,6 +12,7 @@ function createService(mocks: {
     mocks.namespaceResourcesService as any,
     {} as any,
     mocks.resourcesService as any,
+    mocks.smartFoldersService as any,
     {} as any,
   );
 }
@@ -51,6 +53,16 @@ describe('StreamService private_search visible resources', () => {
       permissionFilter: jest.fn((_namespaceId, _userId, resources) => [
         ...resources,
       ]),
+      getAllSubResourcesByUser: jest.fn(),
+    };
+    const resourcesService = {
+      getResourceMeta: jest.fn().mockResolvedValue({
+        id: 'smart-folder-id',
+        name: 'Smart folder',
+        resourceType: ResourceType.SMART_FOLDER,
+      }),
+    };
+    const smartFoldersService = {
       listChildren: jest.fn().mockResolvedValue([
         {
           id: 'matched-doc-id',
@@ -58,18 +70,11 @@ describe('StreamService private_search visible resources', () => {
           resourceType: ResourceType.DOC,
         },
       ]),
-      getAllSubResourcesByUser: jest.fn(),
-    };
-    const resourcesService = {
-      getResourceOrFail: jest.fn().mockResolvedValue({
-        id: 'smart-folder-id',
-        name: 'Smart folder',
-        resourceType: ResourceType.SMART_FOLDER,
-      }),
     };
     const service = createService({
       namespaceResourcesService,
       resourcesService,
+      smartFoldersService,
     });
 
     const result = await (service as any).getUserVisibleResources(
@@ -79,16 +84,15 @@ describe('StreamService private_search visible resources', () => {
         {
           id: 'smart-folder-id',
           name: 'Smart folder',
-          type: 'resource',
+          type: 'folder',
         },
       ],
     );
 
-    expect(namespaceResourcesService.listChildren).toHaveBeenCalledWith(
+    expect(smartFoldersService.listChildren).toHaveBeenCalledWith(
+      'user-id',
       'namespace-id',
       'smart-folder-id',
-      'user-id',
-      {},
     );
     expect(
       namespaceResourcesService.getAllSubResourcesByUser,

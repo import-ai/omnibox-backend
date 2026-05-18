@@ -19,7 +19,7 @@ import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
 import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
-import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import {
   bigintStringToNumber,
   numberToBigintString,
@@ -1149,16 +1149,7 @@ export class ResourcesService {
       ),
       tx,
     );
-    await tx.entityManager.update(
-      Task,
-      {
-        namespaceId,
-        resourceId: In(deleteIds),
-        canceledAt: IsNull(),
-        endedAt: IsNull(),
-      },
-      { canceledAt: new Date(), status: TaskStatus.CANCELED },
-    );
+    await this.tasksService.cancelResourceTasks(namespaceId, deleteIds, tx);
     await this.emitDeleteIndexTasks(namespaceId, userId, deleteIds, tx);
     return deleteIds;
   }

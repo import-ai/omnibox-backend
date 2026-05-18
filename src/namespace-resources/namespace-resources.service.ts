@@ -432,6 +432,15 @@ export class NamespaceResourcesService {
     resourceIds: string[],
     manager: EntityManager,
   ): Promise<Set<string>> {
+    const userInNamespace = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+      manager,
+    );
+    if (!userInNamespace) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
     const parents = await this.resourcesService.batchGetParentResources(
       namespaceId,
       resourceIds,

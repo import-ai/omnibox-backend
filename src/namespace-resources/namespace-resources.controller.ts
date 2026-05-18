@@ -188,7 +188,6 @@ export class NamespaceResourcesController {
   }
 
   @Post('batch-trash')
-  @CheckNamespaceReadonly()
   async batchMoveToTrash(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,

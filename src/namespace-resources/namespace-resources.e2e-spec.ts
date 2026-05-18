@@ -26,7 +26,7 @@ describe('ResourcesController (e2e)', () => {
 
   afterAll(async () => {
     await memberClient?.close();
-    await client.close();
+    await client?.close();
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/resources', () => {
@@ -955,6 +955,37 @@ describe('ResourcesController (e2e)', () => {
       await memberClient
         .get(`/api/v1/namespaces/${client.namespace.id}/resources/${second.id}`)
         .expect(HttpStatus.OK);
+    });
+
+    it('should reject batch trash from non namespace member even when resource is globally editable', async () => {
+      const outsiderClient = await TestClient.create();
+      const resource = await createDoc(
+        'Batch Trash Global Editable',
+        client.namespace.root_resource_id,
+      );
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/permissions`,
+        )
+        .send({ permission: ResourcePermission.CAN_EDIT })
+        .expect(HttpStatus.OK);
+
+      try {
+        await outsiderClient
+          .post(
+            `/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`,
+          )
+          .send({ resourceIds: [resource.id] })
+          .expect(HttpStatus.FORBIDDEN);
+
+        await client
+          .get(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+          )
+          .expect(HttpStatus.OK);
+      } finally {
+        await outsiderClient.close();
+      }
     });
 
     it('should count source without edit permission as failed on batch move', async () => {

@@ -164,16 +164,17 @@ export class TasksService {
 
   async cancelResourceTasks(
     namespaceId: string,
-    resourceId: string,
+    resourceIds: string | string[],
     tx: Transaction,
   ) {
-    if (!namespaceId || !resourceId) {
+    const ids = Array.isArray(resourceIds) ? resourceIds : [resourceIds];
+    if (!namespaceId || ids.length === 0) {
       return;
     }
     const tasksToCancel = await tx.entityManager.find(Task, {
       where: {
         namespaceId,
-        resourceId,
+        resourceId: In(ids),
         canceledAt: IsNull(),
         endedAt: IsNull(),
       },
@@ -181,7 +182,12 @@ export class TasksService {
     });
     await tx.entityManager.update(
       Task,
-      { namespaceId, resourceId, canceledAt: IsNull(), endedAt: IsNull() },
+      {
+        namespaceId,
+        resourceId: In(ids),
+        canceledAt: IsNull(),
+        endedAt: IsNull(),
+      },
       { canceledAt: new Date(), status: TaskStatus.CANCELED },
     );
     for (const task of tasksToCancel) {

@@ -91,7 +91,19 @@ export class SharesService {
     return share;
   }
 
+  private getShareOwnerIdOrFail(share: Share): string {
+    if (share.userId) {
+      return share.userId;
+    }
+
+    const message = this.i18n.t('share.errors.shareNotFound', {
+      args: { shareId: share.id },
+    });
+    throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
+  }
+
   async getPublicShareInfo(share: Share): Promise<PublicShareInfoDto> {
+    const ownerUserId = this.getShareOwnerIdOrFail(share);
     const resource = await this.resourcesService.getResourceMeta(
       share.namespaceId,
       share.resourceId,
@@ -105,9 +117,8 @@ export class SharesService {
 
     let hasChildren = false;
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
-      const userId = share.userId!;
       const children = await this.smartFoldersService.listChildren(
-        userId,
+        ownerUserId,
         share.namespaceId,
         share.resourceId,
         { limit: 1 },
@@ -126,7 +137,7 @@ export class SharesService {
       resource,
       hasChildren,
     );
-    const user = await this.userService.find(share.userId!);
+    const user = await this.userService.find(ownerUserId);
     return PublicShareInfoDto.fromResourceMeta(
       share,
       resourceMeta,
@@ -173,6 +184,9 @@ export class SharesService {
         password: null,
         expiresAt: null,
       });
+    }
+    if (share.enabled && !share.userId) {
+      share.userId = userId;
     }
     if (req.enabled !== undefined) {
       share.enabled = req.enabled;

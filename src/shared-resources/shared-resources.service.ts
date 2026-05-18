@@ -26,6 +26,20 @@ export class SharedResourcesService {
     private readonly i18n: I18nService,
   ) {}
 
+  private getShareOwnerIdOrFail(share: Share): string {
+    if (share.userId) {
+      return share.userId;
+    }
+
+    throw new AppException(
+      this.i18n.t('share.errors.shareNotFound', {
+        args: { shareId: share.id },
+      }),
+      'SHARE_NOT_FOUND',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+
   async getSharedResource(
     share: Share,
     resourceId: string,
@@ -59,8 +73,9 @@ export class SharedResourcesService {
       share.resourceId,
     );
     if (shareRoot?.resourceType === ResourceType.SMART_FOLDER) {
+      const ownerUserId = this.getShareOwnerIdOrFail(share);
       const resourceMatched = await this.smartFoldersService.isResourceMatched(
-        share.userId!,
+        ownerUserId,
         share.namespaceId,
         share.resourceId,
         resource.id,
@@ -85,7 +100,7 @@ export class SharedResourcesService {
           continue;
         }
         const parentMatched = await this.smartFoldersService.isResourceMatched(
-          share.userId!,
+          ownerUserId,
           share.namespaceId,
           share.resourceId,
           parent.id,
@@ -178,8 +193,9 @@ export class SharedResourcesService {
   private async getSharedSmartFolderMatchedChildren(
     share: Share,
   ): Promise<SharedResourceMetaDto[]> {
+    const ownerUserId = this.getShareOwnerIdOrFail(share);
     const children = await this.smartFoldersService.listChildren(
-      share.userId!,
+      ownerUserId,
       share.namespaceId,
       share.resourceId,
     );
@@ -203,8 +219,9 @@ export class SharedResourcesService {
     share: Share,
     resource: Resource,
   ): Promise<boolean> {
+    const ownerUserId = this.getShareOwnerIdOrFail(share);
     const matched = await this.smartFoldersService.isResourceMatched(
-      share.userId!,
+      ownerUserId,
       share.namespaceId,
       share.resourceId,
       resource.id,
@@ -222,7 +239,7 @@ export class SharedResourcesService {
         continue;
       }
       const parentMatched = await this.smartFoldersService.isResourceMatched(
-        share.userId!,
+        ownerUserId,
         share.namespaceId,
         share.resourceId,
         parent.id,

@@ -61,7 +61,7 @@ export class SmartFoldersController {
       namespaceId,
       resourceId,
       {
-        limit: limit === undefined ? undefined : Number(limit),
+        limit: Number.isFinite(Number(limit)) ? Number(limit) : 20,
         offset: Number.isFinite(Number(offset)) ? Number(offset) : 0,
       },
     );

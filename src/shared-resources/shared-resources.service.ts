@@ -152,6 +152,10 @@ export class SharedResourcesService {
     resourceIds: string[],
   ): Promise<Map<string, ResourceMetaDto[]>> {
     const pathMap = new Map<string, ResourceMetaDto[]>();
+    const shareRoot = await this.resourcesService.getResource(
+      share.namespaceId,
+      share.resourceId,
+    );
     const resourceMap = await this.resourcesService.batchGetParentResources(
       share.namespaceId,
       resourceIds,
@@ -172,6 +176,19 @@ export class SharedResourcesService {
           HttpStatus.NOT_FOUND,
         );
       }
+
+      if (shareRoot?.resourceType === ResourceType.SMART_FOLDER) {
+        pathMap.set(
+          resourceId,
+          await this.getSharedSmartFolderResourcePath(
+            share,
+            shareRoot,
+            resource,
+          ),
+        );
+        continue;
+      }
+
       const path: ResourceMetaDto[] = [resource];
       while (last(path).id != share.resourceId) {
         const parentId = last(path).parentId;
@@ -188,6 +205,66 @@ export class SharedResourcesService {
     }
 
     return pathMap;
+  }
+
+  private async getSharedSmartFolderResourcePath(
+    share: Share,
+    shareRoot: Resource,
+    resource: ResourceMetaDto,
+  ): Promise<ResourceMetaDto[]> {
+    const shareRootMeta = ResourceMetaDto.fromEntity(shareRoot);
+    if (resource.id === share.resourceId) {
+      return [shareRootMeta];
+    }
+
+    const ownerUserId = this.getShareOwnerIdOrFail(share);
+    const resourceMatched = await this.smartFoldersService.isResourceMatched(
+      ownerUserId,
+      share.namespaceId,
+      share.resourceId,
+      resource.id,
+    );
+    if (resourceMatched) {
+      return [shareRootMeta, resource];
+    }
+
+    const parentResources = (
+      await this.resourcesService.getParentResourcesOrFail(
+        share.namespaceId,
+        resource.parentId,
+      )
+    ).reverse();
+    let firstMatchedFolderIndex = -1;
+    for (let index = 0; index < parentResources.length; index++) {
+      const parent = parentResources[index];
+      if (parent.resourceType !== ResourceType.FOLDER) {
+        continue;
+      }
+      const parentMatched = await this.smartFoldersService.isResourceMatched(
+        ownerUserId,
+        share.namespaceId,
+        share.resourceId,
+        parent.id,
+      );
+      if (parentMatched) {
+        firstMatchedFolderIndex = index;
+        break;
+      }
+    }
+
+    if (firstMatchedFolderIndex < 0) {
+      throw new AppException(
+        this.i18n.t('resource.errors.resourceNotFound'),
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return [
+      shareRootMeta,
+      ...parentResources.slice(firstMatchedFolderIndex),
+      resource,
+    ];
   }
 
   private async getSharedSmartFolderMatchedChildren(

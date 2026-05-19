@@ -7,6 +7,8 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
       getResource: jest.fn(),
       getChildren: jest.fn(),
       getAllSubResources: jest.fn(),
+      batchGetParentResources: jest.fn(),
+      getParentResourcesOrFail: jest.fn(),
       resourceFilter: jest.fn(),
     };
     const smartFoldersService = {
@@ -26,6 +28,7 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
           },
         },
       ]),
+      isResourceMatched: jest.fn(),
     };
     const service = new SharedResourcesService(
       resourcesService as any,
@@ -165,5 +168,219 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
       ],
       total: 1,
     });
+  });
+
+  it('builds virtual paths for matched shared smart folder resources', async () => {
+    const { resourcesService, service, smartFoldersService } = createService();
+    resourcesService.getResource.mockResolvedValue({
+      id: 'smart-folder-id',
+      namespaceId: 'namespace-id',
+      name: 'Smart folder',
+      resourceType: ResourceType.SMART_FOLDER,
+      createdAt: new Date('2026-05-18T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+      attrs: {},
+    });
+    resourcesService.batchGetParentResources.mockResolvedValue(
+      new Map([
+        [
+          'matched-doc-id',
+          {
+            id: 'matched-doc-id',
+            parentId: 'physical-parent-id',
+            name: 'Matched doc',
+            resourceType: ResourceType.DOC,
+            createdAt: new Date('2026-05-18T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+            attrs: {},
+          },
+        ],
+        [
+          'physical-parent-id',
+          {
+            id: 'physical-parent-id',
+            parentId: 'namespace-root-id',
+            name: 'Physical parent',
+            resourceType: ResourceType.FOLDER,
+            createdAt: new Date('2026-05-18T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+            attrs: {},
+          },
+        ],
+        [
+          'namespace-root-id',
+          {
+            id: 'namespace-root-id',
+            parentId: null,
+            name: '',
+            resourceType: ResourceType.FOLDER,
+            createdAt: new Date('2026-05-18T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+            attrs: {},
+          },
+        ],
+      ]),
+    );
+    smartFoldersService.isResourceMatched.mockResolvedValue(true);
+
+    const result = await service.batchGetResourcePath(
+      {
+        id: 'share-id',
+        namespaceId: 'namespace-id',
+        resourceId: 'smart-folder-id',
+        userId: 'owner-user-id',
+        allResources: true,
+      } as any,
+      ['matched-doc-id'],
+    );
+
+    expect(smartFoldersService.isResourceMatched).toHaveBeenCalledWith(
+      'owner-user-id',
+      'namespace-id',
+      'smart-folder-id',
+      'matched-doc-id',
+    );
+    expect(result.get('matched-doc-id')).toEqual([
+      expect.objectContaining({
+        id: 'smart-folder-id',
+        name: 'Smart folder',
+        resourceType: ResourceType.SMART_FOLDER,
+      }),
+      expect.objectContaining({
+        id: 'matched-doc-id',
+        name: 'Matched doc',
+      }),
+    ]);
+  });
+
+  it('builds virtual paths for descendants of matched shared smart folder folders', async () => {
+    const { resourcesService, service, smartFoldersService } = createService();
+    resourcesService.getResource.mockResolvedValue({
+      id: 'smart-folder-id',
+      namespaceId: 'namespace-id',
+      name: 'Smart folder',
+      resourceType: ResourceType.SMART_FOLDER,
+      createdAt: new Date('2026-05-18T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+      attrs: {},
+    });
+    resourcesService.batchGetParentResources.mockResolvedValue(
+      new Map([
+        [
+          'nested-doc-id',
+          {
+            id: 'nested-doc-id',
+            parentId: 'matched-folder-id',
+            name: 'Nested doc',
+            resourceType: ResourceType.DOC,
+            createdAt: new Date('2026-05-18T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+            attrs: {},
+          },
+        ],
+        [
+          'matched-folder-id',
+          {
+            id: 'matched-folder-id',
+            parentId: 'physical-parent-id',
+            name: 'Matched folder',
+            resourceType: ResourceType.FOLDER,
+            createdAt: new Date('2026-05-18T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+            attrs: {},
+          },
+        ],
+        [
+          'physical-parent-id',
+          {
+            id: 'physical-parent-id',
+            parentId: 'namespace-root-id',
+            name: 'Physical parent',
+            resourceType: ResourceType.FOLDER,
+            createdAt: new Date('2026-05-18T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+            attrs: {},
+          },
+        ],
+        [
+          'namespace-root-id',
+          {
+            id: 'namespace-root-id',
+            parentId: null,
+            name: '',
+            resourceType: ResourceType.FOLDER,
+            createdAt: new Date('2026-05-18T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+            attrs: {},
+          },
+        ],
+      ]),
+    );
+    resourcesService.getParentResourcesOrFail.mockResolvedValue([
+      {
+        id: 'matched-folder-id',
+        parentId: 'physical-parent-id',
+        name: 'Matched folder',
+        resourceType: ResourceType.FOLDER,
+      },
+      {
+        id: 'physical-parent-id',
+        parentId: 'namespace-root-id',
+        name: 'Physical parent',
+        resourceType: ResourceType.FOLDER,
+      },
+      {
+        id: 'namespace-root-id',
+        parentId: null,
+        name: '',
+        resourceType: ResourceType.FOLDER,
+      },
+    ]);
+    smartFoldersService.isResourceMatched.mockImplementation(
+      (
+        _userId: string,
+        _namespaceId: string,
+        _smartFolderId: string,
+        resourceId: string,
+      ) => resourceId === 'matched-folder-id',
+    );
+
+    const result = await service.batchGetResourcePath(
+      {
+        id: 'share-id',
+        namespaceId: 'namespace-id',
+        resourceId: 'smart-folder-id',
+        userId: 'owner-user-id',
+        allResources: true,
+      } as any,
+      ['nested-doc-id'],
+    );
+
+    expect(smartFoldersService.isResourceMatched).toHaveBeenCalledWith(
+      'owner-user-id',
+      'namespace-id',
+      'smart-folder-id',
+      'nested-doc-id',
+    );
+    expect(smartFoldersService.isResourceMatched).toHaveBeenCalledWith(
+      'owner-user-id',
+      'namespace-id',
+      'smart-folder-id',
+      'matched-folder-id',
+    );
+    expect(result.get('nested-doc-id')).toEqual([
+      expect.objectContaining({
+        id: 'smart-folder-id',
+        name: 'Smart folder',
+      }),
+      expect.objectContaining({
+        id: 'matched-folder-id',
+        name: 'Matched folder',
+      }),
+      expect.objectContaining({
+        id: 'nested-doc-id',
+        name: 'Nested doc',
+      }),
+    ]);
   });
 });

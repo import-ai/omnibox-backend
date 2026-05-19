@@ -6,6 +6,8 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
     const resourcesService = {
       getResource: jest.fn(),
       getChildren: jest.fn(),
+      getAllSubResources: jest.fn(),
+      resourceFilter: jest.fn(),
     };
     const smartFoldersService = {
       listChildren: jest.fn().mockResolvedValue([
@@ -70,5 +72,98 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
         attrs: { kept: true },
       }),
     ]);
+  });
+
+  it('includes matched resources when listing all resources for a shared smart folder root', async () => {
+    const { resourcesService, service, smartFoldersService } = createService();
+    resourcesService.getResource.mockResolvedValue({
+      id: 'smart-folder-id',
+      namespaceId: 'namespace-id',
+      name: 'Smart folder',
+      resourceType: ResourceType.SMART_FOLDER,
+      createdAt: new Date('2026-05-18T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+      attrs: {},
+    });
+    resourcesService.getChildren.mockResolvedValue([]);
+    resourcesService.getAllSubResources.mockResolvedValue([]);
+
+    const result = await service.getAllSharedResources({
+      id: 'share-id',
+      namespaceId: 'namespace-id',
+      resourceId: 'smart-folder-id',
+      userId: 'owner-user-id',
+      allResources: true,
+    } as any);
+
+    expect(smartFoldersService.listChildren).toHaveBeenCalledWith(
+      'owner-user-id',
+      'namespace-id',
+      'smart-folder-id',
+    );
+    expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'smart-folder-id',
+        parentId: null,
+        resourceType: ResourceType.SMART_FOLDER,
+      }),
+      expect.objectContaining({
+        id: 'matched-doc-id',
+        parentId: 'smart-folder-id',
+        resourceType: ResourceType.DOC,
+      }),
+    ]);
+  });
+
+  it('filters matched resources when shared VFS filters a smart folder root', async () => {
+    const { resourcesService, service } = createService();
+    resourcesService.getResource.mockResolvedValue({
+      id: 'smart-folder-id',
+      namespaceId: 'namespace-id',
+      name: 'Smart folder',
+      resourceType: ResourceType.SMART_FOLDER,
+      createdAt: new Date('2026-05-18T00:00:00.000Z'),
+      updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+      attrs: {},
+    });
+    resourcesService.getChildren.mockResolvedValue([]);
+    resourcesService.getAllSubResources.mockResolvedValue([]);
+    resourcesService.resourceFilter.mockResolvedValue({
+      resources: [
+        {
+          id: 'matched-doc-id',
+        },
+      ],
+      total: 1,
+    });
+
+    const result = await service.resourceFilter(
+      {
+        id: 'share-id',
+        namespaceId: 'namespace-id',
+        resourceId: 'smart-folder-id',
+        userId: 'owner-user-id',
+        allResources: true,
+      } as any,
+      'smart-folder-id',
+      { namePattern: 'Matched' } as any,
+    );
+
+    expect(resourcesService.resourceFilter).toHaveBeenCalledWith(
+      'namespace-id',
+      ['smart-folder-id', 'matched-doc-id'],
+      { namePattern: 'Matched' },
+    );
+    expect(result).toEqual({
+      resources: [
+        expect.objectContaining({
+          id: 'matched-doc-id',
+          parentId: 'smart-folder-id',
+          resourceType: ResourceType.DOC,
+        }),
+      ],
+      total: 1,
+    });
   });
 });

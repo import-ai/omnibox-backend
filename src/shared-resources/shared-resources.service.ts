@@ -404,6 +404,15 @@ export class SharedResourcesService {
     if (!parent) {
       return [];
     }
+    if (parent.resourceType === ResourceType.SMART_FOLDER) {
+      if (!share.allResources) {
+        return [parent];
+      }
+      return [
+        parent,
+        ...(await this.getSharedSmartFolderMatchedChildren(share)),
+      ];
+    }
     const subResources = share.allResources
       ? await this.resourcesService.getAllSubResources(share.namespaceId, [
           parent.id,

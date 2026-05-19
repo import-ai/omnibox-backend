@@ -121,6 +121,11 @@ describe('StreamService private_search visible resources', () => {
           name: 'Smart folder',
           resourceType: ResourceType.SMART_FOLDER,
         },
+        {
+          id: 'matched-doc-id',
+          name: 'Matched doc',
+          resourceType: ResourceType.DOC,
+        },
       ]),
     };
     const service = createService({
@@ -140,6 +145,11 @@ describe('StreamService private_search visible resources', () => {
         id: 'smart-folder-id',
         name: 'Smart folder',
         type: 'folder',
+      },
+      {
+        id: 'matched-doc-id',
+        name: 'Matched doc',
+        type: 'resource',
       },
     ]);
   });

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -19,6 +20,22 @@ import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.servic
 @Controller('api/v1/namespaces/:namespaceId/smart-folders')
 export class SmartFoldersController {
   constructor(private readonly smartFoldersService: SmartFoldersService) {}
+
+  private parseChildrenLimit(limit?: string, requestFrom?: string) {
+    if (Number.isFinite(Number(limit))) {
+      return Number(limit);
+    }
+
+    return requestFrom === 'web' ? undefined : 20;
+  }
+
+  private parseChildrenOffset(offset?: string, requestFrom?: string) {
+    if (Number.isFinite(Number(offset))) {
+      return Number(offset);
+    }
+
+    return requestFrom === 'web' ? undefined : 0;
+  }
 
   @Post()
   @CheckNamespaceReadonly()
@@ -55,14 +72,15 @@ export class SmartFoldersController {
     @Param('resourceId') resourceId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Headers('from') requestFrom?: string,
   ): Promise<ResourceSummaryDto[]> {
     return await this.smartFoldersService.listChildren(
       userId,
       namespaceId,
       resourceId,
       {
-        limit: Number.isFinite(Number(limit)) ? Number(limit) : 20,
-        offset: Number.isFinite(Number(offset)) ? Number(offset) : 0,
+        limit: this.parseChildrenLimit(limit, requestFrom),
+        offset: this.parseChildrenOffset(offset, requestFrom),
       },
     );
   }

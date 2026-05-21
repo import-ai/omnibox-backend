@@ -2,7 +2,6 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import {
@@ -16,6 +15,7 @@ import {
   SmartFolderRootScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { ISmartFoldersService } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
+import { SmartFolderResourcesService } from 'omniboxd/smart-folders/smart-folder-resources.service';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
 import { SmartFoldersQuotaService } from 'omniboxd/smart-folders/smart-folders-quota.service';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
@@ -36,7 +36,7 @@ export class SmartFoldersService implements ISmartFoldersService {
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
-    private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly smartFolderResourcesService: SmartFolderResourcesService,
     private readonly permissionsService: PermissionsService,
     private readonly ruleService: SmartFoldersRuleService,
     private readonly scopeService: SmartFoldersScopeService,
@@ -72,7 +72,7 @@ export class SmartFoldersService implements ISmartFoldersService {
         conditions.length,
         manager,
       );
-      const createdResource = await this.namespaceResourcesService.create(
+      const createdResource = await this.smartFolderResourcesService.create(
         userId,
         namespaceId,
         {
@@ -158,7 +158,7 @@ export class SmartFoldersService implements ISmartFoldersService {
 
     // Smart folders are virtual result sets.
     const visibleResources =
-      await this.namespaceResourcesService.getUserVisibleResources(
+      await this.smartFolderResourcesService.getUserVisibleResources(
         userId,
         namespaceId,
       );
@@ -348,7 +348,7 @@ export class SmartFoldersService implements ISmartFoldersService {
       }
 
       if (Object.keys(resourceUpdates).length > 0) {
-        await this.namespaceResourcesService.update(
+        await this.smartFolderResourcesService.update(
           namespaceId,
           userId,
           resourceId,
@@ -378,7 +378,7 @@ export class SmartFoldersService implements ISmartFoldersService {
   ): Promise<void> {
     await this.getConfigOrFail(namespaceId, resourceId);
     await this.assertCanEdit(namespaceId, resourceId, userId);
-    await this.namespaceResourcesService.delete(
+    await this.smartFolderResourcesService.delete(
       userId,
       namespaceId,
       resourceId,
@@ -507,7 +507,7 @@ export class SmartFoldersService implements ISmartFoldersService {
     namespaceId: string,
     config: SmartFolderConfig,
   ): Promise<SmartFolderResponseDto> {
-    const resource = await this.namespaceResourcesService.getResource({
+    const resource = await this.smartFolderResourcesService.getResource({
       userId,
       namespaceId,
       resourceId: config.resourceId,

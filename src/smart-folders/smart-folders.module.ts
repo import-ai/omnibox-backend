@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
-import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
+import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
@@ -13,6 +13,7 @@ import {
   SMART_FOLDERS_SERVICE,
 } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 import { SmartFolderEntitlementsService } from 'omniboxd/smart-folders/smart-folder-entitlements.service';
+import { SmartFolderResourcesService } from 'omniboxd/smart-folders/smart-folder-resources.service';
 import { SmartFoldersController } from 'omniboxd/smart-folders/smart-folders.controller';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
 import { SmartFoldersQuotaService } from 'omniboxd/smart-folders/smart-folders-quota.service';
@@ -24,9 +25,12 @@ import { TagModule } from 'omniboxd/tag/tag.module';
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SmartFolderConfig, Resource]),
-    NamespaceResourcesModule,
-    NamespacesModule,
+    TypeOrmModule.forFeature([
+      SmartFolderConfig,
+      Resource,
+      Namespace,
+      NamespaceMember,
+    ]),
     NamespacesQuotaModule,
     PermissionsModule,
     ResourcesModule,
@@ -38,6 +42,7 @@ import { TagModule } from 'omniboxd/tag/tag.module';
     SmartFoldersMatcherService,
     SmartFoldersScopeService,
     SmartFoldersQuotaService,
+    SmartFolderResourcesService,
     {
       provide: SMART_FOLDER_ENTITLEMENTS_PROVIDER,
       useClass: SmartFolderEntitlementsService,

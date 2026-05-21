@@ -104,7 +104,7 @@ import { VfsModule } from 'omniboxd/vfs/vfs.module';
 import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
 import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
 import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
-import { AddSmartFolders1776852000000 } from 'omniboxd/migrations/1776852000000-add-smart-folders';
+import { AddSmartFolders1779344088692 } from 'omniboxd/migrations/1779344088692-add-smart-folders';
 import { SharedVfsModule } from 'omniboxd/shared-vfs/shared-vfs.module';
 import { SharedResourceTagsModule } from 'omniboxd/shared-resource-tags/shared-resource-tags.module';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -269,7 +269,7 @@ export class AppModule implements NestModule {
               AddNotifications1776070800000,
               AddStatusEnqueuedIndexToTasks1776071000000,
               DeduplicateResourceNames1775666229211,
-              AddSmartFolders1776852000000,
+              AddSmartFolders1779344088692,
               ...extraMigrations,
             ],
             migrationsRun: true,

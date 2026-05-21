@@ -16,8 +16,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { Injectable, HttpStatus } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
+import { Inject, Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { S3Service } from 'omniboxd/s3/s3.service';
@@ -70,7 +69,8 @@ export class NamespaceResourcesService {
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
-    private readonly moduleRef: ModuleRef,
+    @Inject(SMART_FOLDERS_SERVICE)
+    private readonly smartFoldersService: ISmartFoldersService,
   ) {}
 
   private async getTagsByIds(
@@ -613,7 +613,7 @@ export class NamespaceResourcesService {
     const resource = parents[parents.length - 1];
 
     if (resource?.resourceType === ResourceType.SMART_FOLDER) {
-      return await this.getSmartFoldersService().listChildren(
+      return await this.smartFoldersService.listChildren(
         userId,
         namespaceId,
         resourceId,
@@ -1048,7 +1048,7 @@ export class NamespaceResourcesService {
 
     // Check smart folder quota before restoring
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
-      await this.getSmartFoldersService().assertRestoreEntitlements(
+      await this.smartFoldersService.assertRestoreEntitlements(
         namespaceId,
         userId,
         resourceId,
@@ -1121,12 +1121,6 @@ export class NamespaceResourcesService {
 
   s3Path(resourceId: string) {
     return `resources/${resourceId}`;
-  }
-
-  private getSmartFoldersService(): ISmartFoldersService {
-    return this.moduleRef.get<ISmartFoldersService>(SMART_FOLDERS_SERVICE, {
-      strict: false,
-    });
   }
 
   async uploadFile(

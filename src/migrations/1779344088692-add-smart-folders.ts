@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { BaseColumns } from './base-columns';
 
-export class AddSmartFolders1776852000000 implements MigrationInterface {
+export class AddSmartFolders1779344088692 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await this.addSmartFolderResourceType(queryRunner);
     await this.ensureSmartFolderEnums(queryRunner);

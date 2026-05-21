@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { SmartFolderResourcesService } from 'omniboxd/smart-folders/smart-folder-resources.service';
 import {
   SmartFolderOwnerScope,
   SmartFolderRootScope,
@@ -9,7 +9,7 @@ import {
 @Injectable()
 export class SmartFoldersScopeService {
   constructor(
-    private readonly namespacesService: NamespacesService,
+    private readonly smartFolderResourcesService: SmartFolderResourcesService,
     private readonly resourcesService: ResourcesService,
   ) {}
 
@@ -94,7 +94,11 @@ export class SmartFoldersScopeService {
       | SmartFolderRootScope.TEAMSPACE,
   ): Promise<string> {
     return scope === SmartFolderOwnerScope.PRIVATE
-      ? await this.namespacesService.getPrivateRootId(userId, namespaceId)
-      : (await this.namespacesService.getTeamspaceRoot(namespaceId)).id;
+      ? await this.smartFolderResourcesService.getPrivateRootId(
+          userId,
+          namespaceId,
+        )
+      : (await this.smartFolderResourcesService.getTeamspaceRoot(namespaceId))
+          .id;
   }
 }

@@ -157,24 +157,6 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  private emitStreamError(
-    client: Socket,
-    eventType: 'ask' | 'write',
-    error: Error | AppException,
-  ) {
-    this.logger.error(`Error handling ${eventType}`, error);
-    const span = trace.getActiveSpan();
-    if (span) {
-      span.recordException(error);
-    }
-    if (error instanceof AppException) {
-      client.emit('error', error.getResponse());
-    } else {
-      client.emit('error', { message: 'Unknown error' });
-    }
-    client.emit('complete');
-  }
-
   private async handleShareAgentStream(
     client: Socket,
     shareId: string,
@@ -185,24 +167,20 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const userId = client.data.userId;
     const requestId = client.handshake.headers['x-request-id'] as string;
 
-    try {
-      const share = await this.sharesService.getAndValidateShare(
-        shareId,
-        sharePassword,
-        userId,
-      );
-      if (
-        share.shareType !== ShareType.CHAT_ONLY &&
-        share.shareType !== ShareType.ALL
-      ) {
-        const message = this.i18n.t('share.errors.chatNotAllowed');
-        throw new AppException(
-          message,
-          'CHAT_NOT_ALLOWED',
-          HttpStatus.FORBIDDEN,
-        );
-      }
+    const share = await this.sharesService.getAndValidateShare(
+      shareId,
+      sharePassword,
+      userId,
+    );
+    if (
+      share.shareType !== ShareType.CHAT_ONLY &&
+      share.shareType !== ShareType.ALL
+    ) {
+      const message = this.i18n.t('share.errors.chatNotAllowed');
+      throw new AppException(message, 'CHAT_NOT_ALLOWED', HttpStatus.FORBIDDEN);
+    }
 
+    try {
       const observable = await this.streamService.createShareAgentStream(
         share,
         agentRequest,
@@ -214,14 +192,24 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
           client.emit('message', message.data);
         },
         error: (error) => {
-          this.emitStreamError(client, eventType, error);
+          this.logger.error(`Error in ${eventType} stream`, error);
+          const span = trace.getActiveSpan();
+          if (span) {
+            span.recordException(error);
+          }
+          client.emit('error', { message: 'Unknown error' });
         },
         complete: () => {
           client.emit('complete');
         },
       });
     } catch (error) {
-      this.emitStreamError(client, eventType, error);
+      this.logger.error(`Error handling ${eventType}`, error);
+      const span = trace.getActiveSpan();
+      if (span) {
+        span.recordException(error);
+      }
+      client.emit('error', { message: 'Unknown error' });
     }
   }
 }

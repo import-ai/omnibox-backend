@@ -1,5 +1,4 @@
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { SMART_FOLDERS_SERVICE } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 import { NamespaceResourcesService } from './namespace-resources.service';
 
 describe('NamespaceResourcesService.listChildren', () => {
@@ -15,14 +14,6 @@ describe('NamespaceResourcesService.listChildren', () => {
     const smartFoldersService = {
       listChildren: jest.fn(),
     };
-    const moduleRef = {
-      get: jest.fn((token) => {
-        if (token === SMART_FOLDERS_SERVICE) {
-          return smartFoldersService;
-        }
-        return undefined;
-      }),
-    };
     const service = new NamespaceResourcesService(
       {} as any,
       {} as any,
@@ -35,10 +26,10 @@ describe('NamespaceResourcesService.listChildren', () => {
       {} as any,
       {} as any,
       {} as any,
-      moduleRef as any,
+      smartFoldersService as any,
     );
 
-    return { moduleRef, resourcesService, service, smartFoldersService };
+    return { resourcesService, service, smartFoldersService };
   }
 
   it('delegates smart folder children to SmartFoldersService virtual list', async () => {

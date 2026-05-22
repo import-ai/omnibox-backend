@@ -186,6 +186,36 @@ describe('CollectProcessor', () => {
         expect(result).toEqual({});
       });
 
+      it('should update resource with file content too long message when task has content limit exception', async () => {
+        const message =
+          '当前文件内容（32769 字符）超过系统可处理上限（32768 字符），请尝试拆分文档后重新上传。';
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          exception: {
+            code: 'FILE_CONTENT_TOO_LONG',
+            error: message,
+          },
+          status: TaskStatus.ERROR,
+        });
+
+        namespaceResourcesService.update.mockResolvedValue(undefined);
+
+        const result = await processor.process(task);
+
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
+          'test-user',
+          'test-resource-id',
+          expect.objectContaining({
+            namespaceId: 'test-namespace',
+            content: message,
+          }),
+          true,
+        );
+        expect(result).toEqual({});
+        expect(resourcesService.getResourceOrFail).not.toHaveBeenCalled();
+      });
+
       it('should not call resourcesService.getResourceOrFail when task has exception', async () => {
         const task = createMockTask({
           payload: { resource_id: 'test-resource-id' },

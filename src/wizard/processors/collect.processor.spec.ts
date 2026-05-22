@@ -217,7 +217,8 @@ describe('CollectProcessor', () => {
       });
 
       it('should update resource with ASR no valid fragment message when audio has no speech', async () => {
-        const message = '未检测到有效语音内容，请上传更长、有人声更清晰的音频';
+        const message =
+          '未检测到有效语音内容，请上传更长、有人声、更清晰的音频。';
         const task = createMockTask({
           payload: { resource_id: 'test-resource-id' },
           exception: {

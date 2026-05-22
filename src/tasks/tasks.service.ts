@@ -11,11 +11,14 @@ import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { context, propagation } from '@opentelemetry/api';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { WizardCapabilitiesService } from 'omniboxd/tasks/wizard-capabilities.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
+import { gzipSync } from 'zlib';
 
 @Injectable()
 export class TasksService {
   private readonly kafkaTasksTopic: string;
   private readonly proUrl: string | undefined;
+  private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
   constructor(
     @InjectRepository(Task)
@@ -25,12 +28,26 @@ export class TasksService {
     private readonly configService: ConfigService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
     private readonly wizardCapabilitiesService: WizardCapabilitiesService,
+    private readonly s3Service: S3Service,
   ) {
     this.kafkaTasksTopic = this.configService.get<string>(
       'OBB_TASKS_TOPIC',
       'omnibox-tasks',
     );
     this.proUrl = this.configService.get<string>('OBB_PRO_URL');
+  }
+
+  async uploadHtmlToS3(html: string): Promise<string> {
+    const { objectKey } = await this.s3Service.generateObjectKey(
+      this.gzipHtmlFolder,
+      'html.gz',
+    );
+    await this.s3Service.putObject(
+      objectKey,
+      gzipSync(Buffer.from(html, 'utf-8')),
+      'application/gzip',
+    );
+    return objectKey;
   }
 
   injectTraceHeaders(task: Partial<Task>) {
@@ -89,6 +106,21 @@ export class TasksService {
       })
       .getRawMany<{ namespaceId: string }>();
     return rows.map((row) => row.namespaceId);
+  }
+
+  getHtmlS3Key(input: Record<string, any>): string | undefined {
+    if (input.html_s3_key) {
+      return input.html_s3_key;
+    }
+    // Backward compatibility: old tasks stored the S3 key directly in html
+    if (
+      typeof input.html === 'string' &&
+      input.html.startsWith(this.gzipHtmlFolder) &&
+      input.html.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
+    ) {
+      return input.html;
+    }
+    return undefined;
   }
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {
@@ -341,12 +373,19 @@ export class TasksService {
       );
     }
 
+    let input = originalTask.input;
+    if (typeof input?.html === 'string') {
+      const { html, ...rest } = input;
+      const html_s3_key =
+        this.getHtmlS3Key(input) ?? (await this.uploadHtmlToS3(html));
+      input = { ...rest, html_s3_key };
+    }
     const newTask = await this.emitTask({
       namespaceId: originalTask.namespaceId,
       userId: originalTask.userId,
       priority: originalTask.priority,
       function: originalTask.function,
-      input: originalTask.input,
+      input,
       payload: originalTask.payload,
     });
 

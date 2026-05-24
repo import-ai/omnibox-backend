@@ -48,6 +48,7 @@ import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
+import { ResourceSortOptions } from 'omniboxd/resources/resource-sort.types';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -594,10 +595,10 @@ export class NamespaceResourcesService {
       summary?: boolean;
       limit?: number;
       offset?: number;
-    },
+    } & ResourceSortOptions,
     entityManager?: EntityManager,
   ): Promise<ResourceSummaryDto[]> {
-    const { summary = false, limit, offset } = options || {};
+    const { summary = false, limit, offset, sortBy, sortOrder } = options || {};
 
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
@@ -608,7 +609,7 @@ export class NamespaceResourcesService {
     let children = await this.resourcesService.getChildren(
       namespaceId,
       [resourceId],
-      { summary, limit, offset },
+      { summary, limit, offset, sortBy, sortOrder },
       entityManager,
     );
 

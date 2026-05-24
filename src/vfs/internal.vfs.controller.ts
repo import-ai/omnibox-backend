@@ -17,6 +17,10 @@ import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { CreateRequestDto } from 'omniboxd/vfs/dto/create.request.dto';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { MkdirRequestDto } from 'omniboxd/vfs/dto/mkdir.request.dto';
+import {
+  ResourceSortBy,
+  ResourceSortOrder,
+} from 'omniboxd/resources/resource-sort.types';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs')
 export class InternalVfsController {
@@ -30,6 +34,8 @@ export class InternalVfsController {
     @Query('path') path: string,
     @Query('offset') offset: number = 0,
     @Query('limit') limit: number = 20,
+    @Query('sort_by') sortBy?: ResourceSortBy,
+    @Query('sort_order') sortOrder?: ResourceSortOrder,
   ) {
     return await this.vfsService.listChildrenByPath(
       namespaceId,
@@ -37,6 +43,7 @@ export class InternalVfsController {
       path,
       offset,
       limit,
+      { sortBy, sortOrder },
     );
   }
 

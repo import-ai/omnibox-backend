@@ -10,6 +10,7 @@ import {
   IsNull,
   Not,
   Repository,
+  SelectQueryBuilder,
 } from 'typeorm';
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -27,6 +28,14 @@ import {
   sanitizeResourceName,
   generateUniqueResourceName,
 } from 'omniboxd/utils/sanitize-resource-name';
+import {
+  DEFAULT_RESOURCE_SORT_BY,
+  getDefaultResourceSortOrder,
+  ResourceSortBy,
+  ResourceSortOptions,
+  ResourceSortOrder,
+} from './resource-sort.types';
+import { sortResourcesByName } from './utils/resource-name-sort';
 
 const TASK_PRIORITY = 5;
 
@@ -350,9 +359,13 @@ export class ResourcesService {
       summary?: boolean;
       limit?: number;
       offset?: number;
-    },
+    } & ResourceSortOptions,
     entityManager?: EntityManager,
   ): Promise<Resource[]> {
+    if (parentIds.length === 0) {
+      return [];
+    }
+
     const baseFields: (keyof Resource)[] = [
       'id',
       'name',
@@ -372,16 +385,67 @@ export class ResourcesService {
       ? entityManager.getRepository(Resource)
       : this.resourceRepository;
 
-    return await repo.find({
-      select,
-      where: {
-        namespaceId,
-        parentId: In(parentIds),
-      },
-      order: { updatedAt: 'DESC' },
-      ...(options?.limit !== undefined && { take: options.limit }),
-      ...(options?.offset !== undefined && { skip: options.offset }),
-    });
+    const sortBy = options?.sortBy ?? DEFAULT_RESOURCE_SORT_BY;
+    const sortOrder = options?.sortOrder ?? getDefaultResourceSortOrder(sortBy);
+    const queryBuilder = repo
+      .createQueryBuilder('resource')
+      .select(select.map((field) => `resource.${String(field)}`))
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IN (:...parentIds)', { parentIds });
+
+    this.applyChildrenSort(queryBuilder, sortBy, sortOrder);
+
+    if (sortBy === ResourceSortBy.NAME) {
+      const sortedResources = sortResourcesByName(
+        await queryBuilder.getMany(),
+        sortOrder,
+      );
+      const start = options?.offset ?? 0;
+      const end =
+        options?.limit === undefined ? undefined : start + options.limit;
+      return sortedResources.slice(start, end);
+    }
+
+    if (options?.offset !== undefined) {
+      queryBuilder.skip(options.offset);
+    }
+    if (options?.limit !== undefined) {
+      queryBuilder.take(options.limit);
+    }
+
+    return await queryBuilder.getMany();
+  }
+
+  private applyChildrenSort(
+    queryBuilder: SelectQueryBuilder<Resource>,
+    sortBy: ResourceSortBy,
+    sortOrder: ResourceSortOrder,
+  ): SelectQueryBuilder<Resource> {
+    const typeOrmSortOrder =
+      sortOrder === ResourceSortOrder.ASC ? 'ASC' : 'DESC';
+
+    if (sortBy === ResourceSortBy.NAME) {
+      queryBuilder.orderBy('resource.id', 'ASC');
+      return queryBuilder;
+    }
+
+    queryBuilder
+      .orderBy(this.getChildrenSortExpression(sortBy), typeOrmSortOrder)
+      .addOrderBy('resource.id', 'ASC');
+    return queryBuilder;
+  }
+
+  private getChildrenSortExpression(sortBy: ResourceSortBy): string {
+    switch (sortBy) {
+      case ResourceSortBy.CREATED_AT:
+        return 'resource.created_at';
+      case ResourceSortBy.NAME:
+        return 'LOWER(resource.name)';
+      case ResourceSortBy.UPDATED_AT:
+      case ResourceSortBy.MANUAL:
+      default:
+        return 'resource.updated_at';
+    }
   }
 
   async getAllSubResources(

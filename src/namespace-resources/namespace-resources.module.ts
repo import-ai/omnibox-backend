@@ -15,6 +15,7 @@ import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resourc
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
+import { ToolbarModule } from 'omniboxd/toolbar/toolbar.module';
 
 @Module({
   exports: [NamespaceResourcesService],
@@ -36,6 +37,7 @@ import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.modu
     ResourcesModule,
     FilesModule,
     NamespacesQuotaModule,
+    ToolbarModule,
   ],
 })
 export class NamespaceResourcesModule {}

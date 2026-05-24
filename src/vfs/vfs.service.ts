@@ -20,6 +20,7 @@ import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-r
 import { last } from 'omniboxd/utils/arrays';
 import { VfsResourceResponseDto } from 'omniboxd/vfs/dto/vfs.resource.response.dto';
 import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
+import { ResourceSortOptions } from 'omniboxd/resources/resource-sort.types';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -78,20 +79,17 @@ export class VfsService {
     resourceId: string,
     userId: string,
     parentPath?: string,
+    sortOptions?: ResourceSortOptions,
     entityManager?: EntityManager,
   ) {
     const resources = await this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
       userId,
-      {},
+      sortOptions,
       entityManager,
     );
-    // Sort by create time desc
-    const sortedResources = resources.sort((a, b) => {
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    });
-    return sortedResources.map((r) =>
+    return resources.map((r) =>
       FileInfoDto.fromResourceSummaryDto(r, parentPath),
     );
   }
@@ -201,6 +199,7 @@ export class VfsService {
     path: string,
     offset: number = 0,
     limit: number = 20,
+    sortOptions?: ResourceSortOptions,
   ): Promise<ListResponseDto> {
     const parsedPath = VfsService.parsePath(path);
 
@@ -220,6 +219,7 @@ export class VfsService {
         resourceId,
         userId,
         lastResource.path,
+        sortOptions,
       );
 
       return {
@@ -368,6 +368,7 @@ export class VfsService {
         namespaceId,
         currentParentId,
         userId,
+        undefined,
         undefined,
         tx.entityManager,
       );

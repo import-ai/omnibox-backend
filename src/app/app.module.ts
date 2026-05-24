@@ -106,6 +106,8 @@ import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
 import { SharedVfsModule } from 'omniboxd/shared-vfs/shared-vfs.module';
 import { SharedResourceTagsModule } from 'omniboxd/shared-resource-tags/shared-resource-tags.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ToolbarModule } from 'omniboxd/toolbar/toolbar.module';
+import { AddToolbarPreferences1779625978606 } from 'omniboxd/migrations/1779625978606-add-toolbar-preferences';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -198,6 +200,7 @@ export class AppModule implements NestModule {
         VfsWizardModule,
         SharedVfsModule,
         SharedResourceTagsModule,
+        ToolbarModule,
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],
@@ -266,6 +269,7 @@ export class AppModule implements NestModule {
               AddNotifications1776070800000,
               AddStatusEnqueuedIndexToTasks1776071000000,
               DeduplicateResourceNames1775666229211,
+              AddToolbarPreferences1779625978606,
               ...extraMigrations,
             ],
             migrationsRun: true,

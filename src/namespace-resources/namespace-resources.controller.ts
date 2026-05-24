@@ -22,12 +22,20 @@ import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { ListChildrenRequestDto } from './dto/list-children-request.dto';
+import { ToolbarService } from 'omniboxd/toolbar/toolbar.service';
+import {
+  getDefaultResourceSortOrder,
+  ResourceSortBy,
+  ResourceSortOrder,
+} from 'omniboxd/resources/resource-sort.types';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly permissionsService: PermissionsService,
+    private readonly toolbarService: ToolbarService,
   ) {}
 
   @Get()
@@ -120,16 +128,47 @@ export class NamespaceResourcesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
-    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
-    @Query('summary') summary?: string,
+    @Query() query: ListChildrenRequestDto,
   ): Promise<ResourceSummaryDto[]> {
+    const sortOptions = await this.resolveSortOptions(
+      namespaceId,
+      userId,
+      query,
+    );
     return this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
       userId,
-      { summary: summary === 'true', limit, offset },
+      {
+        summary: query.summary === true,
+        limit: query.limit,
+        offset: query.offset,
+        ...sortOptions,
+      },
     );
+  }
+
+  private async resolveSortOptions(
+    namespaceId: string,
+    userId: string,
+    query: ListChildrenRequestDto,
+  ): Promise<{ sortBy: ResourceSortBy; sortOrder: ResourceSortOrder }> {
+    if (query.sortBy || query.sortOrder) {
+      const sortBy = query.sortBy ?? ResourceSortBy.UPDATED_AT;
+      return {
+        sortBy,
+        sortOrder: query.sortOrder ?? getDefaultResourceSortOrder(sortBy),
+      };
+    }
+
+    const preference = await this.toolbarService.getPreference(
+      namespaceId,
+      userId,
+    );
+    return {
+      sortBy: preference.sortBy,
+      sortOrder: preference.sortOrder,
+    };
   }
 
   @Post(':resourceId/move/:targetId')

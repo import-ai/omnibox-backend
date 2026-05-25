@@ -7,5 +7,4 @@ export interface IWizardUrlProvider {
     namespaceId?: string,
     agentRequest?: WizardAgentRequestDto,
   ): Promise<string>;
-  getProBaseUrl(): Promise<string | undefined>;
 }

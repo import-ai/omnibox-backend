@@ -245,6 +245,7 @@ export class WizardTaskService {
           filename: resource.attrs.filename,
           mimetype: resource.attrs.mimetype,
           resource_id: resource.id,
+          ...(userOptions.language ? { language: userOptions.language } : {}),
         },
         payload: {
           resource_id: resource.id,

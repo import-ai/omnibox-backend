@@ -14,6 +14,7 @@ import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { TasksCronService } from 'omniboxd/tasks/tasks.cron.service';
+import { S3Module } from 'omniboxd/s3/s3.module';
 
 @Module({
   providers: [
@@ -28,6 +29,7 @@ import { TasksCronService } from 'omniboxd/tasks/tasks.cron.service';
     KafkaModule,
     NamespacesQuotaModule,
     TagModule,
+    S3Module,
   ],
   controllers: [
     TasksController,

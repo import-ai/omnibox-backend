@@ -56,7 +56,7 @@ export class WizardTaskService {
     userId: string,
     namespaceId: string,
     resourceId: string,
-    input: { html: string; url: string; title?: string },
+    input: { html_s3_key: string; url: string; title?: string },
     tx?: Transaction,
   ) {
     const userOptions = await this.getUserOptions(userId);
@@ -106,7 +106,7 @@ export class WizardTaskService {
     userId: string,
     namespaceId: string,
     resourceId: string,
-    input: { url: string; html?: string; title?: string },
+    input: { url: string; html_s3_key?: string; title?: string },
     tx?: Transaction,
   ) {
     const userOptions = await this.getUserOptions(userId);

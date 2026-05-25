@@ -100,7 +100,12 @@ export class CollectProcessor extends Processor {
     const exceptionError = (task.exception as any)?.error;
     const rawDetails = (task.exception as any)?.details;
 
-    if (exceptionCode === 'FILE_CONTENT_TOO_LONG' && exceptionError) {
+    if (
+      ['FILE_CONTENT_TOO_LONG', 'SUCCESS_WITH_NO_VALID_FRAGMENT'].includes(
+        exceptionCode,
+      ) &&
+      exceptionError
+    ) {
       return exceptionError;
     }
 

@@ -7,8 +7,6 @@ import { IWizardUrlProvider } from 'omniboxd/wizard-url-provider/wizard-url-prov
 @Injectable()
 export class WizardUrlProviderService implements IWizardUrlProvider {
   private readonly baseUrl: string;
-  private readonly proBaseUrl: string | undefined;
-
   constructor(
     private readonly configService: ConfigService,
     private readonly i18n: I18nService,
@@ -23,14 +21,9 @@ export class WizardUrlProviderService implements IWizardUrlProvider {
       );
     }
     this.baseUrl = baseUrl;
-    this.proBaseUrl = this.configService.get<string>('OBB_WIZARD_PRO_BASE_URL');
   }
 
   getBaseUrl(): Promise<string> {
     return Promise.resolve(this.baseUrl);
-  }
-
-  getProBaseUrl(): Promise<string | undefined> {
-    return Promise.resolve(this.proBaseUrl);
   }
 }

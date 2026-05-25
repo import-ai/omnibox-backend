@@ -1,9 +1,6 @@
 import * as path from 'path';
-import { Inject, Injectable } from '@nestjs/common';
-import {
-  IWizardUrlProvider,
-  WIZARD_URL_PROVIDER,
-} from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 interface WizardCapabilities {
   functions: string[];
@@ -12,10 +9,13 @@ interface WizardCapabilities {
 
 @Injectable()
 export class WizardCapabilitiesService {
-  constructor(
-    @Inject(WIZARD_URL_PROVIDER)
-    private readonly wizardUrlProvider: IWizardUrlProvider,
-  ) {}
+  private readonly baseUrl: string;
+  private readonly proBaseUrl: string | undefined;
+
+  constructor(configService: ConfigService) {
+    this.baseUrl = configService.getOrThrow<string>('OBB_WIZARD_BASE_URL');
+    this.proBaseUrl = configService.get<string>('OBB_WIZARD_PRO_BASE_URL');
+  }
 
   private checkCapabilities(
     caps: WizardCapabilities,
@@ -51,20 +51,18 @@ export class WizardCapabilitiesService {
     }
   }
 
-  private async getWizardCapabilities(): Promise<WizardCapabilities> {
-    const baseUrl = await this.wizardUrlProvider.getBaseUrl();
+  private getWizardCapabilities(): Promise<WizardCapabilities> {
     return this.fetchCapabilities(
-      `${baseUrl}/internal/api/v1/wizard/functions`,
+      `${this.baseUrl}/internal/api/v1/wizard/functions`,
     );
   }
 
-  private async getProCapabilities(): Promise<WizardCapabilities | null> {
-    const baseUrl = await this.wizardUrlProvider.getProBaseUrl();
-    if (!baseUrl) {
-      return null;
+  private getProCapabilities(): Promise<WizardCapabilities | null> {
+    if (!this.proBaseUrl) {
+      return Promise.resolve(null);
     }
     return this.fetchCapabilities(
-      `${baseUrl}/internal/api/v1/wizard/functions`,
+      `${this.proBaseUrl}/internal/api/v1/wizard/functions`,
     );
   }
 

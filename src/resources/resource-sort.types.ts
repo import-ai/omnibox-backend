@@ -21,7 +21,7 @@ export const DEFAULT_RESOURCE_SORT_ORDER = ResourceSortOrder.DESC;
 export function getDefaultResourceSortOrder(
   sortBy: ResourceSortBy,
 ): ResourceSortOrder {
-  if (sortBy === ResourceSortBy.NAME) {
+  if (sortBy === ResourceSortBy.NAME || sortBy === ResourceSortBy.MANUAL) {
     return ResourceSortOrder.ASC;
   }
   return DEFAULT_RESOURCE_SORT_ORDER;

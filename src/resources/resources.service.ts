@@ -373,6 +373,7 @@ export class ResourcesService {
       'resourceType',
       'globalPermission',
       'attrs',
+      'manualOrder',
       'createdAt',
       'updatedAt',
     ];
@@ -439,13 +440,77 @@ export class ResourcesService {
     switch (sortBy) {
       case ResourceSortBy.CREATED_AT:
         return 'resource.created_at';
+      case ResourceSortBy.MANUAL:
+        return 'resource.manual_order';
       case ResourceSortBy.NAME:
         return 'LOWER(resource.name)';
       case ResourceSortBy.UPDATED_AT:
-      case ResourceSortBy.MANUAL:
       default:
         return 'resource.updated_at';
     }
+  }
+
+  async reorderChildren(
+    namespaceId: string,
+    parentId: string,
+    orderedResourceIds: string[],
+    tx?: Transaction,
+  ): Promise<void> {
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.reorderChildren(namespaceId, parentId, orderedResourceIds, tx),
+      );
+    }
+
+    const repo = tx.entityManager.getRepository(Resource);
+    const siblings = await repo
+      .createQueryBuilder('resource')
+      .setLock('pessimistic_write')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id = :parentId', { parentId })
+      .orderBy('resource.manual_order', 'ASC')
+      .addOrderBy('resource.id', 'ASC')
+      .getMany();
+
+    const orderedSet = new Set(orderedResourceIds);
+    const mergedResourceIds = [
+      ...orderedResourceIds,
+      ...siblings
+        .map((resource) => resource.id)
+        .filter((resourceId) => !orderedSet.has(resourceId)),
+    ];
+
+    for (const [index, resourceId] of mergedResourceIds.entries()) {
+      await repo.update(
+        { namespaceId, id: resourceId, parentId },
+        { manualOrder: numberToBigintString(index) },
+      );
+    }
+  }
+
+  private async getTopManualOrder(
+    namespaceId: string,
+    parentId: string,
+    entityManager: EntityManager,
+  ): Promise<string> {
+    const topSibling = await entityManager
+      .getRepository(Resource)
+      .createQueryBuilder('resource')
+      .select('resource.manualOrder')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id = :parentId', { parentId })
+      .orderBy('resource.manual_order', 'ASC')
+      .addOrderBy('resource.id', 'ASC')
+      .setLock('pessimistic_write')
+      .getOne();
+
+    if (!topSibling) {
+      return '0';
+    }
+
+    return numberToBigintString(
+      bigintStringToNumber(topSibling.manualOrder) - 1,
+    );
   }
 
   async getAllSubResources(
@@ -752,6 +817,15 @@ export class ResourcesService {
       );
     }
 
+    let manualOrder: string | undefined;
+    if (props.parentId && props.parentId !== oldResource.parentId) {
+      manualOrder = await this.getTopManualOrder(
+        namespaceId,
+        props.parentId,
+        entityManager,
+      );
+    }
+
     // Validate and sanitize resource name
     let resolvedName = props.name;
     if (resolvedName !== undefined) {
@@ -800,6 +874,7 @@ export class ResourcesService {
       { namespaceId, id: resourceId },
       {
         ...updatedProps,
+        ...(manualOrder !== undefined && { manualOrder }),
         ...(contentSize !== undefined && {
           contentSize: numberToBigintString(contentSize),
         }),
@@ -923,9 +998,17 @@ export class ResourcesService {
       : 0;
 
     const repo = entityManager.getRepository(Resource);
+    const manualOrder = createProps.parentId
+      ? await this.getTopManualOrder(
+          createProps.namespaceId,
+          createProps.parentId,
+          entityManager,
+        )
+      : '0';
     const resource = await repo.save(
       repo.create({
         ...createProps,
+        manualOrder,
         contentSize: numberToBigintString(contentSize),
       }),
     );

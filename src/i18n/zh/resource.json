@@ -18,6 +18,7 @@
     "trashItemNotFound": "回收站中未找到该项目",
     "cannotPermanentlyDeleteRoot": "无法永久删除根资源",
     "resourceNameContainsSlash": "资源名称不能包含 '/'",
-    "resourceNameConflict": "资源名称在该目录下已存在"
+    "resourceNameConflict": "资源名称在该目录下已存在",
+    "invalidManualOrder": "手动排序只能包含该目录下的资源，且每个资源只能出现一次"
   }
 }

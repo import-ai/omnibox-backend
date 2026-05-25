@@ -29,6 +29,7 @@ import {
   ResourceSortBy,
   ResourceSortOrder,
 } from 'omniboxd/resources/resource-sort.types';
+import { UpdateManualOrderRequestDto } from './dto/update-manual-order-request.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -184,6 +185,22 @@ export class NamespaceResourcesController {
       resourceId,
       userId,
       targetId,
+    );
+  }
+
+  @Patch(':resourceId/manual-order')
+  @CheckNamespaceReadonly()
+  async updateManualOrder(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Body() data: UpdateManualOrderRequestDto,
+  ): Promise<void> {
+    await this.namespaceResourcesService.updateManualOrder(
+      namespaceId,
+      resourceId,
+      userId,
+      data,
     );
   }
 

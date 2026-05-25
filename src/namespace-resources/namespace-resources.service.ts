@@ -49,6 +49,12 @@ import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
 import { ResourceSortOptions } from 'omniboxd/resources/resource-sort.types';
+import { UpdateManualOrderRequestDto } from './dto/update-manual-order-request.dto';
+import { ToolbarService } from 'omniboxd/toolbar/toolbar.service';
+import {
+  ToolbarSortBy,
+  ToolbarSortOrder,
+} from 'omniboxd/toolbar/entities/toolbar.entity';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -66,6 +72,7 @@ export class NamespaceResourcesService {
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    private readonly toolbarService: ToolbarService,
   ) {}
 
   private async getTagsByIds(
@@ -423,6 +430,218 @@ export class NamespaceResourcesService {
       resourceId,
       userId,
       { parentId: targetId },
+    );
+  }
+
+  async updateManualOrder(
+    namespaceId: string,
+    parentId: string,
+    userId: string,
+    data: UpdateManualOrderRequestDto,
+  ): Promise<void> {
+    const resourceIds = data.resourceIds ?? (data as any).resource_ids;
+    const switchToManual =
+      data.switchToManual ?? (data as any).switch_to_manual ?? false;
+
+    const canEditParent = await this.permissionsService.userHasPermission(
+      namespaceId,
+      parentId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (!canEditParent) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    await transaction(this.dataSource.manager, async (tx) => {
+      const resolvedResourceIds = await this.resolveManualOrderResourceIds(
+        namespaceId,
+        parentId,
+        data,
+        resourceIds,
+        tx,
+      );
+      await this.resourcesService.reorderChildren(
+        namespaceId,
+        parentId,
+        resolvedResourceIds,
+        tx,
+      );
+    });
+
+    if (switchToManual) {
+      await this.toolbarService.updatePreference(namespaceId, userId, {
+        sortBy: ToolbarSortBy.MANUAL,
+        sortOrder: ToolbarSortOrder.ASC,
+      });
+    }
+  }
+
+  private async resolveManualOrderResourceIds(
+    namespaceId: string,
+    parentId: string,
+    data: UpdateManualOrderRequestDto,
+    resourceIds: string[] | undefined,
+    tx: Transaction,
+  ): Promise<string[]> {
+    const siblings = await this.getManualOrderSiblings(
+      namespaceId,
+      parentId,
+      tx,
+    );
+    const explicitResourceIds = resourceIds ?? [];
+    if (explicitResourceIds.length > 0) {
+      this.assertManualOrderResourceIds(
+        parentId,
+        explicitResourceIds,
+        siblings,
+      );
+      return explicitResourceIds;
+    }
+
+    const resourceId = data.resourceId ?? (data as any).resource_id;
+    const targetIndex = data.targetIndex ?? (data as any).target_index;
+    const beforeResourceId =
+      data.beforeResourceId ?? (data as any).before_resource_id;
+    const afterResourceId =
+      data.afterResourceId ?? (data as any).after_resource_id;
+    if (!resourceId) {
+      const message = this.i18n.t('resource.errors.invalidManualOrder');
+      throw new AppException(
+        message,
+        'INVALID_MANUAL_ORDER',
+        HttpStatus.BAD_REQUEST,
+        {
+          reason: 'resource_id_required',
+          parentId,
+          siblingIds: siblings.map((resource) => resource.id),
+        },
+      );
+    }
+
+    const siblingIds = siblings.map((resource) => resource.id);
+    this.assertManualOrderResourceIds(parentId, [resourceId], siblings);
+
+    const orderedIds = siblingIds.filter(
+      (siblingId) => siblingId !== resourceId,
+    );
+    const insertIndex = this.resolveManualOrderInsertIndex(
+      parentId,
+      orderedIds,
+      targetIndex,
+      beforeResourceId,
+      afterResourceId,
+    );
+    orderedIds.splice(insertIndex, 0, resourceId);
+    return orderedIds;
+  }
+
+  private async getManualOrderSiblings(
+    namespaceId: string,
+    parentId: string,
+    tx: Transaction,
+  ): Promise<Resource[]> {
+    const parent = await tx.entityManager.findOne(Resource, {
+      where: { namespaceId, id: parentId },
+    });
+    if (!parent) {
+      const message = this.i18n.t('resource.errors.resourceNotFound');
+      throw new AppException(
+        message,
+        'RESOURCE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return await tx.entityManager.find(Resource, {
+      select: ['id', 'manualOrder'],
+      where: { namespaceId, parentId },
+      order: { manualOrder: 'ASC', id: 'ASC' },
+    });
+  }
+
+  private assertManualOrderResourceIds(
+    parentId: string,
+    resourceIds: string[],
+    siblings: Resource[],
+  ): void {
+    const uniqueResourceIds = new Set(resourceIds);
+    if (resourceIds.length !== uniqueResourceIds.size) {
+      const message = this.i18n.t('resource.errors.invalidManualOrder');
+      const duplicateResourceIds = resourceIds.filter(
+        (resourceId, index) => resourceIds.indexOf(resourceId) !== index,
+      );
+      throw new AppException(
+        message,
+        'INVALID_MANUAL_ORDER',
+        HttpStatus.BAD_REQUEST,
+        {
+          reason: 'duplicate_resource_ids',
+          parentId,
+          receivedResourceIds: resourceIds,
+          duplicateResourceIds: [...new Set(duplicateResourceIds)],
+        },
+      );
+    }
+
+    const siblingIds = siblings.map((resource) => resource.id);
+    const siblingIdSet = new Set(siblingIds);
+    const outsideParentResourceIds = resourceIds.filter(
+      (resourceId) => !siblingIdSet.has(resourceId),
+    );
+    if (outsideParentResourceIds.length > 0) {
+      const message = this.i18n.t('resource.errors.invalidManualOrder');
+      throw new AppException(
+        message,
+        'INVALID_MANUAL_ORDER',
+        HttpStatus.BAD_REQUEST,
+        {
+          reason: 'resource_ids_outside_parent',
+          parentId,
+          receivedResourceIds: resourceIds,
+          siblingIds,
+          outsideParentResourceIds,
+        },
+      );
+    }
+  }
+
+  private resolveManualOrderInsertIndex(
+    parentId: string,
+    orderedIds: string[],
+    targetIndex: number | undefined,
+    beforeResourceId: string | undefined,
+    afterResourceId: string | undefined,
+  ): number {
+    if (targetIndex !== undefined) {
+      return Math.min(targetIndex, orderedIds.length);
+    }
+
+    if (beforeResourceId) {
+      const beforeIndex = orderedIds.indexOf(beforeResourceId);
+      if (beforeIndex >= 0) {
+        return beforeIndex;
+      }
+    }
+
+    if (afterResourceId) {
+      const afterIndex = orderedIds.indexOf(afterResourceId);
+      if (afterIndex >= 0) {
+        return afterIndex + 1;
+      }
+    }
+
+    const message = this.i18n.t('resource.errors.invalidManualOrder');
+    throw new AppException(
+      message,
+      'INVALID_MANUAL_ORDER',
+      HttpStatus.BAD_REQUEST,
+      {
+        reason: 'target_position_required',
+        parentId,
+        siblingIds: orderedIds,
+      },
     );
   }
 

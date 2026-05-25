@@ -108,6 +108,7 @@ import { SharedResourceTagsModule } from 'omniboxd/shared-resource-tags/shared-r
 import { ScheduleModule } from '@nestjs/schedule';
 import { ToolbarModule } from 'omniboxd/toolbar/toolbar.module';
 import { AddToolbarPreferences1779625978606 } from 'omniboxd/migrations/1779625978606-add-toolbar-preferences';
+import { AddResourceManualOrder1779638955868 } from 'omniboxd/migrations/1779638955868-add-resource-manual-order';
 
 @Module({})
 export class AppModule implements NestModule {
@@ -270,6 +271,7 @@ export class AppModule implements NestModule {
               AddStatusEnqueuedIndexToTasks1776071000000,
               DeduplicateResourceNames1775666229211,
               AddToolbarPreferences1779625978606,
+              AddResourceManualOrder1779638955868,
               ...extraMigrations,
             ],
             migrationsRun: true,

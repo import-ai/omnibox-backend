@@ -7,6 +7,7 @@ import {
   ToolbarSortBy,
   ToolbarSortOrder,
 } from 'omniboxd/toolbar/entities/toolbar.entity';
+import { getDefaultResourceSortOrder } from 'omniboxd/resources/resource-sort.types';
 import { Repository } from 'typeorm';
 import { UpdateToolbarPreferenceDto } from './dto/update-toolbar-preference.dto';
 import { I18nService } from 'nestjs-i18n';
@@ -51,14 +52,16 @@ export class ToolbarService {
     updatePreference: UpdateToolbarPreferenceDto,
   ): Promise<ToolbarPreference> {
     const preference = await this.getPreference(namespaceId, userId);
+    const sortBy = updatePreference.sortBy ?? preference.sortBy;
+    const sortOrder =
+      updatePreference.sortOrder ??
+      (updatePreference.sortBy !== undefined
+        ? getDefaultResourceSortOrder(updatePreference.sortBy)
+        : preference.sortOrder);
     return await this.toolbarRepository.save({
       ...preference,
-      ...(updatePreference.sortBy !== undefined && {
-        sortBy: updatePreference.sortBy,
-      }),
-      ...(updatePreference.sortOrder !== undefined && {
-        sortOrder: updatePreference.sortOrder,
-      }),
+      sortBy,
+      sortOrder,
     });
   }
 

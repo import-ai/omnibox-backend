@@ -96,7 +96,18 @@ export class CollectProcessor extends Processor {
 
   private buildErrorContent(task: Task): string {
     const exceptionType = (task.exception as any)?.type;
+    const exceptionCode = (task.exception as any)?.code;
+    const exceptionError = (task.exception as any)?.error;
     const rawDetails = (task.exception as any)?.details;
+
+    if (
+      ['FILE_CONTENT_TOO_LONG', 'SUCCESS_WITH_NO_VALID_FRAGMENT'].includes(
+        exceptionCode,
+      ) &&
+      exceptionError
+    ) {
+      return exceptionError;
+    }
 
     if (exceptionType === 'InsufficientQuotaError' && rawDetails) {
       const details = plainToInstance(QuotaExceptionDetailsDto, rawDetails, {

@@ -12,6 +12,9 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
   fileUploadSizeLimit: 20 * 1024 * 1024, // 20MB
   trashRetentionDays: 7,
   readonly: false,
+  smartFolderPrivateLimit: 1,
+  smartFolderTeamLimit: 1,
+  smartFolderRuleLimit: 3,
 };
 
 @Injectable()
@@ -24,11 +27,16 @@ export class NamespacesQuotaService {
 
   async getNamespaceUsage(namespaceId: string): Promise<NamespaceUsageDto> {
     if (!this.proUrl) {
-      return DEFAULT_USAGE;
+      return { ...DEFAULT_USAGE };
     }
-    const response = await fetch(
-      `${this.proUrl}/internal/api/v1/namespaces/${namespaceId}/usages`,
-    );
+    let response: Response;
+    try {
+      response = await fetch(
+        `${this.proUrl}/internal/api/v1/namespaces/${namespaceId}/usages`,
+      );
+    } catch {
+      return { ...DEFAULT_USAGE };
+    }
     if (!response.ok) {
       throw new AppException(
         `Failed to get usage for namespace ${namespaceId}`,

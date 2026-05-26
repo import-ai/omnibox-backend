@@ -8,6 +8,7 @@ export enum ResourceType {
   LINK = 'link',
   FILE = 'file',
   FOLDER = 'folder',
+  SMART_FOLDER = 'smart_folder',
 }
 
 @Entity('resources')

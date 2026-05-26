@@ -1,0 +1,8 @@
+{
+  "errors": {
+    "scopeInvalid": "Team smart folder can only filter teamspace resources",
+    "quotaExceeded": "Smart folder quota exceeded",
+    "ruleLimitExceeded": "Smart folder rule limit exceeded",
+    "notFound": "Smart folder not found"
+  }
+}

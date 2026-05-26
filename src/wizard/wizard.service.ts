@@ -124,22 +124,18 @@ export class WizardService {
       this.gzipHtmlFolder,
       'html.gz',
     );
-    const metadata = {
-      resourceId: resource.id,
-      url,
-    };
     await this.s3Service.putObject(
       objectKey,
       compressedHtml.buffer,
       compressedHtml.mimetype,
-      metadata,
+      { resourceId: resource.id, url },
     );
 
     const task = await this.wizardTaskService.emitWebAnalysisTask(
       userId,
       namespaceId,
       resource.id,
-      { html: objectKey, url, title },
+      { html_s3_key: objectKey, url, title },
     );
     return { task_id: task.id, resource_id: resource.id };
   }
@@ -294,6 +290,14 @@ export class WizardService {
   ): Promise<void> {
     for (const nextTask of nextTasks) {
       try {
+        let input = nextTask.input;
+        if (typeof input.html === 'string') {
+          const { html, ...rest } = input;
+          input = {
+            ...rest,
+            html_s3_key: await this.tasksService.uploadHtmlToS3(html),
+          };
+        }
         const createdTask = await this.tasksService.emitTask({
           namespaceId: parentTask.namespaceId,
           userId: parentTask.userId,
@@ -302,7 +306,7 @@ export class WizardService {
               ? numberToBigintString(nextTask.priority)
               : parentTask.priority,
           function: nextTask.function,
-          input: nextTask.input,
+          input,
           payload: {
             ...nextTask.payload,
             parent_task_id: parentTask.id,
@@ -412,17 +416,9 @@ export class WizardService {
     task.startedAt = new Date();
     task.status = TaskStatus.RUNNING;
     const newTask = await this.wizardTaskService.taskRepository.save(task);
-    // Fetch HTML content from S3 for tasks that need HTML analysis
-    if (
-      ['collect', 'generate_video_note', 'web_analysis'].includes(
-        newTask.function,
-      ) &&
-      newTask.input.html?.startsWith(this.gzipHtmlFolder) &&
-      newTask.input.html?.length === this.gzipHtmlFolder.length + 36 // 1 + 32 + 3
-    ) {
-      const htmlContent = await this.getHtmlFromMinioGzipFile(
-        newTask.input.html,
-      );
+    const s3Key = this.tasksService.getHtmlS3Key(newTask.input);
+    if (s3Key) {
+      const htmlContent = await this.getHtmlFromMinioGzipFile(s3Key);
       newTask.input = { ...newTask.input, html: htmlContent };
     }
     return InternalTaskDto.fromEntity(newTask);

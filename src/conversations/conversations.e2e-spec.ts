@@ -34,6 +34,23 @@ describe('ConversationsController (e2e)', () => {
       expect(response.body).toHaveProperty('updated_at');
     });
 
+    it('should create a conversation with preferences', async () => {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+        .send({
+          preferences: {
+            tools: [{ name: 'web_search' }],
+            enable_thinking: true,
+          },
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body.preferences).toEqual({
+        tools: [{ name: 'web_search' }],
+        enable_thinking: true,
+      });
+    });
+
     it('should fail with invalid namespaceId', async () => {
       await client
         .post('/api/v1/namespaces/invalid-namespace/conversations')
@@ -248,6 +265,64 @@ describe('ConversationsController (e2e)', () => {
         )
         .send(updateData)
         .expect(HttpStatus.BAD_REQUEST);
+    });
+
+    it('should update conversation preferences', async () => {
+      const updateData = {
+        preferences: {
+          tools: [{ name: 'web_search' }],
+          enable_thinking: true,
+        },
+      };
+
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
+        )
+        .send(updateData)
+        .expect(HttpStatus.OK);
+
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(response.body.preferences).toEqual(updateData.preferences);
+    });
+
+    it('should clear conversation preferences', async () => {
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
+        )
+        .send({
+          preferences: {
+            tools: [{ name: 'web_search' }],
+            enable_thinking: true,
+          },
+        })
+        .expect(HttpStatus.OK);
+
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
+        )
+        .send({
+          preferences: {
+            tools: [],
+            enable_thinking: false,
+          },
+        })
+        .expect(HttpStatus.OK);
+
+      const response = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(response.body.preferences).toBeNull();
     });
 
     it('should fail with non-existent conversation', async () => {

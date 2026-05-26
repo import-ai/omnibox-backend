@@ -1,4 +1,5 @@
 import { ConversationsService } from './conversations.service';
+import { CreateConversationDto } from './dto/create-conversation.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 import { ConversationDetailDto } from './dto/conversation-detail.dto';
 import {
@@ -40,8 +41,13 @@ export class ConversationsController {
   async create(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
+    @Body() createConversationDto: CreateConversationDto = {},
   ) {
-    return await this.conversationsService.create(namespaceId, userId);
+    return await this.conversationsService.create(
+      namespaceId,
+      userId,
+      createConversationDto.preferences,
+    );
   }
 
   @Patch(':id')
@@ -49,7 +55,7 @@ export class ConversationsController {
     @Param('id') id: string,
     @Body() updateConversationDto: UpdateConversationDto,
   ) {
-    await this.conversationsService.update(id, updateConversationDto.title);
+    await this.conversationsService.update(id, updateConversationDto);
   }
 
   @Get(':id')

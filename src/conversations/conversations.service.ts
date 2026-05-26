@@ -11,7 +11,12 @@ import {
   ConversationDetailDto,
   ConversationMessageMappingDto,
 } from 'omniboxd/conversations/dto/conversation-detail.dto';
+import {
+  ConversationPreferences,
+  ConversationPreferencesDto,
+} from 'omniboxd/conversations/dto/conversation-preferences.dto';
 import { ConversationSummaryDto } from 'omniboxd/conversations/dto/conversation-summary.dto';
+import { UpdateConversationDto } from 'omniboxd/conversations/dto/update-conversation.dto';
 import {
   Message,
   OpenAIMessageRole,
@@ -35,11 +40,16 @@ export class ConversationsService {
     private readonly i18n: I18nService,
   ) {}
 
-  async create(namespaceId: string, userId: string) {
+  async create(
+    namespaceId: string,
+    userId: string,
+    preferences?: ConversationPreferencesDto,
+  ) {
     const conversation = this.conversationRepository.create({
       namespaceId,
       userId: userId,
       title: '',
+      preferences: this.normalizePreferences(preferences),
     });
     return await this.conversationRepository.save(conversation);
   }
@@ -54,10 +64,43 @@ export class ConversationsService {
     return await this.conversationRepository.save(conversation);
   }
 
-  async update(id: string, title: string) {
+  async update(id: string, updateConversationDto: UpdateConversationDto) {
     const conversation = await this.findOne(id);
-    conversation.title = title;
+    if (updateConversationDto.title !== undefined) {
+      conversation.title = updateConversationDto.title;
+    }
+    if (updateConversationDto.preferences !== undefined) {
+      conversation.preferences = this.normalizePreferences(
+        updateConversationDto.preferences ?? undefined,
+      );
+    }
     await this.conversationRepository.save(conversation);
+  }
+
+  private normalizePreferences(
+    preferences?: ConversationPreferencesDto | null,
+  ): ConversationPreferences | null {
+    if (!preferences) {
+      return null;
+    }
+
+    const tools = (preferences.tools ?? []).filter(
+      (tool) => tool.name === 'web_search',
+    );
+    const enableThinking = preferences.enable_thinking === true;
+
+    if (tools.length === 0 && !enableThinking) {
+      return null;
+    }
+
+    const normalized: ConversationPreferences = {};
+    if (tools.length > 0) {
+      normalized.tools = tools.map((tool) => ({ name: tool.name }));
+    }
+    if (enableThinking) {
+      normalized.enable_thinking = true;
+    }
+    return normalized;
   }
 
   async findAll(
@@ -192,6 +235,7 @@ export class ConversationsService {
     const detail: ConversationDetailDto = {
       id: conversation.id,
       title: conversation.title,
+      preferences: conversation.preferences,
       created_at: conversation.createdAt.toISOString(),
       updated_at: conversation.updatedAt?.toISOString(),
       mapping: {},

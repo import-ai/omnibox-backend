@@ -1,4 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
+import { ConversationPreferences } from 'omniboxd/conversations/dto/conversation-preferences.dto';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('conversations')
@@ -17,4 +18,7 @@ export class Conversation extends Base {
 
   @Column('varchar', { nullable: true })
   shareId: string | null;
+
+  @Column('jsonb', { nullable: true })
+  preferences: ConversationPreferences | null;
 }

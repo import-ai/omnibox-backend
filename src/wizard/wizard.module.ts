@@ -25,6 +25,7 @@ import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
 
 @Module({
   providers: [
@@ -48,6 +49,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     TasksModule,
     S3Module,
     SharedResourcesModule,
+    SmartFoldersModule,
     TypeOrmModule.forFeature([Task]),
   ],
   controllers: [

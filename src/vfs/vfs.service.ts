@@ -20,6 +20,8 @@ import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-r
 import { last } from 'omniboxd/utils/arrays';
 import { VfsResourceResponseDto } from 'omniboxd/vfs/dto/vfs.resource.response.dto';
 import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 
 const tracer = trace.getTracer('VFSService');
 
@@ -34,6 +36,8 @@ export class VfsService {
     private readonly dataSource: DataSource,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly namespacesService: NamespacesService,
+    private readonly resourcesService: ResourcesService,
+    private readonly smartFoldersService: SmartFoldersService,
   ) {}
 
   /**
@@ -80,6 +84,22 @@ export class VfsService {
     parentPath?: string,
     entityManager?: EntityManager,
   ) {
+    const meta = await this.resourcesService.getResourceMeta(
+      namespaceId,
+      resourceId,
+      entityManager,
+    );
+    if (meta?.resourceType === ResourceType.SMART_FOLDER) {
+      // Smart folders are virtual — use condition-based query instead of parentId
+      const children = await this.smartFoldersService.listChildren(
+        userId,
+        namespaceId,
+        resourceId,
+      );
+      return children.map((r) =>
+        FileInfoDto.fromResourceSummaryDto(r, parentPath),
+      );
+    }
     const resources = await this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,

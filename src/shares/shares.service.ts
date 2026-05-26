@@ -7,7 +7,9 @@ import { ShareInfoDto } from './dto/share-info.dto';
 import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-info.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
+import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -19,6 +21,7 @@ export class SharesService {
     @InjectRepository(Share)
     private readonly shareRepo: Repository<Share>,
     private readonly resourcesService: ResourcesService,
+    private readonly smartFoldersService: SmartFoldersService,
     private readonly namespacesService: NamespacesService,
     private readonly userService: UserService,
     private readonly i18n: I18nService,
@@ -88,7 +91,19 @@ export class SharesService {
     return share;
   }
 
+  private getShareOwnerIdOrFail(share: Share): string {
+    if (share.userId) {
+      return share.userId;
+    }
+
+    const message = this.i18n.t('share.errors.shareNotFound', {
+      args: { shareId: share.id },
+    });
+    throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
+  }
+
   async getPublicShareInfo(share: Share): Promise<PublicShareInfoDto> {
+    const ownerUserId = this.getShareOwnerIdOrFail(share);
     const resource = await this.resourcesService.getResourceMeta(
       share.namespaceId,
       share.resourceId,
@@ -99,16 +114,30 @@ export class SharesService {
       });
       throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
-    const children = await this.resourcesService.getChildren(
-      share.namespaceId,
-      [share.resourceId],
-    );
+
+    let hasChildren = false;
+    if (resource.resourceType === ResourceType.SMART_FOLDER) {
+      const children = await this.smartFoldersService.listChildren(
+        ownerUserId,
+        share.namespaceId,
+        share.resourceId,
+        { limit: 1 },
+      );
+      hasChildren = children.length > 0;
+    } else {
+      const children = await this.resourcesService.getChildren(
+        share.namespaceId,
+        [share.resourceId],
+      );
+      hasChildren = children.length > 0;
+    }
+
     const resourceMeta = SharedResourceMetaDto.fromResourceMeta(
       share,
       resource,
-      children.length > 0,
+      hasChildren,
     );
-    const user = await this.userService.find(share.userId!);
+    const user = await this.userService.find(ownerUserId);
     return PublicShareInfoDto.fromResourceMeta(
       share,
       resourceMeta,
@@ -155,6 +184,9 @@ export class SharesService {
         password: null,
         expiresAt: null,
       });
+    }
+    if (share.enabled && !share.userId) {
+      share.userId = userId;
     }
     if (req.enabled !== undefined) {
       share.enabled = req.enabled;

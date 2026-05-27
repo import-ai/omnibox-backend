@@ -595,7 +595,7 @@ export class NamespaceResourcesService {
           message,
           'TARGET_NOT_EDITABLE',
           HttpStatus.FORBIDDEN,
-          { targetName: target?.name },
+          { target_name: target?.name },
         );
       }
       await this.ensureResourceNameNotExists(

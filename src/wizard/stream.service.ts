@@ -402,27 +402,71 @@ export class StreamService {
       return resources.map((r) => this.toPrivateSearchResource(r));
     }
 
-    const visibleResources: PrivateSearchResourceDto[] = [...reqResources];
+    // For smart folder shares, get all valid shared resources upfront.
+    // This is consistent with the sidebar (which uses listChildren) and avoids
+    // the per-resource isResourceMatched check which can diverge from listChildren.
+    const shareRoot = await this.resourcesService.getResource(
+      share.namespaceId,
+      share.resourceId,
+    );
+    const isSmartFolderShare =
+      shareRoot?.resourceType === ResourceType.SMART_FOLDER &&
+      share.allResources;
+
+    let validSharedResourceIds: Set<string> | null = null;
+    if (isSmartFolderShare) {
+      const allSharedResources =
+        await this.sharedResourcesService.getAllSharedResources(share);
+      validSharedResourceIds = new Set(allSharedResources.map((r) => r.id));
+    }
+
+    const visibleResources: PrivateSearchResourceDto[] = [];
     for (const reqResource of reqResources) {
-      // Check if the resource is in the share
-      const resource = await this.sharedResourcesService.getAndValidateResource(
-        share,
-        reqResource.id,
-      );
-      if (reqResource.type === 'folder') {
-        const subResources =
-          resource.resourceType === ResourceType.SMART_FOLDER
-            ? await this.sharedResourcesService.getSharedResourceChildren(
-                share,
-                reqResource.id,
-              )
-            : await this.resourcesService.getChildren(share.namespaceId, [
-                reqResource.id,
-              ]);
-        reqResource.child_ids = subResources.map((r) => r.id);
-        visibleResources.push(
-          ...subResources.map((r) => this.toPrivateSearchResource(r)),
-        );
+      if (validSharedResourceIds) {
+        // Smart folder share: validate against the actual matched children list
+        if (!validSharedResourceIds.has(reqResource.id)) {
+          const message = this.i18n.t('resource.errors.resourceNotFound');
+          throw new AppException(
+            message,
+            'RESOURCE_NOT_FOUND',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+        visibleResources.push(reqResource);
+        if (reqResource.type === 'folder') {
+          const subResources =
+            await this.sharedResourcesService.getSharedResourceChildren(
+              share,
+              reqResource.id,
+            );
+          reqResource.child_ids = subResources.map((r) => r.id);
+          visibleResources.push(
+            ...subResources.map((r) => this.toPrivateSearchResource(r)),
+          );
+        }
+      } else {
+        // Non-smart-folder share: use strict validation
+        const resource =
+          await this.sharedResourcesService.getAndValidateResource(
+            share,
+            reqResource.id,
+          );
+        visibleResources.push(reqResource);
+        if (reqResource.type === 'folder') {
+          const subResources =
+            resource.resourceType === ResourceType.SMART_FOLDER
+              ? await this.sharedResourcesService.getSharedResourceChildren(
+                  share,
+                  reqResource.id,
+                )
+              : await this.resourcesService.getChildren(share.namespaceId, [
+                  reqResource.id,
+                ]);
+          reqResource.child_ids = subResources.map((r) => r.id);
+          visibleResources.push(
+            ...subResources.map((r) => this.toPrivateSearchResource(r)),
+          );
+        }
       }
     }
     return visibleResources;

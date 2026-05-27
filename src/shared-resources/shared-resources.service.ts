@@ -414,6 +414,13 @@ export class SharedResourcesService {
         if (await this.isSharedSmartFolderMatchOrDescendant(share, resource)) {
           return resource;
         }
+        // Fallback: some resources pass listChildren but fail isResourceMatched due to
+        // divergence in filter evaluation. Check via listChildren as the authoritative
+        // source (consistent with sidebar display).
+        const children = await this.getSharedSmartFolderMatchedChildren(share);
+        if (children.some((c) => c.id === resource.id)) {
+          return resource;
+        }
         const message = this.i18n.t('resource.errors.resourceNotFound');
         throw new AppException(
           message,

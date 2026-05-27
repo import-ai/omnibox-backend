@@ -482,17 +482,22 @@ export class NamespaceResourcesService {
     failedIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
-      const editableIds = await this.getEditableResourceIds(
+      const batchResourceIds = await this.getBatchTopLevelResourceIds(
         namespaceId,
-        userId,
         resourceIds,
         tx.entityManager,
       );
-      const deleteIds = resourceIds.filter((id) => editableIds.has(id));
+      const editableIds = await this.getEditableResourceIds(
+        namespaceId,
+        userId,
+        batchResourceIds,
+        tx.entityManager,
+      );
+      const deleteIds = batchResourceIds.filter((id) => editableIds.has(id));
       if (deleteIds.length === 0) {
         return {
           successIds: [],
-          failedIds: resourceIds,
+          failedIds: batchResourceIds,
         };
       }
       const deletedIds = await this.resourcesService.batchDeleteResources(
@@ -501,10 +506,12 @@ export class NamespaceResourcesService {
         deleteIds,
         tx,
       );
-      const successIds = resourceIds.filter((id) => deletedIds.includes(id));
+      const successIds = batchResourceIds.filter((id) =>
+        deletedIds.includes(id),
+      );
       return {
         successIds: successIds,
-        failedIds: resourceIds.filter((id) => !successIds.includes(id)),
+        failedIds: batchResourceIds.filter((id) => !successIds.includes(id)),
       };
     });
   }
@@ -520,6 +527,11 @@ export class NamespaceResourcesService {
     nameConflictIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
+      const batchResourceIds = await this.getBatchTopLevelResourceIds(
+        namespaceId,
+        resourceIds,
+        tx.entityManager,
+      );
       const userHasPermission = await this.permissionsService.userHasPermission(
         namespaceId,
         targetId,
@@ -539,14 +551,14 @@ export class NamespaceResourcesService {
       const editableIds = await this.getEditableResourceIds(
         namespaceId,
         userId,
-        resourceIds,
+        batchResourceIds,
         tx.entityManager,
       );
-      const moveIds = resourceIds.filter((id) => editableIds.has(id));
+      const moveIds = batchResourceIds.filter((id) => editableIds.has(id));
       if (moveIds.length === 0) {
         return {
           successIds: [],
-          failedIds: resourceIds,
+          failedIds: batchResourceIds,
           nameConflictIds: [],
         };
       }
@@ -558,10 +570,10 @@ export class NamespaceResourcesService {
           targetId,
           tx,
         );
-      const successIds = resourceIds.filter((id) => movedIds.includes(id));
+      const successIds = batchResourceIds.filter((id) => movedIds.includes(id));
       return {
         successIds: successIds,
-        failedIds: resourceIds.filter((id) => !successIds.includes(id)),
+        failedIds: batchResourceIds.filter((id) => !successIds.includes(id)),
         nameConflictIds,
       };
     });
@@ -578,6 +590,11 @@ export class NamespaceResourcesService {
     nameConflictIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
+      const batchResourceIds = await this.getBatchTopLevelResourceIds(
+        namespaceId,
+        data.resourceIds,
+        tx.entityManager,
+      );
       const userHasPermission = await this.permissionsService.userHasPermission(
         namespaceId,
         data.parentId,
@@ -607,15 +624,15 @@ export class NamespaceResourcesService {
       const editableIds = await this.getEditableResourceIds(
         namespaceId,
         userId,
-        data.resourceIds,
+        batchResourceIds,
         tx.entityManager,
       );
-      const moveIds = data.resourceIds.filter((id) => editableIds.has(id));
+      const moveIds = batchResourceIds.filter((id) => editableIds.has(id));
       if (moveIds.length === 0) {
         return {
           resource: null,
           successIds: [],
-          failedIds: data.resourceIds,
+          failedIds: batchResourceIds,
           nameConflictIds: [],
         };
       }
@@ -638,13 +655,39 @@ export class NamespaceResourcesService {
           folder.id,
           tx,
         );
-      const successIds = data.resourceIds.filter((id) => movedIds.includes(id));
+      const successIds = batchResourceIds.filter((id) => movedIds.includes(id));
       return {
         resource: folder,
         successIds: successIds,
-        failedIds: data.resourceIds.filter((id) => !successIds.includes(id)),
+        failedIds: batchResourceIds.filter((id) => !successIds.includes(id)),
         nameConflictIds,
       };
+    });
+  }
+
+  private async getBatchTopLevelResourceIds(
+    namespaceId: string,
+    resourceIds: string[],
+    entityManager: EntityManager,
+  ): Promise<string[]> {
+    if (resourceIds.length === 0) {
+      return [];
+    }
+    const resourceIdSet = new Set(resourceIds);
+    const resourcesById = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+      entityManager,
+    );
+    return resourceIds.filter((id) => {
+      let current = resourcesById.get(id);
+      while (current?.parentId) {
+        if (resourceIdSet.has(current.parentId)) {
+          return false;
+        }
+        current = resourcesById.get(current.parentId);
+      }
+      return true;
     });
   }
 

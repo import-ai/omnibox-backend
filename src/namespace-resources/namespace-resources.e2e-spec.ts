@@ -1153,6 +1153,39 @@ describe('ResourcesController (e2e)', () => {
       );
     });
 
+    it('should ignore child ids covered by a selected parent on batch move', async () => {
+      const target = await createFolder(
+        'Batch Move Parent Target',
+        client.namespace.root_resource_id,
+      );
+      const parent = await createFolder(
+        'Batch Move Selected Parent',
+        client.namespace.root_resource_id,
+      );
+      const child = await createDoc('Batch Move Muted Child', parent.id);
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({ resourceIds: [parent.id, child.id], targetId: target.id })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [parent.id],
+        failed_ids: [],
+      });
+      const targetChildrenResponse = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${target.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(targetChildrenResponse.body.map((r: any) => r.id)).toContain(
+        parent.id,
+      );
+      expect(targetChildrenResponse.body.map((r: any) => r.id)).not.toContain(
+        child.id,
+      );
+    });
+
     it('should create a folder with selected resources inside it', async () => {
       const parent = await createFolder(
         'Batch Folder Parent',

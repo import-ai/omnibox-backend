@@ -1051,6 +1051,31 @@ describe('ResourcesController (e2e)', () => {
       );
     });
 
+    it('should reject batch move when no selected sources are editable', async () => {
+      const target = await createFolder(
+        'Batch Move No Editable Target',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc(
+        'Batch Move No Editable First',
+        client.namespace.root_resource_id,
+      );
+      const second = await createDoc(
+        'Batch Move No Editable Second',
+        client.namespace.root_resource_id,
+      );
+      await setUserPermission(first.id, ResourcePermission.CAN_VIEW);
+      await setUserPermission(second.id, ResourcePermission.CAN_VIEW);
+
+      await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({ resourceIds: [first.id, second.id], targetId: target.id })
+        .expect(HttpStatus.FORBIDDEN)
+        .expect((response) => {
+          expect(response.body.code).toBe('batch_source_not_editable');
+        });
+    });
+
     it('should reject batch move when target is not editable', async () => {
       const target = await createFolder(
         'Batch Move Readonly Target',

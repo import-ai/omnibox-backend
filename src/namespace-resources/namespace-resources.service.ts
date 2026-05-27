@@ -556,11 +556,12 @@ export class NamespaceResourcesService {
       );
       const moveIds = batchResourceIds.filter((id) => editableIds.has(id));
       if (moveIds.length === 0) {
-        return {
-          successIds: [],
-          failedIds: batchResourceIds,
-          nameConflictIds: [],
-        };
+        const message = this.i18n.t('auth.errors.notAuthorized');
+        throw new AppException(
+          message,
+          'BATCH_SOURCE_NOT_EDITABLE',
+          HttpStatus.FORBIDDEN,
+        );
       }
       const { movedIds, nameConflictIds } =
         await this.resourcesService.batchMoveResources(

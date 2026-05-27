@@ -1160,8 +1160,26 @@ export class ResourcesService {
     targetId: string,
     entityManager?: EntityManager,
   ): Promise<string[]> {
+    const result = await this.getBatchMoveCandidates(
+      namespaceId,
+      resourceIds,
+      targetId,
+      entityManager,
+    );
+    return result.moveIds;
+  }
+
+  async getBatchMoveCandidates(
+    namespaceId: string,
+    resourceIds: string[],
+    targetId: string,
+    entityManager?: EntityManager,
+  ): Promise<{
+    moveIds: string[];
+    nameConflictIds: string[];
+  }> {
     if (resourceIds.length === 0) {
-      return [];
+      return { moveIds: [], nameConflictIds: [] };
     }
     const targetParents = await this.getParentResourcesOrFail(
       namespaceId,
@@ -1173,7 +1191,7 @@ export class ResourcesService {
       (id) => id !== targetId && !targetParentIds.has(id),
     );
     if (candidates.length === 0) {
-      return [];
+      return { moveIds: [], nameConflictIds: [] };
     }
 
     const resourceMap = await this.batchGetResourceMeta(
@@ -1202,14 +1220,23 @@ export class ResourcesService {
       const key = resource.name.toLowerCase();
       selectedNameCounts.set(key, (selectedNameCounts.get(key) ?? 0) + 1);
     }
-    return candidates.filter((id) => {
+    const moveIds: string[] = [];
+    const nameConflictIds: string[] = [];
+    for (const id of candidates) {
       const resource = resourceMap.get(id);
       if (!resource) {
-        return false;
+        continue;
       }
       const key = resource.name.toLowerCase();
-      return !occupiedNames.has(key) && selectedNameCounts.get(key) === 1;
-    });
+      const hasNameConflict =
+        occupiedNames.has(key) || selectedNameCounts.get(key) !== 1;
+      if (hasNameConflict) {
+        nameConflictIds.push(id);
+      } else {
+        moveIds.push(id);
+      }
+    }
+    return { moveIds, nameConflictIds };
   }
 
   async batchMoveResources(
@@ -1218,15 +1245,15 @@ export class ResourcesService {
     resourceIds: string[],
     targetId: string,
     tx: Transaction,
-  ): Promise<string[]> {
-    const moveIds = await this.getBatchMovableResourceIds(
+  ): Promise<{ movedIds: string[]; nameConflictIds: string[] }> {
+    const { moveIds, nameConflictIds } = await this.getBatchMoveCandidates(
       namespaceId,
       resourceIds,
       targetId,
       tx.entityManager,
     );
     if (moveIds.length === 0) {
-      return [];
+      return { movedIds: [], nameConflictIds };
     }
     const repo = tx.entityManager.getRepository(Resource);
     const resources = await repo.find({
@@ -1238,7 +1265,7 @@ export class ResourcesService {
       resource.parentId = targetId;
     });
     await this.emitUpsertIndexTasks(namespaceId, userId, resources, tx);
-    return moveIds;
+    return { movedIds: moveIds, nameConflictIds };
   }
 
   async deleteResource(

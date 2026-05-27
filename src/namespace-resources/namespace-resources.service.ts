@@ -511,6 +511,7 @@ export class NamespaceResourcesService {
   ): Promise<{
     successIds: string[];
     failedIds: string[];
+    nameConflictIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
       const userHasPermission = await this.permissionsService.userHasPermission(
@@ -523,7 +524,11 @@ export class NamespaceResourcesService {
       );
       if (!userHasPermission) {
         const message = this.i18n.t('auth.errors.notAuthorized');
-        throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+        throw new AppException(
+          message,
+          'TARGET_NOT_EDITABLE',
+          HttpStatus.FORBIDDEN,
+        );
       }
       const editableIds = await this.getEditableResourceIds(
         namespaceId,
@@ -536,19 +541,22 @@ export class NamespaceResourcesService {
         return {
           successIds: [],
           failedIds: resourceIds,
+          nameConflictIds: [],
         };
       }
-      const movedIds = await this.resourcesService.batchMoveResources(
-        userId,
-        namespaceId,
-        moveIds,
-        targetId,
-        tx,
-      );
+      const { movedIds, nameConflictIds } =
+        await this.resourcesService.batchMoveResources(
+          userId,
+          namespaceId,
+          moveIds,
+          targetId,
+          tx,
+        );
       const successIds = resourceIds.filter((id) => movedIds.includes(id));
       return {
         successIds: successIds,
         failedIds: resourceIds.filter((id) => !successIds.includes(id)),
+        nameConflictIds,
       };
     });
   }
@@ -561,6 +569,7 @@ export class NamespaceResourcesService {
     resource: Resource | null;
     successIds: string[];
     failedIds: string[];
+    nameConflictIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
       const userHasPermission = await this.permissionsService.userHasPermission(
@@ -572,8 +581,16 @@ export class NamespaceResourcesService {
         tx.entityManager,
       );
       if (!userHasPermission) {
+        const target = await tx.entityManager
+          .getRepository(Resource)
+          .findOne({ where: { namespaceId, id: data.parentId } });
         const message = this.i18n.t('auth.errors.notAuthorized');
-        throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+        throw new AppException(
+          message,
+          'TARGET_NOT_EDITABLE',
+          HttpStatus.FORBIDDEN,
+          { targetName: target?.name },
+        );
       }
       await this.ensureResourceNameNotExists(
         namespaceId,
@@ -593,6 +610,7 @@ export class NamespaceResourcesService {
           resource: null,
           successIds: [],
           failedIds: data.resourceIds,
+          nameConflictIds: [],
         };
       }
 
@@ -606,18 +624,20 @@ export class NamespaceResourcesService {
         },
         tx,
       );
-      const movedIds = await this.resourcesService.batchMoveResources(
-        userId,
-        namespaceId,
-        moveIds,
-        folder.id,
-        tx,
-      );
+      const { movedIds, nameConflictIds } =
+        await this.resourcesService.batchMoveResources(
+          userId,
+          namespaceId,
+          moveIds,
+          folder.id,
+          tx,
+        );
       const successIds = data.resourceIds.filter((id) => movedIds.includes(id));
       return {
         resource: folder,
         successIds: successIds,
         failedIds: data.resourceIds.filter((id) => !successIds.includes(id)),
+        nameConflictIds,
       };
     });
   }

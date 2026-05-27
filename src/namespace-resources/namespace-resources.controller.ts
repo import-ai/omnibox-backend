@@ -212,6 +212,7 @@ export class NamespaceResourcesController {
   ): Promise<{
     successIds: string[];
     failedIds: string[];
+    nameConflictIds: string[];
   }> {
     return await this.namespaceResourcesService.batchMove(
       userId,
@@ -237,6 +238,7 @@ export class NamespaceResourcesController {
       return {
         successIds: folder.successIds,
         failedIds: folder.failedIds,
+        nameConflictIds: folder.nameConflictIds,
       };
     }
     const resource = await this.namespaceResourcesService.getResource({
@@ -248,6 +250,7 @@ export class NamespaceResourcesController {
       ...resource,
       successIds: folder.successIds,
       failedIds: folder.failedIds,
+      nameConflictIds: folder.nameConflictIds,
     };
   }
 

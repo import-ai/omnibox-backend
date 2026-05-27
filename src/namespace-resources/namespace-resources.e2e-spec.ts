@@ -1065,7 +1065,59 @@ describe('ResourcesController (e2e)', () => {
       await memberClient
         .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
         .send({ resourceIds: [source.id], targetId: target.id })
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.FORBIDDEN)
+        .expect((response) => {
+          expect(response.body.code).toBe('target_not_editable');
+        });
+    });
+
+    it('should report name conflicts on batch move', async () => {
+      const target = await createFolder(
+        'Batch Move Name Conflict Target',
+        client.namespace.root_resource_id,
+      );
+      const conflictName = uniqueName('Batch Move Conflict Resource');
+      const conflictSourceResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: conflictName,
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content: 'source with conflicting name',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      const conflictSource = conflictSourceResponse.body;
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: conflictName,
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: target.id,
+          content: 'existing target child',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      const movableSource = await createDoc(
+        'Batch Move Non Conflict Resource',
+        client.namespace.root_resource_id,
+      );
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({
+          resourceIds: [conflictSource.id, movableSource.id],
+          targetId: target.id,
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [movableSource.id],
+        failed_ids: [conflictSource.id],
+        name_conflict_ids: [conflictSource.id],
+      });
     });
 
     it('should batch move resources when source and target are editable', async () => {
@@ -1154,7 +1206,13 @@ describe('ResourcesController (e2e)', () => {
           parentId: parent.id,
           resourceIds: [source.id],
         })
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.FORBIDDEN)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            code: 'target_not_editable',
+            target_name: parent.name,
+          });
+        });
     });
 
     it('should not create a folder when no selected resources are editable', async () => {
@@ -1179,9 +1237,10 @@ describe('ResourcesController (e2e)', () => {
         })
         .expect(HttpStatus.CREATED);
 
-      expect(response.body).toEqual({
+      expect(response.body).toMatchObject({
         success_ids: [],
         failed_ids: [first.id, second.id],
+        name_conflict_ids: [],
       });
       const childrenResponse = await memberClient
         .get(

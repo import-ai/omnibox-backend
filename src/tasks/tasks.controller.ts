@@ -17,6 +17,15 @@ export class TasksController {
 
   @Post()
   async createTask(@Body() data: Partial<Task>) {
+    if (data.input) {
+      delete data.input.html_s3_key;
+      if (typeof data.input.html === 'string') {
+        data.input.html_s3_key = await this.tasksService.uploadHtmlToS3(
+          data.input.html,
+        );
+        delete data.input.html;
+      }
+    }
     return TaskDto.fromEntity(await this.tasksService.emitTask(data));
   }
 

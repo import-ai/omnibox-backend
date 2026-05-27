@@ -45,8 +45,11 @@ describe('InternalWizardController (e2e)', () => {
       .expect(HttpStatus.OK);
 
     expect(task.body.id).toBe(taskId);
-    // HTML is stored in S3, so input.html contains the object key path
-    expect(task.body.input.html).toMatch(/^collect\/html\/gzip\/.+\.gz$/);
+    // HTML is stored in S3 under html_s3_key; input.html is not persisted
+    expect(task.body.input.html_s3_key).toMatch(
+      /^collect\/html\/gzip\/.+\.gz$/,
+    );
+    expect(task.body.input.html).toBeUndefined();
 
     // Start the task before sending callback
     await client

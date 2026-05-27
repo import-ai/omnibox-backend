@@ -375,6 +375,35 @@ describe('ReaderProcessor', () => {
         expect(result).toEqual({});
       });
 
+      it('should surface ASR no valid fragment message from parent exception handling', async () => {
+        const message =
+          '未检测到有效语音内容，请上传更长、有人声、更清晰的音频。';
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          exception: {
+            code: 'SUCCESS_WITH_NO_VALID_FRAGMENT',
+            error: message,
+          },
+          status: TaskStatus.ERROR,
+        });
+
+        namespaceResourcesService.update.mockResolvedValue(undefined);
+
+        const result = await processor.process(task);
+
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
+          'test-user',
+          'test-resource-id',
+          expect.objectContaining({
+            namespaceId: 'test-namespace',
+            content: message,
+          }),
+          true,
+        );
+        expect(result).toEqual({});
+      });
+
       it('should be instance of CollectProcessor', () => {
         const { CollectProcessor } = require('./collect.processor');
         expect(processor).toBeInstanceOf(CollectProcessor);

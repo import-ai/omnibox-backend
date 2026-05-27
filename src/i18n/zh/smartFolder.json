@@ -1,0 +1,8 @@
+{
+  "errors": {
+    "scopeInvalid": "团队智能文件夹只能筛选团队空间资源",
+    "quotaExceeded": "智能文件夹配额已用尽",
+    "ruleLimitExceeded": "智能文件夹规则数量超出限制",
+    "notFound": "智能文件夹未找到"
+  }
+}

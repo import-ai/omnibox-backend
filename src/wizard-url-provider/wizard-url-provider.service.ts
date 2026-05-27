@@ -7,7 +7,6 @@ import { IWizardUrlProvider } from 'omniboxd/wizard-url-provider/wizard-url-prov
 @Injectable()
 export class WizardUrlProviderService implements IWizardUrlProvider {
   private readonly baseUrl: string;
-
   constructor(
     private readonly configService: ConfigService,
     private readonly i18n: I18nService,

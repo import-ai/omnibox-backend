@@ -894,7 +894,10 @@ export class ResourcesService {
         createProps.source || 'default',
         tx,
       );
-    } else if (resource.parentId) {
+    } else if (
+      resource.parentId &&
+      resource.resourceType !== ResourceType.SMART_FOLDER
+    ) {
       // If it's not a root resource, create index task
       await this.wizardTaskService.emitUpsertIndexTask(
         TASK_PRIORITY,

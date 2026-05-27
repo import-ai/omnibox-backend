@@ -16,7 +16,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { Inject, Injectable, HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { S3Service } from 'omniboxd/s3/s3.service';
@@ -49,6 +49,10 @@ import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
 import { BatchCreateFolderDto } from './dto/batch-resource-actions.dto';
+import {
+  ISmartFoldersService,
+  SMART_FOLDERS_SERVICE,
+} from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 
 @Injectable()
 export class NamespaceResourcesService {
@@ -66,6 +70,8 @@ export class NamespaceResourcesService {
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    @Inject(SMART_FOLDERS_SERVICE)
+    private readonly smartFoldersService: ISmartFoldersService,
   ) {}
 
   private async getTagsByIds(
@@ -847,6 +853,19 @@ export class NamespaceResourcesService {
       resourceId,
       entityManager,
     );
+    const resource = parents[parents.length - 1];
+
+    if (resource?.resourceType === ResourceType.SMART_FOLDER) {
+      return await this.smartFoldersService.listChildren(
+        userId,
+        namespaceId,
+        resourceId,
+        {
+          limit,
+          offset,
+        },
+      );
+    }
 
     let children = await this.resourcesService.getChildren(
       namespaceId,
@@ -1222,6 +1241,7 @@ export class NamespaceResourcesService {
         tagIds: data.tag_ids,
         content: data.content,
         attrs: data.attrs,
+        parentId: data.parentId,
       },
       undefined,
       autoRenameOnConflict,
@@ -1266,6 +1286,15 @@ export class NamespaceResourcesService {
         message,
         'CANNOT_RESTORE_ROOT',
         HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Check smart folder quota before restoring
+    if (resource.resourceType === ResourceType.SMART_FOLDER) {
+      await this.smartFoldersService.assertRestoreEntitlements(
+        namespaceId,
+        userId,
+        resourceId,
       );
     }
 
@@ -1374,10 +1403,12 @@ export class NamespaceResourcesService {
     includeRoot: boolean = false,
     requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
   ): Promise<ResourceMetaDto[]> {
+    const allResources =
+      await this.resourcesService.getAllResources(namespaceId);
     const resources = await this.permissionsService.filterResourcesByPermission(
       userId,
       namespaceId,
-      await this.resourcesService.getAllResources(namespaceId),
+      allResources,
       requiredPermission,
     );
     return resources.filter((res) => res.parentId !== null || includeRoot);

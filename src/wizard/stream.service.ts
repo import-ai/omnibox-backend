@@ -14,7 +14,10 @@ import {
   WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { trace } from '@opentelemetry/api';
 import { Share } from 'omniboxd/shares/entities/share.entity';
@@ -24,6 +27,7 @@ import { Span } from 'nestjs-otel';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 
 interface HandlerContext {
   parentId?: string;
@@ -41,6 +45,7 @@ export class StreamService {
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
+    private readonly smartFoldersService: SmartFoldersService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -270,13 +275,7 @@ export class StreamService {
           userId,
           namespaceId,
         );
-      return resources.map((r) => {
-        return {
-          id: r.id,
-          name: r.name || '',
-          type: r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-        } as PrivateSearchResourceDto;
-      });
+      return resources.map((r) => this.toPrivateSearchResource(r));
     }
     const visibleResources: PrivateSearchResourceDto[] =
       await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(
@@ -286,26 +285,111 @@ export class StreamService {
       );
     for (const resource of resources) {
       if (resource.type === 'folder') {
-        const resources =
-          await this.namespaceResourcesService.getAllSubResourcesByUser(
+        const meta = await this.resourcesService.getResourceMeta(
+          namespaceId,
+          resource.id,
+        );
+        if (meta?.resourceType === ResourceType.SMART_FOLDER) {
+          // Smart folders are virtual — expand via conditions, not parentId
+          const children = await this.smartFoldersService.listChildren(
             userId,
             namespaceId,
             resource.id,
           );
-        resource.child_ids = resources.map((r) => r.id);
-        visibleResources.push(
-          ...resources.map((r) => {
-            return {
-              id: r.id,
-              name: r.name || '',
-              type:
-                r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-            } as PrivateSearchResourceDto;
-          }),
-        );
+          resource.child_ids = children.map((r) => r.id);
+          visibleResources.push(
+            ...children.map((r) => this.toPrivateSearchResource(r)),
+          );
+        } else {
+          const subResources =
+            await this.namespaceResourcesService.getAllSubResourcesByUser(
+              userId,
+              namespaceId,
+              resource.id,
+            );
+          resource.child_ids = subResources.map((r) => r.id);
+          visibleResources.push(
+            ...subResources.map((r) => this.toPrivateSearchResource(r)),
+          );
+        }
       }
     }
     return visibleResources;
+  }
+
+  private toPrivateSearchResource(resource: {
+    id: string;
+    name: string;
+    resourceType: ResourceType;
+  }): PrivateSearchResourceDto {
+    return {
+      id: resource.id,
+      name: resource.name || '',
+      type: this.toPrivateSearchResourceType(resource.resourceType),
+    };
+  }
+
+  private toPrivateSearchResourceType(
+    resourceType: ResourceType,
+  ): PrivateSearchResourceDto['type'] {
+    if (
+      resourceType === ResourceType.FOLDER ||
+      resourceType === ResourceType.SMART_FOLDER
+    ) {
+      return 'folder';
+    }
+    return 'resource';
+  }
+
+  private isPrivateSearchFolder(
+    resource: PrivateSearchResourceDto,
+    actualResource?: Resource,
+  ): boolean {
+    return (
+      resource.type === 'folder' ||
+      actualResource?.resourceType === ResourceType.SMART_FOLDER
+    );
+  }
+
+  private async safeGetResource(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Resource | undefined> {
+    try {
+      return await this.resourcesService.getResourceOrFail(
+        namespaceId,
+        resourceId,
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async getUserVisibleChildResources(
+    namespaceId: string,
+    userId: string,
+    resource: PrivateSearchResourceDto,
+    actualResource?: Resource,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      resourceType: ResourceType;
+    }>
+  > {
+    if (actualResource?.resourceType === ResourceType.SMART_FOLDER) {
+      return await this.namespaceResourcesService.listChildren(
+        namespaceId,
+        resource.id,
+        userId,
+        {},
+      );
+    }
+    return await this.namespaceResourcesService.getAllSubResourcesByUser(
+      userId,
+      namespaceId,
+      resource.id,
+    );
   }
 
   private async getShareVisibleResources(
@@ -315,37 +399,29 @@ export class StreamService {
     if (reqResources.length === 0) {
       const resources =
         await this.sharedResourcesService.getAllSharedResources(share);
-      return resources.map((r) => {
-        return {
-          id: r.id,
-          name: r.name || '',
-          type: r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-        } as PrivateSearchResourceDto;
-      });
+      return resources.map((r) => this.toPrivateSearchResource(r));
     }
 
     const visibleResources: PrivateSearchResourceDto[] = [...reqResources];
     for (const reqResource of reqResources) {
       // Check if the resource is in the share
-      await this.sharedResourcesService.getAndValidateResource(
+      const resource = await this.sharedResourcesService.getAndValidateResource(
         share,
         reqResource.id,
       );
       if (reqResource.type === 'folder') {
-        const subResources = await this.resourcesService.getChildren(
-          share.namespaceId,
-          [reqResource.id],
-        );
+        const subResources =
+          resource.resourceType === ResourceType.SMART_FOLDER
+            ? await this.sharedResourcesService.getSharedResourceChildren(
+                share,
+                reqResource.id,
+              )
+            : await this.resourcesService.getChildren(share.namespaceId, [
+                reqResource.id,
+              ]);
         reqResource.child_ids = subResources.map((r) => r.id);
         visibleResources.push(
-          ...subResources.map((r) => {
-            return {
-              id: r.id,
-              name: r.name || '',
-              type:
-                r.resourceType === ResourceType.FOLDER ? 'folder' : 'resource',
-            } as PrivateSearchResourceDto;
-          }),
+          ...subResources.map((r) => this.toPrivateSearchResource(r)),
         );
       }
     }

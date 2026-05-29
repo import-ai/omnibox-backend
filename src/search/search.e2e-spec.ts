@@ -21,6 +21,17 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { TagService } from 'omniboxd/tag/tag.service';
+import {
+  SmartFolderField,
+  SmartFolderMatchMode,
+  SmartFolderOperator,
+} from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
+import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
+import {
+  ResourceSortBy,
+  ResourceSortOrder,
+} from 'omniboxd/resources/resource-sort.types';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
 jest.mock('../wizard-api/wizard-api.service', () => {
@@ -141,6 +152,22 @@ describe('SearchController (e2e)', () => {
                 ]);
                 return Promise.resolve(new Map(entries));
               }),
+            batchGetResources: jest
+              .fn()
+              .mockImplementation((_namespaceId, resourceIds: string[]) => {
+                return Promise.resolve(
+                  (resourceIds || []).map((id) => ({
+                    id,
+                    name: 'Test Document',
+                    attrs: {},
+                    resourceType: 'doc',
+                    tagIds: [],
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    content: 'This is test content for searching',
+                  })),
+                );
+              }),
           },
         },
         {
@@ -153,6 +180,19 @@ describe('SearchController (e2e)', () => {
           provide: TagService,
           useValue: {
             findByIds: jest.fn().mockResolvedValue([]),
+            getTagsByIds: jest.fn().mockResolvedValue([]),
+          },
+        },
+        {
+          provide: SmartFoldersRuleService,
+          useValue: {
+            normalize: jest.fn((conditions) => conditions || []),
+          },
+        },
+        {
+          provide: SmartFoldersMatcherService,
+          useValue: {
+            matches: jest.fn().mockReturnValue(true),
           },
         },
         {
@@ -209,7 +249,7 @@ describe('SearchController (e2e)', () => {
   });
 
   describe('GET /api/v1/namespaces/:namespaceId/search', () => {
-    it('should search successfully with query parameter', async () => {
+    it('should return only resource results by default', async () => {
       const response = await request(app.getHttpServer())
         .get(`/api/v1/namespaces/${mockNamespaceId}/search?query=test`)
         .set('user', JSON.stringify(mockUser))
@@ -217,12 +257,9 @@ describe('SearchController (e2e)', () => {
 
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
-
-      // Check the structure of returned items
-      const firstItem = response.body[0];
-      expect(firstItem).toHaveProperty('type');
-      expect(firstItem).toHaveProperty('id');
-      expect([DocType.RESOURCE, DocType.MESSAGE]).toContain(firstItem.type);
+      response.body.forEach((item: any) => {
+        expect(item.type).toBe(DocType.RESOURCE);
+      });
     });
 
     it('should search with type filter for resources', async () => {
@@ -244,7 +281,7 @@ describe('SearchController (e2e)', () => {
       });
     });
 
-    it('should search with type filter for messages', async () => {
+    it('should not return conversation results when message type is requested', async () => {
       const response = await request(app.getHttpServer())
         .get(
           `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
@@ -253,13 +290,7 @@ describe('SearchController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(Array.isArray(response.body)).toBe(true);
-
-      // All returned items should be messages
-      response.body.forEach((item: any) => {
-        expect(item.type).toBe(DocType.MESSAGE);
-        expect(item).toHaveProperty('conversationId');
-        expect(item).toHaveProperty('content');
-      });
+      expect(response.body).toHaveLength(0);
     });
 
     it('should handle missing query parameter', async () => {
@@ -297,6 +328,43 @@ describe('SearchController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(Array.isArray(response.body)).toBe(true);
+    });
+
+    it('should search with smart folder filter conditions', async () => {
+      const searchSpy = jest.spyOn(searchService, 'search');
+      const conditions = [
+        {
+          field: SmartFolderField.TITLE,
+          operator: SmartFolderOperator.CONTAINS,
+          value: 'roadmap',
+        },
+      ];
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/namespaces/${mockNamespaceId}/search`)
+        .set('user', JSON.stringify(mockUser))
+        .send({
+          query: 'planning',
+          match_mode: SmartFolderMatchMode.ALL,
+          sort_by: ResourceSortBy.UPDATED_AT,
+          sort_order: ResourceSortOrder.DESC,
+          conditions,
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(searchSpy).toHaveBeenCalledWith(
+        mockUser.id,
+        mockNamespaceId,
+        'planning',
+        undefined,
+        {
+          conditions,
+          matchMode: SmartFolderMatchMode.ALL,
+          sortBy: ResourceSortBy.UPDATED_AT,
+          sortOrder: ResourceSortOrder.DESC,
+        },
+      );
     });
 
     it('should handle special characters in query', async () => {

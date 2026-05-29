@@ -1,8 +1,9 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { DocType } from './doc-type.enum';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { SearchRequestDto } from './dto/search-request.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/search')
 export class SearchController {
@@ -16,6 +17,26 @@ export class SearchController {
     @Query('type') type?: DocType,
   ) {
     return await this.searchService.search(userId, namespaceId, query, type);
+  }
+
+  @Post()
+  async searchWithFilters(
+    @UserId() userId,
+    @Param('namespaceId') namespaceId: string,
+    @Body() data: SearchRequestDto,
+  ) {
+    return await this.searchService.search(
+      userId,
+      namespaceId,
+      data.query || '',
+      data.type,
+      {
+        conditions: data.conditions,
+        matchMode: data.matchMode,
+        sortBy: data.sortBy,
+        sortOrder: data.sortOrder,
+      },
+    );
   }
 }
 

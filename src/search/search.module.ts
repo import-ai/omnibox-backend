@@ -14,10 +14,12 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
+import { SearchResourceFilterService } from './search-resource-filter.service';
 
 @Module({
   exports: [SearchService],
-  providers: [SearchService],
+  providers: [SearchService, SearchResourceFilterService],
   controllers: [SearchController, InternalSearchController],
   imports: [
     WizardAPIModule,
@@ -28,6 +30,7 @@ import { TagModule } from 'omniboxd/tag/tag.module';
     ConversationsModule,
     TasksModule,
     TagModule,
+    SmartFoldersModule,
     TypeOrmModule.forFeature([Task]),
   ],
 })

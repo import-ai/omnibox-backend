@@ -31,6 +31,7 @@ import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { GroupsModule } from 'omniboxd/groups/groups.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
@@ -173,6 +174,7 @@ export class AppModule implements NestModule {
         UserModule,
         APIKeyModule,
         NamespacesModule,
+        NamespacesQuotaModule,
         NamespaceResourcesModule,
         NamespaceTasksModule,
         ResourcesModule,

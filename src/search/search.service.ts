@@ -1,11 +1,10 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { DocType } from './doc-type.enum';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
-  IndexedDocDto,
-  IndexedMessageDto,
-  IndexedResourceDto,
-} from './dto/indexed-doc.dto';
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
+import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
 import { WeaviateSyncStatsResponseDto } from './dto/weaviate-sync-stats-response.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -27,9 +26,12 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 import { I18nService } from 'nestjs-i18n';
 import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { Message } from 'omniboxd/messages/entities/message.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
+import {
+  SearchFilterOptions,
+  SearchResourceFilterService,
+} from './search-resource-filter.service';
 
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
@@ -51,6 +53,7 @@ export class SearchService {
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
     private readonly tagService: TagService,
+    private readonly searchResourceFilterService: SearchResourceFilterService,
   ) {}
 
   async search(
@@ -58,6 +61,7 @@ export class SearchService {
     namespaceId: string,
     query: string,
     type?: DocType,
+    options?: SearchFilterOptions,
   ) {
     const hasAccess = await this.permissionsService.userInNamespace(
       userId,
@@ -67,21 +71,28 @@ export class SearchService {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
+    if (type === DocType.MESSAGE) {
+      return [];
+    }
+    const normalizedQuery = (query || '').trim();
+    const filterOptions =
+      this.searchResourceFilterService.normalizeOptions(options);
+    if (!normalizedQuery) {
+      return await this.searchResourceFilterService.searchResourcesByFilters(
+        userId,
+        namespaceId,
+        filterOptions,
+      );
+    }
     const searchRequest = new SearchRequestDto();
-    searchRequest.query = query;
+    searchRequest.query = normalizedQuery;
     searchRequest.namespaceId = namespaceId;
     searchRequest.userId = userId;
     searchRequest.limit = 100;
-    if (type === DocType.RESOURCE) {
-      searchRequest.type = IndexRecordType.CHUNK;
-    }
-    if (type === DocType.MESSAGE) {
-      searchRequest.type = IndexRecordType.MESSAGE;
-    }
+    searchRequest.type = IndexRecordType.CHUNK;
     const result = await this.wizardApiService.search(searchRequest);
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
-    const seenConversationIds = new Set<string>();
     for (const record of result?.records || []) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
@@ -100,6 +111,12 @@ export class SearchService {
       namespaceId,
       [...resourceMetaMap.values()],
     );
+    const matchedResourceIds =
+      await this.searchResourceFilterService.getMatchedResourceIds(
+        namespaceId,
+        [...seenResourceIds],
+        filterOptions,
+      );
 
     seenResourceIds.clear();
 
@@ -117,6 +134,9 @@ export class SearchService {
         ) {
           continue;
         }
+        if (matchedResourceIds && !matchedResourceIds.has(chunk.resourceId)) {
+          continue;
+        }
 
         const resourceMeta = resourceMetaMap.get(chunk.resourceId);
         const resourceDto: IndexedResourceDto = {
@@ -129,22 +149,6 @@ export class SearchService {
           resourceType: resourceMeta?.resourceType || ResourceType.DOC,
         };
         items.push(resourceDto);
-      } else if (record.type === IndexRecordType.MESSAGE) {
-        const message = record.message!;
-        if (seenConversationIds.has(message.conversationId)) {
-          continue;
-        }
-        seenConversationIds.add(message.conversationId);
-        if (!(await this.conversationsService.has(message.conversationId))) {
-          continue;
-        }
-        const messageDto: IndexedMessageDto = {
-          type: DocType.MESSAGE,
-          id: record.id,
-          conversationId: message.conversationId,
-          content: message.message.content,
-        };
-        items.push(messageDto);
       }
     }
     return items;

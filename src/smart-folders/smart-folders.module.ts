@@ -55,6 +55,8 @@ import { TagModule } from 'omniboxd/tag/tag.module';
   controllers: [SmartFolderEntitlementsController, SmartFoldersController],
   exports: [
     SmartFoldersService,
+    SmartFoldersRuleService,
+    SmartFoldersMatcherService,
     SMART_FOLDERS_SERVICE,
     SMART_FOLDER_ENTITLEMENTS_PROVIDER,
   ],

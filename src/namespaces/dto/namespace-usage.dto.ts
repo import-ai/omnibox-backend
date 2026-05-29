@@ -30,4 +30,7 @@ export class NamespaceUsageDto {
 
   @Expose({ name: 'smart_folder_rule_limit' })
   smartFolderRuleLimit?: number;
+
+  @Expose({ name: 'search_rule_limit' })
+  searchRuleLimit?: number;
 }

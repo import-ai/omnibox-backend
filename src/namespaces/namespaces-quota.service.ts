@@ -15,6 +15,7 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
   smartFolderPrivateLimit: 1,
   smartFolderTeamLimit: 1,
   smartFolderRuleLimit: 3,
+  searchRuleLimit: 3,
 };
 
 @Injectable()

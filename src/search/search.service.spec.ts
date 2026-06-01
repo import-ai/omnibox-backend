@@ -25,8 +25,8 @@ describe('SearchService', () => {
             type: IndexRecordType.CHUNK,
             chunk: {
               resourceId,
-              title: 'Resource title',
-              text: 'Resource content',
+              title: 'Query resource title',
+              text: 'Query resource content',
             },
           },
           {
@@ -34,8 +34,8 @@ describe('SearchService', () => {
             type: IndexRecordType.CHUNK,
             chunk: {
               resourceId: matchingResourceId,
-              title: 'Matched title',
-              text: 'Matched content',
+              title: 'Query matched title',
+              text: 'Query matched content',
             },
           },
           {
@@ -67,7 +67,7 @@ describe('SearchService', () => {
             resourceId,
             {
               id: resourceId,
-              name: 'Resource title',
+              name: 'Query resource title',
               attrs: {},
               resourceType: ResourceType.DOC,
             },
@@ -76,7 +76,7 @@ describe('SearchService', () => {
             matchingResourceId,
             {
               id: matchingResourceId,
-              name: 'Matched title',
+              name: 'Query matched title',
               attrs: {},
               resourceType: ResourceType.DOC,
             },
@@ -86,21 +86,23 @@ describe('SearchService', () => {
       batchGetResources: jest.fn().mockResolvedValue([
         {
           id: resourceId,
-          name: 'Resource title',
+          name: 'Query resource title',
           attrs: {},
           resourceType: ResourceType.DOC,
           tagIds: [],
           createdAt: new Date('2026-05-01T00:00:00.000Z'),
           updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+          content: 'Query resource content',
         },
         {
           id: matchingResourceId,
-          name: 'Matched title',
+          name: 'Query matched title',
           attrs: {},
           resourceType: ResourceType.DOC,
           tagIds: [],
           createdAt: new Date('2026-05-02T00:00:00.000Z'),
           updatedAt: new Date('2026-05-02T00:00:00.000Z'),
+          content: 'Query matched content',
         },
       ]),
     };
@@ -347,6 +349,118 @@ describe('SearchService', () => {
       type: DocType.RESOURCE,
       resourceId: matchingResourceId,
     });
+  });
+
+  it('filters semantic results by literal query text', async () => {
+    const { resourcesService, service, wizardApiService } = createService();
+    wizardApiService.search.mockResolvedValueOnce({
+      records: [
+        {
+          id: 'related-resource-result-id',
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId,
+            title: 'Related city notes',
+            text: 'City travel content',
+          },
+        },
+        {
+          id: 'shanghai-resource-result-id',
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId: matchingResourceId,
+            title: '上海项目记录',
+            text: '了解客户安排',
+          },
+        },
+      ],
+    });
+    resourcesService.batchGetResources.mockResolvedValueOnce([
+      {
+        id: resourceId,
+        name: 'Related city notes',
+        attrs: {},
+        resourceType: ResourceType.DOC,
+        tagIds: [],
+        createdAt: new Date('2026-05-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+        content: 'City travel content',
+      },
+      {
+        id: matchingResourceId,
+        name: '上海项目记录',
+        attrs: {},
+        resourceType: ResourceType.DOC,
+        tagIds: [],
+        createdAt: new Date('2026-05-02T00:00:00.000Z'),
+        updatedAt: new Date('2026-05-02T00:00:00.000Z'),
+        content: '了解客户安排',
+      },
+    ]);
+
+    const result = await service.search(userId, namespaceId, '上海');
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      type: DocType.RESOURCE,
+      resourceId: matchingResourceId,
+    });
+  });
+
+  it('does not widen semantic results when filter match mode is any', async () => {
+    const { searchResourceFilterService, service, wizardApiService } =
+      createService();
+    wizardApiService.search.mockResolvedValueOnce({
+      records: [
+        {
+          id: 'resource-result-id',
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId,
+            title: 'Keyword result',
+            text: 'Keyword content',
+          },
+        },
+      ],
+    });
+    const conditions = [
+      {
+        field: SmartFolderField.TITLE,
+        operator: SmartFolderOperator.CONTAINS,
+        value: 'matched',
+      },
+      {
+        field: SmartFolderField.TAGS,
+        operator: SmartFolderOperator.CONTAINS,
+        value: 'roadmap',
+      },
+    ];
+
+    const result = await service.search(
+      userId,
+      namespaceId,
+      'keyword',
+      undefined,
+      {
+        conditions,
+        matchMode: SmartFolderMatchMode.ANY,
+      },
+    );
+
+    expect(
+      searchResourceFilterService.searchResourcesByFilters,
+    ).not.toHaveBeenCalled();
+    expect(
+      searchResourceFilterService.getMatchedResourceIds,
+    ).toHaveBeenCalledWith(
+      namespaceId,
+      [resourceId],
+      expect.objectContaining({
+        conditions,
+        matchMode: SmartFolderMatchMode.ANY,
+      }),
+    );
+    expect(result).toEqual([]);
   });
 
   it('returns no conversations when message type is requested', async () => {

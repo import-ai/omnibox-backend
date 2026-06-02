@@ -351,7 +351,7 @@ describe('SearchService', () => {
     });
   });
 
-  it('filters semantic results by literal query text', async () => {
+  it('keeps semantic resource results without literal query matches', async () => {
     const { resourcesService, service, wizardApiService } = createService();
     wizardApiService.search.mockResolvedValueOnce({
       records: [
@@ -400,11 +400,17 @@ describe('SearchService', () => {
 
     const result = await service.search(userId, namespaceId, '上海');
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
-      type: DocType.RESOURCE,
-      resourceId: matchingResourceId,
-    });
+    expect(result).toHaveLength(2);
+    expect(result).toEqual([
+      expect.objectContaining({
+        type: DocType.RESOURCE,
+        resourceId,
+      }),
+      expect.objectContaining({
+        type: DocType.RESOURCE,
+        resourceId: matchingResourceId,
+      }),
+    ]);
   });
 
   it('does not widen semantic results when filter match mode is any', async () => {

@@ -34,6 +34,30 @@ describe('SmartFoldersRuleService', () => {
     ]);
   });
 
+  it('normalizes UPDATED_AT between date ranges as date conditions', () => {
+    const result = service.normalize([
+      {
+        field: SmartFolderField.UPDATED_AT,
+        operator: SmartFolderOperator.BETWEEN,
+        value: {
+          startDate: '2026-05-18',
+          endDate: '2026-05-01',
+        },
+      },
+    ]);
+
+    expect(result).toEqual([
+      {
+        field: SmartFolderField.UPDATED_AT,
+        operator: SmartFolderOperator.BETWEEN,
+        value: {
+          start_date: '2026-05-01',
+          end_date: '2026-05-18',
+        },
+      },
+    ]);
+  });
+
   it('drops values for empty text operators', () => {
     const result = service.normalize([
       {

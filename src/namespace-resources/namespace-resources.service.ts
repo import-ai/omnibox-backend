@@ -452,21 +452,21 @@ export class NamespaceResourcesService {
       resourceIds,
       manager,
     );
-    const permissions = await this.permissionsService.getCurrentPermissions(
-      userId,
-      namespaceId,
-      [...parents.values()],
-      manager,
+    const editableResources =
+      await this.permissionsService.filterResourcesByPermission(
+        userId,
+        namespaceId,
+        [...parents.values()],
+        ResourcePermission.CAN_EDIT,
+        manager,
+      );
+    const editableResourceIds = new Set(
+      editableResources.map((resource) => resource.id),
     );
     const editableIds = new Set<string>();
     for (const resourceId of resourceIds) {
       const resource = parents.get(resourceId);
-      const permission = permissions.get(resourceId);
-      if (
-        resource?.parentId &&
-        permission &&
-        comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
-      ) {
+      if (resource?.parentId && editableResourceIds.has(resourceId)) {
         editableIds.add(resourceId);
       }
     }
@@ -514,6 +514,29 @@ export class NamespaceResourcesService {
         failedIds: batchResourceIds.filter((id) => !successIds.includes(id)),
       };
     });
+  }
+
+  async assertCanBatchMoveToTrash(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<void> {
+    const manager = this.dataSource.manager;
+    const batchResourceIds = await this.getBatchTopLevelResourceIds(
+      namespaceId,
+      resourceIds,
+      manager,
+    );
+    const editableIds = await this.getEditableResourceIds(
+      namespaceId,
+      userId,
+      batchResourceIds,
+      manager,
+    );
+    if (batchResourceIds.some((id) => !editableIds.has(id))) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
   }
 
   async batchMove(

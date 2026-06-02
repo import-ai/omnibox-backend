@@ -187,6 +187,19 @@ export class NamespaceResourcesController {
     );
   }
 
+  @Post('batch-trash/check')
+  async checkBatchMoveToTrash(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() data: BatchResourceIdsDto,
+  ) {
+    await this.namespaceResourcesService.assertCanBatchMoveToTrash(
+      userId,
+      namespaceId,
+      data.resourceIds,
+    );
+  }
+
   @Post('batch-trash')
   async batchMoveToTrash(
     @UserId() userId: string,

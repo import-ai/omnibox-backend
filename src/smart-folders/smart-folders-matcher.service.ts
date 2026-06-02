@@ -31,8 +31,9 @@ export class SmartFoldersMatcherService {
     resource: Resource,
     condition: SmartFolderCondition,
   ): boolean {
-    if (condition.field === SmartFolderField.CREATED_AT) {
-      return this.matchesDateCondition(resource.createdAt, condition);
+    const dateCandidate = this.getDateCandidate(resource, condition.field);
+    if (dateCandidate) {
+      return this.matchesDateCondition(dateCandidate, condition);
     }
 
     if (
@@ -68,6 +69,20 @@ export class SmartFoldersMatcherService {
     return typeof condition.value === 'string'
       ? condition.value.toLowerCase()
       : '';
+  }
+
+  private getDateCandidate(
+    resource: Resource,
+    field?: SmartFolderField,
+  ): Date | null {
+    switch (field) {
+      case SmartFolderField.CREATED_AT:
+        return resource.createdAt;
+      case SmartFolderField.UPDATED_AT:
+        return resource.updatedAt;
+      default:
+        return null;
+    }
   }
 
   private getConditionCandidate(

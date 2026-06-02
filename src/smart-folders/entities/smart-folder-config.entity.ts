@@ -23,6 +23,7 @@ export enum SmartFolderField {
   URL = 'url',
   FILE_NAME = 'file_name',
   CREATED_AT = 'created_at',
+  UPDATED_AT = 'updated_at',
   CONTENT = 'content',
 }
 

@@ -105,12 +105,6 @@ export class SearchService {
       namespaceId,
       [...seenResourceIds],
     );
-    const queryMatchedResourceIds = await this.getQueryMatchedResourceIds(
-      namespaceId,
-      [...seenResourceIds],
-      normalizedQuery,
-      result?.records || [],
-    );
     const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,
@@ -139,9 +133,6 @@ export class SearchService {
         ) {
           continue;
         }
-        if (!queryMatchedResourceIds.has(chunk.resourceId)) {
-          continue;
-        }
         if (matchedResourceIds && !matchedResourceIds.has(chunk.resourceId)) {
           continue;
         }
@@ -160,46 +151,6 @@ export class SearchService {
       }
     }
     return items;
-  }
-
-  private async getQueryMatchedResourceIds(
-    namespaceId: string,
-    resourceIds: string[],
-    query: string,
-    records: any[],
-  ): Promise<Set<string>> {
-    const normalizedQuery = query.toLowerCase();
-    const matched = new Set<string>();
-    for (const record of records) {
-      if (record.type !== IndexRecordType.CHUNK || !record.chunk) {
-        continue;
-      }
-      const chunk = record.chunk;
-      if (
-        this.includesQuery(chunk.title, normalizedQuery) ||
-        this.includesQuery(chunk.text, normalizedQuery)
-      ) {
-        matched.add(chunk.resourceId);
-      }
-    }
-
-    const resources = await this.resourcesService.batchGetResources(
-      namespaceId,
-      resourceIds,
-    );
-    for (const resource of resources) {
-      if (
-        this.includesQuery(resource.name, normalizedQuery) ||
-        this.includesQuery(resource.content, normalizedQuery)
-      ) {
-        matched.add(resource.id);
-      }
-    }
-    return matched;
-  }
-
-  private includesQuery(value: string | null | undefined, query: string) {
-    return (value || '').toLowerCase().includes(query);
   }
 
   async refreshResourceIndex() {

@@ -452,21 +452,21 @@ export class NamespaceResourcesService {
       resourceIds,
       manager,
     );
-    const permissions = await this.permissionsService.getCurrentPermissions(
-      userId,
-      namespaceId,
-      [...parents.values()],
-      manager,
+    const editableResources =
+      await this.permissionsService.filterResourcesByPermission(
+        userId,
+        namespaceId,
+        [...parents.values()],
+        ResourcePermission.CAN_EDIT,
+        manager,
+      );
+    const editableResourceIds = new Set(
+      editableResources.map((resource) => resource.id),
     );
     const editableIds = new Set<string>();
     for (const resourceId of resourceIds) {
       const resource = parents.get(resourceId);
-      const permission = permissions.get(resourceId);
-      if (
-        resource?.parentId &&
-        permission &&
-        comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
-      ) {
+      if (resource?.parentId && editableResourceIds.has(resourceId)) {
         editableIds.add(resourceId);
       }
     }

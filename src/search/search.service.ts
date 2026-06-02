@@ -76,6 +76,9 @@ export class SearchService {
     const filterOptions =
       this.searchResourceFilterService.normalizeOptions(options);
     if (!normalizedQuery) {
+      if ((filterOptions.conditions || []).length <= 0) {
+        return [];
+      }
       return await this.searchResourceFilterService.searchResourcesByFilters(
         userId,
         namespaceId,

@@ -271,40 +271,36 @@ describe('SearchService', () => {
     });
   });
 
-  it('lists visible resources without semantic search when query and filters are empty', async () => {
+  it('returns empty results without semantic search when query and filters are empty', async () => {
     const { searchResourceFilterService, service, wizardApiService } =
       createService();
 
-    await service.search(userId, namespaceId, '', undefined, {});
+    const result = await service.search(userId, namespaceId, '', undefined, {});
 
     expect(wizardApiService.search).not.toHaveBeenCalled();
     expect(
       searchResourceFilterService.searchResourcesByFilters,
-    ).toHaveBeenCalledWith(
-      userId,
-      namespaceId,
-      expect.objectContaining({
-        conditions: [],
-      }),
-    );
+    ).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
   });
 
-  it('lists visible resources without semantic search when query contains only whitespace', async () => {
+  it('returns empty results without semantic search when query contains only whitespace', async () => {
     const { searchResourceFilterService, service, wizardApiService } =
       createService();
 
-    await service.search(userId, namespaceId, '   ', undefined, {});
+    const result = await service.search(
+      userId,
+      namespaceId,
+      '   ',
+      undefined,
+      {},
+    );
 
     expect(wizardApiService.search).not.toHaveBeenCalled();
     expect(
       searchResourceFilterService.searchResourcesByFilters,
-    ).toHaveBeenCalledWith(
-      userId,
-      namespaceId,
-      expect.objectContaining({
-        conditions: [],
-      }),
-    );
+    ).not.toHaveBeenCalled();
+    expect(result).toEqual([]);
   });
 
   it('filters semantic resource results with smart folder conditions', async () => {

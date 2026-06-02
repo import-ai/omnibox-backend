@@ -14,10 +14,12 @@ import {
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { FilesService } from 'omniboxd/files/files.service';
+import { File } from 'omniboxd/files/entities/file.entity';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
 import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import {
   bigintStringToNumber,
   numberToBigintString,
@@ -27,6 +29,8 @@ import {
   sanitizeResourceName,
   generateUniqueResourceName,
 } from 'omniboxd/utils/sanitize-resource-name';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 
 const TASK_PRIORITY = 5;
 
@@ -41,6 +45,7 @@ export class ResourcesService {
     private readonly i18n: I18nService,
     private readonly filesService: FilesService,
     private readonly storageUsagesService: StorageUsagesService,
+    private readonly tagService: TagService,
   ) {}
 
   private validateResourceName(
@@ -976,6 +981,294 @@ export class ResourcesService {
         tx,
       );
     }
+  }
+
+  private sumByUser(
+    resources: Resource[],
+    getAmount: (resource: Resource) => number,
+  ): Map<string, number> {
+    const totals = new Map<string, number>();
+    for (const resource of resources) {
+      if (!resource.userId) {
+        continue;
+      }
+      const amount = getAmount(resource);
+      if (amount === 0) {
+        continue;
+      }
+      totals.set(resource.userId, (totals.get(resource.userId) ?? 0) + amount);
+    }
+    return totals;
+  }
+
+  private async updateStorageUsageByUser(
+    namespaceId: string,
+    storageType: StorageType,
+    totalsByUser: Map<string, number>,
+    tx: Transaction,
+  ): Promise<void> {
+    for (const [usageUserId, amount] of totalsByUser) {
+      await this.storageUsagesService.updateStorageUsage(
+        namespaceId,
+        usageUserId,
+        storageType,
+        amount,
+        tx,
+      );
+    }
+  }
+
+  private async emitDeleteIndexTasks(
+    namespaceId: string,
+    userId: string,
+    resourceIds: string[],
+    tx: Transaction,
+  ): Promise<void> {
+    if (resourceIds.length === 0) {
+      return;
+    }
+    const repo = tx.entityManager.getRepository(Task);
+    await repo.insert(
+      resourceIds.map((resourceId) =>
+        repo.create(
+          this.tasksService.injectTraceHeaders({
+            function: 'delete_index',
+            input: { resource_id: resourceId },
+            namespaceId,
+            userId,
+            payload: { resource_id: resourceId },
+            resourceId,
+          }),
+        ),
+      ),
+    );
+    tx.afterCommitHooks.push(() =>
+      this.tasksService.checkTaskMessage(namespaceId),
+    );
+  }
+
+  private async emitUpsertIndexTasks(
+    namespaceId: string,
+    userId: string,
+    resources: Resource[],
+    tx: Transaction,
+  ): Promise<void> {
+    const indexableResources = resources.filter(
+      (resource) =>
+        resource.resourceType !== ResourceType.FOLDER && !!resource.content,
+    );
+    if (indexableResources.length === 0) {
+      return;
+    }
+
+    const tagIds = [
+      ...new Set(
+        indexableResources.flatMap((resource) => resource.tagIds ?? []),
+      ),
+    ];
+    const tags = await this.tagService.getTagsByIds(namespaceId, tagIds);
+    const tagsById = new Map(tags.map((tag) => [tag.id, tag]));
+    const repo = tx.entityManager.getRepository(Task);
+    await repo.insert(
+      indexableResources.map((resource) => {
+        const resourceTags = (resource.tagIds ?? [])
+          .map((tagId) => tagsById.get(tagId))
+          .filter((tag): tag is TagDto => !!tag);
+        return repo.create(
+          this.tasksService.injectTraceHeaders({
+            function: 'upsert_index',
+            priority: numberToBigintString(TASK_PRIORITY),
+            input: {
+              title: resource.name,
+              content: resource.content,
+              meta_info: {
+                user_id: resource.userId,
+                resource_id: resource.id,
+                parent_id: resource.parentId,
+                resource_tag_ids: resourceTags.map((tag) => tag.id),
+                resource_tag_names: resourceTags.map((tag) => tag.name),
+              },
+            },
+            payload: { resource_id: resource.id },
+            namespaceId,
+            userId,
+            resourceId: resource.id,
+          }),
+        );
+      }),
+    );
+    tx.afterCommitHooks.push(() =>
+      this.tasksService.checkTaskMessage(namespaceId),
+    );
+  }
+
+  async batchDeleteResources(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+    tx: Transaction,
+  ): Promise<string[]> {
+    if (resourceIds.length === 0) {
+      return [];
+    }
+    const repo = tx.entityManager.getRepository(Resource);
+    const resources = await repo.find({
+      where: { namespaceId, id: In(resourceIds), parentId: Not(IsNull()) },
+      lock: { mode: 'pessimistic_write' },
+    });
+    const deleteIds = resources.map((resource) => resource.id);
+    if (deleteIds.length === 0) {
+      return [];
+    }
+
+    const fileIds = resources
+      .map((resource) => resource.fileId)
+      .filter((fileId): fileId is string => !!fileId);
+    const files =
+      fileIds.length > 0
+        ? await tx.entityManager.find(File, {
+            where: { namespaceId, id: In(fileIds) },
+          })
+        : [];
+    const fileSizeById = new Map(
+      files.map((file) => [file.id, bigintStringToNumber(file.size ?? '0')]),
+    );
+
+    await repo.softDelete({ namespaceId, id: In(deleteIds) });
+    await this.updateStorageUsageByUser(
+      namespaceId,
+      StorageType.CONTENT,
+      this.sumByUser(
+        resources,
+        (resource) => -1 * bigintStringToNumber(resource.contentSize),
+      ),
+      tx,
+    );
+    await this.updateStorageUsageByUser(
+      namespaceId,
+      StorageType.UPLOAD,
+      this.sumByUser(resources, (resource) =>
+        resource.fileId ? -1 * (fileSizeById.get(resource.fileId) ?? 0) : 0,
+      ),
+      tx,
+    );
+    await this.tasksService.cancelResourceTasks(namespaceId, deleteIds, tx);
+    await this.emitDeleteIndexTasks(namespaceId, userId, deleteIds, tx);
+    return deleteIds;
+  }
+
+  async getBatchMovableResourceIds(
+    namespaceId: string,
+    resourceIds: string[],
+    targetId: string,
+    entityManager?: EntityManager,
+  ): Promise<string[]> {
+    const result = await this.getBatchMoveCandidates(
+      namespaceId,
+      resourceIds,
+      targetId,
+      entityManager,
+    );
+    return result.moveIds;
+  }
+
+  async getBatchMoveCandidates(
+    namespaceId: string,
+    resourceIds: string[],
+    targetId: string,
+    entityManager?: EntityManager,
+  ): Promise<{
+    moveIds: string[];
+    nameConflictIds: string[];
+  }> {
+    if (resourceIds.length === 0) {
+      return { moveIds: [], nameConflictIds: [] };
+    }
+    const targetParents = await this.getParentResourcesOrFail(
+      namespaceId,
+      targetId,
+      entityManager,
+    );
+    const targetParentIds = new Set(targetParents.map((parent) => parent.id));
+    const candidates = resourceIds.filter(
+      (id) => id !== targetId && !targetParentIds.has(id),
+    );
+    if (candidates.length === 0) {
+      return { moveIds: [], nameConflictIds: [] };
+    }
+
+    const resourceMap = await this.batchGetResourceMeta(
+      namespaceId,
+      candidates,
+      entityManager,
+    );
+    const targetChildren = await this.getChildren(
+      namespaceId,
+      [targetId],
+      {},
+      entityManager,
+    );
+    const movingIds = new Set(candidates);
+    const occupiedNames = new Set(
+      targetChildren
+        .filter((child) => !movingIds.has(child.id))
+        .map((child) => child.name.toLowerCase()),
+    );
+    const selectedNameCounts = new Map<string, number>();
+    for (const id of candidates) {
+      const resource = resourceMap.get(id);
+      if (!resource) {
+        continue;
+      }
+      const key = resource.name.toLowerCase();
+      selectedNameCounts.set(key, (selectedNameCounts.get(key) ?? 0) + 1);
+    }
+    const moveIds: string[] = [];
+    const nameConflictIds: string[] = [];
+    for (const id of candidates) {
+      const resource = resourceMap.get(id);
+      if (!resource) {
+        continue;
+      }
+      const key = resource.name.toLowerCase();
+      const hasNameConflict =
+        occupiedNames.has(key) || selectedNameCounts.get(key) !== 1;
+      if (hasNameConflict) {
+        nameConflictIds.push(id);
+      } else {
+        moveIds.push(id);
+      }
+    }
+    return { moveIds, nameConflictIds };
+  }
+
+  async batchMoveResources(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+    targetId: string,
+    tx: Transaction,
+  ): Promise<{ movedIds: string[]; nameConflictIds: string[] }> {
+    const { moveIds, nameConflictIds } = await this.getBatchMoveCandidates(
+      namespaceId,
+      resourceIds,
+      targetId,
+      tx.entityManager,
+    );
+    if (moveIds.length === 0) {
+      return { movedIds: [], nameConflictIds };
+    }
+    const repo = tx.entityManager.getRepository(Resource);
+    const resources = await repo.find({
+      where: { namespaceId, id: In(moveIds) },
+      lock: { mode: 'pessimistic_write' },
+    });
+    await repo.update({ namespaceId, id: In(moveIds) }, { parentId: targetId });
+    resources.forEach((resource) => {
+      resource.parentId = targetId;
+    });
+    await this.emitUpsertIndexTasks(namespaceId, userId, resources, tx);
+    return { movedIds: moveIds, nameConflictIds };
   }
 
   async deleteResource(

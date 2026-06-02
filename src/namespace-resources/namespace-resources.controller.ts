@@ -22,6 +22,11 @@ import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import {
+  BatchCreateFolderDto,
+  BatchMoveResourcesDto,
+  BatchResourceIdsDto,
+} from './dto/batch-resource-actions.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {
@@ -180,6 +185,73 @@ export class NamespaceResourcesController {
       skip,
       { summary: summary === 'true' },
     );
+  }
+
+  @Post('batch-trash')
+  async batchMoveToTrash(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() data: BatchResourceIdsDto,
+  ): Promise<{
+    successIds: string[];
+    failedIds: string[];
+  }> {
+    return await this.namespaceResourcesService.batchMoveToTrash(
+      userId,
+      namespaceId,
+      data.resourceIds,
+    );
+  }
+
+  @Post('batch-move')
+  @CheckNamespaceReadonly()
+  async batchMove(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() data: BatchMoveResourcesDto,
+  ): Promise<{
+    successIds: string[];
+    failedIds: string[];
+    nameConflictIds: string[];
+  }> {
+    return await this.namespaceResourcesService.batchMove(
+      userId,
+      namespaceId,
+      data.resourceIds,
+      data.targetId,
+    );
+  }
+
+  @Post('batch-folder')
+  @CheckNamespaceReadonly()
+  async batchCreateFolder(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() data: BatchCreateFolderDto,
+  ) {
+    const folder = await this.namespaceResourcesService.batchCreateFolder(
+      userId,
+      namespaceId,
+      data,
+    );
+    if (!folder.resource) {
+      return {
+        successIds: folder.successIds,
+        failedIds: folder.failedIds,
+        nameConflictIds: folder.nameConflictIds,
+      };
+    }
+    const resource = await this.namespaceResourcesService.getResource({
+      namespaceId,
+      userId,
+      resourceId: folder.resource.id,
+    });
+    return {
+      ...resource,
+      successIds: folder.successIds,
+      failedIds: folder.failedIds,
+      nameConflictIds: folder.nameConflictIds,
+    };
   }
 
   // Trash routes must be defined before :resourceId routes to avoid

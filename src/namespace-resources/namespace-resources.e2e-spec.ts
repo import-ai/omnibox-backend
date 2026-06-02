@@ -6,16 +6,29 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 describe('ResourcesController (e2e)', () => {
   let client: TestClient;
   let memberClient: TestClient;
+  let outsiderClient: TestClient;
   let uid = 0;
   const uniqueName = (base: string) => `${base} ${++uid}`;
+  const setUserPermission = async (
+    resourceId: string,
+    permission: ResourcePermission,
+  ) => {
+    await client
+      .patch(
+        `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}/permissions/users/${memberClient.user.id}`,
+      )
+      .send({ permission })
+      .expect(HttpStatus.OK);
+  };
 
   beforeAll(async () => {
     client = await TestClient.create();
   });
 
   afterAll(async () => {
+    await outsiderClient?.close();
     await memberClient?.close();
-    await client.close();
+    await client?.close();
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/resources', () => {
@@ -699,18 +712,6 @@ describe('ResourcesController (e2e)', () => {
       return response.body.id;
     };
 
-    const setUserPermission = async (
-      resourceId: string,
-      permission: ResourcePermission,
-    ) => {
-      await client
-        .patch(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}/permissions/users/${memberClient.user.id}`,
-        )
-        .send({ permission })
-        .expect(HttpStatus.OK);
-    };
-
     beforeAll(async () => {
       memberClient = await TestClient.create();
 
@@ -868,6 +869,561 @@ describe('ResourcesController (e2e)', () => {
       expect(childrenResponse.body).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: sourceId })]),
       );
+    });
+  });
+
+  describe('POST /api/v1/namespaces/:namespaceId/resources/batch-*', () => {
+    beforeAll(async () => {
+      if (memberClient) {
+        return;
+      }
+      memberClient = await TestClient.create();
+
+      const invitation = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/invitations`)
+        .send({
+          namespaceRole: 'member',
+          rootPermission: ResourcePermission.CAN_EDIT,
+        })
+        .expect(HttpStatus.CREATED);
+
+      await memberClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}/accept`,
+        )
+        .expect(HttpStatus.CREATED);
+
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}`,
+        )
+        .expect(HttpStatus.OK);
+    });
+
+    async function createFolder(name: string, parentId: string) {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName(name),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.FOLDER,
+          parentId,
+          content: '',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      return response.body;
+    }
+
+    async function createDoc(name: string, parentId: string) {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName(name),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId,
+          content: 'batch resource content',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      return response.body;
+    }
+
+    it('should move selected resources to trash', async () => {
+      const first = await createDoc(
+        'Batch Trash First',
+        client.namespace.root_resource_id,
+      );
+      const second = await createDoc(
+        'Batch Trash Second',
+        client.namespace.root_resource_id,
+      );
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`)
+        .send({ resourceIds: [first.id, second.id] })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [first.id, second.id],
+        failed_ids: [],
+      });
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources/${first.id}`)
+        .expect(HttpStatus.NOT_FOUND);
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources/${second.id}`)
+        .expect(HttpStatus.NOT_FOUND);
+    });
+
+    it('should count sources without edit permission as failed on batch trash', async () => {
+      const first = await createDoc(
+        'Batch Trash Readonly First',
+        client.namespace.root_resource_id,
+      );
+      const second = await createDoc(
+        'Batch Trash Readonly Second',
+        client.namespace.root_resource_id,
+      );
+      await setUserPermission(first.id, ResourcePermission.CAN_VIEW);
+      await setUserPermission(second.id, ResourcePermission.CAN_VIEW);
+
+      const response = await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`)
+        .send({ resourceIds: [first.id, second.id] })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toEqual({
+        success_ids: [],
+        failed_ids: [first.id, second.id],
+      });
+      await memberClient
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources/${first.id}`)
+        .expect(HttpStatus.OK);
+      await memberClient
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources/${second.id}`)
+        .expect(HttpStatus.OK);
+    });
+
+    it('should reject batch trash from non namespace member even when resource is globally editable', async () => {
+      outsiderClient = await TestClient.create();
+      const resource = await createDoc(
+        'Batch Trash Global Editable',
+        client.namespace.root_resource_id,
+      );
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}/permissions`,
+        )
+        .send({ permission: ResourcePermission.CAN_EDIT })
+        .expect(HttpStatus.OK);
+
+      await outsiderClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`)
+        .send({ resourceIds: [resource.id] })
+        .expect(HttpStatus.FORBIDDEN);
+
+      await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .expect(HttpStatus.OK);
+    });
+
+    it('should count source without edit permission as failed on batch move', async () => {
+      const target = await createFolder(
+        'Batch Move Editable Target',
+        client.namespace.root_resource_id,
+      );
+      const readonlySource = await createDoc(
+        'Batch Move Readonly Source',
+        client.namespace.root_resource_id,
+      );
+      const editableSource = await createDoc(
+        'Batch Move Editable Source',
+        client.namespace.root_resource_id,
+      );
+      await setUserPermission(readonlySource.id, ResourcePermission.CAN_VIEW);
+
+      const response = await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({
+          resourceIds: [readonlySource.id, editableSource.id],
+          targetId: target.id,
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [editableSource.id],
+        failed_ids: [readonlySource.id],
+      });
+      const childrenResponse = await memberClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${target.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(childrenResponse.body.map((r: any) => r.id)).toContain(
+        editableSource.id,
+      );
+      expect(childrenResponse.body.map((r: any) => r.id)).not.toContain(
+        readonlySource.id,
+      );
+    });
+
+    it('should reject batch move when no selected sources are editable', async () => {
+      const target = await createFolder(
+        'Batch Move No Editable Target',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc(
+        'Batch Move No Editable First',
+        client.namespace.root_resource_id,
+      );
+      const second = await createDoc(
+        'Batch Move No Editable Second',
+        client.namespace.root_resource_id,
+      );
+      await setUserPermission(first.id, ResourcePermission.CAN_VIEW);
+      await setUserPermission(second.id, ResourcePermission.CAN_VIEW);
+
+      await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({ resourceIds: [first.id, second.id], targetId: target.id })
+        .expect(HttpStatus.FORBIDDEN)
+        .expect((response) => {
+          expect(response.body.code).toBe('batch_source_not_editable');
+        });
+    });
+
+    it('should reject batch move when target is not editable', async () => {
+      const target = await createFolder(
+        'Batch Move Readonly Target',
+        client.namespace.root_resource_id,
+      );
+      const source = await createDoc(
+        'Batch Move Target Permission Source',
+        client.namespace.root_resource_id,
+      );
+      await setUserPermission(target.id, ResourcePermission.CAN_VIEW);
+
+      await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({ resourceIds: [source.id], targetId: target.id })
+        .expect(HttpStatus.FORBIDDEN)
+        .expect((response) => {
+          expect(response.body.code).toBe('target_not_editable');
+        });
+    });
+
+    it('should report name conflicts on batch move', async () => {
+      const target = await createFolder(
+        'Batch Move Name Conflict Target',
+        client.namespace.root_resource_id,
+      );
+      const conflictName = uniqueName('Batch Move Conflict Resource');
+      const conflictSourceResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: conflictName,
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content: 'source with conflicting name',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      const conflictSource = conflictSourceResponse.body;
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: conflictName,
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: target.id,
+          content: 'existing target child',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      const movableSource = await createDoc(
+        'Batch Move Non Conflict Resource',
+        client.namespace.root_resource_id,
+      );
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({
+          resourceIds: [conflictSource.id, movableSource.id],
+          targetId: target.id,
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [movableSource.id],
+        failed_ids: [conflictSource.id],
+        name_conflict_ids: [conflictSource.id],
+      });
+    });
+
+    it('should batch move resources when source and target are editable', async () => {
+      const target = await createFolder(
+        'Batch Move All Editable Target',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc(
+        'Batch Move All Editable First',
+        client.namespace.root_resource_id,
+      );
+      const second = await createDoc(
+        'Batch Move All Editable Second',
+        client.namespace.root_resource_id,
+      );
+
+      const response = await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({ resourceIds: [first.id, second.id], targetId: target.id })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [first.id, second.id],
+        failed_ids: [],
+      });
+      const childrenResponse = await memberClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${target.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(childrenResponse.body.map((r: any) => r.id)).toEqual(
+        expect.arrayContaining([first.id, second.id]),
+      );
+    });
+
+    it('should ignore child ids covered by a selected parent on batch move', async () => {
+      const target = await createFolder(
+        'Batch Move Parent Target',
+        client.namespace.root_resource_id,
+      );
+      const parent = await createFolder(
+        'Batch Move Selected Parent',
+        client.namespace.root_resource_id,
+      );
+      const child = await createDoc('Batch Move Muted Child', parent.id);
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({ resourceIds: [parent.id, child.id], targetId: target.id })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [parent.id],
+        failed_ids: [],
+      });
+      const targetChildrenResponse = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${target.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(targetChildrenResponse.body.map((r: any) => r.id)).toContain(
+        parent.id,
+      );
+      expect(targetChildrenResponse.body.map((r: any) => r.id)).not.toContain(
+        child.id,
+      );
+    });
+
+    it('should create a folder with selected resources inside it', async () => {
+      const parent = await createFolder(
+        'Batch Folder Parent',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc('Batch Folder First', parent.id);
+      const second = await createDoc('Batch Folder Second', parent.id);
+
+      const response = await client
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/batch-folder`,
+        )
+        .send({
+          name: uniqueName('Selected Resources'),
+          parentId: parent.id,
+          resourceIds: [first.id, second.id],
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body.resource_type).toBe(ResourceType.FOLDER);
+      expect(response.body.parent_id).toBe(parent.id);
+      expect(response.body.success_ids).toEqual([first.id, second.id]);
+      expect(response.body.failed_ids).toEqual([]);
+      const childrenResponse = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${response.body.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(childrenResponse.body.map((r: any) => r.id)).toEqual(
+        expect.arrayContaining([first.id, second.id]),
+      );
+    });
+
+    it('should reject batch folder when parent is not editable', async () => {
+      const parent = await createFolder(
+        'Batch Folder Readonly Parent',
+        client.namespace.root_resource_id,
+      );
+      const source = await createDoc(
+        'Batch Folder Parent Permission Source',
+        parent.id,
+      );
+      await setUserPermission(parent.id, ResourcePermission.CAN_VIEW);
+
+      await memberClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/batch-folder`,
+        )
+        .send({
+          name: uniqueName('Forbidden Batch Folder'),
+          parentId: parent.id,
+          resourceIds: [source.id],
+        })
+        .expect(HttpStatus.FORBIDDEN)
+        .expect((response) => {
+          expect(response.body).toMatchObject({
+            code: 'target_not_editable',
+            target_name: parent.name,
+          });
+        });
+    });
+
+    it('should not create a folder when no selected resources are editable', async () => {
+      const parent = await createFolder(
+        'Batch Folder All Readonly Parent',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc('Batch Folder Readonly First', parent.id);
+      const second = await createDoc('Batch Folder Readonly Second', parent.id);
+      await setUserPermission(first.id, ResourcePermission.CAN_VIEW);
+      await setUserPermission(second.id, ResourcePermission.CAN_VIEW);
+      const folderName = uniqueName('Readonly Selected Resources');
+
+      const response = await memberClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/batch-folder`,
+        )
+        .send({
+          name: folderName,
+          parentId: parent.id,
+          resourceIds: [first.id, second.id],
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [],
+        failed_ids: [first.id, second.id],
+        name_conflict_ids: [],
+      });
+      const childrenResponse = await memberClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${parent.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(childrenResponse.body.map((r: any) => r.name)).not.toContain(
+        folderName,
+      );
+      expect(childrenResponse.body.map((r: any) => r.id)).toEqual(
+        expect.arrayContaining([first.id, second.id]),
+      );
+    });
+
+    it('should validate folder name before selected resource permissions', async () => {
+      const parent = await createFolder(
+        'Batch Folder Conflict Readonly Parent',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc(
+        'Batch Folder Conflict Readonly First',
+        parent.id,
+      );
+      const second = await createDoc(
+        'Batch Folder Conflict Readonly Second',
+        parent.id,
+      );
+      await setUserPermission(first.id, ResourcePermission.CAN_VIEW);
+      await setUserPermission(second.id, ResourcePermission.CAN_VIEW);
+      const folderName = uniqueName('Readonly Conflict Folder');
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: folderName,
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.FOLDER,
+          parentId: parent.id,
+          content: '',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+
+      await memberClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/batch-folder`,
+        )
+        .send({
+          name: folderName,
+          parentId: parent.id,
+          resourceIds: [first.id, second.id],
+        })
+        .expect(HttpStatus.CONFLICT);
+    });
+
+    it('should create a folder with only editable selected resources', async () => {
+      const parent = await createFolder(
+        'Batch Folder Partial Parent',
+        client.namespace.root_resource_id,
+      );
+      const readonlySource = await createDoc(
+        'Batch Folder Partial Readonly',
+        parent.id,
+      );
+      const editableSource = await createDoc(
+        'Batch Folder Partial Editable',
+        parent.id,
+      );
+      await setUserPermission(readonlySource.id, ResourcePermission.CAN_VIEW);
+
+      const response = await memberClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/batch-folder`,
+        )
+        .send({
+          name: uniqueName('Partial Selected Resources'),
+          parentId: parent.id,
+          resourceIds: [readonlySource.id, editableSource.id],
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body.success_ids).toEqual([editableSource.id]);
+      expect(response.body.failed_ids).toEqual([readonlySource.id]);
+      const folderChildrenResponse = await memberClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${response.body.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(folderChildrenResponse.body.map((r: any) => r.id)).toEqual([
+        editableSource.id,
+      ]);
+      const parentChildrenResponse = await memberClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${parent.id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      expect(parentChildrenResponse.body.map((r: any) => r.id)).toContain(
+        readonlySource.id,
+      );
+    });
+
+    it('should report failed count without failing successful batch items', async () => {
+      const valid = await createDoc(
+        'Batch Partial Valid',
+        client.namespace.root_resource_id,
+      );
+
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`)
+        .send({ resourceIds: [valid.id, 'missing-batch-resource'] })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toMatchObject({
+        success_ids: [valid.id],
+        failed_ids: ['missing-batch-resource'],
+      });
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/resources/${valid.id}`)
+        .expect(HttpStatus.NOT_FOUND);
+    });
+
+    it('should reject empty batch resource ids', async () => {
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-trash`)
+        .send({ resourceIds: [] })
+        .expect(HttpStatus.BAD_REQUEST);
     });
   });
 

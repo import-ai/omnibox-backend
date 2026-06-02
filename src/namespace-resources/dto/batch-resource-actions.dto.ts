@@ -1,5 +1,4 @@
 import {
-  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsNotEmpty,
@@ -11,7 +10,6 @@ import { i18nValidationMessage } from 'nestjs-i18n';
 export class BatchResourceIdsDto {
   @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
   @ArrayMinSize(1)
-  @ArrayMaxSize(100)
   @IsString({
     each: true,
     message: i18nValidationMessage('validation.errors.isString'),

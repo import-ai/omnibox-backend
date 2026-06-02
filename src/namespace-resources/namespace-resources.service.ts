@@ -516,6 +516,29 @@ export class NamespaceResourcesService {
     });
   }
 
+  async assertCanBatchMoveToTrash(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<void> {
+    const manager = this.dataSource.manager;
+    const batchResourceIds = await this.getBatchTopLevelResourceIds(
+      namespaceId,
+      resourceIds,
+      manager,
+    );
+    const editableIds = await this.getEditableResourceIds(
+      namespaceId,
+      userId,
+      batchResourceIds,
+      manager,
+    );
+    if (batchResourceIds.some((id) => !editableIds.has(id))) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+  }
+
   async batchMove(
     userId: string,
     namespaceId: string,

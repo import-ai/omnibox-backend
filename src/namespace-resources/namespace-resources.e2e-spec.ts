@@ -986,6 +986,26 @@ describe('ResourcesController (e2e)', () => {
         .expect(HttpStatus.OK);
     });
 
+    it('should reject batch trash check when any selected resource is not editable', async () => {
+      const first = await createDoc(
+        'Batch Trash Check Readonly First',
+        client.namespace.root_resource_id,
+      );
+      const second = await createDoc(
+        'Batch Trash Check Editable Second',
+        client.namespace.root_resource_id,
+      );
+      await setUserPermission(first.id, ResourcePermission.CAN_VIEW);
+      await setUserPermission(second.id, ResourcePermission.CAN_EDIT);
+
+      await memberClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/batch-trash/check`,
+        )
+        .send({ resourceIds: [first.id, second.id] })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
     it('should reject batch trash from non namespace member even when resource is globally editable', async () => {
       outsiderClient = await TestClient.create();
       const resource = await createDoc(

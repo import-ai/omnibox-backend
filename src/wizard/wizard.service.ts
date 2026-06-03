@@ -80,6 +80,12 @@ export class WizardService {
         this.tagService,
         this.i18n,
       ),
+      generate_audio_note: new CollectProcessor(
+        this.namespaceResourcesService,
+        this.resourcesService,
+        this.tagService,
+        this.i18n,
+      ),
       collect_url: new CollectUrlProcessor(
         this.namespaceResourcesService,
         this.i18n,

@@ -127,6 +127,31 @@ export class WizardTaskService {
     );
   }
 
+  async emitGenerateAudioNoteTask(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    input: { url: string; html_s3_key?: string; title?: string },
+    tx?: Transaction,
+  ) {
+    const userOptions = await this.getUserOptions(userId);
+    return this.tasksService.emitTask(
+      {
+        function: 'generate_audio_note',
+        input,
+        namespaceId,
+        payload: {
+          resource_id: resourceId,
+          user: {
+            options: userOptions,
+          },
+        },
+        userId,
+      },
+      tx,
+    );
+  }
+
   async emitCollectUrlTask(
     userId: string,
     namespaceId: string,

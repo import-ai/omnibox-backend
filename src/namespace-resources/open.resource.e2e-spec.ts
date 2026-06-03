@@ -368,6 +368,81 @@ describe('OpenResourcesController (e2e)', () => {
         .expect(404);
     });
 
+    it('should add and remove resource tags with UPDATE permission', async () => {
+      const firstTagName = 'open-remove-tag';
+      const secondTagName = 'open-add-tag';
+      const [firstTagId] = await client.createTags([firstTagName]);
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Resource Tags',
+          content: 'Open resource tag mutation content',
+        })
+        .expect(201);
+
+      const resourceId = resourceResponse.body.id;
+
+      await client
+        .request()
+        .post(`/open/api/v1/resources/${resourceId}/tags`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ tag_name: firstTagName })
+        .expect(200);
+
+      const secondAddResponse = await client
+        .request()
+        .post(`/open/api/v1/resources/${resourceId}/tags`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ tag_name: secondTagName })
+        .expect(200);
+
+      expect(secondAddResponse.body.tags.map((tag: any) => tag.name)).toEqual(
+        expect.arrayContaining([firstTagName, secondTagName]),
+      );
+
+      const removeResponse = await client
+        .request()
+        .delete(`/open/api/v1/resources/${resourceId}/tags/${firstTagId}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .expect(200);
+
+      const remainingTags = removeResponse.body.tags;
+      expect(remainingTags.map((tag: any) => tag.name)).toContain(
+        secondTagName,
+      );
+      expect(remainingTags.map((tag: any) => tag.id)).not.toContain(firstTagId);
+    });
+
+    it('should reject resource tag mutations when API key lacks UPDATE permission', async () => {
+      const [tagId] = await client.createTags(['open-tag-no-update']);
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Resource Tag Permission',
+          content: 'Permission test content',
+        })
+        .expect(201);
+
+      await client
+        .request()
+        .post(`/open/api/v1/resources/${resourceResponse.body.id}/tags`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .send({ tag_name: 'open-tag-no-update' })
+        .expect(403);
+
+      await client
+        .request()
+        .delete(
+          `/open/api/v1/resources/${resourceResponse.body.id}/tags/${tagId}`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(403);
+    });
+
     it('should reject update when API key lacks UPDATE permission', async () => {
       const resourceResponse = await client
         .request()

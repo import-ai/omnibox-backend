@@ -1395,6 +1395,68 @@ export class NamespaceResourcesService {
     });
   }
 
+  async addOpenResourceTag(
+    namespaceId: string,
+    userId: string,
+    rootResourceId: string,
+    resourceId: string,
+    tagName: string,
+  ): Promise<ResourceDto> {
+    await this.resolveOpenResourceId(
+      namespaceId,
+      rootResourceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
+    const tag = await this.tagService.getOrCreateTagByName(
+      namespaceId,
+      tagName,
+    );
+    const nextTagIds = Array.from(
+      new Set([...(resource.tagIds ?? []), tag.id]),
+    );
+
+    await this.update(namespaceId, userId, resourceId, { tag_ids: nextTagIds });
+    return await this.getResource({
+      namespaceId,
+      resourceId,
+      userId,
+    });
+  }
+
+  async removeOpenResourceTag(
+    namespaceId: string,
+    userId: string,
+    rootResourceId: string,
+    resourceId: string,
+    tagId: string,
+  ): Promise<ResourceDto> {
+    await this.resolveOpenResourceId(
+      namespaceId,
+      rootResourceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
+    const nextTagIds = (resource.tagIds ?? []).filter((id) => id !== tagId);
+
+    await this.update(namespaceId, userId, resourceId, { tag_ids: nextTagIds });
+    return await this.getResource({
+      namespaceId,
+      resourceId,
+      userId,
+    });
+  }
+
   async delete(userId: string, namespaceId: string, id: string) {
     const resource = await this.resourcesService.getResourceOrFail(
       namespaceId,

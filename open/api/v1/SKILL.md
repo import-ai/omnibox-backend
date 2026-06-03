@@ -6,10 +6,11 @@ Use this skill when integrating external tools, plugins, or agents with OmniBox 
 
 - Cloud service base URL: `https://api.omnibox.pro`
 - Self-hosted base URL: `<your-server>/open/api`
-- API version prefix: `/open/api/v1`
+- Default cloud API version prefix: `/v1`
+- Internal/self-hosted API version prefix: `/open/api/v1`
 - Swagger UI: `/open/api/docs`
 
-In Swagger, routes are shown relative to `/open/api`, for example `/v1/resources`.
+When this skill file is loaded from a local path that already contains `/open/api/v1`, use `/open/api/v1` as the base path for generated requests. Otherwise, use the public `/v1` prefix. In Swagger, routes may be shown relative to `/open/api`, for example `/v1/resources`.
 
 ## Authentication
 
@@ -30,12 +31,12 @@ Resource and search endpoints must stay within the API key root resource boundar
 
 ## Permission matrix
 
-| Target | Actions | Typical endpoints |
-| --- | --- | --- |
-| `resources` | `create`, `read`, `update`, `delete` | `/v1/resources`, `/v1/resources/{id}`, `/v1/resources/upload`, `/v1/wizard/collect/*` |
-| `tags` | `create`, `read` | `/v1/tags` |
-| `search` | `read` | `/v1/search` |
-| `chat` | `create` | `/v1/wizard/ask` |
+| Target      | Actions                              | Typical endpoints                                                                                                |
+| ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `resources` | `create`, `read`, `update`, `delete` | `/v1/resources`, `/v1/resources/{id}`, `/v1/resources/{id}/tags`, `/v1/resources/upload`, `/v1/wizard/collect/*` |
+| `tags`      | `create`, `read`                     | `/v1/tags`                                                                                                       |
+| `search`    | `read`                               | `/v1/search`                                                                                                     |
+| `chat`      | `create`                             | `/v1/wizard/ask`                                                                                                 |
 
 When adding endpoints, reuse an existing target/action if the semantics match. Add new permission targets only when the existing matrix cannot express the capability safely.
 
@@ -54,10 +55,12 @@ API key creation and broad management remain in the authenticated product API, n
 - `POST /v1/resources`: create a document resource.
 - `GET /v1/resources/{resourceId}`: read a resource under the API key root.
 - `PATCH /v1/resources/{resourceId}`: update a resource under the API key root.
+- `POST /v1/resources/{resourceId}/tags`: add a tag to a resource under the API key root by `tag_name`.
+- `DELETE /v1/resources/{resourceId}/tags/{tagId}`: remove a tag from a resource under the API key root by `tagId`.
 - `DELETE /v1/resources/{resourceId}`: delete a resource under the API key root.
 - `POST /v1/resources/upload`: upload a file as a resource.
 
-Use `parent_id` only for resources reachable under the API key root. If `parent_id` is omitted, use the API key root.
+Use `parent_id` only for resources reachable under the API key root. If `parent_id` is omitted, use the API key root. Resource tag add/remove operations require `resources:update`; tag lifecycle creation/listing uses the `tags` permission target. Adding a resource tag creates the tag in the API key namespace when the `tag_name` does not already exist.
 
 ### Web collection and AI wizard
 
@@ -121,4 +124,18 @@ curl -X POST \
   -H "Content-Type: application/json" \
   -d '{"name":"API note","content":"Saved from Open API"}' \
   "https://api.omnibox.pro/v1/resources"
+```
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $OMNIBOX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tag_name":"project"}' \
+  "https://api.omnibox.pro/v1/resources/<resourceId>/tags"
+```
+
+```bash
+curl -X DELETE \
+  -H "Authorization: Bearer $OMNIBOX_API_KEY" \
+  "https://api.omnibox.pro/v1/resources/<resourceId>/tags/<tagId>"
 ```

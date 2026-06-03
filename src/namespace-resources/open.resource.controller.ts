@@ -11,6 +11,7 @@ import {
   UploadedFile,
   UseInterceptors,
   HttpStatus,
+  HttpCode,
 } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
@@ -31,6 +32,7 @@ import { TagService } from 'omniboxd/tag/tag.service';
 import { parseHashtags } from 'omniboxd/utils/parse-hashtags';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { OpenResourceTagDto } from 'omniboxd/namespace-resources/dto/open-resource-tags.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
 import {
@@ -326,6 +328,82 @@ export class OpenResourcesController {
       apiKey.attrs.root_resource_id,
       resourceId,
       data,
+    );
+  }
+
+  @Post(':resourceId/tags')
+  @HttpCode(HttpStatus.OK)
+  @CheckNamespaceReadonly()
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.UPDATE],
+      },
+    ],
+  })
+  @ApiOperation({ summary: 'Add tags to a resource under the API key root' })
+  @ApiBody({
+    description:
+      'Tag name to add to the resource. Existing tags are preserved.',
+    type: OpenResourceTagDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tags added successfully',
+    type: ResourceDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
+  async addTags(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Param('resourceId') resourceId: string,
+    @Body() data: OpenResourceTagDto,
+  ): Promise<ResourceDto> {
+    return await this.namespaceResourcesService.addOpenResourceTag(
+      apiKey.namespaceId,
+      userId,
+      apiKey.attrs.root_resource_id,
+      resourceId,
+      data.tag_name,
+    );
+  }
+
+  @Delete(':resourceId/tags/:tagId')
+  @CheckNamespaceReadonly()
+  @APIKeyAuth({
+    permissions: [
+      {
+        target: APIKeyPermissionTarget.RESOURCES,
+        permissions: [APIKeyPermissionType.UPDATE],
+      },
+    ],
+  })
+  @ApiOperation({
+    summary: 'Remove a tag from a resource under the API key root',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tag removed successfully',
+    type: ResourceDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Resource not found' })
+  async removeTag(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('tagId') tagId: string,
+  ): Promise<ResourceDto> {
+    return await this.namespaceResourcesService.removeOpenResourceTag(
+      apiKey.namespaceId,
+      userId,
+      apiKey.attrs.root_resource_id,
+      resourceId,
+      tagId,
     );
   }
 

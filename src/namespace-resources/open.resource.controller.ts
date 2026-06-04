@@ -38,6 +38,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
 
 @ApiTags('Resources')
 @ApiSecurity('api-key')
@@ -128,6 +129,7 @@ export class OpenResourcesController {
   }
 
   @Post()
+  @SkipOpenAPIQuota()
   @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [

@@ -33,11 +33,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 @ApiTags('Wizard')
 @ApiSecurity('api-key')
+@SkipOpenAPIQuota()
 @Controller('open/api/v1/wizard')
 export class OpenWizardController {
   constructor(

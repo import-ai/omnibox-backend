@@ -9,9 +9,11 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
+import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
 
 @ApiTags('API Keys')
 @ApiSecurity('api-key')
+@SkipOpenAPIQuota()
 @Controller('open/api/v1/api-keys')
 export class OpenAPIKeyController {
   constructor(private readonly apiKeyService: APIKeyService) {}

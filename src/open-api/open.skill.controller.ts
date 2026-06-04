@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
 
 const OPEN_API_BASE_URL_PLACEHOLDER = '${OBB_OPEN_API_BASE_URL}';
 const DEFAULT_OPEN_API_BASE_URL = '/open/api';
@@ -15,6 +16,7 @@ function readSkillTemplate(): string {
   return readFileSync(join(__dirname, 'templates/SKILL.md'), 'utf8');
 }
 
+@SkipOpenAPIQuota()
 @Controller('open/api/v1')
 export class OpenSkillController {
   private readonly renderedSkill: string;

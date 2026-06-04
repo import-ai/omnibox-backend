@@ -361,9 +361,39 @@ describe('OpenResourcesController (e2e)', () => {
         .expect(200);
 
       expect(Array.isArray(listResponse.body)).toBe(true);
-      expect(
-        listResponse.body.some((item: any) => item.id === resourceId),
-      ).toBe(true);
+      const defaultSummaryItem = listResponse.body.find(
+        (item: any) => item.id === resourceId,
+      );
+      expect(defaultSummaryItem).toBeDefined();
+      expect(defaultSummaryItem.content).toBe('');
+
+      const falseSummaryResponse = await client
+        .request()
+        .get('/open/api/v1/resources?summary=false')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+      const falseSummaryItem = falseSummaryResponse.body.find(
+        (item: any) => item.id === resourceId,
+      );
+      expect(falseSummaryItem).toBeDefined();
+      expect(falseSummaryItem.content).toBe('');
+
+      const trueSummaryResponse = await client
+        .request()
+        .get('/open/api/v1/resources?summary=true')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+      const trueSummaryItem = trueSummaryResponse.body.find(
+        (item: any) => item.id === resourceId,
+      );
+      expect(trueSummaryItem).toBeDefined();
+      expect(trueSummaryItem.content).toBe('Content for open lifecycle read');
+
+      await client
+        .request()
+        .get('/open/api/v1/resources?summary=invalid')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(400);
 
       const getResponse = await client
         .request()

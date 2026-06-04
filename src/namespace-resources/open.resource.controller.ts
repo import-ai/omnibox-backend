@@ -12,6 +12,8 @@ import {
   UseInterceptors,
   HttpStatus,
   HttpCode,
+  DefaultValuePipe,
+  ParseBoolPipe,
 } from '@nestjs/common';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
@@ -79,8 +81,7 @@ export class OpenResourcesController {
   @ApiQuery({
     name: 'summary',
     required: false,
-    type: Boolean,
-    schema: { default: false },
+    schema: { type: 'boolean', default: false },
     description:
       'Whether to include content previews and first attachment metadata. Defaults to false.',
   })
@@ -97,7 +98,8 @@ export class OpenResourcesController {
     @Query('parent_id') parentId?: string,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
-    @Query('summary') summary?: string,
+    @Query('summary', new DefaultValuePipe(false), ParseBoolPipe)
+    summary?: boolean,
   ): Promise<ResourceSummaryDto[]> {
     return await this.openResourcesService.listResources(
       apiKey.namespaceId,
@@ -107,7 +109,7 @@ export class OpenResourcesController {
         parentId,
         limit,
         offset,
-        summary: summary === 'true',
+        summary,
       },
     );
   }

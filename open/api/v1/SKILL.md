@@ -4,13 +4,18 @@ Use this skill when integrating external tools, plugins, or agents with OmniBox 
 
 ## Base URL and documentation
 
-- Cloud service base URL: `https://api.omnibox.pro`
-- Self-hosted base URL: `<your-server>/open/api`
-- Default cloud API version prefix: `/v1`
-- Internal/self-hosted API version prefix: `/open/api/v1`
-- Swagger UI: `/open/api/docs`
+Set `OBB_OPEN_API_BASE_URL` to the Open API base path or externally reachable Open API origin. It defaults to `/open/api`. Generated requests should use:
 
-When this skill file is loaded from a local path that already contains `/open/api/v1`, use `/open/api/v1` as the base path for generated requests. Otherwise, use the public `/v1` prefix. In Swagger, routes may be shown relative to `/open/api`, for example `/v1/resources`.
+```text
+${OBB_OPEN_API_BASE_URL}/v1
+```
+
+Examples:
+
+- Default/self-hosted same-origin: `OBB_OPEN_API_BASE_URL=/open/api`
+- Cloud service: `OBB_OPEN_API_BASE_URL=https://api.omnibox.pro`
+
+Swagger UI is available at `${OBB_OPEN_API_BASE_URL}/docs`. In backend Swagger generation, routes may be shown relative to `/open/api`, for example `/v1/resources`.
 
 ## Authentication
 
@@ -52,7 +57,7 @@ API key creation and broad management remain in the authenticated product API, n
 ### Resources
 
 - `GET /v1/resources`: list resources under the API key root.
-- `POST /v1/resources`: create a document resource.
+- `POST /v1/resources`: create a document or folder resource. For `resource_type=folder`, provide `name` and do not send `content`.
 - `GET /v1/resources/{resourceId}`: read a resource under the API key root.
 - `PATCH /v1/resources/{resourceId}`: update a resource under the API key root.
 - `POST /v1/resources/{resourceId}/tags`: add a tag to a resource under the API key root by `tag_name`.
@@ -115,7 +120,7 @@ No dedicated Open API rate limiter is defined in this module yet. Until one is a
 
 ```bash
 curl -H "Authorization: Bearer $OMNIBOX_API_KEY" \
-  "https://api.omnibox.pro/v1/resources?limit=20&summary=true"
+  "${OBB_OPEN_API_BASE_URL}/v1/resources?limit=20&summary=true"
 ```
 
 ```bash
@@ -123,7 +128,7 @@ curl -X POST \
   -H "Authorization: Bearer $OMNIBOX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name":"API note","content":"Saved from Open API"}' \
-  "https://api.omnibox.pro/v1/resources"
+  "${OBB_OPEN_API_BASE_URL}/v1/resources"
 ```
 
 ```bash
@@ -131,11 +136,11 @@ curl -X POST \
   -H "Authorization: Bearer $OMNIBOX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"tag_name":"project"}' \
-  "https://api.omnibox.pro/v1/resources/<resourceId>/tags"
+  "${OBB_OPEN_API_BASE_URL}/v1/resources/<resourceId>/tags"
 ```
 
 ```bash
 curl -X DELETE \
   -H "Authorization: Bearer $OMNIBOX_API_KEY" \
-  "https://api.omnibox.pro/v1/resources/<resourceId>/tags/<tagId>"
+  "${OBB_OPEN_API_BASE_URL}/v1/resources/<resourceId>/tags/<tagId>"
 ```

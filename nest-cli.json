@@ -9,7 +9,7 @@
         "include": "mail/templates/**"
       },
       { "include": "i18n/**/*", "watchAssets": true },
-      { "include": "../open/api/v1/SKILL.md", "outDir": "dist" }
+      { "include": "open-api/templates/**" }
     ]
   }
 }

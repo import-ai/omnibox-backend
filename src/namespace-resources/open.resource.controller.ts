@@ -24,7 +24,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { AddOpenResourceTagRequestDto } from 'omniboxd/namespace-resources/dto/add-open-resource-tag-request.dto';
+import { OpenAddResourceTagRequestDto } from 'omniboxd/namespace-resources/dto/open-add-resource-tag-request.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
 import {
@@ -267,7 +267,7 @@ export class OpenResourcesController {
   @ApiBody({
     description:
       'Tag name to add to the resource. Existing tags are preserved.',
-    type: AddOpenResourceTagRequestDto,
+    type: OpenAddResourceTagRequestDto,
   })
   @ApiResponse({
     status: 200,
@@ -281,7 +281,7 @@ export class OpenResourcesController {
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
     @Param('resourceId') resourceId: string,
-    @Body() data: AddOpenResourceTagRequestDto,
+    @Body() data: OpenAddResourceTagRequestDto,
   ): Promise<ResourceDto> {
     return await this.openResourcesService.addResourceTag(
       apiKey.namespaceId,

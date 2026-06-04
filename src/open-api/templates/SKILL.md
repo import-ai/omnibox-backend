@@ -48,12 +48,12 @@ Important rules for agents:
 
 ## Permissions
 
-| Target | Actions | Used for |
-| --- | --- | --- |
+| Target      | Actions                              | Used for                                                   |
+| ----------- | ------------------------------------ | ---------------------------------------------------------- |
 | `resources` | `create`, `read`, `update`, `delete` | resources, folders, files, tag association, web collection |
-| `tags` | `create`, `read` | tag lifecycle and tag lookup |
-| `search` | `read` | search resources under the API key root |
-| `chat` | `create` | ask AI wizard |
+| `tags`      | `create`, `read`                     | tag lifecycle and tag lookup                               |
+| `search`    | `read`                               | search resources under the API key root                    |
+| `chat`      | `create`                             | ask AI wizard                                              |
 
 When an endpoint returns `403`, inspect the needed permission in the endpoint list below.
 

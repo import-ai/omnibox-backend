@@ -12,21 +12,7 @@ function trimTrailingSlash(value: string): string {
 }
 
 function readSkillTemplate(): string {
-  const paths = [
-    join(process.cwd(), 'open/api/v1/SKILL.md'),
-    join(process.cwd(), 'dist/api/v1/SKILL.md'),
-  ];
-
-  for (const path of paths) {
-    try {
-      return readFileSync(path, 'utf8');
-    } catch {
-      // Try the next candidate. The source path exists in development, while
-      // the dist asset path exists in production Docker images.
-    }
-  }
-
-  return readFileSync(paths[0], 'utf8');
+  return readFileSync(join(__dirname, 'templates/SKILL.md'), 'utf8');
 }
 
 @Controller('open/api/v1')

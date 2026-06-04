@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
-export class AddOpenResourceTagRequestDto {
+export class OpenAddResourceTagRequestDto {
   @ApiProperty({
     description: 'Tag name to add to the resource',
     example: 'project',

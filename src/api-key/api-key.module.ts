@@ -8,6 +8,7 @@ import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { UserModule } from 'omniboxd/user/user.module';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
+import { OpenAPIQuotaModule } from 'omniboxd/open-api/open-api-quota.module';
 
 @Module({
   providers: [APIKeyService],
@@ -18,6 +19,7 @@ import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.modu
     PermissionsModule,
     NamespacesModule,
     NamespacesQuotaModule,
+    OpenAPIQuotaModule,
     UserModule,
   ],
 })

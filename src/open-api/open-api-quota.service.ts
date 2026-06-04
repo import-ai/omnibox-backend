@@ -2,6 +2,8 @@ import { HttpStatus, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { NamespaceUsageDto } from 'omniboxd/namespaces/dto/namespace-usage.dto';
+import { OpenAPIRequestsQuotaDto } from 'omniboxd/open-api/open-api-quota.dto';
 import { createClient, RedisClientType } from 'redis';
 
 const ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -41,7 +43,7 @@ export class OpenAPIQuotaService implements OnModuleDestroy {
   async assertAndConsume(namespaceId: string): Promise<void> {
     const usage =
       await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
-    const limit = Math.floor(usage.openApiRequestsPer24h ?? 0);
+    const limit = this.getRequestsPer24hLimit(usage);
     if (limit <= 0) {
       return;
     }
@@ -63,6 +65,45 @@ export class OpenAPIQuotaService implements OnModuleDestroy {
       'OPEN_API_REQUESTS_PER_24H_EXCEEDED',
       HttpStatus.TOO_MANY_REQUESTS,
     );
+  }
+
+  async getQuotaStatus(
+    namespaceId: string,
+    namespaceUsage?: NamespaceUsageDto,
+  ): Promise<OpenAPIRequestsQuotaDto> {
+    const usage =
+      namespaceUsage ??
+      (await this.namespacesQuotaService.getNamespaceUsage(namespaceId));
+    const limit = this.getRequestsPer24hLimit(usage);
+    if (limit <= 0) {
+      return {
+        limit: 0,
+        used: 0,
+        remaining: null,
+        resetAt: null,
+      };
+    }
+
+    const client = await this.getRedisClient();
+    const key = `open-api-requests-per-24h:${namespaceId}`;
+    const [rawUsed, ttl] = await Promise.all([
+      client.get(key),
+      client.pTTL(key),
+    ]);
+    const used = Math.max(0, Number(rawUsed ?? 0) || 0);
+    const remaining = Math.max(0, limit - used);
+    const resetAt = ttl > 0 ? new Date(Date.now() + ttl) : null;
+
+    return {
+      limit,
+      used,
+      remaining,
+      resetAt,
+    };
+  }
+
+  private getRequestsPer24hLimit(usage: NamespaceUsageDto): number {
+    return Math.floor(usage.openApiRequestsPer24h ?? 0);
   }
 
   private async getRedisClient(): Promise<RedisClientType> {

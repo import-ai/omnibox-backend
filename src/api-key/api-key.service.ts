@@ -27,6 +27,7 @@ import { Applications } from 'omniboxd/applications/applications.entity';
 import { UserService } from 'omniboxd/user/user.service';
 import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
 import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
+import { OpenAPIQuotaService } from 'omniboxd/open-api/open-api-quota.service';
 
 @Injectable()
 export class APIKeyService {
@@ -38,6 +39,7 @@ export class APIKeyService {
     private readonly permissionsService: PermissionsService,
     private readonly namespacesService: NamespacesService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    private readonly openAPIQuotaService: OpenAPIQuotaService,
     private readonly userService: UserService,
     private readonly i18n: I18nService,
   ) {}
@@ -333,9 +335,13 @@ export class APIKeyService {
     // Get the user
     const user = await this.userService.find(apiKey.userId);
 
-    // Get the namespace usage
+    // Get the namespace usage and Open API quota status
     const namespaceUsage = await this.namespacesQuotaService.getNamespaceUsage(
       apiKey.namespaceId,
+    );
+    const openApiRequestsQuota = await this.openAPIQuotaService.getQuotaStatus(
+      apiKey.namespaceId,
+      namespaceUsage,
     );
 
     // Convert entities to DTOs and return
@@ -348,6 +354,7 @@ export class APIKeyService {
       namespace: namespaceDto,
       user: userDto,
       namespaceUsage: namespaceUsage,
+      openApiRequestsQuota,
     };
   }
 }

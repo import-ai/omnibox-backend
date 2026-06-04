@@ -77,6 +77,73 @@ describe('OpenAPIQuotaService', () => {
     });
   });
 
+  it('returns unlimited quota status without redis when quota is disabled', async () => {
+    const service = createService({}, 0);
+
+    await expect(service.getQuotaStatus('namespace-id')).resolves.toEqual({
+      limit: 0,
+      used: 0,
+      remaining: null,
+      resetAt: null,
+    });
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it('returns quota status from redis without consuming quota', async () => {
+    const redisClient = {
+      isOpen: false,
+      connect: jest.fn(),
+      get: jest.fn().mockResolvedValue('3'),
+      pTTL: jest.fn().mockResolvedValue(60_000),
+    };
+    (createClient as jest.Mock).mockReturnValue(redisClient);
+    const service = createService(
+      {
+        OBB_REDIS_URL: 'redis://localhost:6379',
+      },
+      10,
+    );
+
+    const before = Date.now();
+    const status = await service.getQuotaStatus('namespace-id');
+    const after = Date.now();
+
+    expect(status.limit).toBe(10);
+    expect(status.used).toBe(3);
+    expect(status.remaining).toBe(7);
+    expect(status.resetAt?.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+    expect(status.resetAt?.getTime()).toBeLessThanOrEqual(after + 60_000);
+    expect(redisClient.get).toHaveBeenCalledWith(
+      'open-api-requests-per-24h:namespace-id',
+    );
+    expect(redisClient.pTTL).toHaveBeenCalledWith(
+      'open-api-requests-per-24h:namespace-id',
+    );
+  });
+
+  it('returns full remaining quota when redis key does not exist', async () => {
+    const redisClient = {
+      isOpen: false,
+      connect: jest.fn(),
+      get: jest.fn().mockResolvedValue(null),
+      pTTL: jest.fn().mockResolvedValue(-2),
+    };
+    (createClient as jest.Mock).mockReturnValue(redisClient);
+    const service = createService(
+      {
+        OBB_REDIS_URL: 'redis://localhost:6379',
+      },
+      10,
+    );
+
+    await expect(service.getQuotaStatus('namespace-id')).resolves.toEqual({
+      limit: 10,
+      used: 0,
+      remaining: 10,
+      resetAt: null,
+    });
+  });
+
   it('rejects requests when redis quota script returns denied', async () => {
     const redisClient = {
       isOpen: false,

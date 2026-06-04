@@ -118,7 +118,10 @@ export class OpenResourcesController {
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Content required' })
+  @ApiResponse({
+    status: 400,
+    description: 'Content required for documents or name required for folders',
+  })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async create(
@@ -127,7 +130,9 @@ export class OpenResourcesController {
     @Body() data: OpenCreateResourceDto,
     @I18n() i18n: I18nContext,
   ) {
-    if (!data.content) {
+    const resourceType = data.resource_type ?? ResourceType.DOC;
+
+    if (resourceType === ResourceType.DOC && !data.content) {
       const message = i18n.t('resource.errors.contentRequired');
       throw new AppException(
         message,
@@ -136,10 +141,27 @@ export class OpenResourcesController {
       );
     }
 
+    if (resourceType === ResourceType.FOLDER && !data.name?.trim()) {
+      const message = i18n.t('resource.errors.nameRequired');
+      throw new AppException(message, 'NAME_REQUIRED', HttpStatus.BAD_REQUEST);
+    }
+
+    if (resourceType === ResourceType.FOLDER && data.content !== undefined) {
+      const message = i18n.t('resource.errors.contentNotAllowedForFolder');
+      throw new AppException(
+        message,
+        'CONTENT_NOT_ALLOWED_FOR_FOLDER',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     // Optionally parse hashtags from content
     let tagIds: string[] | undefined = data.tag_ids;
-    if (!data.skip_parsing_tags_from_content) {
-      const hashtagNames = parseHashtags(data.content);
+    if (
+      resourceType === ResourceType.DOC &&
+      !data.skip_parsing_tags_from_content
+    ) {
+      const hashtagNames = parseHashtags(data.content || '');
       // If hashtags found, get or create tags and merge with provided tag_ids
       if (hashtagNames.length > 0) {
         const hashtagIds = await this.tagService.getOrCreateTagsByNames(
@@ -163,7 +185,7 @@ export class OpenResourcesController {
       content: data.content,
       tag_ids: tagIds,
       attrs: data.attrs || {},
-      resourceType: ResourceType.DOC,
+      resourceType,
       parentId,
     } as CreateResourceDto;
 
@@ -173,13 +195,16 @@ export class OpenResourcesController {
       createResourceDto,
     );
 
-    if (!isEmpty(newResource.content?.trim())) {
+    if (
+      resourceType === ResourceType.DOC &&
+      !isEmpty(newResource.content?.trim())
+    ) {
       if (isEmpty(newResource.name?.trim())) {
         await this.wizardTaskService.emitGenerateTitleTask(
           userId,
           apiKey.namespaceId,
           { resource_id: newResource.id },
-          { content: data.content },
+          { content: data.content || '' },
         );
       }
       // Skip extract tags task if user requested or we already have tags

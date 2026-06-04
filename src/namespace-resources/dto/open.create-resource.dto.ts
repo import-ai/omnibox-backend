@@ -3,12 +3,13 @@ import {
   IsString,
   IsObject,
   IsOptional,
-  IsNotEmpty,
   IsBoolean,
+  IsIn,
   MaxLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { ApiProperty } from '@nestjs/swagger';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 export class OpenCreateResourceDto {
   @ApiProperty({
@@ -23,6 +24,19 @@ export class OpenCreateResourceDto {
   })
   @IsOptional()
   name?: string;
+
+  @ApiProperty({
+    description:
+      'Resource type. Defaults to doc. Folder resources do not require content but must include name.',
+    enum: [ResourceType.DOC, ResourceType.FOLDER],
+    example: ResourceType.DOC,
+    required: false,
+  })
+  @IsIn([ResourceType.DOC, ResourceType.FOLDER], {
+    message: i18nValidationMessage('validation.errors.resourceType.isEnum'),
+  })
+  @IsOptional()
+  resource_type?: ResourceType.DOC | ResourceType.FOLDER;
 
   @ApiProperty({
     description:
@@ -50,16 +64,16 @@ export class OpenCreateResourceDto {
   tag_ids?: string[];
 
   @ApiProperty({
-    description: 'Content of the resource/document',
+    description:
+      'Content of the resource/document. Required for doc resources and optional for folder resources.',
     example: 'This is the content of my document. #tag1 #tag2',
+    required: false,
   })
   @IsString({
     message: i18nValidationMessage('validation.errors.content.isString'),
   })
-  @IsNotEmpty({
-    message: i18nValidationMessage('validation.errors.content.isNotEmpty'),
-  })
-  content: string;
+  @IsOptional()
+  content?: string;
 
   @ApiProperty({
     description: 'Additional attributes/metadata for the resource',

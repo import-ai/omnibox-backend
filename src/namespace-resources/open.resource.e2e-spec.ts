@@ -5,6 +5,7 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;
@@ -129,6 +130,57 @@ describe('OpenResourcesController (e2e)', () => {
       expect(response.body).toHaveProperty('id');
       expect(typeof response.body.id).toBe('string');
       expect(response.body).toHaveProperty('name');
+    });
+
+    it('should create a folder without content when name is provided', async () => {
+      const resourceData = {
+        name: 'Open API Folder',
+        resource_type: ResourceType.FOLDER,
+      };
+
+      const response = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send(resourceData)
+        .expect(201);
+
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.name).toBe(resourceData.name);
+
+      const resourceResponse = await client
+        .request()
+        .get(`/open/api/v1/resources/${response.body.id}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(resourceResponse.body).toMatchObject({
+        id: response.body.id,
+        name: resourceData.name,
+        resource_type: ResourceType.FOLDER,
+      });
+    });
+
+    it('should reject folder creation without name', async () => {
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({ resource_type: ResourceType.FOLDER })
+        .expect(400);
+    });
+
+    it('should reject folder creation with content', async () => {
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open API Folder With Content',
+          resource_type: ResourceType.FOLDER,
+          content: 'Folder content should not be accepted',
+        })
+        .expect(400);
     });
 
     it('create_resource_with_tags', async () => {

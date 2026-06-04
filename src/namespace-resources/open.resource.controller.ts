@@ -27,7 +27,9 @@ import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/o
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { OpenAddResourceTagRequestDto } from 'omniboxd/namespace-resources/dto/open-add-resource-tag-request.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { OpenGetResourceQueryDto } from 'omniboxd/namespace-resources/dto/open-get-resource-query.dto';
 import { OpenListResourcesResponseDto } from 'omniboxd/namespace-resources/dto/open-list-resources-response.dto';
+import { OpenResourceDto } from 'omniboxd/namespace-resources/dto/open-resource.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -251,12 +253,12 @@ export class OpenResourcesController {
   @ApiOperation({
     summary: 'Get a resource',
     description:
-      'Retrieves a single resource by ID. The resource must be within the API key root scope and visible to the API key user.',
+      'Retrieves a single resource by ID. The resource must be within the API key root scope and visible to the API key user. Resource content is returned as a paginated object using content_offset and content_limit.',
   })
   @ApiResponse({
     status: 200,
     description: 'Resource retrieved successfully',
-    type: ResourceDto,
+    type: OpenResourceDto,
   })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
@@ -265,12 +267,17 @@ export class OpenResourcesController {
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
     @Param('resourceId') resourceId: string,
-  ): Promise<ResourceDto> {
+    @Query() query: OpenGetResourceQueryDto,
+  ): Promise<OpenResourceDto> {
     return await this.openResourcesService.getResource(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
       userId,
       resourceId,
+      {
+        offset: query.content_offset,
+        limit: query.content_limit,
+      },
     );
   }
 

@@ -4,6 +4,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
 import { OpenListResourcesResponseDto } from 'omniboxd/namespace-resources/dto/open-list-resources-response.dto';
+import { OpenResourceDto } from 'omniboxd/namespace-resources/dto/open-resource.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
@@ -181,18 +182,20 @@ export class OpenResourcesService {
     rootResourceId: string,
     userId: string,
     resourceId: string,
-  ): Promise<ResourceDto> {
+    contentPagination: { offset: number; limit: number },
+  ): Promise<OpenResourceDto> {
     await this.resolveResourceId(
       namespaceId,
       rootResourceId,
       resourceId,
       userId,
     );
-    return await this.namespaceResourcesService.getResource({
+    const resource = await this.namespaceResourcesService.getResource({
       namespaceId,
       resourceId,
       userId,
     });
+    return OpenResourceDto.fromResourceDto(resource, contentPagination);
   }
 
   async updateResource(

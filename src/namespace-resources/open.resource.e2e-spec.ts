@@ -410,8 +410,97 @@ describe('OpenResourcesController (e2e)', () => {
       expect(getResponse.body).toMatchObject({
         id: resourceId,
         name: 'Open Lifecycle Read',
-        content: 'Content for open lifecycle read',
+        content: {
+          text: 'Content for open lifecycle read',
+          pagination: {
+            offset: 0,
+            limit: 100,
+            total_lines: 1,
+          },
+        },
       });
+    });
+
+    it('should paginate resource content by line', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Paginated Content',
+          content: ['line 1', 'line 2', 'line 3', 'line 4'].join('\n'),
+        })
+        .expect(201);
+
+      const response = await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_offset=1&content_limit=2`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(response.body.content).toEqual({
+        text: ['line 2', 'line 3'].join('\n'),
+        pagination: {
+          offset: 1,
+          limit: 2,
+          total_lines: 4,
+        },
+      });
+
+      const outOfRangeResponse = await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_offset=10&content_limit=2`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(outOfRangeResponse.body.content).toEqual({
+        text: '',
+        pagination: {
+          offset: 10,
+          limit: 2,
+          total_lines: 4,
+        },
+      });
+    });
+
+    it('should reject invalid resource content pagination query', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Invalid Pagination Query',
+          content: 'line 1',
+        })
+        .expect(201);
+
+      await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_offset=-1`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(400);
+
+      await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_limit=0`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(400);
+
+      await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_limit=1001`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(400);
     });
 
     it('should return total before limit for visible child resources', async () => {

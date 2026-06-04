@@ -18,24 +18,20 @@ export class OpenResourceContentPaginationDto {
   total_lines: number;
 }
 
-export class OpenResourceContentDto {
-  @ApiProperty({ description: 'Current page of resource content.' })
-  text: string;
-
-  @ApiProperty({
-    description: 'Pagination metadata for the resource content.',
-    type: () => OpenResourceContentPaginationDto,
-  })
-  pagination: OpenResourceContentPaginationDto;
-}
-
 export class OpenResourceDto {
   id: string;
   namespace_id: string;
   parent_id: string | null;
   name: string;
   resource_type: ResourceType;
-  content: OpenResourceContentDto;
+  content: string;
+
+  @ApiProperty({
+    description: 'Pagination metadata for the resource content.',
+    type: () => OpenResourceContentPaginationDto,
+  })
+  content_pagenation: OpenResourceContentPaginationDto;
+
   tags: TagDto[];
   attrs: Record<string, any>;
   global_permission: ResourcePermission | null;
@@ -61,13 +57,11 @@ export class OpenResourceDto {
     dto.parent_id = resource.parent_id;
     dto.name = resource.name;
     dto.resource_type = resource.resource_type;
-    dto.content = {
-      text,
-      pagination: {
-        offset: contentPagination.offset,
-        limit: contentPagination.limit,
-        total_lines: totalLines,
-      },
+    dto.content = text;
+    dto.content_pagenation = {
+      offset: contentPagination.offset,
+      limit: contentPagination.limit,
+      total_lines: totalLines,
     };
     dto.tags = resource.tags;
     dto.attrs = resource.attrs;

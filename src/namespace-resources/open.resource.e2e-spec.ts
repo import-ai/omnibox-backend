@@ -410,13 +410,11 @@ describe('OpenResourcesController (e2e)', () => {
       expect(getResponse.body).toMatchObject({
         id: resourceId,
         name: 'Open Lifecycle Read',
-        content: {
-          text: 'Content for open lifecycle read',
-          pagination: {
-            offset: 0,
-            limit: 100,
-            total_lines: 1,
-          },
+        content: 'Content for open lifecycle read',
+        content_pagenation: {
+          offset: 0,
+          limit: 100,
+          total_lines: 1,
         },
       });
     });
@@ -440,9 +438,9 @@ describe('OpenResourcesController (e2e)', () => {
         .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
         .expect(200);
 
-      expect(response.body.content).toEqual({
-        text: ['line 2', 'line 3'].join('\n'),
-        pagination: {
+      expect(response.body).toMatchObject({
+        content: ['line 2', 'line 3'].join('\n'),
+        content_pagenation: {
           offset: 1,
           limit: 2,
           total_lines: 4,
@@ -457,9 +455,9 @@ describe('OpenResourcesController (e2e)', () => {
         .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
         .expect(200);
 
-      expect(outOfRangeResponse.body.content).toEqual({
-        text: '',
-        pagination: {
+      expect(outOfRangeResponse.body).toMatchObject({
+        content: '',
+        content_pagenation: {
           offset: 10,
           limit: 2,
           total_lines: 4,

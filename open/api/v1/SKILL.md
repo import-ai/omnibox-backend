@@ -1,8 +1,8 @@
 # OmniBox Open API v1 Skill
 
-Use this skill when integrating external tools, plugins, or agents with OmniBox through the public Open API.
+Use this skill to call OmniBox Open API on behalf of a user. The API lets agents create, read, update, delete, tag, search, collect, upload, and ask AI over resources inside the API key's authorized scope.
 
-## Base URL and documentation
+## Endpoint base
 
 Open API base URL:
 
@@ -10,108 +10,265 @@ Open API base URL:
 ${OBB_OPEN_API_BASE_URL}/v1
 ```
 
-Swagger UI is available at `${OBB_OPEN_API_BASE_URL}/docs`. In backend Swagger generation, routes may be shown relative to `/open/api`, for example `/v1/resources`.
+Swagger/OpenAPI docs:
+
+```text
+${OBB_OPEN_API_BASE_URL}/docs
+```
+
+Use the base URL above for all requests in this skill. Paths below are relative to that base, for example `GET /resources` means `GET ${OBB_OPEN_API_BASE_URL}/v1/resources`.
 
 ## Authentication
 
-All Open API v1 endpoints require an API key unless explicitly documented otherwise.
+Every request needs an API key:
 
 ```http
 Authorization: Bearer <api-key>
 ```
 
-API keys are scoped to:
+Do not put API keys in logs, chat messages, documents, or URLs. If a request fails with `401`, ask the user for a valid API key or have them create one in OmniBox.
+
+## Scope and safety rules
+
+An API key is scoped to:
 
 - one user
 - one namespace / workspace
 - one root resource
-- an explicit permission matrix
+- a permission matrix
 
-Resource and search endpoints must stay within the API key root resource boundary. Do not expose or assume access to resources outside that root.
+Important rules for agents:
 
-## Permission matrix
+- Never assume access to the full namespace. Only operate under the API key root resource.
+- If `parent_id` is omitted when creating/listing resources, the API key root resource is used.
+- Only use `parent_id` values returned by this Open API or explicitly provided by the user.
+- For `403`, explain that the API key lacks permission or the target is outside scope.
+- For `404`, treat the resource as not visible within this API key scope; do not guess other IDs.
+- Prefer small paginated reads. Use `limit` and `offset` for list/search calls.
 
-| Target      | Actions                              | Typical endpoints                                                                                                |
-| ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `resources` | `create`, `read`, `update`, `delete` | `/v1/resources`, `/v1/resources/{id}`, `/v1/resources/{id}/tags`, `/v1/resources/upload`, `/v1/wizard/collect/*` |
-| `tags`      | `create`, `read`                     | `/v1/tags`                                                                                                       |
-| `search`    | `read`                               | `/v1/search`                                                                                                     |
-| `chat`      | `create`                             | `/v1/wizard/ask`                                                                                                 |
+## Permissions
 
-When adding endpoints, reuse an existing target/action if the semantics match. Add new permission targets only when the existing matrix cannot express the capability safely.
+| Target | Actions | Used for |
+| --- | --- | --- |
+| `resources` | `create`, `read`, `update`, `delete` | resources, folders, files, tag association, web collection |
+| `tags` | `create`, `read` | tag lifecycle and tag lookup |
+| `search` | `read` | search resources under the API key root |
+| `chat` | `create` | ask AI wizard |
 
-## Current capability scope
+When an endpoint returns `403`, inspect the needed permission in the endpoint list below.
 
-### API keys
+## Common workflows
 
-- `GET /v1/api-keys/info`: inspect the current API key and its scope.
-- `DELETE /v1/api-keys`: revoke the current API key and related applications.
+### Inspect the current API key
 
-API key creation and broad management remain in the authenticated product API, not the public Open API.
+Call this first when you need to understand the key's namespace, root resource, and permissions.
 
-### Resources
+```http
+GET /api-keys/info
+```
 
-- `GET /v1/resources`: list resources under the API key root.
-- `POST /v1/resources`: create a document or folder resource. For `resource_type=folder`, provide `name` and do not send `content`.
-- `GET /v1/resources/{resourceId}`: read a resource under the API key root.
-- `PATCH /v1/resources/{resourceId}`: update a resource under the API key root.
-- `POST /v1/resources/{resourceId}/tags`: add a tag to a resource under the API key root by `tag_name`.
-- `DELETE /v1/resources/{resourceId}/tags/{tagId}`: remove a tag from a resource under the API key root by `tagId`.
-- `DELETE /v1/resources/{resourceId}`: delete a resource under the API key root.
-- `POST /v1/resources/upload`: upload a file as a resource.
+### List resources
 
-Use `parent_id` only for resources reachable under the API key root. If `parent_id` is omitted, use the API key root. Resource tag add/remove operations require `resources:update`; tag lifecycle creation/listing uses the `tags` permission target. Adding a resource tag creates the tag in the API key namespace when the `tag_name` does not already exist.
+```http
+GET /resources?limit=20&offset=0&summary=true
+GET /resources?parent_id=<resourceId>&limit=20&offset=0
+```
 
-### Web collection and AI wizard
+Requires `resources:read`.
 
-- `POST /v1/wizard/collect/gzip`: collect web content from uploaded gzip-compressed HTML.
-- `POST /v1/wizard/collect/url`: create a URL collection task.
-- `POST /v1/wizard/ask`: ask the AI wizard with Open API context.
+### Read one resource and its tags
 
-Collection endpoints require `resources:create`. Ask requires `chat:create`.
+```http
+GET /resources/<resourceId>
+```
 
-### Tags
+Requires `resources:read`. The response includes `tags`, so use this endpoint to see the tags on a specific resource.
 
-- `POST /v1/tags`: create a tag in the API key namespace.
-- `GET /v1/tags`: list or query tags by `name`, `id`, or `ids`.
+### Create a document resource
 
-### Search
+```http
+POST /resources
+Content-Type: application/json
 
-- `GET /v1/search`: search resources visible within the API key root.
+{
+  "name": "API note",
+  "resource_type": "doc",
+  "content": "Saved from Open API",
+  "parent_id": "optional-parent-resource-id",
+  "tag_ids": ["optional-tag-id"]
+}
+```
 
-## Error and compatibility rules
+Requires `resources:create`.
 
-- Keep Open API v1 routes, request fields, response shapes, and permission semantics backward compatible.
-- Do not rename existing fields or change successful response shapes without introducing a new version.
-- Use the existing `AppException` + i18n error pattern for business errors.
-- Return standard HTTP status codes:
-  - `400`: invalid request or missing required content
-  - `401`: missing or invalid API key
-  - `403`: insufficient permission or out-of-scope access
-  - `404`: resource not found within the API key scope
-- Never leak internal IDs or resources outside the API key namespace/root boundary.
+Notes:
 
-## Rate limits and safety
+- `resource_type` defaults to `doc`.
+- Document resources require non-empty `content`.
+- If `parent_id` is omitted, the document is created under the API key root resource.
 
-No dedicated Open API rate limiter is defined in this module yet. Until one is added, design new endpoints as if they may be called by automation:
+### Create a folder resource
 
-- validate and bound pagination (`limit`, `offset`)
-- avoid unbounded tree walks or full namespace scans
-- avoid large synchronous AI or file-processing work when a task-based flow exists
-- prefer async task creation for slow operations
+```http
+POST /resources
+Content-Type: application/json
 
-## Implementation checklist for new Open API endpoints
+{
+  "name": "Folder name",
+  "resource_type": "folder",
+  "parent_id": "optional-parent-resource-id"
+}
+```
 
-1. Place public routes under `open/api/v1/*`.
-2. Register controllers in `OpenAPIModule` so `/open/api/docs` includes them.
-3. Protect routes with `@APIKeyAuth()` and the minimal permission target/action.
-4. Enforce namespace and root resource scope using API key attrs.
-5. Add Swagger decorators (`@ApiTags`, `@ApiSecurity`, `@ApiOperation`, `@ApiResponse`, `@ApiBody` when needed).
-6. Add or update DTOs with `RequestDto` / `ResponseDto` suffixes where applicable.
-7. Add targeted unit/e2e coverage beside the feature.
-8. Keep `/open/api/docs` free of internal `/api/v1` and `/internal/api/v1` routes.
+Requires `resources:create`.
 
-## Example requests
+Rules:
+
+- Folder resources require non-empty `name`.
+- Do not send `content` for folders.
+- If `parent_id` is omitted, the folder is created under the API key root resource.
+
+### Update a resource
+
+```http
+PATCH /resources/<resourceId>
+Content-Type: application/json
+
+{
+  "name": "Updated name",
+  "content": "Updated content"
+}
+```
+
+Requires `resources:update`.
+
+### Delete a resource
+
+```http
+DELETE /resources/<resourceId>
+```
+
+Requires `resources:delete`.
+
+### Upload a file as a resource
+
+```http
+POST /resources/upload
+Content-Type: multipart/form-data
+
+file=<binary-file>
+parsed_content=<optional-text-content>
+```
+
+Requires `resources:create`.
+
+### Add a tag to a resource
+
+```http
+POST /resources/<resourceId>/tags
+Content-Type: application/json
+
+{
+  "tag_name": "project"
+}
+```
+
+Requires `resources:update`. Existing resource tags are preserved. If the tag name does not exist in the namespace, the API creates it.
+
+### Remove a tag from a resource
+
+```http
+DELETE /resources/<resourceId>/tags/<tagId>
+```
+
+Requires `resources:update`.
+
+### Create or query tags
+
+```http
+POST /tags
+Content-Type: application/json
+
+{
+  "name": "project"
+}
+```
+
+Requires `tags:create`.
+
+```http
+GET /tags?name=project&limit=20&offset=0
+GET /tags?ids=<tagId1>,<tagId2>
+GET /tags?id=<tagId>
+```
+
+Requires `tags:read`.
+
+### Search resources
+
+```http
+GET /search?query=<query>&limit=20&offset=0
+```
+
+Requires `search:read`. Search is limited to resources visible within the API key root.
+
+### Collect web content
+
+```http
+POST /wizard/collect/url
+Content-Type: application/json
+
+{
+  "url": "https://example.com/article",
+  "parent_id": "optional-parent-resource-id"
+}
+```
+
+```http
+POST /wizard/collect/gzip
+Content-Type: application/json
+
+{
+  "url": "https://example.com/article",
+  "gzip": "base64-gzip-html",
+  "parent_id": "optional-parent-resource-id"
+}
+```
+
+Requires `resources:create`. These endpoints create asynchronous collection tasks when needed.
+
+### Ask AI wizard
+
+```http
+POST /wizard/ask
+Content-Type: application/json
+
+{
+  "message": "Question for OmniBox AI",
+  "resource_id": "optional-resource-id"
+}
+```
+
+Requires `chat:create`.
+
+## Response handling
+
+Common status codes:
+
+- `200` / `201`: success
+- `400`: invalid request body, missing required field, or unsupported field combination
+- `401`: missing or invalid API key
+- `403`: insufficient permission or target outside API key scope
+- `404`: resource not found within API key scope
+
+When you receive an error:
+
+1. Read the response body for an application error code/message.
+2. Do not retry blindly on `400`, `401`, `403`, or `404`.
+3. For pagination or search, narrow the request before retrying.
+4. Ask the user before destructive actions such as `DELETE /resources/<resourceId>`.
+
+## Curl examples
 
 ```bash
 curl -H "Authorization: Bearer $OMNIBOX_API_KEY" \
@@ -130,12 +287,14 @@ curl -X POST \
 curl -X POST \
   -H "Authorization: Bearer $OMNIBOX_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"tag_name":"project"}' \
-  "${OBB_OPEN_API_BASE_URL}/v1/resources/<resourceId>/tags"
+  -d '{"name":"Folder name","resource_type":"folder"}' \
+  "${OBB_OPEN_API_BASE_URL}/v1/resources"
 ```
 
 ```bash
-curl -X DELETE \
+curl -X POST \
   -H "Authorization: Bearer $OMNIBOX_API_KEY" \
-  "${OBB_OPEN_API_BASE_URL}/v1/resources/<resourceId>/tags/<tagId>"
+  -H "Content-Type: application/json" \
+  -d '{"tag_name":"project"}' \
+  "${OBB_OPEN_API_BASE_URL}/v1/resources/<resourceId>/tags"
 ```

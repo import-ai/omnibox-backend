@@ -2,7 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
-import { OpenCreateResourceDto } from 'omniboxd/namespace-resources/dto/open.create-resource.dto';
+import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
@@ -64,7 +64,7 @@ export class OpenResourcesService {
     namespaceId: string,
     rootResourceId: string,
     userId: string,
-    data: OpenCreateResourceDto,
+    data: OpenCreateResourceRequestDto,
   ): Promise<{ id: string; name: string }> {
     const resourceType = data.resource_type ?? ResourceType.DOC;
 

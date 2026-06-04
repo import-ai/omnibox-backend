@@ -11,7 +11,7 @@ import { i18nValidationMessage } from 'nestjs-i18n';
 import { ApiProperty } from '@nestjs/swagger';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
-export class OpenCreateResourceDto {
+export class OpenCreateResourceRequestDto {
   @ApiProperty({
     description: 'Resource name/title',
     example: 'My Document Title',

@@ -12,16 +12,16 @@ import {
   APIKey as APIKeyEntity,
 } from 'omniboxd/api-key/api-key.entity';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
-import { CreateTagDto } from 'omniboxd/tag/dto/create-tag.dto';
+import { CreateTagRequestDto } from 'omniboxd/tag/dto/create-tag-request.dto';
 import { OpenListTagsRequestDto } from 'omniboxd/tag/dto/open-list-tags-request.dto';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
-import { TagService } from 'omniboxd/tag/tag.service';
+import { OpenTagService } from 'omniboxd/tag/open.tag.service';
 
 @ApiTags('Tags')
 @ApiSecurity('api-key')
 @Controller('open/api/v1/tags')
 export class OpenTagController {
-  constructor(private readonly tagService: TagService) {}
+  constructor(private readonly openTagService: OpenTagService) {}
 
   @Post()
   @APIKeyAuth({
@@ -33,7 +33,7 @@ export class OpenTagController {
     ],
   })
   @ApiOperation({ summary: 'Create a tag in the API key namespace' })
-  @ApiBody({ type: CreateTagDto })
+  @ApiBody({ type: CreateTagRequestDto })
   @ApiResponse({
     status: 201,
     description: 'Tag created successfully',
@@ -43,10 +43,12 @@ export class OpenTagController {
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async create(
     @APIKey() apiKey: APIKeyEntity,
-    @Body() createTagDto: CreateTagDto,
+    @Body() createTagRequestDto: CreateTagRequestDto,
   ): Promise<TagDto> {
-    const tag = await this.tagService.create(apiKey.namespaceId, createTagDto);
-    return TagDto.fromEntity(tag);
+    return await this.openTagService.create(
+      apiKey.namespaceId,
+      createTagRequestDto,
+    );
   }
 
   @Get()
@@ -70,16 +72,6 @@ export class OpenTagController {
     @APIKey() apiKey: APIKeyEntity,
     @Query() query: OpenListTagsRequestDto,
   ): Promise<TagDto[]> {
-    const ids = query.ids ?? query.id;
-    if (ids && ids.length > 0) {
-      const tags = await this.tagService.findByIds(apiKey.namespaceId, ids);
-      return tags.map((tag) => TagDto.fromEntity(tag));
-    }
-
-    const tags = await this.tagService.findAll(apiKey.namespaceId, query.name, {
-      offset: query.offset,
-      limit: query.limit,
-    });
-    return tags.map((tag) => TagDto.fromEntity(tag));
+    return await this.openTagService.findAll(apiKey.namespaceId, query);
   }
 }

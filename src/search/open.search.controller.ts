@@ -13,13 +13,13 @@ import {
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import { OpenSearchRequestDto } from 'omniboxd/search/dto/open-search-request.dto';
 import { IndexedResourceDto } from 'omniboxd/search/dto/indexed-doc.dto';
-import { SearchService } from 'omniboxd/search/search.service';
+import { OpenSearchService } from 'omniboxd/search/open.search.service';
 
 @ApiTags('Search')
 @ApiSecurity('api-key')
 @Controller('open/api/v1/search')
 export class OpenSearchController {
-  constructor(private readonly searchService: SearchService) {}
+  constructor(private readonly openSearchService: OpenSearchService) {}
 
   @Get()
   @APIKeyAuth({
@@ -42,7 +42,7 @@ export class OpenSearchController {
     @APIKey() apiKey: APIKeyEntity,
     @Query() query: OpenSearchRequestDto,
   ): Promise<IndexedResourceDto[]> {
-    return await this.searchService.openSearch(apiKey, query.query, {
+    return await this.openSearchService.search(apiKey, query.query, {
       offset: query.offset,
       limit: query.limit,
     });

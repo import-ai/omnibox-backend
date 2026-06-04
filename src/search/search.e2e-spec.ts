@@ -11,6 +11,7 @@ import {
 } from './search.controller';
 import { OpenSearchController } from 'omniboxd/search/open.search.controller';
 import { SearchService } from './search.service';
+import { OpenSearchService } from 'omniboxd/search/open.search.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
@@ -105,6 +106,7 @@ describe('SearchController (e2e)', () => {
       ],
       providers: [
         SearchService,
+        OpenSearchService,
         WizardAPIService,
         {
           provide: PermissionsService,

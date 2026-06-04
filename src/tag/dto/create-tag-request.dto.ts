@@ -2,7 +2,7 @@ import { IsString, MaxLength } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { ApiProperty } from '@nestjs/swagger';
 
-export class CreateTagDto {
+export class CreateTagRequestDto {
   @ApiProperty({
     description: 'Tag name',
     example: 'project',

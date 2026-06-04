@@ -1,5 +1,5 @@
 import { TagService } from 'omniboxd/tag/tag.service';
-import { CreateTagDto } from 'omniboxd/tag/dto/create-tag.dto';
+import { CreateTagRequestDto } from 'omniboxd/tag/dto/create-tag-request.dto';
 import { Get, Body, Param, Query, Post, Controller } from '@nestjs/common';
 
 @Controller('api/v1/namespaces/:namespaceId/tag')
@@ -9,9 +9,9 @@ export class TagController {
   @Post()
   async create(
     @Param('namespaceId') namespaceId: string,
-    @Body() createTagDto: CreateTagDto,
+    @Body() createTagRequestDto: CreateTagRequestDto,
   ) {
-    return await this.tagService.create(namespaceId, createTagDto);
+    return await this.tagService.create(namespaceId, createTagRequestDto);
   }
 
   @Get()

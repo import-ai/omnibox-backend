@@ -22,9 +22,9 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { OpenCreateResourceDto } from 'omniboxd/namespace-resources/dto/open.create-resource.dto';
+import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { OpenResourceTagDto } from 'omniboxd/namespace-resources/dto/open-resource-tags.dto';
+import { AddOpenResourceTagRequestDto } from 'omniboxd/namespace-resources/dto/add-open-resource-tag-request.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
 import {
@@ -94,7 +94,7 @@ export class OpenResourcesController {
   @ApiOperation({ summary: 'Create a new resource/document' })
   @ApiBody({
     description: 'Resource creation request with content and metadata',
-    type: OpenCreateResourceDto,
+    type: OpenCreateResourceRequestDto,
   })
   @ApiResponse({
     status: 201,
@@ -115,7 +115,7 @@ export class OpenResourcesController {
   async create(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
-    @Body() data: OpenCreateResourceDto,
+    @Body() data: OpenCreateResourceRequestDto,
   ): Promise<{ id: string; name: string }> {
     return await this.openResourcesService.createResource(
       apiKey.namespaceId,
@@ -267,7 +267,7 @@ export class OpenResourcesController {
   @ApiBody({
     description:
       'Tag name to add to the resource. Existing tags are preserved.',
-    type: OpenResourceTagDto,
+    type: AddOpenResourceTagRequestDto,
   })
   @ApiResponse({
     status: 200,
@@ -281,7 +281,7 @@ export class OpenResourcesController {
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
     @Param('resourceId') resourceId: string,
-    @Body() data: OpenResourceTagDto,
+    @Body() data: AddOpenResourceTagRequestDto,
   ): Promise<ResourceDto> {
     return await this.openResourcesService.addResourceTag(
       apiKey.namespaceId,

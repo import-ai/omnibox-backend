@@ -2,7 +2,7 @@ import { Tag } from 'omniboxd/tag/tag.entity';
 import { EntityManager, In, Like, Repository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { CreateTagDto } from 'omniboxd/tag/dto/create-tag.dto';
+import { CreateTagRequestDto } from 'omniboxd/tag/dto/create-tag-request.dto';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 
 @Injectable()
@@ -12,14 +12,14 @@ export class TagService {
     private tagRepository: Repository<Tag>,
   ) {}
 
-  async create(namespaceId: string, createTagDto: CreateTagDto) {
-    const oldTag = await this.findByName(namespaceId, createTagDto.name);
+  async create(namespaceId: string, createTagRequestDto: CreateTagRequestDto) {
+    const oldTag = await this.findByName(namespaceId, createTagRequestDto.name);
     if (oldTag) {
       return oldTag;
     }
     const newTag = this.tagRepository.create({
       namespaceId,
-      name: createTagDto.name,
+      name: createTagRequestDto.name,
     });
     return await this.tagRepository.save(newTag);
   }

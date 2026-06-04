@@ -17,7 +17,6 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -31,7 +30,6 @@ import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { Message } from 'omniboxd/messages/entities/message.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { APIKey } from 'omniboxd/api-key/api-key.entity';
 
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
@@ -45,7 +43,6 @@ export class SearchService {
     private readonly wizardApiService: WizardAPIService,
     private readonly permissionsService: PermissionsService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
-    private readonly openResourcesService: OpenResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
@@ -150,96 +147,6 @@ export class SearchService {
         items.push(messageDto);
       }
     }
-    return items;
-  }
-
-  async openSearch(
-    apiKey: APIKey,
-    query: string,
-    options?: { offset?: number; limit?: number },
-  ): Promise<IndexedResourceDto[]> {
-    return await this.openResourceSearch(
-      apiKey.userId,
-      apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
-      query,
-      options,
-    );
-  }
-
-  async openResourceSearch(
-    userId: string,
-    namespaceId: string,
-    rootResourceId: string,
-    query: string,
-    options?: { offset?: number; limit?: number },
-  ): Promise<IndexedResourceDto[]> {
-    const limit = Math.min(Math.max(options?.limit ?? 100, 1), 100);
-    const offset = Math.max(options?.offset ?? 0, 0);
-
-    const searchRequest = new SearchRequestDto();
-    searchRequest.query = query;
-    searchRequest.namespaceId = namespaceId;
-    searchRequest.userId = userId;
-    searchRequest.type = IndexRecordType.CHUNK;
-    searchRequest.offset = offset;
-    searchRequest.limit = limit;
-    const result = await this.wizardApiService.search(searchRequest);
-    const resourceIds: string[] = [];
-    const seenResourceIds = new Set<string>();
-
-    for (const record of result?.records || []) {
-      if (record.type !== IndexRecordType.CHUNK || !record.chunk) {
-        continue;
-      }
-      if (seenResourceIds.has(record.chunk.resourceId)) {
-        continue;
-      }
-      seenResourceIds.add(record.chunk.resourceId);
-      resourceIds.push(record.chunk.resourceId);
-    }
-
-    const scopedResourceIds =
-      await this.openResourcesService.filterResourceScope(
-        namespaceId,
-        rootResourceId,
-        userId,
-        resourceIds,
-      );
-    const scopedResourceIdSet = new Set(scopedResourceIds);
-    const resourceMetaMap = await this.resourcesService.batchGetResourceMeta(
-      namespaceId,
-      scopedResourceIds,
-    );
-
-    const items: IndexedResourceDto[] = [];
-    seenResourceIds.clear();
-    for (const record of result?.records || []) {
-      if (record.type !== IndexRecordType.CHUNK || !record.chunk) {
-        continue;
-      }
-
-      const chunk = record.chunk;
-      if (
-        seenResourceIds.has(chunk.resourceId) ||
-        !scopedResourceIdSet.has(chunk.resourceId)
-      ) {
-        continue;
-      }
-
-      seenResourceIds.add(chunk.resourceId);
-      const resourceMeta = resourceMetaMap.get(chunk.resourceId);
-      items.push({
-        type: DocType.RESOURCE,
-        id: record.id,
-        resourceId: chunk.resourceId,
-        title: chunk.title || 'Untitled',
-        content: chunk.text || '',
-        attrs: resourceMeta?.attrs || {},
-        resourceType: resourceMeta?.resourceType || ResourceType.DOC,
-      });
-    }
-
     return items;
   }
 

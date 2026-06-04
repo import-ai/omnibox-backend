@@ -4,16 +4,11 @@ Use this skill when integrating external tools, plugins, or agents with OmniBox 
 
 ## Base URL and documentation
 
-Set `OBB_OPEN_API_BASE_URL` to the Open API base path or externally reachable Open API origin. It defaults to `/open/api`. Generated requests should use:
+Open API base URL:
 
 ```text
 ${OBB_OPEN_API_BASE_URL}/v1
 ```
-
-Examples:
-
-- Default/self-hosted same-origin: `OBB_OPEN_API_BASE_URL=/open/api`
-- Cloud service: `OBB_OPEN_API_BASE_URL=https://api.omnibox.pro`
 
 Swagger UI is available at `${OBB_OPEN_API_BASE_URL}/docs`. In backend Swagger generation, routes may be shown relative to `/open/api`, for example `/v1/resources`.
 

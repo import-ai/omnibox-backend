@@ -32,7 +32,11 @@ export class OpenTagController {
       },
     ],
   })
-  @ApiOperation({ summary: 'Create a tag in the API key namespace' })
+  @ApiOperation({
+    summary: 'Create a tag',
+    description:
+      'Creates a tag owned by the current API key namespace. If a matching tag already exists, the service returns the existing tag according to the tag service behavior.',
+  })
   @ApiBody({ type: CreateTagRequestDto })
   @ApiResponse({
     status: 201,
@@ -60,7 +64,11 @@ export class OpenTagController {
       },
     ],
   })
-  @ApiOperation({ summary: 'List or query tags in the API key namespace' })
+  @ApiOperation({
+    summary: 'List tags',
+    description:
+      'Lists tags from the current API key namespace. Optional filters support name search, comma-separated tag IDs, and offset/limit pagination.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Tags retrieved successfully',

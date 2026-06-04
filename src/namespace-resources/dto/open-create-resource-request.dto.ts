@@ -8,11 +8,11 @@ import {
   MaxLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 export class OpenCreateResourceRequestDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Resource name/title',
     example: 'My Document Title',
   })
@@ -25,7 +25,7 @@ export class OpenCreateResourceRequestDto {
   @IsOptional()
   name?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
       'Resource type. Defaults to doc. Folder resources do not require content but must include name.',
     enum: [ResourceType.DOC, ResourceType.FOLDER],
@@ -38,7 +38,7 @@ export class OpenCreateResourceRequestDto {
   @IsOptional()
   resource_type?: ResourceType.DOC | ResourceType.FOLDER;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
       'Parent resource ID under the API key root. Defaults to the API key root resource.',
     example: '550e8400-e29b-41d4-a716-446655440000',
@@ -50,7 +50,7 @@ export class OpenCreateResourceRequestDto {
   @IsOptional()
   parent_id?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Array of tag IDs to associate with the resource',
     type: [String],
     example: ['550e8400-e29b-41d4-a716-446655440000'],
@@ -63,7 +63,7 @@ export class OpenCreateResourceRequestDto {
   })
   tag_ids?: string[];
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
       'Content of the resource/document. Required for doc resources and optional for folder resources.',
     example: 'This is the content of my document. #tag1 #tag2',
@@ -75,7 +75,7 @@ export class OpenCreateResourceRequestDto {
   @IsOptional()
   content?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Additional attributes/metadata for the resource',
     type: 'object',
     additionalProperties: true,
@@ -85,7 +85,7 @@ export class OpenCreateResourceRequestDto {
   @IsOptional()
   attrs?: Record<string, any>;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Skip automatic parsing of hashtags from content',
     example: false,
   })

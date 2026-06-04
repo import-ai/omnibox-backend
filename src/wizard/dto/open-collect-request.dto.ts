@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class OpenCollectRequestDto {
   @ApiProperty({
@@ -27,8 +27,8 @@ export class OpenCollectRequestDto {
   })
   title: string;
 
-  @ApiProperty({
-    description: 'Parent resource ID (optional, defaults to root resource)',
+  @ApiPropertyOptional({
+    description: 'Parent resource ID. Defaults to the API key root resource',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsString({

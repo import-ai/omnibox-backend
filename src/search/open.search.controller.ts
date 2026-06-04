@@ -30,7 +30,11 @@ export class OpenSearchController {
       },
     ],
   })
-  @ApiOperation({ summary: 'Search resources under the API key root' })
+  @ApiOperation({
+    summary: 'Search resources',
+    description:
+      'Searches indexed resources visible within the API key root scope. Results are limited to resources that belong to the current API key namespace and root resource tree.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Resource search results retrieved successfully',

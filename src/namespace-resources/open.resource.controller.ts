@@ -34,6 +34,7 @@ import {
   ApiSecurity,
   ApiConsumes,
   ApiBody,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
@@ -52,7 +53,37 @@ export class OpenResourcesController {
       },
     ],
   })
-  @ApiOperation({ summary: 'List resources under the API key root' })
+  @ApiOperation({
+    summary: 'List child resources',
+    description:
+      'Lists direct child resources under the API key root resource, or under parent_id when provided. Use offset and limit for pagination. The summary query parameter defaults to false; set it to true to include content previews and first attachment metadata.',
+  })
+  @ApiQuery({
+    name: 'parent_id',
+    required: false,
+    description:
+      'Parent resource ID under the API key root. Defaults to the API key root resource.',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Maximum number of resources to return.',
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    type: Number,
+    description: 'Number of resources to skip before returning results.',
+  })
+  @ApiQuery({
+    name: 'summary',
+    required: false,
+    type: Boolean,
+    schema: { default: false },
+    description:
+      'Whether to include content previews and first attachment metadata. Defaults to false.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Resources listed successfully',
@@ -91,7 +122,11 @@ export class OpenResourcesController {
       },
     ],
   })
-  @ApiOperation({ summary: 'Create a new resource/document' })
+  @ApiOperation({
+    summary: 'Create a resource',
+    description:
+      'Creates a document or folder under the API key root resource. Documents require content; folders require name and must not include content. parent_id, when provided, must be inside the API key root scope.',
+  })
   @ApiBody({
     description: 'Resource creation request with content and metadata',
     type: OpenCreateResourceRequestDto,
@@ -136,7 +171,11 @@ export class OpenResourcesController {
     ],
   })
   @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Upload a file as a resource' })
+  @ApiOperation({
+    summary: 'Upload a file resource',
+    description:
+      'Uploads a file and creates a resource under the API key root resource. parsed_content can be supplied when the caller has already extracted text content.',
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     description: 'File upload with optional parsed content',
@@ -192,7 +231,11 @@ export class OpenResourcesController {
       },
     ],
   })
-  @ApiOperation({ summary: 'Get a resource under the API key root' })
+  @ApiOperation({
+    summary: 'Get a resource',
+    description:
+      'Retrieves a single resource by ID. The resource must be within the API key root scope and visible to the API key user.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Resource retrieved successfully',
@@ -224,7 +267,11 @@ export class OpenResourcesController {
       },
     ],
   })
-  @ApiOperation({ summary: 'Update a resource under the API key root' })
+  @ApiOperation({
+    summary: 'Update a resource',
+    description:
+      'Updates mutable fields for a resource within the API key root scope. Moving a resource with parentId is only allowed to another resource inside the same scoped tree.',
+  })
   @ApiBody({
     description: 'Resource fields to update',
     type: UpdateResourceDto,
@@ -263,7 +310,11 @@ export class OpenResourcesController {
       },
     ],
   })
-  @ApiOperation({ summary: 'Add tags to a resource under the API key root' })
+  @ApiOperation({
+    summary: 'Add a tag to a resource',
+    description:
+      'Adds the named tag to a resource within the API key root scope. Existing tags are preserved.',
+  })
   @ApiBody({
     description:
       'Tag name to add to the resource. Existing tags are preserved.',
@@ -271,7 +322,7 @@ export class OpenResourcesController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Tags added successfully',
+    description: 'Tag added successfully',
     type: ResourceDto,
   })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
@@ -303,7 +354,9 @@ export class OpenResourcesController {
     ],
   })
   @ApiOperation({
-    summary: 'Remove a tag from a resource under the API key root',
+    summary: 'Remove a tag from a resource',
+    description:
+      'Removes a tag from a resource within the API key root scope. The resource remains unchanged if other tags are still attached.',
   })
   @ApiResponse({
     status: 200,
@@ -337,7 +390,11 @@ export class OpenResourcesController {
       },
     ],
   })
-  @ApiOperation({ summary: 'Delete a resource under the API key root' })
+  @ApiOperation({
+    summary: 'Delete a resource',
+    description:
+      'Deletes a resource within the API key root scope. The API key must have delete permission for resources.',
+  })
   @ApiResponse({ status: 200, description: 'Resource deleted successfully' })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })

@@ -58,8 +58,8 @@ export class OpenWizardController {
   })
   @UseInterceptors(FileInterceptor('html'))
   @ApiOperation({
-    summary: 'Collect web content and create a resource',
-    description: `Collects and saves a web page by uploading its HTML content along with metadata.
+    summary: 'Collect compressed HTML content',
+    description: `Collects and saves a web page by uploading gzip-compressed HTML content with metadata. The created resource is placed under the API key root resource, or under parentId when provided and within scope.
 
 ## Example
 
@@ -68,7 +68,7 @@ export class OpenWizardController {
 echo '<html><body>Page content</body></html>' | gzip > /tmp/html.gz
 
 # Then, make the API request
-curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
+curl -X POST 'https://api.omnibox.pro/v1/wizard/collect/gzip' \\
   -H 'Authorization: Bearer your-api-key' \\
   -F 'url=https://example.com/page' \\
   -F 'title=Example Page' \\
@@ -123,7 +123,11 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
       },
     ],
   })
-  @ApiOperation({ summary: 'Ask a question to the AI wizard/assistant' })
+  @ApiOperation({
+    summary: 'Ask the AI assistant',
+    description:
+      'Sends a question to the AI assistant using Open API chat permissions. parent_message_id can continue an existing conversation only when the message belongs to the current API key user and namespace.',
+  })
   @ApiBody({
     description: 'Question and context for the AI assistant',
     type: OpenAgentRequestDto,
@@ -158,7 +162,11 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
       },
     ],
   })
-  @ApiOperation({ summary: 'Collect content from a URL' })
+  @ApiOperation({
+    summary: 'Collect content from a URL',
+    description:
+      'Creates an asynchronous collection task for a URL. The resulting resource is placed under the API key root resource, or under parentId when provided and within scope.',
+  })
   @ApiBody({
     description: 'URL to collect content from',
     type: OpenCollectUrlRequestDto,

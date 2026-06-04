@@ -1,6 +1,6 @@
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   PrivateSearchToolDto,
   WebSearchToolDto,
@@ -26,16 +26,16 @@ export class OpenAgentRequestDto {
   })
   tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
 
-  @ApiProperty({
-    description: 'Enable thinking/reasoning mode',
+  @ApiPropertyOptional({
+    description: 'Enable thinking/reasoning mode. Defaults to false.',
     example: true,
   })
   @IsOptional()
   @IsBoolean({ message: i18nValidationMessage('validation.errors.isBoolean') })
   enable_thinking?: boolean;
 
-  @ApiProperty({
-    description: 'Response language',
+  @ApiPropertyOptional({
+    description: 'Response language.',
     enum: ['简体中文', 'English'],
     example: 'English',
   })
@@ -43,8 +43,9 @@ export class OpenAgentRequestDto {
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   lang?: '简体中文' | 'English';
 
-  @ApiProperty({
-    description: 'Parent message ID for conversation threading',
+  @ApiPropertyOptional({
+    description:
+      'Parent message ID for conversation threading. Must belong to the current API key user and namespace.',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsOptional()

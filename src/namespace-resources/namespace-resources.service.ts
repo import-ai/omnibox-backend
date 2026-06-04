@@ -48,6 +48,7 @@ import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
+import { BatchCreateFolderDto } from './dto/batch-resource-actions.dto';
 import {
   ISmartFoldersService,
   SMART_FOLDERS_SERVICE,
@@ -429,6 +430,315 @@ export class NamespaceResourcesService {
       userId,
       { parentId: targetId },
     );
+  }
+
+  private async getEditableResourceIds(
+    namespaceId: string,
+    userId: string,
+    resourceIds: string[],
+    manager: EntityManager,
+  ): Promise<Set<string>> {
+    const userInNamespace = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+      manager,
+    );
+    if (!userInNamespace) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const parents = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+      manager,
+    );
+    const editableResources =
+      await this.permissionsService.filterResourcesByPermission(
+        userId,
+        namespaceId,
+        [...parents.values()],
+        ResourcePermission.CAN_EDIT,
+        manager,
+      );
+    const editableResourceIds = new Set(
+      editableResources.map((resource) => resource.id),
+    );
+    const editableIds = new Set<string>();
+    for (const resourceId of resourceIds) {
+      const resource = parents.get(resourceId);
+      if (resource?.parentId && editableResourceIds.has(resourceId)) {
+        editableIds.add(resourceId);
+      }
+    }
+    return editableIds;
+  }
+
+  async batchMoveToTrash(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<{
+    successIds: string[];
+    failedIds: string[];
+  }> {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const batchResourceIds = await this.getBatchTopLevelResourceIds(
+        namespaceId,
+        resourceIds,
+        tx.entityManager,
+      );
+      const editableIds = await this.getEditableResourceIds(
+        namespaceId,
+        userId,
+        batchResourceIds,
+        tx.entityManager,
+      );
+      const deleteIds = batchResourceIds.filter((id) => editableIds.has(id));
+      if (deleteIds.length === 0) {
+        return {
+          successIds: [],
+          failedIds: batchResourceIds,
+        };
+      }
+      const deletedIds = await this.resourcesService.batchDeleteResources(
+        userId,
+        namespaceId,
+        deleteIds,
+        tx,
+      );
+      const successIds = batchResourceIds.filter((id) =>
+        deletedIds.includes(id),
+      );
+      return {
+        successIds: successIds,
+        failedIds: batchResourceIds.filter((id) => !successIds.includes(id)),
+      };
+    });
+  }
+
+  async assertCanBatchMoveToTrash(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+  ): Promise<void> {
+    const manager = this.dataSource.manager;
+    const batchResourceIds = await this.getBatchTopLevelResourceIds(
+      namespaceId,
+      resourceIds,
+      manager,
+    );
+    const editableIds = await this.getEditableResourceIds(
+      namespaceId,
+      userId,
+      batchResourceIds,
+      manager,
+    );
+    if (batchResourceIds.some((id) => !editableIds.has(id))) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+  }
+
+  async batchMove(
+    userId: string,
+    namespaceId: string,
+    resourceIds: string[],
+    targetId: string,
+  ): Promise<{
+    successIds: string[];
+    failedIds: string[];
+    nameConflictIds: string[];
+  }> {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const batchResourceIds = await this.getBatchTopLevelResourceIds(
+        namespaceId,
+        resourceIds,
+        tx.entityManager,
+      );
+      const userHasPermission = await this.permissionsService.userHasPermission(
+        namespaceId,
+        targetId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+        undefined,
+        tx.entityManager,
+      );
+      if (!userHasPermission) {
+        const message = this.i18n.t('auth.errors.notAuthorized');
+        throw new AppException(
+          message,
+          'TARGET_NOT_EDITABLE',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      const editableIds = await this.getEditableResourceIds(
+        namespaceId,
+        userId,
+        batchResourceIds,
+        tx.entityManager,
+      );
+      const moveIds = batchResourceIds.filter((id) => editableIds.has(id));
+      if (moveIds.length === 0) {
+        const message = this.i18n.t('auth.errors.notAuthorized');
+        throw new AppException(
+          message,
+          'BATCH_SOURCE_NOT_EDITABLE',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      const { movedIds, nameConflictIds } =
+        await this.resourcesService.batchMoveResources(
+          userId,
+          namespaceId,
+          moveIds,
+          targetId,
+          tx,
+        );
+      const successIds = batchResourceIds.filter((id) => movedIds.includes(id));
+      return {
+        successIds: successIds,
+        failedIds: batchResourceIds.filter((id) => !successIds.includes(id)),
+        nameConflictIds,
+      };
+    });
+  }
+
+  async batchCreateFolder(
+    userId: string,
+    namespaceId: string,
+    data: BatchCreateFolderDto,
+  ): Promise<{
+    resource: Resource | null;
+    successIds: string[];
+    failedIds: string[];
+    nameConflictIds: string[];
+  }> {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const batchResourceIds = await this.getBatchTopLevelResourceIds(
+        namespaceId,
+        data.resourceIds,
+        tx.entityManager,
+      );
+      const userHasPermission = await this.permissionsService.userHasPermission(
+        namespaceId,
+        data.parentId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+        undefined,
+        tx.entityManager,
+      );
+      if (!userHasPermission) {
+        const target = await tx.entityManager
+          .getRepository(Resource)
+          .findOne({ where: { namespaceId, id: data.parentId } });
+        const message = this.i18n.t('auth.errors.notAuthorized');
+        throw new AppException(
+          message,
+          'TARGET_NOT_EDITABLE',
+          HttpStatus.FORBIDDEN,
+          { target_name: target?.name },
+        );
+      }
+      await this.ensureResourceNameNotExists(
+        namespaceId,
+        data.parentId,
+        data.name,
+        tx.entityManager,
+      );
+      const editableIds = await this.getEditableResourceIds(
+        namespaceId,
+        userId,
+        batchResourceIds,
+        tx.entityManager,
+      );
+      const moveIds = batchResourceIds.filter((id) => editableIds.has(id));
+      if (moveIds.length === 0) {
+        return {
+          resource: null,
+          successIds: [],
+          failedIds: batchResourceIds,
+          nameConflictIds: [],
+        };
+      }
+
+      const folder = await this.create(
+        userId,
+        namespaceId,
+        {
+          name: data.name,
+          parentId: data.parentId,
+          resourceType: ResourceType.FOLDER,
+        },
+        tx,
+      );
+      const { movedIds, nameConflictIds } =
+        await this.resourcesService.batchMoveResources(
+          userId,
+          namespaceId,
+          moveIds,
+          folder.id,
+          tx,
+        );
+      const successIds = batchResourceIds.filter((id) => movedIds.includes(id));
+      return {
+        resource: folder,
+        successIds: successIds,
+        failedIds: batchResourceIds.filter((id) => !successIds.includes(id)),
+        nameConflictIds,
+      };
+    });
+  }
+
+  private async getBatchTopLevelResourceIds(
+    namespaceId: string,
+    resourceIds: string[],
+    entityManager: EntityManager,
+  ): Promise<string[]> {
+    if (resourceIds.length === 0) {
+      return [];
+    }
+    const resourceIdSet = new Set(resourceIds);
+    const resourcesById = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+      entityManager,
+    );
+    return resourceIds.filter((id) => {
+      let current = resourcesById.get(id);
+      while (current?.parentId) {
+        if (resourceIdSet.has(current.parentId)) {
+          return false;
+        }
+        current = resourcesById.get(current.parentId);
+      }
+      return true;
+    });
+  }
+
+  private async ensureResourceNameNotExists(
+    namespaceId: string,
+    parentId: string,
+    name: string,
+    entityManager: EntityManager,
+  ): Promise<void> {
+    const count = await entityManager
+      .getRepository(Resource)
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
+        parentId,
+      })
+      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
+      .andWhere('resource.deleted_at IS NULL')
+      .getCount();
+    if (count > 0) {
+      const message = this.i18n.t('resource.errors.resourceNameConflict');
+      throw new AppException(
+        message,
+        'RESOURCE_NAME_CONFLICT',
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
   async search({ namespaceId, excludeResourceId, name, userId }) {

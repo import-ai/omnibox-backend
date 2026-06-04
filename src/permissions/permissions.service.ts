@@ -578,8 +578,15 @@ export class PermissionsService {
     });
   }
 
-  async userInNamespace(userId: string, namespaceId: string): Promise<boolean> {
-    const count = await this.namespaceMembersRepository.count({
+  async userInNamespace(
+    userId: string,
+    namespaceId: string,
+    entityManager?: EntityManager,
+  ): Promise<boolean> {
+    const namespaceMembersRepository = entityManager
+      ? entityManager.getRepository(NamespaceMember)
+      : this.namespaceMembersRepository;
+    const count = await namespaceMembersRepository.count({
       where: { namespaceId, userId },
     });
     return count > 0;

@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { createClient } from 'redis';
 import { OpenAPIQuotaService } from './open-api-quota.service';
 
@@ -7,19 +8,27 @@ jest.mock('redis', () => ({
 }));
 
 describe('OpenAPIQuotaService', () => {
-  const createService = (config: Record<string, string | undefined>) => {
+  const createService = (
+    config: Record<string, string | undefined>,
+    openApiRequestsPer24h: number,
+  ) => {
     const configService = {
       get: jest.fn((key: string) => config[key]),
     } as unknown as ConfigService;
-    return new OpenAPIQuotaService(configService);
+    const namespacesQuotaService = {
+      getNamespaceUsage: jest.fn().mockResolvedValue({
+        openApiRequestsPer24h,
+      }),
+    } as unknown as NamespacesQuotaService;
+    return new OpenAPIQuotaService(configService, namespacesQuotaService);
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('does nothing when requests per 24h is not configured', async () => {
-    const service = createService({});
+  it('does nothing when namespace usage has no open api quota', async () => {
+    const service = createService({}, 0);
 
     await expect(
       service.assertAndConsume('namespace-id'),
@@ -27,8 +36,8 @@ describe('OpenAPIQuotaService', () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 
-  it('does nothing when requests per 24h is not positive', async () => {
-    const service = createService({ OBB_OPEN_API_REQUESTS_PER_24H: '0' });
+  it('does nothing when namespace usage quota is not positive', async () => {
+    const service = createService({}, -1);
 
     await expect(
       service.assertAndConsume('namespace-id'),
@@ -36,11 +45,11 @@ describe('OpenAPIQuotaService', () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 
-  it('requires redis when requests per 24h is enabled', async () => {
-    const service = createService({ OBB_OPEN_API_REQUESTS_PER_24H: '1' });
+  it('requires redis when namespace usage quota is enabled', async () => {
+    const service = createService({}, 1);
 
     await expect(service.assertAndConsume('namespace-id')).rejects.toThrow(
-      'OBB_REDIS_URL is required when OBB_OPEN_API_REQUESTS_PER_24H is enabled',
+      'OBB_REDIS_URL is required when Open API requests per 24h quota is enabled',
     );
   });
 
@@ -51,10 +60,12 @@ describe('OpenAPIQuotaService', () => {
       eval: jest.fn().mockResolvedValue([1, 1, 86_400_000]),
     };
     (createClient as jest.Mock).mockReturnValue(redisClient);
-    const service = createService({
-      OBB_OPEN_API_REQUESTS_PER_24H: '2',
-      OBB_REDIS_URL: 'redis://localhost:6379',
-    });
+    const service = createService(
+      {
+        OBB_REDIS_URL: 'redis://localhost:6379',
+      },
+      2,
+    );
 
     await expect(
       service.assertAndConsume('namespace-id'),
@@ -73,10 +84,12 @@ describe('OpenAPIQuotaService', () => {
       eval: jest.fn().mockResolvedValue([0, 2, 86_000_000]),
     };
     (createClient as jest.Mock).mockReturnValue(redisClient);
-    const service = createService({
-      OBB_OPEN_API_REQUESTS_PER_24H: '2',
-      OBB_REDIS_URL: 'redis://localhost:6379',
-    });
+    const service = createService(
+      {
+        OBB_REDIS_URL: 'redis://localhost:6379',
+      },
+      2,
+    );
 
     await expect(
       service.assertAndConsume('namespace-id'),

@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { createClient, RedisClientType } from 'redis';
 
 const ROLLING_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -26,7 +27,10 @@ return {1, next, redis.call('PTTL', KEYS[1])}
 export class OpenAPIQuotaService implements OnModuleDestroy {
   private redisClient: RedisClientType | null = null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
+  ) {}
 
   async onModuleDestroy(): Promise<void> {
     if (this.redisClient?.isOpen) {
@@ -35,7 +39,9 @@ export class OpenAPIQuotaService implements OnModuleDestroy {
   }
 
   async assertAndConsume(namespaceId: string): Promise<void> {
-    const limit = this.getRequestsPer24hLimit();
+    const usage =
+      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
+    const limit = Math.floor(usage.openApiRequestsPer24h ?? 0);
     if (limit <= 0) {
       return;
     }
@@ -59,16 +65,6 @@ export class OpenAPIQuotaService implements OnModuleDestroy {
     );
   }
 
-  private getRequestsPer24hLimit(): number {
-    const raw = this.configService.get<string>('OBB_OPEN_API_REQUESTS_PER_24H');
-    if (!raw) {
-      return 0;
-    }
-
-    const limit = Number(raw);
-    return Number.isFinite(limit) ? Math.floor(limit) : 0;
-  }
-
   private async getRedisClient(): Promise<RedisClientType> {
     if (this.redisClient?.isOpen) {
       return this.redisClient;
@@ -77,7 +73,7 @@ export class OpenAPIQuotaService implements OnModuleDestroy {
     const redisUrl = this.configService.get<string>('OBB_REDIS_URL');
     if (!redisUrl) {
       throw new Error(
-        'OBB_REDIS_URL is required when OBB_OPEN_API_REQUESTS_PER_24H is enabled',
+        'OBB_REDIS_URL is required when Open API requests per 24h quota is enabled',
       );
     }
 

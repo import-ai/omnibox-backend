@@ -15,6 +15,7 @@ import { AuthController } from 'omniboxd/auth/auth.controller';
 import { ConfigService, ConfigModule } from '@nestjs/config';
 import { InternalAuthController } from 'omniboxd/auth/internal.auth.controller';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { GroupsModule } from 'omniboxd/groups/groups.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { WechatService } from 'omniboxd/auth/wechat/wechat.service';
@@ -86,6 +87,7 @@ import { OpenAPIQuotaService } from 'omniboxd/open-api/open-api-quota.service';
     SmsModule,
     PassportModule,
     NamespacesModule,
+    NamespacesQuotaModule,
     GroupsModule,
     PermissionsModule,
     APIKeyModule,

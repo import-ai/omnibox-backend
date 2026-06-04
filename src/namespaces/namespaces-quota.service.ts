@@ -11,6 +11,7 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
   taskParallelism: 1,
   fileUploadSizeLimit: 20 * 1024 * 1024, // 20MB
   trashRetentionDays: 7,
+  openApiRequestsPer24h: 0,
   readonly: false,
   smartFolderPrivateLimit: 1,
   smartFolderTeamLimit: 1,

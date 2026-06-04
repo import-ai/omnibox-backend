@@ -13,11 +13,7 @@ import {
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18n, I18nContext } from 'nestjs-i18n';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
-import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import {
   APIKey as APIKeyEntity,
@@ -27,11 +23,6 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { OpenCreateResourceDto } from 'omniboxd/namespace-resources/dto/open.create-resource.dto';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { isEmpty } from 'omniboxd/utils/is-empty';
-import { TagService } from 'omniboxd/tag/tag.service';
-import { parseHashtags } from 'omniboxd/utils/parse-hashtags';
-import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { OpenResourceTagDto } from 'omniboxd/namespace-resources/dto/open-resource-tags.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
@@ -45,18 +36,12 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 @ApiTags('Resources')
 @ApiSecurity('api-key')
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {
-  constructor(
-    private readonly namespaceResourcesService: NamespaceResourcesService,
-    private readonly openResourcesService: OpenResourcesService,
-    private readonly wizardTaskService: WizardTaskService,
-    private readonly tagService: TagService,
-  ) {}
+  constructor(private readonly openResourcesService: OpenResourcesService) {}
 
   @Get()
   @APIKeyAuth({
@@ -83,17 +68,12 @@ export class OpenResourcesController {
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
     @Query('summary') summary?: string,
   ): Promise<ResourceSummaryDto[]> {
-    const resourceId = await this.openResourcesService.resolveResourceId(
+    return await this.openResourcesService.listResources(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
-      parentId,
-      userId,
-    );
-    return await this.namespaceResourcesService.listChildren(
-      apiKey.namespaceId,
-      resourceId,
       userId,
       {
+        parentId,
         limit,
         offset,
         summary: summary === 'true',
@@ -136,97 +116,13 @@ export class OpenResourcesController {
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
     @Body() data: OpenCreateResourceDto,
-    @I18n() i18n: I18nContext,
-  ) {
-    const resourceType = data.resource_type ?? ResourceType.DOC;
-
-    if (resourceType === ResourceType.DOC && !data.content) {
-      const message = i18n.t('resource.errors.contentRequired');
-      throw new AppException(
-        message,
-        'CONTENT_REQUIRED',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (resourceType === ResourceType.FOLDER && !data.name?.trim()) {
-      const message = i18n.t('resource.errors.nameRequired');
-      throw new AppException(message, 'NAME_REQUIRED', HttpStatus.BAD_REQUEST);
-    }
-
-    if (resourceType === ResourceType.FOLDER && data.content !== undefined) {
-      const message = i18n.t('resource.errors.contentNotAllowedForFolder');
-      throw new AppException(
-        message,
-        'CONTENT_NOT_ALLOWED_FOR_FOLDER',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Optionally parse hashtags from content
-    let tagIds: string[] | undefined = data.tag_ids;
-    if (
-      resourceType === ResourceType.DOC &&
-      !data.skip_parsing_tags_from_content
-    ) {
-      const hashtagNames = parseHashtags(data.content || '');
-      // If hashtags found, get or create tags and merge with provided tag_ids
-      if (hashtagNames.length > 0) {
-        const hashtagIds = await this.tagService.getOrCreateTagsByNames(
-          apiKey.namespaceId,
-          hashtagNames,
-        );
-        // Merge and deduplicate tag IDs
-        tagIds = Array.from(new Set([...(tagIds || []), ...hashtagIds]));
-      }
-    }
-
-    const parentId = await this.openResourcesService.resolveResourceId(
+  ): Promise<{ id: string; name: string }> {
+    return await this.openResourcesService.createResource(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
-      data.parent_id,
       userId,
+      data,
     );
-
-    const createResourceDto = {
-      name: data.name || '',
-      content: data.content,
-      tag_ids: tagIds,
-      attrs: data.attrs || {},
-      resourceType,
-      parentId,
-    } as CreateResourceDto;
-
-    const newResource = await this.namespaceResourcesService.create(
-      userId,
-      apiKey.namespaceId,
-      createResourceDto,
-    );
-
-    if (
-      resourceType === ResourceType.DOC &&
-      !isEmpty(newResource.content?.trim())
-    ) {
-      if (isEmpty(newResource.name?.trim())) {
-        await this.wizardTaskService.emitGenerateTitleTask(
-          userId,
-          apiKey.namespaceId,
-          { resource_id: newResource.id },
-          { content: data.content || '' },
-        );
-      }
-      // Skip extract tags task if user requested or we already have tags
-      if (!data.skip_parsing_tags_from_content && isEmpty(newResource.tagIds)) {
-        await this.wizardTaskService.emitExtractTagsTask(
-          userId,
-          newResource.id,
-          apiKey.namespaceId,
-          newResource.content,
-        );
-      }
-    }
-
-    return { id: newResource.id, name: newResource.name };
   }
 
   @Post('upload')
@@ -275,24 +171,16 @@ export class OpenResourcesController {
   async uploadFile(
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
-    @I18n() i18n: I18nContext,
     @UploadedFile() file?: Express.Multer.File,
     @Body('parsed_content') parsedContent?: string,
-  ) {
-    if (!file) {
-      const message = i18n.t('resource.errors.fileRequired');
-      throw new AppException(message, 'FILE_REQUIRED', HttpStatus.BAD_REQUEST);
-    }
-
-    const newResource = await this.namespaceResourcesService.uploadFile(
-      userId,
+  ): Promise<{ id: string; name: string }> {
+    return await this.openResourcesService.uploadFile(
       apiKey.namespaceId,
-      file,
       apiKey.attrs.root_resource_id,
-      'open_api',
+      userId,
+      file,
       parsedContent,
     );
-    return { id: newResource.id, name: newResource.name };
   }
 
   @Get(':resourceId')
@@ -318,17 +206,12 @@ export class OpenResourcesController {
     @UserId() userId: string,
     @Param('resourceId') resourceId: string,
   ): Promise<ResourceDto> {
-    await this.openResourcesService.resolveResourceId(
+    return await this.openResourcesService.getResource(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
-      resourceId,
       userId,
+      resourceId,
     );
-    return await this.namespaceResourcesService.getResource({
-      namespaceId: apiKey.namespaceId,
-      resourceId,
-      userId,
-    });
   }
 
   @Patch(':resourceId')
@@ -360,34 +243,13 @@ export class OpenResourcesController {
     @Param('resourceId') resourceId: string,
     @Body() data: UpdateResourceDto,
   ): Promise<ResourceDto> {
-    await this.openResourcesService.resolveResourceId(
+    return await this.openResourcesService.updateResource(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    if (data.parentId) {
-      await this.openResourcesService.resolveResourceId(
-        apiKey.namespaceId,
-        apiKey.attrs.root_resource_id,
-        data.parentId,
-        userId,
-        ResourcePermission.CAN_EDIT,
-      );
-    }
-
-    await this.namespaceResourcesService.update(
-      apiKey.namespaceId,
       userId,
       resourceId,
       data,
     );
-    return await this.namespaceResourcesService.getResource({
-      namespaceId: apiKey.namespaceId,
-      resourceId,
-      userId,
-    });
   }
 
   @Post(':resourceId/tags')
@@ -485,16 +347,10 @@ export class OpenResourcesController {
     @UserId() userId: string,
     @Param('resourceId') resourceId: string,
   ): Promise<void> {
-    await this.openResourcesService.resolveResourceId(
+    await this.openResourcesService.deleteResource(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
-      resourceId,
       userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    await this.namespaceResourcesService.delete(
-      userId,
-      apiKey.namespaceId,
       resourceId,
     );
   }

@@ -1,6 +1,6 @@
 import { Controller, Get, Header } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { readFile } from 'fs/promises';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
@@ -11,7 +11,7 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-async function readSkillTemplate(): Promise<string> {
+function readSkillTemplate(): string {
   const paths = [
     join(process.cwd(), 'open/api/v1/SKILL.md'),
     join(process.cwd(), 'dist/api/v1/SKILL.md'),
@@ -19,25 +19,22 @@ async function readSkillTemplate(): Promise<string> {
 
   for (const path of paths) {
     try {
-      return await readFile(path, 'utf8');
+      return readFileSync(path, 'utf8');
     } catch {
       // Try the next candidate. The source path exists in development, while
       // the dist asset path exists in production Docker images.
     }
   }
 
-  return await readFile(paths[0], 'utf8');
+  return readFileSync(paths[0], 'utf8');
 }
 
 @Controller('open/api/v1')
 export class OpenSkillController {
-  constructor(private readonly configService: ConfigService) {}
+  private readonly renderedSkill: string;
 
-  @Get('SKILL.md')
-  @Public()
-  @Header('Content-Type', 'text/markdown; charset=utf-8')
-  async getSkill(): Promise<string> {
-    const template = await readSkillTemplate();
+  constructor(private readonly configService: ConfigService) {
+    const template = readSkillTemplate();
     const openApiBaseUrl = trimTrailingSlash(
       this.configService.get<string>(
         'OBB_OPEN_API_BASE_URL',
@@ -45,6 +42,16 @@ export class OpenSkillController {
       ),
     );
 
-    return template.replaceAll(OPEN_API_BASE_URL_PLACEHOLDER, openApiBaseUrl);
+    this.renderedSkill = template.replaceAll(
+      OPEN_API_BASE_URL_PLACEHOLDER,
+      openApiBaseUrl,
+    );
+  }
+
+  @Get('SKILL.md')
+  @Public()
+  @Header('Content-Type', 'text/markdown; charset=utf-8')
+  getSkill(): string {
+    return this.renderedSkill;
   }
 }

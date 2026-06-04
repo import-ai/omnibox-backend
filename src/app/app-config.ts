@@ -22,19 +22,15 @@ function setupOpenAPISwagger(app: INestApplication): INestApplication {
     });
 
     doc.paths = Object.fromEntries(
-      Object.entries(doc.paths)
-        .filter(([path]) => path.startsWith('/open/api'))
-        .map(([path, pathConfig]) => {
-          const newPath = path.replace('/open/api', '');
-          return [newPath, pathConfig];
-        }),
+      Object.entries(doc.paths).map(([path, pathConfig]) => {
+        const newPath = path.replace('/open/api', '');
+        return [newPath, pathConfig];
+      }),
     );
     return doc;
   };
 
-  SwaggerModule.setup('open/api/docs', app, documentFactory, {
-    useGlobalPrefix: false,
-  });
+  SwaggerModule.setup('open/api/docs', app, documentFactory);
 
   return app;
 }
@@ -48,9 +44,7 @@ function setupSwagger(app: INestApplication): INestApplication {
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, documentFactory, {
-    useGlobalPrefix: false,
-  });
+  SwaggerModule.setup('docs', app, documentFactory);
 
   return app;
 }

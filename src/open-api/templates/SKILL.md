@@ -70,7 +70,7 @@ GET /api-keys/info
 ### List resources
 
 ```http
-GET /resources?limit=20&offset=0&summary=true
+GET /resources?limit=20&offset=0&summary=false
 GET /resources?parent_id=<resourceId>&limit=20&offset=0
 ```
 
@@ -289,7 +289,7 @@ When you receive an error:
 
 ```bash
 curl -H "Authorization: Bearer $OMNIBOX_API_KEY" \
-  "${OBB_OPEN_API_BASE_URL}/v1/resources?limit=20&summary=true"
+  "${OBB_OPEN_API_BASE_URL}/v1/resources?limit=20&summary=false"
 ```
 
 ```bash

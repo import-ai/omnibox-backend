@@ -93,6 +93,7 @@ jest.mock('../wizard-api/wizard-api.service', () => {
 describe('SearchController (e2e)', () => {
   let app: INestApplication;
   let searchService: SearchService;
+  let openSearchService: OpenSearchService;
 
   const mockUser = { id: 'test-user-id' };
   const mockNamespaceId = '550e8400-e29b-41d4-a716-446655440000';
@@ -245,6 +246,7 @@ describe('SearchController (e2e)', () => {
     await app.init();
 
     searchService = moduleFixture.get<SearchService>(SearchService);
+    openSearchService = moduleFixture.get<OpenSearchService>(OpenSearchService);
   });
 
   afterAll(async () => {
@@ -411,7 +413,7 @@ describe('SearchController (e2e)', () => {
         },
       } as APIKey;
 
-      const result = await searchService.openSearch(apiKey, 'test');
+      const result = await openSearchService.search(apiKey, 'test');
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({

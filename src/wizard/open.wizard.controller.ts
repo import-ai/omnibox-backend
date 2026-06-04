@@ -33,7 +33,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 @ApiTags('Wizard')
@@ -43,7 +43,7 @@ export class OpenWizardController {
   constructor(
     private readonly wizardService: WizardService,
     private readonly openWizardService: OpenWizardService,
-    private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly openResourcesService: OpenResourcesService,
   ) {}
 
   @Post('collect/gzip')
@@ -94,7 +94,7 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
     @Body() data: OpenCollectRequestDto,
     @UploadedFile() compressedHtml: Express.Multer.File,
   ): Promise<CollectResponseDto> {
-    const parentId = await this.namespaceResourcesService.resolveOpenResourceId(
+    const parentId = await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
       data.parentId,
@@ -175,7 +175,7 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
     @UserId() userId: string,
     @Body() data: OpenCollectUrlRequestDto,
   ): Promise<CollectUrlResponseDto> {
-    const parentId = await this.namespaceResourcesService.resolveOpenResourceId(
+    const parentId = await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
       data.parentId,

@@ -14,6 +14,7 @@ import { SearchService } from './search.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -131,7 +132,12 @@ describe('SearchController (e2e)', () => {
           provide: NamespaceResourcesService,
           useValue: {
             listAllResources: jest.fn().mockResolvedValue([]),
-            filterOpenResourceScope: jest
+          },
+        },
+        {
+          provide: OpenResourcesService,
+          useValue: {
+            filterResourceScope: jest
               .fn()
               .mockResolvedValue(['550e8400-e29b-41d4-a716-446655440000']),
           },

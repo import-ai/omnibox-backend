@@ -1002,26 +1002,6 @@ export class NamespaceResourcesService {
     );
   }
 
-  async listOpenResources(
-    namespaceId: string,
-    rootResourceId: string,
-    userId: string,
-    options?: {
-      parentId?: string;
-      limit?: number;
-      offset?: number;
-      summary?: boolean;
-    },
-  ): Promise<ResourceSummaryDto[]> {
-    const resourceId = await this.resolveOpenResourceId(
-      namespaceId,
-      rootResourceId,
-      options?.parentId,
-      userId,
-    );
-    return await this.listChildren(namespaceId, resourceId, userId, options);
-  }
-
   async getSpaceType(
     namespaceId: string,
     rootResourceId: string,
@@ -1089,26 +1069,6 @@ export class NamespaceResourcesService {
       spaceType,
       tagsMap.get(resource.id) || [],
     );
-  }
-
-  async getOpenResource({
-    userId,
-    namespaceId,
-    rootResourceId,
-    resourceId,
-  }: {
-    userId: string;
-    namespaceId: string;
-    rootResourceId: string;
-    resourceId: string;
-  }): Promise<ResourceDto> {
-    await this.resolveOpenResourceId(
-      namespaceId,
-      rootResourceId,
-      resourceId,
-      userId,
-    );
-    return await this.getResource({ namespaceId, resourceId, userId });
   }
 
   async getResourceFileForUser(
@@ -1355,108 +1315,6 @@ export class NamespaceResourcesService {
     );
   }
 
-  async updateOpenResource(
-    namespaceId: string,
-    userId: string,
-    rootResourceId: string,
-    resourceId: string,
-    data: UpdateResourceDto,
-    autoRenameOnConflict: boolean = false,
-  ): Promise<ResourceDto> {
-    await this.resolveOpenResourceId(
-      namespaceId,
-      rootResourceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-
-    if (data.parentId) {
-      await this.resolveOpenResourceId(
-        namespaceId,
-        rootResourceId,
-        data.parentId,
-        userId,
-        ResourcePermission.CAN_EDIT,
-      );
-    }
-
-    await this.update(
-      namespaceId,
-      userId,
-      resourceId,
-      data,
-      autoRenameOnConflict,
-    );
-    return await this.getResource({
-      namespaceId,
-      resourceId,
-      userId,
-    });
-  }
-
-  async addOpenResourceTag(
-    namespaceId: string,
-    userId: string,
-    rootResourceId: string,
-    resourceId: string,
-    tagName: string,
-  ): Promise<ResourceDto> {
-    await this.resolveOpenResourceId(
-      namespaceId,
-      rootResourceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    const resource = await this.resourcesService.getResourceOrFail(
-      namespaceId,
-      resourceId,
-    );
-    const tag = await this.tagService.getOrCreateTagByName(
-      namespaceId,
-      tagName,
-    );
-    const nextTagIds = Array.from(
-      new Set([...(resource.tagIds ?? []), tag.id]),
-    );
-
-    await this.update(namespaceId, userId, resourceId, { tag_ids: nextTagIds });
-    return await this.getResource({
-      namespaceId,
-      resourceId,
-      userId,
-    });
-  }
-
-  async removeOpenResourceTag(
-    namespaceId: string,
-    userId: string,
-    rootResourceId: string,
-    resourceId: string,
-    tagId: string,
-  ): Promise<ResourceDto> {
-    await this.resolveOpenResourceId(
-      namespaceId,
-      rootResourceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    const resource = await this.resourcesService.getResourceOrFail(
-      namespaceId,
-      resourceId,
-    );
-    const nextTagIds = (resource.tagIds ?? []).filter((id) => id !== tagId);
-
-    await this.update(namespaceId, userId, resourceId, { tag_ids: nextTagIds });
-    return await this.getResource({
-      namespaceId,
-      resourceId,
-      userId,
-    });
-  }
-
   async delete(userId: string, namespaceId: string, id: string) {
     const resource = await this.resourcesService.getResourceOrFail(
       namespaceId,
@@ -1471,22 +1329,6 @@ export class NamespaceResourcesService {
       );
     }
     await this.resourcesService.deleteResource(userId, namespaceId, id);
-  }
-
-  async deleteOpenResource(
-    userId: string,
-    namespaceId: string,
-    rootResourceId: string,
-    resourceId: string,
-  ): Promise<void> {
-    await this.resolveOpenResourceId(
-      namespaceId,
-      rootResourceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_EDIT,
-    );
-    await this.delete(userId, namespaceId, resourceId);
   }
 
   async restore(userId: string, namespaceId: string, resourceId: string) {
@@ -1637,105 +1479,6 @@ export class NamespaceResourcesService {
       requiredPermission,
     );
     return resources.filter((res) => res.parentId !== null || includeRoot);
-  }
-
-  async filterOpenResourceScope(
-    namespaceId: string,
-    rootResourceId: string,
-    userId: string,
-    resourceIds: string[],
-    requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
-  ): Promise<string[]> {
-    if (resourceIds.length === 0) {
-      return [];
-    }
-
-    const uniqueResourceIds = Array.from(new Set(resourceIds));
-    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
-      namespaceId,
-      uniqueResourceIds,
-    );
-
-    const resources = [...resourceMetaMap.values()];
-    const permissionMap = await this.permissionsService.getCurrentPermissions(
-      userId,
-      namespaceId,
-      resources,
-    );
-
-    return uniqueResourceIds.filter((resourceId) => {
-      const resource = resourceMetaMap.get(resourceId);
-      if (!resource) {
-        return false;
-      }
-      const permission = permissionMap.get(resourceId);
-      return (
-        this.isResourceInOpenScope(resourceMetaMap, rootResourceId, resource) &&
-        !!permission &&
-        comparePermission(permission, requiredPermission) >= 0
-      );
-    });
-  }
-
-  async resolveOpenResourceId(
-    namespaceId: string,
-    rootResourceId: string,
-    resourceId: string | undefined,
-    userId: string,
-    requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
-  ): Promise<string> {
-    const effectiveResourceId = resourceId || rootResourceId;
-    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
-      namespaceId,
-      [effectiveResourceId],
-    );
-    const resource = resourceMetaMap.get(effectiveResourceId);
-    if (!resource) {
-      const message = this.i18n.t('resource.errors.resourceNotFound');
-      throw new AppException(
-        message,
-        'RESOURCE_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
-    if (
-      !this.isResourceInOpenScope(resourceMetaMap, rootResourceId, resource)
-    ) {
-      const message = this.i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
-
-    const permissionMap = await this.permissionsService.getCurrentPermissions(
-      userId,
-      namespaceId,
-      [...resourceMetaMap.values()],
-    );
-    const permission = permissionMap.get(effectiveResourceId);
-    if (!permission || comparePermission(permission, requiredPermission) < 0) {
-      const message = this.i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
-
-    return effectiveResourceId;
-  }
-
-  private isResourceInOpenScope(
-    resourceMetaMap: Map<string, ResourceMetaDto>,
-    rootResourceId: string,
-    resource: ResourceMetaDto,
-  ): boolean {
-    let current: ResourceMetaDto | undefined = resource;
-    while (current) {
-      if (current.id === rootResourceId) {
-        return true;
-      }
-      if (!current.parentId) {
-        return false;
-      }
-      current = resourceMetaMap.get(current.parentId);
-    }
-    return false;
   }
 
   async listAllResources(offset: number, limit: number) {

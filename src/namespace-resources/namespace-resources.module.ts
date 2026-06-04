@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { NamespaceResourcesController } from 'omniboxd/namespace-resources/namespace-resources.controller';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InternalResourcesController } from 'omniboxd/namespace-resources/internal.resource.controller';
@@ -17,8 +18,8 @@ import { FilesModule } from 'omniboxd/files/files.module';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 
 @Module({
-  exports: [NamespaceResourcesService],
-  providers: [NamespaceResourcesService],
+  exports: [NamespaceResourcesService, OpenResourcesService],
+  providers: [NamespaceResourcesService, OpenResourcesService],
   controllers: [
     NamespaceResourcesController,
     InternalResourcesController,

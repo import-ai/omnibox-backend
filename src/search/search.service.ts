@@ -17,6 +17,7 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { Repository } from 'typeorm';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -44,6 +45,7 @@ export class SearchService {
     private readonly wizardApiService: WizardAPIService,
     private readonly permissionsService: PermissionsService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly openResourcesService: OpenResourcesService,
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
@@ -198,7 +200,7 @@ export class SearchService {
     }
 
     const scopedResourceIds =
-      await this.namespaceResourcesService.filterOpenResourceScope(
+      await this.openResourcesService.filterResourceScope(
         namespaceId,
         rootResourceId,
         userId,

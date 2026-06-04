@@ -16,6 +16,7 @@ import {
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import {
@@ -44,6 +45,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 @ApiTags('Resources')
 @ApiSecurity('api-key')
@@ -51,6 +53,7 @@ import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-sto
 export class OpenResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly openResourcesService: OpenResourcesService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly tagService: TagService,
   ) {}
@@ -80,12 +83,17 @@ export class OpenResourcesController {
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
     @Query('summary') summary?: string,
   ): Promise<ResourceSummaryDto[]> {
-    return await this.namespaceResourcesService.listOpenResources(
+    const resourceId = await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
+      parentId,
+      userId,
+    );
+    return await this.namespaceResourcesService.listChildren(
+      apiKey.namespaceId,
+      resourceId,
       userId,
       {
-        parentId,
         limit,
         offset,
         summary: summary === 'true',
@@ -173,7 +181,7 @@ export class OpenResourcesController {
       }
     }
 
-    const parentId = await this.namespaceResourcesService.resolveOpenResourceId(
+    const parentId = await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
       data.parent_id,
@@ -310,9 +318,14 @@ export class OpenResourcesController {
     @UserId() userId: string,
     @Param('resourceId') resourceId: string,
   ): Promise<ResourceDto> {
-    return await this.namespaceResourcesService.getOpenResource({
+    await this.openResourcesService.resolveResourceId(
+      apiKey.namespaceId,
+      apiKey.attrs.root_resource_id,
+      resourceId,
+      userId,
+    );
+    return await this.namespaceResourcesService.getResource({
       namespaceId: apiKey.namespaceId,
-      rootResourceId: apiKey.attrs.root_resource_id,
       resourceId,
       userId,
     });
@@ -347,13 +360,34 @@ export class OpenResourcesController {
     @Param('resourceId') resourceId: string,
     @Body() data: UpdateResourceDto,
   ): Promise<ResourceDto> {
-    return await this.namespaceResourcesService.updateOpenResource(
+    await this.openResourcesService.resolveResourceId(
+      apiKey.namespaceId,
+      apiKey.attrs.root_resource_id,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (data.parentId) {
+      await this.openResourcesService.resolveResourceId(
+        apiKey.namespaceId,
+        apiKey.attrs.root_resource_id,
+        data.parentId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+      );
+    }
+
+    await this.namespaceResourcesService.update(
       apiKey.namespaceId,
       userId,
-      apiKey.attrs.root_resource_id,
       resourceId,
       data,
     );
+    return await this.namespaceResourcesService.getResource({
+      namespaceId: apiKey.namespaceId,
+      resourceId,
+      userId,
+    });
   }
 
   @Post(':resourceId/tags')
@@ -387,7 +421,7 @@ export class OpenResourcesController {
     @Param('resourceId') resourceId: string,
     @Body() data: OpenResourceTagDto,
   ): Promise<ResourceDto> {
-    return await this.namespaceResourcesService.addOpenResourceTag(
+    return await this.openResourcesService.addResourceTag(
       apiKey.namespaceId,
       userId,
       apiKey.attrs.root_resource_id,
@@ -423,7 +457,7 @@ export class OpenResourcesController {
     @Param('resourceId') resourceId: string,
     @Param('tagId') tagId: string,
   ): Promise<ResourceDto> {
-    return await this.namespaceResourcesService.removeOpenResourceTag(
+    return await this.openResourcesService.removeResourceTag(
       apiKey.namespaceId,
       userId,
       apiKey.attrs.root_resource_id,
@@ -451,10 +485,16 @@ export class OpenResourcesController {
     @UserId() userId: string,
     @Param('resourceId') resourceId: string,
   ): Promise<void> {
-    await this.namespaceResourcesService.deleteOpenResource(
-      userId,
+    await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    await this.namespaceResourcesService.delete(
+      userId,
+      apiKey.namespaceId,
       resourceId,
     );
   }

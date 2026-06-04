@@ -1,5 +1,13 @@
-import { Expose } from 'class-transformer';
-import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
+import { Expose, Type } from 'class-transformer';
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import {
   SmartFolderCondition,
   SmartFolderMatchMode,
@@ -23,4 +31,17 @@ export class SearchRequestDto {
   @IsArray()
   @IsOptional()
   conditions?: SmartFolderCondition[];
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @IsOptional()
+  offset?: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  limit?: number;
 }

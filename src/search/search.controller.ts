@@ -25,7 +25,7 @@ export class SearchController {
     @Param('namespaceId') namespaceId: string,
     @Body() data: SearchRequestDto,
   ) {
-    return await this.searchService.search(
+    return await this.searchService.searchPaginated(
       userId,
       namespaceId,
       data.query || '',
@@ -33,6 +33,10 @@ export class SearchController {
       {
         conditions: data.conditions,
         matchMode: data.matchMode,
+      },
+      {
+        offset: data.offset,
+        limit: data.limit,
       },
     );
   }

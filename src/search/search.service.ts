@@ -34,6 +34,20 @@ import {
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
 const WEAVIATE_SYNC_LOG_EVERY = 1000;
+const DEFAULT_SEARCH_LIMIT = 20;
+const MAX_SEARCH_LIMIT = 100;
+
+export interface SearchPaginationOptions {
+  offset?: number;
+  limit?: number;
+}
+
+export interface SearchPaginatedResult {
+  items: IndexedDocDto[];
+  total: number;
+  offset: number;
+  limit: number;
+}
 
 @Injectable()
 export class SearchService {
@@ -85,12 +99,96 @@ export class SearchService {
         filterOptions,
       );
     }
+    return await this.searchSemanticResources(
+      userId,
+      namespaceId,
+      normalizedQuery,
+      filterOptions,
+      MAX_SEARCH_LIMIT,
+    );
+  }
 
+  async searchPaginated(
+    userId: string,
+    namespaceId: string,
+    query: string,
+    type?: DocType,
+    options?: SearchFilterOptions,
+    pagination?: SearchPaginationOptions,
+  ): Promise<SearchPaginatedResult> {
+    const { offset, limit } = this.normalizePagination(pagination);
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    if (type === DocType.MESSAGE) {
+      return {
+        items: [],
+        total: 0,
+        offset,
+        limit,
+      };
+    }
+    const normalizedQuery = (query || '').trim();
+    const filterOptions =
+      this.searchResourceFilterService.normalizeOptions(options);
+    if (!normalizedQuery) {
+      if ((filterOptions.conditions || []).length <= 0) {
+        return {
+          items: [],
+          total: 0,
+          offset,
+          limit,
+        };
+      }
+      const result =
+        await this.searchResourceFilterService.searchResourcesByFiltersWithTotal(
+          userId,
+          namespaceId,
+          filterOptions,
+        );
+
+      return {
+        items: result.items.slice(offset, offset + limit),
+        total: result.total,
+        offset,
+        limit,
+      };
+    }
+
+    const items = await this.searchSemanticResources(
+      userId,
+      namespaceId,
+      normalizedQuery,
+      filterOptions,
+      MAX_SEARCH_LIMIT,
+    );
+
+    return {
+      items: items.slice(offset, offset + limit),
+      total: items.length,
+      offset,
+      limit,
+    };
+  }
+
+  private async searchSemanticResources(
+    userId: string,
+    namespaceId: string,
+    normalizedQuery: string,
+    filterOptions: SearchFilterOptions,
+    limit: number,
+  ): Promise<IndexedDocDto[]> {
     const searchRequest = new SearchRequestDto();
     searchRequest.query = normalizedQuery;
     searchRequest.namespaceId = namespaceId;
     searchRequest.userId = userId;
-    searchRequest.limit = 100;
+    searchRequest.limit = Math.min(Math.max(limit, 1), MAX_SEARCH_LIMIT);
+    searchRequest.offset = 0;
     searchRequest.type = IndexRecordType.CHUNK;
     const result = await this.wizardApiService.search(searchRequest);
     const items: IndexedDocDto[] = [];
@@ -153,7 +251,24 @@ export class SearchService {
         items.push(resourceDto);
       }
     }
+
     return items;
+  }
+
+  private normalizePagination(
+    pagination?: SearchPaginationOptions,
+  ): Required<SearchPaginationOptions> {
+    const offset = Number.isInteger(pagination?.offset)
+      ? Math.max(pagination!.offset!, 0)
+      : 0;
+    const limit = Number.isInteger(pagination?.limit)
+      ? Math.min(Math.max(pagination!.limit!, 1), MAX_SEARCH_LIMIT)
+      : DEFAULT_SEARCH_LIMIT;
+
+    return {
+      offset,
+      limit,
+    };
   }
 
   async refreshResourceIndex() {

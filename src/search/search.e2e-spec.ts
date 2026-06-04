@@ -341,7 +341,7 @@ describe('SearchController (e2e)', () => {
     });
 
     it('should search with smart folder filter conditions', async () => {
-      const searchSpy = jest.spyOn(searchService, 'search');
+      const searchSpy = jest.spyOn(searchService, 'searchPaginated');
       const conditions = [
         {
           field: SmartFolderField.TITLE,
@@ -357,10 +357,19 @@ describe('SearchController (e2e)', () => {
           query: 'planning',
           match_mode: SmartFolderMatchMode.ALL,
           conditions,
+          offset: 0,
+          limit: 20,
         })
         .expect(HttpStatus.CREATED);
 
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          items: expect.any(Array),
+          total: expect.any(Number),
+          offset: 0,
+          limit: 20,
+        }),
+      );
       expect(searchSpy).toHaveBeenCalledWith(
         mockUser.id,
         mockNamespaceId,
@@ -369,6 +378,10 @@ describe('SearchController (e2e)', () => {
         {
           conditions,
           matchMode: SmartFolderMatchMode.ALL,
+        },
+        {
+          offset: 0,
+          limit: 20,
         },
       );
     });

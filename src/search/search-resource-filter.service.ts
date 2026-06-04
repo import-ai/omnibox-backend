@@ -20,6 +20,11 @@ export interface SearchFilterOptions {
   matchMode?: SmartFolderMatchMode;
 }
 
+export interface SearchFilterResult {
+  items: IndexedDocDto[];
+  total: number;
+}
+
 @Injectable()
 export class SearchResourceFilterService {
   constructor(
@@ -77,6 +82,20 @@ export class SearchResourceFilterService {
     namespaceId: string,
     options: SearchFilterOptions,
   ): Promise<IndexedDocDto[]> {
+    const result = await this.searchResourcesByFiltersWithTotal(
+      userId,
+      namespaceId,
+      options,
+    );
+
+    return result.items;
+  }
+
+  async searchResourcesByFiltersWithTotal(
+    userId: string,
+    namespaceId: string,
+    options: SearchFilterOptions,
+  ): Promise<SearchFilterResult> {
     const visibleResources =
       await this.namespaceResourcesService.getAllResourcesByUser(
         userId,
@@ -88,9 +107,14 @@ export class SearchResourceFilterService {
     );
     const conditions = options.conditions || [];
     if (conditions.length <= 0) {
-      return this.sortResources(resources).map((resource) =>
+      const items = this.sortResources(resources).map((resource) =>
         this.toIndexedResource(resource),
       );
+
+      return {
+        items,
+        total: items.length,
+      };
     }
 
     const resourcesWithTagNames = await this.withTagNames(
@@ -102,9 +126,14 @@ export class SearchResourceFilterService {
       this.smartFoldersMatcherService.matches(resource, conditions, matchMode),
     );
 
-    return this.sortResources(matched).map((resource) =>
+    const items = this.sortResources(matched).map((resource) =>
       this.toIndexedResource(resource),
     );
+
+    return {
+      items,
+      total: items.length,
+    };
   }
 
   private async withTagNames(

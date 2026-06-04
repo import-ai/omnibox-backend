@@ -187,6 +187,41 @@ describe('SearchService', () => {
             }));
         },
       ),
+      searchResourcesByFiltersWithTotal: jest.fn(
+        async (_userId: string, _namespaceId: string, options: any) => {
+          const visibleResources =
+            await namespaceResourcesService.getAllResourcesByUser(
+              userId,
+              namespaceId,
+            );
+          const resources = await resourcesService.batchGetResources(
+            namespaceId,
+            visibleResources.map((resource) => resource.id),
+          );
+          const items = resources
+            .filter((resource) =>
+              matcherService.matches(
+                resource,
+                options.conditions || [],
+                options.matchMode ?? SmartFolderMatchMode.ALL,
+              ),
+            )
+            .map((resource) => ({
+              type: DocType.RESOURCE,
+              id: resource.id,
+              resourceId: resource.id,
+              title: resource.name,
+              content: resource.content || '',
+              attrs: resource.attrs || {},
+              resourceType: resource.resourceType,
+            }));
+
+          return {
+            items,
+            total: items.length,
+          };
+        },
+      ),
     };
     const service = new SearchService(
       wizardApiService as any,
@@ -268,6 +303,45 @@ describe('SearchService', () => {
     expect(result[0]).toMatchObject({
       type: DocType.RESOURCE,
       resourceId: matchingResourceId,
+    });
+  });
+
+  it('returns paginated filter results for post search', async () => {
+    const { matcherService, service } = createService();
+    matcherService.matches.mockReturnValue(true);
+    const conditions = [
+      {
+        field: SmartFolderField.TITLE,
+        operator: SmartFolderOperator.CONTAINS,
+        value: 'matched',
+      },
+    ];
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      '',
+      undefined,
+      {
+        conditions,
+        matchMode: SmartFolderMatchMode.ALL,
+      },
+      {
+        offset: 1,
+        limit: 1,
+      },
+    );
+
+    expect(result).toEqual({
+      items: [
+        expect.objectContaining({
+          type: DocType.RESOURCE,
+          resourceId: matchingResourceId,
+        }),
+      ],
+      total: 2,
+      offset: 1,
+      limit: 1,
     });
   });
 
@@ -407,6 +481,34 @@ describe('SearchService', () => {
         resourceId: matchingResourceId,
       }),
     ]);
+  });
+
+  it('returns paginated semantic results for post search', async () => {
+    const { service } = createService();
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 1,
+        limit: 1,
+      },
+    );
+
+    expect(result).toEqual({
+      items: [
+        expect.objectContaining({
+          type: DocType.RESOURCE,
+          resourceId: matchingResourceId,
+        }),
+      ],
+      total: 2,
+      offset: 1,
+      limit: 1,
+    });
   });
 
   it('does not widen semantic results when filter match mode is any', async () => {

@@ -76,6 +76,23 @@ GET /resources?parent_id=<resourceId>&limit=20&offset=0
 
 Requires `resources:read`.
 
+Response shape:
+
+```json
+{
+  "resources": [
+    {
+      "id": "resource-id",
+      "name": "Resource name",
+      "resource_type": "doc"
+    }
+  ],
+  "total": 42
+}
+```
+
+`total` is the full number of visible resources matching the same parent scope before `limit` and `offset` are applied.
+
 ### Read one resource and its tags
 
 ```http

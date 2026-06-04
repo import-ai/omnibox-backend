@@ -3,8 +3,8 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
+import { OpenListResourcesResponseDto } from 'omniboxd/namespace-resources/dto/open-list-resources-response.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
-import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -41,14 +41,14 @@ export class OpenResourcesService {
       offset?: number;
       summary?: boolean;
     },
-  ): Promise<ResourceSummaryDto[]> {
+  ): Promise<OpenListResourcesResponseDto> {
     const resourceId = await this.resolveResourceId(
       namespaceId,
       rootResourceId,
       options?.parentId,
       userId,
     );
-    return await this.namespaceResourcesService.listChildren(
+    return await this.namespaceResourcesService.listChildrenWithTotal(
       namespaceId,
       resourceId,
       userId,

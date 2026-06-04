@@ -360,8 +360,12 @@ describe('OpenResourcesController (e2e)', () => {
         .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
         .expect(200);
 
-      expect(Array.isArray(listResponse.body)).toBe(true);
-      const defaultSummaryItem = listResponse.body.find(
+      expect(Array.isArray(listResponse.body.resources)).toBe(true);
+      expect(listResponse.body.total).toBeGreaterThanOrEqual(1);
+      expect(listResponse.body.resources.length).toBeLessThanOrEqual(
+        listResponse.body.total,
+      );
+      const defaultSummaryItem = listResponse.body.resources.find(
         (item: any) => item.id === resourceId,
       );
       expect(defaultSummaryItem).toBeDefined();
@@ -372,7 +376,8 @@ describe('OpenResourcesController (e2e)', () => {
         .get('/open/api/v1/resources?summary=false')
         .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
         .expect(200);
-      const falseSummaryItem = falseSummaryResponse.body.find(
+      expect(falseSummaryResponse.body.total).toBe(listResponse.body.total);
+      const falseSummaryItem = falseSummaryResponse.body.resources.find(
         (item: any) => item.id === resourceId,
       );
       expect(falseSummaryItem).toBeDefined();
@@ -383,7 +388,8 @@ describe('OpenResourcesController (e2e)', () => {
         .get('/open/api/v1/resources?summary=true')
         .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
         .expect(200);
-      const trueSummaryItem = trueSummaryResponse.body.find(
+      expect(trueSummaryResponse.body.total).toBe(listResponse.body.total);
+      const trueSummaryItem = trueSummaryResponse.body.resources.find(
         (item: any) => item.id === resourceId,
       );
       expect(trueSummaryItem).toBeDefined();
@@ -406,6 +412,42 @@ describe('OpenResourcesController (e2e)', () => {
         name: 'Open Lifecycle Read',
         content: 'Content for open lifecycle read',
       });
+    });
+
+    it('should return total before limit for visible child resources', async () => {
+      const folderResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open List Total Folder',
+          resource_type: ResourceType.FOLDER,
+        })
+        .expect(201);
+
+      for (const index of [1, 2, 3]) {
+        await client
+          .request()
+          .post('/open/api/v1/resources')
+          .set('Authorization', `Bearer ${apiKeyValue}`)
+          .send({
+            name: `Open List Total Child ${index}`,
+            content: `Open list total child content ${index}`,
+            parent_id: folderResponse.body.id,
+          })
+          .expect(201);
+      }
+
+      const response = await client
+        .request()
+        .get(
+          `/open/api/v1/resources?parent_id=${folderResponse.body.id}&limit=1&offset=0`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(response.body.resources).toHaveLength(1);
+      expect(response.body.total).toBe(3);
     });
 
     it('should update and delete resources with lifecycle permissions', async () => {

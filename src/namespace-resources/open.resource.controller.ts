@@ -12,8 +12,7 @@ import {
   UseInterceptors,
   HttpStatus,
   HttpCode,
-  DefaultValuePipe,
-  ParseBoolPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
@@ -28,7 +27,7 @@ import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/o
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { OpenAddResourceTagRequestDto } from 'omniboxd/namespace-resources/dto/open-add-resource-tag-request.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
-import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
+import { OpenListResourcesResponseDto } from 'omniboxd/namespace-resources/dto/open-list-resources-response.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -45,6 +44,21 @@ import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-sto
 @Controller('open/api/v1/resources')
 export class OpenResourcesController {
   constructor(private readonly openResourcesService: OpenResourcesService) {}
+
+  private parseOptionalBoolean(value?: string): boolean {
+    if (value === undefined) {
+      return false;
+    }
+    if (value === 'true') {
+      return true;
+    }
+    if (value === 'false') {
+      return false;
+    }
+    throw new BadRequestException(
+      'Validation failed (boolean string is expected)',
+    );
+  }
 
   @Get()
   @APIKeyAuth({
@@ -88,7 +102,7 @@ export class OpenResourcesController {
   @ApiResponse({
     status: 200,
     description: 'Resources listed successfully',
-    type: [ResourceSummaryDto],
+    type: OpenListResourcesResponseDto,
   })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
@@ -98,9 +112,8 @@ export class OpenResourcesController {
     @Query('parent_id') parentId?: string,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
-    @Query('summary', new DefaultValuePipe(false), ParseBoolPipe)
-    summary?: boolean,
-  ): Promise<ResourceSummaryDto[]> {
+    @Query('summary') summary?: string,
+  ): Promise<OpenListResourcesResponseDto> {
     return await this.openResourcesService.listResources(
       apiKey.namespaceId,
       apiKey.attrs.root_resource_id,
@@ -109,7 +122,7 @@ export class OpenResourcesController {
         parentId,
         limit,
         offset,
-        summary,
+        summary: this.parseOptionalBoolean(summary),
       },
     );
   }

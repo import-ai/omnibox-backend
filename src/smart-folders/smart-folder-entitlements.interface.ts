@@ -24,6 +24,16 @@ export interface ISmartFoldersService {
     },
   ): Promise<ResourceSummaryDto[]>;
 
+  listChildrenWithTotal(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{ resources: ResourceSummaryDto[]; total: number }>;
+
   assertRestoreEntitlements(
     namespaceId: string,
     userId: string,

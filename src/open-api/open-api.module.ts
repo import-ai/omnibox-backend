@@ -11,6 +11,7 @@ import { OpenTagController } from 'omniboxd/tag/open.tag.controller';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { SearchModule } from 'omniboxd/search/search.module';
 import { OpenSearchController } from 'omniboxd/search/open.search.controller';
+import { OpenSkillController } from 'omniboxd/open-api/open.skill.controller';
 
 @Module({
   providers: [],
@@ -20,6 +21,7 @@ import { OpenSearchController } from 'omniboxd/search/open.search.controller';
     OpenWizardController,
     OpenTagController,
     OpenSearchController,
+    OpenSkillController,
   ],
   exports: [],
   imports: [

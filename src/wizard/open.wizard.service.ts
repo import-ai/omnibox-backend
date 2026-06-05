@@ -11,6 +11,7 @@ import {
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { EntityNotFoundError } from 'typeorm';
 
 @Injectable()
 export class OpenWizardService {
@@ -58,9 +59,30 @@ export class OpenWizardService {
     parentMessageId?: string,
   ): Promise<string> {
     if (parentMessageId) {
-      // Find conversation_id from parent_message_id
-      const parentMessage = await this.messagesService.findOne(parentMessageId);
-      return parentMessage.conversationId;
+      try {
+        const parentMessage = await this.messagesService.findOneForUser(
+          parentMessageId,
+          userId,
+        );
+        const conversation =
+          await this.conversationsService.findOneForUserInNamespace(
+            parentMessage.conversationId,
+            userId,
+            namespaceId,
+          );
+        return conversation.id;
+      } catch (error) {
+        if (!(error instanceof EntityNotFoundError)) {
+          throw error;
+        }
+
+        const message = this.i18n.t('system.errors.messageNotFound');
+        throw new AppException(
+          message,
+          'PARENT_MESSAGE_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
     } else {
       // Create a new conversation
       const conversation = await this.conversationsService.create(

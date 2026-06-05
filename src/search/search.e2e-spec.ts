@@ -9,10 +9,13 @@ import {
   SearchController,
   InternalSearchController,
 } from './search.controller';
+import { OpenSearchController } from 'omniboxd/search/open.search.controller';
 import { SearchService } from './search.service';
+import { OpenSearchService } from 'omniboxd/search/open.search.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -21,6 +24,12 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { TagService } from 'omniboxd/tag/tag.service';
+import {
+  APIKey,
+  APIKeyPermissionTarget,
+  APIKeyPermissionType,
+} from 'omniboxd/api-key/api-key.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
 jest.mock('../wizard-api/wizard-api.service', () => {
@@ -84,15 +93,21 @@ jest.mock('../wizard-api/wizard-api.service', () => {
 describe('SearchController (e2e)', () => {
   let app: INestApplication;
   let searchService: SearchService;
+  let openSearchService: OpenSearchService;
 
   const mockUser = { id: 'test-user-id' };
   const mockNamespaceId = '550e8400-e29b-41d4-a716-446655440000';
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      controllers: [SearchController, InternalSearchController],
+      controllers: [
+        SearchController,
+        OpenSearchController,
+        InternalSearchController,
+      ],
       providers: [
         SearchService,
+        OpenSearchService,
         WizardAPIService,
         {
           provide: PermissionsService,
@@ -123,10 +138,39 @@ describe('SearchController (e2e)', () => {
           },
         },
         {
+          provide: OpenResourcesService,
+          useValue: {
+            filterResourceScope: jest
+              .fn()
+              .mockResolvedValue(['550e8400-e29b-41d4-a716-446655440000']),
+          },
+        },
+        {
           provide: ResourcesService,
           useValue: {
             getParentResources: jest.fn().mockResolvedValue([]),
-            batchGetResourceMeta: jest.fn().mockResolvedValue(new Map()),
+            batchGetResourceMeta: jest
+              .fn()
+              .mockImplementation((_namespaceId, resourceIds: string[]) => {
+                const entries: Array<
+                  [
+                    string,
+                    {
+                      id: string;
+                      attrs: Record<string, unknown>;
+                      resourceType: ResourceType;
+                    },
+                  ]
+                > = (resourceIds || []).map((id) => [
+                  id,
+                  {
+                    id,
+                    attrs: {},
+                    resourceType: ResourceType.DOC,
+                  },
+                ]);
+                return Promise.resolve(new Map(entries));
+              }),
             batchGetParentResources: jest
               .fn()
               .mockImplementation((_namespaceId, resourceIds: string[]) => {
@@ -202,6 +246,7 @@ describe('SearchController (e2e)', () => {
     await app.init();
 
     searchService = moduleFixture.get<SearchService>(SearchService);
+    openSearchService = moduleFixture.get<OpenSearchService>(OpenSearchService);
   });
 
   afterAll(async () => {
@@ -347,6 +392,36 @@ describe('SearchController (e2e)', () => {
         HttpStatus.OK,
         HttpStatus.INTERNAL_SERVER_ERROR,
       ]).toContain(response.status);
+    });
+  });
+
+  describe('openSearch', () => {
+    it('should return resource-only results filtered by open resource scope', async () => {
+      const apiKey = {
+        id: 'test-api-key-id',
+        value: 'sk-test',
+        userId: 'test-user',
+        namespaceId: 'test-namespace',
+        attrs: {
+          root_resource_id: 'test-root-resource',
+          permissions: [
+            {
+              target: APIKeyPermissionTarget.SEARCH,
+              permissions: [APIKeyPermissionType.READ],
+            },
+          ],
+        },
+      } as APIKey;
+
+      const result = await openSearchService.search(apiKey, 'test');
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        type: DocType.RESOURCE,
+        resourceId: '550e8400-e29b-41d4-a716-446655440000',
+        title: 'Test Document',
+      });
+      expect((result[0] as any).conversationId).toBeUndefined();
     });
   });
 

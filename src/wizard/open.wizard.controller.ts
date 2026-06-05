@@ -33,14 +33,19 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 @ApiTags('Wizard')
 @ApiSecurity('api-key')
+@SkipOpenAPIQuota()
 @Controller('open/api/v1/wizard')
 export class OpenWizardController {
   constructor(
     private readonly wizardService: WizardService,
     private readonly openWizardService: OpenWizardService,
+    private readonly openResourcesService: OpenResourcesService,
   ) {}
 
   @Post('collect/gzip')
@@ -55,8 +60,8 @@ export class OpenWizardController {
   })
   @UseInterceptors(FileInterceptor('html'))
   @ApiOperation({
-    summary: 'Collect web content and create a resource',
-    description: `Collects and saves a web page by uploading its HTML content along with metadata.
+    summary: 'Collect compressed HTML content',
+    description: `Collects and saves a web page by uploading gzip-compressed HTML content with metadata. The created resource is placed under the API key root resource, or under parentId when provided and within scope.
 
 ## Example
 
@@ -65,7 +70,7 @@ export class OpenWizardController {
 echo '<html><body>Page content</body></html>' | gzip > /tmp/html.gz
 
 # Then, make the API request
-curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
+curl -X POST 'https://api.omnibox.pro/v1/wizard/collect/gzip' \\
   -H 'Authorization: Bearer your-api-key' \\
   -F 'url=https://example.com/page' \\
   -F 'title=Example Page' \\
@@ -91,13 +96,20 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
     @Body() data: OpenCollectRequestDto,
     @UploadedFile() compressedHtml: Express.Multer.File,
   ): Promise<CollectResponseDto> {
+    const parentId = await this.openResourcesService.resolveResourceId(
+      apiKey.namespaceId,
+      apiKey.attrs.root_resource_id,
+      data.parentId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
     return await this.wizardService.compressedCollect(
       apiKey.namespaceId,
       userId,
       {
         url: data.url,
         title: data.title,
-        parentId: data.parentId || apiKey.attrs.root_resource_id,
+        parentId,
       } as CompressedCollectRequestDto,
       compressedHtml,
     );
@@ -113,7 +125,11 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
       },
     ],
   })
-  @ApiOperation({ summary: 'Ask a question to the AI wizard/assistant' })
+  @ApiOperation({
+    summary: 'Ask the AI assistant',
+    description:
+      'Sends a question to the AI assistant using Open API chat permissions. parent_message_id can continue an existing conversation only when the message belongs to the current API key user and namespace.',
+  })
   @ApiBody({
     description: 'Question and context for the AI assistant',
     type: OpenAgentRequestDto,
@@ -148,7 +164,11 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
       },
     ],
   })
-  @ApiOperation({ summary: 'Collect content from a URL' })
+  @ApiOperation({
+    summary: 'Collect content from a URL',
+    description:
+      'Creates an asynchronous collection task for a URL. The resulting resource is placed under the API key root resource, or under parentId when provided and within scope.',
+  })
   @ApiBody({
     description: 'URL to collect content from',
     type: OpenCollectUrlRequestDto,
@@ -165,11 +185,18 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect' \\
     @UserId() userId: string,
     @Body() data: OpenCollectUrlRequestDto,
   ): Promise<CollectUrlResponseDto> {
+    const parentId = await this.openResourcesService.resolveResourceId(
+      apiKey.namespaceId,
+      apiKey.attrs.root_resource_id,
+      data.parentId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
     return await this.wizardService.collectUrl(
       apiKey.namespaceId,
       userId,
       data.url,
-      data.parentId || apiKey.attrs.root_resource_id,
+      parentId,
     );
   }
 }

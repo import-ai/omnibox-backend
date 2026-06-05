@@ -19,6 +19,9 @@ export class NamespaceUsageDto {
   @Expose({ name: 'trash_retention_days' })
   trashRetentionDays: number;
 
+  @Expose({ name: 'open_api_requests_per_24h' })
+  openApiRequestsPer24h: number;
+
   @Expose({ name: 'readonly' })
   readonly: boolean;
 

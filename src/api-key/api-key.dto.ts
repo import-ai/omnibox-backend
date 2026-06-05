@@ -12,6 +12,7 @@ import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
 import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
 import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
 import { NamespaceUsageDto } from 'omniboxd/namespaces/dto/namespace-usage.dto';
+import { OpenAPIRequestsQuotaDto } from 'omniboxd/open-api/open-api-quota.dto';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateAPIKeyDto {
@@ -120,4 +121,11 @@ export class APIKeyInfoResponseDto {
   })
   @Expose({ name: 'namespace_usage' })
   namespaceUsage: NamespaceUsageDto;
+
+  @ApiProperty({
+    description: 'Open API requests per 24h quota status',
+    type: () => OpenAPIRequestsQuotaDto,
+  })
+  @Expose({ name: 'open_api_requests_quota' })
+  openApiRequestsQuota: OpenAPIRequestsQuotaDto;
 }

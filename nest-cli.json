@@ -8,7 +8,8 @@
       {
         "include": "mail/templates/**"
       },
-      { "include": "i18n/**/*", "watchAssets": true }
+      { "include": "i18n/**/*", "watchAssets": true },
+      { "include": "open-api/templates/**" }
     ]
   }
 }

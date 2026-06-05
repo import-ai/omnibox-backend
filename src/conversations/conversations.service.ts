@@ -267,6 +267,16 @@ export class ConversationsService {
     });
   }
 
+  async findOneForUserInNamespace(
+    conversationId: string,
+    userId: string,
+    namespaceId: string,
+  ) {
+    return await this.conversationRepository.findOneOrFail({
+      where: { id: conversationId, userId, namespaceId },
+    });
+  }
+
   async remove(namespaceId: string, userId: string, conversationId: string) {
     await transaction(this.dataSource.manager, async (tx) => {
       await this.wizardTaskService.emitDeleteConversationTask(

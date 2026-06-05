@@ -5,11 +5,13 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;
   let apiKeyValue: string;
   let readOnlyApiKeyValue: string;
+  let lifecycleApiKeyValue: string;
 
   beforeAll(async () => {
     client = await TestClient.create();
@@ -60,6 +62,32 @@ describe('OpenResourcesController (e2e)', () => {
       .expect(201);
 
     readOnlyApiKeyValue = readOnlyResponse.body.value;
+
+    const lifecycleApiKeyData = {
+      user_id: client.user.id,
+      namespace_id: client.namespace.id,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.RESOURCES,
+            permissions: [
+              APIKeyPermissionType.CREATE,
+              APIKeyPermissionType.READ,
+              APIKeyPermissionType.UPDATE,
+              APIKeyPermissionType.DELETE,
+            ],
+          },
+        ],
+      },
+    };
+
+    const lifecycleResponse = await client
+      .post('/api/v1/api-keys')
+      .send(lifecycleApiKeyData)
+      .expect(201);
+
+    lifecycleApiKeyValue = lifecycleResponse.body.value;
   });
 
   afterAll(async () => {
@@ -102,6 +130,57 @@ describe('OpenResourcesController (e2e)', () => {
       expect(response.body).toHaveProperty('id');
       expect(typeof response.body.id).toBe('string');
       expect(response.body).toHaveProperty('name');
+    });
+
+    it('should create a folder without content when name is provided', async () => {
+      const resourceData = {
+        name: 'Open API Folder',
+        resource_type: ResourceType.FOLDER,
+      };
+
+      const response = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send(resourceData)
+        .expect(201);
+
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.name).toBe(resourceData.name);
+
+      const resourceResponse = await client
+        .request()
+        .get(`/open/api/v1/resources/${response.body.id}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(resourceResponse.body).toMatchObject({
+        id: response.body.id,
+        name: resourceData.name,
+        resource_type: ResourceType.FOLDER,
+      });
+    });
+
+    it('should reject folder creation without name', async () => {
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({ resource_type: ResourceType.FOLDER })
+        .expect(400);
+    });
+
+    it('should reject folder creation with content', async () => {
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open API Folder With Content',
+          resource_type: ResourceType.FOLDER,
+          content: 'Folder content should not be accepted',
+        })
+        .expect(400);
     });
 
     it('create_resource_with_tags', async () => {
@@ -258,6 +337,340 @@ describe('OpenResourcesController (e2e)', () => {
         .set('Authorization', `Bearer ${apiKeyValue}`)
         .send(resourceData)
         .expect(400);
+    });
+  });
+
+  describe('resource lifecycle open APIs', () => {
+    it('should list and get resources with READ permission', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Lifecycle Read',
+          content: 'Content for open lifecycle read',
+        })
+        .expect(201);
+
+      const resourceId = resourceResponse.body.id;
+
+      const listResponse = await client
+        .request()
+        .get('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(Array.isArray(listResponse.body.resources)).toBe(true);
+      expect(listResponse.body.total).toBeGreaterThanOrEqual(1);
+      expect(listResponse.body.resources.length).toBeLessThanOrEqual(
+        listResponse.body.total,
+      );
+      const defaultSummaryItem = listResponse.body.resources.find(
+        (item: any) => item.id === resourceId,
+      );
+      expect(defaultSummaryItem).toBeDefined();
+      expect(defaultSummaryItem.content).toBe('');
+
+      const falseSummaryResponse = await client
+        .request()
+        .get('/open/api/v1/resources?summary=false')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+      expect(falseSummaryResponse.body.total).toBe(listResponse.body.total);
+      const falseSummaryItem = falseSummaryResponse.body.resources.find(
+        (item: any) => item.id === resourceId,
+      );
+      expect(falseSummaryItem).toBeDefined();
+      expect(falseSummaryItem.content).toBe('');
+
+      const trueSummaryResponse = await client
+        .request()
+        .get('/open/api/v1/resources?summary=true')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+      expect(trueSummaryResponse.body.total).toBe(listResponse.body.total);
+      const trueSummaryItem = trueSummaryResponse.body.resources.find(
+        (item: any) => item.id === resourceId,
+      );
+      expect(trueSummaryItem).toBeDefined();
+      expect(trueSummaryItem.content).toBe('Content for open lifecycle read');
+
+      await client
+        .request()
+        .get('/open/api/v1/resources?summary=invalid')
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(400);
+
+      const getResponse = await client
+        .request()
+        .get(`/open/api/v1/resources/${resourceId}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(getResponse.body).toMatchObject({
+        id: resourceId,
+        name: 'Open Lifecycle Read',
+        content: 'Content for open lifecycle read',
+        content_pagination: {
+          offset: 0,
+          limit: 100,
+          total_lines: 1,
+        },
+      });
+    });
+
+    it('should paginate resource content by line', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Paginated Content',
+          content: ['line 1', 'line 2', 'line 3', 'line 4'].join('\n'),
+        })
+        .expect(201);
+
+      const response = await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_offset=1&content_limit=2`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(response.body).toMatchObject({
+        content: ['line 2', 'line 3'].join('\n'),
+        content_pagination: {
+          offset: 1,
+          limit: 2,
+          total_lines: 4,
+        },
+      });
+
+      const outOfRangeResponse = await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_offset=10&content_limit=2`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(outOfRangeResponse.body).toMatchObject({
+        content: '',
+        content_pagination: {
+          offset: 10,
+          limit: 2,
+          total_lines: 4,
+        },
+      });
+    });
+
+    it('should reject invalid resource content pagination query', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Invalid Pagination Query',
+          content: 'line 1',
+        })
+        .expect(201);
+
+      await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_offset=-1`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(400);
+
+      await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_limit=0`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(400);
+
+      await client
+        .request()
+        .get(
+          `/open/api/v1/resources/${resourceResponse.body.id}?content_limit=1001`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(400);
+    });
+
+    it('should return total before limit for visible child resources', async () => {
+      const folderResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open List Total Folder',
+          resource_type: ResourceType.FOLDER,
+        })
+        .expect(201);
+
+      for (const index of [1, 2, 3]) {
+        await client
+          .request()
+          .post('/open/api/v1/resources')
+          .set('Authorization', `Bearer ${apiKeyValue}`)
+          .send({
+            name: `Open List Total Child ${index}`,
+            content: `Open list total child content ${index}`,
+            parent_id: folderResponse.body.id,
+          })
+          .expect(201);
+      }
+
+      const response = await client
+        .request()
+        .get(
+          `/open/api/v1/resources?parent_id=${folderResponse.body.id}&limit=1&offset=0`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(response.body.resources).toHaveLength(1);
+      expect(response.body.total).toBe(3);
+    });
+
+    it('should update and delete resources with lifecycle permissions', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Lifecycle Update',
+          content: 'Initial open lifecycle content',
+        })
+        .expect(201);
+
+      const resourceId = resourceResponse.body.id;
+
+      const updateResponse = await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceId}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Lifecycle Updated',
+          content: 'Updated open lifecycle content',
+        })
+        .expect(200);
+
+      expect(updateResponse.body).toMatchObject({
+        id: resourceId,
+        name: 'Open Lifecycle Updated',
+        content: 'Updated open lifecycle content',
+      });
+
+      await client
+        .request()
+        .delete(`/open/api/v1/resources/${resourceId}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .expect(200);
+
+      await client
+        .request()
+        .get(`/open/api/v1/resources/${resourceId}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(404);
+    });
+
+    it('should add and remove resource tags with UPDATE permission', async () => {
+      const firstTagName = 'open-remove-tag';
+      const secondTagName = 'open-add-tag';
+      const [firstTagId] = await client.createTags([firstTagName]);
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Resource Tags',
+          content: 'Open resource tag mutation content',
+        })
+        .expect(201);
+
+      const resourceId = resourceResponse.body.id;
+
+      await client
+        .request()
+        .post(`/open/api/v1/resources/${resourceId}/tags`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ tag_name: firstTagName })
+        .expect(200);
+
+      const secondAddResponse = await client
+        .request()
+        .post(`/open/api/v1/resources/${resourceId}/tags`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ tag_name: secondTagName })
+        .expect(200);
+
+      expect(secondAddResponse.body.tags.map((tag: any) => tag.name)).toEqual(
+        expect.arrayContaining([firstTagName, secondTagName]),
+      );
+
+      const removeResponse = await client
+        .request()
+        .delete(`/open/api/v1/resources/${resourceId}/tags/${firstTagId}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .expect(200);
+
+      const remainingTags = removeResponse.body.tags;
+      expect(remainingTags.map((tag: any) => tag.name)).toContain(
+        secondTagName,
+      );
+      expect(remainingTags.map((tag: any) => tag.id)).not.toContain(firstTagId);
+    });
+
+    it('should reject resource tag mutations when API key lacks UPDATE permission', async () => {
+      const [tagId] = await client.createTags(['open-tag-no-update']);
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Resource Tag Permission',
+          content: 'Permission test content',
+        })
+        .expect(201);
+
+      await client
+        .request()
+        .post(`/open/api/v1/resources/${resourceResponse.body.id}/tags`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .send({ tag_name: 'open-tag-no-update' })
+        .expect(403);
+
+      await client
+        .request()
+        .delete(
+          `/open/api/v1/resources/${resourceResponse.body.id}/tags/${tagId}`,
+        )
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(403);
+    });
+
+    it('should reject update when API key lacks UPDATE permission', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Lifecycle Permission',
+          content: 'Permission test content',
+        })
+        .expect(201);
+
+      await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceResponse.body.id}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .send({ name: 'Should not update' })
+        .expect(403);
     });
   });
 

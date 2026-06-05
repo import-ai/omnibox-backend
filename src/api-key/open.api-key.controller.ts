@@ -9,16 +9,22 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
+import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
 
 @ApiTags('API Keys')
 @ApiSecurity('api-key')
+@SkipOpenAPIQuota()
 @Controller('open/api/v1/api-keys')
 export class OpenAPIKeyController {
   constructor(private readonly apiKeyService: APIKeyService) {}
 
   @Get('info')
   @APIKeyAuth()
-  @ApiOperation({ summary: 'Get API key information' })
+  @ApiOperation({
+    summary: 'Get API key information',
+    description:
+      'Returns metadata for the current API key, including its namespace, root resource scope, and configured permissions.',
+  })
   @ApiResponse({
     status: 200,
     description: 'API key information retrieved successfully',
@@ -32,7 +38,11 @@ export class OpenAPIKeyController {
 
   @Delete()
   @APIKeyAuth()
-  @ApiOperation({ summary: 'Delete the API key and related applications' })
+  @ApiOperation({
+    summary: 'Delete the current API key',
+    description:
+      'Deletes the current API key and related application records. The key can no longer be used after this request succeeds.',
+  })
   @ApiResponse({ status: 200, description: 'API key deleted successfully' })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   async delete(@APIKey() apiKey: APIKeyEntity): Promise<void> {

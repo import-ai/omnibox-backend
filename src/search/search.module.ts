@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SearchService } from './search.service';
+import { OpenSearchService } from 'omniboxd/search/open.search.service';
 import {
   InternalSearchController,
   SearchController,
@@ -16,8 +17,8 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 
 @Module({
-  exports: [SearchService],
-  providers: [SearchService],
+  exports: [SearchService, OpenSearchService],
+  providers: [SearchService, OpenSearchService],
   controllers: [SearchController, InternalSearchController],
   imports: [
     WizardAPIModule,

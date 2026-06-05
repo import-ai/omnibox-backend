@@ -6,6 +6,10 @@
     "invalidApiKey": "Invalid API key",
     "noPermissionForTarget": "API key does not have permission for target: {target}",
     "noSpecificPermission": "API key does not have {permission} permission for target: {target}",
+    "invalidPermissions": "Invalid API key permissions",
+    "invalidPermissionTarget": "Invalid API key permission target: {target}",
+    "invalidPermissionAction": "Invalid API key permission action: {action} for target: {target}",
+    "invalidPermissionCombination": "API key permission action {action} is not allowed for target: {target}",
     "noPermissionForNamespace": "User {userId} does not have permission to namespace {namespaceId}",
     "noWritePermission": "User {userId} does not have write permission to resource {resourceId} in namespace {namespaceId}",
     "userOrNamespaceRequired": "Either user_id or namespace_id parameter is required"

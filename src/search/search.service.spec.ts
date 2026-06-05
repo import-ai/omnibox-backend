@@ -511,6 +511,149 @@ describe('SearchService', () => {
     });
   });
 
+  it('continues semantic search pages until the requested filtered page is filled', async () => {
+    const {
+      matcherService,
+      permissionsService,
+      resourcesService,
+      service,
+      wizardApiService,
+    } = createService();
+    const laterMatchingResourceId = 'later-matching-resource-id';
+    matcherService.matches.mockImplementation(
+      (resource) => resource.id === laterMatchingResourceId,
+    );
+    const conditions = [
+      {
+        field: SmartFolderField.TITLE,
+        operator: SmartFolderOperator.CONTAINS,
+        value: 'matched',
+      },
+    ];
+    const nonMatchingRecords = Array.from({ length: 100 }, (_, index) => ({
+      id: `non-matching-result-id-${index}`,
+      type: IndexRecordType.CHUNK,
+      chunk: {
+        resourceId: `non-matching-resource-id-${index}`,
+        title: `Query resource title ${index}`,
+        text: `Query resource content ${index}`,
+      },
+    }));
+    wizardApiService.search
+      .mockResolvedValueOnce({
+        records: nonMatchingRecords,
+      })
+      .mockResolvedValueOnce({
+        records: [
+          {
+            id: 'later-matching-resource-result-id',
+            type: IndexRecordType.CHUNK,
+            chunk: {
+              resourceId: laterMatchingResourceId,
+              title: 'Later matched title',
+              text: 'Later matched content',
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        records: [],
+      });
+    permissionsService.getCurrentPermissions.mockImplementation(
+      (_userId: string, _namespaceId: string, resources: any[]) =>
+        Promise.resolve(
+          new Map(
+            resources.map((resource) => [
+              resource.id,
+              ResourcePermission.CAN_VIEW,
+            ]),
+          ),
+        ),
+    );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              {
+                id,
+                name:
+                  id === laterMatchingResourceId
+                    ? 'Later matched title'
+                    : 'Query resource title',
+                attrs: {},
+                resourceType: ResourceType.DOC,
+              },
+            ]),
+          ),
+        ),
+    );
+    resourcesService.batchGetResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          ids.map((id) => ({
+            id,
+            name:
+              id === laterMatchingResourceId
+                ? 'Later matched title'
+                : 'Query resource title',
+            attrs: {},
+            resourceType: ResourceType.DOC,
+            tagIds: [],
+            createdAt: new Date('2026-05-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+            content:
+              id === laterMatchingResourceId
+                ? 'Later matched content'
+                : 'Query resource content',
+          })),
+        ),
+    );
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {
+        conditions,
+        matchMode: SmartFolderMatchMode.ALL,
+      },
+      {
+        offset: 0,
+        limit: 1,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(wizardApiService.search).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        offset: 0,
+        limit: 100,
+      }),
+    );
+    expect(wizardApiService.search).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        offset: 100,
+        limit: 100,
+      }),
+    );
+    expect(result).toEqual({
+      items: [
+        expect.objectContaining({
+          type: DocType.RESOURCE,
+          resourceId: laterMatchingResourceId,
+        }),
+      ],
+      total: 1,
+      offset: 0,
+      limit: 1,
+    });
+  });
+
   it('does not widen semantic results when filter match mode is any', async () => {
     const { searchResourceFilterService, service, wizardApiService } =
       createService();

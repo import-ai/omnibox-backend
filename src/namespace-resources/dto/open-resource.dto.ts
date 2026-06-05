@@ -30,7 +30,7 @@ export class OpenResourceDto {
     description: 'Pagination metadata for the resource content.',
     type: () => OpenResourceContentPaginationDto,
   })
-  content_pagenation: OpenResourceContentPaginationDto;
+  content_pagination: OpenResourceContentPaginationDto;
 
   tags: TagDto[];
   attrs: Record<string, any>;
@@ -58,7 +58,7 @@ export class OpenResourceDto {
     dto.name = resource.name;
     dto.resource_type = resource.resource_type;
     dto.content = text;
-    dto.content_pagenation = {
+    dto.content_pagination = {
       offset: contentPagination.offset,
       limit: contentPagination.limit,
       total_lines: totalLines,

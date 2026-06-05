@@ -253,7 +253,7 @@ export class OpenResourcesController {
   @ApiOperation({
     summary: 'Get a resource',
     description:
-      'Retrieves a single resource by ID. The resource must be within the API key root scope and visible to the API key user. Resource content is paginated using content_offset and content_limit; pagination metadata is returned in content_pagenation.',
+      'Retrieves a single resource by ID. The resource must be within the API key root scope and visible to the API key user. Resource content is paginated using content_offset and content_limit; pagination metadata is returned in content_pagination.',
   })
   @ApiResponse({
     status: 200,

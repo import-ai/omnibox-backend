@@ -93,13 +93,31 @@ Response shape:
 
 `total` is the full number of visible resources matching the same parent scope before `limit` and `offset` are applied.
 
-### Read one resource and its tags
+### Read one resource, content, and tags
 
 ```http
-GET /resources/<resourceId>
+GET /resources/<resourceId>?content_offset=0&content_limit=100
 ```
 
 Requires `resources:read`. The response includes `tags`, so use this endpoint to see the tags on a specific resource.
+
+Resource `content` is returned as a string and is paginated by lines. Use `content_offset` and `content_limit` to read long resources in chunks.
+
+Response shape excerpt:
+
+```json
+{
+  "id": "resource-id",
+  "name": "Resource name",
+  "content": "line 1\nline 2",
+  "content_pagination": {
+    "offset": 0,
+    "limit": 100,
+    "total_lines": 200
+  },
+  "tags": []
+}
+```
 
 ### Create a document resource
 

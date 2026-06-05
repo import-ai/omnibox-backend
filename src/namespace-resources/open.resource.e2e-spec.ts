@@ -411,7 +411,7 @@ describe('OpenResourcesController (e2e)', () => {
         id: resourceId,
         name: 'Open Lifecycle Read',
         content: 'Content for open lifecycle read',
-        content_pagenation: {
+        content_pagination: {
           offset: 0,
           limit: 100,
           total_lines: 1,
@@ -440,7 +440,7 @@ describe('OpenResourcesController (e2e)', () => {
 
       expect(response.body).toMatchObject({
         content: ['line 2', 'line 3'].join('\n'),
-        content_pagenation: {
+        content_pagination: {
           offset: 1,
           limit: 2,
           total_lines: 4,
@@ -457,7 +457,7 @@ describe('OpenResourcesController (e2e)', () => {
 
       expect(outOfRangeResponse.body).toMatchObject({
         content: '',
-        content_pagenation: {
+        content_pagination: {
           offset: 10,
           limit: 2,
           total_lines: 4,

@@ -36,6 +36,7 @@ const BACKFILL_PAGE_SIZE = 100;
 const WEAVIATE_SYNC_LOG_EVERY = 1000;
 const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_SEARCH_LIMIT = 100;
+const SEMANTIC_SEARCH_PAGE_SIZE = 100;
 
 export interface SearchPaginationOptions {
   offset?: number;
@@ -99,13 +100,17 @@ export class SearchService {
         filterOptions,
       );
     }
-    return await this.searchSemanticResources(
+    const result = await this.searchSemanticResources(
       userId,
       namespaceId,
       normalizedQuery,
       filterOptions,
-      MAX_SEARCH_LIMIT,
+      {
+        offset: 0,
+        limit: MAX_SEARCH_LIMIT,
+      },
     );
+    return result.items;
   }
 
   async searchPaginated(
@@ -160,19 +165,56 @@ export class SearchService {
       };
     }
 
-    const items = await this.searchSemanticResources(
+    const result = await this.searchSemanticResourcesPaginated(
       userId,
       namespaceId,
       normalizedQuery,
       filterOptions,
-      MAX_SEARCH_LIMIT,
+      offset,
+      limit,
     );
 
     return {
-      items: items.slice(offset, offset + limit),
-      total: items.length,
+      items: result.items,
+      total: result.total,
       offset,
       limit,
+    };
+  }
+
+  private async searchSemanticResourcesPaginated(
+    userId: string,
+    namespaceId: string,
+    normalizedQuery: string,
+    filterOptions: SearchFilterOptions,
+    offset: number,
+    limit: number,
+  ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
+    const requestedItemCount = offset + limit;
+    const matchingItems: IndexedDocDto[] = [];
+
+    for (
+      let searchOffset = 0, hasMoreRawResults = true;
+      matchingItems.length < requestedItemCount && hasMoreRawResults;
+      searchOffset += SEMANTIC_SEARCH_PAGE_SIZE
+    ) {
+      const searchPage = await this.searchSemanticResources(
+        userId,
+        namespaceId,
+        normalizedQuery,
+        filterOptions,
+        {
+          offset: searchOffset,
+          limit: SEMANTIC_SEARCH_PAGE_SIZE,
+        },
+      );
+      matchingItems.push(...searchPage.items);
+      hasMoreRawResults = searchPage.rawCount >= searchPage.limit;
+    }
+
+    return {
+      items: matchingItems.slice(offset, requestedItemCount),
+      total: matchingItems.length,
     };
   }
 
@@ -181,19 +223,27 @@ export class SearchService {
     namespaceId: string,
     normalizedQuery: string,
     filterOptions: SearchFilterOptions,
-    limit: number,
-  ): Promise<IndexedDocDto[]> {
+    pagination: Required<SearchPaginationOptions>,
+  ): Promise<{
+    items: IndexedDocDto[];
+    limit: number;
+    rawCount: number;
+  }> {
     const searchRequest = new SearchRequestDto();
     searchRequest.query = normalizedQuery;
     searchRequest.namespaceId = namespaceId;
     searchRequest.userId = userId;
-    searchRequest.limit = Math.min(Math.max(limit, 1), MAX_SEARCH_LIMIT);
-    searchRequest.offset = 0;
+    searchRequest.limit = Math.min(
+      Math.max(pagination.limit, 1),
+      MAX_SEARCH_LIMIT,
+    );
+    searchRequest.offset = Math.max(pagination.offset, 0);
     searchRequest.type = IndexRecordType.CHUNK;
     const result = await this.wizardApiService.search(searchRequest);
+    const records = result?.records || [];
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
-    for (const record of result?.records || []) {
+    for (const record of records) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
         if (!seenResourceIds.has(chunk.resourceId)) {
@@ -220,7 +270,7 @@ export class SearchService {
 
     seenResourceIds.clear();
 
-    for (const record of result?.records || []) {
+    for (const record of records) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
         if (seenResourceIds.has(chunk.resourceId)) {
@@ -252,7 +302,11 @@ export class SearchService {
       }
     }
 
-    return items;
+    return {
+      items,
+      limit: searchRequest.limit,
+      rawCount: records.length,
+    };
   }
 
   private normalizePagination(

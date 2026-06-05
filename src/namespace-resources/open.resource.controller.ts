@@ -180,6 +180,7 @@ export class OpenResourcesController {
   }
 
   @Post('upload')
+  @SkipOpenAPIQuota()
   @CheckNamespaceReadonly()
   @APIKeyAuth({
     permissions: [

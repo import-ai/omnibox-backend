@@ -57,6 +57,22 @@ Important rules for agents:
 
 When an endpoint returns `403`, inspect the needed permission in the endpoint list below.
 
+## Quota
+
+Most Open API business read, update, delete, tag, and search requests consume the namespace-level Open API request quota. When the quota is exhausted, quota-limited endpoints return `429` with `open_api_requests_per_24h_exceeded`.
+
+These endpoints do not consume Open API request quota:
+
+- `GET /api-keys/info`
+- `DELETE /api-keys`
+- `POST /resources`
+- `POST /resources/upload`
+- `POST /wizard/collect/url`
+- `POST /wizard/collect/gzip`
+- `POST /wizard/ask`
+
+Use `GET /api-keys/info` to inspect `open_api_requests_quota.limit`, `used`, `remaining`, and `reset_at`.
+
 ## Common workflows
 
 ### Inspect the current API key

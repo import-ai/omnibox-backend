@@ -195,7 +195,7 @@ export class SearchService {
 
     for (
       let searchOffset = 0, hasMoreRawResults = true;
-      matchingItems.length < requestedItemCount && hasMoreRawResults;
+      hasMoreRawResults;
       searchOffset += SEMANTIC_SEARCH_PAGE_SIZE
     ) {
       const searchPage = await this.searchSemanticResources(

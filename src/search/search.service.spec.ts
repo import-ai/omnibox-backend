@@ -511,6 +511,81 @@ describe('SearchService', () => {
     });
   });
 
+  it('scans all semantic result pages before returning the total', async () => {
+    const { permissionsService, resourcesService, service, wizardApiService } =
+      createService();
+    const firstPageRecords = Array.from({ length: 100 }, (_, index) => ({
+      id: `semantic-result-id-${index}`,
+      type: IndexRecordType.CHUNK,
+      chunk: {
+        resourceId: `semantic-resource-id-${index}`,
+        title: `Semantic resource title ${index}`,
+        text: `Semantic resource content ${index}`,
+      },
+    }));
+    const lastResourceId = 'semantic-resource-id-100';
+    wizardApiService.search
+      .mockResolvedValueOnce({
+        records: firstPageRecords,
+      })
+      .mockResolvedValueOnce({
+        records: [
+          {
+            id: 'semantic-result-id-100',
+            type: IndexRecordType.CHUNK,
+            chunk: {
+              resourceId: lastResourceId,
+              title: 'Semantic resource title 100',
+              text: 'Semantic resource content 100',
+            },
+          },
+        ],
+      });
+    permissionsService.getCurrentPermissions.mockImplementation(
+      (_userId: string, _namespaceId: string, resources: any[]) =>
+        Promise.resolve(
+          new Map(
+            resources.map((resource) => [
+              resource.id,
+              ResourcePermission.CAN_VIEW,
+            ]),
+          ),
+        ),
+    );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              {
+                id,
+                name: `Semantic resource title ${id.split('-').at(-1)}`,
+                attrs: {},
+                resourceType: ResourceType.DOC,
+              },
+            ]),
+          ),
+        ),
+    );
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 0,
+        limit: 20,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(result.items).toHaveLength(20);
+    expect(result.total).toBe(101);
+  });
+
   it('continues semantic search pages until the requested filtered page is filled', async () => {
     const {
       matcherService,

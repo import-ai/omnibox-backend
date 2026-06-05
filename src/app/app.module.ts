@@ -77,6 +77,7 @@ import { DeduplicateResourceNames1775666229211 } from 'omniboxd/migrations/17756
 import { AddNotifications1776070800000 } from 'omniboxd/migrations/1776070800000-add-notifications';
 import { AddStatusEnqueuedIndexToTasks1776071000000 } from 'omniboxd/migrations/1776071000000-add-status-enqueued-index-to-tasks';
 import { AddSmartFolders1779344088692 } from 'omniboxd/migrations/1779344088692-add-smart-folders';
+import { AddLastHeartbeatToTasks1780652045516 } from 'omniboxd/migrations/1780652045516-add-last-heartbeat-to-tasks';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -270,6 +271,7 @@ export class AppModule implements NestModule {
               AddStatusEnqueuedIndexToTasks1776071000000,
               DeduplicateResourceNames1775666229211,
               AddSmartFolders1779344088692,
+              AddLastHeartbeatToTasks1780652045516,
               ...extraMigrations,
             ],
             migrationsRun: true,

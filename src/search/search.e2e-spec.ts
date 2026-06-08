@@ -33,6 +33,7 @@ import {
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
 import { SearchResourceFilterService } from './search-resource-filter.service';
+import { SearchCandidateService } from './search-candidate.service';
 import {
   APIKey,
   APIKeyPermissionTarget,
@@ -117,6 +118,7 @@ describe('SearchController (e2e)', () => {
       providers: [
         SearchService,
         SearchResourceFilterService,
+        SearchCandidateService,
         OpenSearchService,
         WizardAPIService,
         {

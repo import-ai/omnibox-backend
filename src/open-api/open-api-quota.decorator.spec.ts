@@ -1,8 +1,9 @@
 import 'reflect-metadata';
+
 import { OpenAPIKeyController } from 'omniboxd/api-key/open.api-key.controller';
 import { OpenResourcesController } from 'omniboxd/namespace-resources/open.resource.controller';
-import { SKIP_OPEN_API_QUOTA } from 'omniboxd/open-api/open-api-quota.decorator';
 import { OpenSkillController } from 'omniboxd/open-api/open.skill.controller';
+import { SKIP_OPEN_API_QUOTA } from 'omniboxd/open-api/open-api-quota.decorator';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 
 describe('Open API quota skip decorators', () => {

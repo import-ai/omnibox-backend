@@ -1,8 +1,9 @@
-import otelSDK from './tracing';
-import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
 import { AppModule } from 'omniboxd/app/app.module';
 import { configureApp } from 'omniboxd/app/app-config';
+
+import otelSDK from './tracing';
 
 async function bootstrap() {
   // Start OpenTelemetry SDK before creating the NestJS app

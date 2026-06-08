@@ -1,5 +1,5 @@
-import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
+import { TestClient } from 'test/test-client';
 
 process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8000';
 

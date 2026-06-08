@@ -1,5 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Entity, Column, PrimaryGeneratedColumn, Unique, Index } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
 @Entity('oauth_pairwise_subjects')
 @Unique(['userId', 'clientId'])

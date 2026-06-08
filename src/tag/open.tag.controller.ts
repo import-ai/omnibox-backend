@@ -7,9 +7,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import {
+  APIKey as APIKeyEntity,
   APIKeyPermissionTarget,
   APIKeyPermissionType,
-  APIKey as APIKeyEntity,
 } from 'omniboxd/api-key/api-key.entity';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import { CreateTagRequestDto } from 'omniboxd/tag/dto/create-tag-request.dto';

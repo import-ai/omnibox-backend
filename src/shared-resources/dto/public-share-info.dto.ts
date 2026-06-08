@@ -1,5 +1,6 @@
 import { Expose } from 'class-transformer';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
+
 import { SharedResourceMetaDto } from './shared-resource-meta.dto';
 
 export class PublicShareInfoDto {

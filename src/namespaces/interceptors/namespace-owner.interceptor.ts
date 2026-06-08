@@ -5,10 +5,11 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Observable } from 'rxjs';
+
 import { NamespacesService } from '../namespaces.service';
-import { I18nService } from 'nestjs-i18n';
 
 @Injectable()
 export class NamespaceOwnerInterceptor implements NestInterceptor {

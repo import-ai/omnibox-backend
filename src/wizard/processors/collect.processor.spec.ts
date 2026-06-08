@@ -1,13 +1,14 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { CollectProcessor } from './collect.processor';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
-import { I18nService } from 'nestjs-i18n';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+
+import { CollectProcessor } from './collect.processor';
 
 describe('CollectProcessor', () => {
   let processor: CollectProcessor;

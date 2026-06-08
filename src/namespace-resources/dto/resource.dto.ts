@@ -4,6 +4,7 @@ import {
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+
 import { BreadcrumbItemDto } from './breadcrumb-item.dto';
 
 export enum SpaceType {

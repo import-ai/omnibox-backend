@@ -1,6 +1,6 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   PrivateSearchToolDto,
   WebSearchToolDto,

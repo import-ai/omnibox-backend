@@ -1,8 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { PhoneConfigService } from './phone-config.service';
 import { SmsService } from 'omniboxd/sms/sms.service';
+
+import { PhoneConfigService } from './phone-config.service';
 
 @ApiTags('Phone')
 @Controller('api/v1/phone')

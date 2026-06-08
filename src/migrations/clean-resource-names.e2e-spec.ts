@@ -1,9 +1,10 @@
-import { DataSource, QueryRunner } from 'typeorm';
 import {
   destroyDataSource,
   getTestPostgresUrl,
   releaseQueryRunner,
 } from 'test/migration-test-utils';
+import { DataSource, QueryRunner } from 'typeorm';
+
 import { CleanResourceNames1755396702021 } from './1755396702021-clean-resource-names';
 
 describe('CleanResourceNames Migration E2E', () => {

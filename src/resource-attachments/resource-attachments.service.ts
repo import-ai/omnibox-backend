@@ -1,19 +1,19 @@
-import { Injectable, HttpStatus, Logger } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DataSource, IsNull, Not } from 'typeorm';
+import { I18nService } from 'nestjs-i18n';
 import { ResourceAttachment } from 'omniboxd/attachments/entities/resource-attachment.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
-import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
-import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
-import { transaction, Transaction } from 'omniboxd/utils/transaction-utils';
 import { S3Service } from 'omniboxd/s3/s3.service';
+import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
+import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
 import {
   bigintStringToNumber,
   nullableBigintStringToNumber,
   numberToBigintString,
 } from 'omniboxd/utils/bigint-utils';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
 
 @Injectable()
 export class ResourceAttachmentsService {

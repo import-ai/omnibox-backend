@@ -1,23 +1,24 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { APIKeyService } from './api-key.service';
-import {
-  APIKey,
-  APIKeyPermissionType,
-  APIKeyPermissionTarget,
-} from './api-key.entity';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { CreateAPIKeyDto } from './api-key.dto';
-import { Applications } from 'omniboxd/applications/applications.entity';
-import { UserService } from 'omniboxd/user/user.service';
 import { I18nService } from 'nestjs-i18n';
+import { Applications } from 'omniboxd/applications/applications.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { OpenAPIQuotaService } from 'omniboxd/open-api/open-api-quota.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { UserService } from 'omniboxd/user/user.service';
+import { Repository } from 'typeorm';
+
+import { CreateAPIKeyDto } from './api-key.dto';
+import {
+  APIKey,
+  APIKeyPermissionTarget,
+  APIKeyPermissionType,
+} from './api-key.entity';
+import { APIKeyService } from './api-key.service';
 
 describe('APIKeyService', () => {
   let service: APIKeyService;

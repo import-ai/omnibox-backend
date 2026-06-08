@@ -1,7 +1,8 @@
-import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
-import { NamespaceRole } from './entities/namespace-member.entity';
+import { TestClient } from 'test/test-client';
+
 import { ResourcePermission } from '../permissions/resource-permission.enum';
+import { NamespaceRole } from './entities/namespace-member.entity';
 
 /**
  * Generate unique namespace name to avoid conflicts

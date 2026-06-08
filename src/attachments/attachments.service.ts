@@ -1,20 +1,21 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Response } from 'express';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
+import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
+import { Share } from 'omniboxd/shares/entities/share.entity';
 import {
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
-import { Injectable, Logger } from '@nestjs/common';
-import { Response } from 'express';
-import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { Readable } from 'stream';
+
 import {
   UploadAttachmentsResponseDto,
   UploadedAttachmentDto,
 } from './dto/upload-attachments-response.dto';
-import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
-import { Share } from 'omniboxd/shares/entities/share.entity';
-import { Readable } from 'stream';
 
 @Injectable()
 export class AttachmentsService {

@@ -1,11 +1,11 @@
-import { TestClient } from 'test/test-client';
 import {
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
-import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { TestClient } from 'test/test-client';
 
 describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;

@@ -1,27 +1,27 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { SpanStatusCode, trace } from '@opentelemetry/api';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
 import {
   ResourceDto,
   SpaceType,
 } from 'omniboxd/namespace-resources/dto/resource.dto';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { SpanStatusCode, trace } from '@opentelemetry/api';
-import { ParsedPathDo } from 'omniboxd/vfs/do/parsed-path.do';
-import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
-import { ListResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
-import { DataSource, EntityManager } from 'typeorm';
-import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
-import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
-import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
-import { last } from 'omniboxd/utils/arrays';
-import { VfsResourceResponseDto } from 'omniboxd/vfs/dto/vfs.resource.response.dto';
-import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
+import { last } from 'omniboxd/utils/arrays';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { ParsedPathDo } from 'omniboxd/vfs/do/parsed-path.do';
+import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
+import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
+import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
+import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
+import { ListResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
+import { VfsResourceResponseDto } from 'omniboxd/vfs/dto/vfs.resource.response.dto';
+import { DataSource, EntityManager } from 'typeorm';
 
 const tracer = trace.getTracer('VFSService');
 

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { Processor } from './processor.abstract';
 import { Task } from 'omniboxd/tasks/tasks.entity';
+
+import { Processor } from './processor.abstract';
 
 // Concrete implementation for testing the abstract class
 class TestProcessor extends Processor {

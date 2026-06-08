@@ -1,8 +1,26 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Resource, ResourceType } from './entities/resource.entity';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { File } from 'omniboxd/files/entities/file.entity';
+import { FilesService } from 'omniboxd/files/files.service';
+import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
+import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
+import {
+  bigintStringToNumber,
+  numberToBigintString,
+} from 'omniboxd/utils/bigint-utils';
+import { isOptional } from 'omniboxd/utils/is-empty';
+import {
+  generateUniqueResourceName,
+  sanitizeResourceName,
+} from 'omniboxd/utils/sanitize-resource-name';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import {
   DataSource,
   EntityManager,
@@ -11,26 +29,9 @@ import {
   Not,
   Repository,
 } from 'typeorm';
+
 import { ResourceMetaDto } from './dto/resource-meta.dto';
-import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
-import { FilesService } from 'omniboxd/files/files.service';
-import { File } from 'omniboxd/files/entities/file.entity';
-import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
-import { TasksService } from 'omniboxd/tasks/tasks.service';
-import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
-import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
-import { Task } from 'omniboxd/tasks/tasks.entity';
-import {
-  bigintStringToNumber,
-  numberToBigintString,
-} from 'omniboxd/utils/bigint-utils';
-import { isOptional } from 'omniboxd/utils/is-empty';
-import {
-  sanitizeResourceName,
-  generateUniqueResourceName,
-} from 'omniboxd/utils/sanitize-resource-name';
-import { TagService } from 'omniboxd/tag/tag.service';
-import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+import { Resource, ResourceType } from './entities/resource.entity';
 
 const TASK_PRIORITY = 5;
 

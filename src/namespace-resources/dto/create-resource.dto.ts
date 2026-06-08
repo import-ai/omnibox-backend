@@ -1,12 +1,12 @@
 import {
-  IsEnum,
   IsArray,
-  IsString,
+  IsEnum,
+  IsNotEmpty,
   IsObject,
   IsOptional,
-  IsNotEmpty,
-  ValidateIf,
+  IsString,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';

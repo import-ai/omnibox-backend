@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString } from 'class-validator';
 import { Expose } from 'class-transformer';
+import { IsNotEmpty, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class GroupDto {

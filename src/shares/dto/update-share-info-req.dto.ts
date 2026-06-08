@@ -1,13 +1,14 @@
 import { Expose } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
-  IsDateString,
-  IsInt,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+
 import { ShareType } from '../entities/share.entity';
 
 export class UpdateShareInfoReqDto {

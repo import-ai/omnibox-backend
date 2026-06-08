@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { OAuthPairwiseSubject } from './entities/oauth-pairwise-subject.entity';
 import generateId from 'omniboxd/utils/generate-id';
+import { Repository } from 'typeorm';
+
+import { OAuthPairwiseSubject } from './entities/oauth-pairwise-subject.entity';
 
 @Injectable()
 export class PairwiseSubjectService {

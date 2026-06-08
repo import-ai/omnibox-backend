@@ -1,4 +1,5 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+
 import { BaseColumns } from './base-columns';
 
 export class Files1761556143000 implements MigrationInterface {

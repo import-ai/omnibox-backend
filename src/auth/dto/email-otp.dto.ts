@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsString, Length } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+
 import { IsAllowedEmailDomain } from '../../utils/email-validation';
 
 export class SendEmailOtpDto {

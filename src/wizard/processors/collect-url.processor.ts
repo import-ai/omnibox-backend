@@ -1,11 +1,11 @@
-import { Task } from 'omniboxd/tasks/tasks.entity';
-import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { isEmpty } from 'omniboxd/utils/is-empty';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { isEmpty } from 'omniboxd/utils/is-empty';
+import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 
 export class CollectUrlProcessor extends Processor {
   constructor(

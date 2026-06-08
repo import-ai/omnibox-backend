@@ -1,7 +1,7 @@
-import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { Controller, Get, Param } from '@nestjs/common';
-import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 
 @Controller('internal/api/v1/wizard/tasks')
 export class InternalWizardTasksController {

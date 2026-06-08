@@ -1,36 +1,36 @@
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 import { isEmail } from 'class-validator';
-import generateId from 'omniboxd/utils/generate-id';
+import { I18nService } from 'nestjs-i18n';
+import { APIKey } from 'omniboxd/api-key/api-key.entity';
+import { Applications } from 'omniboxd/applications/applications.entity';
+import { CacheService } from 'omniboxd/common/cache.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { maskPhone } from 'omniboxd/common/validators';
-import { InjectRepository } from '@nestjs/typeorm';
-import { User } from 'omniboxd/user/entities/user.entity';
+import { Invitation } from 'omniboxd/invitations/entities/invitation.entity';
 import { MailService } from 'omniboxd/mail/mail.service';
-import { SmsService } from 'omniboxd/sms/sms.service';
-import { DataSource, EntityManager, In, Like, Repository } from 'typeorm';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import {
   NamespaceMember,
   NamespaceRole,
 } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
-import { APIKey } from 'omniboxd/api-key/api-key.entity';
-import { Applications } from 'omniboxd/applications/applications.entity';
+import { SmsService } from 'omniboxd/sms/sms.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
-import { Invitation } from 'omniboxd/invitations/entities/invitation.entity';
-import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
-import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
-import { UserOption } from 'omniboxd/user/entities/user-option.entity';
-import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
-import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
-import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
+import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
+import { UpdateUserBindingDto } from 'omniboxd/user/dto/update-user-binding.dto';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
+import { UserOption } from 'omniboxd/user/entities/user-option.entity';
 import { isNameBlocked } from 'omniboxd/utils/blocked-names';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
-import { CacheService } from 'omniboxd/common/cache.service';
 import { filterEmoji } from 'omniboxd/utils/emoji';
+import generateId from 'omniboxd/utils/generate-id';
 import { appendTokenToUrl } from 'omniboxd/utils/url-utils';
+import { DataSource, EntityManager, In, Like, Repository } from 'typeorm';
 
 interface EmailVerificationState {
   code: string;

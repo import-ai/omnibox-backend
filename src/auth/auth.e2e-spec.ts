@@ -1,8 +1,8 @@
-import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
 import { APIKeyPermissionType } from 'omniboxd/api-key/api-key.entity';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { ALLOWED_EMAIL_DOMAINS } from 'omniboxd/utils/email-validation';
+import { TestClient } from 'test/test-client';
 
 describe('AuthModule (e2e)', () => {
   let client: TestClient;

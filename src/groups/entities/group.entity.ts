@@ -1,6 +1,6 @@
 import { Base } from 'omniboxd/common/base.entity';
 import generateId from 'omniboxd/utils/generate-id';
-import { Entity, Column, PrimaryColumn, BeforeInsert } from 'typeorm';
+import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 
 @Entity('groups')
 export class Group extends Base {

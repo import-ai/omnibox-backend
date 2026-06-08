@@ -3,8 +3,8 @@ import {
   ExecutionContext,
   HttpStatus,
 } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Request } from 'express';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 interface UserIdOptions {
   optional?: boolean;

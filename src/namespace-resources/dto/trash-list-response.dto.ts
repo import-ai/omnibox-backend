@@ -1,4 +1,5 @@
 import { Expose } from 'class-transformer';
+
 import { TrashItemDto } from './trash-item.dto';
 
 export class TrashListResponseDto {

@@ -1,8 +1,8 @@
-import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
-import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { QQBot } from 'omniboxd/applications/apps/qq-bot';
+import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
+import { TestClient } from 'test/test-client';
 
 describe('ApplicationsController (e2e)', () => {
   let client: TestClient;

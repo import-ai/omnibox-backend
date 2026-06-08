@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { NamespacesQuotaService } from './namespaces-quota.service';
+
 import { NamespaceReadonlyInterceptor } from './interceptors/namespace-readonly.interceptor';
+import { NamespacesQuotaService } from './namespaces-quota.service';
 
 @Module({
   providers: [NamespacesQuotaService, NamespaceReadonlyInterceptor],

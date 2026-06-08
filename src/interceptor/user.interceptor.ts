@@ -1,12 +1,12 @@
 import {
+  CallHandler,
+  ExecutionContext,
   Injectable,
   NestInterceptor,
-  ExecutionContext,
-  CallHandler,
 } from '@nestjs/common';
+import { context, trace } from '@opentelemetry/api';
 import { Observable } from 'rxjs';
-import { tap, finalize } from 'rxjs/operators';
-import { trace, context } from '@opentelemetry/api';
+import { finalize, tap } from 'rxjs/operators';
 import { Socket } from 'socket.io';
 
 const LOGIN_URLS = ['/api/v1/login', '/api/v1/auth/accept-invite'];

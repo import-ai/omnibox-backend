@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsObject } from 'class-validator';
+import { IsNotEmpty, IsObject, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class TraceEventDto {

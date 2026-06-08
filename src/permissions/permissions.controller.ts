@@ -3,15 +3,16 @@ import {
   Controller,
   Delete,
   Get,
+  HttpStatus,
   Param,
   Patch,
   Req,
-  HttpStatus,
 } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
-import { PermissionsService } from './permissions.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+
 import { PermissionDto } from './dto/permission.dto';
+import { PermissionsService } from './permissions.service';
 import { ResourcePermission } from './resource-permission.enum';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/permissions')

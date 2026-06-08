@@ -1,12 +1,13 @@
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
-import { transformKeysToSnakeCase } from './utils';
 import {
-  Injectable,
   CallHandler,
   ExecutionContext,
+  Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+
+import { transformKeysToSnakeCase } from './utils';
 
 @Injectable()
 export class SnakeCaseInterceptor implements NestInterceptor {

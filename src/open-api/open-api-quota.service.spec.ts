@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { createClient } from 'redis';
+
 import { OpenAPIQuotaService } from './open-api-quota.service';
 
 jest.mock('redis', () => ({

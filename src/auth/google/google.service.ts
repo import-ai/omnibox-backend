@@ -1,15 +1,15 @@
-import { DataSource } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { I18nService } from 'nestjs-i18n';
 import { SocialService } from 'omniboxd/auth/social.service';
-import { UserService } from 'omniboxd/user/user.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { UserService } from 'omniboxd/user/user.service';
 import { fetchWithRetry } from 'omniboxd/utils/fetch-with-retry';
 import { transaction } from 'omniboxd/utils/transaction-utils';
+import { DataSource } from 'typeorm';
 
 interface GoogleTokenResponse {
   access_token: string;

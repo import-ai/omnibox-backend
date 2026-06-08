@@ -1,4 +1,5 @@
 import { Expose, Type } from 'class-transformer';
+
 import { IndexRecordDto } from './index-record.dto';
 
 export class SearchResponseDto {

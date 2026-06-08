@@ -1,5 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+
 import { CreateNotificationRequestDto } from './dto';
 import { NotificationsService } from './notifications.service';
 

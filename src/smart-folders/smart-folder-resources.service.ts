@@ -1,12 +1,13 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
-import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import {
   ResourceDto,
   SpaceType,
 } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
+import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
@@ -14,8 +15,8 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
-import { I18nService } from 'nestjs-i18n';
 import { DataSource, EntityManager, Repository } from 'typeorm';
+
 import {
   SmartFolderCreateResourceInput,
   SmartFolderUpdateResourceInput,

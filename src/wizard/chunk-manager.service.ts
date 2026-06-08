@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { S3Service } from 'omniboxd/s3/s3.service';
-import { ConfigService } from '@nestjs/config';
 import { buffer } from 'node:stream/consumers';
+
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { S3Service } from 'omniboxd/s3/s3.service';
 
 @Injectable()
 export class ChunkManagerService {

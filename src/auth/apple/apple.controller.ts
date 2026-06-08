@@ -1,9 +1,9 @@
-import { Request, Response } from 'express';
-import { AuthService } from 'omniboxd/auth/auth.service';
-import { AppleService } from 'omniboxd/auth/apple/apple.service';
-import { Req, Res, Get, Body, Controller, Post } from '@nestjs/common';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Request, Response } from 'express';
+import { AppleService } from 'omniboxd/auth/apple/apple.service';
+import { AuthService } from 'omniboxd/auth/auth.service';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { SocialController } from 'omniboxd/auth/social.controller';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 

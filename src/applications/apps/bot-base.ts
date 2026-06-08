@@ -1,21 +1,21 @@
-import { BaseApp } from 'omniboxd/applications/apps/base-app';
-import { Repository } from 'typeorm';
-import { Applications } from 'omniboxd/applications/applications.entity';
-import { APIKeyService } from 'omniboxd/api-key/api-key.service';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { I18nService } from 'nestjs-i18n';
+import { APIKeyResponseDto } from 'omniboxd/api-key/api-key.dto';
 import {
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
-import { Injectable, HttpStatus } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import {
   ApplicationsResponseDto,
   CreateApplicationsDto,
 } from 'omniboxd/applications/applications.dto';
-import { APIKeyResponseDto } from 'omniboxd/api-key/api-key.dto';
+import { Applications } from 'omniboxd/applications/applications.entity';
+import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { Repository } from 'typeorm';
 
 export interface BotCallbackRequestDto {
   key: string;

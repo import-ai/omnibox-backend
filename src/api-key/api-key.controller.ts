@@ -1,24 +1,24 @@
-import { APIKeyService } from 'omniboxd/api-key/api-key.service';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { I18n, I18nContext } from 'nestjs-i18n';
 import {
   APIKeyResponseDto,
   CreateAPIKeyDto,
   PatchAPIKeyDto,
   UpdateAPIKeyDto,
 } from 'omniboxd/api-key/api-key.dto';
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Put,
-  Query,
-  HttpStatus,
-} from '@nestjs/common';
+import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18n, I18nContext } from 'nestjs-i18n';
 
 @Controller('api/v1/api-keys')
 export class APIKeyController {

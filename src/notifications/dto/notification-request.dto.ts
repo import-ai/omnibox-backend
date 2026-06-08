@@ -1,9 +1,5 @@
 import { Expose } from 'class-transformer';
 import {
-  ValidatorConstraint,
-  ValidatorConstraintInterface,
-  ValidationArguments,
-  Validate,
   IsArray,
   IsIn,
   IsInt,
@@ -13,6 +9,10 @@ import {
   IsString,
   IsUUID,
   Min,
+  Validate,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 

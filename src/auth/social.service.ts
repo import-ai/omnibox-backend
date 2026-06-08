@@ -1,14 +1,14 @@
-import { EntityManager } from 'typeorm';
-import generateId from 'omniboxd/utils/generate-id';
-import { UserService } from 'omniboxd/user/user.service';
-import { WechatCheckResponseDto } from 'omniboxd/auth/dto/wechat-login.dto';
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
+import { WechatCheckResponseDto } from 'omniboxd/auth/dto/wechat-login.dto';
 import { CacheService } from 'omniboxd/common/cache.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { UserService } from 'omniboxd/user/user.service';
 import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 import { filterEmoji } from 'omniboxd/utils/emoji';
+import generateId from 'omniboxd/utils/generate-id';
+import { EntityManager } from 'typeorm';
 
 export interface UserSocialState {
   type: string;

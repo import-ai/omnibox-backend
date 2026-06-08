@@ -1,15 +1,16 @@
-import { Injectable, HttpStatus, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { I18nService } from 'nestjs-i18n';
 import * as crypto from 'crypto';
-import { OAuthClientService } from './oauth-client.service';
-import { PairwiseSubjectService } from './pairwise-subject.service';
-import { OAuthTokenStoreService } from './oauth-token-store.service';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserService } from 'omniboxd/user/user.service';
+
 import { AuthorizeRequestDto } from './dto/authorize-request.dto';
 import { TokenRequestDto, TokenResponseDto } from './dto/token-request.dto';
 import { UserinfoResponseDto } from './dto/userinfo-response.dto';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { OAuthClientService } from './oauth-client.service';
+import { OAuthTokenStoreService } from './oauth-token-store.service';
+import { PairwiseSubjectService } from './pairwise-subject.service';
 
 @Injectable()
 export class OAuthProviderService {

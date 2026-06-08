@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { SmsModule } from 'omniboxd/sms/sms.module';
-import { PhoneConfigService } from './phone-config.service';
+
 import { PhoneConfigController } from './phone-config.controller';
+import { PhoneConfigService } from './phone-config.service';
 
 @Module({
   imports: [ConfigModule, SmsModule],

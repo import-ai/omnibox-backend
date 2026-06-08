@@ -1,9 +1,9 @@
-import { TestClient } from 'test/test-client';
-import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { plainToInstance } from 'class-transformer';
-import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { last } from 'omniboxd/utils/arrays';
 import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
+import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
+import { TestClient } from 'test/test-client';
 
 async function getByPath(
   client: TestClient,

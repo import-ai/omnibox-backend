@@ -1,8 +1,8 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { FilterTagsRequestDto } from 'omniboxd/resource-tags/dto/filter-tags-request.dto';
-import { ListTagsResponseDto } from 'omniboxd/resource-tags/dto/list-tags-response.dto';
 import { ListTagsRequestDto } from 'omniboxd/resource-tags/dto/list-tags-request.dto';
+import { ListTagsResponseDto } from 'omniboxd/resource-tags/dto/list-tags-response.dto';
 import { TagWithCountDto } from 'omniboxd/resource-tags/dto/tag-with-count.dto';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';

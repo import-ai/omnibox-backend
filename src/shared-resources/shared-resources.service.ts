@@ -1,21 +1,22 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
-import { SharedResourceDto } from './dto/shared-resource.dto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
-import { Share } from 'omniboxd/shares/entities/share.entity';
-import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
-import { TagService } from 'omniboxd/tag/tag.service';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
-import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
-import { VFSResourceFilterOptionsDto } from 'omniboxd/vfs/dto/filter.request.dto';
+import { TagService } from 'omniboxd/tag/tag.service';
 import { last } from 'omniboxd/utils/arrays';
+import { VFSResourceFilterOptionsDto } from 'omniboxd/vfs/dto/filter.request.dto';
+
+import { SharedResourceDto } from './dto/shared-resource.dto';
+import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 
 @Injectable()
 export class SharedResourcesService {

@@ -1,5 +1,5 @@
-import { IsEmail, IsNotEmpty } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { IsEmail, IsNotEmpty } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { IsAllowedEmailDomain } from 'omniboxd/utils/email-validation';
 

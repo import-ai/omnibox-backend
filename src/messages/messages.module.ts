@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Message } from 'omniboxd/messages/entities/message.entity';
-import { MessagesService } from 'omniboxd/messages/messages.service';
 import { MessagesController } from 'omniboxd/messages/messages.controller';
+import { MessagesService } from 'omniboxd/messages/messages.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 

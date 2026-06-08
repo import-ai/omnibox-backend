@@ -1,20 +1,21 @@
-import { NamespaceRole } from './entities/namespace-member.entity';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import {
-  Get,
-  Post,
   Body,
+  Controller,
+  Delete,
+  Get,
   Param,
   Patch,
-  Delete,
-  Controller,
+  Post,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+
+import { NamespaceAdmin } from './decorators/namespace-admin.decorator';
+import { NamespaceOwner } from './decorators/namespace-owner.decorator';
 import { CreateNamespaceDto } from './dto/create-namespace.dto';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
-import { NamespaceOwner } from './decorators/namespace-owner.decorator';
-import { NamespaceAdmin } from './decorators/namespace-admin.decorator';
-import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
+import { NamespaceRole } from './entities/namespace-member.entity';
 
 @Controller('api/v1/namespaces')
 export class NamespacesController {

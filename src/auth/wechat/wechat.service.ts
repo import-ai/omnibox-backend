@@ -1,14 +1,14 @@
-import { DataSource } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { UserService } from 'omniboxd/user/user.service';
+import { JwtService } from '@nestjs/jwt';
+import { I18nService } from 'nestjs-i18n';
 import { SocialService } from 'omniboxd/auth/social.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { CreateUserBindingDto } from 'omniboxd/user/dto/create-user-binding.dto';
-import { Logger, Injectable, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { UserService } from 'omniboxd/user/user.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
+import { DataSource } from 'typeorm';
 
 export interface WechatUserInfo {
   openid: string;

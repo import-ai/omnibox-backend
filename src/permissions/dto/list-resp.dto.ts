@@ -1,7 +1,8 @@
 import { Group } from 'omniboxd/groups/entities/group.entity';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
-import { ResourcePermission } from '../resource-permission.enum';
 import { User } from 'omniboxd/user/entities/user.entity';
+
+import { ResourcePermission } from '../resource-permission.enum';
 
 export class GroupDto {
   id: string;

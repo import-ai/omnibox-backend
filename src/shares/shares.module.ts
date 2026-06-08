@@ -1,15 +1,16 @@
 import { Module } from '@nestjs/common';
-import { SharesService } from './shares.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
+import { UserModule } from 'omniboxd/user/user.module';
+
 import { Share } from './entities/share.entity';
 import {
   PublicSharesController,
   ResourceSharesController,
 } from './shares.controller';
-import { ResourcesModule } from 'omniboxd/resources/resources.module';
-import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
-import { UserModule } from 'omniboxd/user/user.module';
-import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
+import { SharesService } from './shares.service';
 
 @Module({
   imports: [

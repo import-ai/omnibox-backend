@@ -1,22 +1,7 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import {
-  ClearNotificationsRequestDto,
-  CreateNotificationRequestDto,
-  ClearNotificationsResponseDto,
-  NotificationDetailResponseDto,
-  NotificationItemDto,
-  NotificationListResponseDto,
-  NotificationUnreadCountResponseDto,
-  UpdateNotificationResponseDto,
-  UpdateNotificationRequestDto,
-} from './dto';
-import {
-  Notification,
-  NotificationStatus,
-} from './entities/notification.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   Brackets,
   FindOptionsWhere,
@@ -25,6 +10,22 @@ import {
   MoreThanOrEqual,
   Repository,
 } from 'typeorm';
+
+import {
+  ClearNotificationsRequestDto,
+  ClearNotificationsResponseDto,
+  CreateNotificationRequestDto,
+  NotificationDetailResponseDto,
+  NotificationItemDto,
+  NotificationListResponseDto,
+  NotificationUnreadCountResponseDto,
+  UpdateNotificationRequestDto,
+  UpdateNotificationResponseDto,
+} from './dto';
+import {
+  Notification,
+  NotificationStatus,
+} from './entities/notification.entity';
 
 const NOTIFICATION_RETENTION_DAYS = 30;
 

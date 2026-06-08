@@ -1,33 +1,33 @@
-import { MessagesService } from 'omniboxd/messages/messages.service';
 import { HttpStatus, Injectable, Logger, MessageEvent } from '@nestjs/common';
-import { Observable, Subscriber } from 'rxjs';
+import { trace } from '@opentelemetry/api';
+import { I18nService } from 'nestjs-i18n';
+import { Span } from 'nestjs-otel';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   Message,
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
+import { MessagesService } from 'omniboxd/messages/messages.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
+import { Share } from 'omniboxd/shares/entities/share.entity';
+import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
   WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
-import { trace } from '@opentelemetry/api';
-import { Share } from 'omniboxd/shares/entities/share.entity';
-import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { Span } from 'nestjs-otel';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
+import { Observable, Subscriber } from 'rxjs';
 
 interface HandlerContext {
   parentId?: string;

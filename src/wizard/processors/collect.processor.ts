@@ -1,16 +1,17 @@
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 import { HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
-import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
-import { isEmpty } from 'omniboxd/utils/is-empty';
-import { TagService } from 'omniboxd/tag/tag.service';
-import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
-import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { isEmpty } from 'omniboxd/utils/is-empty';
+import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
+import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
+
 import { QuotaExceptionDetailsDto } from './dto/quota-exception.dto';
 
 export class CollectProcessor extends Processor {

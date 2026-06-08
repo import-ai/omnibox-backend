@@ -562,6 +562,211 @@ describe('SearchService', () => {
     });
   });
 
+  it('uses default response limit while fetching semantic pages in larger batches', async () => {
+    const { service, wizardApiService } = createService();
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 0,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        offset: 0,
+        limit: 100,
+      }),
+    );
+    expect(result.limit).toBe(20);
+  });
+
+  it('reuses semantic scan state for sequential offset pages', async () => {
+    const { permissionsService, resourcesService, service, wizardApiService } =
+      createService();
+    const createRecords = (page: number) =>
+      Array.from({ length: 100 }, (_, index) => {
+        const id = `page-${page}-resource-${index}`;
+        return {
+          id: `page-${page}-record-${index}`,
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId: id,
+            title: `Page ${page} title ${index}`,
+            text: `Page ${page} content ${index}`,
+          },
+        };
+      });
+
+    wizardApiService.search.mockImplementation((request: any) =>
+      Promise.resolve({
+        records: request.offset === 0 ? createRecords(0) : createRecords(1),
+      }),
+    );
+    permissionsService.getCurrentPermissions.mockImplementation(
+      (_userId: string, _namespaceId: string, resources: any[]) =>
+        Promise.resolve(
+          new Map(
+            resources.map((resource) => [
+              resource.id,
+              ResourcePermission.CAN_VIEW,
+            ]),
+          ),
+        ),
+    );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              {
+                id,
+                name: `Title for ${id}`,
+                attrs: {},
+                resourceType: ResourceType.DOC,
+              },
+            ]),
+          ),
+        ),
+    );
+
+    await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 0,
+        limit: 100,
+      },
+    );
+    const secondPage = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 100,
+        limit: 100,
+      },
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(wizardApiService.search).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        offset: 0,
+        limit: 100,
+      }),
+    );
+    expect(wizardApiService.search).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        offset: 100,
+        limit: 100,
+      }),
+    );
+    expect(secondPage.items[0]).toMatchObject({
+      resourceId: 'page-1-resource-0',
+    });
+  });
+
+  it('refreshes permissions before returning cached semantic pages', async () => {
+    const { permissionsService, resourcesService, service, wizardApiService } =
+      createService();
+    const createRecords = () =>
+      Array.from({ length: 100 }, (_, index) => {
+        const id = `cached-resource-${index}`;
+        return {
+          id: `cached-record-${index}`,
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId: id,
+            title: `Cached title ${index}`,
+            text: `Cached content ${index}`,
+          },
+        };
+      });
+
+    wizardApiService.search.mockResolvedValue({
+      records: createRecords(),
+    });
+    permissionsService.getCurrentPermissions
+      .mockImplementationOnce(
+        (_userId: string, _namespaceId: string, resources) =>
+          Promise.resolve(
+            new Map(
+              resources.map((resource: any) => [
+                resource.id,
+                ResourcePermission.CAN_VIEW,
+              ]),
+            ),
+          ),
+      )
+      .mockImplementationOnce(
+        (_userId: string, _namespaceId: string, resources) =>
+          Promise.resolve(
+            new Map(
+              resources
+                .filter((resource: any) => resource.id !== 'cached-resource-10')
+                .map((resource: any) => [
+                  resource.id,
+                  ResourcePermission.CAN_VIEW,
+                ]),
+            ),
+          ),
+      );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              {
+                id,
+                name: `Title for ${id}`,
+                attrs: {},
+                resourceType: ResourceType.DOC,
+              },
+            ]),
+          ),
+        ),
+    );
+
+    await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 0,
+        limit: 100,
+      },
+    );
+    const cachedPage = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 10,
+        limit: 1,
+      },
+    );
+
+    expect(cachedPage.items).toEqual([]);
+    expect(permissionsService.getCurrentPermissions).toHaveBeenCalledTimes(2);
+  });
+
   it('deduplicates semantic resource results across fetched pages', async () => {
     const { permissionsService, resourcesService, service, wizardApiService } =
       createService();

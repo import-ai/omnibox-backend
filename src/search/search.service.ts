@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { DocType } from './doc-type.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
@@ -38,6 +39,9 @@ const WEAVIATE_SYNC_LOG_EVERY = 1000;
 const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_SEARCH_LIMIT = 100;
 const SEMANTIC_SEARCH_PAGE_SIZE = 100;
+const SEMANTIC_SEARCH_CACHE_TTL_MS = 30 * 1000;
+const SEMANTIC_SEARCH_CACHE_MAX_ENTRIES = 100;
+const SEMANTIC_SEARCH_CACHE_MAX_ITEMS = 2000;
 
 export interface SearchPaginationOptions {
   offset?: number;
@@ -51,9 +55,21 @@ export interface SearchPaginatedResult {
   limit: number;
 }
 
+interface SemanticSearchCacheEntry {
+  expiresAt: number;
+  hasMoreRawResults: boolean;
+  items: IndexedDocDto[];
+  nextSearchOffset: number;
+  seenResourceIds: Set<string>;
+}
+
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
+  private readonly semanticSearchCache = new Map<
+    string,
+    SemanticSearchCacheEntry
+  >();
 
   constructor(
     private readonly wizardApiService: WizardAPIService,
@@ -215,13 +231,20 @@ export class SearchService {
     limit: number,
   ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
     const requestedItemCount = offset + limit;
-    const matchingItems: IndexedDocDto[] = [];
-    const seenResourceIds = new Set<string>();
+    const cacheKey = this.getSemanticSearchCacheKey(
+      userId,
+      namespaceId,
+      normalizedQuery,
+      candidateResourceIds,
+    );
+    const cachedEntry = this.getSemanticSearchCacheEntry(cacheKey);
+    const cacheEntry = cachedEntry || this.createSemanticSearchCacheEntry();
+    const cachedItemCount = cachedEntry?.items.length ?? 0;
 
     for (
-      let searchOffset = 0, hasMoreRawResults = true;
-      matchingItems.length < requestedItemCount && hasMoreRawResults;
-      searchOffset += SEMANTIC_SEARCH_PAGE_SIZE
+      ;
+      cacheEntry.items.length < requestedItemCount &&
+      cacheEntry.hasMoreRawResults;
     ) {
       const searchPage = await this.searchSemanticResources(
         userId,
@@ -229,26 +252,147 @@ export class SearchService {
         normalizedQuery,
         candidateResourceIds,
         {
-          offset: searchOffset,
+          offset: cacheEntry.nextSearchOffset,
           limit: SEMANTIC_SEARCH_PAGE_SIZE,
         },
       );
+      cacheEntry.nextSearchOffset += searchPage.limit;
       for (const item of searchPage.items) {
         if (item.type === DocType.RESOURCE) {
-          if (seenResourceIds.has(item.resourceId)) {
+          if (cacheEntry.seenResourceIds.has(item.resourceId)) {
             continue;
           }
-          seenResourceIds.add(item.resourceId);
+          cacheEntry.seenResourceIds.add(item.resourceId);
         }
-        matchingItems.push(item);
+        cacheEntry.items.push(item);
       }
-      hasMoreRawResults = searchPage.rawCount >= searchPage.limit;
+      cacheEntry.hasMoreRawResults = searchPage.rawCount >= searchPage.limit;
     }
+    this.setSemanticSearchCacheEntry(cacheKey, cacheEntry);
+    const items = cacheEntry.items.slice(offset, requestedItemCount);
+    const shouldRefreshCachedPermissions =
+      cachedEntry !== null && offset < cachedItemCount;
 
     return {
-      items: matchingItems.slice(offset, requestedItemCount),
-      total: matchingItems.length,
+      items: shouldRefreshCachedPermissions
+        ? await this.refreshCachedResourcePermissions(
+            userId,
+            namespaceId,
+            items,
+          )
+        : items,
+      total: cacheEntry.items.length,
     };
+  }
+
+  private async refreshCachedResourcePermissions(
+    userId: string,
+    namespaceId: string,
+    items: IndexedDocDto[],
+  ): Promise<IndexedDocDto[]> {
+    const resourceIds = items
+      .filter((item) => item.type === DocType.RESOURCE)
+      .map((item) => item.resourceId);
+    if (resourceIds.length <= 0) {
+      return items;
+    }
+
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+
+    const visibleItems: IndexedDocDto[] = [];
+    for (const item of items) {
+      if (item.type !== DocType.RESOURCE) {
+        visibleItems.push(item);
+        continue;
+      }
+      const permission = permissionMap.get(item.resourceId);
+      if (
+        !permission ||
+        comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
+      ) {
+        continue;
+      }
+
+      const resourceMeta = resourceMetaMap.get(item.resourceId);
+      visibleItems.push({
+        ...item,
+        attrs: resourceMeta?.attrs || {},
+        resourceType: resourceMeta?.resourceType || ResourceType.DOC,
+      });
+    }
+
+    return visibleItems;
+  }
+
+  private createSemanticSearchCacheEntry(): SemanticSearchCacheEntry {
+    return {
+      expiresAt: Date.now() + SEMANTIC_SEARCH_CACHE_TTL_MS,
+      hasMoreRawResults: true,
+      items: [],
+      nextSearchOffset: 0,
+      seenResourceIds: new Set<string>(),
+    };
+  }
+
+  private getSemanticSearchCacheEntry(
+    key: string,
+  ): SemanticSearchCacheEntry | null {
+    const entry = this.semanticSearchCache.get(key);
+    if (!entry) {
+      return null;
+    }
+    if (entry.expiresAt <= Date.now()) {
+      this.semanticSearchCache.delete(key);
+      return null;
+    }
+    this.semanticSearchCache.delete(key);
+    this.semanticSearchCache.set(key, entry);
+    return entry;
+  }
+
+  private setSemanticSearchCacheEntry(
+    key: string,
+    entry: SemanticSearchCacheEntry,
+  ) {
+    if (entry.items.length > SEMANTIC_SEARCH_CACHE_MAX_ITEMS) {
+      this.semanticSearchCache.delete(key);
+      return;
+    }
+    entry.expiresAt = Date.now() + SEMANTIC_SEARCH_CACHE_TTL_MS;
+    this.semanticSearchCache.delete(key);
+    this.semanticSearchCache.set(key, entry);
+    while (this.semanticSearchCache.size > SEMANTIC_SEARCH_CACHE_MAX_ENTRIES) {
+      const oldestKey = this.semanticSearchCache.keys().next().value as
+        | string
+        | undefined;
+      if (oldestKey === undefined) {
+        break;
+      }
+      this.semanticSearchCache.delete(oldestKey);
+    }
+  }
+
+  private getSemanticSearchCacheKey(
+    userId: string,
+    namespaceId: string,
+    normalizedQuery: string,
+    candidateResourceIds: string[] | null,
+  ): string {
+    const candidateHash = candidateResourceIds
+      ? createHash('sha256')
+          .update(candidateResourceIds.join('\0'))
+          .digest('hex')
+      : 'all';
+
+    return [userId, namespaceId, normalizedQuery, candidateHash].join('\0');
   }
 
   private async searchSemanticResources(

@@ -153,6 +153,24 @@ export class SmartFoldersService implements ISmartFoldersService {
       offset?: number;
     },
   ): Promise<ResourceSummaryDto[]> {
+    const { resources } = await this.listChildrenWithTotal(
+      userId,
+      namespaceId,
+      resourceId,
+      options,
+    );
+    return resources;
+  }
+
+  async listChildrenWithTotal(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    options?: {
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{ resources: ResourceSummaryDto[]; total: number }> {
     const config = await this.getConfigOrFail(namespaceId, resourceId);
     await this.assertCanView(namespaceId, resourceId, userId);
 
@@ -176,7 +194,7 @@ export class SmartFoldersService implements ISmartFoldersService {
       .map((resource) => resource.id);
 
     if (visibleIds.length <= 0) {
-      return [];
+      return { resources: [], total: 0 };
     }
 
     const resources = await this.resourceRepository.find({
@@ -206,6 +224,7 @@ export class SmartFoldersService implements ISmartFoldersService {
         ),
       )
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    const total = matched.length;
     const offset = Math.max(0, options?.offset ?? 0);
     const limit =
       options?.limit === undefined
@@ -217,12 +236,15 @@ export class SmartFoldersService implements ISmartFoldersService {
         ? matched.slice(offset)
         : matched.slice(offset, offset + limit);
 
-    return paged.map((resource) =>
-      ResourceSummaryDto.fromEntity(
-        resource,
-        !!hasChildrenMap.get(resource.id),
+    return {
+      resources: paged.map((resource) =>
+        ResourceSummaryDto.fromEntity(
+          resource,
+          !!hasChildrenMap.get(resource.id),
+        ),
       ),
-    );
+      total,
+    };
   }
 
   async isResourceMatched(

@@ -1002,6 +1002,131 @@ export class NamespaceResourcesService {
     );
   }
 
+  async listChildrenWithTotal(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    options?: {
+      summary?: boolean;
+      limit?: number;
+      offset?: number;
+    },
+    entityManager?: EntityManager,
+  ): Promise<{ resources: ResourceSummaryDto[]; total: number }> {
+    const { summary = false, limit, offset } = options || {};
+
+    const parents = await this.resourcesService.getParentResourcesOrFail(
+      namespaceId,
+      resourceId,
+      entityManager,
+    );
+    const resource = parents[parents.length - 1];
+
+    if (resource?.resourceType === ResourceType.SMART_FOLDER) {
+      return await this.smartFoldersService.listChildrenWithTotal(
+        userId,
+        namespaceId,
+        resourceId,
+        {
+          limit,
+          offset,
+        },
+      );
+    }
+
+    const children = await this.resourcesService.getChildren(
+      namespaceId,
+      [resourceId],
+      { summary },
+      entityManager,
+    );
+
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...parents, ...children.map((r) => ResourceMetaDto.fromEntity(r))],
+      entityManager,
+    );
+
+    const visibleChildren = children.filter((res) => {
+      const permission = permissionMap.get(res.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      );
+    });
+
+    const total = visibleChildren.length;
+    const normalizedOffset = Math.max(0, offset ?? 0);
+    const normalizedLimit =
+      limit === undefined ? undefined : Math.max(1, limit);
+    const pagedChildren =
+      normalizedLimit === undefined
+        ? visibleChildren.slice(normalizedOffset)
+        : visibleChildren.slice(
+            normalizedOffset,
+            normalizedOffset + normalizedLimit,
+          );
+
+    let subChildren = await this.resourcesService.getChildren(
+      namespaceId,
+      pagedChildren.map((child) => child.id),
+      {},
+      entityManager,
+    );
+
+    const subChildrenPermissionMap =
+      await this.permissionsService.getCurrentPermissions(
+        userId,
+        namespaceId,
+        [
+          ...parents,
+          ...pagedChildren.map((r) => ResourceMetaDto.fromEntity(r)),
+          ...subChildren.map((r) => ResourceMetaDto.fromEntity(r)),
+        ],
+        entityManager,
+      );
+
+    subChildren = subChildren.filter((res) => {
+      const permission = subChildrenPermissionMap.get(res.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      );
+    });
+
+    const hasChildrenMap = new Map<string, boolean>();
+    for (const resource of subChildren) {
+      if (resource.parentId) {
+        hasChildrenMap.set(resource.parentId, true);
+      }
+    }
+
+    if (summary) {
+      const firstAttachments =
+        await this.resourceAttachmentsService.getFirstAttachments(
+          namespaceId,
+          pagedChildren.map((r) => r.id),
+        );
+      return {
+        resources: pagedChildren.map((res) =>
+          ResourceSummaryDto.fromEntity(
+            res,
+            !!hasChildrenMap.get(res.id),
+            firstAttachments.get(res.id),
+          ),
+        ),
+        total,
+      };
+    }
+    return {
+      resources: pagedChildren.map((res) =>
+        ResourceSummaryDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
+      ),
+      total,
+    };
+  }
+
   async getSpaceType(
     namespaceId: string,
     rootResourceId: string,

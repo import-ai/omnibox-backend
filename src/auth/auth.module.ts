@@ -32,6 +32,8 @@ import { CacheService } from 'omniboxd/common/cache.service';
 import { SmsModule } from 'omniboxd/sms/sms.module';
 import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { OpenAPIQuotaGuard } from 'omniboxd/open-api/open-api-quota.guard';
+import { OpenAPIQuotaModule } from 'omniboxd/open-api/open-api-quota.module';
 
 @Module({
   exports: [
@@ -69,6 +71,10 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     },
     {
       provide: APP_GUARD,
+      useClass: OpenAPIQuotaGuard,
+    },
+    {
+      provide: APP_GUARD,
       useClass: CookieAuthGuard,
     },
   ],
@@ -79,6 +85,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
     SmsModule,
     PassportModule,
     NamespacesModule,
+    OpenAPIQuotaModule,
     GroupsModule,
     PermissionsModule,
     APIKeyModule,

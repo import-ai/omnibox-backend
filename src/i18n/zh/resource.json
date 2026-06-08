@@ -10,6 +10,8 @@
     "cannotDuplicateRoot": "无法复制根资源",
     "cannotRestoreRoot": "无法恢复根资源",
     "contentRequired": "资源需要内容",
+    "nameRequired": "资源需要名称",
+    "contentNotAllowedForFolder": "文件夹资源不允许传内容",
     "fileRequired": "需要上传文件",
     "fileResourceNotFound": "文件资源未找到",
     "cycleDetected": "资源树中检测到循环引用",

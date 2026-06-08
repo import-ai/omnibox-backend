@@ -11,6 +11,8 @@ export enum APIKeyPermissionType {
 export enum APIKeyPermissionTarget {
   RESOURCES = 'resources',
   CHAT = 'chat',
+  TAGS = 'tags',
+  SEARCH = 'search',
 }
 
 export type APIKeyPermission = {
@@ -22,6 +24,24 @@ export type APIKeyAttrs = {
   related_app_id?: string;
   root_resource_id: string;
   permissions: APIKeyPermission[];
+};
+
+export const API_KEY_PERMISSION_MATRIX: Record<
+  APIKeyPermissionTarget,
+  readonly APIKeyPermissionType[]
+> = {
+  [APIKeyPermissionTarget.RESOURCES]: [
+    APIKeyPermissionType.CREATE,
+    APIKeyPermissionType.READ,
+    APIKeyPermissionType.UPDATE,
+    APIKeyPermissionType.DELETE,
+  ],
+  [APIKeyPermissionTarget.CHAT]: [APIKeyPermissionType.CREATE],
+  [APIKeyPermissionTarget.TAGS]: [
+    APIKeyPermissionType.CREATE,
+    APIKeyPermissionType.READ,
+  ],
+  [APIKeyPermissionTarget.SEARCH]: [APIKeyPermissionType.READ],
 };
 
 @Entity('api_keys')

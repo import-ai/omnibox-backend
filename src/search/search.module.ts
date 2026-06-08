@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SearchService } from './search.service';
+import { OpenSearchService } from 'omniboxd/search/open.search.service';
 import {
   InternalSearchController,
   SearchController,
@@ -19,7 +20,7 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
 
 @Module({
   exports: [SearchService],
-  providers: [SearchService, SearchResourceFilterService],
+  providers: [SearchService, SearchResourceFilterService, OpenSearchService],
   controllers: [SearchController, InternalSearchController],
   imports: [
     WizardAPIModule,

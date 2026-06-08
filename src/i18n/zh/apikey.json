@@ -6,6 +6,10 @@
     "invalidApiKey": "API 密钥无效",
     "noPermissionForTarget": "API 密钥没有 {target} 的权限",
     "noSpecificPermission": "API 密钥没有 {target} 的 {permission} 权限",
+    "invalidPermissions": "API 密钥权限无效",
+    "invalidPermissionTarget": "API 密钥权限目标无效：{target}",
+    "invalidPermissionAction": "API 密钥权限动作无效：{target} 的 {action}",
+    "invalidPermissionCombination": "API 密钥权限动作 {action} 不允许用于目标：{target}",
     "noPermissionForNamespace": "用户 {userId} 没有空间 {namespaceId} 的权限",
     "noWritePermission": "用户 {userId} 没有空间 {namespaceId} 中资源 {resourceId} 的写入权限",
     "userOrNamespaceRequired": "需要提供 user_id 或 namespace_id 参数"

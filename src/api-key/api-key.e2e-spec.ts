@@ -372,4 +372,82 @@ describe('APIKeyController (e2e)', () => {
 
     await client.post('/api/v1/api-keys').send(apiKeyData).expect(404);
   });
+
+  it('should create an API key with tags and search permissions', async () => {
+    const apiKeyData = {
+      user_id: client.user.id,
+      namespace_id: client.namespace.id,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.TAGS,
+            permissions: [
+              APIKeyPermissionType.CREATE,
+              APIKeyPermissionType.READ,
+            ],
+          },
+          {
+            target: APIKeyPermissionTarget.SEARCH,
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
+      },
+    };
+
+    const response = await client
+      .post('/api/v1/api-keys')
+      .send(apiKeyData)
+      .expect(201);
+
+    expect(response.body.attrs.permissions).toEqual(
+      apiKeyData.attrs.permissions,
+    );
+  });
+
+  it('should reject unknown API key permission targets', async () => {
+    const apiKeyData = {
+      user_id: client.user.id,
+      namespace_id: client.namespace.id,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: 'vfs',
+            permissions: [APIKeyPermissionType.READ],
+          },
+        ],
+      },
+    };
+
+    const response = await client
+      .post('/api/v1/api-keys')
+      .send(apiKeyData)
+      .expect(400);
+
+    expect(response.body.code).toBe('invalid_permission_target');
+  });
+
+  it('should reject illegal API key target-action combinations', async () => {
+    const apiKeyData = {
+      user_id: client.user.id,
+      namespace_id: client.namespace.id,
+      attrs: {
+        root_resource_id: client.namespace.root_resource_id,
+        permissions: [
+          {
+            target: APIKeyPermissionTarget.SEARCH,
+            permissions: [APIKeyPermissionType.CREATE],
+          },
+        ],
+      },
+    };
+
+    const response = await client
+      .post('/api/v1/api-keys')
+      .send(apiKeyData)
+      .expect(400);
+
+    expect(response.body.code).toBe('invalid_permission_combination');
+  });
 });

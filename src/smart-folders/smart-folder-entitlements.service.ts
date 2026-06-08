@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { SmartFolderEntitlementsResponseDto } from 'omniboxd/smart-folders/dto/smart-folder-entitlements-response.dto';
 import {
   SmartFolderConfig,
   SmartFolderOwnerScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
-import { SmartFolderEntitlementsResponseDto } from 'omniboxd/smart-folders/dto/smart-folder-entitlements-response.dto';
 import { ISmartFolderEntitlementsProvider } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 import { Repository } from 'typeorm';
 

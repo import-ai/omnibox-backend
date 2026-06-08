@@ -1,6 +1,6 @@
 import { Base } from 'omniboxd/common/base.entity';
 import generateId from 'omniboxd/utils/generate-id';
-import { Column, Entity, BeforeInsert, PrimaryColumn } from 'typeorm';
+import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 
 @Entity('tags')
 export class Tag extends Base {

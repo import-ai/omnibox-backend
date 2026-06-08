@@ -1,6 +1,6 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MaxLength } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateTagRequestDto {
   @ApiProperty({

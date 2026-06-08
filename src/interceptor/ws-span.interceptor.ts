@@ -1,12 +1,12 @@
 import {
+  CallHandler,
+  ExecutionContext,
   Injectable,
   NestInterceptor,
-  ExecutionContext,
-  CallHandler,
 } from '@nestjs/common';
+import { context, trace } from '@opentelemetry/api';
 import { Observable } from 'rxjs';
 import { finalize } from 'rxjs/operators';
-import { trace, context } from '@opentelemetry/api';
 
 @Injectable()
 export class WsSpanInterceptor implements NestInterceptor {

@@ -1,5 +1,5 @@
-import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { Expose } from 'class-transformer';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { Tag } from 'omniboxd/tag/tag.entity';
 
 export class TagWithCountDto extends TagDto {

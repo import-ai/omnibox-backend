@@ -1,9 +1,9 @@
-import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
 import {
-  OpenAIMessageRole,
   MessageStatus,
+  OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
+import { TestClient } from 'test/test-client';
 
 describe('ConversationsController (e2e)', () => {
   let client: TestClient;

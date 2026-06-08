@@ -1,8 +1,8 @@
 import { Controller, Get, Query, UseInterceptors } from '@nestjs/common';
 import { Public } from 'omniboxd/auth';
 import {
-  ValidateShare,
   ValidatedShare,
+  ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
@@ -10,8 +10,9 @@ import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dt
 import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
 import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { ListResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
-import { SharedVfsService } from './shared-vfs.service';
+
 import { SharedVfsResourceResponseDto } from './dto/shared-vfs.resource.response.dto';
+import { SharedVfsService } from './shared-vfs.service';
 
 @Controller('internal/api/v1/shares/:shareId/vfs')
 @UseInterceptors(ValidateShareInterceptor)

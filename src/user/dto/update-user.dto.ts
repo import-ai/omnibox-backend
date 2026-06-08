@@ -1,12 +1,12 @@
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
-  IsString,
-  MinLength,
-  MaxLength,
   IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { Transform } from 'class-transformer';
 import { IsAllowedEmailDomain } from 'omniboxd/utils/email-validation';
 
 export class UpdateUserDto {

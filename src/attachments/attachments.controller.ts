@@ -11,12 +11,13 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { Request, Response } from 'express';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { UploadAttachmentsResponseDto } from './dto/upload-attachments-response.dto';
+import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { CookieAuth } from 'omniboxd/auth/decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+
+import { UploadAttachmentsResponseDto } from './dto/upload-attachments-response.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
 export class AttachmentsController {

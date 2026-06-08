@@ -1,6 +1,6 @@
 import { Body, Controller, Param, Post } from '@nestjs/common';
-import { Public } from 'omniboxd/auth';
 import { ApplicationsService } from 'omniboxd/applications/applications.service';
+import { Public } from 'omniboxd/auth';
 
 @Controller('internal/api/v1/applications')
 export class InternalApplicationsController {

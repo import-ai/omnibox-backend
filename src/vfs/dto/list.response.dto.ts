@@ -1,5 +1,5 @@
-import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
 import { Expose } from 'class-transformer';
+import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
 
 export class ListResponseDto {
   @Expose({ name: 'parent_id' })

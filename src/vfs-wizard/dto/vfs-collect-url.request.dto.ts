@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString, IsUrl } from 'class-validator';
 import { Expose } from 'class-transformer';
+import { IsNotEmpty, IsString, IsUrl } from 'class-validator';
 
 export class VfsCollectUrlRequestDto {
   @IsString()

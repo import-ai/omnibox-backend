@@ -1,32 +1,32 @@
-import { UserService } from 'omniboxd/user/user.service';
-import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
-import { ValidateEmailDto } from 'omniboxd/user/dto/validate-email.dto';
 import {
-  SendPhoneCodeRequestDto,
-  BindPhoneRequestDto,
-} from 'omniboxd/user/dto/phone-binding.dto';
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {
-  InitiateAccountDeletionDto,
   ConfirmAccountDeletionDto,
+  InitiateAccountDeletionDto,
 } from 'omniboxd/user/dto/delete-account.dto';
 import {
-  Req,
-  Get,
-  Body,
-  Patch,
-  Query,
-  Param,
-  Post,
-  Controller,
-  ParseIntPipe,
-  HttpStatus,
-  HttpCode,
-} from '@nestjs/common';
-import { I18nService } from 'nestjs-i18n';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+  BindPhoneRequestDto,
+  SendPhoneCodeRequestDto,
+} from 'omniboxd/user/dto/phone-binding.dto';
+import { UpdateUserDto } from 'omniboxd/user/dto/update-user.dto';
+import { ValidateEmailDto } from 'omniboxd/user/dto/validate-email.dto';
+import { UserService } from 'omniboxd/user/user.service';
 
 @Controller('api/v1/user')
 export class UserController {

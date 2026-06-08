@@ -1,8 +1,9 @@
 import { Body, Controller, Post, Req } from '@nestjs/common';
-import { TraceService } from 'omniboxd/trace/trace.service';
-import { TraceReqDto } from './dto/trace-req.dto';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { TraceService } from 'omniboxd/trace/trace.service';
+
+import { TraceReqDto } from './dto/trace-req.dto';
 
 @Controller('api/v1/trace')
 export class TraceController {

@@ -5,25 +5,7 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { RequestId } from 'omniboxd/decorators/request-id.decorators';
-import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
-import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
-import {
-  CollectUrlResponseDto,
-  OpenCollectUrlRequestDto,
-} from 'omniboxd/wizard/dto/collect-url-request.dto';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
-import {
-  APIKey as APIKeyEntity,
-  APIKeyPermissionTarget,
-  APIKeyPermissionType,
-} from 'omniboxd/api-key/api-key.entity';
-import { OpenCollectRequestDto } from 'omniboxd/wizard/dto/open-collect-request.dto';
-import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import {
   ApiBody,
   ApiConsumes,
@@ -32,10 +14,28 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
+import {
+  APIKey as APIKeyEntity,
+  APIKeyPermissionTarget,
+  APIKeyPermissionType,
+} from 'omniboxd/api-key/api-key.entity';
+import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
+import { RequestId } from 'omniboxd/decorators/request-id.decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
-import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
+import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
+import {
+  CollectUrlResponseDto,
+  OpenCollectUrlRequestDto,
+} from 'omniboxd/wizard/dto/collect-url-request.dto';
+import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
+import { OpenCollectRequestDto } from 'omniboxd/wizard/dto/open-collect-request.dto';
+import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
+import { WizardService } from 'omniboxd/wizard/wizard.service';
 
 @ApiTags('Wizard')
 @ApiSecurity('api-key')

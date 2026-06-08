@@ -1,14 +1,15 @@
 import { Controller, Get, Param, UseInterceptors } from '@nestjs/common';
-import { SharedResourcesService } from './shared-resources.service';
-import { SharedResourceDto } from './dto/shared-resource.dto';
 import { CookieAuth } from 'omniboxd/auth/decorators';
-import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 import {
-  ValidateShare,
   ValidatedShare,
+  ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+
+import { SharedResourceDto } from './dto/shared-resource.dto';
+import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
+import { SharedResourcesService } from './shared-resources.service';
 
 @Controller('api/v1/shares/:shareId/resources')
 @UseInterceptors(ValidateShareInterceptor)

@@ -1,12 +1,13 @@
 import { Controller, Get, Param, Post, UseInterceptors } from '@nestjs/common';
-import { ConversationsService } from './conversations.service';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import {
-  ValidateShare,
   ValidatedShare,
+  ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+
+import { ConversationsService } from './conversations.service';
 
 @Controller('api/v1/shares/:shareId/conversations')
 @UseInterceptors(ValidateShareInterceptor)

@@ -1,4 +1,5 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+
 import { BaseColumns } from './base-columns';
 
 export class UserBindings1752652489640 implements MigrationInterface {

@@ -1,14 +1,14 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
-  IsString,
-  IsObject,
-  IsOptional,
   IsBoolean,
   IsIn,
+  IsObject,
+  IsOptional,
+  IsString,
   MaxLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 export class OpenCreateResourceRequestDto {

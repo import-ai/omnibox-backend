@@ -1,8 +1,8 @@
-import { TestClient } from 'test/test-client';
-import { createResourceByPath } from 'test/vfs-utils';
 import { plainToInstance } from 'class-transformer';
 import { ListTagsResponseDto } from 'omniboxd/resource-tags/dto/list-tags-response.dto';
 import { TagRenameResponseDto } from 'omniboxd/resource-tags/dto/tag-rename.response.dto';
+import { TestClient } from 'test/test-client';
+import { createResourceByPath } from 'test/vfs-utils';
 
 type Operation =
   | 'list_tags'

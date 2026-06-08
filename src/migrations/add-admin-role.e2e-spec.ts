@@ -1,4 +1,5 @@
 import { DataSource, QueryRunner } from 'typeorm';
+
 import { AddAdminRole1766339893375 } from './1766339893375-add-admin-role';
 
 describe.skip('AddAdminRole Migration E2E', () => {

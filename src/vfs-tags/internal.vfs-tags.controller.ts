@@ -9,9 +9,9 @@ import {
 } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { ResourceTagRequestDto } from 'omniboxd/vfs-tags/dto/resource-tag-request.dto';
 import { VfsTagsService } from 'omniboxd/vfs-tags/vfs-tags.service';
-import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 @Controller('internal/api/v1/namespaces/:namespaceId/vfs/tags')
 export class InternalVfsTagsController {

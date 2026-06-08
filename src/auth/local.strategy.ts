@@ -1,10 +1,10 @@
-import { Strategy } from 'passport-local';
-import { AuthService } from 'omniboxd/auth/auth.service';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
 import { Request } from 'express';
+import { I18nService } from 'nestjs-i18n';
+import { AuthService } from 'omniboxd/auth/auth.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { Strategy } from 'passport-local';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {

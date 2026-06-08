@@ -15,11 +15,11 @@ import {
 import { SmartFolderEntitlementsService } from 'omniboxd/smart-folders/smart-folder-entitlements.service';
 import { SmartFolderResourcesService } from 'omniboxd/smart-folders/smart-folder-resources.service';
 import { SmartFoldersController } from 'omniboxd/smart-folders/smart-folders.controller';
+import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
 import { SmartFoldersQuotaService } from 'omniboxd/smart-folders/smart-folders-quota.service';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 import { SmartFoldersScopeService } from 'omniboxd/smart-folders/smart-folders-scope.service';
-import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { TagModule } from 'omniboxd/tag/tag.module';
 
 @Global()

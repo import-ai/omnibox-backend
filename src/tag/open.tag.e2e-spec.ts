@@ -1,8 +1,8 @@
-import { TestClient } from 'test/test-client';
 import {
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
+import { TestClient } from 'test/test-client';
 
 describe('OpenTagController (e2e)', () => {
   let client: TestClient;

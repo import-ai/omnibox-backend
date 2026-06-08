@@ -1,14 +1,14 @@
 import { Controller, Get, Query, UseInterceptors } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import {
-  ValidateShare,
   ValidatedShare,
+  ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { FilterTagsRequestDto } from 'omniboxd/resource-tags/dto/filter-tags-request.dto';
 import { ListTagsRequestDto } from 'omniboxd/resource-tags/dto/list-tags-request.dto';
-import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SharedResourceTagsService } from 'omniboxd/shared-resource-tags/shared-resource-tags.service';
+import { Share } from 'omniboxd/shares/entities/share.entity';
 
 @Controller('internal/api/v1/shares/:shareId/tags')
 @UseInterceptors(ValidateShareInterceptor)

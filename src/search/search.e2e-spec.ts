@@ -1,35 +1,36 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
 import { HttpStatus } from '@nestjs/common';
-import { DocType } from './doc-type.enum';
-import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import {
-  SearchController,
-  InternalSearchController,
-} from './search.controller';
-import { OpenSearchController } from 'omniboxd/search/open.search.controller';
-import { SearchService } from './search.service';
-import { OpenSearchService } from 'omniboxd/search/open.search.service';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { ConversationsService } from 'omniboxd/conversations/conversations.service';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
-import { MessagesService } from 'omniboxd/messages/messages.service';
+import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { I18nService } from 'nestjs-i18n';
-import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { TagService } from 'omniboxd/tag/tag.service';
 import {
   APIKey,
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
+import { ConversationsService } from 'omniboxd/conversations/conversations.service';
+import { MessagesService } from 'omniboxd/messages/messages.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { OpenSearchController } from 'omniboxd/search/open.search.controller';
+import { OpenSearchService } from 'omniboxd/search/open.search.service';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
+import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import * as request from 'supertest';
+
+import { DocType } from './doc-type.enum';
+import {
+  InternalSearchController,
+  SearchController,
+} from './search.controller';
+import { SearchService } from './search.service';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
 jest.mock('../wizard-api/wizard-api.service', () => {

@@ -1,36 +1,36 @@
 import {
   Body,
   Controller,
+  HttpStatus,
   Param,
   Post,
   Sse,
   UploadedFile,
   UseInterceptors,
   ValidationPipe,
-  HttpStatus,
 } from '@nestjs/common';
-import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { StreamService } from 'omniboxd/wizard/stream.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { I18nService } from 'nestjs-i18n';
+import { CookieAuth } from 'omniboxd/auth';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { RequestId } from 'omniboxd/decorators/request-id.decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import {
+  ValidatedShare,
+  ValidateShare,
+} from 'omniboxd/decorators/validate-share.decorator';
+import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { Share } from 'omniboxd/shares/entities/share.entity';
+import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectResponseDto } from 'omniboxd/wizard/dto/collect-response.dto';
 import {
   CollectUrlRequestDto,
   CollectUrlResponseDto,
 } from 'omniboxd/wizard/dto/collect-url-request.dto';
-import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
-import { RequestId } from 'omniboxd/decorators/request-id.decorators';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
-import { CookieAuth } from 'omniboxd/auth';
-import {
-  ValidatedShare,
-  ValidateShare,
-} from 'omniboxd/decorators/validate-share.decorator';
-import { Share } from 'omniboxd/shares/entities/share.entity';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
-import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { StreamService } from 'omniboxd/wizard/stream.service';
+import { WizardService } from 'omniboxd/wizard/wizard.service';
 
 @Controller('api/v1/wizard')
 export class CollectController {

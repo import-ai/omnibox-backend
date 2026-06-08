@@ -1,6 +1,7 @@
-import { Resource, ResourceType } from '../entities/resource.entity';
 import { Exclude, Expose, Transform } from 'class-transformer';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+
+import { Resource, ResourceType } from '../entities/resource.entity';
 
 export class ResourceMetaDto {
   @Expose()

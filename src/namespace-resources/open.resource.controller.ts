@@ -1,8 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
@@ -10,35 +13,32 @@ import {
   Query,
   UploadedFile,
   UseInterceptors,
-  HttpStatus,
-  HttpCode,
-  BadRequestException,
 } from '@nestjs/common';
-import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
-import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   APIKey as APIKeyEntity,
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
-import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { OpenAddResourceTagRequestDto } from 'omniboxd/namespace-resources/dto/open-add-resource-tag-request.dto';
-import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
 import { OpenGetResourceQueryDto } from 'omniboxd/namespace-resources/dto/open-get-resource-query.dto';
 import { OpenListResourcesResponseDto } from 'omniboxd/namespace-resources/dto/open-list-resources-response.dto';
 import { OpenResourceDto } from 'omniboxd/namespace-resources/dto/open-resource.dto';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiSecurity,
-  ApiConsumes,
-  ApiBody,
-  ApiQuery,
-} from '@nestjs/swagger';
+import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
 

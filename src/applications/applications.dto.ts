@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, IsObject } from 'class-validator';
+import { IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { Applications } from 'omniboxd/applications/applications.entity';
 

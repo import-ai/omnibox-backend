@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+
 import { ResourceSummaryDto } from './resource-summary.dto';
 
 export class OpenListResourcesResponseDto {

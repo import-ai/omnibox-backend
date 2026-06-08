@@ -1,32 +1,33 @@
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
   Body,
   Controller,
   Delete,
   Get,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
-  HttpStatus,
 } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18n, I18nContext } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { ResourceSummaryDto } from './dto/resource-summary.dto';
-import { TrashListResponseDto } from './dto/trash-list-response.dto';
+import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+
 import {
   BatchCreateFolderDto,
   BatchMoveResourcesDto,
   BatchResourceIdsDto,
 } from './dto/batch-resource-actions.dto';
+import { ResourceSummaryDto } from './dto/resource-summary.dto';
+import { TrashListResponseDto } from './dto/trash-list-response.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources')
 export class NamespaceResourcesController {

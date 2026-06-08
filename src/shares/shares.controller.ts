@@ -6,16 +6,17 @@ import {
   Patch,
   UseInterceptors,
 } from '@nestjs/common';
-import { SharesService } from './shares.service';
-import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
 import { CookieAuth } from 'omniboxd/auth/decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import {
-  ValidateShare,
   ValidatedShare,
+  ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
+
+import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
+import { SharesService } from './shares.service';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/share')
 export class ResourceSharesController {

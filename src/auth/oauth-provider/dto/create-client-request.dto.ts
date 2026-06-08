@@ -1,12 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsNotEmpty,
-  IsString,
-  IsArray,
-  IsOptional,
-  ArrayMinSize,
-} from 'class-validator';
 import { Expose } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateClientRequestDto {

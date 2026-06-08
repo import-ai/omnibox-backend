@@ -1,34 +1,35 @@
-import { InjectRepository } from '@nestjs/typeorm';
-import { Namespace } from './entities/namespace.entity';
-import { UpdateNamespaceDto } from './dto/update-namespace.dto';
-import { NamespaceMemberDto } from './dto/namespace-member.dto';
-import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
-import { UserService } from 'omniboxd/user/user.service';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { I18nService } from 'nestjs-i18n';
+import { APIKey } from 'omniboxd/api-key/api-key.entity';
+import { Applications } from 'omniboxd/applications/applications.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
+import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { Share } from 'omniboxd/shares/entities/share.entity';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { UserService } from 'omniboxd/user/user.service';
+import { isNameBlocked } from 'omniboxd/utils/blocked-names';
+import { filterEmoji } from 'omniboxd/utils/emoji';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
+
+import { NamespaceMemberDto } from './dto/namespace-member.dto';
+import { UpdateNamespaceDto } from './dto/update-namespace.dto';
+import { Namespace } from './entities/namespace.entity';
 import {
   NamespaceMember,
   NamespaceRole,
   ROLE_LEVEL,
 } from './entities/namespace-member.entity';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
-import { isNameBlocked } from 'omniboxd/utils/blocked-names';
-import { filterEmoji } from 'omniboxd/utils/emoji';
-import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
-import { APIKey } from 'omniboxd/api-key/api-key.entity';
-import { Applications } from 'omniboxd/applications/applications.entity';
-import { TasksService } from 'omniboxd/tasks/tasks.service';
-import { Share } from 'omniboxd/shares/entities/share.entity';
-import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
 
 @Injectable()
 export class NamespacesService {

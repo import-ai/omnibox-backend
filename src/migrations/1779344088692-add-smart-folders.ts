@@ -5,6 +5,7 @@ import {
   TableColumn,
   TableIndex,
 } from 'typeorm';
+
 import { BaseColumns } from './base-columns';
 
 export class AddSmartFolders1779344088692 implements MigrationInterface {

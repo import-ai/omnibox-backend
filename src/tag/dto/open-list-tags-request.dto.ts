@@ -1,7 +1,7 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsArray, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ApiPropertyOptional } from '@nestjs/swagger';
 
 function splitCsv(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {

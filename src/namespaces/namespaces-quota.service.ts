@@ -1,8 +1,9 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
-import { NamespaceUsageDto } from './dto/namespace-usage.dto';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+
+import { NamespaceUsageDto } from './dto/namespace-usage.dto';
 
 const DEFAULT_USAGE: NamespaceUsageDto = {
   storageQuota: 0,

@@ -1,11 +1,11 @@
 import { Expose } from 'class-transformer';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 export class InternalResourceDto {
   @Expose()

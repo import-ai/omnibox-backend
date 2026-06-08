@@ -1,6 +1,7 @@
-import { DocType } from '../doc-type.enum';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ApiProperty } from '@nestjs/swagger';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+
+import { DocType } from '../doc-type.enum';
 
 export class IndexedResourceDto {
   @ApiProperty({ enum: [DocType.RESOURCE] })

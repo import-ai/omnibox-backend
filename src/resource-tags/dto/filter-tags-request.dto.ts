@@ -1,5 +1,5 @@
-import { IsOptional, IsString, IsInt, Min } from 'class-validator';
 import { Expose, Type } from 'class-transformer';
+import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { ListTagsRequestDto } from 'omniboxd/resource-tags/dto/list-tags-request.dto';
 
 export class FilterTagsRequestDto extends ListTagsRequestDto {

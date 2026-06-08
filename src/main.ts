@@ -1,6 +1,7 @@
+// eslint-disable-next-line simple-import-sort/imports -- OpenTelemetry must patch modules before Nest loads.
 import otelSDK from './tracing';
-import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
 import { AppModule } from 'omniboxd/app/app.module';
 import { configureApp } from 'omniboxd/app/app-config';
 

@@ -1,7 +1,7 @@
+import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
-import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
 
 export class SharedResourceDto {
   id: string;

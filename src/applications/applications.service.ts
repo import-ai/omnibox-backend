@@ -1,18 +1,19 @@
-import { Repository } from 'typeorm';
-import { Injectable, HttpStatus } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
-import { Applications } from './applications.entity';
+import { BaseApp } from 'omniboxd/applications/apps/base-app';
+import { QQBot } from 'omniboxd/applications/apps/qq-bot';
+import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
+import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { Repository } from 'typeorm';
+
 import {
   ApplicationsResponseDto,
   CreateApplicationsDto,
 } from './applications.dto';
-import { BaseApp } from 'omniboxd/applications/apps/base-app';
-import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
-import { QQBot } from 'omniboxd/applications/apps/qq-bot';
-import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
+import { Applications } from './applications.entity';
 
 export interface FindAllOptions {
   apiKeyId?: string;

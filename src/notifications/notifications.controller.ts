@@ -8,6 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+
 import {
   ClearNotificationsRequestDto,
   UpdateNotificationRequestDto,

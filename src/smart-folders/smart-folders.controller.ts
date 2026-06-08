@@ -9,9 +9,9 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
-import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
+import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { CreateSmartFolderRequestDto } from 'omniboxd/smart-folders/dto/create-smart-folder-request.dto';
 import { SmartFolderResponseDto } from 'omniboxd/smart-folders/dto/smart-folder-response.dto';
 import { UpdateSmartFolderRequestDto } from 'omniboxd/smart-folders/dto/update-smart-folder-request.dto';

@@ -1,7 +1,7 @@
-import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { TestClient } from 'test/test-client';
 
 describe('ResourcesController (e2e)', () => {
   let client: TestClient;

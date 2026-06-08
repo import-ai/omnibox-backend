@@ -1,13 +1,14 @@
 import { Controller, Get, Param, Res, UseInterceptors } from '@nestjs/common';
 import { Response } from 'express';
-import { AttachmentsService } from './attachments.service';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import {
-  ValidateShare,
   ValidatedShare,
+  ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+
+import { AttachmentsService } from './attachments.service';
 
 @Controller('api/v1/shares/:shareId/resources/:resourceId/attachments')
 @UseInterceptors(ValidateShareInterceptor)

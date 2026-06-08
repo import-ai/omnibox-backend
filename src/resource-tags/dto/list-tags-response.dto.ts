@@ -1,6 +1,7 @@
-import { TagWithCountDto } from './tag-with-count.dto';
 import { Type } from 'class-transformer';
 import { ValidateNested } from 'class-validator';
+
+import { TagWithCountDto } from './tag-with-count.dto';
 
 export class ListTagsResponseDto {
   @ValidateNested()

@@ -1,16 +1,16 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { Reflector } from '@nestjs/core';
+import { InjectRepository } from '@nestjs/typeorm';
 import { WsException } from '@nestjs/websockets';
-import { Socket } from 'socket.io';
+import { I18nService } from 'nestjs-i18n';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import {
   WS_AUTH_CONFIG_KEY,
   WsAuthConfig,
 } from 'omniboxd/auth/decorators/ws-auth-options.decorator';
-import { I18nService } from 'nestjs-i18n';
 import { User } from 'omniboxd/user/entities/user.entity';
+import { Socket } from 'socket.io';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {

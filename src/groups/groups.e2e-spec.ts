@@ -1,5 +1,5 @@
-import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
+import { TestClient } from 'test/test-client';
 
 describe('GroupsController (e2e)', () => {
   let client: TestClient;

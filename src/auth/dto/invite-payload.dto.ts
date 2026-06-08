@@ -1,7 +1,8 @@
 import { Expose, Type } from 'class-transformer';
-import { UserInvitationDto } from './invitation.dto';
 import { IsNotEmpty, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+
+import { UserInvitationDto } from './invitation.dto';
 
 export class InvitePayloadDto {
   @Expose()

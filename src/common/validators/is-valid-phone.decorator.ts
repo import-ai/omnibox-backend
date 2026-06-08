@@ -1,8 +1,9 @@
 import {
   registerDecorator,
-  ValidationOptions,
   ValidationArguments,
+  ValidationOptions,
 } from 'class-validator';
+
 import { validatePhone } from './phone.validator';
 
 export interface IsValidPhoneOptions {

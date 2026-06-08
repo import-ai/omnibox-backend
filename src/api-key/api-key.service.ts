@@ -1,9 +1,14 @@
-import { Repository } from 'typeorm';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
 import { randomBytes } from 'crypto';
+import { I18nService } from 'nestjs-i18n';
+import {
+  APIKeyInfoResponseDto,
+  APIKeyResponseDto,
+  CreateAPIKeyDto,
+  PatchAPIKeyDto,
+  UpdateAPIKeyDto,
+} from 'omniboxd/api-key/api-key.dto';
 import {
   API_KEY_PERMISSION_MATRIX,
   APIKey,
@@ -12,22 +17,17 @@ import {
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
-import {
-  APIKeyInfoResponseDto,
-  APIKeyResponseDto,
-  CreateAPIKeyDto,
-  PatchAPIKeyDto,
-  UpdateAPIKeyDto,
-} from 'omniboxd/api-key/api-key.dto';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { Applications } from 'omniboxd/applications/applications.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
-import { Applications } from 'omniboxd/applications/applications.entity';
-import { UserService } from 'omniboxd/user/user.service';
-import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
-import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
 import { OpenAPIQuotaService } from 'omniboxd/open-api/open-api-quota.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
+import { UserService } from 'omniboxd/user/user.service';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class APIKeyService {

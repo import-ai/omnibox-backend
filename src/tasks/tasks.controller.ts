@@ -1,5 +1,3 @@
-import { Task } from 'omniboxd/tasks/tasks.entity';
-import { TasksService } from 'omniboxd/tasks/tasks.service';
 import {
   Body,
   Controller,
@@ -10,6 +8,8 @@ import {
   Post,
 } from '@nestjs/common';
 import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 
 @Controller('api/v1/namespaces/:namespaceId/tasks')
 export class TasksController {

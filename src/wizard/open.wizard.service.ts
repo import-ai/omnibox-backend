@@ -1,16 +1,16 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { MessagesService } from 'omniboxd/messages/messages.service';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
-import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { StreamService } from 'omniboxd/wizard/stream.service';
-import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
+import { MessagesService } from 'omniboxd/messages/messages.service';
 import {
   AgentRequestChannel,
   AgentRequestDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
+import { StreamService } from 'omniboxd/wizard/stream.service';
+import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { EntityNotFoundError } from 'typeorm';
 
 @Injectable()

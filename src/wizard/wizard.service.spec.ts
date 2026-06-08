@@ -1,5 +1,6 @@
-import { WizardService } from './wizard.service';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
+
+import { WizardService } from './wizard.service';
 
 const createTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-id',

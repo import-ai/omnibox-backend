@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { SmartFolderResourcesService } from 'omniboxd/smart-folders/smart-folder-resources.service';
 import {
   SmartFolderOwnerScope,
   SmartFolderRootScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { SmartFolderResourcesService } from 'omniboxd/smart-folders/smart-folder-resources.service';
 
 @Injectable()
 export class SmartFoldersScopeService {

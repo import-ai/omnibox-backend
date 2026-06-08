@@ -1,7 +1,7 @@
-import { IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator';
-import { i18nValidationMessage } from 'nestjs-i18n';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Expose } from 'class-transformer';
+import { IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class BaseCollectUrlRequestDto {
   @ApiProperty({

@@ -1,4 +1,5 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
+
 import { BaseColumns } from './base-columns';
 
 async function createUsersTable(queryRunner: QueryRunner): Promise<void> {

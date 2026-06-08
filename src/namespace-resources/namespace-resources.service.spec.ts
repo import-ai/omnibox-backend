@@ -1,4 +1,5 @@
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+
 import { NamespaceResourcesService } from './namespace-resources.service';
 
 describe('NamespaceResourcesService.listChildren', () => {

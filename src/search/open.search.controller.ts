@@ -11,8 +11,8 @@ import {
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
 import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
-import { OpenSearchRequestDto } from 'omniboxd/search/dto/open-search-request.dto';
 import { IndexedResourceDto } from 'omniboxd/search/dto/indexed-doc.dto';
+import { OpenSearchRequestDto } from 'omniboxd/search/dto/open-search-request.dto';
 import { OpenSearchService } from 'omniboxd/search/open.search.service';
 
 @ApiTags('Search')

@@ -1,6 +1,6 @@
+import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { Controller, Body, Post } from '@nestjs/common';
 import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
 
 @Controller('internal/api/v1')

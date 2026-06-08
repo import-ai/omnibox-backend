@@ -1,10 +1,9 @@
-import { DataSource, QueryRunner } from 'typeorm';
 import {
   destroyDataSource,
   getTestPostgresUrl,
   releaseQueryRunner,
 } from 'test/migration-test-utils';
-import { UpdateAttachmentUrls1755499552000 } from './1755499552000-update-attachment-urls';
+import { DataSource, QueryRunner } from 'typeorm';
 
 // Import all prior migrations in chronological order
 import { Init1751900000000 } from './1751900000000-init';
@@ -17,6 +16,7 @@ import { ApiKeys1754550165406 } from './1754550165406-api-keys';
 import { ResourceAttachments1755059371000 } from './1755059371000-resource-attachments';
 import { AddTagIdsToResources1755248141570 } from './1755248141570-add-tag-ids-to-resources';
 import { CleanResourceNames1755396702021 } from './1755396702021-clean-resource-names';
+import { UpdateAttachmentUrls1755499552000 } from './1755499552000-update-attachment-urls';
 
 describe('UpdateAttachmentUrls Migration E2E', () => {
   let dataSource: DataSource;

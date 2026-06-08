@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+
 import { BreadcrumbItemDto } from './breadcrumb-item.dto';
 import { ResourceDto, SpaceType } from './resource.dto';
 

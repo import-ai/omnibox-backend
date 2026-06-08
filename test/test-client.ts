@@ -1,13 +1,13 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from 'omniboxd/app/app.module';
-import { configureApp } from 'omniboxd/app/app-config';
+import { Test, TestingModule } from '@nestjs/testing';
 import {
   APIKeyPermissionTarget,
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
+import { AppModule } from 'omniboxd/app/app.module';
+import { configureApp } from 'omniboxd/app/app-config';
+import * as request from 'supertest';
+import { App } from 'supertest/types';
 
 export function randomChoice(choices: string): string {
   return choices[Math.floor(Math.random() * choices.length)];

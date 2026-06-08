@@ -1,31 +1,31 @@
 import { Module } from '@nestjs/common';
-import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
+import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
+import { MessagesModule } from 'omniboxd/messages/messages.module';
+import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { S3Module } from 'omniboxd/s3/s3.module';
+import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
+import { SharesModule } from 'omniboxd/shares/shares.module';
+import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
+import { TagModule } from 'omniboxd/tag/tag.module';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { TasksModule } from 'omniboxd/tasks/tasks.module';
+import { UserModule } from 'omniboxd/user/user.module';
+import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
+import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
+import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
-import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 import {
   CollectController,
   SharedWizardController,
   WizardController,
 } from 'omniboxd/wizard/wizard.controller';
-import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
-import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
-import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
-import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
-import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
-import { TagModule } from 'omniboxd/tag/tag.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Task } from 'omniboxd/tasks/tasks.entity';
-import { MessagesModule } from 'omniboxd/messages/messages.module';
-import { UserModule } from 'omniboxd/user/user.module';
-import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
-import { TasksModule } from 'omniboxd/tasks/tasks.module';
-import { S3Module } from 'omniboxd/s3/s3.module';
-import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
-import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
-import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
-import { SharesModule } from 'omniboxd/shares/shares.module';
-import { ResourcesModule } from 'omniboxd/resources/resources.module';
-import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
+import { WizardService } from 'omniboxd/wizard/wizard.service';
+import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
 @Module({
   providers: [

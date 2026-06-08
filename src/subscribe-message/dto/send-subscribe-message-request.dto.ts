@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer';
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import { IsObject, IsOptional, IsString } from 'class-validator';
 
 export class SendSubscribeMessageRequestDto {
   @IsString()

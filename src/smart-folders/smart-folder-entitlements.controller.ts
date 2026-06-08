@@ -1,4 +1,5 @@
 import { Controller, Get, HttpStatus, Inject, Param } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -7,7 +8,6 @@ import {
   ISmartFolderEntitlementsProvider,
   SMART_FOLDER_ENTITLEMENTS_PROVIDER,
 } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
-import { I18nService } from 'nestjs-i18n';
 
 @Controller('api/v1/namespaces/:namespaceId/smart-folders/entitlements')
 export class SmartFolderEntitlementsController {

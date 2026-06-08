@@ -1,24 +1,25 @@
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
-  Query,
   Headers,
   HttpStatus,
+  Post,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { OAuthProviderService } from './oauth-provider.service';
-import { OAuthClientService } from './oauth-client.service';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { CookieAuth, Public } from 'omniboxd/auth/decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
+
 import { AuthorizeRequestDto } from './dto/authorize-request.dto';
-import { TokenRequestDto, TokenResponseDto } from './dto/token-request.dto';
-import { UserinfoResponseDto } from './dto/userinfo-response.dto';
 import {
   CreateClientRequestDto,
   CreateClientResponseDto,
 } from './dto/create-client-request.dto';
-import { CookieAuth, Public } from 'omniboxd/auth/decorators';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { TokenRequestDto, TokenResponseDto } from './dto/token-request.dto';
+import { UserinfoResponseDto } from './dto/userinfo-response.dto';
+import { OAuthClientService } from './oauth-client.service';
+import { OAuthProviderService } from './oauth-provider.service';
 
 @ApiTags('OAuth Provider')
 @Controller('api/v1/oauth')

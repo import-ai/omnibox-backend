@@ -1,6 +1,4 @@
 import { HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { Expose, plainToInstance, Transform, Type } from 'class-transformer';
 import {
   IsInt,
@@ -10,6 +8,8 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 export class VFSResourceFilterOptionsDto {
   @Expose({ name: 'created_at_before' })

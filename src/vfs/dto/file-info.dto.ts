@@ -1,12 +1,12 @@
 import { Expose } from 'class-transformer';
+import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
+import { SpaceType } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
-import { InternalResourceDto } from 'omniboxd/namespace-resources/dto/internal-resource.dto';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { SpaceType } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
 
 export class FileInfoDto {

@@ -1,19 +1,20 @@
-import * as bcrypt from 'bcrypt';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Share, ShareType } from './entities/share.entity';
-import { Repository } from 'typeorm';
-import { ShareInfoDto } from './dto/share-info.dto';
-import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
-import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-info.dto';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import * as bcrypt from 'bcrypt';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-info.dto';
 import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { UserService } from 'omniboxd/user/user.service';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { Repository } from 'typeorm';
+
+import { ShareInfoDto } from './dto/share-info.dto';
+import { UpdateShareInfoReqDto } from './dto/update-share-info-req.dto';
+import { Share, ShareType } from './entities/share.entity';
 
 @Injectable()
 export class SharesService {

@@ -1,11 +1,11 @@
-import { Repository } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { generateHTML, loadHtmlTemplate } from 'omniboxd/seo/utils';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
-import { generateHTML, loadHtmlTemplate } from 'omniboxd/seo/utils';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class SeoService {

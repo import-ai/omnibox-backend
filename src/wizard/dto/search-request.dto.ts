@@ -19,4 +19,7 @@ export class SearchRequestDto {
 
   @Expose({ name: 'limit' })
   limit?: number;
+
+  @Expose({ name: 'resource_ids' })
+  resourceIds?: string[];
 }

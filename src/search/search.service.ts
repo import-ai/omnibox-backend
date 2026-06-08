@@ -30,6 +30,7 @@ import {
   SearchFilterOptions,
   SearchResourceFilterService,
 } from './search-resource-filter.service';
+import { SearchCandidateService } from './search-candidate.service';
 
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
@@ -67,6 +68,7 @@ export class SearchService {
     private readonly i18n: I18nService,
     private readonly tagService: TagService,
     private readonly searchResourceFilterService: SearchResourceFilterService,
+    private readonly searchCandidateService: SearchCandidateService,
   ) {}
 
   async search(
@@ -100,11 +102,19 @@ export class SearchService {
         filterOptions,
       );
     }
+    const candidateResourceIds = await this.getFilterCandidateResourceIds(
+      userId,
+      namespaceId,
+      filterOptions,
+    );
+    if (candidateResourceIds && candidateResourceIds.length <= 0) {
+      return [];
+    }
     const result = await this.searchSemanticResources(
       userId,
       namespaceId,
       normalizedQuery,
-      filterOptions,
+      candidateResourceIds,
       {
         offset: 0,
         limit: MAX_SEARCH_LIMIT,
@@ -165,11 +175,25 @@ export class SearchService {
       };
     }
 
+    const candidateResourceIds = await this.getFilterCandidateResourceIds(
+      userId,
+      namespaceId,
+      filterOptions,
+    );
+    if (candidateResourceIds && candidateResourceIds.length <= 0) {
+      return {
+        items: [],
+        total: 0,
+        offset,
+        limit,
+      };
+    }
+
     const result = await this.searchSemanticResourcesPaginated(
       userId,
       namespaceId,
       normalizedQuery,
-      filterOptions,
+      candidateResourceIds,
       offset,
       limit,
     );
@@ -186,7 +210,7 @@ export class SearchService {
     userId: string,
     namespaceId: string,
     normalizedQuery: string,
-    filterOptions: SearchFilterOptions,
+    candidateResourceIds: string[] | null,
     offset: number,
     limit: number,
   ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
@@ -202,7 +226,7 @@ export class SearchService {
         userId,
         namespaceId,
         normalizedQuery,
-        filterOptions,
+        candidateResourceIds,
         {
           offset: searchOffset,
           limit: SEMANTIC_SEARCH_PAGE_SIZE,
@@ -222,7 +246,7 @@ export class SearchService {
     userId: string,
     namespaceId: string,
     normalizedQuery: string,
-    filterOptions: SearchFilterOptions,
+    candidateResourceIds: string[] | null,
     pagination: Required<SearchPaginationOptions>,
   ): Promise<{
     items: IndexedDocDto[];
@@ -239,13 +263,23 @@ export class SearchService {
     );
     searchRequest.offset = Math.max(pagination.offset, 0);
     searchRequest.type = IndexRecordType.CHUNK;
+    searchRequest.resourceIds = candidateResourceIds || undefined;
     const result = await this.wizardApiService.search(searchRequest);
     const records = result?.records || [];
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
+    const candidateResourceIdSet = candidateResourceIds
+      ? new Set(candidateResourceIds)
+      : null;
     for (const record of records) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
+        if (
+          candidateResourceIdSet &&
+          !candidateResourceIdSet.has(chunk.resourceId)
+        ) {
+          continue;
+        }
         if (!seenResourceIds.has(chunk.resourceId)) {
           seenResourceIds.add(chunk.resourceId);
         }
@@ -261,12 +295,6 @@ export class SearchService {
       namespaceId,
       [...resourceMetaMap.values()],
     );
-    const matchedResourceIds =
-      await this.searchResourceFilterService.getMatchedResourceIds(
-        namespaceId,
-        [...seenResourceIds],
-        filterOptions,
-      );
 
     seenResourceIds.clear();
 
@@ -276,15 +304,18 @@ export class SearchService {
         if (seenResourceIds.has(chunk.resourceId)) {
           continue;
         }
+        if (
+          candidateResourceIdSet &&
+          !candidateResourceIdSet.has(chunk.resourceId)
+        ) {
+          continue;
+        }
         seenResourceIds.add(chunk.resourceId);
         const permission = permissionMap.get(chunk.resourceId);
         if (
           !permission ||
           comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
         ) {
-          continue;
-        }
-        if (matchedResourceIds && !matchedResourceIds.has(chunk.resourceId)) {
           continue;
         }
 
@@ -307,6 +338,18 @@ export class SearchService {
       limit: searchRequest.limit,
       rawCount: records.length,
     };
+  }
+
+  private async getFilterCandidateResourceIds(
+    userId: string,
+    namespaceId: string,
+    filterOptions: SearchFilterOptions,
+  ): Promise<string[] | null> {
+    return await this.searchCandidateService.getFilterCandidateResourceIds(
+      userId,
+      namespaceId,
+      filterOptions,
+    );
   }
 
   private normalizePagination(

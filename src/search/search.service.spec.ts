@@ -223,6 +223,34 @@ describe('SearchService', () => {
         },
       ),
     };
+    const searchCandidateService = {
+      getFilterCandidateResourceIds: jest.fn(
+        async (_userId: string, _namespaceId: string, options: any) => {
+          const conditions = options?.conditions || [];
+          if (conditions.length <= 0) {
+            return null;
+          }
+          const visibleResources =
+            await namespaceResourcesService.getAllResourcesByUser(
+              userId,
+              namespaceId,
+            );
+          const visibleResourceIds = visibleResources.map(
+            (resource) => resource.id,
+          );
+          const matchedResourceIds =
+            await searchResourceFilterService.getMatchedResourceIds(
+              namespaceId,
+              visibleResourceIds,
+              options,
+            );
+          if (!matchedResourceIds) {
+            return null;
+          }
+          return visibleResourceIds.filter((id) => matchedResourceIds.has(id));
+        },
+      ),
+    };
     const service = new SearchService(
       wizardApiService as any,
       permissionsService as any,
@@ -237,6 +265,7 @@ describe('SearchService', () => {
       } as any,
       {} as any,
       searchResourceFilterService as any,
+      searchCandidateService as any,
     );
 
     return {
@@ -246,6 +275,7 @@ describe('SearchService', () => {
       permissionsService,
       resourcesService,
       ruleService,
+      searchCandidateService,
       searchResourceFilterService,
       service,
       wizardApiService,
@@ -378,8 +408,14 @@ describe('SearchService', () => {
   });
 
   it('filters semantic resource results with smart folder conditions', async () => {
-    const { matcherService, resourcesService, ruleService, service } =
-      createService();
+    const {
+      matcherService,
+      resourcesService,
+      ruleService,
+      searchCandidateService,
+      service,
+      wizardApiService,
+    } = createService();
     const conditions = [
       {
         field: SmartFolderField.TITLE,
@@ -403,6 +439,21 @@ describe('SearchService', () => {
     expect(resourcesService.batchGetResources).toHaveBeenCalledWith(
       namespaceId,
       [resourceId, matchingResourceId],
+    );
+    expect(
+      searchCandidateService.getFilterCandidateResourceIds,
+    ).toHaveBeenCalledWith(
+      userId,
+      namespaceId,
+      expect.objectContaining({
+        conditions,
+        matchMode: SmartFolderMatchMode.ALL,
+      }),
+    );
+    expect(wizardApiService.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceIds: [matchingResourceId],
+      }),
     );
     expect(matcherService.matches).toHaveBeenCalledWith(
       expect.objectContaining({ id: resourceId }),
@@ -514,12 +565,23 @@ describe('SearchService', () => {
   it('continues semantic search pages until the requested filtered page is filled', async () => {
     const {
       matcherService,
+      namespaceResourcesService,
       permissionsService,
       resourcesService,
       service,
       wizardApiService,
     } = createService();
     const laterMatchingResourceId = 'later-matching-resource-id';
+    namespaceResourcesService.getAllResourcesByUser.mockResolvedValueOnce([
+      {
+        id: laterMatchingResourceId,
+        parentId: 'parent-id',
+      },
+      {
+        id: resourceId,
+        parentId: 'parent-id',
+      },
+    ]);
     matcherService.matches.mockImplementation(
       (resource) => resource.id === laterMatchingResourceId,
     );
@@ -632,6 +694,7 @@ describe('SearchService', () => {
       expect.objectContaining({
         offset: 0,
         limit: 100,
+        resourceIds: [laterMatchingResourceId],
       }),
     );
     expect(wizardApiService.search).toHaveBeenNthCalledWith(
@@ -639,6 +702,7 @@ describe('SearchService', () => {
       expect.objectContaining({
         offset: 100,
         limit: 100,
+        resourceIds: [laterMatchingResourceId],
       }),
     );
     expect(result).toEqual({
@@ -655,8 +719,12 @@ describe('SearchService', () => {
   });
 
   it('does not widen semantic results when filter match mode is any', async () => {
-    const { searchResourceFilterService, service, wizardApiService } =
-      createService();
+    const {
+      searchCandidateService,
+      searchResourceFilterService,
+      service,
+      wizardApiService,
+    } = createService();
     wizardApiService.search.mockResolvedValueOnce({
       records: [
         {
@@ -698,13 +766,18 @@ describe('SearchService', () => {
       searchResourceFilterService.searchResourcesByFilters,
     ).not.toHaveBeenCalled();
     expect(
-      searchResourceFilterService.getMatchedResourceIds,
+      searchCandidateService.getFilterCandidateResourceIds,
     ).toHaveBeenCalledWith(
+      userId,
       namespaceId,
-      [resourceId],
       expect.objectContaining({
         conditions,
         matchMode: SmartFolderMatchMode.ANY,
+      }),
+    );
+    expect(wizardApiService.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceIds: [matchingResourceId],
       }),
     );
     expect(result).toEqual([]);

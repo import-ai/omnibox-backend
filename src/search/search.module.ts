@@ -17,10 +17,16 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
 import { SearchResourceFilterService } from './search-resource-filter.service';
+import { SearchCandidateService } from './search-candidate.service';
 
 @Module({
   exports: [SearchService, OpenSearchService],
-  providers: [SearchService, SearchResourceFilterService, OpenSearchService],
+  providers: [
+    SearchService,
+    SearchResourceFilterService,
+    SearchCandidateService,
+    OpenSearchService,
+  ],
   controllers: [SearchController, InternalSearchController],
   imports: [
     WizardAPIModule,

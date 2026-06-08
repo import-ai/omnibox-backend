@@ -19,7 +19,7 @@ import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module'
 import { SearchResourceFilterService } from './search-resource-filter.service';
 
 @Module({
-  exports: [SearchService],
+  exports: [SearchService, OpenSearchService],
   providers: [SearchService, SearchResourceFilterService, OpenSearchService],
   controllers: [SearchController, InternalSearchController],
   imports: [

@@ -90,6 +90,7 @@ export default async () => {
   process.env.OBB_MAIL_FROM = '"Test <test@example.com>"';
   process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8080';
   process.env.OBB_KAFKA_BROKER = kafkaBroker;
+  process.env.OBB_PRO_URL = '';
   process.env.MAILHOG_API_URL = mailhogApiUrl;
 
   (global as any).__POSTGRES_CONTAINER__ = postgresContainer;

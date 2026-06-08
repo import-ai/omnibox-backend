@@ -12,6 +12,8 @@ function customAlphabet(alphabet: string, size: number) {
   };
 }
 
+process.env.OBB_PRO_URL = '';
+
 expect.extend({
   withResponseFailedLog(received, expected, onFail) {
     const pass = this.equals(received, expected);

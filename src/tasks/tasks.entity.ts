@@ -52,7 +52,7 @@ export class Task extends Base {
   @Column({ default: false })
   enqueued: boolean;
 
-  @Column('timestamptz', { nullable: true })
+  @Column('timestamptz', { nullable: true, default: null })
   lastHeartbeat: Date | null;
 
   @Column('varchar', { nullable: true })

@@ -399,6 +399,13 @@ export class TasksService {
     return TaskDto.fromEntity(newTask);
   }
 
+  async updateHeartbeat(taskId: string): Promise<void> {
+    await this.taskRepository.update(
+      { id: taskId, status: TaskStatus.RUNNING },
+      { lastHeartbeat: new Date() },
+    );
+  }
+
   async getTasksByResourceId(
     namespaceId: string,
     resourceId: string,

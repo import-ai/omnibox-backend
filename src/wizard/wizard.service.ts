@@ -393,6 +393,10 @@ export class WizardService {
     task.output.images = processedImages;
   }
 
+  async updateHeartbeat(taskId: string): Promise<void> {
+    await this.tasksService.updateHeartbeat(taskId);
+  }
+
   async startTask(taskId: string): Promise<InternalTaskDto> {
     const task = await this.wizardTaskService.taskRepository.findOne({
       where: { id: taskId },

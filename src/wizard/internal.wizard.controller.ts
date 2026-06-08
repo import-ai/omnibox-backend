@@ -36,6 +36,12 @@ export class InternalWizardController {
   }
 
   @Public()
+  @Post('tasks/:taskId/heartbeat')
+  async updateHeartbeat(@Param('taskId') taskId: string) {
+    await this.wizardService.updateHeartbeat(taskId);
+  }
+
+  @Public()
   @Post('tasks/:taskId/start')
   async startTask(@Param('taskId') taskId: string) {
     return await this.wizardService.startTask(taskId);

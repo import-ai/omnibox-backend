@@ -216,6 +216,7 @@ export class SearchService {
   ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
     const requestedItemCount = offset + limit;
     const matchingItems: IndexedDocDto[] = [];
+    const seenResourceIds = new Set<string>();
 
     for (
       let searchOffset = 0, hasMoreRawResults = true;
@@ -232,7 +233,15 @@ export class SearchService {
           limit: SEMANTIC_SEARCH_PAGE_SIZE,
         },
       );
-      matchingItems.push(...searchPage.items);
+      for (const item of searchPage.items) {
+        if (item.type === DocType.RESOURCE) {
+          if (seenResourceIds.has(item.resourceId)) {
+            continue;
+          }
+          seenResourceIds.add(item.resourceId);
+        }
+        matchingItems.push(item);
+      }
       hasMoreRawResults = searchPage.rawCount >= searchPage.limit;
     }
 

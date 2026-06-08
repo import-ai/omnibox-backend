@@ -562,6 +562,133 @@ describe('SearchService', () => {
     });
   });
 
+  it('deduplicates semantic resource results across fetched pages', async () => {
+    const { permissionsService, resourcesService, service, wizardApiService } =
+      createService();
+    const duplicateResourceId = 'duplicate-resource-id';
+    const firstPageResourceIds = Array.from(
+      { length: 12 },
+      (_, index) => `first-page-resource-id-${index}`,
+    );
+    const hiddenResourceIds = Array.from(
+      { length: 87 },
+      (_, index) => `hidden-resource-id-${index}`,
+    );
+    const secondPageResourceIds = Array.from(
+      { length: 7 },
+      (_, index) => `second-page-resource-id-${index}`,
+    );
+    const allowedResourceIds = new Set([
+      duplicateResourceId,
+      ...firstPageResourceIds,
+      ...secondPageResourceIds,
+    ]);
+    const firstPageRecords = [
+      {
+        id: 'duplicate-result-id-1',
+        type: IndexRecordType.CHUNK,
+        chunk: {
+          resourceId: duplicateResourceId,
+          title: 'Duplicate title',
+          text: 'First matching chunk',
+        },
+      },
+      ...firstPageResourceIds.map((id, index) => ({
+        id: `first-page-result-id-${index}`,
+        type: IndexRecordType.CHUNK,
+        chunk: {
+          resourceId: id,
+          title: `First page title ${index}`,
+          text: `First page content ${index}`,
+        },
+      })),
+      ...hiddenResourceIds.map((id, index) => ({
+        id: `hidden-result-id-${index}`,
+        type: IndexRecordType.CHUNK,
+        chunk: {
+          resourceId: id,
+          title: `Hidden title ${index}`,
+          text: `Hidden content ${index}`,
+        },
+      })),
+    ];
+
+    wizardApiService.search
+      .mockResolvedValueOnce({
+        records: firstPageRecords,
+      })
+      .mockResolvedValueOnce({
+        records: [
+          {
+            id: 'duplicate-result-id-2',
+            type: IndexRecordType.CHUNK,
+            chunk: {
+              resourceId: duplicateResourceId,
+              title: 'Duplicate title',
+              text: 'Second matching chunk',
+            },
+          },
+          ...secondPageResourceIds.map((id, index) => ({
+            id: `second-page-result-id-${index}`,
+            type: IndexRecordType.CHUNK,
+            chunk: {
+              resourceId: id,
+              title: `Second page title ${index}`,
+              text: `Second page content ${index}`,
+            },
+          })),
+        ],
+      });
+    permissionsService.getCurrentPermissions.mockImplementation(
+      (_userId: string, _namespaceId: string, resources: any[]) =>
+        Promise.resolve(
+          new Map(
+            resources
+              .filter((resource) => allowedResourceIds.has(resource.id))
+              .map((resource) => [resource.id, ResourcePermission.CAN_VIEW]),
+          ),
+        ),
+    );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              {
+                id,
+                name:
+                  id === duplicateResourceId
+                    ? 'Duplicate title'
+                    : `Title for ${id}`,
+                attrs: {},
+                resourceType: ResourceType.DOC,
+              },
+            ]),
+          ),
+        ),
+    );
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 0,
+        limit: 20,
+      },
+    );
+
+    expect(result.items.map((item: any) => item.resourceId)).toEqual([
+      duplicateResourceId,
+      ...firstPageResourceIds,
+      ...secondPageResourceIds,
+    ]);
+    expect(result.total).toBe(20);
+  });
+
   it('continues semantic search pages until the requested filtered page is filled', async () => {
     const {
       matcherService,

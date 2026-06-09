@@ -1,13 +1,13 @@
-import { Task } from 'omniboxd/tasks/tasks.entity';
-import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
+import { HttpStatus } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { ExtractTagsOutputDto } from 'omniboxd/wizard/processors/dto/extract-tags.output.dto';
-import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 
 export class ExtractTagsProcessor extends Processor {
   constructor(

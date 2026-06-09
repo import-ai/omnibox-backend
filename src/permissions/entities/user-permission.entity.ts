@@ -1,5 +1,6 @@
 import { Base } from 'omniboxd/common/base.entity';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+
 import { ResourcePermission } from '../resource-permission.enum';
 
 @Entity('user_permissions')

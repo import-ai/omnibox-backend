@@ -1,9 +1,10 @@
-import { WizardService } from 'omniboxd/wizard/wizard.service';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
-import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
-import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { Body, Controller, Param, Post, Query } from '@nestjs/common';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
+import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
+import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
+import { WizardService } from 'omniboxd/wizard/wizard.service';
+
 import { CreateTempfileReqDto } from './dto/create-tempfile-req.dto';
 
 @Controller('internal/api/v1/wizard')

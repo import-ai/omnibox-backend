@@ -1,7 +1,7 @@
-import { Response } from 'express';
-import { SeoService } from 'omniboxd/seo/seo.service';
 import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { SeoService } from 'omniboxd/seo/seo.service';
 
 @Public()
 @Controller('api/v1/seo')

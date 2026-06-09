@@ -1,6 +1,6 @@
-import * as path from 'path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as path from 'path';
 
 interface WizardCapabilities {
   functions: string[];

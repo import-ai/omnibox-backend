@@ -1,19 +1,19 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
-  Post,
   Patch,
+  Post,
   Query,
-  Body,
 } from '@nestjs/common';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { FilesService } from 'omniboxd/files/files.service';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {

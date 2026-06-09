@@ -1,5 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('user_options')
 export class UserOption extends Base {

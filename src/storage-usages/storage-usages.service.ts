@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { StorageUsage, StorageType } from './entities/storage-usage.entity';
-import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
+import { Transaction } from 'omniboxd/utils/transaction-utils';
+import { Repository } from 'typeorm';
+
+import { StorageType, StorageUsage } from './entities/storage-usage.entity';
 
 @Injectable()
 export class StorageUsagesService {

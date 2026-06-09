@@ -1,37 +1,37 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { DocType } from './doc-type.enum';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
-import { WeaviateSyncStatsResponseDto } from './dto/weaviate-sync-stats-response.dto';
+import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { ConversationsService } from 'omniboxd/conversations/conversations.service';
+import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
+import { Message } from 'omniboxd/messages/entities/message.entity';
+import { MessagesService } from 'omniboxd/messages/messages.service';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import {
   comparePermission,
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
-import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
-import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { Repository } from 'typeorm';
-import { Task } from 'omniboxd/tasks/tasks.entity';
-import { InjectRepository } from '@nestjs/typeorm';
-import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
-import { MessagesService } from 'omniboxd/messages/messages.service';
-import { ConversationsService } from 'omniboxd/conversations/conversations.service';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-
-import { I18nService } from 'nestjs-i18n';
-import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
-import { Message } from 'omniboxd/messages/entities/message.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
+import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
+import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { Repository } from 'typeorm';
+
+import { DocType } from './doc-type.enum';
+import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
+import { WeaviateSyncStatsResponseDto } from './dto/weaviate-sync-stats-response.dto';
+import { SearchCandidateService } from './search-candidate.service';
 import {
   SearchFilterOptions,
   SearchResourceFilterService,
 } from './search-resource-filter.service';
-import { SearchCandidateService } from './search-candidate.service';
 
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;

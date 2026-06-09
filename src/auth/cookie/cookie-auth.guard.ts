@@ -1,18 +1,18 @@
 import {
   CanActivate,
   ExecutionContext,
-  Injectable,
   HttpStatus,
+  Injectable,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { Reflector } from '@nestjs/core';
-import { AuthService } from 'omniboxd/auth/auth.service';
-import { IS_COOKIE_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
-import { CookieAuthOptions } from 'omniboxd/auth/cookie/cookie.auth.decorator';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
+import { AuthService } from 'omniboxd/auth/auth.service';
+import { CookieAuthOptions } from 'omniboxd/auth/cookie/cookie.auth.decorator';
+import { IS_COOKIE_AUTH, IS_PUBLIC_KEY } from 'omniboxd/auth/decorators';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { User } from 'omniboxd/user/entities/user.entity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class CookieAuthGuard implements CanActivate {

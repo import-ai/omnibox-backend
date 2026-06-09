@@ -1,4 +1,11 @@
 import {
+  HttpStatus,
+  Logger,
+  UseGuards,
+  UseInterceptors,
+  ValidationPipe,
+} from '@nestjs/common';
+import {
   ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
@@ -7,25 +14,18 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import {
-  Logger,
-  UseGuards,
-  UseInterceptors,
-  ValidationPipe,
-  HttpStatus,
-} from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { trace } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
-import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
-import { StreamService } from 'omniboxd/wizard/stream.service';
-import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { WsAuthOptions } from 'omniboxd/auth';
-import { SharesService } from 'omniboxd/shares/shares.service';
-import { ShareType } from 'omniboxd/shares/entities/share.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { WsSpanInterceptor } from 'omniboxd/interceptor/ws-span.interceptor';
-import { trace } from '@opentelemetry/api';
+import { ShareType } from 'omniboxd/shares/entities/share.entity';
+import { SharesService } from 'omniboxd/shares/shares.service';
+import { WsJwtGuard } from 'omniboxd/websocket/ws-jwt.guard';
+import { AgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
+import { StreamService } from 'omniboxd/wizard/stream.service';
+import { Server, Socket } from 'socket.io';
 
 @WebSocketGateway({
   cors: {

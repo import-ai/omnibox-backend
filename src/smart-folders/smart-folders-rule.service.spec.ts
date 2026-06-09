@@ -1,8 +1,8 @@
-import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 import {
   SmartFolderField,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 
 describe('SmartFoldersRuleService', () => {
   const i18n = {

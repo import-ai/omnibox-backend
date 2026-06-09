@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { VfsService } from 'omniboxd/vfs/vfs.service';
-import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { VfsCollectUrlResponseDto } from 'omniboxd/vfs-wizard/dto/vfs-collect-url.response.dto';
+import { WizardService } from 'omniboxd/wizard/wizard.service';
 
 @Injectable()
 export class VfsWizardService {

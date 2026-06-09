@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { TraceEventDto } from './dto/trace-event.dto';
 import { instanceToPlain } from 'class-transformer';
-import { TraceMessageDto } from './dto/trace-message.dto';
 import { KafkaService } from 'omniboxd/kafka/kafka.service';
+
+import { TraceEventDto } from './dto/trace-event.dto';
+import { TraceMessageDto } from './dto/trace-message.dto';
 
 @Injectable()
 export class TraceService {

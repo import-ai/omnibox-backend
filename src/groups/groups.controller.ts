@@ -7,14 +7,15 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { GroupsService } from './groups.service';
-import { CreateGroupDto } from './dto/create-group.dto';
 import { plainToInstance } from 'class-transformer';
-import { GroupDto } from './dto/group.dto';
-import { UpdateGroupDto } from './dto/update-group.dto';
-import { GroupUserDto } from './dto/group-user.dto';
-import { AddGroupUserDto } from './dto/add-group-user.dto';
 import { NamespaceAdmin } from 'omniboxd/namespaces/decorators/namespace-admin.decorator';
+
+import { AddGroupUserDto } from './dto/add-group-user.dto';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { GroupDto } from './dto/group.dto';
+import { GroupUserDto } from './dto/group-user.dto';
+import { UpdateGroupDto } from './dto/update-group.dto';
+import { GroupsService } from './groups.service';
 
 @Controller('api/v1/namespaces/:namespaceId/groups')
 export class GroupsController {

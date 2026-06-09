@@ -8,9 +8,10 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { InvitationsService } from './invitations.service';
-import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
 import { NamespaceAdmin } from 'omniboxd/namespaces/decorators/namespace-admin.decorator';
+
+import { CreateInvitationReqDto } from './dto/create-invitation-req.dto';
+import { InvitationsService } from './invitations.service';
 
 @Controller('api/v1/namespaces/:namespaceId')
 export class InvitationsController {

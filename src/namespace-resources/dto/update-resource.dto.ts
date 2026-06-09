@@ -1,10 +1,10 @@
 import {
-  IsEnum,
   IsArray,
-  IsObject,
-  IsString,
-  IsOptional,
+  IsEnum,
   IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
   MaxLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';

@@ -1,14 +1,14 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { CreateApplicationsDto } from 'omniboxd/applications/applications.dto';
 import { ConfigService } from '@nestjs/config';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { Applications } from 'omniboxd/applications/applications.entity';
-import { Repository } from 'typeorm';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { BotBase } from 'omniboxd/applications/apps/bot-base';
+import { CreateApplicationsDto } from 'omniboxd/applications/applications.dto';
+import { Applications } from 'omniboxd/applications/applications.entity';
 import { BaseApp } from 'omniboxd/applications/apps/base-app';
+import { BotBase } from 'omniboxd/applications/apps/bot-base';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class WechatClaw extends BotBase {

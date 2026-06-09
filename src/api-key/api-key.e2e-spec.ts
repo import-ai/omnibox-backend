@@ -1,4 +1,5 @@
 import { TestClient } from 'test/test-client';
+
 import { APIKeyPermissionTarget, APIKeyPermissionType } from './api-key.entity';
 
 describe('APIKeyController (e2e)', () => {

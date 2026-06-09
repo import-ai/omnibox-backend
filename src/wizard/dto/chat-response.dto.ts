@@ -1,7 +1,7 @@
 import {
+  MessageAttrs,
   OpenAIMessage,
   OpenAIMessageRole,
-  MessageAttrs,
 } from 'omniboxd/messages/entities/message.entity';
 
 export type ChatResponseType =

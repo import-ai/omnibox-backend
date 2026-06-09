@@ -1,8 +1,8 @@
 import { HttpStatus, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { NamespaceUsageDto } from 'omniboxd/namespaces/dto/namespace-usage.dto';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { OpenAPIRequestsQuotaDto } from 'omniboxd/open-api/open-api-quota.dto';
 import { createClient, RedisClientType } from 'redis';
 

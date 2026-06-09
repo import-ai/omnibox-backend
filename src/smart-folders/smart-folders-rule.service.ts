@@ -1,11 +1,11 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   SmartFolderCondition,
   SmartFolderField,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
-import { I18nService } from 'nestjs-i18n';
 
 const TEXT_FIELDS = new Set<SmartFolderField>([
   SmartFolderField.TITLE,

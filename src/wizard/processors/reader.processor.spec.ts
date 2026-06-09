@@ -1,13 +1,14 @@
 /* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-require-imports */
 import { Test, TestingModule } from '@nestjs/testing';
-import { ReaderProcessor } from './reader.processor';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
-import { I18nService } from 'nestjs-i18n';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+
+import { ReaderProcessor } from './reader.processor';
 
 describe('ReaderProcessor', () => {
   let processor: ReaderProcessor;

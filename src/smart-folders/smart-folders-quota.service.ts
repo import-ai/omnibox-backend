@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   SmartFolderConfig,
@@ -10,7 +10,7 @@ import {
   ISmartFolderEntitlementsProvider,
   SMART_FOLDER_ENTITLEMENTS_PROVIDER,
 } from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
-import { I18nService } from 'nestjs-i18n';
+import { EntityManager, Repository } from 'typeorm';
 
 @Injectable()
 export class SmartFoldersQuotaService {

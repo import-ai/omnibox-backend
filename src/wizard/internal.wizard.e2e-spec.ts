@@ -1,6 +1,6 @@
-import { TestClient } from 'test/test-client';
 import { HttpStatus } from '@nestjs/common';
 import { Image } from 'omniboxd/wizard/types/wizard.types';
+import { TestClient } from 'test/test-client';
 import { gzipSync } from 'zlib';
 
 describe('InternalWizardController (e2e)', () => {

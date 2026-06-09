@@ -1,19 +1,19 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import { TagService } from 'omniboxd/tag/tag.service';
-import { TagWithCountDto } from 'omniboxd/resource-tags/dto/tag-with-count.dto';
-import { ListTagsResponseDto } from 'omniboxd/resource-tags/dto/list-tags-response.dto';
-import { ListTagsRequestDto } from 'omniboxd/resource-tags/dto/list-tags-request.dto';
-import { FilterTagsRequestDto } from 'omniboxd/resource-tags/dto/filter-tags-request.dto';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { I18nService } from 'nestjs-i18n';
-import { transaction } from 'omniboxd/utils/transaction-utils';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { Tag } from 'omniboxd/tag/tag.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { FilterTagsRequestDto } from 'omniboxd/resource-tags/dto/filter-tags-request.dto';
+import { ListTagsRequestDto } from 'omniboxd/resource-tags/dto/list-tags-request.dto';
+import { ListTagsResponseDto } from 'omniboxd/resource-tags/dto/list-tags-response.dto';
 import { TagRenameResponseDto } from 'omniboxd/resource-tags/dto/tag-rename.response.dto';
+import { TagWithCountDto } from 'omniboxd/resource-tags/dto/tag-with-count.dto';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { Tag } from 'omniboxd/tag/tag.entity';
+import { TagService } from 'omniboxd/tag/tag.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
+import { transaction } from 'omniboxd/utils/transaction-utils';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class ResourceTagsService {

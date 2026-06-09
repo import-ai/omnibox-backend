@@ -1,7 +1,7 @@
-import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { Expose } from 'class-transformer';
-import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
+import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
 
 export class VfsResourceResponseDto extends ResourceDto {
   @Expose({ name: 'vfs_name' })

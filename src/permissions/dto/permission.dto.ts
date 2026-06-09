@@ -1,6 +1,7 @@
 import { Expose } from 'class-transformer';
 import { IsEnum, IsNotEmpty } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+
 import { ResourcePermission } from '../resource-permission.enum';
 
 @Expose()

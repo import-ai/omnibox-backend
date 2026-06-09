@@ -1,8 +1,9 @@
 import { Expose, Transform, Type } from 'class-transformer';
-import { UserInvitationDto } from './invitation.dto';
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+
 import { IsAllowedEmailDomain } from '../../utils/email-validation';
+import { UserInvitationDto } from './invitation.dto';
 
 export class SignUpPayloadDto {
   @Expose()

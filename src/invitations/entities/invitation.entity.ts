@@ -1,8 +1,8 @@
 import { Base } from 'omniboxd/common/base.entity';
-import generateId from 'omniboxd/utils/generate-id';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import generateId from 'omniboxd/utils/generate-id';
+import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 
 @Entity('invitations')
 export class Invitation extends Base {

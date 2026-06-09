@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { CacheService } from 'omniboxd/common/cache.service';
 import { MailModule } from 'omniboxd/mail/mail.module';
 import { SmsModule } from 'omniboxd/sms/sms.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserService } from 'omniboxd/user/user.service';
 import { User } from 'omniboxd/user/entities/user.entity';
-import { UserController } from 'omniboxd/user/user.controller';
-import { UserOption } from 'omniboxd/user/entities/user-option.entity';
 import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
-import { CacheService } from 'omniboxd/common/cache.service';
+import { UserOption } from 'omniboxd/user/entities/user-option.entity';
+import { UserController } from 'omniboxd/user/user.controller';
+import { UserService } from 'omniboxd/user/user.service';
 
 @Module({
   exports: [UserService],

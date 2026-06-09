@@ -1,11 +1,11 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import { TagService } from 'omniboxd/tag/tag.service';
-import { TagDto } from 'omniboxd/tag/dto/tag.dto';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { VfsService } from 'omniboxd/vfs/vfs.service';
-import { transaction } from 'omniboxd/utils/transaction-utils';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { transaction } from 'omniboxd/utils/transaction-utils';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class VfsTagsService {

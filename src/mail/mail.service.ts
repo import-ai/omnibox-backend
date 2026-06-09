@@ -1,7 +1,7 @@
-import { Injectable, Logger, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nContext, I18nService } from 'nestjs-i18n';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
+import { I18nContext, I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 @Injectable()
 export class MailService {

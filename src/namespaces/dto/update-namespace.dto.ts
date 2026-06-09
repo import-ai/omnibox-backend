@@ -1,9 +1,9 @@
 import {
-  IsString,
-  IsOptional,
   IsNotEmpty,
-  MinLength,
+  IsOptional,
+  IsString,
   MaxLength,
+  MinLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 

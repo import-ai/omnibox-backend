@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExtractTagsProcessor } from './extract-tags.processor';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
-import { I18nService } from 'nestjs-i18n';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+
+import { ExtractTagsProcessor } from './extract-tags.processor';
 
 describe('ExtractTagsProcessor', () => {
   let processor: ExtractTagsProcessor;

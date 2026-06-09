@@ -1,8 +1,8 @@
 import { ConsoleLogger, INestApplication, LogLevel } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import * as express from 'express';
 import * as cookieParser from 'cookie-parser';
+import * as express from 'express';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 
 function setupOpenAPISwagger(app: INestApplication): INestApplication {

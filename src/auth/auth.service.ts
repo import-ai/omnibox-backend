@@ -1,29 +1,30 @@
-import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
-import { User } from 'omniboxd/user/entities/user.entity';
-import { DataSource } from 'typeorm';
-import { MailService } from 'omniboxd/mail/mail.service';
-import { UserService } from 'omniboxd/user/user.service';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { GroupsService } from 'omniboxd/groups/groups.service';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { InvitePayloadDto } from './dto/invite-payload.dto';
-import { UserInvitationDto } from './dto/invitation.dto';
-import { SignUpPayloadDto } from './dto/signup-payload.dto';
-import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
 import { isEmail } from 'class-validator';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { GroupsService } from 'omniboxd/groups/groups.service';
+import { MailService } from 'omniboxd/mail/mail.service';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { SmsService } from 'omniboxd/sms/sms.service';
+import { CreateUserDto } from 'omniboxd/user/dto/create-user.dto';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { UserService } from 'omniboxd/user/user.service';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { appendQueryParams, appendTokenToUrl } from 'omniboxd/utils/url-utils';
+import { DataSource } from 'typeorm';
+
+import { SendEmailOtpResponseDto } from './dto/email-otp.dto';
+import { UserInvitationDto } from './dto/invitation.dto';
+import { InvitePayloadDto } from './dto/invite-payload.dto';
+import { SendPhoneOtpResponseDto } from './dto/phone-otp.dto';
+import { SignUpPayloadDto } from './dto/signup-payload.dto';
 import { OtpService } from './otp.service';
 import { SocialService } from './social.service';
-import { SendEmailOtpResponseDto } from './dto/email-otp.dto';
-import { SendPhoneOtpResponseDto } from './dto/phone-otp.dto';
-import { appendQueryParams, appendTokenToUrl } from 'omniboxd/utils/url-utils';
-import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
-import { SmsService } from 'omniboxd/sms/sms.service';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
 
 @Injectable()
 export class AuthService {

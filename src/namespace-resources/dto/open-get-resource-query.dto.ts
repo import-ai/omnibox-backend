@@ -1,6 +1,6 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsInt, Max, Min } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export const DEFAULT_OPEN_RESOURCE_CONTENT_LIMIT = 100;
 export const MAX_OPEN_RESOURCE_CONTENT_LIMIT = 1000;

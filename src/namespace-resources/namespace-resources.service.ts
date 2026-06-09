@@ -1,5 +1,36 @@
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { FilesService } from 'omniboxd/files/files.service';
+import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import {
+  comparePermission,
+  ResourcePermission,
+} from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
+import {
+  ISmartFoldersService,
+  SMART_FOLDERS_SERVICE,
+} from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+import { TagService } from 'omniboxd/tag/tag.service';
 import duplicateName from 'omniboxd/utils/duplicate-name';
+import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
+import { isOptional } from 'omniboxd/utils/is-empty';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import {
   DataSource,
   EntityManager,
@@ -10,49 +41,19 @@ import {
   Not,
   Repository,
 } from 'typeorm';
-import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
-import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
-import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { Inject, Injectable, HttpStatus } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
-import { S3Service } from 'omniboxd/s3/s3.service';
-import { PermissionsService } from 'omniboxd/permissions/permissions.service';
-import { PrivateSearchResourceDto } from 'omniboxd/wizard/dto/agent-request.dto';
-import {
-  comparePermission,
-  ResourcePermission,
-} from 'omniboxd/permissions/resource-permission.enum';
-import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
-import { ResourceDto, SpaceType } from './dto/resource.dto';
-import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
-import { TagService } from 'omniboxd/tag/tag.service';
-import { TagDto } from 'omniboxd/tag/dto/tag.dto';
-import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
-import { ResourceSummaryDto } from './dto/resource-summary.dto';
-import { FilesService } from 'omniboxd/files/files.service';
+
+import { BatchCreateFolderDto } from './dto/batch-resource-actions.dto';
 import { CreateFileReqDto } from './dto/create-file-req.dto';
 import {
-  UploadFileInfoDto,
-  InternalFileInfoDto,
   DownloadFileInfoDto,
+  InternalFileInfoDto,
+  UploadFileInfoDto,
 } from './dto/file-info.dto';
-import { getOriginalFileName } from 'omniboxd/utils/encode-filename';
 import { InternalResourceDto } from './dto/internal-resource.dto';
+import { ResourceDto, SpaceType } from './dto/resource.dto';
+import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
-import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
-import { isOptional } from 'omniboxd/utils/is-empty';
-import { BatchCreateFolderDto } from './dto/batch-resource-actions.dto';
-import {
-  ISmartFoldersService,
-  SMART_FOLDERS_SERVICE,
-} from 'omniboxd/smart-folders/smart-folder-entitlements.interface';
 
 @Injectable()
 export class NamespaceResourcesService {

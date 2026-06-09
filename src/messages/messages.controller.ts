@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Param, Post, Req } from '@nestjs/common';
-import { MessagesService } from './messages.service';
-import { CreateMessageDto } from './dto/create-message.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+
+import { CreateMessageDto } from './dto/create-message.dto';
+import { MessagesService } from './messages.service';
 
 @Controller(
   'api/v1/namespaces/:namespaceId/conversations/:conversationId/messages',

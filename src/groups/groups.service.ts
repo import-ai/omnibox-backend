@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Invitation } from 'omniboxd/invitations/entities/invitation.entity';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { UserService } from 'omniboxd/user/user.service';
 import {
   DataSource,
   EntityManager,
@@ -8,14 +12,11 @@ import {
   Not,
   Repository,
 } from 'typeorm';
-import { Group } from './entities/group.entity';
-import { GroupUser } from './entities/group-user.entity';
+
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
-import { User } from 'omniboxd/user/entities/user.entity';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { Invitation } from 'omniboxd/invitations/entities/invitation.entity';
-import { UserService } from 'omniboxd/user/user.service';
+import { Group } from './entities/group.entity';
+import { GroupUser } from './entities/group-user.entity';
 
 @Injectable()
 export class GroupsService {

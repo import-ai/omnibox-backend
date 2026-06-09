@@ -1,4 +1,5 @@
 import { MigrationInterface, QueryRunner, Table, TableCheck } from 'typeorm';
+
 import { BaseColumns } from './base-columns';
 
 export class AddNotifications1776070800000 implements MigrationInterface {

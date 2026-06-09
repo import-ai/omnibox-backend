@@ -1,6 +1,9 @@
-import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
-import { propagation, context } from '@opentelemetry/api';
+import { context, propagation } from '@opentelemetry/api';
+import { instanceToPlain, plainToInstance } from 'class-transformer';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { WizardAgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { SearchResponseDto } from 'omniboxd/wizard/dto/search-response.dto';
 import {
@@ -8,13 +11,10 @@ import {
   UpsertWeaviateResourceRequestDto,
   WeaviateUpsertResponseDto,
 } from 'omniboxd/wizard/dto/weaviate-upsert.dto';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { I18nService } from 'nestjs-i18n';
 import {
   IWizardUrlProvider,
   WIZARD_URL_PROVIDER,
 } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
-import { WizardAgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 
 @Injectable()
 export class WizardAPIService {

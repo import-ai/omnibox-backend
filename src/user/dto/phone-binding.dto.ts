@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString, Length } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsString, Length } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { IsValidPhone } from 'omniboxd/common/validators';
 

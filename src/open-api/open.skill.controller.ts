@@ -1,9 +1,9 @@
 import { Controller, Get, Header } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { readFileSync } from 'fs';
-import { join } from 'path';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
+import { join } from 'path';
 
 const OPEN_API_BASE_URL_PLACEHOLDER = '${OBB_OPEN_API_BASE_URL}';
 const DEFAULT_OPEN_API_BASE_URL = '/open/api';

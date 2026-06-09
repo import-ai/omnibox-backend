@@ -1,13 +1,13 @@
+import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
-import { Get, Post, Query, Body, Controller, Req, Res } from '@nestjs/common';
 import { AuthService } from 'omniboxd/auth/auth.service';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { SocialController } from 'omniboxd/auth/social.controller';
 import {
   WechatService,
   WechatUserInfo,
 } from 'omniboxd/auth/wechat/wechat.service';
-import { SocialController } from 'omniboxd/auth/social.controller';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { ConfigService } from '@nestjs/config';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 @Controller('api/v1/wechat')

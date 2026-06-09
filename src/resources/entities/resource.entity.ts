@@ -1,7 +1,7 @@
 import { Base } from 'omniboxd/common/base.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import generateId from 'omniboxd/utils/generate-id';
 import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 
 export enum ResourceType {
   DOC = 'doc',

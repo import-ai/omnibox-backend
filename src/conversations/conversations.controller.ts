@@ -1,6 +1,3 @@
-import { ConversationsService } from './conversations.service';
-import { UpdateConversationDto } from './dto/update-conversation.dto';
-import { ConversationDetailDto } from './dto/conversation-detail.dto';
 import {
   Body,
   Controller,
@@ -11,8 +8,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ConversationSummaryDto } from './dto/conversation-summary.dto';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+
+import { ConversationsService } from './conversations.service';
+import { ConversationDetailDto } from './dto/conversation-detail.dto';
+import { ConversationSummaryDto } from './dto/conversation-summary.dto';
+import { UpdateConversationDto } from './dto/update-conversation.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/conversations')
 export class ConversationsController {

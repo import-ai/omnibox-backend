@@ -1,3 +1,5 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { Expose, Type } from 'class-transformer';
 import {
   IsArray,
   IsObject,
@@ -7,13 +9,12 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { Type, Expose } from 'class-transformer';
-import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
 import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
-import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
 import { NamespaceUsageDto } from 'omniboxd/namespaces/dto/namespace-usage.dto';
 import { OpenAPIRequestsQuotaDto } from 'omniboxd/open-api/open-api-quota.dto';
-import { ApiProperty } from '@nestjs/swagger';
+import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
+
+import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
 
 export class CreateAPIKeyDto {
   @IsString({

@@ -1,12 +1,12 @@
+import { plainToInstance } from 'class-transformer';
+import { last } from 'omniboxd/utils/arrays';
+import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
+import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
+import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
+import { ListResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
+import { VfsService } from 'omniboxd/vfs/vfs.service';
 import { TestClient } from 'test/test-client';
 import { createResourceByPath } from 'test/vfs-utils';
-import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
-import { plainToInstance } from 'class-transformer';
-import { VfsService } from 'omniboxd/vfs/vfs.service';
-import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
-import { last } from 'omniboxd/utils/arrays';
-import { ListResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
-import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
 
 type Operation =
   | 'create'

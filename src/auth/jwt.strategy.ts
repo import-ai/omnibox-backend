@@ -1,14 +1,13 @@
-import { Request } from 'express';
-import { Injectable, HttpStatus } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Request } from 'express';
 import { I18nService } from 'nestjs-i18n';
-
-import { User } from 'omniboxd/user/entities/user.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {

@@ -1,7 +1,8 @@
 import { IsNumber, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { Namespace } from '../entities/namespace.entity';
 import { bigintStringToNumber } from 'omniboxd/utils/bigint-utils';
+
+import { Namespace } from '../entities/namespace.entity';
 
 export class NamespaceResponseDto {
   @IsString({

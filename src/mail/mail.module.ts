@@ -1,10 +1,10 @@
-import * as path from 'path';
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MailerModule } from '@nestjs-modules/mailer';
+import { HandlebarsAdapter } from '@nestjs-modules/mailer/adapters/handlebars.adapter';
 import { I18nService } from 'nestjs-i18n';
 import { MailService } from 'omniboxd/mail/mail.service';
-import { MailerModule } from '@nestjs-modules/mailer';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { HandlebarsAdapter } from '@nestjs-modules/mailer/adapters/handlebars.adapter';
+import * as path from 'path';
 
 @Module({
   exports: [MailService],

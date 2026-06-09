@@ -1,8 +1,8 @@
 import {
-  parsePhoneNumberFromString,
-  isValidPhoneNumber,
-  getCountryCallingCode as getCallingCode,
   CountryCode,
+  getCountryCallingCode as getCallingCode,
+  isValidPhoneNumber,
+  parsePhoneNumberFromString,
 } from 'libphonenumber-js';
 
 export interface ParsedPhone {

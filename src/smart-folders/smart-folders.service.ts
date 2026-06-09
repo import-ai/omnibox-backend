@@ -1,9 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-summary.dto';
-import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
   Resource,
   ResourceType,
@@ -22,8 +23,8 @@ import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-ru
 import { SmartFoldersScopeService } from 'omniboxd/smart-folders/smart-folders-scope.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
-import { I18nService } from 'nestjs-i18n';
 import { DataSource, In, Repository } from 'typeorm';
+
 import { CreateSmartFolderRequestDto } from './dto/create-smart-folder-request.dto';
 import { SmartFolderResponseDto } from './dto/smart-folder-response.dto';
 import { UpdateSmartFolderRequestDto } from './dto/update-smart-folder-request.dto';

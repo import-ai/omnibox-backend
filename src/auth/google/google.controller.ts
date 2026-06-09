@@ -1,9 +1,9 @@
+import { Body, Controller, Get, Post, Query, Req, Res } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
-import { GoogleService } from 'omniboxd/auth/google/google.service';
-import { Req, Res, Get, Body, Controller, Post, Query } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { ConfigService } from '@nestjs/config';
+import { GoogleService } from 'omniboxd/auth/google/google.service';
 import { SocialController } from 'omniboxd/auth/social.controller';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 

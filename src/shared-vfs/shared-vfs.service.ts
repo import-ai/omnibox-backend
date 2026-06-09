@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { SharedResourceDto } from 'omniboxd/shared-resources/dto/shared-resource.dto';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { FileInfoDto } from 'omniboxd/vfs/dto/file-info.dto';
@@ -8,7 +9,7 @@ import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dt
 import { FilterResponseDto } from 'omniboxd/vfs/dto/filter.response.dto';
 import { GetResponseDto } from 'omniboxd/vfs/dto/get.response.dto';
 import { ListResponseDto } from 'omniboxd/vfs/dto/list.response.dto';
-import { SharedResourceDto } from 'omniboxd/shared-resources/dto/shared-resource.dto';
+
 import { ShareParsedPathDo } from './do/share-parsed-path.do';
 import { SharedVfsResourceResponseDto } from './dto/shared-vfs.resource.response.dto';
 

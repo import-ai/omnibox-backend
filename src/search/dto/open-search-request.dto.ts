@@ -1,7 +1,7 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class OpenSearchRequestDto {
   @ApiProperty({ description: 'Search query text' })

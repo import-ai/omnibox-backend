@@ -1,20 +1,21 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserModule } from 'omniboxd/user/user.module';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import {
   NamespacesController,
   NamespacesSingleController,
 } from 'omniboxd/namespaces/namespaces.controller';
-import { NamespaceMember } from './entities/namespace-member.entity';
-import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
+import { UserModule } from 'omniboxd/user/user.module';
+
 import { Namespace } from './entities/namespace.entity';
-import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interceptor';
+import { NamespaceMember } from './entities/namespace-member.entity';
 import { NamespaceAdminInterceptor } from './interceptors/namespace-admin.interceptor';
+import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interceptor';
 
 @Module({
   exports: [NamespacesService],

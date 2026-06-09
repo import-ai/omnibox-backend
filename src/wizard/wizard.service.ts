@@ -1,36 +1,38 @@
+import { buffer } from 'node:stream/consumers';
+
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
-import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { TagService } from 'omniboxd/tag/tag.service';
+import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { S3Service } from 'omniboxd/s3/s3.service';
+import { TagService } from 'omniboxd/tag/tag.service';
+import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
+import { CollectUrlResponseDto } from 'omniboxd/wizard/dto/collect-url-request.dto';
 import {
   NextTaskRequestDto,
   TaskCallbackDto,
 } from 'omniboxd/wizard/dto/task-callback.dto';
-import { ConfigService } from '@nestjs/config';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
-import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
+import { CollectUrlProcessor } from 'omniboxd/wizard/processors/collect-url.processor';
 import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-title.processor';
-import { CollectUrlProcessor } from 'omniboxd/wizard/processors/collect-url.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
-import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
+import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
-import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
-import { isEmpty } from 'omniboxd/utils/is-empty';
-import { S3Service } from 'omniboxd/s3/s3.service';
 import { createGunzip } from 'zlib';
-import { buffer } from 'node:stream/consumers';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { TasksService } from 'omniboxd/tasks/tasks.service';
+
 import { TempfileDto } from './dto/tempfile.dto';
-import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
-import { CollectUrlResponseDto } from 'omniboxd/wizard/dto/collect-url-request.dto';
 
 @Injectable()
 export class WizardService {

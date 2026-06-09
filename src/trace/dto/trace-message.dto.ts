@@ -1,4 +1,5 @@
 import { Expose } from 'class-transformer';
+
 import { TraceEventDto } from './trace-event.dto';
 
 export class TraceMessageDto {

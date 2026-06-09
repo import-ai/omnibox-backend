@@ -9,6 +9,7 @@ import {
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+
 import { IsAllowedEmailDomain } from '../../utils/email-validation';
 
 export class InviteDto {

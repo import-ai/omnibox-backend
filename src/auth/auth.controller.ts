@@ -1,33 +1,34 @@
-import { Response } from 'express';
-import { AuthService } from 'omniboxd/auth/auth.service';
-import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
-import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { ConfigService } from '@nestjs/config';
 import {
-  Res,
   Body,
-  Post,
-  Request,
-  UseGuards,
   Controller,
   HttpCode,
-  Query,
   HttpStatus,
+  Post,
+  Query,
+  Request,
+  Res,
+  UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Response } from 'express';
+import { AuthService } from 'omniboxd/auth/auth.service';
+import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+
 import {
   SendEmailOtpDto,
-  VerifyEmailOtpDto,
   SendEmailOtpResponseDto,
+  VerifyEmailOtpDto,
 } from './dto/email-otp.dto';
+import { InviteDto } from './dto/invite.dto';
 import {
   SendPhoneOtpRequestDto,
-  VerifyPhoneOtpRequestDto,
   SendPhoneOtpResponseDto,
+  VerifyPhoneOtpRequestDto,
 } from './dto/phone-otp.dto';
-import { InviteDto } from './dto/invite.dto';
-import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
 @Controller('api/v1')
 export class AuthController {

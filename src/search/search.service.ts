@@ -231,6 +231,7 @@ export class SearchService {
     limit: number,
   ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
     const requestedItemCount = offset + limit;
+    const requestedItemCountWithLookahead = requestedItemCount + 1;
     const cacheKey = this.getSemanticSearchCacheKey(
       userId,
       namespaceId,
@@ -243,7 +244,7 @@ export class SearchService {
 
     for (
       ;
-      cacheEntry.items.length < requestedItemCount &&
+      cacheEntry.items.length < requestedItemCountWithLookahead &&
       cacheEntry.hasMoreRawResults;
     ) {
       const searchPage = await this.searchSemanticResources(

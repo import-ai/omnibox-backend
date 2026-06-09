@@ -586,6 +586,95 @@ describe('SearchService', () => {
     expect(result.limit).toBe(20);
   });
 
+  it('reports more than the current page total when semantic search has additional results', async () => {
+    const { permissionsService, resourcesService, service, wizardApiService } =
+      createService();
+    const visibleFirstPageResourceIds = Array.from(
+      { length: 20 },
+      (_, index) => `visible-page-resource-${index}`,
+    );
+    const hiddenFirstPageResourceIds = Array.from(
+      { length: 80 },
+      (_, index) => `hidden-page-resource-${index}`,
+    );
+    const lookaheadResourceId = 'lookahead-resource-id';
+    const visibleResourceIds = new Set([
+      ...visibleFirstPageResourceIds,
+      lookaheadResourceId,
+    ]);
+
+    wizardApiService.search
+      .mockResolvedValueOnce({
+        records: [
+          ...visibleFirstPageResourceIds,
+          ...hiddenFirstPageResourceIds,
+        ].map((id) => ({
+          id: `record-${id}`,
+          type: IndexRecordType.CHUNK,
+          chunk: {
+            resourceId: id,
+            title: `Title for ${id}`,
+            text: `Content for ${id}`,
+          },
+        })),
+      })
+      .mockResolvedValueOnce({
+        records: [
+          {
+            id: `record-${lookaheadResourceId}`,
+            type: IndexRecordType.CHUNK,
+            chunk: {
+              resourceId: lookaheadResourceId,
+              title: 'Lookahead title',
+              text: 'Lookahead content',
+            },
+          },
+        ],
+      });
+    permissionsService.getCurrentPermissions.mockImplementation(
+      (_userId: string, _namespaceId: string, resources: any[]) =>
+        Promise.resolve(
+          new Map(
+            resources
+              .filter((resource) => visibleResourceIds.has(resource.id))
+              .map((resource) => [resource.id, ResourcePermission.CAN_VIEW]),
+          ),
+        ),
+    );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              {
+                id,
+                name: `Title for ${id}`,
+                attrs: {},
+                resourceType: ResourceType.DOC,
+              },
+            ]),
+          ),
+        ),
+    );
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      {
+        offset: 0,
+        limit: 20,
+      },
+    );
+
+    expect(result.items).toHaveLength(20);
+    expect(result.total).toBe(21);
+    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+  });
+
   it('reuses semantic scan state for sequential offset pages', async () => {
     const { permissionsService, resourcesService, service, wizardApiService } =
       createService();
@@ -603,11 +692,16 @@ describe('SearchService', () => {
         };
       });
 
-    wizardApiService.search.mockImplementation((request: any) =>
-      Promise.resolve({
-        records: request.offset === 0 ? createRecords(0) : createRecords(1),
-      }),
-    );
+    wizardApiService.search.mockImplementation((request: any) => {
+      const records =
+        request.offset === 0
+          ? createRecords(0)
+          : request.offset === 100
+            ? createRecords(1)
+            : [];
+
+      return Promise.resolve({ records });
+    });
     permissionsService.getCurrentPermissions.mockImplementation(
       (_userId: string, _namespaceId: string, resources: any[]) =>
         Promise.resolve(
@@ -644,7 +738,7 @@ describe('SearchService', () => {
       {},
       {
         offset: 0,
-        limit: 100,
+        limit: 20,
       },
     );
     const secondPage = await service.searchPaginated(
@@ -654,12 +748,12 @@ describe('SearchService', () => {
       undefined,
       {},
       {
-        offset: 100,
-        limit: 100,
+        offset: 20,
+        limit: 20,
       },
     );
 
-    expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+    expect(wizardApiService.search).toHaveBeenCalledTimes(1);
     expect(wizardApiService.search).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -667,15 +761,8 @@ describe('SearchService', () => {
         limit: 100,
       }),
     );
-    expect(wizardApiService.search).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        offset: 100,
-        limit: 100,
-      }),
-    );
     expect(secondPage.items[0]).toMatchObject({
-      resourceId: 'page-1-resource-0',
+      resourceId: 'page-0-resource-20',
     });
   });
 
@@ -749,7 +836,7 @@ describe('SearchService', () => {
       {},
       {
         offset: 0,
-        limit: 100,
+        limit: 20,
       },
     );
     const cachedPage = await service.searchPaginated(

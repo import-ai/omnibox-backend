@@ -21,6 +21,7 @@ describe('SmartFoldersMatcherService', () => {
       content: '',
       tagIds: [],
       createdAt: new Date('2026-05-18T12:00:00.000Z'),
+      updatedAt: new Date('2026-05-19T12:00:00.000Z'),
       ...values,
     } as Resource;
   }
@@ -60,6 +61,27 @@ describe('SmartFoldersMatcherService', () => {
           value: {
             start_date: '2026-05-01',
             end_date: '2026-05-18',
+          },
+        },
+      ],
+      SmartFolderMatchMode.ALL,
+    );
+
+    expect(matched).toBe(true);
+  });
+
+  it('matches UPDATED_AT date conditions against resource updatedAt', () => {
+    const matched = service.matches(
+      resource({
+        createdAt: new Date('2026-05-10T12:00:00.000Z'),
+        updatedAt: new Date('2026-05-18T12:00:00.000Z'),
+      }),
+      [
+        {
+          field: SmartFolderField.UPDATED_AT,
+          operator: SmartFolderOperator.ON,
+          value: {
+            date: '2026-05-18',
           },
         },
       ],

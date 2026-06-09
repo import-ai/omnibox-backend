@@ -6,6 +6,7 @@ import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { OpenSearchService } from 'omniboxd/search/open.search.service';
+import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
@@ -16,10 +17,17 @@ import {
   SearchController,
 } from './search.controller';
 import { SearchService } from './search.service';
+import { SearchCandidateService } from './search-candidate.service';
+import { SearchResourceFilterService } from './search-resource-filter.service';
 
 @Module({
   exports: [SearchService, OpenSearchService],
-  providers: [SearchService, OpenSearchService],
+  providers: [
+    SearchService,
+    SearchResourceFilterService,
+    SearchCandidateService,
+    OpenSearchService,
+  ],
   controllers: [SearchController, InternalSearchController],
   imports: [
     WizardAPIModule,
@@ -30,6 +38,7 @@ import { SearchService } from './search.service';
     ConversationsModule,
     TasksModule,
     TagModule,
+    SmartFoldersModule,
     TypeOrmModule.forFeature([Task]),
   ],
 })

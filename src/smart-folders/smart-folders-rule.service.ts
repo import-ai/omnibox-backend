@@ -15,6 +15,11 @@ const TEXT_FIELDS = new Set<SmartFolderField>([
   SmartFolderField.CONTENT,
 ]);
 
+const DATE_FIELDS = new Set<SmartFolderField>([
+  SmartFolderField.CREATED_AT,
+  SmartFolderField.UPDATED_AT,
+]);
+
 const TEXT_OPERATORS = new Set<SmartFolderOperator>([
   SmartFolderOperator.CONTAINS,
   SmartFolderOperator.NOT_CONTAINS,
@@ -59,7 +64,7 @@ export class SmartFoldersRuleService {
     const field = condition.field;
     const operator = condition.operator;
     const isTextField = TEXT_FIELDS.has(field);
-    const isDateField = field === SmartFolderField.CREATED_AT;
+    const isDateField = DATE_FIELDS.has(field);
 
     if (
       (isTextField && !TEXT_OPERATORS.has(operator)) ||

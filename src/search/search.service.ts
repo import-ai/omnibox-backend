@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { createHash } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
@@ -24,20 +25,51 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { Repository } from 'typeorm';
 
 import { DocType } from './doc-type.enum';
-import {
-  IndexedDocDto,
-  IndexedMessageDto,
-  IndexedResourceDto,
-} from './dto/indexed-doc.dto';
+import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
 import { WeaviateSyncStatsResponseDto } from './dto/weaviate-sync-stats-response.dto';
+import { SearchCandidateService } from './search-candidate.service';
+import {
+  SearchFilterOptions,
+  SearchResourceFilterService,
+} from './search-resource-filter.service';
 
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
 const WEAVIATE_SYNC_LOG_EVERY = 1000;
+const DEFAULT_SEARCH_LIMIT = 20;
+const MAX_SEARCH_LIMIT = 100;
+const SEMANTIC_SEARCH_PAGE_SIZE = 100;
+const SEMANTIC_SEARCH_CACHE_TTL_MS = 30 * 1000;
+const SEMANTIC_SEARCH_CACHE_MAX_ENTRIES = 100;
+const SEMANTIC_SEARCH_CACHE_MAX_ITEMS = 2000;
+
+export interface SearchPaginationOptions {
+  offset?: number;
+  limit?: number;
+}
+
+export interface SearchPaginatedResult {
+  items: IndexedDocDto[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+interface SemanticSearchCacheEntry {
+  expiresAt: number;
+  hasMoreRawResults: boolean;
+  items: IndexedDocDto[];
+  nextSearchOffset: number;
+  seenResourceIds: Set<string>;
+}
 
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
+  private readonly semanticSearchCache = new Map<
+    string,
+    SemanticSearchCacheEntry
+  >();
 
   constructor(
     private readonly wizardApiService: WizardAPIService,
@@ -51,6 +83,8 @@ export class SearchService {
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
     private readonly tagService: TagService,
+    private readonly searchResourceFilterService: SearchResourceFilterService,
+    private readonly searchCandidateService: SearchCandidateService,
   ) {}
 
   async search(
@@ -58,6 +92,7 @@ export class SearchService {
     namespaceId: string,
     query: string,
     type?: DocType,
+    options?: SearchFilterOptions,
   ) {
     const hasAccess = await this.permissionsService.userInNamespace(
       userId,
@@ -67,24 +102,338 @@ export class SearchService {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
-    const searchRequest = new SearchRequestDto();
-    searchRequest.query = query;
-    searchRequest.namespaceId = namespaceId;
-    searchRequest.userId = userId;
-    searchRequest.limit = 100;
-    if (type === DocType.RESOURCE) {
-      searchRequest.type = IndexRecordType.CHUNK;
+    if (type === DocType.MESSAGE) {
+      return [];
+    }
+    const normalizedQuery = (query || '').trim();
+    const filterOptions =
+      this.searchResourceFilterService.normalizeOptions(options);
+    if (!normalizedQuery) {
+      if ((filterOptions.conditions || []).length <= 0) {
+        return [];
+      }
+      return await this.searchResourceFilterService.searchResourcesByFilters(
+        userId,
+        namespaceId,
+        filterOptions,
+      );
+    }
+    const candidateResourceIds = await this.getFilterCandidateResourceIds(
+      userId,
+      namespaceId,
+      filterOptions,
+    );
+    if (candidateResourceIds && candidateResourceIds.length <= 0) {
+      return [];
+    }
+    const result = await this.searchSemanticResources(
+      userId,
+      namespaceId,
+      normalizedQuery,
+      candidateResourceIds,
+      {
+        offset: 0,
+        limit: MAX_SEARCH_LIMIT,
+      },
+    );
+    return result.items;
+  }
+
+  async searchPaginated(
+    userId: string,
+    namespaceId: string,
+    query: string,
+    type?: DocType,
+    options?: SearchFilterOptions,
+    pagination?: SearchPaginationOptions,
+  ): Promise<SearchPaginatedResult> {
+    const { offset, limit } = this.normalizePagination(pagination);
+    const hasAccess = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!hasAccess) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
     if (type === DocType.MESSAGE) {
-      searchRequest.type = IndexRecordType.MESSAGE;
+      return {
+        items: [],
+        total: 0,
+        offset,
+        limit,
+      };
     }
+    const normalizedQuery = (query || '').trim();
+    const filterOptions =
+      this.searchResourceFilterService.normalizeOptions(options);
+    if (!normalizedQuery) {
+      if ((filterOptions.conditions || []).length <= 0) {
+        return {
+          items: [],
+          total: 0,
+          offset,
+          limit,
+        };
+      }
+      const result =
+        await this.searchResourceFilterService.searchResourcesByFiltersWithTotal(
+          userId,
+          namespaceId,
+          filterOptions,
+        );
+
+      return {
+        items: result.items.slice(offset, offset + limit),
+        total: result.total,
+        offset,
+        limit,
+      };
+    }
+
+    const candidateResourceIds = await this.getFilterCandidateResourceIds(
+      userId,
+      namespaceId,
+      filterOptions,
+    );
+    if (candidateResourceIds && candidateResourceIds.length <= 0) {
+      return {
+        items: [],
+        total: 0,
+        offset,
+        limit,
+      };
+    }
+
+    const result = await this.searchSemanticResourcesPaginated(
+      userId,
+      namespaceId,
+      normalizedQuery,
+      candidateResourceIds,
+      offset,
+      limit,
+    );
+
+    return {
+      items: result.items,
+      total: result.total,
+      offset,
+      limit,
+    };
+  }
+
+  private async searchSemanticResourcesPaginated(
+    userId: string,
+    namespaceId: string,
+    normalizedQuery: string,
+    candidateResourceIds: string[] | null,
+    offset: number,
+    limit: number,
+  ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
+    const requestedItemCount = offset + limit;
+    const requestedItemCountWithLookahead = requestedItemCount + 1;
+    const cacheKey = this.getSemanticSearchCacheKey(
+      userId,
+      namespaceId,
+      normalizedQuery,
+      candidateResourceIds,
+    );
+    const cachedEntry = this.getSemanticSearchCacheEntry(cacheKey);
+    const cacheEntry = cachedEntry || this.createSemanticSearchCacheEntry();
+    const cachedItemCount = cachedEntry?.items.length ?? 0;
+
+    for (
+      ;
+      cacheEntry.items.length < requestedItemCountWithLookahead &&
+      cacheEntry.hasMoreRawResults;
+    ) {
+      const searchPage = await this.searchSemanticResources(
+        userId,
+        namespaceId,
+        normalizedQuery,
+        candidateResourceIds,
+        {
+          offset: cacheEntry.nextSearchOffset,
+          limit: SEMANTIC_SEARCH_PAGE_SIZE,
+        },
+      );
+      cacheEntry.nextSearchOffset += searchPage.limit;
+      for (const item of searchPage.items) {
+        if (item.type === DocType.RESOURCE) {
+          if (cacheEntry.seenResourceIds.has(item.resourceId)) {
+            continue;
+          }
+          cacheEntry.seenResourceIds.add(item.resourceId);
+        }
+        cacheEntry.items.push(item);
+      }
+      cacheEntry.hasMoreRawResults = searchPage.rawCount >= searchPage.limit;
+    }
+    this.setSemanticSearchCacheEntry(cacheKey, cacheEntry);
+    const items = cacheEntry.items.slice(offset, requestedItemCount);
+    const shouldRefreshCachedPermissions =
+      cachedEntry !== null && offset < cachedItemCount;
+
+    return {
+      items: shouldRefreshCachedPermissions
+        ? await this.refreshCachedResourcePermissions(
+            userId,
+            namespaceId,
+            items,
+          )
+        : items,
+      total: cacheEntry.items.length,
+    };
+  }
+
+  private async refreshCachedResourcePermissions(
+    userId: string,
+    namespaceId: string,
+    items: IndexedDocDto[],
+  ): Promise<IndexedDocDto[]> {
+    const resourceIds = items
+      .filter((item) => item.type === DocType.RESOURCE)
+      .map((item) => item.resourceId);
+    if (resourceIds.length <= 0) {
+      return items;
+    }
+
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+
+    const visibleItems: IndexedDocDto[] = [];
+    for (const item of items) {
+      if (item.type !== DocType.RESOURCE) {
+        visibleItems.push(item);
+        continue;
+      }
+      const permission = permissionMap.get(item.resourceId);
+      if (
+        !permission ||
+        comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
+      ) {
+        continue;
+      }
+
+      const resourceMeta = resourceMetaMap.get(item.resourceId);
+      visibleItems.push({
+        ...item,
+        attrs: resourceMeta?.attrs || {},
+        resourceType: resourceMeta?.resourceType || ResourceType.DOC,
+      });
+    }
+
+    return visibleItems;
+  }
+
+  private createSemanticSearchCacheEntry(): SemanticSearchCacheEntry {
+    return {
+      expiresAt: Date.now() + SEMANTIC_SEARCH_CACHE_TTL_MS,
+      hasMoreRawResults: true,
+      items: [],
+      nextSearchOffset: 0,
+      seenResourceIds: new Set<string>(),
+    };
+  }
+
+  private getSemanticSearchCacheEntry(
+    key: string,
+  ): SemanticSearchCacheEntry | null {
+    const entry = this.semanticSearchCache.get(key);
+    if (!entry) {
+      return null;
+    }
+    if (entry.expiresAt <= Date.now()) {
+      this.semanticSearchCache.delete(key);
+      return null;
+    }
+    this.semanticSearchCache.delete(key);
+    this.semanticSearchCache.set(key, entry);
+    return entry;
+  }
+
+  private setSemanticSearchCacheEntry(
+    key: string,
+    entry: SemanticSearchCacheEntry,
+  ) {
+    if (entry.items.length > SEMANTIC_SEARCH_CACHE_MAX_ITEMS) {
+      this.semanticSearchCache.delete(key);
+      return;
+    }
+    entry.expiresAt = Date.now() + SEMANTIC_SEARCH_CACHE_TTL_MS;
+    this.semanticSearchCache.delete(key);
+    this.semanticSearchCache.set(key, entry);
+    while (this.semanticSearchCache.size > SEMANTIC_SEARCH_CACHE_MAX_ENTRIES) {
+      const oldestKey = this.semanticSearchCache.keys().next().value as
+        | string
+        | undefined;
+      if (oldestKey === undefined) {
+        break;
+      }
+      this.semanticSearchCache.delete(oldestKey);
+    }
+  }
+
+  private getSemanticSearchCacheKey(
+    userId: string,
+    namespaceId: string,
+    normalizedQuery: string,
+    candidateResourceIds: string[] | null,
+  ): string {
+    const candidateHash = candidateResourceIds
+      ? createHash('sha256')
+          .update(candidateResourceIds.join('\0'))
+          .digest('hex')
+      : 'all';
+
+    return [userId, namespaceId, normalizedQuery, candidateHash].join('\0');
+  }
+
+  private async searchSemanticResources(
+    userId: string,
+    namespaceId: string,
+    normalizedQuery: string,
+    candidateResourceIds: string[] | null,
+    pagination: Required<SearchPaginationOptions>,
+  ): Promise<{
+    items: IndexedDocDto[];
+    limit: number;
+    rawCount: number;
+  }> {
+    const searchRequest = new SearchRequestDto();
+    searchRequest.query = normalizedQuery;
+    searchRequest.namespaceId = namespaceId;
+    searchRequest.userId = userId;
+    searchRequest.limit = Math.min(
+      Math.max(pagination.limit, 1),
+      MAX_SEARCH_LIMIT,
+    );
+    searchRequest.offset = Math.max(pagination.offset, 0);
+    searchRequest.type = IndexRecordType.CHUNK;
+    searchRequest.resourceIds = candidateResourceIds || undefined;
     const result = await this.wizardApiService.search(searchRequest);
+    const records = result?.records || [];
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
-    const seenConversationIds = new Set<string>();
-    for (const record of result?.records || []) {
+    const candidateResourceIdSet = candidateResourceIds
+      ? new Set(candidateResourceIds)
+      : null;
+    for (const record of records) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
+        if (
+          candidateResourceIdSet &&
+          !candidateResourceIdSet.has(chunk.resourceId)
+        ) {
+          continue;
+        }
         if (!seenResourceIds.has(chunk.resourceId)) {
           seenResourceIds.add(chunk.resourceId);
         }
@@ -103,10 +452,16 @@ export class SearchService {
 
     seenResourceIds.clear();
 
-    for (const record of result?.records || []) {
+    for (const record of records) {
       if (record.type === IndexRecordType.CHUNK) {
         const chunk = record.chunk!;
         if (seenResourceIds.has(chunk.resourceId)) {
+          continue;
+        }
+        if (
+          candidateResourceIdSet &&
+          !candidateResourceIdSet.has(chunk.resourceId)
+        ) {
           continue;
         }
         seenResourceIds.add(chunk.resourceId);
@@ -129,25 +484,42 @@ export class SearchService {
           resourceType: resourceMeta?.resourceType || ResourceType.DOC,
         };
         items.push(resourceDto);
-      } else if (record.type === IndexRecordType.MESSAGE) {
-        const message = record.message!;
-        if (seenConversationIds.has(message.conversationId)) {
-          continue;
-        }
-        seenConversationIds.add(message.conversationId);
-        if (!(await this.conversationsService.has(message.conversationId))) {
-          continue;
-        }
-        const messageDto: IndexedMessageDto = {
-          type: DocType.MESSAGE,
-          id: record.id,
-          conversationId: message.conversationId,
-          content: message.message.content,
-        };
-        items.push(messageDto);
       }
     }
-    return items;
+
+    return {
+      items,
+      limit: searchRequest.limit,
+      rawCount: records.length,
+    };
+  }
+
+  private async getFilterCandidateResourceIds(
+    userId: string,
+    namespaceId: string,
+    filterOptions: SearchFilterOptions,
+  ): Promise<string[] | null> {
+    return await this.searchCandidateService.getFilterCandidateResourceIds(
+      userId,
+      namespaceId,
+      filterOptions,
+    );
+  }
+
+  private normalizePagination(
+    pagination?: SearchPaginationOptions,
+  ): Required<SearchPaginationOptions> {
+    const offset = Number.isInteger(pagination?.offset)
+      ? Math.max(pagination!.offset!, 0)
+      : 0;
+    const limit = Number.isInteger(pagination?.limit)
+      ? Math.min(Math.max(pagination!.limit!, 1), MAX_SEARCH_LIMIT)
+      : DEFAULT_SEARCH_LIMIT;
+
+    return {
+      offset,
+      limit,
+    };
   }
 
   async refreshResourceIndex() {

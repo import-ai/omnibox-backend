@@ -98,6 +98,60 @@ export class TasksService {
     );
   }
 
+  async getLastFinishedTaskEndedAt(
+    namespaceIds: string[],
+  ): Promise<Map<string, Date>> {
+    if (namespaceIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.taskRepository
+      .createQueryBuilder('task')
+      .select('task.namespaceId', 'namespaceId')
+      .addSelect('MAX(task.endedAt)', 'endedAt')
+      .where('task.namespaceId IN (:...namespaceIds)', { namespaceIds })
+      .andWhere('task.status = :status', { status: TaskStatus.FINISHED })
+      .groupBy('task.namespaceId')
+      .getRawMany<{ namespaceId: string; endedAt: Date }>();
+    return new Map(rows.map((row) => [row.namespaceId, row.endedAt]));
+  }
+
+  async getNextTaskV2(): Promise<Task | null> {
+    const namespaceIds = await this.listActiveTaskNamespaceIds();
+    if (namespaceIds.length === 0) {
+      return null;
+    }
+    const lastFinishedMap = await this.getLastFinishedTaskEndedAt(namespaceIds);
+    const selectedNamespaceId = namespaceIds.reduce((bestId, id) => {
+      const bestTime = lastFinishedMap.get(bestId);
+      const idTime = lastFinishedMap.get(id);
+      if (!bestTime) return bestId;
+      if (!idTime) return id;
+      return idTime < bestTime ? id : bestId;
+    });
+    return this.taskRepository.findOne({
+      where: {
+        namespaceId: selectedNamespaceId,
+        status: In([TaskStatus.PENDING, TaskStatus.RUNNING]),
+      },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async listActiveTaskNamespaceIdsV2(): Promise<string[]> {
+    const rows = await this.taskRepository
+      .createQueryBuilder('task')
+      .select('DISTINCT task.namespaceId', 'namespaceId')
+      .where('task.status IN (:...statuses)', {
+        statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
+      })
+      .andWhere(
+        '(task.lastHeartbeat IS NULL OR task.lastHeartbeat < :threshold)',
+        { threshold: new Date(Date.now() - 10_000) },
+      )
+      .getRawMany<{ namespaceId: string }>();
+    return rows.map((row) => row.namespaceId);
+  }
+
   async listActiveTaskNamespaceIds(): Promise<string[]> {
     const rows = await this.taskRepository
       .createQueryBuilder('task')

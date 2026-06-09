@@ -1,9 +1,10 @@
-import { SearchCandidateService } from './search-candidate.service';
 import {
   SmartFolderField,
   SmartFolderMatchMode,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+
+import { SearchCandidateService } from './search-candidate.service';
 
 describe('SearchCandidateService', () => {
   const namespaceId = 'namespace-id';

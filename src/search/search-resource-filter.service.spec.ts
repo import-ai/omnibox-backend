@@ -5,6 +5,7 @@ import {
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
+
 import { SearchResourceFilterService } from './search-resource-filter.service';
 
 describe('SearchResourceFilterService', () => {

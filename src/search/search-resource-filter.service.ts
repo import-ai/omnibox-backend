@@ -12,6 +12,7 @@ import {
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 import { TagService } from 'omniboxd/tag/tag.service';
+
 import { DocType } from './doc-type.enum';
 import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
 

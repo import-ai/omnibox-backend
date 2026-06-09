@@ -1,13 +1,14 @@
-import { DocType } from './doc-type.enum';
-import { SearchService } from './search.service';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
   SmartFolderField,
   SmartFolderMatchMode,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
+
+import { DocType } from './doc-type.enum';
+import { SearchService } from './search.service';
 
 describe('SearchService', () => {
   const namespaceId = 'namespace-id';

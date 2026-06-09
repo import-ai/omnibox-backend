@@ -12,6 +12,7 @@ import {
   SmartFolderCondition,
   SmartFolderMatchMode,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+
 import { DocType } from '../doc-type.enum';
 
 export class SearchRequestDto {

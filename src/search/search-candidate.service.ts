@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+
 import {
   SearchFilterOptions,
   SearchResourceFilterService,

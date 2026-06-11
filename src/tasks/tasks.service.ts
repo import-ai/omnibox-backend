@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { context, propagation } from '@opentelemetry/api';
+import { randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { KafkaService } from 'omniboxd/kafka/kafka.service';
@@ -397,6 +398,73 @@ export class TasksService {
     });
 
     return TaskDto.fromEntity(newTask);
+  }
+
+  async getNextTaskV2(functions: string[]): Promise<Task | null> {
+    if (functions.length === 0) {
+      return null;
+    }
+
+    const limitedNamespaces = await this.listNamespacesAtParallelismLimit();
+    const seed = randomUUID();
+    const cutoff = new Date(Date.now() - 10_000);
+
+    const qb = this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.status IN (:...statuses)', {
+        statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
+      })
+      .andWhere(
+        '(task.lastHeartbeat IS NULL OR task.lastHeartbeat < :cutoff)',
+        { cutoff },
+      )
+      .andWhere('task.function IN (:...functions)', { functions });
+
+    if (limitedNamespaces.length > 0) {
+      qb.andWhere('task.namespaceId NOT IN (:...limitedNamespaces)', {
+        limitedNamespaces,
+      });
+    }
+
+    // Order by priority, then a per-namespace hash so the selection is spread
+    // evenly across namespaces instead of always favoring the same one. The
+    // seed re-randomizes the hash each call.
+    //
+    // Priority is normally highest first, but with a 1/5 chance we flip to
+    // lowest first so low-priority tasks aren't starved.
+    const priorityOrder = Math.random() < 0.2 ? 'ASC' : 'DESC';
+    return await qb
+      .orderBy('task.priority', priorityOrder)
+      .addOrderBy('md5(task.namespaceId || :seed)', 'ASC')
+      .addOrderBy('task.createdAt', 'ASC')
+      .setParameter('seed', seed)
+      .limit(1)
+      .getOne();
+  }
+
+  async listNamespacesAtParallelismLimit(): Promise<string[]> {
+    const cutoff = new Date(Date.now() - 10_000);
+    const rows = await this.taskRepository
+      .createQueryBuilder('task')
+      .select('task.namespaceId', 'namespaceId')
+      .addSelect('COUNT(*)', 'count')
+      .where('task.status = :status', { status: TaskStatus.RUNNING })
+      .andWhere('task.lastHeartbeat >= :cutoff', { cutoff })
+      .groupBy('task.namespaceId')
+      .getRawMany<{ namespaceId: string; count: string }>();
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const parallelismMap =
+      await this.namespacesQuotaService.batchGetNamespaceParallelism(
+        rows.map((r) => r.namespaceId),
+      );
+
+    return rows
+      .filter((r) => Number(r.count) >= (parallelismMap[r.namespaceId] ?? 1))
+      .map((r) => r.namespaceId);
   }
 
   async updateHeartbeat(taskId: string): Promise<void> {

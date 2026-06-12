@@ -58,9 +58,9 @@ export class NamespacesQuotaService {
         namespaceIds.map((id) => [id, DEFAULT_USAGE.taskParallelism]),
       );
     }
-    const params = new URLSearchParams(
-      namespaceIds.map((id) => ['namespaceIds', id]),
-    );
+    const params = new URLSearchParams({
+      namespace_ids: namespaceIds.join(','),
+    });
     let response: Response;
     try {
       response = await fetch(
@@ -80,12 +80,16 @@ export class NamespacesQuotaService {
     }
     const {
       namespaces,
-    }: { namespaces: Record<string, { max_parallelism: number }> } =
-      await response.json();
+    }: {
+      namespaces: { namespace_id: string; max_parallelism: number }[];
+    } = await response.json();
+    const parallelismById = new Map(
+      namespaces.map((n) => [n.namespace_id, n.max_parallelism]),
+    );
     return Object.fromEntries(
       namespaceIds.map((id) => [
         id,
-        namespaces[id]?.max_parallelism ?? DEFAULT_USAGE.taskParallelism,
+        parallelismById.get(id) ?? DEFAULT_USAGE.taskParallelism,
       ]),
     );
   }

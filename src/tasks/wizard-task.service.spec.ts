@@ -77,7 +77,7 @@ describe('WizardTaskService', () => {
 
       expect(tasksService.emitTask).toHaveBeenCalledWith(
         {
-          function: 'file_reader',
+          function: 'file_reader_pdf',
           input: {
             title: 'Example File',
             original_name: 'example.pdf',

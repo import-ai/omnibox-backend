@@ -6,7 +6,7 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-id',
   namespaceId: 'namespace-id',
   userId: 'user-id',
-  function: 'file_reader',
+  function: 'file_reader_pdf',
   input: {},
   payload: { resource_id: 'resource-id' },
   output: null,
@@ -85,7 +85,7 @@ describe('WizardService', () => {
       expect(tasksService.emitTask).not.toHaveBeenCalled();
       expect(result).toEqual({
         taskId: task.id,
-        function: 'file_reader',
+        function: 'file_reader_pdf',
       });
     });
   });

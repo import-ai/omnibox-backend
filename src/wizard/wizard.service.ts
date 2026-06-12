@@ -56,6 +56,16 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
   ) {
+    // All file_reader_* kinds share post-processing; one ReaderProcessor instance
+    // is registered under every per-format kind. The legacy `file_reader` name is
+    // also registered so tasks emitted before the per-format split still get
+    // post-processed when they finish.
+    const readerProcessor = new ReaderProcessor(
+      this.namespaceResourcesService,
+      this.resourcesService,
+      this.tagService,
+      this.i18n,
+    );
     this.processors = {
       collect: new CollectProcessor(
         this.namespaceResourcesService,
@@ -63,12 +73,14 @@ export class WizardService {
         this.tagService,
         this.i18n,
       ),
-      file_reader: new ReaderProcessor(
-        this.namespaceResourcesService,
-        this.resourcesService,
-        this.tagService,
-        this.i18n,
-      ),
+      file_reader: readerProcessor,
+      file_reader_text: readerProcessor,
+      file_reader_ppt: readerProcessor,
+      file_reader_word: readerProcessor,
+      file_reader_pdf: readerProcessor,
+      file_reader_audio: readerProcessor,
+      file_reader_video: readerProcessor,
+      file_reader_image: readerProcessor,
       extract_tags: new ExtractTagsProcessor(
         namespaceResourcesService,
         this.tagService,

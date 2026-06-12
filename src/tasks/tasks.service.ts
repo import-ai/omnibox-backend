@@ -15,6 +15,17 @@ import { gzipSync } from 'zlib';
 
 import { TaskDto, TaskMetaDto } from './dto/task.dto';
 
+// Functions that only the pro wizard can handle. When OBB_PRO_URL is unset, no
+// worker ever polls for these, so emitting them normally would leave the task
+// pending forever.
+const PRO_ONLY_FUNCTIONS = new Set<string>([
+  'file_reader_pdf',
+  'file_reader_audio',
+  'file_reader_video',
+  'file_reader_image',
+  'generate_video_note',
+]);
+
 @Injectable()
 export class TasksService {
   private readonly proUrl: string | undefined;
@@ -75,11 +86,26 @@ export class TasksService {
       );
       priority = numberToBigintString(usage.taskPriority);
     }
+    // A pro-only function can't run without the pro wizard configured: no
+    // worker would ever poll for it. Fail the task up front rather than leaving
+    // it pending forever.
+    const unsupported =
+      !!data.function && PRO_ONLY_FUNCTIONS.has(data.function) && !this.proUrl;
     return await repo.save(
       repo.create({
         ...this.injectTraceHeaders(data),
         priority,
         resourceId: data.resourceId || data.payload?.resource_id,
+        ...(unsupported
+          ? {
+              status: TaskStatus.ERROR,
+              endedAt: new Date(),
+              exception: {
+                error: `Function '${data.function}' is not supported`,
+                type: 'UnsupportedFunctionError',
+              },
+            }
+          : {}),
       }),
     );
   }

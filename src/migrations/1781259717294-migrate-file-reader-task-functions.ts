@@ -1,8 +1,9 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 // The single `file_reader` function was split into per-format kinds. Existing
-// pending/running tasks were emitted with the old `file_reader` name, so the
-// wizard can no longer route them. Remap them to the new per-format kind based
+// pending/running/canceled tasks were emitted with the old `file_reader` name,
+// so the wizard can no longer route them (canceled ones would also fail if
+// rerun). Remap them to the new per-format kind based
 // on the uploaded file's extension, mirroring EXT_TO_FILE_READER_FN in
 // src/tasks/wizard-task.service.ts. Tasks whose extension is unsupported (or
 // missing) keep the old name and are left untouched.
@@ -45,7 +46,7 @@ export class MigrateFileReaderTaskFunctions1781259717294 implements MigrationInt
           END AS fn
         FROM tasks
         WHERE function = 'file_reader'
-          AND status IN ('pending', 'running')
+          AND status IN ('pending', 'running', 'canceled')
       ) AS m
       WHERE t.id = m.id
         AND m.fn IS NOT NULL;

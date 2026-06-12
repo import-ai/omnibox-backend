@@ -34,6 +34,10 @@ import { createGunzip } from 'zlib';
 
 import { TempfileDto } from './dto/tempfile.dto';
 
+// A task whose heartbeat is older than this is considered stale and can be
+// (re)claimed by a worker.
+const HEARTBEAT_TIMEOUT_MS = 10_000;
+
 @Injectable()
 export class WizardService {
   private readonly logger = new Logger(WizardService.name);
@@ -429,6 +433,31 @@ export class WizardService {
       newTask.input = { ...newTask.input, html: htmlContent };
     }
     return InternalTaskDto.fromEntity(newTask);
+  }
+
+  async pollTask(functions: string[]): Promise<InternalTaskDto | null> {
+    const heartbeatCutoff = new Date(Date.now() - HEARTBEAT_TIMEOUT_MS);
+    const task = await this.tasksService.getNextTaskV2(
+      functions,
+      heartbeatCutoff,
+    );
+    if (!task) {
+      return null;
+    }
+    const claimedTask = await this.tasksService.claimTask(
+      task.id,
+      heartbeatCutoff,
+    );
+    if (!claimedTask) {
+      // Another worker claimed the task between selection and claim.
+      return null;
+    }
+    const s3Key = this.tasksService.getHtmlS3Key(claimedTask.input);
+    if (s3Key) {
+      const htmlContent = await this.getHtmlFromMinioGzipFile(s3Key);
+      claimedTask.input = { ...claimedTask.input, html: htmlContent };
+    }
+    return InternalTaskDto.fromEntity(claimedTask);
   }
 
   async getHtmlFromMinioGzipFile(path: string) {

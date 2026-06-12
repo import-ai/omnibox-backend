@@ -6,6 +6,7 @@ import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 
 import { CreateTempfileReqDto } from './dto/create-tempfile-req.dto';
+import { PollTaskRequestDto, PollTaskResponseDto } from './dto/poll-task.dto';
 
 @Controller('internal/api/v1/wizard')
 export class InternalWizardController {
@@ -20,6 +21,14 @@ export class InternalWizardController {
     @Body() taskCallback: TaskCallbackDto,
   ): Promise<Record<string, any>> {
     return await this.wizardService.taskDoneCallback(taskCallback);
+  }
+
+  @Public()
+  @Post('tasks/poll')
+  async pollTask(
+    @Body() body: PollTaskRequestDto,
+  ): Promise<PollTaskResponseDto> {
+    return { task: await this.wizardService.pollTask(body.functions) };
   }
 
   @Public()

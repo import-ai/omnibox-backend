@@ -147,6 +147,16 @@ export class CollectProcessor extends Processor {
       }
     }
 
+    if (
+      typeof exceptionError === 'string' &&
+      (exceptionError.includes('Cannot extract Ximalaya audio_id from URL') ||
+        exceptionError.includes(
+          'This content requires VIP access and is not currently supported.',
+        ))
+    ) {
+      return '该链接内容暂不支持读取。';
+    }
+
     return 'error';
   }
 

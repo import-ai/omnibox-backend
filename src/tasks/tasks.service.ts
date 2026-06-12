@@ -5,20 +5,18 @@ import { context, propagation } from '@opentelemetry/api';
 import { randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { KafkaService } from 'omniboxd/kafka/kafka.service';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
-import { WizardCapabilitiesService } from 'omniboxd/tasks/wizard-capabilities.service';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
-import { In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { gzipSync } from 'zlib';
 
 import { TaskDto, TaskMetaDto } from './dto/task.dto';
 
 @Injectable()
 export class TasksService {
-  private readonly kafkaTasksTopic: string;
   private readonly proUrl: string | undefined;
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
@@ -26,16 +24,10 @@ export class TasksService {
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
     private readonly i18n: I18nService,
-    private readonly kafkaService: KafkaService,
     private readonly configService: ConfigService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
-    private readonly wizardCapabilitiesService: WizardCapabilitiesService,
     private readonly s3Service: S3Service,
   ) {
-    this.kafkaTasksTopic = this.configService.get<string>(
-      'OBB_TASKS_TOPIC',
-      'omnibox-tasks',
-    );
     this.proUrl = this.configService.get<string>('OBB_PRO_URL');
   }
 
@@ -59,57 +51,6 @@ export class TasksService {
     return task;
   }
 
-  async checkTaskMessage(namespaceId: string): Promise<void> {
-    const usage =
-      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
-    const topicName = `${this.kafkaTasksTopic}-${usage.taskPriority}`;
-    while (true) {
-      const task = await this.getNextTask(namespaceId);
-      if (!task) {
-        break;
-      }
-      const count = await this.countEnqueuedTasks(namespaceId);
-      if (count >= usage.taskParallelism) {
-        break;
-      }
-      const supported = await this.wizardCapabilitiesService.isSupported(
-        task.function,
-        task.input?.filename,
-      );
-      if (!supported) {
-        await this.markTaskUnsupported(task);
-        continue;
-      }
-      await this.produceTaskMessage(topicName, task, namespaceId);
-      await this.setTaskEnqueued(namespaceId, task.id);
-    }
-  }
-
-  private async markTaskUnsupported(task: Task): Promise<void> {
-    await this.taskRepository.update(
-      { id: task.id },
-      {
-        status: TaskStatus.ERROR,
-        exception: {
-          error: `Function '${task.function}' is not supported`,
-          type: 'UnsupportedFunctionError',
-        } as Record<string, any>,
-        endedAt: new Date(),
-      },
-    );
-  }
-
-  async listActiveTaskNamespaceIds(): Promise<string[]> {
-    const rows = await this.taskRepository
-      .createQueryBuilder('task')
-      .select('DISTINCT task.namespaceId', 'namespaceId')
-      .where('task.status IN (:...statuses)', {
-        statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
-      })
-      .getRawMany<{ namespaceId: string }>();
-    return rows.map((row) => row.namespaceId);
-  }
-
   getHtmlS3Key(input: Record<string, any>): string | undefined {
     if (input.html_s3_key) {
       return input.html_s3_key;
@@ -127,61 +68,20 @@ export class TasksService {
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {
     const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
-    const task = await repo.save(
+    let priority = data.priority;
+    if (priority === undefined && data.namespaceId) {
+      const usage = await this.namespacesQuotaService.getNamespaceUsage(
+        data.namespaceId,
+      );
+      priority = numberToBigintString(usage.taskPriority);
+    }
+    return await repo.save(
       repo.create({
         ...this.injectTraceHeaders(data),
+        priority,
         resourceId: data.resourceId || data.payload?.resource_id,
       }),
     );
-    if (tx) {
-      tx.afterCommitHooks.push(() => this.checkTaskMessage(task.namespaceId));
-    } else {
-      await this.checkTaskMessage(task.namespaceId);
-    }
-    return task;
-  }
-
-  async countEnqueuedTasks(namespaceId: string): Promise<number> {
-    return await this.taskRepository.count({
-      where: {
-        namespaceId,
-        endedAt: IsNull(),
-        canceledAt: IsNull(),
-        enqueued: true,
-      },
-    });
-  }
-
-  async getNextTask(namespaceId: string): Promise<Task | null> {
-    return await this.taskRepository.findOne({
-      where: {
-        namespaceId,
-        endedAt: IsNull(),
-        canceledAt: IsNull(),
-        enqueued: false,
-      },
-      order: {
-        createdAt: 'ASC',
-      },
-    });
-  }
-
-  async setTaskEnqueued(namespaceId: string, taskId: string): Promise<void> {
-    await this.taskRepository.update(
-      { namespaceId, id: taskId },
-      { enqueued: true },
-    );
-  }
-
-  async listStaleEnqueuedTasks(minAgeMs = 60_000): Promise<Task[]> {
-    const staleAt = new Date(Date.now() - minAgeMs);
-    return await this.taskRepository.find({
-      where: {
-        enqueued: true,
-        status: In([TaskStatus.PENDING, TaskStatus.RUNNING]),
-        createdAt: LessThanOrEqual(staleAt),
-      },
-    });
   }
 
   async findOldestPendingOrRunningTask(): Promise<Task | null> {
@@ -193,40 +93,6 @@ export class TasksService {
         createdAt: 'ASC',
       },
     });
-  }
-
-  async reproduceTaskMessage(task: Task): Promise<void> {
-    const supported = await this.wizardCapabilitiesService.isSupported(
-      task.function,
-      task.input?.filename,
-    );
-    if (!supported) {
-      await this.markTaskUnsupported(task);
-      return;
-    }
-
-    const usage = await this.namespacesQuotaService.getNamespaceUsage(
-      task.namespaceId,
-    );
-    const topicName = `${this.kafkaTasksTopic}-${usage.taskPriority}`;
-    await this.produceTaskMessage(topicName, task, task.namespaceId);
-  }
-
-  private async produceTaskMessage(
-    topicName: string,
-    task: Pick<Task, 'id' | 'function' | 'input'>,
-    namespaceId: string,
-  ): Promise<void> {
-    await this.kafkaService.produce(topicName, [
-      {
-        value: JSON.stringify({
-          task_id: task.id,
-          namespace_id: namespaceId,
-          function: task.function,
-          meta: { file_name: task.input?.filename },
-        }),
-      },
-    ]);
   }
 
   async cancelResourceTasks(

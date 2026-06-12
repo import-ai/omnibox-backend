@@ -232,64 +232,60 @@ export class WizardService {
     const task = await this.wizardTaskService.taskRepository.findOneOrFail({
       where: { id: data.id },
     });
-    try {
-      if (!task.startedAt) {
-        const message = this.i18n.t('wizard.errors.taskNotStarted', {
-          args: { taskId: task.id },
-        });
-        throw new AppException(
-          message,
-          'TASK_NOT_STARTED',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      task.endedAt = new Date();
-      task.exception = data.exception || null;
-
-      // Extract next_tasks from output before saving (task chain dispatch)
-      const nextTasks: NextTaskRequestDto[] = data.output?.next_tasks || [];
-      if (data.output) {
-        // Save output without next_tasks
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { next_tasks, ...outputWithoutNextTasks } = data.output;
-        task.output = outputWithoutNextTasks;
-      } else {
-        task.output = null;
-      }
-
-      await this.preprocessTask(task);
-
-      if (data.status) {
-        task.status = data.status;
-      } else if (!isEmpty(task.exception)) {
-        task.status = TaskStatus.ERROR;
-      } else {
-        task.status = TaskStatus.FINISHED;
-      }
-
-      await this.wizardTaskService.taskRepository.save(task);
-      await this.tasksService.callTaskHook(task.namespaceId, task.id);
-
-      const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
-      const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
-      this.logger.debug({ taskId: task.id, cost, wait });
-
-      if (task.canceledAt) {
-        this.logger.warn(`Task ${task.id} was canceled.`);
-        return { taskId: task.id, function: task.function, status: 'canceled' };
-      }
-
-      const postprocessResult = await this.postprocess(task);
-
-      if (task.status === TaskStatus.FINISHED && nextTasks.length > 0) {
-        await this.dispatchNextTasks(task, nextTasks);
-      }
-
-      return { taskId: task.id, function: task.function, ...postprocessResult };
-    } finally {
-      await this.tasksService.checkTaskMessage(task.namespaceId);
+    if (!task.startedAt) {
+      const message = this.i18n.t('wizard.errors.taskNotStarted', {
+        args: { taskId: task.id },
+      });
+      throw new AppException(
+        message,
+        'TASK_NOT_STARTED',
+        HttpStatus.BAD_REQUEST,
+      );
     }
+
+    task.endedAt = new Date();
+    task.exception = data.exception || null;
+
+    // Extract next_tasks from output before saving (task chain dispatch)
+    const nextTasks: NextTaskRequestDto[] = data.output?.next_tasks || [];
+    if (data.output) {
+      // Save output without next_tasks
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { next_tasks, ...outputWithoutNextTasks } = data.output;
+      task.output = outputWithoutNextTasks;
+    } else {
+      task.output = null;
+    }
+
+    await this.preprocessTask(task);
+
+    if (data.status) {
+      task.status = data.status;
+    } else if (!isEmpty(task.exception)) {
+      task.status = TaskStatus.ERROR;
+    } else {
+      task.status = TaskStatus.FINISHED;
+    }
+
+    await this.wizardTaskService.taskRepository.save(task);
+    await this.tasksService.callTaskHook(task.namespaceId, task.id);
+
+    const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
+    const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
+    this.logger.debug({ taskId: task.id, cost, wait });
+
+    if (task.canceledAt) {
+      this.logger.warn(`Task ${task.id} was canceled.`);
+      return { taskId: task.id, function: task.function, status: 'canceled' };
+    }
+
+    const postprocessResult = await this.postprocess(task);
+
+    if (task.status === TaskStatus.FINISHED && nextTasks.length > 0) {
+      await this.dispatchNextTasks(task, nextTasks);
+    }
+
+    return { taskId: task.id, function: task.function, ...postprocessResult };
   }
 
   private async dispatchNextTasks(
@@ -408,7 +404,6 @@ export class WizardService {
         HttpStatus.NOT_FOUND,
       );
     }
-    await this.tasksService.checkTaskMessage(task.namespaceId);
 
     if (task.canceledAt) {
       throw new AppException(
@@ -449,33 +444,5 @@ export class WizardService {
         })
         .on('error', reject);
     });
-  }
-
-  async reproduceTaskMessages(offset?: number, limit?: number) {
-    const queryBuilder = this.wizardTaskService.taskRepository
-      .createQueryBuilder('task')
-      .select('DISTINCT task.namespace_id', 'namespaceId')
-      .where('task.ended_at IS NULL')
-      .andWhere('task.canceled_at IS NULL');
-
-    if (offset !== undefined) {
-      queryBuilder.offset(offset);
-    }
-    if (limit !== undefined) {
-      queryBuilder.limit(limit);
-    }
-
-    const results = await queryBuilder.getRawMany<{ namespaceId: string }>();
-    const namespaceIds = results.map((r) => r.namespaceId);
-
-    for (const namespaceId of namespaceIds) {
-      await this.tasksService.checkTaskMessage(namespaceId);
-    }
-
-    return {
-      message: `Reproduced task messages for ${namespaceIds.length} namespaces`,
-      count: namespaceIds.length,
-      namespaceIds,
-    };
   }
 }

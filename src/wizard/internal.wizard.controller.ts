@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Param, Post } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
@@ -93,14 +93,5 @@ export class InternalWizardController {
   @Post('tempfiles')
   async createTempfile(@Body() createReq: CreateTempfileReqDto) {
     return await this.wizardService.createTempfile(createReq.filename);
-  }
-
-  @Public()
-  @Post('tasks/reproduce')
-  async reproduceTaskMessages(
-    @Query('offset') offset?: number,
-    @Query('limit') limit: number = 100,
-  ) {
-    return await this.wizardService.reproduceTaskMessages(offset, limit);
   }
 }

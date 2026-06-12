@@ -266,14 +266,17 @@ export class TasksService {
     return TaskDto.fromEntity(newTask);
   }
 
-  async getNextTaskV2(functions: string[]): Promise<Task | null> {
+  async getNextTaskV2(
+    functions: string[],
+    heartbeatCutoff: Date,
+  ): Promise<Task | null> {
     if (functions.length === 0) {
       return null;
     }
 
-    const limitedNamespaces = await this.listNamespacesAtParallelismLimit();
+    const limitedNamespaces =
+      await this.listNamespacesAtParallelismLimit(heartbeatCutoff);
     const seed = randomUUID();
-    const cutoff = new Date(Date.now() - 10_000);
 
     const qb = this.taskRepository
       .createQueryBuilder('task')
@@ -281,8 +284,8 @@ export class TasksService {
         statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
       })
       .andWhere(
-        '(task.lastHeartbeat IS NULL OR task.lastHeartbeat < :cutoff)',
-        { cutoff },
+        '(task.lastHeartbeat IS NULL OR task.lastHeartbeat < :heartbeatCutoff)',
+        { heartbeatCutoff },
       )
       .andWhere('task.function IN (:...functions)', { functions });
 
@@ -308,14 +311,42 @@ export class TasksService {
       .getOne();
   }
 
-  async listNamespacesAtParallelismLimit(): Promise<string[]> {
-    const cutoff = new Date(Date.now() - 10_000);
+  /**
+   * Atomically claim a task for execution. The conditional WHERE guards against
+   * two workers grabbing the same task: only a pending/running task whose
+   * heartbeat is missing or stale (older than 10s) can be claimed. Returns the
+   * claimed task, or null if another worker won the race.
+   */
+  async claimTask(taskId: string, heartbeatCutoff: Date): Promise<Task | null> {
+    const now = new Date();
+    const result = await this.taskRepository
+      .createQueryBuilder()
+      .update(Task)
+      .set({ status: TaskStatus.RUNNING, startedAt: now, lastHeartbeat: now })
+      .where('id = :taskId', { taskId })
+      .andWhere('status IN (:...statuses)', {
+        statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
+      })
+      .andWhere(
+        '(last_heartbeat IS NULL OR last_heartbeat < :heartbeatCutoff)',
+        { heartbeatCutoff },
+      )
+      .execute();
+    if (!result.affected) {
+      return null;
+    }
+    return await this.taskRepository.findOne({ where: { id: taskId } });
+  }
+
+  async listNamespacesAtParallelismLimit(
+    heartbeatCutoff: Date,
+  ): Promise<string[]> {
     const rows = await this.taskRepository
       .createQueryBuilder('task')
       .select('task.namespaceId', 'namespaceId')
       .addSelect('COUNT(*)', 'count')
       .where('task.status = :status', { status: TaskStatus.RUNNING })
-      .andWhere('task.lastHeartbeat >= :cutoff', { cutoff })
+      .andWhere('task.lastHeartbeat >= :heartbeatCutoff', { heartbeatCutoff })
       .groupBy('task.namespaceId')
       .getRawMany<{ namespaceId: string; count: string }>();
 

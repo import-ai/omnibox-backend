@@ -6,7 +6,7 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-id',
   namespaceId: 'namespace-id',
   userId: 'user-id',
-  function: 'file_reader',
+  function: 'file_reader_pdf',
   input: {},
   payload: { resource_id: 'resource-id' },
   output: null,
@@ -15,6 +15,7 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   startedAt: new Date('2026-05-21T00:00:00Z'),
   endedAt: null,
   canceledAt: null,
+  lastHeartbeat: null,
   createdAt: new Date('2026-05-21T00:00:00Z'),
   updatedAt: new Date('2026-05-21T00:00:00Z'),
   deletedAt: null,
@@ -35,7 +36,6 @@ describe('WizardService', () => {
       const wizardTaskService = { taskRepository };
       const tasksService = {
         callTaskHook: jest.fn().mockResolvedValue(undefined),
-        checkTaskMessage: jest.fn().mockResolvedValue(undefined),
         emitTask: jest.fn(),
       };
       const namespaceResourcesService = {
@@ -85,7 +85,7 @@ describe('WizardService', () => {
       expect(tasksService.emitTask).not.toHaveBeenCalled();
       expect(result).toEqual({
         taskId: task.id,
-        function: 'file_reader',
+        function: 'file_reader_pdf',
       });
     });
   });

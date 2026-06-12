@@ -82,6 +82,7 @@ describe('ExtractTagsProcessor', () => {
     updatedAt: new Date(),
     deletedAt: null,
     enqueued: false,
+    lastHeartbeat: null,
     resourceId: 'test-resource-id',
     status: TaskStatus.PENDING,
     ...overrides,

@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   Message,
   OpenAIMessageRole,
@@ -14,7 +15,37 @@ import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
+import * as path from 'path';
 import { Repository } from 'typeorm';
+
+// Maps an uploaded file's extension to the per-format file_reader function kind
+// that the matching wizard (base or pro) is able to handle. Extensions absent
+// from this map are unsupported by either wizard, so no task is emitted for them.
+const EXT_TO_FILE_READER_FN: Record<string, string> = {
+  // base wizard
+  '.md': 'file_reader_text',
+  '.txt': 'file_reader_text',
+  '.pptx': 'file_reader_ppt',
+  '.ppt': 'file_reader_ppt',
+  '.docx': 'file_reader_word',
+  '.doc': 'file_reader_word',
+  // wizard-pro
+  '.pdf': 'file_reader_pdf',
+  '.wav': 'file_reader_audio',
+  '.mp3': 'file_reader_audio',
+  '.opus': 'file_reader_audio',
+  '.m4a': 'file_reader_audio',
+  '.mp4': 'file_reader_video',
+  '.avi': 'file_reader_video',
+  '.mov': 'file_reader_video',
+  '.mkv': 'file_reader_video',
+  '.flv': 'file_reader_video',
+  '.wmv': 'file_reader_video',
+  '.webm': 'file_reader_video',
+  '.png': 'file_reader_image',
+  '.jpg': 'file_reader_image',
+  '.jpeg': 'file_reader_image',
+};
 
 @Injectable()
 export class WizardTaskService {
@@ -235,10 +266,23 @@ export class WizardTaskService {
     source?: string,
     tx?: Transaction,
   ) {
+    const fileName = resource.attrs.original_name ?? resource.attrs.filename;
+    const ext = path.extname(fileName ?? '').toLowerCase();
+    const fn = EXT_TO_FILE_READER_FN[ext];
+    if (!fn) {
+      // Unsupported by either wizard: fail loudly rather than silently emitting
+      // no task (which would leave the resource without a reader forever).
+      throw new AppException(
+        `No file_reader function kind for extension "${ext}" (resource ${resource.id})`,
+        'UNSUPPORTED_FILE_EXTENSION',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const userOptions = await this.getUserOptions(userId);
     return this.tasksService.emitTask(
       {
-        function: 'file_reader',
+        function: fn,
         input: {
           title: resource.name,
           original_name: resource.attrs.original_name,

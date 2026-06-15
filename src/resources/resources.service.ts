@@ -106,6 +106,35 @@ export class ResourcesService {
     }
   }
 
+  private assertResourceCanBeParent(resource: ResourceMetaDto): void {
+    if (resource.resourceType !== ResourceType.SMART_FOLDER) {
+      return;
+    }
+    const message = this.i18n.t('resource.errors.smartFolderCannotBeParent');
+    throw new AppException(
+      message,
+      'SMART_FOLDER_CANNOT_BE_PARENT',
+      HttpStatus.UNPROCESSABLE_ENTITY,
+    );
+  }
+
+  private async assertCanUseAsParentResource(
+    namespaceId: string,
+    parentId: string | null | undefined,
+    entityManager?: EntityManager,
+  ): Promise<ResourceMetaDto | null> {
+    if (!parentId) {
+      return null;
+    }
+    const parent = await this.getResourceMetaOrFail(
+      namespaceId,
+      parentId,
+      entityManager,
+    );
+    this.assertResourceCanBeParent(parent);
+    return parent;
+  }
+
   private async isNameExists(
     namespaceId: string,
     parentId: string | null,
@@ -659,6 +688,11 @@ export class ResourcesService {
     const entityManager = tx.entityManager;
 
     if (props.parentId) {
+      await this.assertCanUseAsParentResource(
+        namespaceId,
+        props.parentId,
+        entityManager,
+      );
       const parents = await this.getParentResourcesOrFail(
         namespaceId,
         props.parentId,
@@ -806,14 +840,11 @@ export class ResourcesService {
 
     const entityManager = tx.entityManager;
 
-    // Check if the parent belongs to the same namespace
-    if (props.parentId) {
-      await this.getResourceMetaOrFail(
-        props.namespaceId,
-        props.parentId,
-        entityManager,
-      );
-    }
+    await this.assertCanUseAsParentResource(
+      props.namespaceId,
+      props.parentId,
+      entityManager,
+    );
 
     // Validate and sanitize resource name
     let resolvedName = this.validateResourceName(
@@ -1185,6 +1216,11 @@ export class ResourcesService {
     if (resourceIds.length === 0) {
       return { moveIds: [], nameConflictIds: [] };
     }
+    await this.assertCanUseAsParentResource(
+      namespaceId,
+      targetId,
+      entityManager,
+    );
     const targetParents = await this.getParentResourcesOrFail(
       namespaceId,
       targetId,

@@ -1,6 +1,7 @@
 import { HttpStatus } from '@nestjs/common';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { SmartFolderRootScope } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { TestClient } from 'test/test-client';
 
 describe('ResourcesController (e2e)', () => {
@@ -144,6 +145,28 @@ describe('ResourcesController (e2e)', () => {
         .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
         .send(resourceData)
         .expect(HttpStatus.BAD_REQUEST);
+    });
+
+    it('should reject smart folder as parent', async () => {
+      const smartFolderResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
+        .send({
+          name: uniqueName('Smart Folder Parent'),
+          rootScope: SmartFolderRootScope.PRIVATE,
+          conditions: [],
+        })
+        .expect(HttpStatus.CREATED);
+
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Resource Under Smart Folder'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: smartFolderResponse.body.resource_id,
+          content: 'content',
+        })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });
   });
 
@@ -870,6 +893,23 @@ describe('ResourcesController (e2e)', () => {
         expect.arrayContaining([expect.objectContaining({ id: sourceId })]),
       );
     });
+
+    it('should reject move to smart folder', async () => {
+      const smartFolderResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
+        .send({
+          name: uniqueName('Smart Folder Move Target'),
+          rootScope: SmartFolderRootScope.PRIVATE,
+          conditions: [],
+        })
+        .expect(HttpStatus.CREATED);
+
+      await client
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${sourceResourceId}/move/${smartFolderResponse.body.resource_id}`,
+        )
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+    });
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/resources/batch-*', () => {
@@ -1196,6 +1236,29 @@ describe('ResourcesController (e2e)', () => {
       expect(childrenResponse.body.map((r: any) => r.id)).toEqual(
         expect.arrayContaining([first.id, second.id]),
       );
+    });
+
+    it('should reject batch move to smart folder', async () => {
+      const source = await createDoc(
+        'Batch Smart Folder Source',
+        client.namespace.root_resource_id,
+      );
+      const smartFolderResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
+        .send({
+          name: uniqueName('Batch Smart Folder Target'),
+          rootScope: SmartFolderRootScope.PRIVATE,
+          conditions: [],
+        })
+        .expect(HttpStatus.CREATED);
+
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({
+          resourceIds: [source.id],
+          targetId: smartFolderResponse.body.resource_id,
+        })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });
 
     it('should ignore child ids covered by a selected parent on batch move', async () => {

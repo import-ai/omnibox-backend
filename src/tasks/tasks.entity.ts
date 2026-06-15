@@ -49,9 +49,6 @@ export class Task extends Base {
   @Column('timestamptz', { nullable: true })
   canceledAt: Date | null;
 
-  @Column({ default: false })
-  enqueued: boolean;
-
   @Column('timestamptz', { nullable: true, default: null })
   lastHeartbeat: Date | null;
 

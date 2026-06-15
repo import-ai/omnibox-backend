@@ -103,7 +103,6 @@ describe('ReaderProcessor', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       deletedAt: null,
-      enqueued: false,
       resourceId: 'test-resource-id',
       status: TaskStatus.PENDING,
       ...overrides,

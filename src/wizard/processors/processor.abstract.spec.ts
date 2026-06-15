@@ -40,7 +40,6 @@ describe('Processor (Abstract)', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
-        enqueued: false,
         resourceId: null,
         status: 'pending',
       } as Task;
@@ -84,7 +83,6 @@ describe('Processor (Abstract)', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
-        enqueued: false,
         resourceId: null,
         status: 'pending',
       } as Task;

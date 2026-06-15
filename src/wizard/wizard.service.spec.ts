@@ -19,7 +19,6 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   createdAt: new Date('2026-05-21T00:00:00Z'),
   updatedAt: new Date('2026-05-21T00:00:00Z'),
   deletedAt: null,
-  enqueued: false,
   resourceId: 'resource-id',
   status: TaskStatus.RUNNING,
   ...overrides,

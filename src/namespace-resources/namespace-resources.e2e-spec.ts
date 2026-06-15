@@ -8,6 +8,7 @@ describe('ResourcesController (e2e)', () => {
   let client: TestClient;
   let memberClient: TestClient;
   let outsiderClient: TestClient;
+  let smartFolderResourceId: string | undefined;
   let uid = 0;
   const uniqueName = (base: string) => `${base} ${++uid}`;
   const setUserPermission = async (
@@ -20,6 +21,21 @@ describe('ResourcesController (e2e)', () => {
       )
       .send({ permission })
       .expect(HttpStatus.OK);
+  };
+  const getSmartFolderResourceId = async () => {
+    if (smartFolderResourceId) {
+      return smartFolderResourceId;
+    }
+    const smartFolderResponse = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
+      .send({
+        name: uniqueName('Smart Folder Parent'),
+        root_scope: SmartFolderRootScope.PRIVATE,
+        conditions: [],
+      })
+      .expect(HttpStatus.CREATED);
+    smartFolderResourceId = smartFolderResponse.body.resource.id;
+    return smartFolderResourceId;
   };
 
   beforeAll(async () => {
@@ -148,14 +164,7 @@ describe('ResourcesController (e2e)', () => {
     });
 
     it('should reject smart folder as parent', async () => {
-      const smartFolderResponse = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
-        .send({
-          name: uniqueName('Smart Folder Parent'),
-          root_scope: SmartFolderRootScope.PRIVATE,
-          conditions: [],
-        })
-        .expect(HttpStatus.CREATED);
+      const smartFolderId = await getSmartFolderResourceId();
 
       await client
         .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
@@ -163,7 +172,7 @@ describe('ResourcesController (e2e)', () => {
           name: uniqueName('Resource Under Smart Folder'),
           namespaceId: client.namespace.id,
           resourceType: ResourceType.DOC,
-          parentId: smartFolderResponse.body.resource.id,
+          parentId: smartFolderId,
           content: 'content',
         })
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
@@ -895,18 +904,11 @@ describe('ResourcesController (e2e)', () => {
     });
 
     it('should reject move to smart folder', async () => {
-      const smartFolderResponse = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
-        .send({
-          name: uniqueName('Smart Folder Move Target'),
-          root_scope: SmartFolderRootScope.PRIVATE,
-          conditions: [],
-        })
-        .expect(HttpStatus.CREATED);
+      const smartFolderId = await getSmartFolderResourceId();
 
       await client
         .post(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${sourceResourceId}/move/${smartFolderResponse.body.resource.id}`,
+          `/api/v1/namespaces/${client.namespace.id}/resources/${sourceResourceId}/move/${smartFolderId}`,
         )
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });
@@ -1243,20 +1245,13 @@ describe('ResourcesController (e2e)', () => {
         'Batch Smart Folder Source',
         client.namespace.root_resource_id,
       );
-      const smartFolderResponse = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
-        .send({
-          name: uniqueName('Batch Smart Folder Target'),
-          root_scope: SmartFolderRootScope.PRIVATE,
-          conditions: [],
-        })
-        .expect(HttpStatus.CREATED);
+      const smartFolderId = await getSmartFolderResourceId();
 
       await client
         .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
         .send({
           resourceIds: [source.id],
-          targetId: smartFolderResponse.body.resource.id,
+          targetId: smartFolderId,
         })
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });

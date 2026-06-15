@@ -44,7 +44,9 @@ export class TaskCallbackDto {
   status?: TaskStatus;
 
   @Expose({ name: 'worker_id' })
-  @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
-  workerId?: string;
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  workerId: string;
 }

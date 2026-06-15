@@ -163,7 +163,7 @@ describe('ResourcesController (e2e)', () => {
           name: uniqueName('Resource Under Smart Folder'),
           namespaceId: client.namespace.id,
           resourceType: ResourceType.DOC,
-          parentId: smartFolderResponse.body.resource_id,
+          parentId: smartFolderResponse.body.resource.id,
           content: 'content',
         })
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
@@ -906,7 +906,7 @@ describe('ResourcesController (e2e)', () => {
 
       await client
         .post(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${sourceResourceId}/move/${smartFolderResponse.body.resource_id}`,
+          `/api/v1/namespaces/${client.namespace.id}/resources/${sourceResourceId}/move/${smartFolderResponse.body.resource.id}`,
         )
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });
@@ -1256,7 +1256,7 @@ describe('ResourcesController (e2e)', () => {
         .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
         .send({
           resourceIds: [source.id],
-          targetId: smartFolderResponse.body.resource_id,
+          targetId: smartFolderResponse.body.resource.id,
         })
         .expect(HttpStatus.UNPROCESSABLE_ENTITY);
     });

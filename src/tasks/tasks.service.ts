@@ -24,6 +24,7 @@ const PRO_ONLY_FUNCTIONS = new Set<string>([
   'file_reader_video',
   'file_reader_image',
   'generate_video_note',
+  'generate_audio_note',
 ]);
 
 @Injectable()

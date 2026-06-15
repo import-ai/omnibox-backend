@@ -58,6 +58,7 @@ describe('WizardService', () => {
 
       const result = await service.taskDoneCallback({
         id: task.id,
+        workerId: 'workerId',
         status: TaskStatus.ERROR,
         exception: {
           code: 'FILE_CONTENT_TOO_LONG',

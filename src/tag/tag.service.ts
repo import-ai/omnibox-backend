@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { CreateTagRequestDto } from 'omniboxd/tag/dto/create-tag-request.dto';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { Tag } from 'omniboxd/tag/tag.entity';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 import { EntityManager, In, Like, Repository } from 'typeorm';
 
 @Injectable()
@@ -107,6 +108,12 @@ export class TagService {
   ): Promise<string[]> {
     if (!tagNames || tagNames.length === 0) {
       return [];
+    }
+    if (tagNames.some((name) => isEmpty(name))) {
+      throw new Error('Empty name');
+    }
+    if (tagNames.some((name) => name.length > 20)) {
+      throw new Error('Name too long');
     }
 
     const repo = manager ? manager.getRepository(Tag) : this.tagRepository;

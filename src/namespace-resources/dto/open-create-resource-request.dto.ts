@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
@@ -51,15 +52,25 @@ export class OpenCreateResourceRequestDto {
   parent_id?: string;
 
   @ApiPropertyOptional({
-    description: 'Array of tag names to associate with the resource',
+    description:
+      'Array of non-empty tag names to associate with the resource. Missing tags are created automatically.',
     type: [String],
     example: ['project', 'meeting-notes'],
+    maxLength: 20,
   })
   @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
   @IsOptional()
   @IsString({
     each: true,
     message: i18nValidationMessage('validation.errors.isString'),
+  })
+  @IsNotEmpty({
+    each: true,
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  @MaxLength(20, {
+    each: true,
+    message: i18nValidationMessage('validation.errors.name.maxLength'),
   })
   tag_names?: string[];
 

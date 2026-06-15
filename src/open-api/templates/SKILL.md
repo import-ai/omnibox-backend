@@ -157,6 +157,7 @@ Notes:
 - `resource_type` defaults to `doc`.
 - Document resources require non-empty `content`.
 - If `parent_id` is omitted, the document is created under the API key root resource.
+- `tag_names` contains tag names, not tag IDs. Each tag name must be non-empty and at most 20 characters. Missing tags are created automatically.
 
 ### Create a folder resource
 
@@ -195,7 +196,7 @@ Content-Type: application/json
 
 Requires `resources:update`.
 
-Use `parent_id` to move a resource. `tag_names` replaces the resource's existing tags with the provided tag names; missing tags are created automatically.
+Use `parent_id` to move a resource. `tag_names` contains tag names, not tag IDs. Each tag name must be non-empty and at most 20 characters. Missing tags are created automatically. `tag_names` replaces the resource's existing tags; send `tag_names: []` to clear tags.
 
 ### Delete a resource
 

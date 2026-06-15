@@ -1,20 +1,17 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
-  IsBoolean,
-  IsIn,
   IsObject,
   IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
-export class OpenCreateResourceRequestDto {
+export class OpenUpdateResourceRequestDto {
   @ApiPropertyOptional({
     description: 'Resource name/title',
-    example: 'My Document Title',
+    example: 'My Updated Document Title',
   })
   @IsString({
     message: i18nValidationMessage('validation.errors.name.isString'),
@@ -27,22 +24,8 @@ export class OpenCreateResourceRequestDto {
 
   @ApiPropertyOptional({
     description:
-      'Resource type. Defaults to doc. Folder resources do not require content but must include name.',
-    enum: [ResourceType.DOC, ResourceType.FOLDER],
-    example: ResourceType.DOC,
-    required: false,
-  })
-  @IsIn([ResourceType.DOC, ResourceType.FOLDER], {
-    message: i18nValidationMessage('validation.errors.resourceType.isEnum'),
-  })
-  @IsOptional()
-  resource_type?: ResourceType.DOC | ResourceType.FOLDER;
-
-  @ApiPropertyOptional({
-    description:
-      'Parent resource ID under the API key root. Defaults to the API key root resource.',
+      'Parent resource ID under the API key root. Use this to move a resource.',
     example: '550e8400-e29b-41d4-a716-446655440000',
-    required: false,
   })
   @IsString({
     message: i18nValidationMessage('validation.errors.parentId.isString'),
@@ -51,7 +34,8 @@ export class OpenCreateResourceRequestDto {
   parent_id?: string;
 
   @ApiPropertyOptional({
-    description: 'Array of tag names to associate with the resource',
+    description:
+      'Array of tag names to associate with the resource. Replaces existing tags.',
     type: [String],
     example: ['project', 'meeting-notes'],
   })
@@ -64,10 +48,8 @@ export class OpenCreateResourceRequestDto {
   tag_names?: string[];
 
   @ApiPropertyOptional({
-    description:
-      'Content of the resource/document. Required for doc resources and optional for folder resources.',
-    example: 'This is the content of my document. #tag1 #tag2',
-    required: false,
+    description: 'Content of the resource/document',
+    example: 'This is the updated content of my document.',
   })
   @IsString({
     message: i18nValidationMessage('validation.errors.content.isString'),
@@ -84,12 +66,4 @@ export class OpenCreateResourceRequestDto {
   @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   @IsOptional()
   attrs?: Record<string, any>;
-
-  @ApiPropertyOptional({
-    description: 'Skip automatic parsing of hashtags from content',
-    example: false,
-  })
-  @IsBoolean({ message: i18nValidationMessage('validation.errors.isBoolean') })
-  @IsOptional()
-  skip_parsing_tags_from_content?: boolean;
 }

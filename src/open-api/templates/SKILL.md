@@ -146,7 +146,7 @@ Content-Type: application/json
   "resource_type": "doc",
   "content": "Saved from Open API",
   "parent_id": "optional-parent-resource-id",
-  "tag_ids": ["optional-tag-id"]
+  "tag_names": ["optional-tag-name"]
 }
 ```
 
@@ -187,11 +187,15 @@ Content-Type: application/json
 
 {
   "name": "Updated name",
-  "content": "Updated content"
+  "content": "Updated content",
+  "parent_id": "optional-parent-resource-id",
+  "tag_names": ["optional-tag-name"]
 }
 ```
 
 Requires `resources:update`.
+
+Use `parent_id` to move a resource. `tag_names` replaces the resource's existing tags with the provided tag names; missing tags are created automatically.
 
 ### Delete a resource
 

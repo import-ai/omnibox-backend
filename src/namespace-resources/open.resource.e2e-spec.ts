@@ -213,7 +213,7 @@ describe('OpenResourcesController (e2e)', () => {
     });
 
     it('should create a resource with tag names', async () => {
-      const tagNames = ['open-create-tag-name-1', 'open-create-tag-name-2'];
+      const tagNames = ['open-create-tag-1', 'open-create-tag-2'];
 
       const response = await client
         .request()

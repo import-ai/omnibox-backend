@@ -35,16 +35,16 @@ import { createGunzip } from 'zlib';
 
 import { TempfileDto } from './dto/tempfile.dto';
 
-// A task whose heartbeat is older than this is considered stale and can be
-// (re)claimed by a worker.
-const HEARTBEAT_TIMEOUT_MS = 10_000;
-
 @Injectable()
 export class WizardService {
   private readonly logger = new Logger(WizardService.name);
   private readonly processors: Record<string, Processor>;
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
+
+  // A task whose heartbeat is older than this is considered stale and can be
+  // (re)claimed by a worker.
+  private readonly heartbeatTimeoutMs: number;
 
   constructor(
     private readonly wizardTaskService: WizardTaskService,
@@ -108,6 +108,11 @@ export class WizardService {
         this.i18n,
       ),
     };
+
+    this.heartbeatTimeoutMs = parseInt(
+      this.configService.get('OBB_TASK_HEARTBEAT_TIMEOUT_MS', '10000'),
+      10,
+    );
   }
 
   async compressedCollect(
@@ -499,7 +504,7 @@ export class WizardService {
     functions: string[],
     workerId: string,
   ): Promise<InternalTaskDto | null> {
-    const heartbeatCutoff = new Date(Date.now() - HEARTBEAT_TIMEOUT_MS);
+    const heartbeatCutoff = new Date(Date.now() - this.heartbeatTimeoutMs);
     const task = await this.tasksService.getNextTaskV2(
       functions,
       heartbeatCutoff,

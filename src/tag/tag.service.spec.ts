@@ -5,20 +5,29 @@ import { TagService } from 'omniboxd/tag/tag.service';
 
 describe('TagService', () => {
   let service: TagService;
+  let repo: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    findOneBy: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+  };
 
   beforeEach(async () => {
+    repo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn(),
+      findOneBy: jest.fn(),
+      create: jest.fn((data) => data),
+      save: jest.fn((tag) => Promise.resolve({ id: `${tag.name}-id`, ...tag })),
+    };
+
     const module = await Test.createTestingModule({
       providers: [
         TagService,
         {
           provide: getRepositoryToken(Tag),
-          useValue: {
-            find: jest.fn(),
-            findOne: jest.fn(),
-            findOneBy: jest.fn(),
-            create: jest.fn(),
-            save: jest.fn(),
-          },
+          useValue: repo,
         },
       ],
     }).compile();
@@ -33,16 +42,33 @@ describe('TagService', () => {
       ).resolves.toEqual([]);
     });
 
-    it('rejects empty tag names', async () => {
+    it('filters empty tag names', async () => {
       await expect(
         service.getOrCreateTagsByNames('namespace-id', ['']),
-      ).rejects.toThrow('Empty name');
+      ).resolves.toEqual([]);
+      expect(repo.find).not.toHaveBeenCalled();
     });
 
-    it('rejects too long tag names', async () => {
+    it('filters too long tag names', async () => {
       await expect(
         service.getOrCreateTagsByNames('namespace-id', ['x'.repeat(21)]),
-      ).rejects.toThrow('Name too long');
+      ).resolves.toEqual([]);
+      expect(repo.find).not.toHaveBeenCalled();
+    });
+
+    it('creates only valid tag names', async () => {
+      await expect(
+        service.getOrCreateTagsByNames('namespace-id', [
+          '',
+          'valid-tag',
+          'x'.repeat(21),
+        ]),
+      ).resolves.toEqual(['valid-tag-id']);
+      expect(repo.create).toHaveBeenCalledTimes(1);
+      expect(repo.create).toHaveBeenCalledWith({
+        namespaceId: 'namespace-id',
+        name: 'valid-tag',
+      });
     });
   });
 });

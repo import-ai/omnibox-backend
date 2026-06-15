@@ -109,11 +109,12 @@ export class TagService {
     if (!tagNames || tagNames.length === 0) {
       return [];
     }
-    if (tagNames.some((name) => isEmpty(name))) {
-      throw new Error('Empty name');
-    }
-    if (tagNames.some((name) => name.length > 20)) {
-      throw new Error('Name too long');
+
+    const validTagNames = tagNames.filter(
+      (name) => !isEmpty(name) && name.length <= 20,
+    );
+    if (validTagNames.length === 0) {
+      return [];
     }
 
     const repo = manager ? manager.getRepository(Tag) : this.tagRepository;
@@ -122,7 +123,7 @@ export class TagService {
     const existingTags = await repo.find({
       where: {
         namespaceId,
-        name: In(tagNames),
+        name: In(validTagNames),
       },
     });
 
@@ -130,7 +131,7 @@ export class TagService {
     const tagIds = existingTags.map((tag) => tag.id);
 
     // Create missing tags
-    const missingTagNames = tagNames.filter(
+    const missingTagNames = validTagNames.filter(
       (name) => !existingTagNames.has(name),
     );
 

@@ -47,7 +47,7 @@ describe('WizardService', () => {
         tasksService as any,
         namespaceResourcesService as any,
         { getOrCreateTagsByNames: jest.fn() } as any,
-        {} as any,
+        { get: jest.fn().mockReturnValue(10000) } as any,
         {} as any,
         {} as any,
         { getResourceOrFail: jest.fn() } as any,

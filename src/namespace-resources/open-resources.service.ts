@@ -5,6 +5,7 @@ import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resou
 import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
 import { OpenListResourcesResponseDto } from 'omniboxd/namespace-resources/dto/open-list-resources-response.dto';
 import { OpenResourceDto } from 'omniboxd/namespace-resources/dto/open-resource.dto';
+import { OpenUpdateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-update-resource-request.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
@@ -67,7 +68,7 @@ export class OpenResourcesService {
     userId: string,
     data: OpenCreateResourceRequestDto,
   ): Promise<{ id: string; name: string }> {
-    const resourceType = data.resource_type ?? ResourceType.DOC;
+    const resourceType = data.resourceType ?? ResourceType.DOC;
 
     if (resourceType === ResourceType.DOC && !data.content) {
       const message = this.i18n.t('resource.errors.contentRequired');
@@ -92,11 +93,15 @@ export class OpenResourcesService {
       );
     }
 
-    let tagIds: string[] | undefined = data.tag_ids;
-    if (
-      resourceType === ResourceType.DOC &&
-      !data.skip_parsing_tags_from_content
-    ) {
+    const parentId = await this.resolveResourceId(
+      namespaceId,
+      rootResourceId,
+      data.parentId,
+      userId,
+    );
+
+    let tagIds = await this.resolveTagNames(namespaceId, data.tagNames);
+    if (resourceType === ResourceType.DOC && !data.skipParsingTagsFromContent) {
       const hashtagNames = parseHashtags(data.content || '');
       if (hashtagNames.length > 0) {
         const hashtagIds = await this.tagService.getOrCreateTagsByNames(
@@ -106,13 +111,6 @@ export class OpenResourcesService {
         tagIds = Array.from(new Set([...(tagIds || []), ...hashtagIds]));
       }
     }
-
-    const parentId = await this.resolveResourceId(
-      namespaceId,
-      rootResourceId,
-      data.parent_id,
-      userId,
-    );
 
     const createResourceDto = {
       name: data.name || '',
@@ -141,7 +139,7 @@ export class OpenResourcesService {
           { content: data.content || '' },
         );
       }
-      if (!data.skip_parsing_tags_from_content && isEmpty(newResource.tagIds)) {
+      if (!data.skipParsingTagsFromContent && isEmpty(newResource.tagIds)) {
         await this.wizardTaskService.emitExtractTagsTask(
           userId,
           newResource.id,
@@ -203,7 +201,7 @@ export class OpenResourcesService {
     rootResourceId: string,
     userId: string,
     resourceId: string,
-    data: UpdateResourceDto,
+    data: OpenUpdateResourceRequestDto,
   ): Promise<ResourceDto> {
     await this.resolveResourceId(
       namespaceId,
@@ -222,11 +220,19 @@ export class OpenResourcesService {
       );
     }
 
+    const updateData: UpdateResourceDto = {
+      name: data.name,
+      parentId: data.parentId,
+      tag_ids: await this.resolveTagNames(namespaceId, data.tagNames),
+      content: data.content,
+      attrs: data.attrs,
+    };
+
     await this.namespaceResourcesService.update(
       namespaceId,
       userId,
       resourceId,
-      data,
+      updateData,
     );
     return await this.namespaceResourcesService.getResource({
       namespaceId,
@@ -426,5 +432,18 @@ export class OpenResourcesService {
       current = resourceMetaMap.get(current.parentId);
     }
     return false;
+  }
+
+  private async resolveTagNames(
+    namespaceId: string,
+    tagNames?: string[],
+  ): Promise<string[] | undefined> {
+    if (tagNames === undefined) {
+      return undefined;
+    }
+    if (tagNames.length === 0) {
+      return [];
+    }
+    return await this.tagService.getOrCreateTagsByNames(namespaceId, tagNames);
   }
 }

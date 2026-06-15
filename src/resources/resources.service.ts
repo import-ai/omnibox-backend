@@ -840,13 +840,11 @@ export class ResourcesService {
 
     const entityManager = tx.entityManager;
 
-    if (props.resourceType !== ResourceType.SMART_FOLDER) {
-      await this.assertCanUseAsParentResource(
-        props.namespaceId,
-        props.parentId,
-        entityManager,
-      );
-    }
+    await this.assertCanUseAsParentResource(
+      props.namespaceId,
+      props.parentId,
+      entityManager,
+    );
 
     // Validate and sanitize resource name
     let resolvedName = this.validateResourceName(

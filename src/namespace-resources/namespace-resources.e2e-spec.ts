@@ -152,7 +152,7 @@ describe('ResourcesController (e2e)', () => {
         .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
         .send({
           name: uniqueName('Smart Folder Parent'),
-          rootScope: SmartFolderRootScope.PRIVATE,
+          root_scope: SmartFolderRootScope.PRIVATE,
           conditions: [],
         })
         .expect(HttpStatus.CREATED);
@@ -899,7 +899,7 @@ describe('ResourcesController (e2e)', () => {
         .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
         .send({
           name: uniqueName('Smart Folder Move Target'),
-          rootScope: SmartFolderRootScope.PRIVATE,
+          root_scope: SmartFolderRootScope.PRIVATE,
           conditions: [],
         })
         .expect(HttpStatus.CREATED);
@@ -1247,7 +1247,7 @@ describe('ResourcesController (e2e)', () => {
         .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
         .send({
           name: uniqueName('Batch Smart Folder Target'),
-          rootScope: SmartFolderRootScope.PRIVATE,
+          root_scope: SmartFolderRootScope.PRIVATE,
           conditions: [],
         })
         .expect(HttpStatus.CREATED);

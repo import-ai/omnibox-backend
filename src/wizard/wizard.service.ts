@@ -262,11 +262,7 @@ export class WizardService {
     // that bypass class-transformer aliasing.
     const callbackWorkerId =
       data.workerId ?? (data as Record<string, any>).worker_id;
-    if (
-      callbackWorkerId &&
-      task.workerId &&
-      callbackWorkerId !== task.workerId
-    ) {
+    if (task.workerId && callbackWorkerId !== task.workerId) {
       this.logger.warn(
         `Ignoring callback for task ${task.id} from worker ${callbackWorkerId}; currently owned by ${task.workerId}`,
       );

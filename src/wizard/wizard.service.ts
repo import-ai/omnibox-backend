@@ -30,6 +30,7 @@ import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-titl
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
+import { IsNull } from 'typeorm';
 import { createGunzip } from 'zlib';
 
 import { TempfileDto } from './dto/tempfile.dto';
@@ -248,6 +249,31 @@ export class WizardService {
     const task = await this.wizardTaskService.taskRepository.findOneOrFail({
       where: { id: data.id },
     });
+
+    // Ignore callbacks from a worker that no longer owns the task (it was
+    // reclaimed as stale and is now run by another worker), or for a task that
+    // has already completed. Guards the race where a worker finishes right as
+    // it loses ownership. `worker_id` rides in directly for S3/chunk payloads
+    // that bypass class-transformer aliasing.
+    const callbackWorkerId =
+      data.workerId ?? (data as Record<string, any>).worker_id;
+    if (
+      callbackWorkerId &&
+      task.workerId &&
+      callbackWorkerId !== task.workerId
+    ) {
+      this.logger.warn(
+        `Ignoring callback for task ${task.id} from worker ${callbackWorkerId}; currently owned by ${task.workerId}`,
+      );
+      return { taskId: task.id, function: task.function };
+    }
+    if (task.status !== TaskStatus.RUNNING) {
+      this.logger.warn(
+        `Ignoring callback for task ${task.id}; status is ${task.status}, not running`,
+      );
+      return { taskId: task.id, function: task.function };
+    }
+
     if (!task.startedAt) {
       const message = this.i18n.t('wizard.errors.taskNotStarted', {
         args: { taskId: task.id },
@@ -283,7 +309,29 @@ export class WizardService {
       task.status = TaskStatus.FINISHED;
     }
 
-    await this.wizardTaskService.taskRepository.save(task);
+    // Persist atomically, guarded on task id + worker id + running status, so a
+    // callback that lost the race (task reclaimed by another worker, or no
+    // longer running, between the read above and this write) cannot overwrite a
+    // task it no longer owns.
+    const { affected } = await this.wizardTaskService.taskRepository.update(
+      {
+        id: task.id,
+        status: TaskStatus.RUNNING,
+        workerId: task.workerId ?? IsNull(),
+      },
+      {
+        endedAt: task.endedAt,
+        exception: task.exception,
+        output: task.output,
+        status: task.status,
+      },
+    );
+    if (!affected) {
+      this.logger.warn(
+        `Ignoring callback for task ${task.id}; not running or no longer owned by worker ${task.workerId} at write time`,
+      );
+      return { taskId: task.id, function: task.function };
+    }
     await this.tasksService.callTaskHook(task.namespaceId, task.id);
 
     const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
@@ -405,8 +453,8 @@ export class WizardService {
     task.output.images = processedImages;
   }
 
-  async updateHeartbeat(taskId: string): Promise<void> {
-    await this.tasksService.updateHeartbeat(taskId);
+  async updateHeartbeat(taskId: string, workerId: string): Promise<boolean> {
+    return await this.tasksService.updateHeartbeat(taskId, workerId);
   }
 
   async startTask(taskId: string): Promise<InternalTaskDto> {

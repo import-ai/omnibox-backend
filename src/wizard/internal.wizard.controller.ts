@@ -6,6 +6,7 @@ import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 
 import { CreateTempfileReqDto } from './dto/create-tempfile-req.dto';
+import { HeartbeatTaskRequestDto } from './dto/heartbeat-task.dto';
 import { PollTaskRequestDto, PollTaskResponseDto } from './dto/poll-task.dto';
 
 @Controller('internal/api/v1/wizard')
@@ -48,8 +49,15 @@ export class InternalWizardController {
 
   @Public()
   @Post('tasks/:taskId/heartbeat')
-  async updateHeartbeat(@Param('taskId') taskId: string) {
-    await this.wizardService.updateHeartbeat(taskId);
+  async updateHeartbeat(
+    @Param('taskId') taskId: string,
+    @Body() body: HeartbeatTaskRequestDto,
+  ) {
+    const owned = await this.wizardService.updateHeartbeat(
+      taskId,
+      body.workerId,
+    );
+    return { owned };
   }
 
   @Public()

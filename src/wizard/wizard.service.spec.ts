@@ -31,7 +31,7 @@ describe('WizardService', () => {
       const task = createTask();
       const taskRepository = {
         findOneOrFail: jest.fn().mockResolvedValue(task),
-        save: jest.fn((savedTask: Task) => Promise.resolve(savedTask)),
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
       };
       const wizardTaskService = { taskRepository };
       const tasksService = {

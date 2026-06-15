@@ -165,7 +165,7 @@ export class TasksService {
     await tx.entityManager.update(
       Task,
       { namespaceId, userId, canceledAt: IsNull(), endedAt: IsNull() },
-      { canceledAt: new Date() },
+      { canceledAt: new Date(), status: TaskStatus.CANCELED },
     );
   }
 
@@ -399,11 +399,18 @@ export class TasksService {
       .map((r) => r.namespaceId);
   }
 
-  async updateHeartbeat(taskId: string): Promise<void> {
-    await this.taskRepository.update(
-      { id: taskId, status: TaskStatus.RUNNING },
+  /**
+   * Refresh the heartbeat only if this worker still owns the task. If another
+   * worker has since re-claimed it (e.g. after a stale heartbeat), the worker
+   * ids won't match and no row is updated. Returns whether the worker still
+   * owns the task.
+   */
+  async updateHeartbeat(taskId: string, workerId: string): Promise<boolean> {
+    const result = await this.taskRepository.update(
+      { id: taskId, status: TaskStatus.RUNNING, workerId },
       { lastHeartbeat: new Date() },
     );
+    return (result.affected ?? 0) > 0;
   }
 
   async getTasksByResourceId(

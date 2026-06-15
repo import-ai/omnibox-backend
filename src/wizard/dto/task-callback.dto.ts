@@ -1,3 +1,4 @@
+import { Expose } from 'class-transformer';
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { TaskStatus } from 'omniboxd/tasks/tasks.entity';
@@ -41,4 +42,9 @@ export class TaskCallbackDto {
   @IsOptional()
   @IsEnum(TaskStatus)
   status?: TaskStatus;
+
+  @Expose({ name: 'worker_id' })
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  workerId?: string;
 }

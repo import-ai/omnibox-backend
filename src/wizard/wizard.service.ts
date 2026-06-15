@@ -110,7 +110,7 @@ export class WizardService {
     };
 
     this.heartbeatTimeoutMs = parseInt(
-      this.configService.get('OBB_TASK_HEARTBEAT_TIMEOUT_MS', '10000'),
+      this.configService.get<string>('OBB_TASK_HEARTBEAT_TIMEOUT_MS', '10000'),
       10,
     );
   }

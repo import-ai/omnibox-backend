@@ -55,6 +55,9 @@ export class Task extends Base {
   @Column('varchar', { nullable: true })
   resourceId: string | null;
 
+  @Column('varchar', { nullable: true, default: null })
+  workerId: string | null;
+
   @Column('enum', { enum: TaskStatus, default: TaskStatus.PENDING })
   status: TaskStatus;
 }

@@ -104,6 +104,7 @@ describe('CollectProcessor', () => {
       deletedAt: null,
       lastHeartbeat: null,
       resourceId: 'test-resource-id',
+      workerId: null,
       status: TaskStatus.PENDING,
       ...overrides,
     });

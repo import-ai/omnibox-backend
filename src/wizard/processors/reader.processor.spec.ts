@@ -104,6 +104,7 @@ describe('ReaderProcessor', () => {
       updatedAt: new Date(),
       deletedAt: null,
       resourceId: 'test-resource-id',
+      workerId: null,
       status: TaskStatus.PENDING,
       ...overrides,
     });

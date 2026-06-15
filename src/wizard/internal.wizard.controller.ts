@@ -28,7 +28,9 @@ export class InternalWizardController {
   async pollTask(
     @Body() body: PollTaskRequestDto,
   ): Promise<PollTaskResponseDto> {
-    return { task: await this.wizardService.pollTask(body.functions) };
+    return {
+      task: await this.wizardService.pollTask(body.functions, body.workerId),
+    };
   }
 
   @Public()

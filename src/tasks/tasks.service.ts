@@ -343,12 +343,21 @@ export class TasksService {
    * heartbeat is missing or stale (older than 10s) can be claimed. Returns the
    * claimed task, or null if another worker won the race.
    */
-  async claimTask(taskId: string, heartbeatCutoff: Date): Promise<Task | null> {
+  async claimTask(
+    taskId: string,
+    heartbeatCutoff: Date,
+    workerId: string,
+  ): Promise<Task | null> {
     const now = new Date();
     const result = await this.taskRepository
       .createQueryBuilder()
       .update(Task)
-      .set({ status: TaskStatus.RUNNING, startedAt: now, lastHeartbeat: now })
+      .set({
+        status: TaskStatus.RUNNING,
+        startedAt: now,
+        lastHeartbeat: now,
+        workerId,
+      })
       .where('id = :taskId', { taskId })
       .andWhere('status IN (:...statuses)', {
         statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],

@@ -447,7 +447,10 @@ export class WizardService {
     return InternalTaskDto.fromEntity(newTask);
   }
 
-  async pollTask(functions: string[]): Promise<InternalTaskDto | null> {
+  async pollTask(
+    functions: string[],
+    workerId: string,
+  ): Promise<InternalTaskDto | null> {
     const heartbeatCutoff = new Date(Date.now() - HEARTBEAT_TIMEOUT_MS);
     const task = await this.tasksService.getNextTaskV2(
       functions,
@@ -459,6 +462,7 @@ export class WizardService {
     const claimedTask = await this.tasksService.claimTask(
       task.id,
       heartbeatCutoff,
+      workerId,
     );
     if (!claimedTask) {
       // Another worker claimed the task between selection and claim.

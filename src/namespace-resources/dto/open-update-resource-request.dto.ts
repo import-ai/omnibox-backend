@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Expose } from 'class-transformer';
 import {
   IsArray,
   IsNotEmpty,
@@ -28,6 +29,7 @@ export class OpenUpdateResourceRequestDto {
       'Parent resource ID under the API key root. Use this to move a resource.',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
+  @Expose({ name: 'parent_id' })
   @IsString({
     message: i18nValidationMessage('validation.errors.parentId.isString'),
   })
@@ -35,7 +37,7 @@ export class OpenUpdateResourceRequestDto {
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.parentId.isNotEmpty'),
   })
-  parent_id?: string;
+  parentId?: string;
 
   @ApiPropertyOptional({
     description:
@@ -44,6 +46,7 @@ export class OpenUpdateResourceRequestDto {
     example: ['project', 'meeting-notes'],
     maxLength: 20,
   })
+  @Expose({ name: 'tag_names' })
   @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
   @IsOptional()
   @IsString({
@@ -58,7 +61,7 @@ export class OpenUpdateResourceRequestDto {
     each: true,
     message: i18nValidationMessage('validation.errors.name.maxLength'),
   })
-  tag_names?: string[];
+  tagNames?: string[];
 
   @ApiPropertyOptional({
     description: 'Content of the resource/document',

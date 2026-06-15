@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Expose } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -33,11 +34,12 @@ export class OpenCreateResourceRequestDto {
     example: ResourceType.DOC,
     required: false,
   })
+  @Expose({ name: 'resource_type' })
   @IsIn([ResourceType.DOC, ResourceType.FOLDER], {
     message: i18nValidationMessage('validation.errors.resourceType.isEnum'),
   })
   @IsOptional()
-  resource_type?: ResourceType.DOC | ResourceType.FOLDER;
+  resourceType?: ResourceType.DOC | ResourceType.FOLDER;
 
   @ApiPropertyOptional({
     description:
@@ -45,11 +47,12 @@ export class OpenCreateResourceRequestDto {
     example: '550e8400-e29b-41d4-a716-446655440000',
     required: false,
   })
+  @Expose({ name: 'parent_id' })
   @IsString({
     message: i18nValidationMessage('validation.errors.parentId.isString'),
   })
   @IsOptional()
-  parent_id?: string;
+  parentId?: string;
 
   @ApiPropertyOptional({
     description:
@@ -58,6 +61,7 @@ export class OpenCreateResourceRequestDto {
     example: ['project', 'meeting-notes'],
     maxLength: 20,
   })
+  @Expose({ name: 'tag_names' })
   @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
   @IsOptional()
   @IsString({
@@ -72,7 +76,7 @@ export class OpenCreateResourceRequestDto {
     each: true,
     message: i18nValidationMessage('validation.errors.name.maxLength'),
   })
-  tag_names?: string[];
+  tagNames?: string[];
 
   @ApiPropertyOptional({
     description:
@@ -100,7 +104,8 @@ export class OpenCreateResourceRequestDto {
     description: 'Skip automatic parsing of hashtags from content',
     example: false,
   })
+  @Expose({ name: 'skip_parsing_tags_from_content' })
   @IsBoolean({ message: i18nValidationMessage('validation.errors.isBoolean') })
   @IsOptional()
-  skip_parsing_tags_from_content?: boolean;
+  skipParsingTagsFromContent?: boolean;
 }

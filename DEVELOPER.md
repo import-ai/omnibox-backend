@@ -157,6 +157,8 @@ await client.close();
 - `*RequestDto` - For incoming request payloads (e.g., `SendPhoneOtpRequestDto`, `BindPhoneRequestDto`)
 - `*ResponseDto` - For outgoing response payloads (e.g., `SendPhoneOtpResponseDto`)
 
+**DTO Field Naming**: TypeScript properties in `RequestDto` and `ResponseDto` classes must use camelCase. When an external API field must be snake_case, map it with `@Expose({ name: 'snake_case' })` and keep the internal property camelCase. Do not define snake_case TypeScript properties in DTO classes.
+
 ## Git Commit Guidelines
 
 **Format**: `type(scope): Description`

@@ -68,7 +68,7 @@ export class OpenResourcesService {
     userId: string,
     data: OpenCreateResourceRequestDto,
   ): Promise<{ id: string; name: string }> {
-    const resourceType = data.resource_type ?? ResourceType.DOC;
+    const resourceType = data.resourceType ?? ResourceType.DOC;
 
     if (resourceType === ResourceType.DOC && !data.content) {
       const message = this.i18n.t('resource.errors.contentRequired');
@@ -96,15 +96,12 @@ export class OpenResourcesService {
     const parentId = await this.resolveResourceId(
       namespaceId,
       rootResourceId,
-      data.parent_id,
+      data.parentId,
       userId,
     );
 
-    let tagIds = await this.resolveTagNames(namespaceId, data.tag_names);
-    if (
-      resourceType === ResourceType.DOC &&
-      !data.skip_parsing_tags_from_content
-    ) {
+    let tagIds = await this.resolveTagNames(namespaceId, data.tagNames);
+    if (resourceType === ResourceType.DOC && !data.skipParsingTagsFromContent) {
       const hashtagNames = parseHashtags(data.content || '');
       if (hashtagNames.length > 0) {
         const hashtagIds = await this.tagService.getOrCreateTagsByNames(
@@ -142,7 +139,7 @@ export class OpenResourcesService {
           { content: data.content || '' },
         );
       }
-      if (!data.skip_parsing_tags_from_content && isEmpty(newResource.tagIds)) {
+      if (!data.skipParsingTagsFromContent && isEmpty(newResource.tagIds)) {
         await this.wizardTaskService.emitExtractTagsTask(
           userId,
           newResource.id,
@@ -213,11 +210,11 @@ export class OpenResourcesService {
       userId,
       ResourcePermission.CAN_EDIT,
     );
-    if (data.parent_id) {
+    if (data.parentId) {
       await this.resolveResourceId(
         namespaceId,
         rootResourceId,
-        data.parent_id,
+        data.parentId,
         userId,
         ResourcePermission.CAN_EDIT,
       );
@@ -225,8 +222,8 @@ export class OpenResourcesService {
 
     const updateData: UpdateResourceDto = {
       name: data.name,
-      parentId: data.parent_id,
-      tag_ids: await this.resolveTagNames(namespaceId, data.tag_names),
+      parentId: data.parentId,
+      tag_ids: await this.resolveTagNames(namespaceId, data.tagNames),
       content: data.content,
       attrs: data.attrs,
     };

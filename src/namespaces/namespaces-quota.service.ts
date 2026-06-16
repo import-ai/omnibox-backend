@@ -50,6 +50,50 @@ export class NamespacesQuotaService {
     return plainToInstance(NamespaceUsageDto, data);
   }
 
+  async batchGetNamespaceParallelism(
+    namespaceIds: string[],
+  ): Promise<Record<string, number>> {
+    if (!this.proUrl) {
+      return Object.fromEntries(
+        namespaceIds.map((id) => [id, DEFAULT_USAGE.taskParallelism]),
+      );
+    }
+    const params = new URLSearchParams({
+      namespace_ids: namespaceIds.join(','),
+    });
+    let response: Response;
+    try {
+      response = await fetch(
+        `${this.proUrl}/internal/api/v1/pro-namespaces?${params}`,
+      );
+    } catch {
+      return Object.fromEntries(
+        namespaceIds.map((id) => [id, DEFAULT_USAGE.taskParallelism]),
+      );
+    }
+    if (!response.ok) {
+      throw new AppException(
+        'Failed to get namespace info',
+        'INTERNAL_SERVER_ERROR',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+    const {
+      namespaces,
+    }: {
+      namespaces: { namespace_id: string; max_parallelism: number }[];
+    } = await response.json();
+    const parallelismById = new Map(
+      namespaces.map((n) => [n.namespace_id, n.max_parallelism]),
+    );
+    return Object.fromEntries(
+      namespaceIds.map((id) => [
+        id,
+        parallelismById.get(id) ?? DEFAULT_USAGE.taskParallelism,
+      ]),
+    );
+  }
+
   async isNamespaceReadonly(namespaceId: string): Promise<boolean> {
     const usage = await this.getNamespaceUsage(namespaceId);
     return usage.readonly;

@@ -6,7 +6,7 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   id: 'task-id',
   namespaceId: 'namespace-id',
   userId: 'user-id',
-  function: 'file_reader',
+  function: 'file_reader_pdf',
   input: {},
   payload: { resource_id: 'resource-id' },
   output: null,
@@ -15,11 +15,12 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   startedAt: new Date('2026-05-21T00:00:00Z'),
   endedAt: null,
   canceledAt: null,
+  lastHeartbeat: null,
   createdAt: new Date('2026-05-21T00:00:00Z'),
   updatedAt: new Date('2026-05-21T00:00:00Z'),
   deletedAt: null,
-  enqueued: false,
   resourceId: 'resource-id',
+  workerId: null,
   status: TaskStatus.RUNNING,
   ...overrides,
 });
@@ -30,12 +31,11 @@ describe('WizardService', () => {
       const task = createTask();
       const taskRepository = {
         findOneOrFail: jest.fn().mockResolvedValue(task),
-        save: jest.fn((savedTask: Task) => Promise.resolve(savedTask)),
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
       };
       const wizardTaskService = { taskRepository };
       const tasksService = {
         callTaskHook: jest.fn().mockResolvedValue(undefined),
-        checkTaskMessage: jest.fn().mockResolvedValue(undefined),
         emitTask: jest.fn(),
       };
       const namespaceResourcesService = {
@@ -47,7 +47,7 @@ describe('WizardService', () => {
         tasksService as any,
         namespaceResourcesService as any,
         { getOrCreateTagsByNames: jest.fn() } as any,
-        {} as any,
+        { get: jest.fn().mockReturnValue(10000) } as any,
         {} as any,
         {} as any,
         { getResourceOrFail: jest.fn() } as any,
@@ -58,6 +58,7 @@ describe('WizardService', () => {
 
       const result = await service.taskDoneCallback({
         id: task.id,
+        workerId: 'workerId',
         status: TaskStatus.ERROR,
         exception: {
           code: 'FILE_CONTENT_TOO_LONG',
@@ -85,7 +86,7 @@ describe('WizardService', () => {
       expect(tasksService.emitTask).not.toHaveBeenCalled();
       expect(result).toEqual({
         taskId: task.id,
-        function: 'file_reader',
+        function: 'file_reader_pdf',
       });
     });
   });

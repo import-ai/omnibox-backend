@@ -1074,9 +1074,6 @@ export class ResourcesService {
         ),
       ),
     );
-    tx.afterCommitHooks.push(() =>
-      this.tasksService.checkTaskMessage(namespaceId),
-    );
   }
 
   private async emitUpsertIndexTasks(
@@ -1128,9 +1125,6 @@ export class ResourcesService {
           }),
         );
       }),
-    );
-    tx.afterCommitHooks.push(() =>
-      this.tasksService.checkTaskMessage(namespaceId),
     );
   }
 

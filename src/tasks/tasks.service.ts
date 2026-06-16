@@ -2,22 +2,33 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { context, propagation } from '@opentelemetry/api';
+import { randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { KafkaService } from 'omniboxd/kafka/kafka.service';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
-import { WizardCapabilitiesService } from 'omniboxd/tasks/wizard-capabilities.service';
+import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
-import { In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { gzipSync } from 'zlib';
 
 import { TaskDto, TaskMetaDto } from './dto/task.dto';
 
+// Functions that only the pro wizard can handle. When OBB_PRO_URL is unset, no
+// worker ever polls for these, so emitting them normally would leave the task
+// pending forever.
+const PRO_ONLY_FUNCTIONS = new Set<string>([
+  'file_reader_pdf',
+  'file_reader_audio',
+  'file_reader_video',
+  'file_reader_image',
+  'generate_video_note',
+  'generate_audio_note',
+]);
+
 @Injectable()
 export class TasksService {
-  private readonly kafkaTasksTopic: string;
   private readonly proUrl: string | undefined;
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
@@ -25,16 +36,10 @@ export class TasksService {
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
     private readonly i18n: I18nService,
-    private readonly kafkaService: KafkaService,
     private readonly configService: ConfigService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
-    private readonly wizardCapabilitiesService: WizardCapabilitiesService,
     private readonly s3Service: S3Service,
   ) {
-    this.kafkaTasksTopic = this.configService.get<string>(
-      'OBB_TASKS_TOPIC',
-      'omnibox-tasks',
-    );
     this.proUrl = this.configService.get<string>('OBB_PRO_URL');
   }
 
@@ -58,57 +63,6 @@ export class TasksService {
     return task;
   }
 
-  async checkTaskMessage(namespaceId: string): Promise<void> {
-    const usage =
-      await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
-    const topicName = `${this.kafkaTasksTopic}-${usage.taskPriority}`;
-    while (true) {
-      const task = await this.getNextTask(namespaceId);
-      if (!task) {
-        break;
-      }
-      const count = await this.countEnqueuedTasks(namespaceId);
-      if (count >= usage.taskParallelism) {
-        break;
-      }
-      const supported = await this.wizardCapabilitiesService.isSupported(
-        task.function,
-        task.input?.filename,
-      );
-      if (!supported) {
-        await this.markTaskUnsupported(task);
-        continue;
-      }
-      await this.produceTaskMessage(topicName, task, namespaceId);
-      await this.setTaskEnqueued(namespaceId, task.id);
-    }
-  }
-
-  private async markTaskUnsupported(task: Task): Promise<void> {
-    await this.taskRepository.update(
-      { id: task.id },
-      {
-        status: TaskStatus.ERROR,
-        exception: {
-          error: `Function '${task.function}' is not supported`,
-          type: 'UnsupportedFunctionError',
-        } as Record<string, any>,
-        endedAt: new Date(),
-      },
-    );
-  }
-
-  async listActiveTaskNamespaceIds(): Promise<string[]> {
-    const rows = await this.taskRepository
-      .createQueryBuilder('task')
-      .select('DISTINCT task.namespaceId', 'namespaceId')
-      .where('task.status IN (:...statuses)', {
-        statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
-      })
-      .getRawMany<{ namespaceId: string }>();
-    return rows.map((row) => row.namespaceId);
-  }
-
   getHtmlS3Key(input: Record<string, any>): string | undefined {
     if (input.html_s3_key) {
       return input.html_s3_key;
@@ -126,61 +80,35 @@ export class TasksService {
 
   async emitTask(data: Partial<Task>, tx?: Transaction) {
     const repo = tx?.entityManager.getRepository(Task) || this.taskRepository;
-    const task = await repo.save(
+    let priority = data.priority;
+    if (priority === undefined && data.namespaceId) {
+      const usage = await this.namespacesQuotaService.getNamespaceUsage(
+        data.namespaceId,
+      );
+      priority = numberToBigintString(usage.taskPriority);
+    }
+    // A pro-only function can't run without the pro wizard configured: no
+    // worker would ever poll for it. Fail the task up front rather than leaving
+    // it pending forever.
+    const unsupported =
+      !!data.function && PRO_ONLY_FUNCTIONS.has(data.function) && !this.proUrl;
+    return await repo.save(
       repo.create({
         ...this.injectTraceHeaders(data),
+        priority,
         resourceId: data.resourceId || data.payload?.resource_id,
+        ...(unsupported
+          ? {
+              status: TaskStatus.ERROR,
+              endedAt: new Date(),
+              exception: {
+                error: `Function '${data.function}' is not supported`,
+                type: 'UnsupportedFunctionError',
+              },
+            }
+          : {}),
       }),
     );
-    if (tx) {
-      tx.afterCommitHooks.push(() => this.checkTaskMessage(task.namespaceId));
-    } else {
-      await this.checkTaskMessage(task.namespaceId);
-    }
-    return task;
-  }
-
-  async countEnqueuedTasks(namespaceId: string): Promise<number> {
-    return await this.taskRepository.count({
-      where: {
-        namespaceId,
-        endedAt: IsNull(),
-        canceledAt: IsNull(),
-        enqueued: true,
-      },
-    });
-  }
-
-  async getNextTask(namespaceId: string): Promise<Task | null> {
-    return await this.taskRepository.findOne({
-      where: {
-        namespaceId,
-        endedAt: IsNull(),
-        canceledAt: IsNull(),
-        enqueued: false,
-      },
-      order: {
-        createdAt: 'ASC',
-      },
-    });
-  }
-
-  async setTaskEnqueued(namespaceId: string, taskId: string): Promise<void> {
-    await this.taskRepository.update(
-      { namespaceId, id: taskId },
-      { enqueued: true },
-    );
-  }
-
-  async listStaleEnqueuedTasks(minAgeMs = 60_000): Promise<Task[]> {
-    const staleAt = new Date(Date.now() - minAgeMs);
-    return await this.taskRepository.find({
-      where: {
-        enqueued: true,
-        status: In([TaskStatus.PENDING, TaskStatus.RUNNING]),
-        createdAt: LessThanOrEqual(staleAt),
-      },
-    });
   }
 
   async findOldestPendingOrRunningTask(): Promise<Task | null> {
@@ -192,40 +120,6 @@ export class TasksService {
         createdAt: 'ASC',
       },
     });
-  }
-
-  async reproduceTaskMessage(task: Task): Promise<void> {
-    const supported = await this.wizardCapabilitiesService.isSupported(
-      task.function,
-      task.input?.filename,
-    );
-    if (!supported) {
-      await this.markTaskUnsupported(task);
-      return;
-    }
-
-    const usage = await this.namespacesQuotaService.getNamespaceUsage(
-      task.namespaceId,
-    );
-    const topicName = `${this.kafkaTasksTopic}-${usage.taskPriority}`;
-    await this.produceTaskMessage(topicName, task, task.namespaceId);
-  }
-
-  private async produceTaskMessage(
-    topicName: string,
-    task: Pick<Task, 'id' | 'function' | 'input'>,
-    namespaceId: string,
-  ): Promise<void> {
-    await this.kafkaService.produce(topicName, [
-      {
-        value: JSON.stringify({
-          task_id: task.id,
-          namespace_id: namespaceId,
-          function: task.function,
-          meta: { file_name: task.input?.filename },
-        }),
-      },
-    ]);
   }
 
   async cancelResourceTasks(
@@ -272,7 +166,7 @@ export class TasksService {
     await tx.entityManager.update(
       Task,
       { namespaceId, userId, canceledAt: IsNull(), endedAt: IsNull() },
-      { canceledAt: new Date() },
+      { canceledAt: new Date(), status: TaskStatus.CANCELED },
     );
   }
 
@@ -397,6 +291,127 @@ export class TasksService {
     });
 
     return TaskDto.fromEntity(newTask);
+  }
+
+  async getNextTaskV2(
+    functions: string[],
+    heartbeatCutoff: Date,
+  ): Promise<Task | null> {
+    if (functions.length === 0) {
+      return null;
+    }
+
+    const limitedNamespaces =
+      await this.listNamespacesAtParallelismLimit(heartbeatCutoff);
+    const seed = randomUUID();
+
+    const qb = this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.status IN (:...statuses)', {
+        statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
+      })
+      .andWhere(
+        '(task.lastHeartbeat IS NULL OR task.lastHeartbeat < :heartbeatCutoff)',
+        { heartbeatCutoff },
+      )
+      .andWhere('task.function IN (:...functions)', { functions });
+
+    if (limitedNamespaces.length > 0) {
+      qb.andWhere('task.namespaceId NOT IN (:...limitedNamespaces)', {
+        limitedNamespaces,
+      });
+    }
+
+    // Order by priority, then a per-namespace hash so the selection is spread
+    // evenly across namespaces instead of always favoring the same one. The
+    // seed re-randomizes the hash each call.
+    //
+    // Priority is normally highest first, but with a 1/5 chance we flip to
+    // lowest first so low-priority tasks aren't starved.
+    const priorityOrder = Math.random() < 0.2 ? 'ASC' : 'DESC';
+    return await qb
+      .orderBy('task.priority', priorityOrder)
+      .addOrderBy('md5(task.namespaceId || :seed)', 'ASC')
+      .addOrderBy('task.createdAt', 'ASC')
+      .setParameter('seed', seed)
+      .limit(1)
+      .getOne();
+  }
+
+  /**
+   * Atomically claim a task for execution. The conditional WHERE guards against
+   * two workers grabbing the same task: only a pending/running task whose
+   * heartbeat is missing or stale (older than 10s) can be claimed. Returns the
+   * claimed task, or null if another worker won the race.
+   */
+  async claimTask(
+    taskId: string,
+    heartbeatCutoff: Date,
+    workerId: string,
+  ): Promise<Task | null> {
+    const now = new Date();
+    const result = await this.taskRepository
+      .createQueryBuilder()
+      .update(Task)
+      .set({
+        status: TaskStatus.RUNNING,
+        startedAt: now,
+        lastHeartbeat: now,
+        workerId,
+      })
+      .where('id = :taskId', { taskId })
+      .andWhere('status IN (:...statuses)', {
+        statuses: [TaskStatus.PENDING, TaskStatus.RUNNING],
+      })
+      .andWhere(
+        '(last_heartbeat IS NULL OR last_heartbeat < :heartbeatCutoff)',
+        { heartbeatCutoff },
+      )
+      .execute();
+    if (!result.affected) {
+      return null;
+    }
+    return await this.taskRepository.findOne({ where: { id: taskId } });
+  }
+
+  async listNamespacesAtParallelismLimit(
+    heartbeatCutoff: Date,
+  ): Promise<string[]> {
+    const rows = await this.taskRepository
+      .createQueryBuilder('task')
+      .select('task.namespaceId', 'namespaceId')
+      .addSelect('COUNT(*)', 'count')
+      .where('task.status = :status', { status: TaskStatus.RUNNING })
+      .andWhere('task.lastHeartbeat >= :heartbeatCutoff', { heartbeatCutoff })
+      .groupBy('task.namespaceId')
+      .getRawMany<{ namespaceId: string; count: string }>();
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const parallelismMap =
+      await this.namespacesQuotaService.batchGetNamespaceParallelism(
+        rows.map((r) => r.namespaceId),
+      );
+
+    return rows
+      .filter((r) => Number(r.count) >= (parallelismMap[r.namespaceId] ?? 1))
+      .map((r) => r.namespaceId);
+  }
+
+  /**
+   * Refresh the heartbeat only if this worker still owns the task. If another
+   * worker has since re-claimed it (e.g. after a stale heartbeat), the worker
+   * ids won't match and no row is updated. Returns whether the worker still
+   * owns the task.
+   */
+  async updateHeartbeat(taskId: string, workerId: string): Promise<boolean> {
+    const result = await this.taskRepository.update(
+      { id: taskId, status: TaskStatus.RUNNING, workerId },
+      { lastHeartbeat: new Date() },
+    );
+    return (result.affected ?? 0) > 0;
   }
 
   async getTasksByResourceId(

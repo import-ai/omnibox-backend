@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Param, Post } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
@@ -6,6 +6,8 @@ import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 
 import { CreateTempfileReqDto } from './dto/create-tempfile-req.dto';
+import { HeartbeatTaskRequestDto } from './dto/heartbeat-task.dto';
+import { PollTaskRequestDto, PollTaskResponseDto } from './dto/poll-task.dto';
 
 @Controller('internal/api/v1/wizard')
 export class InternalWizardController {
@@ -23,6 +25,16 @@ export class InternalWizardController {
   }
 
   @Public()
+  @Post('tasks/poll')
+  async pollTask(
+    @Body() body: PollTaskRequestDto,
+  ): Promise<PollTaskResponseDto> {
+    return {
+      task: await this.wizardService.pollTask(body.functions, body.workerId),
+    };
+  }
+
+  @Public()
   @Post('tasks/:taskId/upload')
   async createTaskResult(@Param('taskId') taskId: string) {
     const url = await this.wizardService.createTaskUploadUrl(taskId);
@@ -33,6 +45,19 @@ export class InternalWizardController {
   @Post('tasks/:taskId/callback')
   async handleUploadedTaskCallback(@Param('taskId') taskId: string) {
     return await this.wizardService.uploadedTaskDoneCallback(taskId);
+  }
+
+  @Public()
+  @Post('tasks/:taskId/heartbeat')
+  async updateHeartbeat(
+    @Param('taskId') taskId: string,
+    @Body() body: HeartbeatTaskRequestDto,
+  ) {
+    const owned = await this.wizardService.updateHeartbeat(
+      taskId,
+      body.workerId,
+    );
+    return { owned };
   }
 
   @Public()
@@ -87,14 +112,5 @@ export class InternalWizardController {
   @Post('tempfiles')
   async createTempfile(@Body() createReq: CreateTempfileReqDto) {
     return await this.wizardService.createTempfile(createReq.filename);
-  }
-
-  @Public()
-  @Post('tasks/reproduce')
-  async reproduceTaskMessages(
-    @Query('offset') offset?: number,
-    @Query('limit') limit: number = 100,
-  ) {
-    return await this.wizardService.reproduceTaskMessages(offset, limit);
   }
 }

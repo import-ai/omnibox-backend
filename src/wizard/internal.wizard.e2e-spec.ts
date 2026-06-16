@@ -60,6 +60,7 @@ describe('InternalWizardController (e2e)', () => {
       .post('/internal/api/v1/wizard/callback')
       .send({
         id: taskId,
+        worker_id: 'worker_id',
         output: {
           title: 'Test Page Title',
           markdown: '![图片](http://example.com/image.png)',

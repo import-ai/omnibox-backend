@@ -36,8 +36,8 @@ import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/o
 import { OpenGetResourceQueryDto } from 'omniboxd/namespace-resources/dto/open-get-resource-query.dto';
 import { OpenListResourcesResponseDto } from 'omniboxd/namespace-resources/dto/open-list-resources-response.dto';
 import { OpenResourceDto } from 'omniboxd/namespace-resources/dto/open-resource.dto';
+import { OpenUpdateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-update-resource-request.dto';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
-import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { SkipOpenAPIQuota } from 'omniboxd/open-api/open-api-quota.decorator';
@@ -295,11 +295,11 @@ export class OpenResourcesController {
   @ApiOperation({
     summary: 'Update a resource',
     description:
-      'Updates mutable fields for a resource within the API key root scope. Moving a resource with parentId is only allowed to another resource inside the same scoped tree.',
+      'Updates mutable fields for a resource within the API key root scope. Moving a resource with parent_id is only allowed to another resource inside the same scoped tree.',
   })
   @ApiBody({
     description: 'Resource fields to update',
-    type: UpdateResourceDto,
+    type: OpenUpdateResourceRequestDto,
   })
   @ApiResponse({
     status: 200,
@@ -313,7 +313,7 @@ export class OpenResourcesController {
     @APIKey() apiKey: APIKeyEntity,
     @UserId() userId: string,
     @Param('resourceId') resourceId: string,
-    @Body() data: UpdateResourceDto,
+    @Body() data: OpenUpdateResourceRequestDto,
   ): Promise<ResourceDto> {
     return await this.openResourcesService.updateResource(
       apiKey.namespaceId,

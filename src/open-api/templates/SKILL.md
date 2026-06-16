@@ -146,7 +146,7 @@ Content-Type: application/json
   "resource_type": "doc",
   "content": "Saved from Open API",
   "parent_id": "optional-parent-resource-id",
-  "tag_ids": ["optional-tag-id"]
+  "tag_names": ["optional-tag-name"]
 }
 ```
 
@@ -157,6 +157,7 @@ Notes:
 - `resource_type` defaults to `doc`.
 - Document resources require non-empty `content`.
 - If `parent_id` is omitted, the document is created under the API key root resource.
+- `tag_names` contains tag names, not tag IDs. Each tag name must be non-empty and at most 20 characters. Missing tags are created automatically.
 
 ### Create a folder resource
 
@@ -187,11 +188,15 @@ Content-Type: application/json
 
 {
   "name": "Updated name",
-  "content": "Updated content"
+  "content": "Updated content",
+  "parent_id": "optional-parent-resource-id",
+  "tag_names": ["optional-tag-name"]
 }
 ```
 
 Requires `resources:update`.
+
+Use `parent_id` to move a resource. `tag_names` contains tag names, not tag IDs. Each tag name must be non-empty and at most 20 characters. Missing tags are created automatically. `tag_names` replaces the resource's existing tags; send `tag_names: []` to clear tags.
 
 ### Delete a resource
 

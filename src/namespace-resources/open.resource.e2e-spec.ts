@@ -212,6 +212,57 @@ describe('OpenResourcesController (e2e)', () => {
       expect(resource.tags).toHaveLength(2);
     });
 
+    it('should create a resource with tag names', async () => {
+      const tagNames = ['open-create-tag-1', 'open-create-tag-2'];
+
+      const response = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Create With Tag Names',
+          content: 'Open create tag names content',
+          tag_names: tagNames,
+        })
+        .expect(201);
+
+      const resourceResponse = await client
+        .request()
+        .get(`/open/api/v1/resources/${response.body.id}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(resourceResponse.body.tags.map((tag: any) => tag.name)).toEqual(
+        expect.arrayContaining(tagNames),
+      );
+    });
+
+    it('should reject empty tag names when creating a resource', async () => {
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Create With Empty Tag Name',
+          content: 'Open create empty tag name content',
+          tag_names: [''],
+        })
+        .expect(400);
+    });
+
+    it('should reject too long tag names when creating a resource', async () => {
+      await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${apiKeyValue}`)
+        .send({
+          name: 'Open Create With Long Tag Name',
+          content: 'Open create long tag name content',
+          tag_names: ['x'.repeat(21)],
+        })
+        .expect(400);
+    });
+
     it('should create resources with different content types', async () => {
       const testCases = [
         {
@@ -577,6 +628,114 @@ describe('OpenResourcesController (e2e)', () => {
         .get(`/open/api/v1/resources/${resourceId}`)
         .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
         .expect(404);
+    });
+
+    it('should move and update resource tags with open api field names', async () => {
+      const firstFolderResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Move Source Folder',
+          resource_type: ResourceType.FOLDER,
+        })
+        .expect(201);
+      const secondFolderResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Move Target Folder',
+          resource_type: ResourceType.FOLDER,
+        })
+        .expect(201);
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Move Resource',
+          content: 'Open move resource content',
+          parent_id: firstFolderResponse.body.id,
+          tag_names: ['open-move-old-tag'],
+        })
+        .expect(201);
+      const nextTagNames = ['open-move-new-tag-1', 'open-move-new-tag-2'];
+
+      const updateResponse = await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceResponse.body.id}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          parent_id: secondFolderResponse.body.id,
+          tag_names: nextTagNames,
+        })
+        .expect(200);
+
+      expect(updateResponse.body.parent_id).toBe(secondFolderResponse.body.id);
+      expect(updateResponse.body.tags.map((tag: any) => tag.name)).toEqual(
+        expect.arrayContaining(nextTagNames),
+      );
+      expect(
+        updateResponse.body.tags.map((tag: any) => tag.name),
+      ).not.toContain('open-move-old-tag');
+
+      const targetListResponse = await client
+        .request()
+        .get(`/open/api/v1/resources?parent_id=${secondFolderResponse.body.id}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+
+      expect(
+        targetListResponse.body.resources.some(
+          (resource: any) => resource.id === resourceResponse.body.id,
+        ),
+      ).toBe(true);
+    });
+
+    it('should reject empty parent_id when updating a resource', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Empty Parent Update',
+          content: 'Open empty parent update content',
+        })
+        .expect(201);
+
+      await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceResponse.body.id}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ parent_id: '' })
+        .expect(400);
+    });
+
+    it('should reject invalid tag names when updating a resource', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Invalid Tag Update',
+          content: 'Open invalid tag update content',
+        })
+        .expect(201);
+
+      await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceResponse.body.id}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ tag_names: [''] })
+        .expect(400);
+
+      await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceResponse.body.id}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ tag_names: ['x'.repeat(21)] })
+        .expect(400);
     });
 
     it('should add and remove resource tags with UPDATE permission', async () => {

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { CreateTagRequestDto } from 'omniboxd/tag/dto/create-tag-request.dto';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { Tag } from 'omniboxd/tag/tag.entity';
+import { isEmpty } from 'omniboxd/utils/is-empty';
 import { EntityManager, In, Like, Repository } from 'typeorm';
 
 @Injectable()
@@ -109,13 +110,20 @@ export class TagService {
       return [];
     }
 
+    const validTagNames = tagNames.filter(
+      (name) => !isEmpty(name) && name.length <= 20,
+    );
+    if (validTagNames.length === 0) {
+      return [];
+    }
+
     const repo = manager ? manager.getRepository(Tag) : this.tagRepository;
 
     // Find existing tags
     const existingTags = await repo.find({
       where: {
         namespaceId,
-        name: In(tagNames),
+        name: In(validTagNames),
       },
     });
 
@@ -123,7 +131,7 @@ export class TagService {
     const tagIds = existingTags.map((tag) => tag.id);
 
     // Create missing tags
-    const missingTagNames = tagNames.filter(
+    const missingTagNames = validTagNames.filter(
       (name) => !existingTagNames.has(name),
     );
 

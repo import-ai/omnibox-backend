@@ -606,6 +606,73 @@ export class PermissionsService {
     return count > 0;
   }
 
+  async updateUserPermissionWithChecks(
+    namespaceId: string,
+    resourceId: string,
+    callerId: string,
+    targetUserId: string,
+    permission: ResourcePermission,
+  ): Promise<void> {
+    const hasPermission = await this.userHasPermission(
+      namespaceId,
+      resourceId,
+      callerId,
+      ResourcePermission.FULL_ACCESS,
+    );
+    if (!hasPermission) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const userExists = await this.userExists(targetUserId);
+    if (!userExists) {
+      const message = this.i18n.t('user.errors.userNotFound');
+      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    const canModify = await this.canModifyUserPermission(
+      namespaceId,
+      callerId,
+      targetUserId,
+    );
+    if (!canModify) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    await this.updateUserPermission(
+      namespaceId,
+      resourceId,
+      targetUserId,
+      permission,
+    );
+  }
+
+  async deleteUserPermissionWithChecks(
+    namespaceId: string,
+    resourceId: string,
+    callerId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    const hasPermission = await this.userHasPermission(
+      namespaceId,
+      resourceId,
+      callerId,
+      ResourcePermission.FULL_ACCESS,
+    );
+    if (!hasPermission) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const canModify = await this.canModifyUserPermission(
+      namespaceId,
+      callerId,
+      targetUserId,
+    );
+    if (!canModify) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    await this.deleteUserPermission(namespaceId, resourceId, targetUserId);
+  }
+
   /**
    * Check if a user exists (regardless of namespace membership)
    */

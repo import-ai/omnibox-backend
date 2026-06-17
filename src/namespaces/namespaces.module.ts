@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { NamespacePermissionsController } from 'omniboxd/namespaces/namespace-permissions.controller';
 import {
   NamespacesController,
   NamespacesSingleController,
@@ -24,7 +25,11 @@ import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interc
     NamespaceOwnerInterceptor,
     NamespaceAdminInterceptor,
   ],
-  controllers: [NamespacesController, NamespacesSingleController],
+  controllers: [
+    NamespacesController,
+    NamespacesSingleController,
+    NamespacePermissionsController,
+  ],
   imports: [
     UserModule,
     NamespaceResourcesModule,

@@ -134,35 +134,11 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
     @Body() permissionDto: PermissionDto,
-    @I18n() i18n: I18nContext,
   ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
+    await this.permissionsService.updateUserPermissionWithChecks(
       namespaceId,
       resourceId,
       req.user.id,
-      ResourcePermission.FULL_ACCESS,
-    );
-    if (!hasPermission) {
-      const message = i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
-    const userExists = await this.permissionsService.userExists(userId);
-    if (!userExists) {
-      const message = i18n.t('user.errors.userNotFound');
-      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
-    }
-    const canModify = await this.permissionsService.canModifyUserPermission(
-      namespaceId,
-      req.user.id,
-      userId,
-    );
-    if (!canModify) {
-      const message = i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
-    await this.permissionsService.updateUserPermission(
-      namespaceId,
-      resourceId,
       userId,
       permissionDto.permission,
     );
@@ -174,30 +150,11 @@ export class PermissionsController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
-    @I18n() i18n: I18nContext,
   ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
+    await this.permissionsService.deleteUserPermissionWithChecks(
       namespaceId,
       resourceId,
       req.user.id,
-      ResourcePermission.FULL_ACCESS,
-    );
-    if (!hasPermission) {
-      const message = i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
-    const canModify = await this.permissionsService.canModifyUserPermission(
-      namespaceId,
-      req.user.id,
-      userId,
-    );
-    if (!canModify) {
-      const message = i18n.t('auth.errors.notAuthorized');
-      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
-    }
-    await this.permissionsService.deleteUserPermission(
-      namespaceId,
-      resourceId,
       userId,
     );
   }

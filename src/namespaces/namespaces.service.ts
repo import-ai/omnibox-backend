@@ -627,8 +627,8 @@ export class NamespacesService {
       (await this.userIsOwner(namespaceId, targetUserId))
     ) {
       throw new AppException(
-        this.i18n.t('namespace.errors.noOwnerAfterwards'),
-        'NO_OWNER_AFTERWARDS',
+        this.i18n.t('namespace.errors.ownerFullAccessRequired'),
+        'OWNER_FULL_ACCESS_REQUIRED',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
@@ -650,8 +650,8 @@ export class NamespacesService {
   ): Promise<void> {
     if (await this.userIsOwner(namespaceId, targetUserId)) {
       throw new AppException(
-        this.i18n.t('namespace.errors.noOwnerAfterwards'),
-        'NO_OWNER_AFTERWARDS',
+        this.i18n.t('namespace.errors.ownerFullAccessRequired'),
+        'OWNER_FULL_ACCESS_REQUIRED',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }

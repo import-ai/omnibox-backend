@@ -8,6 +8,7 @@
     "userNotOwner": "Current user is not owner of this namespace",
     "userNotOwnerOrAdmin": "Current user is not owner or admin of this namespace",
     "noOwnerAfterwards": "The namespace requires at least one owner",
+    "ownerFullAccessRequired": "The owner must retain full access",
     "notAMember": "You are not a member of this namespace",
     "lastMemberCannotQuit": "You are the only member. Please delete the namespace instead",
     "lastOwnerCannotQuit": "You are the last owner. Please transfer ownership before leaving",

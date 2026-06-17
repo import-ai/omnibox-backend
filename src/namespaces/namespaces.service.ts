@@ -615,6 +615,55 @@ export class NamespacesService {
     return memberDtos;
   }
 
+  async updateUserPermission(
+    namespaceId: string,
+    curUserId: string,
+    targetUserId: string,
+    permission: ResourcePermission,
+  ): Promise<void> {
+    // The owner must always retain full access.
+    if (
+      permission !== ResourcePermission.FULL_ACCESS &&
+      (await this.userIsOwner(namespaceId, targetUserId))
+    ) {
+      throw new AppException(
+        this.i18n.t('namespace.errors.noOwnerAfterwards'),
+        'NO_OWNER_AFTERWARDS',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    const { id: resourceId } = await this.getTeamspaceRoot(namespaceId);
+    await this.permissionsService.updateUserPermissionWithChecks(
+      namespaceId,
+      resourceId,
+      curUserId,
+      targetUserId,
+      permission,
+    );
+  }
+
+  async deleteUserPermission(
+    namespaceId: string,
+    curUserId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    if (await this.userIsOwner(namespaceId, targetUserId)) {
+      throw new AppException(
+        this.i18n.t('namespace.errors.noOwnerAfterwards'),
+        'NO_OWNER_AFTERWARDS',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const { id: resourceId } = await this.getTeamspaceRoot(namespaceId);
+    await this.permissionsService.deleteUserPermissionWithChecks(
+      namespaceId,
+      resourceId,
+      curUserId,
+      targetUserId,
+    );
+  }
+
   async getMemberByUserId(namespaceId: string, userId: string) {
     return await this.namespaceMemberRepository.findOne({
       where: {

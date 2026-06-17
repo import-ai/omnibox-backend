@@ -632,7 +632,6 @@ export class PermissionsService {
       namespaceId,
       curUserId,
       targetUserId,
-      permission,
     );
     if (!canModify) {
       const message = this.i18n.t('auth.errors.notAuthorized');
@@ -699,7 +698,6 @@ export class PermissionsService {
     namespaceId: string,
     currentUserId: string,
     targetUserId: string,
-    permission?: ResourcePermission,
   ): Promise<boolean> {
     const [currentMember, targetMember] = await Promise.all([
       this.namespaceMembersRepository.findOne({
@@ -712,18 +710,6 @@ export class PermissionsService {
 
     if (!currentMember) {
       return false;
-    }
-
-    // The owner must always retain full access
-    if (
-      targetMember?.role === NamespaceRole.OWNER &&
-      permission !== ResourcePermission.FULL_ACCESS
-    ) {
-      throw new AppException(
-        this.i18n.t('namespace.errors.noOwnerAfterwards'),
-        'NO_OWNER_AFTERWARDS',
-        HttpStatus.UNPROCESSABLE_ENTITY,
-      );
     }
 
     // If target user is not in the namespace, allow (they might be being added)

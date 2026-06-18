@@ -10,6 +10,7 @@ import {
   UpdateAPIKeyDto,
 } from 'omniboxd/api-key/api-key.dto';
 import {
+  API_KEY_NOTE_MAX_LENGTH,
   API_KEY_PERMISSION_MATRIX,
   APIKey,
   APIKeyAttrs,
@@ -154,6 +155,9 @@ export class APIKeyService {
     if (patchApiKeyDto.permissions !== undefined) {
       updatedAttrs.permissions = patchApiKeyDto.permissions;
     }
+    if (patchApiKeyDto.note !== undefined) {
+      updatedAttrs.note = patchApiKeyDto.note;
+    }
     this.validateAttrs(updatedAttrs);
 
     // Update the API key with the merged attrs
@@ -199,6 +203,29 @@ export class APIKeyService {
   }
 
   private validateAttrs(attrs?: APIKeyAttrs): void {
+    if (attrs?.note !== undefined && typeof attrs.note !== 'string') {
+      const message = this.i18n.t('validation.errors.isString');
+      throw new AppException(
+        message,
+        'INVALID_API_KEY_NOTE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (
+      attrs?.note !== undefined &&
+      attrs.note.length > API_KEY_NOTE_MAX_LENGTH
+    ) {
+      const message = this.i18n.t('apikey.errors.noteTooLong', {
+        args: { max: API_KEY_NOTE_MAX_LENGTH },
+      });
+      throw new AppException(
+        message,
+        'API_KEY_NOTE_TOO_LONG',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     if (attrs?.permissions === undefined) {
       return;
     }

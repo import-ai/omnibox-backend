@@ -22,9 +22,12 @@ export type APIKeyPermission = {
 
 export type APIKeyAttrs = {
   related_app_id?: string;
+  note?: string;
   root_resource_id: string;
   permissions: APIKeyPermission[];
 };
+
+export const API_KEY_NOTE_MAX_LENGTH = 128;
 
 export const API_KEY_PERMISSION_MATRIX: Record<
   APIKeyPermissionTarget,

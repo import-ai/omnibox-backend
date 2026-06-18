@@ -48,6 +48,10 @@ export class PatchAPIKeyDto {
   @Type(() => Object)
   @IsOptional()
   permissions?: APIKeyPermission[];
+
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsOptional()
+  note?: string;
 }
 
 export class APIKeyResponseDto {

@@ -86,6 +86,8 @@ describe('APIKeyService', () => {
             'Invalid API key permission action: {{action}} for target: {{target}}',
           'apikey.errors.invalidPermissionCombination':
             'API key permission action {{action}} is not allowed for target: {{target}}',
+          'apikey.errors.noteTooLong':
+            'API key note cannot exceed {{max}} characters',
         };
         let translation = translations[key] || key;
         if (options?.args) {
@@ -399,6 +401,28 @@ describe('APIKeyService', () => {
       expect(namespacesService.getMemberByUserId).not.toHaveBeenCalled();
       expect(apiKeyRepository.create).not.toHaveBeenCalled();
     });
+
+    it('should reject create with notes longer than 128 characters', async () => {
+      await expect(
+        service.create({
+          user_id: 'test-user-id',
+          namespace_id: 'test-namespace-id',
+          attrs: {
+            note: 'a'.repeat(129),
+            root_resource_id: 'test-resource-id',
+            permissions: [
+              {
+                target: APIKeyPermissionTarget.RESOURCES,
+                permissions: [APIKeyPermissionType.READ],
+              },
+            ],
+          },
+        }),
+      ).rejects.toThrow('API key note cannot exceed 128 characters');
+
+      expect(namespacesService.getMemberByUserId).not.toHaveBeenCalled();
+      expect(apiKeyRepository.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('findByValue', () => {
@@ -428,6 +452,42 @@ describe('APIKeyService', () => {
   });
 
   describe('patch', () => {
+    it('should patch note while preserving existing attrs', async () => {
+      apiKeyRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      const patchedApiKey = {
+        ...mockApiKey,
+        attrs: {
+          ...mockApiKey.attrs,
+          note: 'Production sync key',
+        },
+      };
+      apiKeyRepository.findOne
+        .mockResolvedValueOnce(mockApiKey as any)
+        .mockResolvedValueOnce(patchedApiKey as any);
+
+      const result = await service.patch('test-api-key-id', {
+        note: 'Production sync key',
+      });
+
+      expect(apiKeyRepository.update).toHaveBeenCalledWith('test-api-key-id', {
+        attrs: patchedApiKey.attrs,
+      });
+      expect(result.attrs.note).toBe('Production sync key');
+    });
+
+    it('should reject notes longer than 128 characters', async () => {
+      apiKeyRepository.findOne.mockResolvedValue(mockApiKey as any);
+
+      await expect(
+        service.patch('test-api-key-id', {
+          note: 'a'.repeat(129),
+        }),
+      ).rejects.toThrow('API key note cannot exceed 128 characters');
+
+      expect(apiKeyRepository.update).not.toHaveBeenCalled();
+    });
+
     it('should reject illegal permissions while preserving existing attrs', async () => {
       apiKeyRepository.findOne.mockResolvedValue(mockApiKey as any);
 

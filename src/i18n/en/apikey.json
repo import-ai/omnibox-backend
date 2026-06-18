@@ -12,6 +12,7 @@
     "invalidPermissionCombination": "API key permission action {action} is not allowed for target: {target}",
     "noPermissionForNamespace": "User {userId} does not have permission to namespace {namespaceId}",
     "noWritePermission": "User {userId} does not have write permission to resource {resourceId} in namespace {namespaceId}",
-    "userOrNamespaceRequired": "Either user_id or namespace_id parameter is required"
+    "userOrNamespaceRequired": "Either user_id or namespace_id parameter is required",
+    "noteTooLong": "API key note cannot exceed {max} characters"
   }
 }

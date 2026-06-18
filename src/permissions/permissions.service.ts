@@ -607,6 +607,97 @@ export class PermissionsService {
   }
 
   /**
+   * Ensure the resource is not a namespace root resource. Root permissions are
+   * managed through the namespace-level permission API so the owner protections
+   * cannot be bypassed.
+   */
+  async assertResourceNotRoot(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<void> {
+    const resource = await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      resourceId,
+    );
+    if (!resource.parentId) {
+      const message = this.i18n.t('resource.errors.cannotModifyRootPermission');
+      throw new AppException(
+        message,
+        'CANNOT_MODIFY_ROOT_PERMISSION',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  async updateUserPermissionWithChecks(
+    namespaceId: string,
+    resourceId: string,
+    curUserId: string,
+    targetUserId: string,
+    permission: ResourcePermission,
+  ): Promise<void> {
+    const hasPermission = await this.userHasPermission(
+      namespaceId,
+      resourceId,
+      curUserId,
+      ResourcePermission.FULL_ACCESS,
+    );
+    if (!hasPermission) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const userExists = await this.userExists(targetUserId);
+    if (!userExists) {
+      const message = this.i18n.t('user.errors.userNotFound');
+      throw new AppException(message, 'USER_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    const canModify = await this.canModifyUserPermission(
+      namespaceId,
+      curUserId,
+      targetUserId,
+    );
+    if (!canModify) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    await this.updateUserPermission(
+      namespaceId,
+      resourceId,
+      targetUserId,
+      permission,
+    );
+  }
+
+  async deleteUserPermissionWithChecks(
+    namespaceId: string,
+    resourceId: string,
+    curUserId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    const hasPermission = await this.userHasPermission(
+      namespaceId,
+      resourceId,
+      curUserId,
+      ResourcePermission.FULL_ACCESS,
+    );
+    if (!hasPermission) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    const canModify = await this.canModifyUserPermission(
+      namespaceId,
+      curUserId,
+      targetUserId,
+    );
+    if (!canModify) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    await this.deleteUserPermission(namespaceId, resourceId, targetUserId);
+  }
+
+  /**
    * Check if a user exists (regardless of namespace membership)
    */
   async userExists(userId: string): Promise<boolean> {

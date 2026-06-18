@@ -135,6 +135,10 @@ export class PermissionsController {
     @Param('userId') userId: string,
     @Body() permissionDto: PermissionDto,
   ) {
+    await this.permissionsService.assertResourceNotRoot(
+      namespaceId,
+      resourceId,
+    );
     await this.permissionsService.updateUserPermissionWithChecks(
       namespaceId,
       resourceId,
@@ -151,6 +155,10 @@ export class PermissionsController {
     @Param('resourceId') resourceId: string,
     @Param('userId') userId: string,
   ) {
+    await this.permissionsService.assertResourceNotRoot(
+      namespaceId,
+      resourceId,
+    );
     await this.permissionsService.deleteUserPermissionWithChecks(
       namespaceId,
       resourceId,

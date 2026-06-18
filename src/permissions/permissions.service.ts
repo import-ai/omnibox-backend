@@ -606,6 +606,29 @@ export class PermissionsService {
     return count > 0;
   }
 
+  /**
+   * Ensure the resource is not a namespace root resource. Root permissions are
+   * managed through the namespace-level permission API so the owner protections
+   * cannot be bypassed.
+   */
+  async assertResourceNotRoot(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<void> {
+    const resource = await this.resourcesService.getResourceMetaOrFail(
+      namespaceId,
+      resourceId,
+    );
+    if (!resource.parentId) {
+      const message = this.i18n.t('resource.errors.cannotModifyRootPermission');
+      throw new AppException(
+        message,
+        'CANNOT_MODIFY_ROOT_PERMISSION',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   async updateUserPermissionWithChecks(
     namespaceId: string,
     resourceId: string,

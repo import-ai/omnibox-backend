@@ -203,6 +203,15 @@ export class APIKeyService {
   }
 
   private validateAttrs(attrs?: APIKeyAttrs): void {
+    if (attrs?.note !== undefined && typeof attrs.note !== 'string') {
+      const message = this.i18n.t('validation.errors.isString');
+      throw new AppException(
+        message,
+        'INVALID_API_KEY_NOTE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     if (
       attrs?.note !== undefined &&
       attrs.note.length > API_KEY_NOTE_MAX_LENGTH

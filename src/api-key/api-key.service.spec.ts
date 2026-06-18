@@ -423,6 +423,28 @@ describe('APIKeyService', () => {
       expect(namespacesService.getMemberByUserId).not.toHaveBeenCalled();
       expect(apiKeyRepository.create).not.toHaveBeenCalled();
     });
+
+    it('should reject create with non-string notes', async () => {
+      await expect(
+        service.create({
+          user_id: 'test-user-id',
+          namespace_id: 'test-namespace-id',
+          attrs: {
+            note: 123,
+            root_resource_id: 'test-resource-id',
+            permissions: [
+              {
+                target: APIKeyPermissionTarget.RESOURCES,
+                permissions: [APIKeyPermissionType.READ],
+              },
+            ],
+          } as any,
+        }),
+      ).rejects.toThrow('validation.errors.isString');
+
+      expect(namespacesService.getMemberByUserId).not.toHaveBeenCalled();
+      expect(apiKeyRepository.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('findByValue', () => {

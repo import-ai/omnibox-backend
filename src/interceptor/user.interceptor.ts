@@ -9,7 +9,18 @@ import { Observable } from 'rxjs';
 import { finalize, tap } from 'rxjs/operators';
 import { Socket } from 'socket.io';
 
-const LOGIN_URLS = ['/api/v1/login', '/api/v1/auth/accept-invite'];
+const LOGIN_ROUTES = [
+  { method: 'GET', url: '/api/v1/wechat/callback' },
+  { method: 'POST', url: '/api/v1/auth/accept-invite' },
+  { method: 'POST', url: '/api/v1/google/callback' },
+  { method: 'POST', url: '/api/v1/login' },
+];
+
+function isLoginRoute(method: string, url: string): boolean {
+  return LOGIN_ROUTES.some(
+    (route) => route.method === method && route.url === url,
+  );
+}
 
 @Injectable()
 export class UserInterceptor implements NestInterceptor {
@@ -39,8 +50,7 @@ export class UserInterceptor implements NestInterceptor {
             if (!userId && ctxType === 'http') {
               const httpReq = executionContext.switchToHttp().getRequest();
               if (
-                LOGIN_URLS.includes(httpReq.url) &&
-                httpReq.method === 'POST' &&
+                isLoginRoute(httpReq.method, httpReq.url) &&
                 responseBody?.id
               ) {
                 userId = responseBody.id;

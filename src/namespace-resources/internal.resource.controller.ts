@@ -20,6 +20,7 @@ import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespac
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
@@ -53,6 +54,32 @@ export class InternalResourcesController {
       namespaceId,
       resourceId,
       depth,
+    );
+  }
+
+  @Public()
+  @Get('namespaces/:namespaceId/resources/filter')
+  async filterResources(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Query() requestDto: VFSFilterResourcesRequestDto,
+    @Query('parent_id') parentId?: string,
+  ) {
+    const resources = parentId
+      ? await this.namespaceResourcesService.getAllSubResourcesByUser(
+          userId,
+          namespaceId,
+          parentId,
+        )
+      : await this.namespaceResourcesService.getAllResourcesByUser(
+          userId,
+          namespaceId,
+        );
+    const resourceIds = resources.map((resource) => resource.id);
+    return await this.namespaceResourcesService.resourceFilter(
+      namespaceId,
+      resourceIds,
+      requestDto.options,
     );
   }
 

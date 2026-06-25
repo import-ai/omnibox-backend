@@ -6,6 +6,7 @@ import {
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { SharedResourcesService } from './shared-resources.service';
@@ -16,6 +17,38 @@ export class InternalSharedResourcesController {
   constructor(
     private readonly sharedResourcesService: SharedResourcesService,
   ) {}
+
+  @Public()
+  @ValidateShare()
+  @Get('roots')
+  async getRoots(@ValidatedShare() share: Share) {
+    const root = await this.sharedResourcesService.getAndValidateResourceMeta(
+      share,
+      share.resourceId,
+    );
+    return {
+      root: {
+        id: root.id,
+        name: root.name,
+        has_children: root.hasChildren ?? false,
+      },
+    };
+  }
+
+  @Public()
+  @ValidateShare()
+  @Get('filter')
+  async filterResources(
+    @ValidatedShare() share: Share,
+    @Query() requestDto: VFSFilterResourcesRequestDto,
+    @Query('parent_id') parentId?: string,
+  ) {
+    return await this.sharedResourcesService.resourceFilter(
+      share,
+      parentId ?? share.resourceId,
+      requestDto.options,
+    );
+  }
 
   @Public()
   @ValidateShare()

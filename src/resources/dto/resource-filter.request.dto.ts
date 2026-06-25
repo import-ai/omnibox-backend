@@ -11,7 +11,7 @@ import {
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
-export class VFSResourceFilterOptionsDto {
+export class ResourceFilterOptionsDto {
   @Expose({ name: 'created_at_before' })
   @IsOptional()
   createdAtBefore?: Date;
@@ -81,19 +81,19 @@ export class VFSResourceFilterOptionsDto {
   limit?: number;
 }
 
-export class VFSFilterResourcesRequestDto {
+export class ResourceFilterRequestDto {
   @IsOptional()
   path?: string;
 
   @Transform(({ value }) => {
     // If already an object, return as-is
     if (typeof value === 'object' && value !== null) {
-      return plainToInstance(VFSResourceFilterOptionsDto, value);
+      return plainToInstance(ResourceFilterOptionsDto, value);
     }
     // If string, try to parse as JSON
     if (typeof value === 'string') {
       try {
-        return plainToInstance(VFSResourceFilterOptionsDto, JSON.parse(value));
+        return plainToInstance(ResourceFilterOptionsDto, JSON.parse(value));
       } catch {
         throw new AppException(
           'Invalid JSON in options',
@@ -105,6 +105,6 @@ export class VFSFilterResourcesRequestDto {
     return value;
   })
   @ValidateNested()
-  @Type(() => VFSResourceFilterOptionsDto)
-  options?: VFSResourceFilterOptionsDto;
+  @Type(() => ResourceFilterOptionsDto)
+  options?: ResourceFilterOptionsDto;
 }

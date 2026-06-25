@@ -5,8 +5,8 @@ import {
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
+import { ResourceFilterRequestDto } from 'omniboxd/resources/dto/resource-filter.request.dto';
 import { Share } from 'omniboxd/shares/entities/share.entity';
-import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { SharedResourcesService } from './shared-resources.service';
@@ -40,7 +40,7 @@ export class InternalSharedResourcesController {
   @Get('filter')
   async filterResources(
     @ValidatedShare() share: Share,
-    @Query() requestDto: VFSFilterResourcesRequestDto,
+    @Query() requestDto: ResourceFilterRequestDto,
     @Query('parent_id') parentId?: string,
   ) {
     return await this.sharedResourcesService.resourceFilter(

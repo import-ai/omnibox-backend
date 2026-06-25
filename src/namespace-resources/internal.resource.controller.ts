@@ -19,8 +19,8 @@ import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resou
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { ResourceFilterRequestDto } from 'omniboxd/resources/dto/resource-filter.request.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { VFSFilterResourcesRequestDto } from 'omniboxd/vfs/dto/filter.request.dto';
 
 @Controller('internal/api/v1')
 export class InternalResourcesController {
@@ -62,7 +62,7 @@ export class InternalResourcesController {
   async filterResources(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
-    @Query() requestDto: VFSFilterResourcesRequestDto,
+    @Query() requestDto: ResourceFilterRequestDto,
     @Query('parent_id') parentId?: string,
   ) {
     const resources = parentId

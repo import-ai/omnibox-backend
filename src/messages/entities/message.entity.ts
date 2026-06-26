@@ -40,7 +40,7 @@ export interface MessageAttrs {
   error_message?: string;
   context?: Record<string, any>;
   compact?: {
-    status: 'compacted';
+    status: 'compacting' | 'compacted';
   };
   user_context?: Record<string, any>;
   tool_call?: Record<string, any>;

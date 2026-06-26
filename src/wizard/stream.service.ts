@@ -156,9 +156,11 @@ export class StreamService {
           chunk,
         );
 
+        chunk.id = context.messageId;
         delete chunk.attrs?.context;
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
+        chunk.id = context.messageId;
         const message: Message = await this.messagesService.update(
           context.messageId!,
           namespaceId,
@@ -189,6 +191,7 @@ export class StreamService {
         await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
         if (context.messageId) {
+          chunk.id = context.messageId;
           await this.messagesService.updateDelta(context.messageId, {
             response_type: 'delta',
             message: {},

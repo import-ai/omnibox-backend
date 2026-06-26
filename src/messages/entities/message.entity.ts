@@ -39,6 +39,9 @@ export interface MessageAttrs {
   citations?: Record<string, any>[];
   error_message?: string;
   context?: Record<string, any>;
+  compact?: {
+    status: 'compacted';
+  };
   user_context?: Record<string, any>;
   tool_call?: Record<string, any>;
 }

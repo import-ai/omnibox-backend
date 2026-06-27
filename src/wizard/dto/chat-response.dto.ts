@@ -28,11 +28,13 @@ export interface ChatBOSResponse extends ChatBaseResponse {
 
 export interface ChatEOSResponse extends ChatBaseResponse {
   response_type: 'eos';
+  id?: string;
   role: OpenAIMessageRole;
 }
 
 export interface ChatDeltaResponse extends ChatBaseResponse {
   response_type: 'delta';
+  id?: string;
   message: Partial<OpenAIMessage>;
   attrs?: MessageAttrs;
 }
@@ -47,6 +49,7 @@ export interface ChatMetricsResponse extends ChatBaseResponse {
 
 export interface ChatErrorResponse extends ChatBaseResponse {
   response_type: 'error';
+  id?: string;
   message: string;
 }
 

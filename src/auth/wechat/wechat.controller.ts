@@ -33,9 +33,26 @@ export class WechatController extends SocialController {
     @Query('source') source?: 'h5' | 'web',
     @Query('h5_redirect') h5Redirect?: string,
     @Query('redirect') redirect?: string,
+    @Query('state') state?: string,
   ) {
     const finalSource = source || (isH5 ? 'h5' : 'web');
-    return this.wechatService.authUrl(finalSource, h5Redirect, redirect);
+    return this.wechatService.authUrl(finalSource, h5Redirect, redirect, state);
+  }
+
+  @Public()
+  @Get('check')
+  checkState(@Query('state') state: string) {
+    return this.wechatService.checkState(state);
+  }
+
+  @Public()
+  @Post('check/complete')
+  completeState(
+    @Body('state') state: string,
+    @Body('id') userId: string,
+    @Body('access_token') accessToken: string,
+  ) {
+    return this.wechatService.completeState(state, userId, accessToken);
   }
 
   @Public()

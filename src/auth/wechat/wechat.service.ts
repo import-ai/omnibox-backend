@@ -2,6 +2,7 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { I18nService } from 'nestjs-i18n';
+import { WechatCheckResponseDto } from 'omniboxd/auth/dto/wechat-login.dto';
 import { SocialService } from 'omniboxd/auth/social.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
@@ -134,22 +135,100 @@ export class WechatService {
     source: 'h5' | 'web' = 'web',
     h5Redirect?: string,
     redirectUrl?: string,
+    existingState?: string,
   ): Promise<string> {
-    const state = await this.socialService.generateState(
-      'weixin',
-      '',
-      '',
-      redirectUrl,
-    );
-    const stateInfo = await this.socialService.getState(state);
-    if (stateInfo) {
-      stateInfo['source'] = source;
-      if (h5Redirect) {
-        stateInfo['h5_redirect'] = h5Redirect;
+    let state: string;
+
+    if (existingState) {
+      const existingStateInfo =
+        await this.socialService.getState(existingState);
+      if (!existingStateInfo || existingStateInfo.type !== 'weixin') {
+        const message = this.i18n.t('auth.errors.invalidStateIdentifier');
+        throw new AppException(
+          message,
+          'INVALID_STATE_IDENTIFIER',
+          HttpStatus.UNAUTHORIZED,
+        );
       }
-      await this.socialService.updateState(state, stateInfo);
+      state = existingState;
+      existingStateInfo['source'] = source;
+      if (h5Redirect) {
+        existingStateInfo['h5_redirect'] = h5Redirect;
+      }
+      if (redirectUrl) {
+        existingStateInfo.redirectUrl = redirectUrl;
+      }
+      await this.socialService.updateState(state, existingStateInfo);
+    } else {
+      state = await this.socialService.generateState(
+        'weixin',
+        '',
+        '',
+        redirectUrl,
+      );
+      const stateInfo = await this.socialService.getState(state);
+      if (stateInfo) {
+        stateInfo['source'] = source;
+        if (h5Redirect) {
+          stateInfo['h5_redirect'] = h5Redirect;
+        }
+        await this.socialService.updateState(state, stateInfo);
+      }
     }
+
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
+  }
+
+  async checkState(state: string): Promise<WechatCheckResponseDto> {
+    const stateInfo = await this.socialService.getState(state);
+    if (!stateInfo) {
+      return { status: 'expired' };
+    }
+
+    const userInfo = stateInfo.userInfo as
+      | { id?: string; access_token?: string }
+      | undefined;
+    if (userInfo?.id && userInfo?.access_token) {
+      await this.socialService.deleteState(state);
+      return {
+        status: 'success',
+        user: {
+          id: userInfo.id,
+          access_token: userInfo.access_token,
+        },
+      };
+    }
+
+    return { status: 'pending' };
+  }
+
+  async completeState(
+    state: string,
+    userId: string,
+    accessToken: string,
+  ): Promise<void> {
+    const stateInfo = await this.socialService.getState(state);
+    if (!stateInfo || stateInfo.type !== 'weixin') {
+      const message = this.i18n.t('auth.errors.invalidStateIdentifier');
+      throw new AppException(
+        message,
+        'INVALID_STATE_IDENTIFIER',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    const userInfo = stateInfo.userInfo as
+      | { id?: string; access_token?: string }
+      | undefined;
+    if (userInfo?.id && userInfo?.access_token) {
+      return;
+    }
+
+    stateInfo.userInfo = {
+      id: userId,
+      access_token: accessToken,
+    };
+    await this.socialService.updateState(state, stateInfo);
   }
 
   async handleCallback(

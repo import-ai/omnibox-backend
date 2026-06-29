@@ -68,6 +68,10 @@ export class SocialService {
     return await this.cacheService.get<UserSocialState>(this.namespace, state);
   }
 
+  async deleteState(state: string) {
+    await this.cacheService.delete(this.namespace, state);
+  }
+
   async updateState(state: string, data: UserSocialState) {
     const ttl = data.expiresIn - (Date.now() - data.createdAt);
     if (ttl > 0) {

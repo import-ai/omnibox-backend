@@ -202,10 +202,10 @@ export class WechatService {
     return { status: 'pending' };
   }
 
-  async completeState(
+  async completeMiniProgramState(
     state: string,
-    userId: string,
-    accessToken: string,
+    code: string,
+    lang?: string,
   ): Promise<void> {
     const stateInfo = await this.socialService.getState(state);
     if (!stateInfo || stateInfo.type !== 'weixin') {
@@ -224,9 +224,10 @@ export class WechatService {
       return;
     }
 
+    const loginData = await this.resolveMiniProgramLogin(code, lang);
     stateInfo.userInfo = {
-      id: userId,
-      access_token: accessToken,
+      id: loginData.id,
+      access_token: loginData.access_token,
     };
     await this.socialService.updateState(state, stateInfo);
   }
@@ -593,7 +594,10 @@ export class WechatService {
     await this.userService.unbindByLoginType(userId, 'wechat');
   }
 
-  async miniProgramLogin(code: string, lang?: string): Promise<any> {
+  private async resolveMiniProgramLogin(
+    code: string,
+    lang?: string,
+  ): Promise<any> {
     if (!this.miniProgramAppId || !this.miniProgramAppSecret) {
       const message = this.i18n.t('auth.errors.miniProgramNotConfigured', {
         defaultValue: 'WeChat MiniProgram is not configured',
@@ -604,7 +608,7 @@ export class WechatService {
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
-    this.logger.debug({ code });
+
     const jscode2sessionResponse = await fetch(
       `https://api.weixin.qq.com/sns/jscode2session?appid=${this.miniProgramAppId}&secret=${this.miniProgramAppSecret}&js_code=${code}&grant_type=authorization_code`,
     );
@@ -629,7 +633,7 @@ export class WechatService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    // check if openid is present
+
     if (!sessionData.openid) {
       const providerName = this.i18n.t('auth.providers.wechat');
       const message = this.i18n.t('auth.errors.invalidProviderData', {
@@ -642,7 +646,6 @@ export class WechatService {
       );
     }
 
-    // Prioritize using unionid, if not available, use openid (add prefix distinction)
     const loginId = sessionData.unionid
       ? sessionData.unionid
       : `miniprogram_${sessionData.openid}`;
@@ -650,7 +653,6 @@ export class WechatService {
     const wechatUser = await this.userService.findByLoginId(loginId);
 
     if (wechatUser) {
-      // Save miniprogram openid for existing users (needed for subscribe messages)
       await this.userService.updateBindingMetadata(loginId, {
         mini_program_openid: sessionData.openid,
       });
@@ -699,5 +701,9 @@ export class WechatService {
         }),
       };
     });
+  }
+
+  async miniProgramLogin(code: string, lang?: string): Promise<any> {
+    return this.resolveMiniProgramLogin(code, lang);
   }
 }

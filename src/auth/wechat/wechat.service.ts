@@ -206,7 +206,7 @@ export class WechatService {
     state: string,
     code: string,
     lang?: string,
-  ): Promise<void> {
+  ): Promise<{ id: string; access_token: string }> {
     const stateInfo = await this.socialService.getState(state);
     if (!stateInfo || stateInfo.type !== 'weixin') {
       const message = this.i18n.t('auth.errors.invalidStateIdentifier');
@@ -221,7 +221,10 @@ export class WechatService {
       | { id?: string; access_token?: string }
       | undefined;
     if (userInfo?.id && userInfo?.access_token) {
-      return;
+      return {
+        id: userInfo.id,
+        access_token: userInfo.access_token,
+      };
     }
 
     const loginData = await this.resolveMiniProgramLogin(code, lang);
@@ -230,6 +233,7 @@ export class WechatService {
       access_token: loginData.access_token,
     };
     await this.socialService.updateState(state, stateInfo);
+    return stateInfo.userInfo;
   }
 
   async handleCallback(

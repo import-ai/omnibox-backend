@@ -9,6 +9,7 @@ import { ListTagsResponseDto } from 'omniboxd/resource-tags/dto/list-tags-respon
 import { TagRenameResponseDto } from 'omniboxd/resource-tags/dto/tag-rename.response.dto';
 import { TagWithCountDto } from 'omniboxd/resource-tags/dto/tag-with-count.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { Tag } from 'omniboxd/tag/tag.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { isOptional } from 'omniboxd/utils/is-empty';
@@ -220,6 +221,91 @@ export class ResourceTagsService {
         );
       }
       return TagRenameResponseDto.fromNumber(resourcesWithOldTag.length);
+    });
+  }
+
+  async addTagToResource(
+    namespaceId: string,
+    userId: string,
+    resourceId: string,
+    tagName: string,
+  ): Promise<TagDto[]> {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const resource = await this.namespaceResourcesService.getResource({
+        userId,
+        namespaceId,
+        resourceId,
+      });
+      if (!resource.parent_id) {
+        throw new AppException(
+          'can not add tag to root resource',
+          'INVALID_RESOURCE',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      if (resource.tags.map((tag) => tag.name).includes(tagName)) {
+        throw new AppException(
+          `${resourceId} already has tag ${tagName}`,
+          'RESOURCE_TAG_DUPLICATE',
+          HttpStatus.CONFLICT,
+        );
+      }
+      const tag = await this.tagService.getOrCreateTagByName(
+        namespaceId,
+        tagName,
+        tx.entityManager,
+      );
+      const newTags = resource.tags.concat(TagDto.fromEntity(tag));
+      await this.resourcesService.updateResource(
+        namespaceId,
+        resource.id,
+        userId,
+        {
+          tagIds: newTags.map((tag) => tag.id),
+        },
+        tx,
+      );
+      return newTags;
+    });
+  }
+
+  async removeTagFromResource(
+    namespaceId: string,
+    userId: string,
+    resourceId: string,
+    tagName: string,
+  ): Promise<TagDto[]> {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const resource = await this.namespaceResourcesService.getResource({
+        userId,
+        namespaceId,
+        resourceId,
+      });
+      if (!resource.parent_id) {
+        throw new AppException(
+          'can not remove tag from root resource',
+          'INVALID_RESOURCE',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      if (resource.tags.map((tag) => tag.name).includes(tagName)) {
+        const newTags = resource.tags.filter((tag) => tag.name !== tagName);
+        await this.resourcesService.updateResource(
+          namespaceId,
+          resource.id,
+          userId,
+          {
+            tagIds: newTags.map((tag) => tag.id),
+          },
+          tx,
+        );
+        return newTags;
+      }
+      throw new AppException(
+        `${tagName} not found in ${resourceId}`,
+        'RESOURCE_TAG_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
     });
   }
 }

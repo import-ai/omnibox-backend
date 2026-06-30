@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
+import { ResourceFilterOptionsDto } from 'omniboxd/resources/dto/resource-filter.request.dto';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   Resource,
@@ -13,7 +14,6 @@ import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.servic
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { last } from 'omniboxd/utils/arrays';
-import { VFSResourceFilterOptionsDto } from 'omniboxd/vfs/dto/filter.request.dto';
 
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
@@ -514,7 +514,7 @@ export class SharedResourcesService {
   async resourceFilter(
     share: Share,
     rootResourceId: string,
-    options?: VFSResourceFilterOptionsDto,
+    options?: ResourceFilterOptionsDto,
   ): Promise<{ resources: SharedResourceMetaDto[]; total: number }> {
     const allResources = await this.getAllSubResources(share, rootResourceId);
     const allResourceMap = new Map(

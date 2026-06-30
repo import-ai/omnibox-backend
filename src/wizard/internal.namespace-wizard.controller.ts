@@ -2,13 +2,13 @@ import { Body, Controller, Param, Post } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
-import { VfsCollectUrlRequestDto } from 'omniboxd/vfs-wizard/dto/vfs-collect-url.request.dto';
-import { VfsWizardService } from 'omniboxd/vfs-wizard/vfs-wizard.service';
 import { CollectUrlResponseDto } from 'omniboxd/wizard/dto/collect-url-request.dto';
+import { InternalCollectUrlRequestDto } from 'omniboxd/wizard/dto/internal-collect-url-request.dto';
+import { WizardService } from 'omniboxd/wizard/wizard.service';
 
-@Controller('internal/api/v1/namespaces/:namespaceId/vfs/wizard')
-export class InternalVfsWizardController {
-  constructor(private readonly vfsWizardService: VfsWizardService) {}
+@Controller('internal/api/v1/namespaces/:namespaceId/wizard')
+export class InternalNamespaceWizardController {
+  constructor(private readonly wizardService: WizardService) {}
 
   @Public()
   @Post('collect/url')
@@ -16,13 +16,13 @@ export class InternalVfsWizardController {
   async collectUrl(
     @Param('namespaceId') namespaceId: string,
     @HeaderUserId() userId: string,
-    @Body() data: VfsCollectUrlRequestDto,
+    @Body() body: InternalCollectUrlRequestDto,
   ): Promise<CollectUrlResponseDto> {
-    return await this.vfsWizardService.collectUrl(
+    return await this.wizardService.collectUrl(
       namespaceId,
       userId,
-      data.parentPath,
-      data.url,
+      body.url,
+      body.parentId,
     );
   }
 }

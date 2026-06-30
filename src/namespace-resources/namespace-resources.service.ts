@@ -921,7 +921,9 @@ export class NamespaceResourcesService {
       resourceId,
       entityManager,
     );
-    const resource = parents[parents.length - 1];
+    // getParentResourcesOrFail returns the chain target-first ([target, ..., root]),
+    // so the target resource (which may be a smart folder) is parents[0].
+    const resource = parents[0];
 
     if (resource?.resourceType === ResourceType.SMART_FOLDER) {
       return await this.smartFoldersService.listChildren(
@@ -1021,7 +1023,9 @@ export class NamespaceResourcesService {
       resourceId,
       entityManager,
     );
-    const resource = parents[parents.length - 1];
+    // getParentResourcesOrFail returns the chain target-first ([target, ..., root]),
+    // so the target resource (which may be a smart folder) is parents[0].
+    const resource = parents[0];
 
     if (resource?.resourceType === ResourceType.SMART_FOLDER) {
       return await this.smartFoldersService.listChildrenWithTotal(

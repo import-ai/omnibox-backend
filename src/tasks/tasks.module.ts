@@ -3,7 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { S3Module } from 'omniboxd/s3/s3.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
-import { InternalWizardTasksController } from 'omniboxd/tasks/internal.wizard-tasks.controller';
+import {
+  InternalResourceTasksController,
+  InternalWizardTasksController,
+} from 'omniboxd/tasks/internal.wizard-tasks.controller';
 import {
   ResourceTasksController,
   TasksController,
@@ -27,6 +30,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     TasksController,
     ResourceTasksController,
     InternalWizardTasksController,
+    InternalResourceTasksController,
   ],
   exports: [TasksService, WizardTaskService],
 })

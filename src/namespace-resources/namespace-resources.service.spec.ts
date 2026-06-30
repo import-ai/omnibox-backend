@@ -42,14 +42,15 @@ describe('NamespaceResourcesService.listChildren', () => {
         resourceType: ResourceType.DOC,
       },
     ];
+    // getParentResourcesOrFail returns the chain target-first ([target, ..., root]).
     resourcesService.getParentResourcesOrFail.mockResolvedValue([
-      {
-        id: 'private-root',
-        resourceType: ResourceType.FOLDER,
-      },
       {
         id: resourceId,
         resourceType: ResourceType.SMART_FOLDER,
+      },
+      {
+        id: 'private-root',
+        resourceType: ResourceType.FOLDER,
       },
     ]);
     smartFoldersService.listChildren.mockResolvedValue(children);

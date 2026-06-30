@@ -16,6 +16,7 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { UserModule } from 'omniboxd/user/user.module';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
+import { InternalNamespaceWizardController } from 'omniboxd/wizard/internal.namespace-wizard.controller';
 import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
@@ -57,6 +58,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     CollectController,
     SharedWizardController,
     InternalWizardController,
+    InternalNamespaceWizardController,
   ],
   exports: [WizardService, StreamService, OpenWizardService],
 })

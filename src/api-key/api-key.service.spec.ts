@@ -362,7 +362,7 @@ describe('APIKeyService', () => {
           root_resource_id: 'test-resource-id',
           permissions: [
             {
-              target: 'vfs' as APIKeyPermissionTarget,
+              target: 'invalid_target' as APIKeyPermissionTarget,
               permissions: [APIKeyPermissionType.READ],
             },
           ],
@@ -371,7 +371,7 @@ describe('APIKeyService', () => {
 
       await expect(
         service.create(createApiKeyDtoWithInvalidTarget),
-      ).rejects.toThrow('Invalid API key permission target: vfs');
+      ).rejects.toThrow('Invalid API key permission target: invalid_target');
 
       expect(namespacesService.getMemberByUserId).not.toHaveBeenCalled();
       expect(apiKeyRepository.create).not.toHaveBeenCalled();

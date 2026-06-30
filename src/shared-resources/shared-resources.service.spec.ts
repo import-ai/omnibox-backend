@@ -119,7 +119,7 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
     ]);
   });
 
-  it('filters matched resources when shared VFS filters a smart folder root', async () => {
+  it('filters matched resources when the shared resource filter targets a smart folder root', async () => {
     const { resourcesService, service } = createService();
     resourcesService.getResource.mockResolvedValue({
       id: 'smart-folder-id',

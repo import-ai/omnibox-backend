@@ -414,7 +414,7 @@ describe('APIKeyController (e2e)', () => {
         root_resource_id: client.namespace.root_resource_id,
         permissions: [
           {
-            target: 'vfs',
+            target: 'invalid_target',
             permissions: [APIKeyPermissionType.READ],
           },
         ],

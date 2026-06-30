@@ -31,6 +31,20 @@ class TaskDtoBase {
   }
 }
 
+export class InternalResourceTaskDto {
+  id: string;
+  function: string;
+  status: string;
+
+  static fromTaskMeta(task: TaskMetaDto): InternalResourceTaskDto {
+    const dto = new InternalResourceTaskDto();
+    dto.id = task.id;
+    dto.function = task.function;
+    dto.status = task.status;
+    return dto;
+  }
+}
+
 export class InternalTaskDto extends TaskDtoBase {
   payload: Record<string, any> | null;
   input: Record<string, any>;

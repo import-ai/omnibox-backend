@@ -93,7 +93,6 @@ import { SearchModule } from 'omniboxd/search/search.module';
 import { SeoModule } from 'omniboxd/seo/seo.module';
 import { SharedResourceTagsModule } from 'omniboxd/shared-resource-tags/shared-resource-tags.module';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
-import { SharedVfsModule } from 'omniboxd/shared-vfs/shared-vfs.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
 import { SubscribeMessageModule } from 'omniboxd/subscribe-message/subscribe-message.module';
@@ -103,9 +102,6 @@ import { TelemetryModule } from 'omniboxd/telemetry';
 import { TraceModule } from 'omniboxd/trace/trace.module';
 import { UserModule } from 'omniboxd/user/user.module';
 import { isEmpty } from 'omniboxd/utils/is-empty';
-import { VfsModule } from 'omniboxd/vfs/vfs.module';
-import { VfsTagsModule } from 'omniboxd/vfs-tags/vfs-tags.module';
-import { VfsWizardModule } from 'omniboxd/vfs-wizard/vfs-wizard.module';
 import { WebSocketModule } from 'omniboxd/websocket/websocket.module';
 import { WizardModule } from 'omniboxd/wizard/wizard.module';
 import { WizardUrlProviderModule } from 'omniboxd/wizard-url-provider/wizard-url-provider.module';
@@ -199,10 +195,6 @@ export class AppModule implements NestModule {
         WizardUrlProviderModule,
         NotificationsModule,
         SmartFoldersModule,
-        VfsModule,
-        VfsTagsModule,
-        VfsWizardModule,
-        SharedVfsModule,
         SharedResourceTagsModule,
         CacheModule.registerAsync({
           isGlobal: true,

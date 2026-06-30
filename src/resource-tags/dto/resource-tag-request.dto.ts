@@ -3,8 +3,8 @@ import { IsString } from 'class-validator';
 
 export class ResourceTagRequestDto {
   @IsString()
-  @Expose({ name: 'md_path' })
-  mdPath: string;
+  @Expose({ name: 'resource_id' })
+  resourceId: string;
 
   @IsString()
   @Expose({ name: 'tag_name' })

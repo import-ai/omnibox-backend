@@ -4,11 +4,12 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
 import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 
+import { InternalSharedResourcesController } from './internal.shared-resources.controller';
 import { SharedResourcesController } from './shared-resources.controller';
 import { SharedResourcesService } from './shared-resources.service';
 
 @Module({
-  controllers: [SharedResourcesController],
+  controllers: [SharedResourcesController, InternalSharedResourcesController],
   providers: [SharedResourcesService],
   imports: [SharesModule, ResourcesModule, SmartFoldersModule, TagModule],
   exports: [SharedResourcesService],

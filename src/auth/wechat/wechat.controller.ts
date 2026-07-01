@@ -33,7 +33,6 @@ export class WechatController extends SocialController {
     @Query('source') source?: 'h5' | 'web',
     @Query('h5_redirect') h5Redirect?: string,
     @Query('redirect') redirect?: string,
-    @Query('state') state?: string,
     @Query('device_token') deviceToken?: string,
   ) {
     const finalSource = source || (isH5 ? 'h5' : 'web');
@@ -41,7 +40,6 @@ export class WechatController extends SocialController {
       finalSource,
       h5Redirect,
       redirect,
-      state,
       deviceToken,
     );
   }

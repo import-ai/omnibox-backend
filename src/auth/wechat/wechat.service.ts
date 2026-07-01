@@ -176,52 +176,24 @@ export class WechatService {
     source: 'h5' | 'web' = 'web',
     h5Redirect?: string,
     redirectUrl?: string,
-    existingState?: string,
     deviceToken?: string,
   ): Promise<string> {
-    let state: string;
-
-    if (existingState) {
-      const existingStateInfo =
-        await this.socialService.getState(existingState);
-      if (!existingStateInfo || existingStateInfo.type !== 'weixin') {
-        const message = this.i18n.t('auth.errors.invalidStateIdentifier');
-        throw new AppException(
-          message,
-          'INVALID_STATE_IDENTIFIER',
-          HttpStatus.UNAUTHORIZED,
-        );
-      }
-      state = existingState;
-      existingStateInfo['source'] = source;
-      if (h5Redirect) {
-        existingStateInfo['h5_redirect'] = h5Redirect;
-      }
-      if (redirectUrl) {
-        existingStateInfo.redirectUrl = redirectUrl;
-      }
+    const state = await this.socialService.generateState(
+      'weixin',
+      '',
+      '',
+      redirectUrl,
+    );
+    const stateInfo = await this.socialService.getState(state);
+    if (stateInfo) {
+      stateInfo['source'] = source;
       if (deviceToken) {
-        existingStateInfo.deviceTokenHash = this.hashDeviceToken(deviceToken);
+        stateInfo.deviceTokenHash = this.hashDeviceToken(deviceToken);
       }
-      await this.socialService.updateState(state, existingStateInfo);
-    } else {
-      state = await this.socialService.generateState(
-        'weixin',
-        '',
-        '',
-        redirectUrl,
-      );
-      const stateInfo = await this.socialService.getState(state);
-      if (stateInfo) {
-        stateInfo['source'] = source;
-        if (deviceToken) {
-          stateInfo.deviceTokenHash = this.hashDeviceToken(deviceToken);
-        }
-        if (h5Redirect) {
-          stateInfo['h5_redirect'] = h5Redirect;
-        }
-        await this.socialService.updateState(state, stateInfo);
+      if (h5Redirect) {
+        stateInfo['h5_redirect'] = h5Redirect;
       }
+      await this.socialService.updateState(state, stateInfo);
     }
 
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;

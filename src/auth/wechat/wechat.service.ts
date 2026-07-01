@@ -290,37 +290,6 @@ export class WechatService {
     return stateInfo.userInfo;
   }
 
-  async completeState(
-    state: string,
-    userId: string,
-    accessToken: string,
-    deviceToken?: string,
-  ): Promise<void> {
-    const stateInfo = await this.socialService.getState(state);
-    if (!stateInfo || stateInfo.type !== 'weixin') {
-      const message = this.i18n.t('auth.errors.invalidStateIdentifier');
-      throw new AppException(
-        message,
-        'INVALID_STATE_IDENTIFIER',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
-    this.assertDeviceToken(stateInfo.deviceTokenHash, deviceToken);
-
-    const userInfo = stateInfo.userInfo as
-      | { id?: string; access_token?: string }
-      | undefined;
-    if (userInfo?.id && userInfo?.access_token) {
-      return;
-    }
-
-    stateInfo.userInfo = {
-      id: userId,
-      access_token: accessToken,
-    };
-    await this.socialService.updateState(state, stateInfo);
-  }
-
   async handleCallback(
     code: string,
     state: string,

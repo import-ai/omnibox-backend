@@ -56,22 +56,6 @@ export class WechatController extends SocialController {
   }
 
   @Public()
-  @Post('check/complete')
-  completeState(
-    @Body('state') state: string,
-    @Body('id') userId: string,
-    @Body('access_token') accessToken: string,
-    @Body('device_token') deviceToken?: string,
-  ) {
-    return this.wechatService.completeState(
-      state,
-      userId,
-      accessToken,
-      deviceToken,
-    );
-  }
-
-  @Public()
   @Post('check/complete-mini-program')
   completeMiniProgramState(
     @Body('state') state: string,

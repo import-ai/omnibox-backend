@@ -15,6 +15,7 @@ export interface UserSocialState {
   createdAt: number;
   expiresIn: number;
   nonce?: string;
+  deviceTokenHash?: string;
   userInfo?: WechatCheckResponseDto['user'];
   redirectUrl?: string;
 }

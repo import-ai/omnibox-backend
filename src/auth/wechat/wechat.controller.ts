@@ -34,15 +34,41 @@ export class WechatController extends SocialController {
     @Query('h5_redirect') h5Redirect?: string,
     @Query('redirect') redirect?: string,
     @Query('state') state?: string,
+    @Query('device_token') deviceToken?: string,
   ) {
     const finalSource = source || (isH5 ? 'h5' : 'web');
-    return this.wechatService.authUrl(finalSource, h5Redirect, redirect, state);
+    return this.wechatService.authUrl(
+      finalSource,
+      h5Redirect,
+      redirect,
+      state,
+      deviceToken,
+    );
   }
 
   @Public()
   @Get('check')
-  checkState(@Query('state') state: string) {
-    return this.wechatService.checkState(state);
+  checkState(
+    @Query('state') state: string,
+    @Query('device_token') deviceToken?: string,
+  ) {
+    return this.wechatService.checkState(state, deviceToken);
+  }
+
+  @Public()
+  @Post('check/complete')
+  completeState(
+    @Body('state') state: string,
+    @Body('id') userId: string,
+    @Body('access_token') accessToken: string,
+    @Body('device_token') deviceToken?: string,
+  ) {
+    return this.wechatService.completeState(
+      state,
+      userId,
+      accessToken,
+      deviceToken,
+    );
   }
 
   @Public()
@@ -51,8 +77,14 @@ export class WechatController extends SocialController {
     @Body('state') state: string,
     @Body('code') code: string,
     @Body('lang') lang?: string,
+    @Body('device_token') deviceToken?: string,
   ) {
-    return this.wechatService.completeMiniProgramState(state, code, lang);
+    return this.wechatService.completeMiniProgramState(
+      state,
+      code,
+      lang,
+      deviceToken,
+    );
   }
 
   @Public()

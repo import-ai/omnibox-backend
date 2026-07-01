@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { createHash, timingSafeEqual } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { WechatCheckResponseDto } from 'omniboxd/auth/dto/wechat-login.dto';
 import { SocialService } from 'omniboxd/auth/social.service';
@@ -116,6 +117,46 @@ export class WechatService {
     };
   }
 
+  private hashDeviceToken(deviceToken: string): string {
+    return createHash('sha256').update(deviceToken).digest('hex');
+  }
+
+  private isDeviceTokenValid(
+    expectedHash: string | undefined,
+    deviceToken: string | undefined,
+  ): boolean {
+    if (!expectedHash) {
+      return true;
+    }
+    if (!deviceToken) {
+      return false;
+    }
+
+    const actualHash = this.hashDeviceToken(deviceToken);
+    const expected = Buffer.from(expectedHash);
+    const actual = Buffer.from(actualHash);
+
+    return (
+      expected.length === actual.length && timingSafeEqual(expected, actual)
+    );
+  }
+
+  private assertDeviceToken(
+    expectedHash: string | undefined,
+    deviceToken: string | undefined,
+  ) {
+    if (this.isDeviceTokenValid(expectedHash, deviceToken)) {
+      return;
+    }
+
+    const message = this.i18n.t('auth.errors.invalidStateIdentifier');
+    throw new AppException(
+      message,
+      'INVALID_STATE_IDENTIFIER',
+      HttpStatus.UNAUTHORIZED,
+    );
+  }
+
   async getQrCodeParams(redirectUrl?: string) {
     const state = await this.socialService.generateState(
       'open_weixin',
@@ -136,6 +177,7 @@ export class WechatService {
     h5Redirect?: string,
     redirectUrl?: string,
     existingState?: string,
+    deviceToken?: string,
   ): Promise<string> {
     let state: string;
 
@@ -158,6 +200,9 @@ export class WechatService {
       if (redirectUrl) {
         existingStateInfo.redirectUrl = redirectUrl;
       }
+      if (deviceToken) {
+        existingStateInfo.deviceTokenHash = this.hashDeviceToken(deviceToken);
+      }
       await this.socialService.updateState(state, existingStateInfo);
     } else {
       state = await this.socialService.generateState(
@@ -169,6 +214,9 @@ export class WechatService {
       const stateInfo = await this.socialService.getState(state);
       if (stateInfo) {
         stateInfo['source'] = source;
+        if (deviceToken) {
+          stateInfo.deviceTokenHash = this.hashDeviceToken(deviceToken);
+        }
         if (h5Redirect) {
           stateInfo['h5_redirect'] = h5Redirect;
         }
@@ -179,11 +227,15 @@ export class WechatService {
     return `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&response_type=code&scope=snsapi_userinfo&state=${state}#wechat_redirect`;
   }
 
-  async checkState(state: string): Promise<WechatCheckResponseDto> {
+  async checkState(
+    state: string,
+    deviceToken?: string,
+  ): Promise<WechatCheckResponseDto> {
     const stateInfo = await this.socialService.getState(state);
     if (!stateInfo) {
       return { status: 'expired' };
     }
+    this.assertDeviceToken(stateInfo.deviceTokenHash, deviceToken);
 
     const userInfo = stateInfo.userInfo as
       | { id?: string; access_token?: string }
@@ -206,6 +258,7 @@ export class WechatService {
     state: string,
     code: string,
     lang?: string,
+    deviceToken?: string,
   ): Promise<{ id: string; access_token: string }> {
     const stateInfo = await this.socialService.getState(state);
     if (!stateInfo || stateInfo.type !== 'weixin') {
@@ -216,6 +269,7 @@ export class WechatService {
         HttpStatus.UNAUTHORIZED,
       );
     }
+    this.assertDeviceToken(stateInfo.deviceTokenHash, deviceToken);
 
     const userInfo = stateInfo.userInfo as
       | { id?: string; access_token?: string }
@@ -234,6 +288,37 @@ export class WechatService {
     };
     await this.socialService.updateState(state, stateInfo);
     return stateInfo.userInfo;
+  }
+
+  async completeState(
+    state: string,
+    userId: string,
+    accessToken: string,
+    deviceToken?: string,
+  ): Promise<void> {
+    const stateInfo = await this.socialService.getState(state);
+    if (!stateInfo || stateInfo.type !== 'weixin') {
+      const message = this.i18n.t('auth.errors.invalidStateIdentifier');
+      throw new AppException(
+        message,
+        'INVALID_STATE_IDENTIFIER',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+    this.assertDeviceToken(stateInfo.deviceTokenHash, deviceToken);
+
+    const userInfo = stateInfo.userInfo as
+      | { id?: string; access_token?: string }
+      | undefined;
+    if (userInfo?.id && userInfo?.access_token) {
+      return;
+    }
+
+    stateInfo.userInfo = {
+      id: userId,
+      access_token: accessToken,
+    };
+    await this.socialService.updateState(state, stateInfo);
   }
 
   async handleCallback(

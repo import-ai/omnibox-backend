@@ -15,6 +15,7 @@ export interface UserSocialState {
   createdAt: number;
   expiresIn: number;
   nonce?: string;
+  deviceTokenHash?: string;
   userInfo?: WechatCheckResponseDto['user'];
   redirectUrl?: string;
 }
@@ -66,6 +67,10 @@ export class SocialService {
 
   async getState(state: string) {
     return await this.cacheService.get<UserSocialState>(this.namespace, state);
+  }
+
+  async deleteState(state: string) {
+    await this.cacheService.delete(this.namespace, state);
   }
 
   async updateState(state: string, data: UserSocialState) {

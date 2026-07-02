@@ -44,6 +44,7 @@ export interface MessageAttrs {
   };
   user_context?: Record<string, any>;
   tool_call?: Record<string, any>;
+  usage?: Record<string, any>;
 }
 
 @Entity('messages')

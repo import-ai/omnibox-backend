@@ -9,6 +9,7 @@ import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.ser
 import { OpenAPIQuotaService } from 'omniboxd/open-api/open-api-quota.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { Repository } from 'typeorm';
 
@@ -26,6 +27,7 @@ describe('APIKeyService', () => {
   let applicationsRepository: jest.Mocked<Repository<Applications>>;
   let permissionsService: jest.Mocked<PermissionsService>;
   let namespacesService: jest.Mocked<NamespacesService>;
+  let resourcesService: jest.Mocked<ResourcesService>;
 
   const mockApiKey = {
     id: 'test-api-key-id',
@@ -66,6 +68,12 @@ describe('APIKeyService', () => {
 
     const mockNamespacesService = {
       getMemberByUserId: jest.fn(),
+      getPrivateRootId: jest.fn(),
+      getTeamspaceRoot: jest.fn(),
+    };
+
+    const mockResourcesService = {
+      batchGetParentResources: jest.fn(),
     };
 
     const mockUserService = {
@@ -128,6 +136,10 @@ describe('APIKeyService', () => {
           useValue: mockNamespacesService,
         },
         {
+          provide: ResourcesService,
+          useValue: mockResourcesService,
+        },
+        {
           provide: UserService,
           useValue: mockUserService,
         },
@@ -151,6 +163,7 @@ describe('APIKeyService', () => {
     applicationsRepository = module.get(getRepositoryToken(Applications));
     permissionsService = module.get(PermissionsService);
     namespacesService = module.get(NamespacesService);
+    resourcesService = module.get(ResourcesService);
   });
 
   it('should be defined', () => {
@@ -470,6 +483,83 @@ describe('APIKeyService', () => {
       expect(apiKeyRepository.findOne).toHaveBeenCalledWith({
         where: { value: 'sk-nonexistent' },
       });
+    });
+  });
+
+  describe('findAll', () => {
+    const privateRoot = {
+      id: 'private-root-id',
+      parentId: null,
+      name: '个人',
+    };
+    const folder = {
+      id: 'folder-id',
+      parentId: privateRoot.id,
+      name: '产品资料',
+    };
+    const apiDocs = {
+      id: 'test-resource-id',
+      parentId: folder.id,
+      name: 'API 文档',
+    };
+
+    it('should include resolved root resource path for display', async () => {
+      apiKeyRepository.find.mockResolvedValue([mockApiKey as any]);
+      resourcesService.batchGetParentResources.mockResolvedValue(
+        new Map([
+          [privateRoot.id, privateRoot as any],
+          [folder.id, folder as any],
+          [apiDocs.id, apiDocs as any],
+        ]),
+      );
+      namespacesService.getPrivateRootId.mockResolvedValue(privateRoot.id);
+      namespacesService.getTeamspaceRoot.mockResolvedValue({
+        id: 'teamspace-root-id',
+      } as any);
+      permissionsService.userHasPermission.mockResolvedValue(true);
+
+      const result = await service.findAll('test-user-id', 'test-namespace-id');
+
+      expect(resourcesService.batchGetParentResources).toHaveBeenCalledWith(
+        'test-namespace-id',
+        ['test-resource-id'],
+      );
+      expect(permissionsService.userHasPermission).toHaveBeenCalledWith(
+        'test-namespace-id',
+        'test-resource-id',
+        'test-user-id',
+        ResourcePermission.CAN_VIEW,
+        [apiDocs, folder, privateRoot],
+      );
+      expect(result[0].root_resource).toEqual({
+        id: 'test-resource-id',
+        root_type: 'private',
+        path: [
+          { id: 'private-root-id', name: '个人' },
+          { id: 'folder-id', name: '产品资料' },
+          { id: 'test-resource-id', name: 'API 文档' },
+        ],
+      });
+    });
+
+    it('should return null root resource when user cannot view it', async () => {
+      apiKeyRepository.find.mockResolvedValue([mockApiKey as any]);
+      resourcesService.batchGetParentResources.mockResolvedValue(
+        new Map([
+          [privateRoot.id, privateRoot as any],
+          [folder.id, folder as any],
+          [apiDocs.id, apiDocs as any],
+        ]),
+      );
+      namespacesService.getPrivateRootId.mockResolvedValue(privateRoot.id);
+      namespacesService.getTeamspaceRoot.mockResolvedValue({
+        id: 'teamspace-root-id',
+      } as any);
+      permissionsService.userHasPermission.mockResolvedValue(false);
+
+      const result = await service.findAll('test-user-id', 'test-namespace-id');
+
+      expect(result[0].root_resource).toBeNull();
     });
   });
 

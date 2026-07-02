@@ -5,6 +5,8 @@ import { I18nService } from 'nestjs-i18n';
 import {
   APIKeyInfoResponseDto,
   APIKeyResponseDto,
+  APIKeyRootResourceDto,
+  APIKeyRootResourceType,
   CreateAPIKeyDto,
   PatchAPIKeyDto,
   UpdateAPIKeyDto,
@@ -26,6 +28,8 @@ import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.ser
 import { OpenAPIQuotaService } from 'omniboxd/open-api/open-api-quota.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
 import { UserService } from 'omniboxd/user/user.service';
 import { Repository } from 'typeorm';
@@ -41,6 +45,7 @@ export class APIKeyService {
     private readonly namespacesService: NamespacesService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
     private readonly openAPIQuotaService: OpenAPIQuotaService,
+    private readonly resourcesService: ResourcesService,
     private readonly userService: UserService,
     private readonly i18n: I18nService,
   ) {}
@@ -102,7 +107,172 @@ export class APIKeyService {
     if (namespaceId) where.namespaceId = namespaceId;
 
     const apiKeys = await this.apiKeyRepository.find({ where });
-    return apiKeys.map((apiKey) => APIKeyResponseDto.fromEntity(apiKey));
+    const rootResourceMap = await this.resolveRootResources(apiKeys);
+    return apiKeys.map((apiKey) =>
+      APIKeyResponseDto.fromEntity(
+        apiKey,
+        rootResourceMap.get(apiKey.id) ?? null,
+      ),
+    );
+  }
+
+  private async resolveRootResources(
+    apiKeys: APIKey[],
+  ): Promise<Map<string, APIKeyRootResourceDto | null>> {
+    const result = new Map<string, APIKeyRootResourceDto | null>();
+    const apiKeysWithRootResource = apiKeys.filter(
+      (apiKey) => apiKey.attrs?.root_resource_id,
+    );
+
+    if (apiKeysWithRootResource.length === 0) {
+      return result;
+    }
+
+    const namespaceRootCache = new Map<
+      string,
+      { privateRootId?: string; teamspaceRootId?: string }
+    >();
+
+    const grouped = new Map<string, APIKey[]>();
+    for (const apiKey of apiKeysWithRootResource) {
+      const key = `${apiKey.namespaceId}:${apiKey.userId}`;
+      grouped.set(key, [...(grouped.get(key) ?? []), apiKey]);
+    }
+
+    await Promise.all(
+      Array.from(grouped.values()).map(async (group) => {
+        const [{ namespaceId, userId }] = group;
+        const resourceIds = group.map(
+          (apiKey) => apiKey.attrs.root_resource_id,
+        );
+        const parentResourceMap =
+          await this.resourcesService.batchGetParentResources(
+            namespaceId,
+            resourceIds,
+          );
+        const rootIds = await this.getNamespaceRootIds(
+          userId,
+          namespaceId,
+          namespaceRootCache,
+        );
+
+        await Promise.all(
+          group.map(async (apiKey) => {
+            const rootResource = await this.resolveRootResource(
+              apiKey,
+              parentResourceMap,
+              rootIds,
+            );
+            result.set(apiKey.id, rootResource);
+          }),
+        );
+      }),
+    );
+
+    return result;
+  }
+
+  private async getNamespaceRootIds(
+    userId: string,
+    namespaceId: string,
+    cache: Map<string, { privateRootId?: string; teamspaceRootId?: string }>,
+  ): Promise<{ privateRootId?: string; teamspaceRootId?: string }> {
+    const key = `${namespaceId}:${userId}`;
+    const cached = cache.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    const rootIds: { privateRootId?: string; teamspaceRootId?: string } = {};
+
+    try {
+      rootIds.privateRootId = await this.namespacesService.getPrivateRootId(
+        userId,
+        namespaceId,
+      );
+    } catch {
+      // Treat missing roots the same as missing resources for display.
+    }
+
+    try {
+      const teamspaceRoot =
+        await this.namespacesService.getTeamspaceRoot(namespaceId);
+      rootIds.teamspaceRootId = teamspaceRoot.id;
+    } catch {
+      // Treat missing roots the same as missing resources for display.
+    }
+
+    cache.set(key, rootIds);
+    return rootIds;
+  }
+
+  private async resolveRootResource(
+    apiKey: APIKey,
+    parentResourceMap: Map<string, ResourceMetaDto>,
+    rootIds: { privateRootId?: string; teamspaceRootId?: string },
+  ): Promise<APIKeyRootResourceDto | null> {
+    const resourceId = apiKey.attrs?.root_resource_id;
+    if (!resourceId) {
+      return null;
+    }
+
+    const path = this.buildResourcePath(resourceId, parentResourceMap);
+    if (path.length === 0) {
+      return null;
+    }
+
+    const hasViewPermission = await this.permissionsService.userHasPermission(
+      apiKey.namespaceId,
+      resourceId,
+      apiKey.userId,
+      ResourcePermission.CAN_VIEW,
+      [...path].reverse(),
+    );
+    if (!hasViewPermission) {
+      return null;
+    }
+
+    const root = path[0];
+    return {
+      id: resourceId,
+      root_type: this.getRootResourceType(root.id, rootIds),
+      path: path.map((resource) => ({ id: resource.id, name: resource.name })),
+    };
+  }
+
+  private buildResourcePath(
+    resourceId: string,
+    resourceMap: Map<string, ResourceMetaDto>,
+  ): ResourceMetaDto[] {
+    const path: ResourceMetaDto[] = [];
+    const visited = new Set<string>();
+    let current: ResourceMetaDto | undefined = resourceMap.get(resourceId);
+
+    while (current) {
+      if (visited.has(current.id)) {
+        return [];
+      }
+      visited.add(current.id);
+      path.push(current);
+      current = current.parentId
+        ? resourceMap.get(current.parentId)
+        : undefined;
+    }
+
+    return path.reverse();
+  }
+
+  private getRootResourceType(
+    rootResourceId: string,
+    rootIds: { privateRootId?: string; teamspaceRootId?: string },
+  ): APIKeyRootResourceType {
+    if (rootResourceId === rootIds.privateRootId) {
+      return 'private';
+    }
+    if (rootResourceId === rootIds.teamspaceRootId) {
+      return 'teamspace';
+    }
+    return 'unknown';
   }
 
   async update(

@@ -16,6 +16,32 @@ import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
 
 import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
 
+export type APIKeyRootResourceType = 'private' | 'teamspace' | 'unknown';
+
+export class APIKeyRootResourcePathItemDto {
+  @ApiProperty({ description: 'Resource ID' })
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  id: string;
+
+  @ApiProperty({ description: 'Resource name' })
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  name: string;
+}
+
+export class APIKeyRootResourceDto {
+  @ApiProperty({ description: 'Root resource ID' })
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  id: string;
+
+  @ApiProperty({ description: 'Root resource type' })
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  root_type: APIKeyRootResourceType;
+
+  @ApiProperty({ description: 'Resource path from root to target' })
+  @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
+  path: APIKeyRootResourcePathItemDto[];
+}
+
 export class CreateAPIKeyDto {
   @IsString({
     message: i18nValidationMessage('validation.errors.userId.isString'),
@@ -81,19 +107,35 @@ export class APIKeyResponseDto {
   @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   attrs: APIKeyAttrs;
 
+  @ApiProperty({
+    description:
+      'Resolved root resource path for display. Null when missing or inaccessible.',
+    nullable: true,
+    required: false,
+    type: () => APIKeyRootResourceDto,
+  })
+  @IsOptional()
+  root_resource?: APIKeyRootResourceDto | null;
+
   @ApiProperty({ description: 'Creation timestamp' })
   created_at: Date;
 
   @ApiProperty({ description: 'Last update timestamp' })
   updated_at: Date;
 
-  static fromEntity(apiKey: APIKey): APIKeyResponseDto {
+  static fromEntity(
+    apiKey: APIKey,
+    rootResource?: APIKeyRootResourceDto | null,
+  ): APIKeyResponseDto {
     const dto = new APIKeyResponseDto();
     dto.id = apiKey.id;
     dto.value = apiKey.value;
     dto.user_id = apiKey.userId;
     dto.namespace_id = apiKey.namespaceId;
     dto.attrs = apiKey.attrs;
+    if (rootResource !== undefined) {
+      dto.root_resource = rootResource;
+    }
     dto.created_at = apiKey.createdAt;
     dto.updated_at = apiKey.updatedAt;
     return dto;

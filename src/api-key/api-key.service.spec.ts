@@ -68,12 +68,14 @@ describe('APIKeyService', () => {
 
     const mockNamespacesService = {
       getMemberByUserId: jest.fn(),
-      getPrivateRootId: jest.fn(),
-      getTeamspaceRoot: jest.fn(),
+      getPrivateRootId: jest.fn().mockResolvedValue('private-root-id'),
+      getTeamspaceRoot: jest
+        .fn()
+        .mockResolvedValue({ id: 'teamspace-root-id' }),
     };
 
     const mockResourcesService = {
-      batchGetParentResources: jest.fn(),
+      batchGetParentResources: jest.fn().mockResolvedValue(new Map()),
     };
 
     const mockUserService = {

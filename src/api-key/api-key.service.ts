@@ -78,7 +78,7 @@ export class APIKeyService {
     });
 
     const saved = await this.apiKeyRepository.save(apiKey);
-    return APIKeyResponseDto.fromEntity(saved);
+    return await this.toResponse(saved);
   }
 
   async findOne(id: string): Promise<APIKeyResponseDto> {
@@ -91,7 +91,7 @@ export class APIKeyService {
         HttpStatus.NOT_FOUND,
       );
     }
-    return APIKeyResponseDto.fromEntity(apiKey);
+    return await this.toResponse(apiKey);
   }
 
   async findByValue(value: string): Promise<APIKey | null> {
@@ -113,6 +113,14 @@ export class APIKeyService {
         apiKey,
         rootResourceMap.get(apiKey.id) ?? null,
       ),
+    );
+  }
+
+  private async toResponse(apiKey: APIKey): Promise<APIKeyResponseDto> {
+    const rootResourceMap = await this.resolveRootResources([apiKey]);
+    return APIKeyResponseDto.fromEntity(
+      apiKey,
+      rootResourceMap.get(apiKey.id) ?? null,
     );
   }
 

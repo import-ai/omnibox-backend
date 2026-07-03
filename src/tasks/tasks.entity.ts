@@ -60,4 +60,7 @@ export class Task extends Base {
 
   @Column('enum', { enum: TaskStatus, default: TaskStatus.PENDING })
   status: TaskStatus;
+
+  @Column('int', { default: 0 })
+  numSchedules: number;
 }

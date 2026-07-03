@@ -1,7 +1,6 @@
 import { buffer } from 'node:stream/consumers';
 
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -42,16 +41,11 @@ export class WizardService {
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
 
-  // A task whose heartbeat is older than this is considered stale and can be
-  // (re)claimed by a worker.
-  private readonly heartbeatTimeoutMs: number;
-
   constructor(
     private readonly wizardTaskService: WizardTaskService,
     private readonly tasksService: TasksService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
-    private readonly configService: ConfigService,
     private readonly attachmentsService: AttachmentsService,
     private readonly s3Service: S3Service,
     private readonly resourcesService: ResourcesService,
@@ -108,11 +102,6 @@ export class WizardService {
         this.i18n,
       ),
     };
-
-    this.heartbeatTimeoutMs = parseInt(
-      this.configService.get<string>('OBB_TASK_HEARTBEAT_TIMEOUT_MS', '10000'),
-      10,
-    );
   }
 
   async compressedCollect(
@@ -500,7 +489,7 @@ export class WizardService {
     functions: string[],
     workerId: string,
   ): Promise<InternalTaskDto | null> {
-    const heartbeatCutoff = new Date(Date.now() - this.heartbeatTimeoutMs);
+    const heartbeatCutoff = this.tasksService.heartbeatCutoff();
     const task = await this.tasksService.getNextTaskV2(
       functions,
       heartbeatCutoff,

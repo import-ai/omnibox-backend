@@ -22,6 +22,7 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   resourceId: 'resource-id',
   workerId: null,
   status: TaskStatus.RUNNING,
+  numSchedules: 0,
   ...overrides,
 });
 
@@ -47,7 +48,6 @@ describe('WizardService', () => {
         tasksService as any,
         namespaceResourcesService as any,
         { getOrCreateTagsByNames: jest.fn() } as any,
-        { get: jest.fn().mockReturnValue(10000) } as any,
         {} as any,
         {} as any,
         { getResourceOrFail: jest.fn() } as any,

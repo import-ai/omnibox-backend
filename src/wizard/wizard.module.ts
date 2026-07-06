@@ -19,6 +19,7 @@ import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { InternalNamespaceWizardController } from 'omniboxd/wizard/internal.namespace-wizard.controller';
 import { InternalWizardController } from 'omniboxd/wizard/internal.wizard.controller';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
+import { RecommendedQuestionsService } from 'omniboxd/wizard/recommended-questions.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import {
   CollectController,
@@ -34,6 +35,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     StreamService,
     ChunkManagerService,
     OpenWizardService,
+    RecommendedQuestionsService,
   ],
   imports: [
     WizardAPIModule,
@@ -60,6 +62,11 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     InternalWizardController,
     InternalNamespaceWizardController,
   ],
-  exports: [WizardService, StreamService, OpenWizardService],
+  exports: [
+    WizardService,
+    StreamService,
+    OpenWizardService,
+    RecommendedQuestionsService,
+  ],
 })
 export class WizardModule {}

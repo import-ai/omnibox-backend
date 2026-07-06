@@ -4,6 +4,10 @@ import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { WizardAgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
+import {
+  RecommendQuestionsRequestDto,
+  RecommendQuestionsResponseDto,
+} from 'omniboxd/wizard/dto/recommend-questions.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { SearchResponseDto } from 'omniboxd/wizard/dto/search-response.dto';
 import {
@@ -64,6 +68,18 @@ export class WizardAPIService {
       {},
     );
     return plainToInstance(SearchResponseDto, resp);
+  }
+
+  async recommendQuestions(
+    req: RecommendQuestionsRequestDto,
+  ): Promise<RecommendQuestionsResponseDto> {
+    const resp = await this.request(
+      'POST',
+      '/internal/api/v1/wizard/recommend_questions',
+      instanceToPlain(req),
+      {},
+    );
+    return plainToInstance(RecommendQuestionsResponseDto, resp);
   }
 
   async createTitle(

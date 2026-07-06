@@ -76,6 +76,32 @@ export class ConversationsService {
     return await this.conversationRepository.find(query);
   }
 
+  async getRecentConversations(
+    namespaceId: string,
+    userId: string,
+    count: number,
+  ): Promise<Conversation[]> {
+    return await this.findAll(namespaceId, userId, { limit: count });
+  }
+
+  async getRecentQuestions(
+    namespaceId: string,
+    userId: string,
+    count: number,
+  ): Promise<string[]> {
+    const conversations = await this.getRecentConversations(
+      namespaceId,
+      userId,
+      count,
+    );
+    const summaries = await Promise.all(
+      conversations.map((c) => this.getSummary(userId, c)),
+    );
+    return summaries
+      .map((s) => (s.user_content ?? s.title ?? '').trim())
+      .filter((q) => q.length > 0);
+  }
+
   async countAll(namespaceId: string, userId: string) {
     return await this.conversationRepository.countBy({
       namespaceId,

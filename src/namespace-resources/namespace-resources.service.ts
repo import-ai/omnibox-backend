@@ -828,6 +828,59 @@ export class NamespaceResourcesService {
     return finalResources.map((r) => ResourceSummaryDto.fromEntity(r, false));
   }
 
+  async getRecentResources(
+    namespaceId: string,
+    userId: string,
+    count: number = 1,
+  ): Promise<ResourceMetaDto[]> {
+    const result: ResourceMetaDto[] = [];
+    if (count <= 0) {
+      return result;
+    }
+    const batchSize = 100;
+    for (let skip = 0; ; skip += batchSize) {
+      const batch = await this.resourceRepository.find({
+        where: {
+          namespaceId,
+          parentId: Not(IsNull()),
+          resourceType: Not(ResourceType.FOLDER),
+        },
+        order: { updatedAt: 'DESC' },
+        take: batchSize,
+        skip,
+      });
+      if (batch.length === 0) {
+        return result;
+      }
+
+      // filterResourcesByPermission needs each resource's ancestors present to
+      // resolve inherited permissions, so expand the batch to include them.
+      const withParents = await this.resourcesService.batchGetParentResources(
+        namespaceId,
+        batch.map((r) => r.id),
+      );
+      const visible = await this.permissionsService.filterResourcesByPermission(
+        userId,
+        namespaceId,
+        [...withParents.values()],
+      );
+      const visibleIds = new Set(visible.map((r) => r.id));
+
+      for (const resource of batch) {
+        if (visibleIds.has(resource.id)) {
+          result.push(ResourceMetaDto.fromEntity(resource));
+          if (result.length >= count) {
+            return result;
+          }
+        }
+      }
+
+      if (batch.length < batchSize) {
+        return result;
+      }
+    }
+  }
+
   // Alias for clarity and reuse across modules
   async getUserVisibleResources(
     userId: string,

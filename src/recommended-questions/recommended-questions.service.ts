@@ -16,23 +16,13 @@ import {
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { QueryFailedError, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 const RECENT_RESOURCES_COUNT = 5;
 const RECENT_TAGS_COUNT = 10;
 const RECENT_QUESTIONS_COUNT = 5;
 const DEFAULT_MAX_QUESTIONS = 3;
 const RESOURCE_CONTENT_MAX_LENGTH = 500;
-
-const PG_UNIQUE_VIOLATION = '23505';
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof QueryFailedError &&
-    (err.driverError as { code?: string } | undefined)?.code ===
-      PG_UNIQUE_VIOLATION
-  );
-}
 
 @Injectable()
 export class RecommendedQuestionsService {
@@ -45,33 +35,6 @@ export class RecommendedQuestionsService {
     private readonly wizardApiService: WizardAPIService,
   ) {}
 
-  async findOrInsert(
-    namespaceId: string,
-    userId: string,
-    now: Date,
-  ): Promise<RecommendedQuestion> {
-    const record = await this.recommendedQuestionsRepository.findOne({
-      where: { namespaceId, userId },
-    });
-    if (record) {
-      return record;
-    }
-    try {
-      await this.recommendedQuestionsRepository.insert({
-        namespaceId,
-        userId,
-        scannedAt: now,
-      });
-    } catch (err) {
-      if (!isUniqueViolation(err)) {
-        throw err;
-      }
-    }
-    return await this.recommendedQuestionsRepository.findOneOrFail({
-      where: { namespaceId, userId },
-    });
-  }
-
   async getQuestions(
     namespaceId: string,
     userId: string,
@@ -82,7 +45,7 @@ export class RecommendedQuestionsService {
     return record?.questions ?? [];
   }
 
-  async generateRecommendedQuestions(
+  async generateQuestions(
     namespaceId: string,
     userId: string,
     maxQuestions: number = DEFAULT_MAX_QUESTIONS,

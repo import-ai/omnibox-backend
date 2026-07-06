@@ -165,7 +165,6 @@ export class RecommendedQuestionsCronService {
     if (now.getTime() - record.scannedAt.getTime() < SCAN_FRESHNESS_MS) {
       return null;
     }
-    record.scannedAt = now;
     const result = await this.recommendedQuestionsRepository.update(
       { namespaceId, userId, scannedAt: record.scannedAt },
       { scannedAt: now },
@@ -173,6 +172,7 @@ export class RecommendedQuestionsCronService {
     if (result.affected !== 1) {
       return null;
     }
+    record.scannedAt = now;
     return record;
   }
 

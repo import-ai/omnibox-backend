@@ -881,6 +881,19 @@ export class NamespaceResourcesService {
     }
   }
 
+  // Staleness signal only — intentionally not permission-filtered.
+  async getLastUpdatedAt(namespaceId: string): Promise<Date | undefined> {
+    const resource = await this.resourceRepository.findOne({
+      where: {
+        namespaceId,
+        parentId: Not(IsNull()),
+        resourceType: Not(ResourceType.FOLDER),
+      },
+      order: { updatedAt: 'DESC' },
+    });
+    return resource?.updatedAt;
+  }
+
   // Alias for clarity and reuse across modules
   async getUserVisibleResources(
     userId: string,

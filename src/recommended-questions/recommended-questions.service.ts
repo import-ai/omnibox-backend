@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
-import { TagService } from 'omniboxd/tag/tag.service';
 import {
   RecommendQuestionsContextDto,
   RecommendQuestionsRequestDto,
   RecommendQuestionsResponseDto,
   RecommendResourceDto,
-} from 'omniboxd/wizard/dto/recommend-questions.dto';
+} from 'omniboxd/recommended-questions/dto/recommend-questions.dto';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { TagService } from 'omniboxd/tag/tag.service';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 
 const RECENT_RESOURCES_COUNT = 5;

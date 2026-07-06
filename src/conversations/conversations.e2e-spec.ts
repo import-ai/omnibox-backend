@@ -32,6 +32,24 @@ describe('ConversationsController (e2e)', () => {
       expect(response.body).toHaveProperty('user_id', client.user.id);
       expect(response.body).toHaveProperty('created_at');
       expect(response.body).toHaveProperty('updated_at');
+      expect(response.body).toHaveProperty('is_recommended', false);
+    });
+
+    it('should create a conversation flagged as recommended', async () => {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+        .send({ is_recommended: true })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body).toHaveProperty('id');
+      expect(response.body).toHaveProperty('is_recommended', true);
+    });
+
+    it('should fail when is_recommended is not a boolean', async () => {
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+        .send({ is_recommended: 'yes' })
+        .expect(HttpStatus.BAD_REQUEST);
     });
 
     it('should fail with invalid namespaceId', async () => {

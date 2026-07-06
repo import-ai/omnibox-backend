@@ -17,4 +17,7 @@ export class Conversation extends Base {
 
   @Column('varchar', { nullable: true })
   shareId: string | null;
+
+  @Column({ default: false })
+  isRecommended: boolean;
 }

@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
+  RecentQuestionDto,
   RecommendQuestionsContextDto,
   RecommendQuestionsRequestDto,
   RecommendQuestionsResponseDto,
@@ -106,7 +107,12 @@ export class RecommendedQuestionsService {
       resources,
     );
     context.recentTags = tags.map((t) => t.name);
-    context.recentQuestions = questions;
+    context.recentQuestions = questions.map((q) => {
+      const dto = new RecentQuestionDto();
+      dto.question = q.question;
+      dto.isRecommended = q.isRecommended;
+      return dto;
+    });
 
     const req = new RecommendQuestionsRequestDto();
     req.namespaceId = namespaceId;

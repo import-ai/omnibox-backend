@@ -22,6 +22,11 @@ import { DataSource, Repository } from 'typeorm';
 
 const TASK_PRIORITY = 5;
 
+export interface RecentQuestion {
+  question: string;
+  isRecommended: boolean;
+}
+
 @Injectable()
 export class ConversationsService {
   constructor(
@@ -35,11 +40,12 @@ export class ConversationsService {
     private readonly i18n: I18nService,
   ) {}
 
-  async create(namespaceId: string, userId: string) {
+  async create(namespaceId: string, userId: string, isRecommended = false) {
     const conversation = this.conversationRepository.create({
       namespaceId,
       userId: userId,
       title: '',
+      isRecommended,
     });
     return await this.conversationRepository.save(conversation);
   }
@@ -80,16 +86,23 @@ export class ConversationsService {
     namespaceId: string,
     userId: string,
     count: number,
-  ): Promise<string[]> {
+  ): Promise<RecentQuestion[]> {
     const conversations = await this.findAll(namespaceId, userId, {
       limit: count,
     });
     const summaries = await Promise.all(
       conversations.map((c) => this.getSummary(userId, c)),
     );
-    return summaries
-      .map((s) => (s.user_content ?? s.title ?? '').trim())
-      .filter((q) => q.length > 0);
+    return conversations
+      .map((c, i) => ({
+        question: (
+          summaries[i].user_content ??
+          summaries[i].title ??
+          ''
+        ).trim(),
+        isRecommended: c.isRecommended,
+      }))
+      .filter((q) => q.question.length > 0);
   }
 
   async countAll(namespaceId: string, userId: string) {

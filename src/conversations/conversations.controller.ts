@@ -13,6 +13,7 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ConversationsService } from './conversations.service';
 import { ConversationDetailDto } from './dto/conversation-detail.dto';
 import { ConversationSummaryDto } from './dto/conversation-summary.dto';
+import { CreateConversationDto } from './dto/create-conversation.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/conversations')
@@ -41,8 +42,13 @@ export class ConversationsController {
   async create(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
+    @Body() createConversationDto: CreateConversationDto,
   ) {
-    return await this.conversationsService.create(namespaceId, userId);
+    return await this.conversationsService.create(
+      namespaceId,
+      userId,
+      createConversationDto?.isRecommended ?? false,
+    );
   }
 
   @Patch(':id')

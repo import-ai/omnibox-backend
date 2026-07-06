@@ -24,6 +24,14 @@ export class RecommendResourceDto {
   updatedAt?: string;
 }
 
+export class RecentQuestionDto {
+  @Expose({ name: 'question' })
+  question: string;
+
+  @Expose({ name: 'is_recommended' })
+  isRecommended: boolean = false;
+}
+
 export class RecommendQuestionsContextDto {
   @Expose({ name: 'recent_resources' })
   @Type(() => RecommendResourceDto)
@@ -33,7 +41,8 @@ export class RecommendQuestionsContextDto {
   recentTags: string[] = [];
 
   @Expose({ name: 'recent_questions' })
-  recentQuestions: string[] = [];
+  @Type(() => RecentQuestionDto)
+  recentQuestions: RecentQuestionDto[] = [];
 }
 
 export class RecommendQuestionsRequestDto {

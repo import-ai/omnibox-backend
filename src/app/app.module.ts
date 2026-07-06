@@ -82,6 +82,7 @@ import { MigrateFileReaderTaskFunctions1781259717294 } from 'omniboxd/migrations
 import { AddWorkerIdToTasks1781511514000 } from 'omniboxd/migrations/1781511514000-add-worker-id-to-tasks';
 import { AddNumSchedulesToTasks1783080000000 } from 'omniboxd/migrations/1783080000000-add-num-schedules-to-tasks';
 import { RecommendedQuestions1783321387374 } from 'omniboxd/migrations/1783321387374-recommended-questions';
+import { AddIsRecommendedToConversations1783343362776 } from 'omniboxd/migrations/1783343362776-add-is-recommended-to-conversations';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -274,6 +275,7 @@ export class AppModule implements NestModule {
               AddWorkerIdToTasks1781511514000,
               AddNumSchedulesToTasks1783080000000,
               RecommendedQuestions1783321387374,
+              AddIsRecommendedToConversations1783343362776,
               ...extraMigrations,
             ],
             migrationsRun: true,

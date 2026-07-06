@@ -1,4 +1,5 @@
 import { Expose, Type } from 'class-transformer';
+import { RecommendedQuestionItem } from 'omniboxd/recommended-questions/entities/recommended-questions.entity';
 
 export class RecommendResourceDto {
   @Expose({ name: 'name' })
@@ -14,7 +15,7 @@ export class RecommendResourceDto {
   tags: string[] = [];
 
   @Expose({ name: 'content' })
-  content?: string;
+  content: string;
 
   @Expose({ name: 'created_at' })
   createdAt?: string;
@@ -50,7 +51,7 @@ export class RecommendQuestionsRequestDto {
   maxQuestions?: number;
 }
 
-export class RecommendedQuestionDto {
+export class RecommendedQuestionDto implements RecommendedQuestionItem {
   @Expose({ name: 'question' })
   question: string;
 

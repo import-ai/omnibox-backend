@@ -66,13 +66,11 @@ export class RecommendedQuestionsService {
     namespaceId: string,
     resources: Resource[],
   ): Promise<RecommendResourceDto[]> {
-    const tagIds = [...new Set(resources.flatMap((r) => r.tagIds ?? []))];
-    const tagNameById = new Map(
-      (await this.tagService.getTagsByIds(namespaceId, tagIds)).map((t) => [
-        t.id,
-        t.name,
-      ]),
-    );
+    const tagsByResource =
+      await this.namespaceResourcesService.getTagsForResources(
+        namespaceId,
+        resources,
+      );
 
     return resources
       .map((resource) => {
@@ -82,15 +80,13 @@ export class RecommendedQuestionsService {
         dto.metadata = { ...resource.attrs };
         delete dto.metadata.transcript;
         delete dto.metadata.video_info;
-        dto.tags = (resource.tagIds ?? [])
-          .map((id) => tagNameById.get(id))
-          .filter((name): name is string => !!name);
+        dto.tags = (tagsByResource.get(resource.id) ?? []).map((t) => t.name);
         dto.content = this.truncateContent(resource.content);
         dto.createdAt = resource.createdAt?.toISOString();
         dto.updatedAt = resource.updatedAt?.toISOString();
         return dto;
       })
-      .filter((dto) => dto.name.length > 0 || dto.content!.length > 0);
+      .filter((dto) => dto.name.length > 0 || dto.content.length > 0);
   }
 
   private truncateContent(content: string | null | undefined): string {

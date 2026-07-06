@@ -82,7 +82,7 @@ export class NamespaceResourcesService {
     return await this.tagService.getTagsByIds(namespaceId, tagIds);
   }
 
-  private async getTagsForResources(
+  async getTagsForResources(
     namespaceId: string,
     resources: Resource[],
   ): Promise<Map<string, TagDto[]>> {
@@ -831,12 +831,9 @@ export class NamespaceResourcesService {
   async getRecentResources(
     namespaceId: string,
     userId: string,
-    count: number = 1,
+    count: number,
   ): Promise<Resource[]> {
     const result: Resource[] = [];
-    if (count <= 0) {
-      return result;
-    }
     const batchSize = 100;
     for (let skip = 0; ; skip += batchSize) {
       const batch = await this.resourceRepository.find({
@@ -884,6 +881,7 @@ export class NamespaceResourcesService {
   // Staleness signal only — intentionally not permission-filtered.
   async getLastUpdatedAt(namespaceId: string): Promise<Date | undefined> {
     const resource = await this.resourceRepository.findOne({
+      select: ['updatedAt'],
       where: {
         namespaceId,
         parentId: Not(IsNull()),

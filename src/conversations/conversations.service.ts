@@ -76,24 +76,14 @@ export class ConversationsService {
     return await this.conversationRepository.find(query);
   }
 
-  async getRecentConversations(
-    namespaceId: string,
-    userId: string,
-    count: number,
-  ): Promise<Conversation[]> {
-    return await this.findAll(namespaceId, userId, { limit: count });
-  }
-
   async getRecentQuestions(
     namespaceId: string,
     userId: string,
     count: number,
   ): Promise<string[]> {
-    const conversations = await this.getRecentConversations(
-      namespaceId,
-      userId,
-      count,
-    );
+    const conversations = await this.findAll(namespaceId, userId, {
+      limit: count,
+    });
     const summaries = await Promise.all(
       conversations.map((c) => this.getSummary(userId, c)),
     );

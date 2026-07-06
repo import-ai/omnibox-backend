@@ -16,28 +16,6 @@ import { IsNull, QueryFailedError, Repository } from 'typeorm';
 const SCAN_FRESHNESS_MS = 9 * 60 * 1000;
 const NAMESPACE_BATCH_SIZE = 100;
 
-export type ScanAction = 'skip' | 'generate' | 'touch';
-
-export function computeAction(
-  row: RecommendedQuestions | undefined,
-  lastModified: Date | undefined,
-  now: Date,
-): ScanAction {
-  if (
-    row?.scannedAt &&
-    now.getTime() - row.scannedAt.getTime() < SCAN_FRESHNESS_MS
-  ) {
-    return 'skip';
-  }
-  if (!row?.generatedAt) {
-    return 'generate';
-  }
-  if (lastModified && lastModified > row.generatedAt) {
-    return 'generate';
-  }
-  return 'touch';
-}
-
 const PG_UNIQUE_VIOLATION = '23505';
 
 function isUniqueViolation(err: unknown): boolean {
@@ -78,9 +56,7 @@ export class RecommendedQuestionsCronService {
     const counts = {
       namespaces: 0,
       members: 0,
-      skipped: 0,
       generated: 0,
-      touched: 0,
       failed: 0,
     };
     for (let offset = 0; ; offset += NAMESPACE_BATCH_SIZE) {
@@ -88,9 +64,6 @@ export class RecommendedQuestionsCronService {
         offset,
         NAMESPACE_BATCH_SIZE,
       );
-      if (namespaceIds.length === 0) {
-        break;
-      }
       counts.namespaces += namespaceIds.length;
       for (const namespaceId of namespaceIds) {
         const userIds =
@@ -98,16 +71,12 @@ export class RecommendedQuestionsCronService {
         for (const userId of userIds) {
           counts.members++;
           try {
-            const action = await this.checkRecommendQuestions(
+            const generated = await this.checkRecommendQuestions(
               namespaceId,
               userId,
             );
-            if (action === 'skip') {
-              counts.skipped++;
-            } else if (action === 'generate') {
+            if (generated) {
               counts.generated++;
-            } else {
-              counts.touched++;
             }
           } catch (err) {
             counts.failed++;
@@ -126,9 +95,7 @@ export class RecommendedQuestionsCronService {
     const span = trace.getActiveSpan();
     span?.setAttribute('scan.namespaces', counts.namespaces);
     span?.setAttribute('scan.members', counts.members);
-    span?.setAttribute('scan.skipped', counts.skipped);
     span?.setAttribute('scan.generated', counts.generated);
-    span?.setAttribute('scan.touched', counts.touched);
     span?.setAttribute('scan.failed', counts.failed);
     this.logger.log(`Recommended questions scan: ${JSON.stringify(counts)}`);
   }
@@ -136,56 +103,52 @@ export class RecommendedQuestionsCronService {
   async checkRecommendQuestions(
     namespaceId: string,
     userId: string,
-  ): Promise<ScanAction> {
+  ): Promise<boolean> {
     const now = new Date();
-    const row =
-      (await this.recommendedQuestionsRepository.findOne({
-        where: { namespaceId, userId },
-      })) ?? undefined;
-    // Fresh rows are the common case; return before the activity lookups.
+    const row = await this.recommendedQuestionsRepository.findOne({
+      where: { namespaceId, userId },
+    });
     if (
       row?.scannedAt &&
       now.getTime() - row.scannedAt.getTime() < SCAN_FRESHNESS_MS
     ) {
-      return 'skip';
-    }
-    const lastModified = await this.getLastModifiedAt(namespaceId, userId);
-    const action = computeAction(row, lastModified, now);
-    if (action === 'skip') {
-      return 'skip';
+      return false;
     }
     // Insert-on-conflict-skip plus a compare-and-swap on scanned_at claim the
     // pair, so concurrent instances never process it twice. If generation
     // fails after the claim, the pair is simply rescanned once scanned_at
     // ages out.
     if (!row && !(await this.insertEmptyRow(namespaceId, userId))) {
-      return 'skip';
+      return false;
     }
     if (
       !(await this.claimScan(namespaceId, userId, row?.scannedAt ?? null, now))
     ) {
-      return 'skip';
+      return false;
     }
-    if (action === 'generate') {
-      const res =
-        await this.recommendedQuestionsService.getRecommendedQuestions(
-          namespaceId,
-          userId,
-        );
-      await this.recommendedQuestionsRepository.update(
-        { namespaceId, userId },
-        {
-          questions: res.questions.map((q) => ({
-            question: q.question,
-            intent: q.intent,
-            reason: q.reason,
-          })),
-          generatedAt: now,
-        },
-      );
+    const lastModified = await this.getLastModifiedAt(namespaceId, userId);
+    if (
+      row?.generatedAt &&
+      (!lastModified || lastModified <= row.generatedAt)
+    ) {
+      return false;
     }
-    // For 'touch', the claim already updated scanned_at; nothing else to do.
-    return action;
+    const res = await this.recommendedQuestionsService.getRecommendedQuestions(
+      namespaceId,
+      userId,
+    );
+    await this.recommendedQuestionsRepository.update(
+      { namespaceId, userId },
+      {
+        questions: res.questions.map((q) => ({
+          question: q.question,
+          intent: q.intent,
+          reason: q.reason,
+        })),
+        generatedAt: now,
+      },
+    );
+    return true;
   }
 
   private async getLastModifiedAt(
@@ -195,7 +158,7 @@ export class RecommendedQuestionsCronService {
     const [resourceLast, recentTags, recentConversations] = await Promise.all([
       this.namespaceResourcesService.getLastUpdatedAt(namespaceId),
       this.tagService.getRecentTags(namespaceId, 1),
-      this.conversationsService.getRecentConversations(namespaceId, userId, 1),
+      this.conversationsService.findAll(namespaceId, userId, { limit: 1 }),
     ]);
     return maxDate(
       resourceLast,

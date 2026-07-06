@@ -19,6 +19,5 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     TagModule,
     ConversationsModule,
   ],
-  exports: [RecommendedQuestionsService],
 })
 export class RecommendedQuestionsModule {}

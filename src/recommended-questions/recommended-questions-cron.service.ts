@@ -9,22 +9,12 @@ import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { RecommendedQuestion } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { RecommendedQuestionsService } from 'omniboxd/recommended-questions/recommended-questions.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { QueryFailedError, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 // Slightly below the cron interval so a pair scanned seconds after a tick
 // is not skipped at the next tick (which would double the effective cadence).
 const SCAN_FRESHNESS_MS = 9 * 60 * 1000;
 const NAMESPACE_BATCH_SIZE = 100;
-
-const PG_UNIQUE_VIOLATION = '23505';
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof QueryFailedError &&
-    (err.driverError as { code?: string } | undefined)?.code ===
-      PG_UNIQUE_VIOLATION
-  );
-}
 
 function maxDate(...dates: (Date | undefined)[]): Date | undefined {
   let max: Date | undefined;
@@ -108,10 +98,11 @@ export class RecommendedQuestionsCronService {
     if (!(await this.shouldGenerate(namespaceId, userId, now))) {
       return false;
     }
-    const res = await this.recommendedQuestionsService.getRecommendedQuestions(
-      namespaceId,
-      userId,
-    );
+    const res =
+      await this.recommendedQuestionsService.generateRecommendedQuestions(
+        namespaceId,
+        userId,
+      );
     await this.recommendedQuestionsRepository.update(
       { namespaceId, userId },
       {
@@ -126,33 +117,6 @@ export class RecommendedQuestionsCronService {
     return true;
   }
 
-  private async findOrInsert(
-    namespaceId: string,
-    userId: string,
-    now: Date,
-  ): Promise<RecommendedQuestion> {
-    const record = await this.recommendedQuestionsRepository.findOne({
-      where: { namespaceId, userId },
-    });
-    if (record) {
-      return record;
-    }
-    try {
-      await this.recommendedQuestionsRepository.insert({
-        namespaceId,
-        userId,
-        scannedAt: now,
-      });
-    } catch (err) {
-      if (!isUniqueViolation(err)) {
-        throw err;
-      }
-    }
-    return await this.recommendedQuestionsRepository.findOneOrFail({
-      where: { namespaceId, userId },
-    });
-  }
-
   // Inserting the row on conflict-skip and compare-and-swapping scanned_at
   // claim the pair, so concurrent instances never process it twice. If
   // generation fails after the claim, the pair is simply rescanned once
@@ -162,7 +126,11 @@ export class RecommendedQuestionsCronService {
     userId: string,
     now: Date,
   ): Promise<boolean> {
-    const record = await this.findOrInsert(namespaceId, userId, now);
+    const record = await this.recommendedQuestionsService.findOrInsert(
+      namespaceId,
+      userId,
+      now,
+    );
 
     if (now.getTime() - record.scannedAt.getTime() < SCAN_FRESHNESS_MS) {
       return false;

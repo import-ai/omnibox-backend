@@ -6,10 +6,10 @@ import { Span } from 'nestjs-otel';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { RecommendedQuestions } from 'omniboxd/recommended-questions/entities/recommended-questions.entity';
+import { RecommendedQuestion } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { RecommendedQuestionsService } from 'omniboxd/recommended-questions/recommended-questions.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { IsNull, QueryFailedError, Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 
 // Slightly below the cron interval so a pair scanned seconds after a tick
 // is not skipped at the next tick (which would double the effective cadence).
@@ -41,8 +41,8 @@ export class RecommendedQuestionsCronService {
   private readonly logger = new Logger(RecommendedQuestionsCronService.name);
 
   constructor(
-    @InjectRepository(RecommendedQuestions)
-    private readonly recommendedQuestionsRepository: Repository<RecommendedQuestions>,
+    @InjectRepository(RecommendedQuestion)
+    private readonly recommendedQuestionsRepository: Repository<RecommendedQuestion>,
     private readonly namespacesService: NamespacesService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
@@ -105,32 +105,7 @@ export class RecommendedQuestionsCronService {
     userId: string,
   ): Promise<boolean> {
     const now = new Date();
-    const row = await this.recommendedQuestionsRepository.findOne({
-      where: { namespaceId, userId },
-    });
-    if (
-      row?.scannedAt &&
-      now.getTime() - row.scannedAt.getTime() < SCAN_FRESHNESS_MS
-    ) {
-      return false;
-    }
-    // Insert-on-conflict-skip plus a compare-and-swap on scanned_at claim the
-    // pair, so concurrent instances never process it twice. If generation
-    // fails after the claim, the pair is simply rescanned once scanned_at
-    // ages out.
-    if (!row && !(await this.insertEmptyRow(namespaceId, userId))) {
-      return false;
-    }
-    if (
-      !(await this.claimScan(namespaceId, userId, row?.scannedAt ?? null, now))
-    ) {
-      return false;
-    }
-    const lastModified = await this.getLastModifiedAt(namespaceId, userId);
-    if (
-      row?.generatedAt &&
-      (!lastModified || lastModified <= row.generatedAt)
-    ) {
+    if (!(await this.shouldGenerate(namespaceId, userId, now))) {
       return false;
     }
     const res = await this.recommendedQuestionsService.getRecommendedQuestions(
@@ -151,7 +126,65 @@ export class RecommendedQuestionsCronService {
     return true;
   }
 
-  private async getLastModifiedAt(
+  private async findOrInsert(
+    namespaceId: string,
+    userId: string,
+    now: Date,
+  ): Promise<RecommendedQuestion> {
+    const record = await this.recommendedQuestionsRepository.findOne({
+      where: { namespaceId, userId },
+    });
+    if (record) {
+      return record;
+    }
+    try {
+      await this.recommendedQuestionsRepository.insert({
+        namespaceId,
+        userId,
+        scannedAt: now,
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err)) {
+        throw err;
+      }
+    }
+    return await this.recommendedQuestionsRepository.findOneOrFail({
+      where: { namespaceId, userId },
+    });
+  }
+
+  // Inserting the row on conflict-skip and compare-and-swapping scanned_at
+  // claim the pair, so concurrent instances never process it twice. If
+  // generation fails after the claim, the pair is simply rescanned once
+  // scanned_at ages out.
+  private async shouldGenerate(
+    namespaceId: string,
+    userId: string,
+    now: Date,
+  ): Promise<boolean> {
+    const record = await this.findOrInsert(namespaceId, userId, now);
+
+    if (now.getTime() - record.scannedAt.getTime() < SCAN_FRESHNESS_MS) {
+      return false;
+    }
+
+    const result = await this.recommendedQuestionsRepository.update(
+      { namespaceId, userId, scannedAt: record.scannedAt },
+      { scannedAt: now },
+    );
+    if (result.affected !== 1) {
+      return false;
+    }
+
+    const lastUpdated = await this.getLastUpdatedAt(namespaceId, userId);
+    if (!lastUpdated) {
+      return false;
+    }
+
+    return !record.generatedAt || record.generatedAt <= lastUpdated;
+  }
+
+  private async getLastUpdatedAt(
     namespaceId: string,
     userId: string,
   ): Promise<Date | undefined> {
@@ -165,40 +198,5 @@ export class RecommendedQuestionsCronService {
       recentTags[0]?.updatedAt,
       recentConversations[0]?.updatedAt,
     );
-  }
-
-  private async insertEmptyRow(
-    namespaceId: string,
-    userId: string,
-  ): Promise<boolean> {
-    try {
-      await this.recommendedQuestionsRepository.insert({
-        namespaceId,
-        userId,
-      });
-      return true;
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        return false;
-      }
-      throw err;
-    }
-  }
-
-  private async claimScan(
-    namespaceId: string,
-    userId: string,
-    previousScannedAt: Date | null,
-    now: Date,
-  ): Promise<boolean> {
-    const result = await this.recommendedQuestionsRepository.update(
-      {
-        namespaceId,
-        userId,
-        scannedAt: previousScannedAt ?? IsNull(),
-      },
-      { scannedAt: now },
-    );
-    return (result.affected ?? 0) > 0;
   }
 }

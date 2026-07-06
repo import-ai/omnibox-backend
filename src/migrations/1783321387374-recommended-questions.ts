@@ -25,7 +25,7 @@ export class RecommendedQuestions1783321387374 implements MigrationInterface {
         {
           name: 'scanned_at',
           type: 'timestamp with time zone',
-          isNullable: true,
+          isNullable: false,
         },
         {
           name: 'generated_at',

@@ -1,5 +1,5 @@
 import { Expose, Type } from 'class-transformer';
-import { RecommendedQuestionItem } from 'omniboxd/recommended-questions/entities/recommended-questions.entity';
+import { RecommendedQuestionItem } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 
 export class RecommendResourceDto {
   @Expose({ name: 'name' })

@@ -12,7 +12,7 @@ export interface RecommendedQuestionItem {
   unique: true,
   where: '"deletedAt" IS NULL',
 })
-export class RecommendedQuestions extends Base {
+export class RecommendedQuestion extends Base {
   @PrimaryGeneratedColumn()
   id: string;
 
@@ -22,8 +22,8 @@ export class RecommendedQuestions extends Base {
   @Column('uuid')
   userId: string;
 
-  @Column('timestamptz', { nullable: true })
-  scannedAt: Date | null;
+  @Column('timestamptz')
+  scannedAt: Date;
 
   @Column('timestamptz', { nullable: true })
   generatedAt: Date | null;

@@ -8,7 +8,10 @@ import {
   RecommendQuestionsResponseDto,
   RecommendResourceDto,
 } from 'omniboxd/recommended-questions/dto/recommend-questions.dto';
-import { RecommendedQuestion } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
+import {
+  RecommendedQuestion,
+  RecommendedQuestionItem,
+} from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
@@ -66,6 +69,16 @@ export class RecommendedQuestionsService {
     return await this.recommendedQuestionsRepository.findOneOrFail({
       where: { namespaceId, userId },
     });
+  }
+
+  async getQuestions(
+    namespaceId: string,
+    userId: string,
+  ): Promise<RecommendedQuestionItem[]> {
+    const record = await this.recommendedQuestionsRepository.findOne({
+      where: { namespaceId, userId },
+    });
+    return record?.questions ?? [];
   }
 
   async generateRecommendedQuestions(

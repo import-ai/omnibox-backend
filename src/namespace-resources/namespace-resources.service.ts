@@ -832,8 +832,8 @@ export class NamespaceResourcesService {
     namespaceId: string,
     userId: string,
     count: number = 1,
-  ): Promise<ResourceMetaDto[]> {
-    const result: ResourceMetaDto[] = [];
+  ): Promise<Resource[]> {
+    const result: Resource[] = [];
     if (count <= 0) {
       return result;
     }
@@ -868,7 +868,7 @@ export class NamespaceResourcesService {
 
       for (const resource of batch) {
         if (visibleIds.has(resource.id)) {
-          result.push(ResourceMetaDto.fromEntity(resource));
+          result.push(resource);
           if (result.length >= count) {
             return result;
           }

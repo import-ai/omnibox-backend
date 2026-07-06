@@ -1,8 +1,32 @@
 import { Expose, Type } from 'class-transformer';
 
+export class RecommendResourceDto {
+  @Expose({ name: 'name' })
+  name: string;
+
+  @Expose({ name: 'resource_type' })
+  resourceType?: string;
+
+  @Expose({ name: 'metadata' })
+  metadata: Record<string, any> = {};
+
+  @Expose({ name: 'tags' })
+  tags: string[] = [];
+
+  @Expose({ name: 'content' })
+  content?: string;
+
+  @Expose({ name: 'created_at' })
+  createdAt?: string;
+
+  @Expose({ name: 'updated_at' })
+  updatedAt?: string;
+}
+
 export class RecommendQuestionsContextDto {
   @Expose({ name: 'recent_resources' })
-  recentResources: string[] = [];
+  @Type(() => RecommendResourceDto)
+  recentResources: RecommendResourceDto[] = [];
 
   @Expose({ name: 'recent_tags' })
   recentTags: string[] = [];

@@ -1,6 +1,5 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
-import { RecommendQuestionsResponseDto } from 'omniboxd/recommended-questions/dto/recommend-questions.dto';
 import { RecommendedQuestionsService } from 'omniboxd/recommended-questions/recommended-questions.service';
 
 @Controller('api/v1/namespaces/:namespaceId/recommended-questions')
@@ -13,7 +12,7 @@ export class RecommendedQuestionsController {
   async getRecommendedQuestions(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
-  ): Promise<RecommendQuestionsResponseDto> {
+  ): Promise<{ questions: { question: string }[] }> {
     const questions = await this.recommendedQuestionsService.getQuestions(
       namespaceId,
       userId,

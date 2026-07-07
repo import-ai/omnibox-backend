@@ -57,7 +57,9 @@ describe('RecommendedQuestionsController (e2e)', () => {
         .get(`/api/v1/namespaces/${client.namespace.id}/recommended-questions`)
         .expect(HttpStatus.OK);
 
-      expect(response.body).toEqual({ questions });
+      expect(response.body).toEqual({
+        questions: questions.map((q) => ({ question: q.question })),
+      });
     });
 
     it("should not return another user's questions", async () => {

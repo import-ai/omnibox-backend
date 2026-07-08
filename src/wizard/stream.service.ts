@@ -35,9 +35,22 @@ interface HandlerContext {
   message?: OpenAIMessage;
 }
 
+interface StreamSession {
+  key: string;
+  namespaceId: string;
+  conversationId: string;
+  userId: string;
+  subscribers: Set<Subscriber<MessageEvent>>;
+  controller: AbortController;
+  handlerContext: HandlerContext;
+  canceled: boolean;
+  finished: boolean;
+}
+
 @Injectable()
 export class StreamService {
   private readonly logger = new Logger(StreamService.name);
+  private readonly streamSessions = new Map<string, StreamSession>();
 
   constructor(
     private readonly wizardApiService: WizardAPIService,
@@ -56,6 +69,7 @@ export class StreamService {
     body: WizardAgentRequestDto,
     requestId: string,
     callback: (data: string) => Promise<void>,
+    signal?: AbortSignal,
   ): Promise<void> {
     const span = trace.getActiveSpan();
     if (span) {
@@ -67,6 +81,7 @@ export class StreamService {
       mode,
       body,
       requestId,
+      signal,
     );
     if (!response.ok) {
       const message = this.i18n.t('system.errors.wizardRequestFailed');
@@ -109,7 +124,11 @@ export class StreamService {
         }
       }
     } finally {
-      await reader.cancel();
+      try {
+        await reader.cancel();
+      } catch {
+        // reader may already be closed after an AbortSignal.
+      }
     }
   }
 
@@ -117,7 +136,7 @@ export class StreamService {
     namespaceId: string,
     conversationId: string,
     userId: string,
-    subscriber: Subscriber<MessageEvent>,
+    send: (data: string) => void,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
@@ -224,7 +243,7 @@ export class StreamService {
         chunk.response_type !== 'checkpoint' &&
         context?.message?.role !== OpenAIMessageRole.SYSTEM
       ) {
-        subscriber.next({ data: JSON.stringify(chunk) });
+        send(JSON.stringify(chunk));
       }
     };
   }
@@ -450,49 +469,251 @@ export class StreamService {
       messages = this.getMessages(allMessages, parentId);
     }
 
-    const handlerContext: HandlerContext = {
-      parentId,
-      messageId: undefined,
-    };
+    const key = this.getStreamKey(
+      namespaceId,
+      requestDto.conversation_id,
+      userId,
+      shareId,
+    );
 
     return new Observable<MessageEvent>((subscriber) => {
-      const handler = this.agentHandler(
-        namespaceId,
-        requestDto.conversation_id,
-        userId,
-        subscriber,
-      );
+      const session =
+        this.streamSessions.get(key) ||
+        this.startAgentSession(
+          key,
+          namespaceId,
+          requestDto,
+          requestId,
+          mode,
+          userId,
+          shareId,
+          parentId,
+          messages,
+        );
+      return this.attachSession(session, subscriber);
+    });
+  }
 
-      const tools = (requestDto.tools || []).map((tool) => {
-        if (tool.name === 'private_search') {
-          return {
-            ...tool,
-            namespace_id: namespaceId,
-          } as WizardPrivateSearchToolDto;
+  private getStreamKey(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId = '',
+  ): string {
+    return `${shareId ? `share:${shareId}` : `user:${userId}`}:${namespaceId}:${conversationId}`;
+  }
+
+  private startAgentSession(
+    key: string,
+    namespaceId: string,
+    requestDto: AgentRequestDto,
+    requestId: string,
+    mode: 'ask' | 'write',
+    userId: string,
+    shareId: string,
+    parentId: string | undefined,
+    messages: Message[],
+  ): StreamSession {
+    const session: StreamSession = {
+      key,
+      namespaceId,
+      conversationId: requestDto.conversation_id,
+      userId,
+      subscribers: new Set(),
+      controller: new AbortController(),
+      handlerContext: { parentId },
+      canceled: false,
+      finished: false,
+    };
+    this.streamSessions.set(key, session);
+
+    const handler = this.agentHandler(
+      namespaceId,
+      requestDto.conversation_id,
+      userId,
+      (data) => this.sendSessionData(session, data),
+    );
+
+    const tools = (requestDto.tools || []).map((tool) => {
+      if (tool.name === 'private_search') {
+        return {
+          ...tool,
+          namespace_id: namespaceId,
+        } as WizardPrivateSearchToolDto;
+      }
+      return tool;
+    });
+
+    const wizardRequest: WizardAgentRequestDto = {
+      namespace_id: namespaceId,
+      user_id: userId,
+      conversation_id: requestDto.conversation_id,
+      query: requestDto.query,
+      messages,
+      tools,
+      enable_thinking: requestDto.enable_thinking,
+      lang: requestDto.lang,
+      tool_call: requestDto.tool_call,
+      channel: requestDto.channel,
+      share_id: shareId,
+    };
+
+    void this.stream(
+      namespaceId,
+      mode,
+      wizardRequest,
+      requestId,
+      async (data) => {
+        if (session.finished || session.canceled) return;
+        await handler(data, session.handlerContext);
+      },
+      session.controller.signal,
+    )
+      .then(() => this.completeSession(session))
+      .catch((err: Error) => {
+        if (session.canceled || session.controller.signal.aborted) {
+          this.completeSession(session);
+          return;
         }
-        return tool;
+        this.errorSession(session, err);
       });
 
-      const wizardRequest: WizardAgentRequestDto = {
-        namespace_id: namespaceId,
-        user_id: userId,
-        conversation_id: requestDto.conversation_id,
-        query: requestDto.query,
-        messages,
-        tools,
-        enable_thinking: requestDto.enable_thinking,
-        lang: requestDto.lang,
-        tool_call: requestDto.tool_call,
-        channel: requestDto.channel,
-        share_id: shareId,
-      };
+    return session;
+  }
 
-      this.stream(namespaceId, mode, wizardRequest, requestId, async (data) => {
-        await handler(data, handlerContext);
-      })
-        .then(() => subscriber.complete())
-        .catch((err: Error) => this.streamError(subscriber, err));
+  private attachSession(
+    session: StreamSession,
+    subscriber: Subscriber<MessageEvent>,
+  ) {
+    if (session.finished) {
+      subscriber.complete();
+      return;
+    }
+    session.subscribers.add(subscriber);
+    return () => {
+      session.subscribers.delete(subscriber);
+    };
+  }
+
+  private sendSessionData(session: StreamSession, data: string) {
+    if (session.finished) return;
+    for (const subscriber of session.subscribers) {
+      if (!subscriber.closed) {
+        subscriber.next({ data });
+      }
+    }
+  }
+
+  private completeSession(session: StreamSession) {
+    if (session.finished) return;
+    session.finished = true;
+    for (const subscriber of session.subscribers) {
+      if (!subscriber.closed) {
+        subscriber.complete();
+      }
+    }
+    session.subscribers.clear();
+    this.streamSessions.delete(session.key);
+  }
+
+  private errorSession(session: StreamSession, error: Error) {
+    this.logger.error({ error });
+    const span = trace.getActiveSpan();
+    if (span) {
+      span.recordException(error);
+    }
+    for (const subscriber of session.subscribers) {
+      if (!subscriber.closed) {
+        subscriber.error(error);
+      }
+    }
+    this.completeSession(session);
+  }
+
+  private async stopSession(session: StreamSession) {
+    if (session.finished) return;
+    session.canceled = true;
+    session.controller.abort();
+    const [message] = await this.messagesService.stopRunning(
+      session.namespaceId,
+      session.conversationId,
+      session.userId,
+    );
+    const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
+    this.sendSessionData(
+      session,
+      JSON.stringify({
+        response_type: 'stopped',
+        id: stoppedMessageId,
+      }),
+    );
+    this.completeSession(session);
+  }
+
+  resumeUserAgentStream(
+    userId: string,
+    namespaceId: string,
+    conversationId: string,
+  ): Observable<MessageEvent> {
+    return this.resumeAgentStream(
+      this.getStreamKey(namespaceId, conversationId, userId),
+    );
+  }
+
+  resumeShareAgentStream(
+    share: Share,
+    conversationId: string,
+  ): Observable<MessageEvent> {
+    return this.resumeAgentStream(
+      this.getStreamKey(share.namespaceId, conversationId, '', share.id),
+    );
+  }
+
+  private resumeAgentStream(key: string): Observable<MessageEvent> {
+    return new Observable<MessageEvent>((subscriber) => {
+      const session = this.streamSessions.get(key);
+      if (!session) {
+        subscriber.complete();
+        return;
+      }
+      return this.attachSession(session, subscriber);
     });
+  }
+
+  async cancelUserAgentStream(
+    userId: string,
+    namespaceId: string,
+    conversationId: string,
+  ) {
+    await this.cancelAgentStream(
+      this.getStreamKey(namespaceId, conversationId, userId),
+      namespaceId,
+      conversationId,
+      userId,
+    );
+  }
+
+  async cancelShareAgentStream(share: Share, conversationId: string) {
+    await this.cancelAgentStream(
+      this.getStreamKey(share.namespaceId, conversationId, '', share.id),
+      share.namespaceId,
+      conversationId,
+      '',
+    );
+  }
+
+  private async cancelAgentStream(
+    key: string,
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+  ) {
+    const session = this.streamSessions.get(key);
+    if (session) {
+      await this.stopSession(session);
+      return;
+    }
+    await this.messagesService.stopRunning(namespaceId, conversationId, userId);
   }
 
   async createUserAgentStream(

@@ -16,6 +16,7 @@ export type ChatResponseType =
 
 export interface ChatBaseResponse {
   response_type: ChatResponseType;
+  event_id?: string;
 }
 
 export interface ChatBOSResponse extends ChatBaseResponse {
@@ -25,6 +26,7 @@ export interface ChatBOSResponse extends ChatBaseResponse {
   parentId?: string;
   userId?: string;
   namespaceId?: string;
+  attrs?: MessageAttrs;
 }
 
 export interface ChatEOSResponse extends ChatBaseResponse {

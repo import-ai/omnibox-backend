@@ -170,8 +170,8 @@ export class MessagesService {
     namespaceId: string,
     conversationId: string,
     userId: string | undefined,
-  ): Promise<Message[]> {
-    const messages = await this.messageRepository.find({
+  ): Promise<Message | null> {
+    const message = await this.messageRepository.findOne({
       where: {
         conversationId,
         userId: userId ? userId : IsNull(),
@@ -183,16 +183,13 @@ export class MessagesService {
       },
       order: { createdAt: 'DESC' },
     });
-    return await Promise.all(
-      messages.map((message) =>
-        this.update(
-          message.id,
-          namespaceId,
-          conversationId,
-          { status: MessageStatus.STOPPED },
-          true,
-        ),
-      ),
+    if (!message) return null;
+    return await this.update(
+      message.id,
+      namespaceId,
+      conversationId,
+      { status: MessageStatus.STOPPED },
+      true,
     );
   }
 

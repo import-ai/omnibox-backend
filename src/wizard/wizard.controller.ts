@@ -119,11 +119,13 @@ export class WizardController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Body('conversation_id', new ValidationPipe()) conversationId: string,
+    @Body('last_event_id') lastEventId?: string,
   ) {
     return this.streamService.resumeUserAgentStream(
       userId,
       namespaceId,
       conversationId,
+      lastEventId,
     );
   }
 
@@ -211,8 +213,13 @@ export class SharedWizardController {
   resume(
     @ValidatedShare() share: Share,
     @Body('conversation_id', new ValidationPipe()) conversationId: string,
+    @Body('last_event_id') lastEventId?: string,
   ) {
-    return this.streamService.resumeShareAgentStream(share, conversationId);
+    return this.streamService.resumeShareAgentStream(
+      share,
+      conversationId,
+      lastEventId,
+    );
   }
 
   @Post('stream/cancel')

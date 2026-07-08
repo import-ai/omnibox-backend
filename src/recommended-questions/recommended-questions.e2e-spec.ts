@@ -1,6 +1,9 @@
 import { HttpStatus } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { RecommendedQuestion } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
+import {
+  RecommendedQuestion,
+  RecommendedQuestionItem,
+} from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { TestClient } from 'test/test-client';
 import { Repository } from 'typeorm';
 
@@ -32,6 +35,8 @@ describe('RecommendedQuestionsController (e2e)', () => {
       const repository: Repository<RecommendedQuestion> = client.app.get(
         getRepositoryToken(RecommendedQuestion),
       );
+      const itemRepository: Repository<RecommendedQuestionItem> =
+        client.app.get(getRepositoryToken(RecommendedQuestionItem));
       const now = new Date();
       const questions = [
         {
@@ -45,13 +50,22 @@ describe('RecommendedQuestionsController (e2e)', () => {
           reason: 'Based on recent conversations',
         },
       ];
-      await repository.insert({
+      const record = await repository.save({
         namespaceId: client.namespace.id,
         userId: client.user.id,
         scannedAt: now,
         generatedAt: now,
-        questions,
       });
+      await itemRepository.insert(
+        questions.map((q) => ({
+          recommendedQuestionId: record.id,
+          question: q.question,
+          meta: {
+            intent: q.intent,
+            reason: q.reason,
+          },
+        })),
+      );
 
       const response = await client
         .get(`/api/v1/namespaces/${client.namespace.id}/recommended-questions`)

@@ -32,11 +32,6 @@ export class RecommendedQuestions1783321387374 implements MigrationInterface {
           type: 'timestamp with time zone',
           isNullable: true,
         },
-        {
-          name: 'questions',
-          type: 'jsonb',
-          isNullable: true,
-        },
         ...BaseColumns(),
       ],
       foreignKeys: [
@@ -61,6 +56,47 @@ export class RecommendedQuestions1783321387374 implements MigrationInterface {
       ],
     });
     await queryRunner.createTable(table, true, true, true);
+
+    const itemTable = new Table({
+      name: 'recommended_question_items',
+      columns: [
+        {
+          name: 'id',
+          type: 'bigserial',
+          isPrimary: true,
+        },
+        {
+          name: 'recommended_question_id',
+          type: 'bigint',
+          isNullable: false,
+        },
+        {
+          name: 'question',
+          type: 'text',
+          isNullable: false,
+        },
+        {
+          name: 'meta',
+          type: 'jsonb',
+          isNullable: true,
+        },
+        ...BaseColumns(),
+      ],
+      foreignKeys: [
+        {
+          columnNames: ['recommended_question_id'],
+          referencedTableName: 'recommended_questions',
+          referencedColumnNames: ['id'],
+        },
+      ],
+      indices: [
+        {
+          name: 'idx_recommended_question_items_question_id',
+          columnNames: ['recommended_question_id'],
+        },
+      ],
+    });
+    await queryRunner.createTable(itemTable, true, true, true);
   }
 
   public down(): Promise<void> {

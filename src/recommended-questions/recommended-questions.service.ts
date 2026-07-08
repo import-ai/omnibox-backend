@@ -9,7 +9,10 @@ import {
   RecommendQuestionsResponseDto,
   RecommendResourceDto,
 } from 'omniboxd/recommended-questions/dto/recommend-questions.dto';
-import { RecommendedQuestion } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
+import {
+  RecommendedQuestion,
+  RecommendedQuestionItem,
+} from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
@@ -26,6 +29,8 @@ export class RecommendedQuestionsService {
   constructor(
     @InjectRepository(RecommendedQuestion)
     private readonly recommendedQuestionsRepository: Repository<RecommendedQuestion>,
+    @InjectRepository(RecommendedQuestionItem)
+    private readonly recommendedQuestionItemsRepository: Repository<RecommendedQuestionItem>,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly tagService: TagService,
     private readonly conversationsService: ConversationsService,
@@ -39,7 +44,15 @@ export class RecommendedQuestionsService {
     const record = await this.recommendedQuestionsRepository.findOne({
       where: { namespaceId, userId },
     });
-    return (record?.questions ?? []).map((q) => ({ question: q.question }));
+    if (!record) {
+      return [];
+    }
+
+    const items = await this.recommendedQuestionItemsRepository.find({
+      where: { recommendedQuestionId: record.id },
+      order: { id: 'ASC' },
+    });
+    return items.map((item) => ({ question: item.question }));
   }
 
   async generateQuestions(

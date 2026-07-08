@@ -6,7 +6,10 @@ import { Span } from 'nestjs-otel';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { RecommendedQuestion } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
+import {
+  RecommendedQuestion,
+  RecommendedQuestionItem,
+} from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { RecommendedQuestionsService } from 'omniboxd/recommended-questions/recommended-questions.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { QueryFailedError, Repository } from 'typeorm';
@@ -121,15 +124,26 @@ export class RecommendedQuestionsCronService {
       namespaceId,
       userId,
     );
-    await this.recommendedQuestionsRepository.update(
-      { namespaceId, userId },
-      {
-        questions: res.questions.map((q) => ({
-          question: q.question,
-          intent: q.intent,
-          reason: q.reason,
-        })),
-        generatedAt: now,
+    await this.recommendedQuestionsRepository.manager.transaction(
+      async (manager) => {
+        await manager.getRepository(RecommendedQuestionItem).delete({
+          recommendedQuestionId: record.id,
+        });
+        if (res.questions.length > 0) {
+          await manager.getRepository(RecommendedQuestionItem).insert(
+            res.questions.map((q) => ({
+              recommendedQuestionId: record.id,
+              question: q.question,
+              meta: {
+                intent: q.intent,
+                reason: q.reason,
+              },
+            })),
+          );
+        }
+        await manager
+          .getRepository(RecommendedQuestion)
+          .update({ id: record.id }, { generatedAt: now });
       },
     );
     return true;

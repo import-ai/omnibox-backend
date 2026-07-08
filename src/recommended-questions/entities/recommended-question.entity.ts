@@ -1,8 +1,13 @@
 import { Base } from 'omniboxd/common/base.entity';
 import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
-export interface RecommendedQuestionItem {
+export interface RecommendedQuestionPayload {
   question: string;
+  intent: string;
+  reason: string;
+}
+
+export interface RecommendedQuestionItemMeta {
   intent: string;
   reason: string;
 }
@@ -27,7 +32,20 @@ export class RecommendedQuestion extends Base {
 
   @Column('timestamptz', { nullable: true })
   generatedAt: Date | null;
+}
+
+@Entity('recommended_question_items')
+@Index(['recommendedQuestionId'])
+export class RecommendedQuestionItem extends Base {
+  @PrimaryGeneratedColumn()
+  id: string;
+
+  @Column('bigint')
+  recommendedQuestionId: string;
+
+  @Column('text')
+  question: string;
 
   @Column('jsonb', { nullable: true })
-  questions: RecommendedQuestionItem[] | null;
+  meta: RecommendedQuestionItemMeta | null;
 }

@@ -43,7 +43,6 @@ interface StreamSession {
   subscribers: Set<Subscriber<MessageEvent>>;
   controller: AbortController;
   handlerContext: HandlerContext;
-  canceled: boolean;
   finished: boolean;
 }
 
@@ -522,7 +521,6 @@ export class StreamService {
       subscribers: new Set(),
       controller: new AbortController(),
       handlerContext: { parentId },
-      canceled: false,
       finished: false,
     };
     this.streamSessions.set(key, session);
@@ -564,14 +562,14 @@ export class StreamService {
       wizardRequest,
       requestId,
       async (data) => {
-        if (session.finished || session.canceled) return;
+        if (session.finished || session.controller.signal.aborted) return;
         await handler(data, session.handlerContext);
       },
       session.controller.signal,
     )
       .then(() => this.completeSession(session))
       .catch((err: Error) => {
-        if (session.canceled || session.controller.signal.aborted) {
+        if (session.controller.signal.aborted) {
           this.completeSession(session);
           return;
         }
@@ -632,7 +630,6 @@ export class StreamService {
 
   private async stopSession(session: StreamSession) {
     if (session.finished) return;
-    session.canceled = true;
     session.controller.abort();
     const [message] = await this.messagesService.stopRunning(
       session.namespaceId,

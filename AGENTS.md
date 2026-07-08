@@ -59,6 +59,18 @@ Main API surfaces:
   public in code and must be protected at the network/deployment layer.
 - Internal Swagger is at `/docs`.
 
+Cloud routing note: `omnibox-website` routes these overlapping paths to
+`omnibox-backend-pro`, so changes here will not affect cloud traffic unless
+`omnibox-backend-pro` is updated too. Remind the user when touching them:
+
+- `GET /api/v1/config`
+- `/api/v1/namespaces/:namespaceId/wizard/*`
+- `/api/v1/shares/:shareId/wizard/*`
+- Socket.IO path `/api/v1/socket.io`
+
+`/api/v1/wizard/collect*` is the exception in `omnibox-website`: it routes to
+this backend, not `omnibox-backend-pro`.
+
 Core modules currently include auth, user, namespaces, namespace resources and
 tasks, resources, tags/resource-tags/shared-resource-tags, files,
 attachments/resource-attachments, conversations/messages, shares/shared

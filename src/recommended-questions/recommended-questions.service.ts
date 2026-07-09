@@ -80,7 +80,7 @@ export class RecommendedQuestionsService {
         const itemResourceIds = resourceIdsByItemId.get(item.id) ?? [];
         return (
           itemResourceIds.length === 0 ||
-          itemResourceIds.some((resourceId) => resourceMap.has(resourceId))
+          itemResourceIds.every((resourceId) => resourceMap.has(resourceId))
         );
       })
       .slice(0, PUBLIC_QUESTIONS_LIMIT)

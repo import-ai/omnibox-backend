@@ -15,6 +15,7 @@ import {
   RecommendedQuestionItem,
 } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { Repository } from 'typeorm';
@@ -33,6 +34,7 @@ export class RecommendedQuestionsService {
     @InjectRepository(RecommendedQuestionItem)
     private readonly recommendedQuestionItemsRepository: Repository<RecommendedQuestionItem>,
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
     private readonly tagService: TagService,
     private readonly conversationsService: ConversationsService,
     private readonly wizardApiService: WizardAPIService,
@@ -53,7 +55,30 @@ export class RecommendedQuestionsService {
       where: { recommendedQuestionId: record.id },
       order: { createdAt: 'ASC', id: 'ASC' },
     });
-    return items.map((item) => ({ id: item.id, question: item.question }));
+    const resourceIdsByItemId = new Map<string, string[]>();
+    const resourceIds = new Set<string>();
+    for (const item of items) {
+      const itemResourceIds = this.getResourceIds(item);
+      resourceIdsByItemId.set(item.id, itemResourceIds);
+      for (const resourceId of itemResourceIds) {
+        resourceIds.add(resourceId);
+      }
+    }
+
+    const resourceMap = await this.resourcesService.batchGetResourceMeta(
+      namespaceId,
+      [...resourceIds],
+    );
+
+    return items
+      .filter((item) => {
+        const itemResourceIds = resourceIdsByItemId.get(item.id) ?? [];
+        return (
+          itemResourceIds.length === 0 ||
+          itemResourceIds.some((resourceId) => resourceMap.has(resourceId))
+        );
+      })
+      .map((item) => ({ id: item.id, question: item.question }));
   }
 
   async generateQuestions(
@@ -136,6 +161,14 @@ export class RecommendedQuestionsService {
     dto.id = id;
     dto.name = name;
     return dto;
+  }
+
+  private getResourceIds(item: RecommendedQuestionItem): string[] {
+    const resourceIds = item.meta?.resourceIds;
+    if (!Array.isArray(resourceIds)) {
+      return [];
+    }
+    return resourceIds.filter((resourceId) => typeof resourceId === 'string');
   }
 
   private truncateContent(content: string | null | undefined): string {

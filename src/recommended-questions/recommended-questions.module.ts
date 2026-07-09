@@ -10,6 +10,7 @@ import {
 import { RecommendedQuestionsController } from 'omniboxd/recommended-questions/recommended-questions.controller';
 import { RecommendedQuestionsService } from 'omniboxd/recommended-questions/recommended-questions.service';
 import { RecommendedQuestionsCronService } from 'omniboxd/recommended-questions/recommended-questions-cron.service';
+import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
@@ -21,6 +22,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     WizardAPIModule,
     NamespacesModule,
     NamespaceResourcesModule,
+    ResourcesModule,
     TagModule,
     ConversationsModule,
   ],

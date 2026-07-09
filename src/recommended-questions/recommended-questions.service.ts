@@ -23,7 +23,8 @@ import { Repository } from 'typeorm';
 const RECENT_RESOURCES_COUNT = 5;
 const RECENT_TAGS_COUNT = 10;
 const RECENT_QUESTIONS_COUNT = 5;
-const DEFAULT_MAX_QUESTIONS = 3;
+const DEFAULT_MAX_QUESTIONS = 10;
+const PUBLIC_QUESTIONS_LIMIT = 3;
 const RESOURCE_CONTENT_MAX_LENGTH = 500;
 
 @Injectable()
@@ -51,10 +52,14 @@ export class RecommendedQuestionsService {
       return [];
     }
 
-    const items = await this.recommendedQuestionItemsRepository.find({
-      where: { recommendedQuestionId: record.id },
-      order: { createdAt: 'ASC', id: 'ASC' },
-    });
+    const items = await this.recommendedQuestionItemsRepository
+      .createQueryBuilder('item')
+      .where('item.recommendedQuestionId = :recommendedQuestionId', {
+        recommendedQuestionId: record.id,
+      })
+      .orderBy('item.clicked', 'ASC')
+      .addOrderBy('RANDOM()')
+      .getMany();
     const resourceIdsByItemId = new Map<string, string[]>();
     const resourceIds = new Set<string>();
     for (const item of items) {
@@ -78,6 +83,7 @@ export class RecommendedQuestionsService {
           itemResourceIds.some((resourceId) => resourceMap.has(resourceId))
         );
       })
+      .slice(0, PUBLIC_QUESTIONS_LIMIT)
       .map((item) => ({ id: item.id, question: item.question }));
   }
 

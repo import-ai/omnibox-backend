@@ -32,7 +32,7 @@ describe('RecommendedQuestionsController (e2e)', () => {
       expect(response.body).toEqual({ questions: [] });
     });
 
-    it('should return stored questions', async () => {
+    it('should return at most three stored questions with unclicked questions first', async () => {
       const repository: Repository<RecommendedQuestion> = client.app.get(
         getRepositoryToken(RecommendedQuestion),
       );
@@ -44,11 +44,31 @@ describe('RecommendedQuestionsController (e2e)', () => {
           question: 'What is OpenWrt?',
           intent: 'explore',
           reason: 'Based on recent resources',
+          clicked: false,
         },
         {
           question: 'How to improve home network stability?',
           intent: 'troubleshoot',
           reason: 'Based on recent conversations',
+          clicked: false,
+        },
+        {
+          question: 'How should I tag router docs?',
+          intent: 'organize',
+          reason: 'Based on recent tags',
+          clicked: false,
+        },
+        {
+          question: 'What did I ask about DNS?',
+          intent: 'recall',
+          reason: 'Based on clicked recommendations',
+          clicked: true,
+        },
+        {
+          question: 'How do I debug Wi-Fi roaming?',
+          intent: 'troubleshoot',
+          reason: 'Based on clicked recommendations',
+          clicked: true,
         },
       ];
       const record = await repository.save({
@@ -62,6 +82,7 @@ describe('RecommendedQuestionsController (e2e)', () => {
           itemRepository.create({
             recommendedQuestionId: record.id,
             question: q.question,
+            clicked: q.clicked,
             meta: {
               intent: q.intent,
               reason: q.reason,
@@ -74,10 +95,18 @@ describe('RecommendedQuestionsController (e2e)', () => {
         .get(`/api/v1/namespaces/${client.namespace.id}/recommended-questions`)
         .expect(HttpStatus.OK);
 
-      expect(response.body.questions).toHaveLength(items.length);
+      expect(response.body.questions).toHaveLength(3);
       expect(response.body.questions).toEqual(
         expect.arrayContaining(
-          items.map((item) => ({
+          items.slice(0, 3).map((item) => ({
+            id: item.id,
+            question: item.question,
+          })),
+        ),
+      );
+      expect(response.body.questions).not.toEqual(
+        expect.arrayContaining(
+          items.slice(3).map((item) => ({
             id: item.id,
             question: item.question,
           })),
@@ -91,6 +120,83 @@ describe('RecommendedQuestionsController (e2e)', () => {
           }),
         ),
       );
+    });
+
+    it('should place unclicked questions before clicked questions when both are returned', async () => {
+      const priorityClient = await TestClient.create();
+      tempClients.push(priorityClient);
+      const repository: Repository<RecommendedQuestion> =
+        priorityClient.app.get(getRepositoryToken(RecommendedQuestion));
+      const itemRepository: Repository<RecommendedQuestionItem> =
+        priorityClient.app.get(getRepositoryToken(RecommendedQuestionItem));
+      const now = new Date();
+      const record = await repository.save({
+        namespaceId: priorityClient.namespace.id,
+        userId: priorityClient.user.id,
+        scannedAt: now,
+        generatedAt: now,
+      });
+      const items = await itemRepository.save([
+        itemRepository.create({
+          recommendedQuestionId: record.id,
+          question: 'Unclicked recommendation A',
+          clicked: false,
+          meta: {
+            intent: 'explore',
+            reason: 'Unclicked recommendation',
+          },
+        }),
+        itemRepository.create({
+          recommendedQuestionId: record.id,
+          question: 'Clicked recommendation A',
+          clicked: true,
+          meta: {
+            intent: 'explore',
+            reason: 'Clicked recommendation',
+          },
+        }),
+        itemRepository.create({
+          recommendedQuestionId: record.id,
+          question: 'Unclicked recommendation B',
+          clicked: false,
+          meta: {
+            intent: 'explore',
+            reason: 'Unclicked recommendation',
+          },
+        }),
+        itemRepository.create({
+          recommendedQuestionId: record.id,
+          question: 'Clicked recommendation B',
+          clicked: true,
+          meta: {
+            intent: 'explore',
+            reason: 'Clicked recommendation',
+          },
+        }),
+      ]);
+      const clickedById = new Map(items.map((item) => [item.id, item.clicked]));
+
+      const response = await priorityClient
+        .get(
+          `/api/v1/namespaces/${priorityClient.namespace.id}/recommended-questions`,
+        )
+        .expect(HttpStatus.OK);
+
+      expect(response.body.questions).toHaveLength(3);
+      expect(response.body.questions).toEqual(
+        expect.arrayContaining(
+          items
+            .filter((item) => !item.clicked)
+            .map((item) => ({
+              id: item.id,
+              question: item.question,
+            })),
+        ),
+      );
+      const clickedFlags = response.body.questions.map((item: { id: string }) =>
+        clickedById.get(item.id),
+      );
+      expect(clickedFlags).toEqual([false, false, true]);
     });
 
     it('should omit stored questions whose referenced resources are all deleted', async () => {
@@ -146,20 +252,29 @@ describe('RecommendedQuestionsController (e2e)', () => {
         }),
         itemRepository.create({
           recommendedQuestionId: record.id,
-          question: 'What should I ask about the active resource?',
-          meta: {
-            intent: 'explore',
-            reason: 'Active resource reference',
-            resourceIds: [activeResource.id],
-          },
-        }),
-        itemRepository.create({
-          recommendedQuestionId: record.id,
           question: 'What should I ask about the deleted resource?',
           meta: {
             intent: 'explore',
             reason: 'Deleted resource reference',
             resourceIds: [deletedResource.id],
+          },
+        }),
+        itemRepository.create({
+          recommendedQuestionId: record.id,
+          question: 'What should I ask about another deleted resource?',
+          meta: {
+            intent: 'explore',
+            reason: 'Deleted resource reference',
+            resourceIds: [deletedResource.id],
+          },
+        }),
+        itemRepository.create({
+          recommendedQuestionId: record.id,
+          question: 'What should I ask about the active resource?',
+          meta: {
+            intent: 'explore',
+            reason: 'Active resource reference',
+            resourceIds: [activeResource.id],
           },
         }),
         itemRepository.create({
@@ -179,24 +294,23 @@ describe('RecommendedQuestionsController (e2e)', () => {
         )
         .expect(HttpStatus.OK);
 
-      expect(response.body.questions).toEqual([
-        {
-          id: items[0].id,
-          question: items[0].question,
-        },
-        {
-          id: items[1].id,
-          question: items[1].question,
-        },
-        {
-          id: items[3].id,
-          question: items[3].question,
-        },
-      ]);
-      expect(response.body.questions).not.toContainEqual({
-        id: items[2].id,
-        question: items[2].question,
-      });
+      expect(response.body.questions).toHaveLength(3);
+      expect(response.body.questions).toEqual(
+        expect.arrayContaining(
+          [items[0], items[3], items[4]].map((item) => ({
+            id: item.id,
+            question: item.question,
+          })),
+        ),
+      );
+      expect(response.body.questions).toEqual(
+        expect.not.arrayContaining(
+          [items[1], items[2]].map((item) => ({
+            id: item.id,
+            question: item.question,
+          })),
+        ),
+      );
       expect(response.body.questions).toEqual(
         response.body.questions.map(
           (item: { id: string; question: string }) => ({

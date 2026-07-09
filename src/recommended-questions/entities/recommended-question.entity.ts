@@ -52,6 +52,9 @@ export class RecommendedQuestionItem extends Base {
   @Column('text')
   question: string;
 
+  @Column('boolean', { default: false })
+  clicked: boolean;
+
   @Column('jsonb', { nullable: true })
   meta: RecommendedQuestionItemMeta | null;
 }

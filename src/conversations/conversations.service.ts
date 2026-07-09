@@ -13,6 +13,7 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { RecommendedQuestionItem } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { UserService } from 'omniboxd/user/user.service';
@@ -52,7 +53,17 @@ export class ConversationsService {
       title: '',
       recommendedQuestionId,
     });
-    return await this.conversationRepository.save(conversation);
+    if (!recommendedQuestionId) {
+      return await this.conversationRepository.save(conversation);
+    }
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+      const savedConversation = await manager.save(Conversation, conversation);
+      await manager.update(RecommendedQuestionItem, recommendedQuestionId, {
+        clicked: true,
+      });
+      return savedConversation;
+    });
   }
 
   async createConversationForShare(share: Share) {

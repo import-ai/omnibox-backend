@@ -28,17 +28,45 @@ describe('ConversationsController (e2e)', () => {
 
   describe('POST /api/v1/namespaces/:namespaceId/conversations', () => {
     it('should create a new conversation', async () => {
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+      const normalClient = await TestClient.create();
+      tempClients.push(normalClient);
+      const repository: Repository<RecommendedQuestion> = normalClient.app.get(
+        getRepositoryToken(RecommendedQuestion),
+      );
+      const itemRepository: Repository<RecommendedQuestionItem> =
+        normalClient.app.get(getRepositoryToken(RecommendedQuestionItem));
+      const now = new Date();
+      const record = await repository.save({
+        namespaceId: normalClient.namespace.id,
+        userId: normalClient.user.id,
+        scannedAt: now,
+        generatedAt: now,
+      });
+      const item = await itemRepository.save({
+        recommendedQuestionId: record.id,
+        question: 'Should stay unclicked?',
+        meta: null,
+      });
+
+      const response = await normalClient
+        .post(`/api/v1/namespaces/${normalClient.namespace.id}/conversations`)
         .expect(HttpStatus.CREATED);
 
       expect(response.body).toHaveProperty('id');
       expect(response.body).toHaveProperty('title');
-      expect(response.body).toHaveProperty('namespace_id', client.namespace.id);
-      expect(response.body).toHaveProperty('user_id', client.user.id);
+      expect(response.body).toHaveProperty(
+        'namespace_id',
+        normalClient.namespace.id,
+      );
+      expect(response.body).toHaveProperty('user_id', normalClient.user.id);
       expect(response.body).toHaveProperty('created_at');
       expect(response.body).toHaveProperty('updated_at');
       expect(response.body).toHaveProperty('recommended_question_id', null);
+      await expect(
+        itemRepository.findOneByOrFail({ id: item.id }),
+      ).resolves.toMatchObject({
+        clicked: false,
+      });
     });
 
     it('should create a conversation from a recommended question', async () => {
@@ -67,6 +95,12 @@ describe('ConversationsController (e2e)', () => {
 
       expect(response.body).toHaveProperty('id');
       expect(response.body).toHaveProperty('recommended_question_id', item.id);
+
+      await expect(
+        itemRepository.findOneByOrFail({ id: item.id }),
+      ).resolves.toMatchObject({
+        clicked: true,
+      });
     });
 
     it('should fail when recommended_question_id is not a UUID', async () => {

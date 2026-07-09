@@ -1,4 +1,11 @@
-import { HttpStatus, Injectable, Logger, MessageEvent } from '@nestjs/common';
+import {
+  HttpStatus,
+  Injectable,
+  Logger,
+  MessageEvent,
+  OnModuleDestroy,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
 import { Span } from 'nestjs-otel';
@@ -27,7 +34,16 @@ import {
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { createClient } from 'redis';
 import { Observable, Subscriber } from 'rxjs';
+
+const STREAM_TTL_SECONDS = 60 * 60;
+const STREAM_BLOCK_MS = 15000;
+const STREAM_MAXLEN = 10000;
+const STREAM_START_ID = '0-0';
+
+type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
+type RedisClient = ReturnType<typeof createClient>;
 
 interface HandlerContext {
   parentId?: string;
@@ -35,11 +51,26 @@ interface HandlerContext {
   message?: OpenAIMessage;
 }
 
+interface StreamSession {
+  key: string;
+  namespaceId: string;
+  conversationId: string;
+  userId: string;
+  subscribers: Set<Subscriber<MessageEvent>>;
+  controller: AbortController;
+  handlerContext: HandlerContext;
+  finished: boolean;
+}
+
 @Injectable()
-export class StreamService {
+export class StreamService implements OnModuleDestroy {
   private readonly logger = new Logger(StreamService.name);
+  private readonly streamSessions = new Map<string, StreamSession>();
+  private redisClient: RedisClient | null = null;
+  private redisSubscriber: RedisClient | null = null;
 
   constructor(
+    private readonly configService: ConfigService,
     private readonly wizardApiService: WizardAPIService,
     private readonly messagesService: MessagesService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
@@ -49,6 +80,65 @@ export class StreamService {
     private readonly i18n: I18nService,
   ) {}
 
+  async onModuleDestroy() {
+    await Promise.all([
+      this.redisSubscriber?.isOpen ? this.redisSubscriber.quit() : undefined,
+      this.redisClient?.isOpen ? this.redisClient.quit() : undefined,
+    ]);
+  }
+
+  private async createRedisConnection(): Promise<RedisClient | null> {
+    const redisUrl = this.configService.get<string>('OBB_REDIS_URL');
+    if (!redisUrl) {
+      return null;
+    }
+    const client = createClient({ url: redisUrl });
+    client.on('error', (error) => this.logger.error({ error }));
+    try {
+      await client.connect();
+      return client;
+    } catch (error) {
+      this.logger.error({ error });
+      return null;
+    }
+  }
+
+  private async getRedisClient(): Promise<RedisClient | null> {
+    if (this.redisClient?.isOpen) {
+      return this.redisClient;
+    }
+    this.redisClient = await this.createRedisConnection();
+    return this.redisClient;
+  }
+
+  private async getRedisSubscriber(): Promise<RedisClient | null> {
+    if (this.redisSubscriber?.isOpen) {
+      return this.redisSubscriber;
+    }
+    this.redisSubscriber = await this.createRedisConnection();
+    return this.redisSubscriber;
+  }
+
+  private streamEventsKey(key: string): string {
+    return `wizard:stream:${key}:events`;
+  }
+
+  private streamActiveKey(key: string): string {
+    return `wizard:stream:${key}:active`;
+  }
+
+  private streamCancelKey(key: string): string {
+    return `wizard:stream:${key}:cancel`;
+  }
+
+  private streamSequenceKey(key: string): string {
+    return `wizard:stream:${key}:seq`;
+  }
+
+  private streamControlChannel(key: string): string {
+    return `wizard:stream:${key}:control`;
+  }
+
   @Span('stream')
   async stream(
     namespaceId: string,
@@ -56,6 +146,7 @@ export class StreamService {
     body: WizardAgentRequestDto,
     requestId: string,
     callback: (data: string) => Promise<void>,
+    signal?: AbortSignal,
   ): Promise<void> {
     const span = trace.getActiveSpan();
     if (span) {
@@ -67,6 +158,7 @@ export class StreamService {
       mode,
       body,
       requestId,
+      signal,
     );
     if (!response.ok) {
       const message = this.i18n.t('system.errors.wizardRequestFailed');
@@ -109,7 +201,11 @@ export class StreamService {
         }
       }
     } finally {
-      await reader.cancel();
+      try {
+        await reader.cancel();
+      } catch {
+        // reader may already be closed after an AbortSignal.
+      }
     }
   }
 
@@ -117,7 +213,7 @@ export class StreamService {
     namespaceId: string,
     conversationId: string,
     userId: string,
-    subscriber: Subscriber<MessageEvent>,
+    send: (data: string) => Promise<void>,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
@@ -132,6 +228,7 @@ export class StreamService {
               role: chunk.role,
             },
             parentId: context.parentId,
+            attrs: chunk.attrs,
           },
           false,
         );
@@ -224,7 +321,7 @@ export class StreamService {
         chunk.response_type !== 'checkpoint' &&
         context?.message?.role !== OpenAIMessageRole.SYSTEM
       ) {
-        subscriber.next({ data: JSON.stringify(chunk) });
+        await send(JSON.stringify(chunk));
       }
     };
   }
@@ -450,49 +547,455 @@ export class StreamService {
       messages = this.getMessages(allMessages, parentId);
     }
 
-    const handlerContext: HandlerContext = {
-      parentId,
-      messageId: undefined,
-    };
+    const key = this.getStreamKey(
+      namespaceId,
+      requestDto.conversation_id,
+      userId,
+      shareId,
+    );
 
     return new Observable<MessageEvent>((subscriber) => {
-      const handler = this.agentHandler(
-        namespaceId,
-        requestDto.conversation_id,
-        userId,
-        subscriber,
-      );
+      const session =
+        this.streamSessions.get(key) ||
+        this.startAgentSession(
+          key,
+          namespaceId,
+          requestDto,
+          requestId,
+          mode,
+          userId,
+          shareId,
+          parentId,
+          messages,
+        );
+      return this.attachSession(session, subscriber);
+    });
+  }
 
-      const tools = (requestDto.tools || []).map((tool) => {
-        if (tool.name === 'private_search') {
-          return {
-            ...tool,
-            namespace_id: namespaceId,
-          } as WizardPrivateSearchToolDto;
+  private getStreamKey(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId = '',
+  ): string {
+    return `${shareId ? `share:${shareId}` : `user:${userId}`}:${namespaceId}:${conversationId}`;
+  }
+
+  private startAgentSession(
+    key: string,
+    namespaceId: string,
+    requestDto: AgentRequestDto,
+    requestId: string,
+    mode: 'ask' | 'write',
+    userId: string,
+    shareId: string,
+    parentId: string | undefined,
+    messages: Message[],
+  ): StreamSession {
+    const session: StreamSession = {
+      key,
+      namespaceId,
+      conversationId: requestDto.conversation_id,
+      userId,
+      subscribers: new Set(),
+      controller: new AbortController(),
+      handlerContext: { parentId },
+      finished: false,
+    };
+    this.streamSessions.set(key, session);
+
+    const handler = this.agentHandler(
+      namespaceId,
+      requestDto.conversation_id,
+      userId,
+      (data) => this.sendSessionData(session, data),
+    );
+    const tools = (requestDto.tools || []).map((tool) => {
+      if (tool.name === 'private_search') {
+        return {
+          ...tool,
+          namespace_id: namespaceId,
+        } as WizardPrivateSearchToolDto;
+      }
+      return tool;
+    });
+
+    const wizardRequest: WizardAgentRequestDto = {
+      namespace_id: namespaceId,
+      user_id: userId,
+      conversation_id: requestDto.conversation_id,
+      query: requestDto.query,
+      messages,
+      tools,
+      enable_thinking: requestDto.enable_thinking,
+      lang: requestDto.lang,
+      tool_call: requestDto.tool_call,
+      channel: requestDto.channel,
+      share_id: shareId,
+    };
+
+    void (async () => {
+      await this.startRedisSession(session);
+      await this.stream(
+        namespaceId,
+        mode,
+        wizardRequest,
+        requestId,
+        async (data) => {
+          if (session.finished || session.controller.signal.aborted) return;
+          if (await this.isSessionCanceled(session.key)) {
+            await this.stopSession(session);
+            return;
+          }
+          await handler(
+            await this.addNextEventId(session, data),
+            session.handlerContext,
+          );
+        },
+        session.controller.signal,
+      );
+    })()
+      .then(() => this.completeSession(session))
+      .catch((err: Error) => {
+        if (!session.controller.signal.aborted) {
+          this.errorSession(session, err);
         }
-        return tool;
       });
 
-      const wizardRequest: WizardAgentRequestDto = {
-        namespace_id: namespaceId,
-        user_id: userId,
-        conversation_id: requestDto.conversation_id,
-        query: requestDto.query,
-        messages,
-        tools,
-        enable_thinking: requestDto.enable_thinking,
-        lang: requestDto.lang,
-        tool_call: requestDto.tool_call,
-        channel: requestDto.channel,
-        share_id: shareId,
-      };
+    return session;
+  }
 
-      this.stream(namespaceId, mode, wizardRequest, requestId, async (data) => {
-        await handler(data, handlerContext);
-      })
-        .then(() => subscriber.complete())
-        .catch((err: Error) => this.streamError(subscriber, err));
+  private attachSession(
+    session: StreamSession,
+    subscriber: Subscriber<MessageEvent>,
+  ) {
+    if (session.finished) {
+      subscriber.complete();
+      return;
+    }
+    session.subscribers.add(subscriber);
+    return () => {
+      session.subscribers.delete(subscriber);
+    };
+  }
+
+  private async startRedisSession(session: StreamSession) {
+    try {
+      const client = await this.getRedisClient();
+      if (client) {
+        if (!(await client.exists(this.streamActiveKey(session.key)))) {
+          await client.del([
+            this.streamEventsKey(session.key),
+            this.streamSequenceKey(session.key),
+          ]);
+        }
+        await client.del(this.streamCancelKey(session.key));
+        await client.set(this.streamActiveKey(session.key), '1', {
+          EX: STREAM_TTL_SECONDS,
+        });
+      }
+
+      const subscriber = await this.getRedisSubscriber();
+      if (!subscriber) return;
+      await subscriber.subscribe(this.streamControlChannel(session.key), () => {
+        void this.stopSession(session).catch((error) =>
+          this.logger.error({ error }),
+        );
+      });
+    } catch (error) {
+      this.logger.error({ error });
+    }
+  }
+
+  private async isSessionCanceled(key: string): Promise<boolean> {
+    try {
+      const client = await this.getRedisClient();
+      return client
+        ? Boolean(await client.exists(this.streamCancelKey(key)))
+        : false;
+    } catch (error) {
+      this.logger.error({ error });
+      return false;
+    }
+  }
+
+  private addEventId(data: string, eventId: string): string {
+    const chunk = JSON.parse(data);
+    if (['bos', 'delta'].includes(chunk.response_type)) {
+      chunk.attrs = { ...chunk.attrs, stream_event_id: eventId };
+    }
+    return JSON.stringify({ ...chunk, event_id: eventId });
+  }
+
+  private async addNextEventId(
+    session: StreamSession,
+    data: string,
+  ): Promise<string> {
+    try {
+      const client = await this.getRedisClient();
+      if (!client) return data;
+      const sequenceKey = this.streamSequenceKey(session.key);
+      const sequence = await client.incr(sequenceKey);
+      await client.expire(sequenceKey, STREAM_TTL_SECONDS);
+      return this.addEventId(data, `1-${sequence}`);
+    } catch (error) {
+      this.logger.error({ error });
+      return data;
+    }
+  }
+
+  private async sendSessionData(session: StreamSession, data: string) {
+    if (session.finished) return;
+    const payload = data.includes('"event_id"')
+      ? data
+      : await this.addNextEventId(session, data);
+    try {
+      const client = await this.getRedisClient();
+      if (client) {
+        const eventId = JSON.parse(payload).event_id;
+        if (eventId) {
+          await client.sendCommand([
+            'XADD',
+            this.streamEventsKey(session.key),
+            'MAXLEN',
+            '~',
+            String(STREAM_MAXLEN),
+            eventId,
+            'data',
+            payload,
+          ]);
+          await Promise.all([
+            client.expire(
+              this.streamEventsKey(session.key),
+              STREAM_TTL_SECONDS,
+            ),
+            client.expire(
+              this.streamActiveKey(session.key),
+              STREAM_TTL_SECONDS,
+            ),
+          ]);
+        }
+      }
+    } catch (error) {
+      this.logger.error({ error });
+    }
+    for (const subscriber of session.subscribers) {
+      if (!subscriber.closed) {
+        subscriber.next({ data: payload });
+      }
+    }
+  }
+
+  private completeSession(session: StreamSession) {
+    if (session.finished) return;
+    session.finished = true;
+    for (const subscriber of session.subscribers) {
+      if (!subscriber.closed) {
+        subscriber.complete();
+      }
+    }
+    session.subscribers.clear();
+    this.streamSessions.delete(session.key);
+    void this.cleanupRedisSession(session.key).catch((error) =>
+      this.logger.error({ error }),
+    );
+  }
+
+  private async cleanupRedisSession(key: string) {
+    if (this.redisClient?.isOpen) {
+      await this.redisClient.del(this.streamActiveKey(key));
+    }
+    if (this.redisSubscriber?.isOpen) {
+      await this.redisSubscriber.unsubscribe(this.streamControlChannel(key));
+    }
+  }
+
+  private errorSession(session: StreamSession, error: Error) {
+    this.logger.error({ error });
+    const span = trace.getActiveSpan();
+    if (span) {
+      span.recordException(error);
+    }
+    for (const subscriber of session.subscribers) {
+      if (!subscriber.closed) {
+        subscriber.error(error);
+      }
+    }
+    this.completeSession(session);
+  }
+
+  private async stopSession(session: StreamSession) {
+    if (session.finished || session.controller.signal.aborted) return;
+    session.controller.abort();
+    try {
+      await this.markSessionCanceled(session.key);
+      const message = await this.messagesService.stopRunning(
+        session.namespaceId,
+        session.conversationId,
+        session.userId,
+      );
+      const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
+      await this.sendSessionData(
+        session,
+        JSON.stringify({
+          response_type: 'stopped',
+          id: stoppedMessageId,
+        }),
+      );
+    } finally {
+      this.completeSession(session);
+    }
+  }
+
+  private async markSessionCanceled(key: string) {
+    try {
+      const client = await this.getRedisClient();
+      if (!client) return;
+      await client.set(this.streamCancelKey(key), '1', {
+        EX: STREAM_TTL_SECONDS,
+      });
+    } catch (error) {
+      this.logger.error({ error });
+    }
+  }
+
+  resumeUserAgentStream(
+    userId: string,
+    namespaceId: string,
+    conversationId: string,
+    lastEventId?: string,
+  ): Observable<MessageEvent> {
+    return this.resumeAgentStream(
+      this.getStreamKey(namespaceId, conversationId, userId),
+      lastEventId,
+    );
+  }
+
+  resumeShareAgentStream(
+    share: Share,
+    conversationId: string,
+    lastEventId?: string,
+  ): Observable<MessageEvent> {
+    return this.resumeAgentStream(
+      this.getStreamKey(share.namespaceId, conversationId, '', share.id),
+      lastEventId,
+    );
+  }
+
+  private resumeAgentStream(
+    key: string,
+    lastEventId?: string,
+  ): Observable<MessageEvent> {
+    return new Observable<MessageEvent>((subscriber) => {
+      void this.resumeRedisStream(key, lastEventId, subscriber);
     });
+  }
+
+  private async resumeRedisStream(
+    key: string,
+    lastEventId: string | undefined,
+    subscriber: Subscriber<MessageEvent>,
+  ) {
+    const client = await this.createRedisConnection();
+    if (!client) {
+      const session = this.streamSessions.get(key);
+      if (session) {
+        this.attachSession(session, subscriber);
+      } else {
+        subscriber.complete();
+      }
+      return;
+    }
+
+    try {
+      if (!(await client.exists(this.streamActiveKey(key)))) {
+        subscriber.complete();
+        return;
+      }
+      let cursor = lastEventId || STREAM_START_ID;
+
+      while (!subscriber.closed) {
+        const result = (await client.sendCommand([
+          'XREAD',
+          'BLOCK',
+          String(STREAM_BLOCK_MS),
+          'STREAMS',
+          this.streamEventsKey(key),
+          cursor,
+        ])) as unknown as RedisStreamReadResult;
+        if (!result) {
+          if (!(await client.exists(this.streamActiveKey(key)))) break;
+          continue;
+        }
+        for (const [, entries] of result) {
+          for (const [eventId, fields] of entries) {
+            cursor = eventId;
+            const data = this.addEventId(fields[1], eventId);
+            subscriber.next({ data });
+            if (
+              ['done', 'error', 'stopped'].includes(
+                JSON.parse(data).response_type,
+              )
+            ) {
+              subscriber.complete();
+              return;
+            }
+          }
+        }
+      }
+      subscriber.complete();
+    } catch (error) {
+      this.streamError(subscriber, error as Error);
+    } finally {
+      if (client.isOpen) {
+        try {
+          await client.quit();
+        } catch (error) {
+          this.logger.error({ error });
+        }
+      }
+    }
+  }
+
+  async cancelUserAgentStream(
+    userId: string,
+    namespaceId: string,
+    conversationId: string,
+  ) {
+    await this.cancelAgentStream(
+      this.getStreamKey(namespaceId, conversationId, userId),
+      namespaceId,
+      conversationId,
+      userId,
+    );
+  }
+
+  async cancelShareAgentStream(share: Share, conversationId: string) {
+    await this.cancelAgentStream(
+      this.getStreamKey(share.namespaceId, conversationId, '', share.id),
+      share.namespaceId,
+      conversationId,
+      '',
+    );
+  }
+
+  private async cancelAgentStream(
+    key: string,
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+  ) {
+    await this.markSessionCanceled(key);
+    const session = this.streamSessions.get(key);
+    if (session) {
+      await this.stopSession(session);
+      return;
+    }
+    await this.messagesService.stopRunning(namespaceId, conversationId, userId);
+    const client = await this.getRedisClient();
+    if (client) {
+      await client.publish(this.streamControlChannel(key), 'cancel');
+    }
   }
 
   async createUserAgentStream(

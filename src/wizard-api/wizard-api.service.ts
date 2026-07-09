@@ -39,6 +39,7 @@ export class WizardAPIService {
     mode: 'ask' | 'write',
     body: WizardAgentRequestDto,
     requestId: string,
+    signal?: AbortSignal,
   ): Promise<Response> {
     const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(
       namespaceId,
@@ -55,6 +56,7 @@ export class WizardAPIService {
       method: 'POST',
       headers: requestHeaders,
       body: JSON.stringify(body),
+      signal,
     });
 
     return response;

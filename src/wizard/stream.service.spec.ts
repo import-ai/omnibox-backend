@@ -8,6 +8,7 @@ function createService(mocks: {
   smartFoldersService?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
+    { get: jest.fn() } as any,
     {} as any,
     {} as any,
     mocks.namespaceResourcesService as any,
@@ -211,5 +212,183 @@ describe('StreamService private_search visible resources', () => {
         type: 'resource',
       },
     ]);
+  });
+});
+
+describe('StreamService redis stream replay', () => {
+  it('sends stopped data when abort rejects the active stream', async () => {
+    const service = createService({});
+    (service as any).messagesService = { stopRunning: jest.fn() };
+    const client = {
+      expire: jest.fn(),
+      incr: jest.fn().mockResolvedValue(1),
+      sendCommand: jest.fn(),
+      set: jest.fn(),
+    };
+    const subscriber = {
+      closed: false,
+      complete: jest.fn(),
+      next: jest.fn(),
+    };
+    jest
+      .spyOn(service as any, 'getRedisClient')
+      .mockResolvedValue(client as any);
+    jest
+      .spyOn(service as any, 'startRedisSession')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'stream')
+      .mockImplementation((...args: unknown[]) => {
+        const signal = args[5] as AbortSignal | undefined;
+        return new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      });
+
+    const session = (service as any).startAgentSession(
+      'stream-key',
+      'namespace-id',
+      { conversation_id: 'conversation-id' },
+      'request-id',
+      'ask',
+      'user-id',
+      '',
+      undefined,
+      [],
+    );
+    session.subscribers.add(subscriber);
+    await Promise.resolve();
+
+    await (service as any).stopSession(session);
+
+    expect(subscriber.next).toHaveBeenCalledWith({
+      data: expect.stringContaining('"response_type":"stopped"'),
+    });
+    expect(client.sendCommand).toHaveBeenCalled();
+  });
+
+  it('clears stale cancel state before starting a new stream session', async () => {
+    const service = createService({});
+    const client = {
+      del: jest.fn(),
+      exists: jest.fn().mockResolvedValue(0),
+      set: jest.fn(),
+    };
+    const subscriber = {
+      subscribe: jest.fn(),
+    };
+    jest
+      .spyOn(service as any, 'getRedisClient')
+      .mockResolvedValue(client as any);
+    jest
+      .spyOn(service as any, 'getRedisSubscriber')
+      .mockResolvedValue(subscriber as any);
+
+    await (service as any).startRedisSession({ key: 'stream-key' });
+
+    expect(client.del).toHaveBeenCalledWith([
+      'wizard:stream:stream-key:events',
+      'wizard:stream:stream-key:seq',
+    ]);
+    expect(client.del).toHaveBeenCalledWith('wizard:stream:stream-key:cancel');
+    expect(client.set).toHaveBeenCalledWith(
+      'wizard:stream:stream-key:active',
+      '1',
+      { EX: 3600 },
+    );
+    expect(subscriber.subscribe).toHaveBeenCalledWith(
+      'wizard:stream:stream-key:control',
+      expect.any(Function),
+    );
+  });
+
+  it('stores stream data with a server-side event id', async () => {
+    const service = createService({});
+    const client = {
+      expire: jest.fn(),
+      incr: jest.fn().mockResolvedValue(1),
+      sendCommand: jest.fn(),
+    };
+    jest
+      .spyOn(service as any, 'getRedisClient')
+      .mockResolvedValue(client as any);
+    const subscriber = {
+      closed: false,
+      next: jest.fn(),
+    };
+
+    await (service as any).sendSessionData(
+      {
+        finished: false,
+        key: 'stream-key',
+        subscribers: new Set([subscriber]),
+      },
+      JSON.stringify({
+        response_type: 'delta',
+        message: { content: 'hello' },
+      }),
+    );
+
+    expect(client.sendCommand.mock.calls[0][0]).toEqual([
+      'XADD',
+      'wizard:stream:stream-key:events',
+      'MAXLEN',
+      '~',
+      '10000',
+      '1-1',
+      'data',
+      expect.any(String),
+    ]);
+    const payload = JSON.parse(subscriber.next.mock.calls[0][0].data);
+    expect(payload).toMatchObject({
+      event_id: '1-1',
+      attrs: { stream_event_id: '1-1' },
+    });
+  });
+
+  it('replays redis events with event_id and completes on terminal data', async () => {
+    const service = createService({});
+    const client = {
+      exists: jest.fn().mockResolvedValue(1),
+      isOpen: true,
+      quit: jest.fn(),
+      sendCommand: jest
+        .fn()
+        .mockResolvedValue([
+          [
+            'wizard:stream:stream-key:events',
+            [['1-0', ['data', '{"response_type":"done"}']]],
+          ],
+        ]),
+    };
+    jest
+      .spyOn(service as any, 'createRedisConnection')
+      .mockResolvedValue(client as any);
+    const subscriber = {
+      closed: false,
+      complete: jest.fn(),
+      error: jest.fn(),
+      next: jest.fn(),
+    };
+
+    await (service as any).resumeRedisStream(
+      'stream-key',
+      undefined,
+      subscriber,
+    );
+
+    expect(subscriber.next).toHaveBeenCalledWith({
+      data: '{"response_type":"done","event_id":"1-0"}',
+    });
+    expect(client.sendCommand.mock.calls[0][0]).toEqual([
+      'XREAD',
+      'BLOCK',
+      '15000',
+      'STREAMS',
+      'wizard:stream:stream-key:events',
+      '0-0',
+    ]);
+    expect(subscriber.complete).toHaveBeenCalledTimes(1);
+    expect(client.quit).toHaveBeenCalledTimes(1);
   });
 });

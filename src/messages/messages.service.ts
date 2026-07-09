@@ -9,7 +9,7 @@ import {
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { transaction } from 'omniboxd/utils/transaction-utils';
-import { DataSource, IsNull, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Repository } from 'typeorm';
 
 import {
   ChatCheckpointResponse,
@@ -113,6 +113,15 @@ export class MessagesService {
     const message = await this.messageRepository.findOneOrFail({
       where: { id },
     });
+    if (
+      [
+        MessageStatus.SUCCESS,
+        MessageStatus.STOPPED,
+        MessageStatus.FAILED,
+      ].includes(message.status)
+    ) {
+      return message;
+    }
 
     // >>> OpenAI Message
     message.message.content = this.add(
@@ -155,6 +164,33 @@ export class MessagesService {
     return await this.messageRepository.findOneOrFail({
       where: { id, userId },
     });
+  }
+
+  async stopRunning(
+    namespaceId: string,
+    conversationId: string,
+    userId: string | undefined,
+  ): Promise<Message | null> {
+    const message = await this.messageRepository.findOne({
+      where: {
+        conversationId,
+        userId: userId ? userId : IsNull(),
+        status: In([
+          MessageStatus.PENDING,
+          MessageStatus.STREAMING,
+          MessageStatus.INTERRUPTED,
+        ]),
+      },
+      order: { createdAt: 'DESC' },
+    });
+    if (!message) return null;
+    return await this.update(
+      message.id,
+      namespaceId,
+      conversationId,
+      { status: MessageStatus.STOPPED },
+      true,
+    );
   }
 
   async remove(conversationId: string, messageId: string, user: User) {

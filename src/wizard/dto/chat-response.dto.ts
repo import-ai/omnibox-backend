@@ -11,10 +11,12 @@ export type ChatResponseType =
   | 'done'
   | 'error'
   | 'checkpoint'
-  | 'metrics';
+  | 'metrics'
+  | 'stopped';
 
 export interface ChatBaseResponse {
   response_type: ChatResponseType;
+  event_id?: string;
 }
 
 export interface ChatBOSResponse extends ChatBaseResponse {
@@ -24,6 +26,7 @@ export interface ChatBOSResponse extends ChatBaseResponse {
   parentId?: string;
   userId?: string;
   namespaceId?: string;
+  attrs?: MessageAttrs;
 }
 
 export interface ChatEOSResponse extends ChatBaseResponse {
@@ -53,6 +56,11 @@ export interface ChatErrorResponse extends ChatBaseResponse {
   message: string;
 }
 
+export interface ChatStoppedResponse extends ChatBaseResponse {
+  response_type: 'stopped';
+  id?: string;
+}
+
 export interface ChatCheckpointResponse extends ChatBaseResponse {
   response_type: 'checkpoint';
   checkpoint: Record<string, any>;
@@ -65,4 +73,5 @@ export type ChatResponse =
   | ChatDoneResponse
   | ChatMetricsResponse
   | ChatErrorResponse
+  | ChatStoppedResponse
   | ChatCheckpointResponse;

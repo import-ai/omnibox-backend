@@ -47,7 +47,7 @@ export class ConversationsController {
     return await this.conversationsService.create(
       namespaceId,
       userId,
-      createConversationDto?.isRecommended ?? false,
+      createConversationDto?.recommendedQuestionId ?? null,
     );
   }
 

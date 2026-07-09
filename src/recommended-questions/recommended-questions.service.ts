@@ -41,7 +41,7 @@ export class RecommendedQuestionsService {
   async getQuestions(
     namespaceId: string,
     userId: string,
-  ): Promise<{ question: string }[]> {
+  ): Promise<{ id: string; question: string }[]> {
     const record = await this.recommendedQuestionsRepository.findOne({
       where: { namespaceId, userId },
     });
@@ -53,7 +53,7 @@ export class RecommendedQuestionsService {
       where: { recommendedQuestionId: record.id },
       order: { createdAt: 'ASC', id: 'ASC' },
     });
-    return items.map((item) => ({ question: item.question }));
+    return items.map((item) => ({ id: item.id, question: item.question }));
   }
 
   async generateQuestions(

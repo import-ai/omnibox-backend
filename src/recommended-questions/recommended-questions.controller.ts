@@ -12,7 +12,7 @@ export class RecommendedQuestionsController {
   async getRecommendedQuestions(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
-  ): Promise<{ questions: { question: string }[] }> {
+  ): Promise<{ questions: { id: string; question: string }[] }> {
     const questions = await this.recommendedQuestionsService.getQuestions(
       namespaceId,
       userId,

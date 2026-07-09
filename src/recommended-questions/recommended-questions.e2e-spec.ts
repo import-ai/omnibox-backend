@@ -56,15 +56,17 @@ describe('RecommendedQuestionsController (e2e)', () => {
         scannedAt: now,
         generatedAt: now,
       });
-      await itemRepository.insert(
-        questions.map((q) => ({
-          recommendedQuestionId: record.id,
-          question: q.question,
-          meta: {
-            intent: q.intent,
-            reason: q.reason,
-          },
-        })),
+      const items = await itemRepository.save(
+        questions.map((q) =>
+          itemRepository.create({
+            recommendedQuestionId: record.id,
+            question: q.question,
+            meta: {
+              intent: q.intent,
+              reason: q.reason,
+            },
+          }),
+        ),
       );
 
       const response = await client
@@ -72,7 +74,10 @@ describe('RecommendedQuestionsController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(response.body).toEqual({
-        questions: questions.map((q) => ({ question: q.question })),
+        questions: items.map((item) => ({
+          id: item.id,
+          question: item.question,
+        })),
       });
     });
 

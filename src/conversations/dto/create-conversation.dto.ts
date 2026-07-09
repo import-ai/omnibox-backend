@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer';
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsUUID } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateConversationDto {
@@ -9,10 +9,8 @@ export class CreateConversationDto {
   @IsOptional()
   title?: string;
 
-  @IsBoolean({
-    message: i18nValidationMessage('validation.errors.isBoolean'),
-  })
+  @IsUUID()
   @IsOptional()
-  @Expose({ name: 'is_recommended' })
-  isRecommended?: boolean;
+  @Expose({ name: 'recommended_question_id' })
+  recommendedQuestionId?: string;
 }

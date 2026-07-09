@@ -1,9 +1,15 @@
 import { HttpStatus } from '@nestjs/common';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   MessageStatus,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
+import {
+  RecommendedQuestion,
+  RecommendedQuestionItem,
+} from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { TestClient } from 'test/test-client';
+import { Repository } from 'typeorm';
 
 describe('ConversationsController (e2e)', () => {
   let client: TestClient;
@@ -32,23 +38,41 @@ describe('ConversationsController (e2e)', () => {
       expect(response.body).toHaveProperty('user_id', client.user.id);
       expect(response.body).toHaveProperty('created_at');
       expect(response.body).toHaveProperty('updated_at');
-      expect(response.body).toHaveProperty('is_recommended', false);
+      expect(response.body).toHaveProperty('recommended_question_id', null);
     });
 
-    it('should create a conversation flagged as recommended', async () => {
+    it('should create a conversation from a recommended question', async () => {
+      const repository: Repository<RecommendedQuestion> = client.app.get(
+        getRepositoryToken(RecommendedQuestion),
+      );
+      const itemRepository: Repository<RecommendedQuestionItem> =
+        client.app.get(getRepositoryToken(RecommendedQuestionItem));
+      const now = new Date();
+      const record = await repository.save({
+        namespaceId: client.namespace.id,
+        userId: client.user.id,
+        scannedAt: now,
+        generatedAt: now,
+      });
+      const item = await itemRepository.save({
+        recommendedQuestionId: record.id,
+        question: 'What should I ask next?',
+        meta: null,
+      });
+
       const response = await client
         .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
-        .send({ is_recommended: true })
+        .send({ recommended_question_id: item.id })
         .expect(HttpStatus.CREATED);
 
       expect(response.body).toHaveProperty('id');
-      expect(response.body).toHaveProperty('is_recommended', true);
+      expect(response.body).toHaveProperty('recommended_question_id', item.id);
     });
 
-    it('should fail when is_recommended is not a boolean', async () => {
+    it('should fail when recommended_question_id is not a UUID', async () => {
       await client
         .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
-        .send({ is_recommended: 'yes' })
+        .send({ recommended_question_id: 'invalid-id' })
         .expect(HttpStatus.BAD_REQUEST);
     });
 

@@ -41,12 +41,16 @@ export class ConversationsService {
     private readonly i18n: I18nService,
   ) {}
 
-  async create(namespaceId: string, userId: string, isRecommended = false) {
+  async create(
+    namespaceId: string,
+    userId: string,
+    recommendedQuestionId: string | null = null,
+  ) {
     const conversation = this.conversationRepository.create({
       namespaceId,
       userId: userId,
       title: '',
-      isRecommended,
+      recommendedQuestionId,
     });
     return await this.conversationRepository.save(conversation);
   }
@@ -102,7 +106,7 @@ export class ConversationsService {
           summaries[i].title ??
           ''
         ).trim(),
-        isRecommended: c.isRecommended,
+        isRecommended: !!c.recommendedQuestionId,
       }))
       .filter((q) => q.question.length > 0);
   }

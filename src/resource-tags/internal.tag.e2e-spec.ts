@@ -1,4 +1,6 @@
+import { HttpStatus } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ListTagsResponseDto } from 'omniboxd/resource-tags/dto/list-tags-response.dto';
 import { TagRenameResponseDto } from 'omniboxd/resource-tags/dto/tag-rename.response.dto';
 import { TestClient } from 'test/test-client';
@@ -153,6 +155,7 @@ const testCases: TagTestCase[] = [
 
 describe('Tag (e2e)', () => {
   let client: TestClient;
+  let memberClient: TestClient;
   let privateRootId: string;
   const resourceIds: Record<string, string> = {};
 
@@ -165,6 +168,7 @@ describe('Tag (e2e)', () => {
   });
 
   afterAll(async () => {
+    await memberClient?.close();
     await client.close();
   });
 
@@ -246,5 +250,82 @@ describe('Tag (e2e)', () => {
         })
         .expect(testCase.expectedCode);
     }
+  });
+
+  it('should reject resource tag mutations without edit permission', async () => {
+    memberClient = await TestClient.create();
+
+    const invitation = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/invitations`)
+      .send({
+        namespaceRole: 'member',
+        rootPermission: ResourcePermission.CAN_EDIT,
+      })
+      .expect(HttpStatus.CREATED);
+
+    await memberClient
+      .post(
+        `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}/accept`,
+      )
+      .expect(HttpStatus.CREATED);
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}`,
+      )
+      .expect(HttpStatus.OK);
+
+    const resourceResponse = await client
+      .post(`/internal/api/v1/namespaces/${client.namespace.id}/resources`)
+      .send({
+        parentId: privateRootId,
+        name: 'readonly-tag-resource.md',
+        resourceType: 'doc',
+        content: 'Readonly tag resource',
+      })
+      .expect(HttpStatus.CREATED);
+
+    const resourceId = resourceResponse.body.id;
+
+    await client
+      .post(`/internal/api/v1/namespaces/${client.namespace.id}/tags`)
+      .send({
+        resource_id: resourceId,
+        tag_name: 'existing-tag',
+      })
+      .expect(HttpStatus.CREATED);
+
+    await client
+      .patch(
+        `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}/permissions/users/${memberClient.user.id}`,
+      )
+      .send({ permission: ResourcePermission.CAN_VIEW })
+      .expect(HttpStatus.OK);
+
+    await memberClient
+      .post(`/internal/api/v1/namespaces/${client.namespace.id}/tags`)
+      .send({
+        resource_id: resourceId,
+        tag_name: 'forbidden-add',
+      })
+      .expect(HttpStatus.FORBIDDEN);
+
+    await memberClient
+      .delete(`/internal/api/v1/namespaces/${client.namespace.id}/tags`)
+      .send({
+        resource_id: resourceId,
+        tag_name: 'existing-tag',
+      })
+      .expect(HttpStatus.FORBIDDEN);
+
+    const afterResponse = await client
+      .get(
+        `/internal/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+      )
+      .expect(HttpStatus.OK);
+
+    expect(
+      afterResponse.body.tags.map((tag: { name: string }) => tag.name),
+    ).toEqual(['existing-tag']);
   });
 });

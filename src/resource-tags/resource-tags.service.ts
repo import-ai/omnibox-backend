@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { FilterTagsRequestDto } from 'omniboxd/resource-tags/dto/filter-tags-request.dto';
 import { ListTagsRequestDto } from 'omniboxd/resource-tags/dto/list-tags-request.dto';
@@ -22,6 +23,7 @@ export class ResourceTagsService {
     private readonly tagService: TagService,
     private readonly resourcesService: ResourcesService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly permissionsService: PermissionsService,
     private readonly dataSource: DataSource,
     private readonly i18n: I18nService,
   ) {}
@@ -231,6 +233,12 @@ export class ResourceTagsService {
     tagName: string,
   ): Promise<TagDto[]> {
     return await transaction(this.dataSource.manager, async (tx) => {
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        resourceId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+      );
       const resource = await this.namespaceResourcesService.getResource({
         userId,
         namespaceId,
@@ -276,6 +284,12 @@ export class ResourceTagsService {
     tagName: string,
   ): Promise<TagDto[]> {
     return await transaction(this.dataSource.manager, async (tx) => {
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        resourceId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+      );
       const resource = await this.namespaceResourcesService.getResource({
         userId,
         namespaceId,

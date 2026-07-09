@@ -199,7 +199,7 @@ describe('RecommendedQuestionsController (e2e)', () => {
       expect(clickedFlags).toEqual([false, false, true]);
     });
 
-    it('should omit stored questions whose referenced resources are all deleted', async () => {
+    it('should omit stored questions with any deleted referenced resource', async () => {
       const filterClient = await TestClient.create();
       tempClients.push(filterClient);
       const repository: Repository<RecommendedQuestion> = filterClient.app.get(
@@ -294,10 +294,10 @@ describe('RecommendedQuestionsController (e2e)', () => {
         )
         .expect(HttpStatus.OK);
 
-      expect(response.body.questions).toHaveLength(3);
+      expect(response.body.questions).toHaveLength(2);
       expect(response.body.questions).toEqual(
         expect.arrayContaining(
-          [items[0], items[3], items[4]].map((item) => ({
+          [items[0], items[3]].map((item) => ({
             id: item.id,
             question: item.question,
           })),
@@ -305,7 +305,7 @@ describe('RecommendedQuestionsController (e2e)', () => {
       );
       expect(response.body.questions).toEqual(
         expect.not.arrayContaining(
-          [items[1], items[2]].map((item) => ({
+          [items[1], items[2], items[4]].map((item) => ({
             id: item.id,
             question: item.question,
           })),

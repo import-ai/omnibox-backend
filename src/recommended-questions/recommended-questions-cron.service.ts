@@ -126,7 +126,7 @@ export class RecommendedQuestionsCronService {
     );
     await this.recommendedQuestionsRepository.manager.transaction(
       async (manager) => {
-        await manager.getRepository(RecommendedQuestionItem).delete({
+        await manager.getRepository(RecommendedQuestionItem).softDelete({
           recommendedQuestionId: record.id,
         });
         if (res.questions.length > 0) {

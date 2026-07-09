@@ -484,6 +484,126 @@ describe('ResourcesController (e2e)', () => {
     });
   });
 
+  describe('Internal resource mutation permissions', () => {
+    beforeAll(async () => {
+      if (!memberClient) {
+        memberClient = await TestClient.create();
+      }
+
+      const invitation = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/invitations`)
+        .send({
+          namespaceRole: 'member',
+          rootPermission: ResourcePermission.CAN_EDIT,
+        })
+        .expect(HttpStatus.CREATED);
+
+      await memberClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}/accept`,
+        )
+        .expect(HttpStatus.CREATED);
+
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}`,
+        )
+        .expect(HttpStatus.OK);
+    });
+
+    it('should reject internal patch and delete for a user with view permission only', async () => {
+      const resourceResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Internal Readonly Resource'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content: 'readonly content',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      const resourceId = resourceResponse.body.id;
+
+      await setUserPermission(resourceId, ResourcePermission.CAN_VIEW);
+
+      await memberClient
+        .get(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      await memberClient
+        .patch(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .send({ content: 'changed by internal caller' })
+        .expect(HttpStatus.FORBIDDEN);
+
+      const afterPatchResponse = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .expect(HttpStatus.OK);
+      expect(afterPatchResponse.body.content).toBe('readonly content');
+
+      await memberClient
+        .delete(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
+
+      await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .expect(HttpStatus.OK);
+    });
+
+    it('should allow internal patch and delete for a user with edit permission', async () => {
+      const resourceResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Internal Editable Resource'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content: 'editable content',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      const resourceId = resourceResponse.body.id;
+
+      await memberClient
+        .patch(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .send({ content: 'changed by editable internal caller' })
+        .expect(HttpStatus.OK);
+
+      const afterPatchResponse = await memberClient
+        .get(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .expect(HttpStatus.OK);
+      expect(afterPatchResponse.body.content).toBe(
+        'changed by editable internal caller',
+      );
+
+      await memberClient
+        .delete(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
+        )
+        .expect(HttpStatus.NOT_FOUND);
+    });
+  });
+
   describe('POST /api/v1/namespaces/:namespaceId/resources/:resourceId/duplicate', () => {
     let resourceId: string;
 

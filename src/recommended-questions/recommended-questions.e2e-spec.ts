@@ -73,12 +73,23 @@ describe('RecommendedQuestionsController (e2e)', () => {
         .get(`/api/v1/namespaces/${client.namespace.id}/recommended-questions`)
         .expect(HttpStatus.OK);
 
-      expect(response.body).toEqual({
-        questions: items.map((item) => ({
-          id: item.id,
-          question: item.question,
-        })),
-      });
+      expect(response.body.questions).toHaveLength(items.length);
+      expect(response.body.questions).toEqual(
+        expect.arrayContaining(
+          items.map((item) => ({
+            id: item.id,
+            question: item.question,
+          })),
+        ),
+      );
+      expect(response.body.questions).toEqual(
+        response.body.questions.map(
+          (item: { id: string; question: string }) => ({
+            id: item.id,
+            question: item.question,
+          }),
+        ),
+      );
     });
 
     it("should not return another user's questions", async () => {

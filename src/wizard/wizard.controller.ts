@@ -113,6 +113,36 @@ export class WizardController {
     );
   }
 
+  @Post('stream/resume')
+  @Sse()
+  resume(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body('conversation_id', new ValidationPipe()) conversationId: string,
+    @Body('last_event_id') lastEventId?: string,
+  ) {
+    return this.streamService.resumeUserAgentStream(
+      userId,
+      namespaceId,
+      conversationId,
+      lastEventId,
+    );
+  }
+
+  @Post('stream/cancel')
+  async cancel(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body('conversation_id', new ValidationPipe()) conversationId: string,
+  ) {
+    await this.streamService.cancelUserAgentStream(
+      userId,
+      namespaceId,
+      conversationId,
+    );
+    return { success: true };
+  }
+
   @Post('collect/url')
   @CheckNamespaceReadonly()
   async collectUrl(
@@ -174,5 +204,32 @@ export class SharedWizardController {
       requestId,
       'write',
     );
+  }
+
+  @Post('stream/resume')
+  @Sse()
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare()
+  resume(
+    @ValidatedShare() share: Share,
+    @Body('conversation_id', new ValidationPipe()) conversationId: string,
+    @Body('last_event_id') lastEventId?: string,
+  ) {
+    return this.streamService.resumeShareAgentStream(
+      share,
+      conversationId,
+      lastEventId,
+    );
+  }
+
+  @Post('stream/cancel')
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare()
+  async cancel(
+    @ValidatedShare() share: Share,
+    @Body('conversation_id', new ValidationPipe()) conversationId: string,
+  ) {
+    await this.streamService.cancelShareAgentStream(share, conversationId);
+    return { success: true };
   }
 }

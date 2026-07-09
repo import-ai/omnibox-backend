@@ -137,6 +137,9 @@ export class RecommendedQuestionsCronService {
               meta: {
                 intent: q.intent,
                 reason: q.reason,
+                resourceIds: q.resourceIds ?? [],
+                tagIds: q.tagIds ?? [],
+                conversationIds: q.conversationIds ?? [],
               },
             })),
           );

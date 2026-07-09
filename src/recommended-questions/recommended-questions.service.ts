@@ -8,6 +8,7 @@ import {
   RecommendQuestionsRequestDto,
   RecommendQuestionsResponseDto,
   RecommendResourceDto,
+  RecommendTagDto,
 } from 'omniboxd/recommended-questions/dto/recommend-questions.dto';
 import {
   RecommendedQuestion,
@@ -79,9 +80,10 @@ export class RecommendedQuestionsService {
       namespaceId,
       resources,
     );
-    context.recentTags = tags.map((t) => t.name);
+    context.recentTags = tags.map((t) => this.toRecommendTag(t.id, t.name));
     context.recentQuestions = questions.map((q) => {
       const dto = new RecentQuestionDto();
+      dto.conversationId = q.conversationId;
       dto.question = q.question;
       dto.isRecommended = q.isRecommended;
       return dto;
@@ -109,18 +111,31 @@ export class RecommendedQuestionsService {
     return resources
       .map((resource) => {
         const dto = new RecommendResourceDto();
+        dto.id = resource.id;
         dto.name = resource.name?.trim() ?? '';
         dto.resourceType = resource.resourceType;
         dto.metadata = { ...resource.attrs };
         delete dto.metadata.transcript;
         delete dto.metadata.video_info;
-        dto.tags = (tagsByResource.get(resource.id) ?? []).map((t) => t.name);
+        dto.tags = (tagsByResource.get(resource.id) ?? []).map((t) =>
+          this.toRecommendTag(t.id, t.name),
+        );
         dto.content = this.truncateContent(resource.content);
         dto.createdAt = resource.createdAt?.toISOString();
         dto.updatedAt = resource.updatedAt?.toISOString();
         return dto;
       })
       .filter((dto) => dto.name.length > 0 || dto.content.length > 0);
+  }
+
+  private toRecommendTag(
+    id: string | undefined,
+    name: string,
+  ): RecommendTagDto {
+    const dto = new RecommendTagDto();
+    dto.id = id;
+    dto.name = name;
+    return dto;
   }
 
   private truncateContent(content: string | null | undefined): string {

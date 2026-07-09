@@ -5,11 +5,17 @@ export interface RecommendedQuestionPayload {
   question: string;
   intent: string;
   reason: string;
+  resourceIds: string[];
+  tagIds: string[];
+  conversationIds: string[];
 }
 
 export interface RecommendedQuestionItemMeta {
   intent: string;
   reason: string;
+  resourceIds?: string[];
+  tagIds?: string[];
+  conversationIds?: string[];
 }
 
 @Entity('recommended_questions')

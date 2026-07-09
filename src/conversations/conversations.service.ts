@@ -23,6 +23,7 @@ import { DataSource, Repository } from 'typeorm';
 const TASK_PRIORITY = 5;
 
 export interface RecentQuestion {
+  conversationId: string;
   question: string;
   isRecommended: boolean;
 }
@@ -95,6 +96,7 @@ export class ConversationsService {
     );
     return conversations
       .map((c, i) => ({
+        conversationId: c.id,
         question: (
           summaries[i].user_content ??
           summaries[i].title ??

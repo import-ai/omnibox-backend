@@ -1,7 +1,18 @@
 import { Expose, Type } from 'class-transformer';
 import { RecommendedQuestionPayload } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 
+export class RecommendTagDto {
+  @Expose({ name: 'id' })
+  id?: string;
+
+  @Expose({ name: 'name' })
+  name: string;
+}
+
 export class RecommendResourceDto {
+  @Expose({ name: 'id' })
+  id?: string;
+
   @Expose({ name: 'name' })
   name: string;
 
@@ -12,7 +23,8 @@ export class RecommendResourceDto {
   metadata: Record<string, any> = {};
 
   @Expose({ name: 'tags' })
-  tags: string[] = [];
+  @Type(() => RecommendTagDto)
+  tags: RecommendTagDto[] = [];
 
   @Expose({ name: 'content' })
   content: string;
@@ -25,6 +37,9 @@ export class RecommendResourceDto {
 }
 
 export class RecentQuestionDto {
+  @Expose({ name: 'conversation_id' })
+  conversationId?: string;
+
   @Expose({ name: 'question' })
   question: string;
 
@@ -38,7 +53,8 @@ export class RecommendQuestionsContextDto {
   recentResources: RecommendResourceDto[] = [];
 
   @Expose({ name: 'recent_tags' })
-  recentTags: string[] = [];
+  @Type(() => RecommendTagDto)
+  recentTags: RecommendTagDto[] = [];
 
   @Expose({ name: 'recent_questions' })
   @Type(() => RecentQuestionDto)
@@ -69,6 +85,15 @@ export class RecommendedQuestionDto implements RecommendedQuestionPayload {
 
   @Expose({ name: 'reason' })
   reason: string;
+
+  @Expose({ name: 'resource_ids' })
+  resourceIds: string[] = [];
+
+  @Expose({ name: 'tag_ids' })
+  tagIds: string[] = [];
+
+  @Expose({ name: 'conversation_ids' })
+  conversationIds: string[] = [];
 }
 
 export class RecommendQuestionsResponseDto {

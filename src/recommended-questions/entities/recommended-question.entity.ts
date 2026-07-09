@@ -43,7 +43,7 @@ export class RecommendedQuestion extends Base {
 @Entity('recommended_question_items')
 @Index(['recommendedQuestionId'])
 export class RecommendedQuestionItem extends Base {
-  @PrimaryGeneratedColumn()
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column('bigint')

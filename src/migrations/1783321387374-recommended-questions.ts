@@ -62,7 +62,8 @@ export class RecommendedQuestions1783321387374 implements MigrationInterface {
       columns: [
         {
           name: 'id',
-          type: 'bigserial',
+          type: 'uuid',
+          default: 'uuid_generate_v4()',
           isPrimary: true,
         },
         {

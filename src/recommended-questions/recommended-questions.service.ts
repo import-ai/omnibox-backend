@@ -51,7 +51,7 @@ export class RecommendedQuestionsService {
 
     const items = await this.recommendedQuestionItemsRepository.find({
       where: { recommendedQuestionId: record.id },
-      order: { id: 'ASC' },
+      order: { createdAt: 'ASC', id: 'ASC' },
     });
     return items.map((item) => ({ question: item.question }));
   }

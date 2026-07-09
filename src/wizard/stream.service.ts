@@ -657,11 +657,9 @@ export class StreamService implements OnModuleDestroy {
     })()
       .then(() => this.completeSession(session))
       .catch((err: Error) => {
-        if (session.controller.signal.aborted) {
-          this.completeSession(session);
-          return;
+        if (!session.controller.signal.aborted) {
+          this.errorSession(session, err);
         }
-        this.errorSession(session, err);
       });
 
     return session;
@@ -827,23 +825,26 @@ export class StreamService implements OnModuleDestroy {
   }
 
   private async stopSession(session: StreamSession) {
-    if (session.finished) return;
+    if (session.finished || session.controller.signal.aborted) return;
     session.controller.abort();
-    await this.markSessionCanceled(session.key);
-    const message = await this.messagesService.stopRunning(
-      session.namespaceId,
-      session.conversationId,
-      session.userId,
-    );
-    const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
-    await this.sendSessionData(
-      session,
-      JSON.stringify({
-        response_type: 'stopped',
-        id: stoppedMessageId,
-      }),
-    );
-    this.completeSession(session);
+    try {
+      await this.markSessionCanceled(session.key);
+      const message = await this.messagesService.stopRunning(
+        session.namespaceId,
+        session.conversationId,
+        session.userId,
+      );
+      const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
+      await this.sendSessionData(
+        session,
+        JSON.stringify({
+          response_type: 'stopped',
+          id: stoppedMessageId,
+        }),
+      );
+    } finally {
+      this.completeSession(session);
+    }
   }
 
   private async markSessionCanceled(key: string) {

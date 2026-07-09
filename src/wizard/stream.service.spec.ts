@@ -216,6 +216,57 @@ describe('StreamService private_search visible resources', () => {
 });
 
 describe('StreamService redis stream replay', () => {
+  it('sends stopped data when abort rejects the active stream', async () => {
+    const service = createService({});
+    (service as any).messagesService = { stopRunning: jest.fn() };
+    const client = {
+      expire: jest.fn(),
+      incr: jest.fn().mockResolvedValue(1),
+      sendCommand: jest.fn(),
+      set: jest.fn(),
+    };
+    const subscriber = {
+      closed: false,
+      complete: jest.fn(),
+      next: jest.fn(),
+    };
+    jest
+      .spyOn(service as any, 'getRedisClient')
+      .mockResolvedValue(client as any);
+    jest
+      .spyOn(service as any, 'startRedisSession')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'stream')
+      .mockImplementation((...args: unknown[]) => {
+        const signal = args[5] as AbortSignal | undefined;
+        return new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      });
+
+    const session = (service as any).startAgentSession(
+      'stream-key',
+      'namespace-id',
+      { conversation_id: 'conversation-id' },
+      'request-id',
+      'ask',
+      'user-id',
+      '',
+      undefined,
+      [],
+    );
+    session.subscribers.add(subscriber);
+    await Promise.resolve();
+
+    await (service as any).stopSession(session);
+
+    expect(subscriber.next).toHaveBeenCalledWith({
+      data: expect.stringContaining('"response_type":"stopped"'),
+    });
+    expect(client.sendCommand).toHaveBeenCalled();
+  });
+
   it('clears stale cancel state before starting a new stream session', async () => {
     const service = createService({});
     const client = {

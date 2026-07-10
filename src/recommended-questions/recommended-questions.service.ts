@@ -92,19 +92,25 @@ export class RecommendedQuestionsService {
     userId: string,
     maxQuestions: number = DEFAULT_MAX_QUESTIONS,
   ): Promise<RecommendQuestionsResponseDto> {
-    const [resources, tags, questions] = await Promise.all([
+    const [resources, visibleResources, questions] = await Promise.all([
       this.namespaceResourcesService.getRecentResources(
         namespaceId,
         userId,
         RECENT_RESOURCES_COUNT,
       ),
-      this.tagService.getRecentTags(namespaceId, RECENT_TAGS_COUNT),
+      this.namespaceResourcesService.getAllResourcesByUser(userId, namespaceId),
       this.conversationsService.getRecentQuestions(
         namespaceId,
         userId,
         RECENT_QUESTIONS_COUNT,
       ),
     ]);
+    const visibleTagIds = this.getTagIds(visibleResources);
+    const tags = await this.tagService.getRecentTagsByIds(
+      namespaceId,
+      visibleTagIds,
+      RECENT_TAGS_COUNT,
+    );
 
     const context = new RecommendQuestionsContextDto();
     context.recentResources = await this.toRecommendResources(
@@ -175,6 +181,16 @@ export class RecommendedQuestionsService {
       return [];
     }
     return resourceIds.filter((resourceId) => typeof resourceId === 'string');
+  }
+
+  private getTagIds(resources: { tagIds?: string[] | null }[]): string[] {
+    const tagIds = new Set<string>();
+    for (const resource of resources) {
+      for (const tagId of resource.tagIds ?? []) {
+        tagIds.add(tagId);
+      }
+    }
+    return [...tagIds];
   }
 
   private truncateContent(content: string | null | undefined): string {

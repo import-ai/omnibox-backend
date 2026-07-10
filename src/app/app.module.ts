@@ -81,9 +81,6 @@ import { AddLastHeartbeatToTasks1780652045516 } from 'omniboxd/migrations/178065
 import { MigrateFileReaderTaskFunctions1781259717294 } from 'omniboxd/migrations/1781259717294-migrate-file-reader-task-functions';
 import { AddWorkerIdToTasks1781511514000 } from 'omniboxd/migrations/1781511514000-add-worker-id-to-tasks';
 import { AddNumSchedulesToTasks1783080000000 } from 'omniboxd/migrations/1783080000000-add-num-schedules-to-tasks';
-import { RecommendedQuestions1783321387374 } from 'omniboxd/migrations/1783321387374-recommended-questions';
-import { AddRecommendedQuestionIdToConversations1783343362777 } from 'omniboxd/migrations/1783343362777-add-recommended-question-id-to-conversations';
-import { AddClickedToRecommendedQuestionItems1783343362778 } from 'omniboxd/migrations/1783343362778-add-clicked-to-recommended-question-items';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -91,7 +88,6 @@ import { NotificationsModule } from 'omniboxd/notifications/notifications.module
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { PhoneModule } from 'omniboxd/phone/phone.module';
-import { RecommendedQuestionsModule } from 'omniboxd/recommended-questions/recommended-questions.module';
 import { ResourceTagsModule } from 'omniboxd/resource-tags/resource-tags.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { SearchModule } from 'omniboxd/search/search.module';
@@ -179,7 +175,6 @@ export class AppModule implements NestModule {
         ResourcesModule,
         TasksModule,
         WizardModule,
-        RecommendedQuestionsModule,
         GroupsModule,
         PermissionsModule,
         ConversationsModule,
@@ -275,9 +270,6 @@ export class AppModule implements NestModule {
               MigrateFileReaderTaskFunctions1781259717294,
               AddWorkerIdToTasks1781511514000,
               AddNumSchedulesToTasks1783080000000,
-              RecommendedQuestions1783321387374,
-              AddRecommendedQuestionIdToConversations1783343362777,
-              AddClickedToRecommendedQuestionItems1783343362778,
               ...extraMigrations,
             ],
             migrationsRun: true,

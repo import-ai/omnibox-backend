@@ -1,5 +1,4 @@
-import { Expose } from 'class-transformer';
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class CreateConversationDto {
@@ -8,9 +7,4 @@ export class CreateConversationDto {
   })
   @IsOptional()
   title?: string;
-
-  @IsUUID()
-  @IsOptional()
-  @Expose({ name: 'recommended_question_id' })
-  recommendedQuestionId?: string;
 }

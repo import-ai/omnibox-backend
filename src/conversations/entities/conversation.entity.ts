@@ -17,7 +17,4 @@ export class Conversation extends Base {
 
   @Column('varchar', { nullable: true })
   shareId: string | null;
-
-  @Column('uuid', { nullable: true })
-  recommendedQuestionId: string | null;
 }

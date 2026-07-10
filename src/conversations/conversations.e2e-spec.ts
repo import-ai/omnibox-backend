@@ -1,15 +1,9 @@
 import { HttpStatus } from '@nestjs/common';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   MessageStatus,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
-import {
-  RecommendedQuestion,
-  RecommendedQuestionItem,
-} from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { TestClient } from 'test/test-client';
-import { Repository } from 'typeorm';
 
 describe('ConversationsController (e2e)', () => {
   let client: TestClient;
@@ -30,24 +24,6 @@ describe('ConversationsController (e2e)', () => {
     it('should create a new conversation', async () => {
       const normalClient = await TestClient.create();
       tempClients.push(normalClient);
-      const repository: Repository<RecommendedQuestion> = normalClient.app.get(
-        getRepositoryToken(RecommendedQuestion),
-      );
-      const itemRepository: Repository<RecommendedQuestionItem> =
-        normalClient.app.get(getRepositoryToken(RecommendedQuestionItem));
-      const now = new Date();
-      const record = await repository.save({
-        namespaceId: normalClient.namespace.id,
-        userId: normalClient.user.id,
-        scannedAt: now,
-        generatedAt: now,
-      });
-      const item = await itemRepository.save({
-        recommendedQuestionId: record.id,
-        question: 'Should stay unclicked?',
-        meta: null,
-      });
-
       const response = await normalClient
         .post(`/api/v1/namespaces/${normalClient.namespace.id}/conversations`)
         .expect(HttpStatus.CREATED);
@@ -61,53 +37,6 @@ describe('ConversationsController (e2e)', () => {
       expect(response.body).toHaveProperty('user_id', normalClient.user.id);
       expect(response.body).toHaveProperty('created_at');
       expect(response.body).toHaveProperty('updated_at');
-      expect(response.body).toHaveProperty('recommended_question_id', null);
-      await expect(
-        itemRepository.findOneByOrFail({ id: item.id }),
-      ).resolves.toMatchObject({
-        clicked: false,
-      });
-    });
-
-    it('should create a conversation from a recommended question', async () => {
-      const repository: Repository<RecommendedQuestion> = client.app.get(
-        getRepositoryToken(RecommendedQuestion),
-      );
-      const itemRepository: Repository<RecommendedQuestionItem> =
-        client.app.get(getRepositoryToken(RecommendedQuestionItem));
-      const now = new Date();
-      const record = await repository.save({
-        namespaceId: client.namespace.id,
-        userId: client.user.id,
-        scannedAt: now,
-        generatedAt: now,
-      });
-      const item = await itemRepository.save({
-        recommendedQuestionId: record.id,
-        question: 'What should I ask next?',
-        meta: null,
-      });
-
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
-        .send({ recommended_question_id: item.id })
-        .expect(HttpStatus.CREATED);
-
-      expect(response.body).toHaveProperty('id');
-      expect(response.body).toHaveProperty('recommended_question_id', item.id);
-
-      await expect(
-        itemRepository.findOneByOrFail({ id: item.id }),
-      ).resolves.toMatchObject({
-        clicked: true,
-      });
-    });
-
-    it('should fail when recommended_question_id is not a UUID', async () => {
-      await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
-        .send({ recommended_question_id: 'invalid-id' })
-        .expect(HttpStatus.BAD_REQUEST);
     });
 
     it('should fail with invalid namespaceId', async () => {

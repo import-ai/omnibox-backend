@@ -13,7 +13,6 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
-import { RecommendedQuestionItem } from 'omniboxd/recommended-questions/entities/recommended-question.entity';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { UserService } from 'omniboxd/user/user.service';
@@ -22,12 +21,6 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { DataSource, Repository } from 'typeorm';
 
 const TASK_PRIORITY = 5;
-
-export interface RecentQuestion {
-  conversationId: string;
-  question: string;
-  isRecommended: boolean;
-}
 
 @Injectable()
 export class ConversationsService {
@@ -42,28 +35,13 @@ export class ConversationsService {
     private readonly i18n: I18nService,
   ) {}
 
-  async create(
-    namespaceId: string,
-    userId: string,
-    recommendedQuestionId: string | null = null,
-  ) {
+  async create(namespaceId: string, userId: string) {
     const conversation = this.conversationRepository.create({
       namespaceId,
       userId: userId,
       title: '',
-      recommendedQuestionId,
     });
-    if (!recommendedQuestionId) {
-      return await this.conversationRepository.save(conversation);
-    }
-    return await transaction(this.dataSource.manager, async (tx) => {
-      const manager = tx.entityManager;
-      const savedConversation = await manager.save(Conversation, conversation);
-      await manager.update(RecommendedQuestionItem, recommendedQuestionId, {
-        clicked: true,
-      });
-      return savedConversation;
-    });
+    return await this.conversationRepository.save(conversation);
   }
 
   async createConversationForShare(share: Share) {
@@ -96,30 +74,6 @@ export class ConversationsService {
     if (options?.limit) query.take = Number(options.limit);
     if (options?.offset) query.skip = Number(options.offset);
     return await this.conversationRepository.find(query);
-  }
-
-  async getRecentQuestions(
-    namespaceId: string,
-    userId: string,
-    count: number,
-  ): Promise<RecentQuestion[]> {
-    const conversations = await this.findAll(namespaceId, userId, {
-      limit: count,
-    });
-    const summaries = await Promise.all(
-      conversations.map((c) => this.getSummary(userId, c)),
-    );
-    return conversations
-      .map((c, i) => ({
-        conversationId: c.id,
-        question: (
-          summaries[i].user_content ??
-          summaries[i].title ??
-          ''
-        ).trim(),
-        isRecommended: !!c.recommendedQuestionId,
-      }))
-      .filter((q) => q.question.length > 0);
   }
 
   async countAll(namespaceId: string, userId: string) {

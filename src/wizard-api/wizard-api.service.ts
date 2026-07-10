@@ -1,13 +1,8 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { context, propagation } from '@opentelemetry/api';
 import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import {
-  RecommendQuestionsRequestDto,
-  RecommendQuestionsResponseDto,
-} from 'omniboxd/recommended-questions/dto/recommend-questions.dto';
 import { WizardAgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { SearchResponseDto } from 'omniboxd/wizard/dto/search-response.dto';
@@ -23,18 +18,11 @@ import {
 
 @Injectable()
 export class WizardAPIService {
-  private readonly wizardProBaseUrl?: string;
-
   constructor(
     @Inject(WIZARD_URL_PROVIDER)
     private readonly wizardUrlProvider: IWizardUrlProvider,
     private readonly i18n: I18nService,
-    private readonly configService: ConfigService,
-  ) {
-    this.wizardProBaseUrl = this.configService.get<string>(
-      'OBB_WIZARD_PRO_BASE_URL',
-    );
-  }
+  ) {}
 
   getTraceHeaders(): Record<string, string> {
     const traceHeaders: Record<string, string> = {};
@@ -78,19 +66,6 @@ export class WizardAPIService {
       {},
     );
     return plainToInstance(SearchResponseDto, resp);
-  }
-
-  async recommendQuestions(
-    req: RecommendQuestionsRequestDto,
-  ): Promise<RecommendQuestionsResponseDto> {
-    const resp = await this.request(
-      'POST',
-      '/internal/api/v1/wizard/recommend_questions',
-      instanceToPlain(req),
-      {},
-      this.wizardProBaseUrl ?? (await this.wizardUrlProvider.getBaseUrl()),
-    );
-    return plainToInstance(RecommendQuestionsResponseDto, resp);
   }
 
   async createTitle(
@@ -163,10 +138,8 @@ export class WizardAPIService {
     path: string,
     body: Record<string, any>,
     headers: Record<string, string>,
-    baseUrl?: string,
   ): Promise<Record<string, any>> {
-    const wizardBaseUrl =
-      baseUrl ?? (await this.wizardUrlProvider.getBaseUrl());
+    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl();
     const url = `${wizardBaseUrl}${path}`;
     const requestHeaders = {
       'Content-Type': 'application/json',

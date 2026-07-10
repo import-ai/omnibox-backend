@@ -1,4 +1,5 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { context, propagation } from '@opentelemetry/api';
 import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { I18nService } from 'nestjs-i18n';
@@ -22,11 +23,18 @@ import {
 
 @Injectable()
 export class WizardAPIService {
+  private readonly wizardProBaseUrl?: string;
+
   constructor(
     @Inject(WIZARD_URL_PROVIDER)
     private readonly wizardUrlProvider: IWizardUrlProvider,
     private readonly i18n: I18nService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.wizardProBaseUrl = this.configService.get<string>(
+      'OBB_WIZARD_PRO_BASE_URL',
+    );
+  }
 
   getTraceHeaders(): Record<string, string> {
     const traceHeaders: Record<string, string> = {};
@@ -80,6 +88,7 @@ export class WizardAPIService {
       '/internal/api/v1/wizard/recommend_questions',
       instanceToPlain(req),
       {},
+      this.wizardProBaseUrl ?? (await this.wizardUrlProvider.getBaseUrl()),
     );
     return plainToInstance(RecommendQuestionsResponseDto, resp);
   }
@@ -154,8 +163,10 @@ export class WizardAPIService {
     path: string,
     body: Record<string, any>,
     headers: Record<string, string>,
+    baseUrl?: string,
   ): Promise<Record<string, any>> {
-    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl();
+    const wizardBaseUrl =
+      baseUrl ?? (await this.wizardUrlProvider.getBaseUrl());
     const url = `${wizardBaseUrl}${path}`;
     const requestHeaders = {
       'Content-Type': 'application/json',

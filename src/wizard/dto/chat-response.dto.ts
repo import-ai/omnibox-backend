@@ -23,6 +23,7 @@ export interface ChatBOSResponse extends ChatBaseResponse {
   response_type: 'bos';
   role: OpenAIMessageRole;
   id: string;
+  created_at: string;
   parentId?: string;
   userId?: string;
   namespaceId?: string;

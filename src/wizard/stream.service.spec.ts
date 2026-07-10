@@ -19,6 +19,39 @@ function createService(mocks: {
   );
 }
 
+describe('StreamService agent handler', () => {
+  it('sends the persisted message creation time in bos data', async () => {
+    const service = createService({});
+    const createdAt = new Date('2026-07-10T08:00:00.000Z');
+    (service as any).messagesService = {
+      create: jest.fn().mockResolvedValue({
+        id: 'message-id',
+        parentId: null,
+        createdAt,
+        message: { role: 'assistant' },
+      }),
+    };
+    const send = jest.fn().mockResolvedValue(undefined);
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      send,
+    );
+
+    await handler(
+      JSON.stringify({ response_type: 'bos', role: 'assistant' }),
+      {},
+    );
+
+    expect(JSON.parse(send.mock.calls[0][0])).toMatchObject({
+      response_type: 'bos',
+      id: 'message-id',
+      created_at: createdAt.toISOString(),
+    });
+  });
+});
+
 describe('StreamService private_search visible resources', () => {
   it('treats smart folders as folders when all visible resources are exposed', async () => {
     const namespaceResourcesService = {

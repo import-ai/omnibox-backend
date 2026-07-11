@@ -147,6 +147,16 @@ Common keys include `OBB_PORT`, `OBB_POSTGRES_URL`, `OBB_REDIS_URL`,
 `OBB_DB_SYNC`, S3/MinIO settings, `OBB_KAFKA_BROKER`, mail/SMS credentials,
 OAuth provider credentials, and OpenTelemetry exporter settings.
 
+## Branches
+
+Use `type/<short-kebab-description>`.
+
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`,
+`revert`, `build`.
+
+Keep the description lowercase, kebab-case, and focused on the change, for
+example `feat/add-open-api-quota` or `fix/stream-message-created-at`.
+
 ## Commits
 
 Use `type(scope): Description`.
@@ -160,4 +170,3 @@ Rules:
 - Description starts with a capital present-tense verb.
 - No trailing period.
 - Do not include AI tool attribution or co-author tags.
-

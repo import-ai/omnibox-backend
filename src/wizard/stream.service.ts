@@ -233,6 +233,7 @@ export class StreamService implements OnModuleDestroy {
           false,
         );
         chunk.id = message.id;
+        chunk.created_at = message.createdAt.toISOString();
         chunk.parentId = message.parentId || undefined;
         chunk.userId = userId || undefined;
         chunk.namespaceId = namespaceId;

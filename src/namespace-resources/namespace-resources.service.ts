@@ -1493,6 +1493,15 @@ export class NamespaceResourcesService {
     data: UpdateResourceDto,
     autoRenameOnConflict: boolean = false,
   ) {
+    if (data.parentId) {
+      await this.resourcesService.getResourceOrFail(namespaceId, data.parentId);
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        data.parentId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+      );
+    }
     await this.resourcesService.updateResource(
       namespaceId,
       resourceId,

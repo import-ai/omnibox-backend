@@ -602,6 +602,52 @@ describe('ResourcesController (e2e)', () => {
         )
         .expect(HttpStatus.NOT_FOUND);
     });
+
+    it('should reject internal patch move when target is not editable', async () => {
+      const sourceResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Internal Move Editable Source'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content: 'internal move source content',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+      const targetResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Internal Move View Only Target'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.FOLDER,
+          parentId: client.namespace.root_resource_id,
+          content: '',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+
+      await setUserPermission(
+        targetResponse.body.id,
+        ResourcePermission.CAN_VIEW,
+      );
+
+      await memberClient
+        .patch(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${sourceResponse.body.id}`,
+        )
+        .send({ parentId: targetResponse.body.id })
+        .expect(HttpStatus.FORBIDDEN);
+
+      const sourceAfterMoveAttempt = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${sourceResponse.body.id}`,
+        )
+        .expect(HttpStatus.OK);
+      expect(sourceAfterMoveAttempt.body.parent_id).toBe(
+        client.namespace.root_resource_id,
+      );
+    });
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/resources/:resourceId/duplicate', () => {

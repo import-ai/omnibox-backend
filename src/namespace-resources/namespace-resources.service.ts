@@ -840,7 +840,9 @@ export class NamespaceResourcesService {
         where: {
           namespaceId,
           parentId: Not(IsNull()),
-          resourceType: Not(ResourceType.FOLDER),
+          resourceType: Not(
+            In([ResourceType.FOLDER, ResourceType.SMART_FOLDER]),
+          ),
         },
         order: { updatedAt: 'DESC' },
         take: batchSize,

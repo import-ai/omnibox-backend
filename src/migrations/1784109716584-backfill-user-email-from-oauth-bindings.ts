@@ -6,7 +6,7 @@ export class BackfillUserEmailFromOauthBindings1784109716584 implements Migratio
       WITH candidates AS (
         SELECT DISTINCT ON ("user_bindings"."user_id")
           "user_bindings"."user_id",
-          btrim("user_bindings"."metadata"->>'email') AS "email"
+          lower(btrim("user_bindings"."metadata"->>'email')) AS "email"
         FROM "user_bindings"
         INNER JOIN "users" ON "users"."id" = "user_bindings"."user_id"
         WHERE "users"."email" IS NULL
@@ -37,7 +37,7 @@ export class BackfillUserEmailFromOauthBindings1784109716584 implements Migratio
             SELECT 1
             FROM "users" AS "existing_users"
             WHERE "existing_users"."deleted_at" IS NULL
-              AND "existing_users"."email" = "deduplicated_candidates"."email"
+              AND lower("existing_users"."email") = "deduplicated_candidates"."email"
           )
       )
       UPDATE "users"

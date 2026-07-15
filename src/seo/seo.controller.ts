@@ -10,7 +10,7 @@ export class SeoController {
 
   private send(res: Response, response: SeoResponse) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
+    res.setHeader('Cache-Control', 'no-store');
     res.status(response.status).send(response.html);
   }
 

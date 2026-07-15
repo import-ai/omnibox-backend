@@ -14,10 +14,11 @@ describe('SeoController', () => {
       { get: jest.fn() } as never,
     );
     const controller = new SeoController(service);
+    const setHeader = jest.fn();
     const status = jest.fn().mockReturnThis();
     const send = jest.fn();
     const response = {
-      setHeader: jest.fn(),
+      setHeader,
       status,
       send,
     } as unknown as Response;
@@ -25,6 +26,7 @@ describe('SeoController', () => {
     await controller.getShareSeoHtml('missing', response);
 
     expect(status).toHaveBeenCalledWith(HttpStatus.NOT_FOUND);
+    expect(setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(send).toHaveBeenCalledWith(
       expect.stringContaining('No share found'),
     );

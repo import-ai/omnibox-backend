@@ -35,4 +35,16 @@ export class TasksCronService {
       })}`,
     );
   }
+
+  @Cron(CronExpression.EVERY_10_SECONDS)
+  @Span('TasksCronService.failTasksExceedingScheduleLimit')
+  async failTasksExceedingScheduleLimit(): Promise<void> {
+    const failed = await this.tasksService.failTasksExceedingScheduleLimit();
+    if (failed > 0) {
+      trace.getActiveSpan()?.setAttribute('tasks.failed', failed);
+      this.logger.warn(
+        `Failed ${failed} task(s) that exceeded the maximum number of schedules`,
+      );
+    }
+  }
 }

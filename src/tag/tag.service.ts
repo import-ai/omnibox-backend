@@ -161,6 +161,14 @@ export class TagService {
     });
   }
 
+  async getRecentTags(namespaceId: string, count: number): Promise<Tag[]> {
+    return await this.tagRepository.find({
+      where: { namespaceId },
+      order: { updatedAt: 'DESC' },
+      take: count,
+    });
+  }
+
   async findByPattern(namespaceId: string, pattern: string): Promise<Tag[]> {
     if (!pattern || pattern.trim() === '') {
       return [];

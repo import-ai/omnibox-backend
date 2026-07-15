@@ -82,7 +82,7 @@ export class NamespaceResourcesService {
     return await this.tagService.getTagsByIds(namespaceId, tagIds);
   }
 
-  private async getTagsForResources(
+  async getTagsForResources(
     namespaceId: string,
     resources: Resource[],
   ): Promise<Map<string, TagDto[]>> {
@@ -115,6 +115,45 @@ export class NamespaceResourcesService {
     });
 
     return resourceTagsMap;
+  }
+
+  async getResourceMetaByTags(
+    namespaceId: string,
+    userId: string,
+    tagIds: string[],
+  ): Promise<ResourceMetaDto[]> {
+    if (tagIds.length === 0) {
+      return [];
+    }
+
+    const resources = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IS NOT NULL')
+      .andWhere('resource.resource_type NOT IN (:...resourceTypes)', {
+        resourceTypes: [ResourceType.FOLDER, ResourceType.SMART_FOLDER],
+      })
+      .andWhere('resource.tag_ids && :tagIds', { tagIds })
+      .getMany();
+
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resources.map((resource) => resource.id),
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+    return resources
+      .filter((resource) => {
+        const permission = permissionMap.get(resource.id);
+        return (
+          permission &&
+          comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+        );
+      })
+      .map((resource) => ResourceMetaDto.fromEntity(resource));
   }
 
   private async getResourceIdsByTagNames(
@@ -315,27 +354,35 @@ export class NamespaceResourcesService {
   async permissionFilter<
     T extends string | Resource | PrivateSearchResourceDto,
   >(namespaceId: string, userId: string, resources: T[]): Promise<T[]> {
-    const filtered: T[] = [];
     if (resources.length <= 0) {
-      return filtered;
+      return [];
     }
-    for (const res of resources) {
-      const resourceId: string = typeof res === 'string' ? res : res.id;
-      try {
-        const hasPermission: boolean =
-          await this.permissionsService.userHasPermission(
-            namespaceId,
-            resourceId,
-            userId,
-          );
-        if (hasPermission) {
-          filtered.push(res);
-        }
-      } catch {
-        /* ignore error */
-      }
-    }
-    return filtered;
+
+    const resourceIds = [
+      ...new Set(
+        resources.map((resource) =>
+          typeof resource === 'string' ? resource : resource.id,
+        ),
+      ),
+    ];
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+
+    return resources.filter((resource) => {
+      const resourceId = typeof resource === 'string' ? resource : resource.id;
+      const permission = permissionMap.get(resourceId);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      );
+    });
   }
 
   async query(
@@ -826,6 +873,72 @@ export class NamespaceResourcesService {
 
     // For non-summary, return lightweight ResourceSummaryDto
     return finalResources.map((r) => ResourceSummaryDto.fromEntity(r, false));
+  }
+
+  async getRecentResources(
+    namespaceId: string,
+    userId: string,
+    count: number,
+  ): Promise<Resource[]> {
+    const result: Resource[] = [];
+    const batchSize = 100;
+    for (let skip = 0; ; skip += batchSize) {
+      const batch = await this.resourceRepository.find({
+        where: {
+          namespaceId,
+          parentId: Not(IsNull()),
+          resourceType: Not(
+            In([ResourceType.FOLDER, ResourceType.SMART_FOLDER]),
+          ),
+        },
+        order: { updatedAt: 'DESC' },
+        take: batchSize,
+        skip,
+      });
+      if (batch.length === 0) {
+        return result;
+      }
+
+      // filterResourcesByPermission needs each resource's ancestors present to
+      // resolve inherited permissions, so expand the batch to include them.
+      const withParents = await this.resourcesService.batchGetParentResources(
+        namespaceId,
+        batch.map((r) => r.id),
+      );
+      const visible = await this.permissionsService.filterResourcesByPermission(
+        userId,
+        namespaceId,
+        [...withParents.values()],
+      );
+      const visibleIds = new Set(visible.map((r) => r.id));
+
+      for (const resource of batch) {
+        if (visibleIds.has(resource.id)) {
+          result.push(resource);
+          if (result.length >= count) {
+            return result;
+          }
+        }
+      }
+
+      if (batch.length < batchSize) {
+        return result;
+      }
+    }
+  }
+
+  // Staleness signal only — intentionally not permission-filtered.
+  async getLastUpdatedAt(namespaceId: string): Promise<Date | undefined> {
+    const resource = await this.resourceRepository.findOne({
+      select: ['updatedAt'],
+      where: {
+        namespaceId,
+        parentId: Not(IsNull()),
+        resourceType: Not(In([ResourceType.FOLDER, ResourceType.SMART_FOLDER])),
+      },
+      order: { updatedAt: 'DESC' },
+    });
+    return resource?.updatedAt;
   }
 
   // Alias for clarity and reuse across modules
@@ -1429,6 +1542,15 @@ export class NamespaceResourcesService {
     data: UpdateResourceDto,
     autoRenameOnConflict: boolean = false,
   ) {
+    if (data.parentId) {
+      await this.resourcesService.getResourceOrFail(namespaceId, data.parentId);
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        data.parentId,
+        userId,
+        ResourcePermission.CAN_EDIT,
+      );
+    }
     await this.resourcesService.updateResource(
       namespaceId,
       resourceId,

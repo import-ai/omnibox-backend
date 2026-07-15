@@ -581,6 +581,24 @@ export class NamespacesService {
     return members.map((m) => m.namespaceId);
   }
 
+  async listNamespaceIds(offset: number, limit: number): Promise<string[]> {
+    const namespaces = await this.namespaceRepository.find({
+      select: ['id'],
+      order: { id: 'ASC' },
+      skip: offset,
+      take: limit,
+    });
+    return namespaces.map((namespace) => namespace.id);
+  }
+
+  async getMemberUserIds(namespaceId: string): Promise<string[]> {
+    const members = await this.namespaceMemberRepository.find({
+      where: { namespaceId },
+      select: ['userId'],
+    });
+    return members.map((member) => member.userId);
+  }
+
   async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
       where: { namespaceId },

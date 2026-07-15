@@ -22,14 +22,19 @@ describe('ConversationsController (e2e)', () => {
 
   describe('POST /api/v1/namespaces/:namespaceId/conversations', () => {
     it('should create a new conversation', async () => {
-      const response = await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+      const normalClient = await TestClient.create();
+      tempClients.push(normalClient);
+      const response = await normalClient
+        .post(`/api/v1/namespaces/${normalClient.namespace.id}/conversations`)
         .expect(HttpStatus.CREATED);
 
       expect(response.body).toHaveProperty('id');
       expect(response.body).toHaveProperty('title');
-      expect(response.body).toHaveProperty('namespace_id', client.namespace.id);
-      expect(response.body).toHaveProperty('user_id', client.user.id);
+      expect(response.body).toHaveProperty(
+        'namespace_id',
+        normalClient.namespace.id,
+      );
+      expect(response.body).toHaveProperty('user_id', normalClient.user.id);
       expect(response.body).toHaveProperty('created_at');
       expect(response.body).toHaveProperty('updated_at');
     });

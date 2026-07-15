@@ -18,6 +18,8 @@ import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resou
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourceFilterRequestDto } from 'omniboxd/resources/dto/resource-filter.request.dto';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
@@ -29,6 +31,7 @@ export class InternalResourcesController {
     private readonly resourcesService: ResourcesService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly filesService: FilesService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   @Public()
@@ -158,6 +161,12 @@ export class InternalResourcesController {
         HttpStatus.NOT_FOUND,
       );
     }
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
     const isRecursive = recursive === 'true' || recursive === '1';
     const hasChildren = await this.namespaceResourcesService.hasChildren(
       userId,
@@ -227,6 +236,12 @@ export class InternalResourcesController {
     @HeaderUserId() userId: string,
     @Body() updateDto: UpdateResourceDto,
   ) {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
     return await this.namespaceResourcesService.update(
       namespaceId,
       userId,

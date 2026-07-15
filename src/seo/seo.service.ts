@@ -14,6 +14,10 @@ export type SeoResponse = {
   status: HttpStatus;
 };
 
+function response(html: string, status = HttpStatus.OK): SeoResponse {
+  return { html, status };
+}
+
 @Injectable()
 export class SeoService {
   private readonly baseUrl: string;
@@ -42,32 +46,21 @@ export class SeoService {
       where: { id: shareId },
     });
 
-    if (!share || !share.enabled || !share.userId) {
-      return {
-        html: loadHtmlTemplate('No share found'),
-        status: HttpStatus.NOT_FOUND,
-      };
-    }
-
-    if (share.expiresAt && share.expiresAt < new Date()) {
-      return {
-        html: loadHtmlTemplate('No share found'),
-        status: HttpStatus.NOT_FOUND,
-      };
+    if (
+      !share ||
+      !share.enabled ||
+      !share.userId ||
+      (share.expiresAt && share.expiresAt < new Date())
+    ) {
+      return response(loadHtmlTemplate('No share found'), HttpStatus.NOT_FOUND);
     }
 
     if (share.requireLogin) {
-      return {
-        html: loadHtmlTemplate('This share requires login'),
-        status: HttpStatus.OK,
-      };
+      return response(loadHtmlTemplate('This share requires login'));
     }
 
     if (share.password) {
-      return {
-        html: loadHtmlTemplate('This content is password protected'),
-        status: HttpStatus.OK,
-      };
+      return response(loadHtmlTemplate('This content is password protected'));
     }
 
     const targetResourceId = resourceId || share.resourceId;
@@ -79,17 +72,17 @@ export class SeoService {
       );
     } catch (error) {
       if (error instanceof AppException && error.getStatus() === 404) {
-        return {
-          html: loadHtmlTemplate('Resource not found'),
-          status: HttpStatus.NOT_FOUND,
-        };
+        return response(
+          loadHtmlTemplate('Resource not found'),
+          HttpStatus.NOT_FOUND,
+        );
       }
       throw error;
     }
 
     const baseUrl = `${this.baseUrl}/s/${shareId}/${targetResourceId}`;
 
-    return { html: generateHTML(baseUrl, resource), status: HttpStatus.OK };
+    return response(generateHTML(baseUrl, resource));
   }
 
   async getResourceHtml(
@@ -102,10 +95,10 @@ export class SeoService {
     });
 
     if (!resource) {
-      return {
-        html: loadHtmlTemplate('Resource not found'),
-        status: HttpStatus.NOT_FOUND,
-      };
+      return response(
+        loadHtmlTemplate('Resource not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     if (resource.userId) {
@@ -115,13 +108,10 @@ export class SeoService {
       if (option?.value === 'true') {
         const baseUrl = `${this.baseUrl}/${namespaceId}/${resourceId}`;
 
-        return { html: generateHTML(baseUrl, resource), status: HttpStatus.OK };
+        return response(generateHTML(baseUrl, resource));
       }
     }
 
-    return {
-      html: loadHtmlTemplate('This content is protected'),
-      status: HttpStatus.OK,
-    };
+    return response(loadHtmlTemplate('This content is protected'));
   }
 }

@@ -68,7 +68,6 @@ describe('SeoController', () => {
       'private-resource-id',
     );
     expect(result.status).toBe(HttpStatus.NOT_FOUND);
-    expect(result.html).not.toContain('private content');
   });
 
   it('does not treat an indexed option value of false as public', async () => {

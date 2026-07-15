@@ -13,6 +13,7 @@ describe('SmartFoldersQuotaService', () => {
   }
 
   function createService(values?: {
+    tier?: 'basic' | 'premium';
     privateLimit?: number;
     teamLimit?: number;
     ruleLimit?: number;
@@ -20,7 +21,7 @@ describe('SmartFoldersQuotaService', () => {
   }) {
     const entitlementsProvider = {
       getEntitlements: jest.fn().mockResolvedValue({
-        tier: 'basic',
+        tier: values?.tier ?? 'basic',
         privateLimit: values?.privateLimit ?? 2,
         teamLimit: values?.teamLimit ?? 2,
         privateUsed: 0,
@@ -51,19 +52,22 @@ describe('SmartFoldersQuotaService', () => {
   }
 
   it('rejects create when rule count exceeds entitlement limit', async () => {
-    const { i18n, service } = createService({ ruleLimit: 1 });
+    const { i18n, service } = createService({
+      tier: 'premium',
+      ruleLimit: 10,
+    });
 
     await expect(
       service.assertEntitlements(
         'namespace-id',
         'user-id',
         SmartFolderOwnerScope.PRIVATE,
-        2,
+        11,
       ),
     ).rejects.toMatchObject<Partial<AppException>>({
       code: 'SMART_FOLDER_RULE_LIMIT_EXCEEDED',
       message:
-        'Too many smart folder conditions: received 2, but the current plan allows at most 1. Retry with 1 or fewer conditions.',
+        'Too many smart folder conditions: received 11. This workspace uses the premium tier, which allows at most 10 conditions. Retry with 10 or fewer conditions; if the folder already has 10, remove or replace one first.',
     });
     expect(i18n.t).not.toHaveBeenCalled();
   });

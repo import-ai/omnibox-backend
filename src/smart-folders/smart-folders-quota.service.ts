@@ -78,7 +78,7 @@ export class SmartFoldersQuotaService {
     );
     if (ruleCount > entitlements.ruleLimit) {
       throw new AppException(
-        `Too many smart folder conditions: received ${ruleCount}, but the current plan allows at most ${entitlements.ruleLimit}. Retry with ${entitlements.ruleLimit} or fewer conditions.`,
+        `Too many smart folder conditions: received ${ruleCount}. This workspace uses the ${entitlements.tier} tier, which allows at most ${entitlements.ruleLimit} conditions. Retry with ${entitlements.ruleLimit} or fewer conditions; if the folder already has ${entitlements.ruleLimit}, remove or replace one first.`,
         'SMART_FOLDER_RULE_LIMIT_EXCEEDED',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );

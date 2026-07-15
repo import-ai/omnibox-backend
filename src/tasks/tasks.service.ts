@@ -354,7 +354,7 @@ export class TasksService {
   /**
    * Atomically claim a task for execution. The conditional WHERE guards against
    * two workers grabbing the same task: only a pending/running task whose
-   * heartbeat is missing or stale (older than 10s) can be claimed. Returns the
+   * heartbeat is missing or stale (older than 30s) can be claimed. Returns the
    * claimed task, or null if another worker won the race.
    */
   async claimTask(

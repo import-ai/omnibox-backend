@@ -80,7 +80,7 @@ import { AddSmartFolders1779344088692 } from 'omniboxd/migrations/1779344088692-
 import { AddLastHeartbeatToTasks1780652045516 } from 'omniboxd/migrations/1780652045516-add-last-heartbeat-to-tasks';
 import { MigrateFileReaderTaskFunctions1781259717294 } from 'omniboxd/migrations/1781259717294-migrate-file-reader-task-functions';
 import { AddWorkerIdToTasks1781511514000 } from 'omniboxd/migrations/1781511514000-add-worker-id-to-tasks';
-import { AddNumSchedulesToTasks1783080000000 } from 'omniboxd/migrations/1783080000000-add-num-schedules-to-tasks';
+import { AddNumSchedulesToTasks1784095735711 } from 'omniboxd/migrations/1784095735711-add-num-schedules-to-tasks';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -269,7 +269,7 @@ export class AppModule implements NestModule {
               AddLastHeartbeatToTasks1780652045516,
               MigrateFileReaderTaskFunctions1781259717294,
               AddWorkerIdToTasks1781511514000,
-              AddNumSchedulesToTasks1783080000000,
+              AddNumSchedulesToTasks1784095735711,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -117,6 +117,34 @@ export class NamespaceResourcesService {
     return resourceTagsMap;
   }
 
+  async getResourceMetaByTags(
+    namespaceId: string,
+    userId: string,
+    tagIds: string[],
+  ): Promise<ResourceMetaDto[]> {
+    if (tagIds.length === 0) {
+      return [];
+    }
+
+    const resources = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('resource.parent_id IS NOT NULL')
+      .andWhere('resource.resource_type NOT IN (:...resourceTypes)', {
+        resourceTypes: [ResourceType.FOLDER, ResourceType.SMART_FOLDER],
+      })
+      .andWhere('resource.tag_ids && :tagIds', { tagIds })
+      .getMany();
+    const filteredResources = await this.permissionFilter(
+      namespaceId,
+      userId,
+      resources,
+    );
+    return filteredResources.map((resource) =>
+      ResourceMetaDto.fromEntity(resource),
+    );
+  }
+
   private async getResourceIdsByTagNames(
     namespaceId: string,
     tagNames: string[],
@@ -887,7 +915,7 @@ export class NamespaceResourcesService {
       where: {
         namespaceId,
         parentId: Not(IsNull()),
-        resourceType: Not(ResourceType.FOLDER),
+        resourceType: Not(In([ResourceType.FOLDER, ResourceType.SMART_FOLDER])),
       },
       order: { updatedAt: 'DESC' },
     });

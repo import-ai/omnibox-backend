@@ -1,6 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
-export class AddNumSchedulesToTasks1783080000000 implements MigrationInterface {
+export class AddNumSchedulesToTasks1784095735711 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.addColumn(
       'tasks',

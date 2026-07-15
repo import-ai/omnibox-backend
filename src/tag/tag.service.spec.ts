@@ -71,26 +71,4 @@ describe('TagService', () => {
       });
     });
   });
-
-  describe('getRecentTagsByIds', () => {
-    it('returns empty array when tag ids are empty', async () => {
-      await expect(
-        service.getRecentTagsByIds('namespace-id', [], 10),
-      ).resolves.toEqual([]);
-      expect(repo.find).not.toHaveBeenCalled();
-    });
-
-    it('queries recent tags scoped by namespace and ids', async () => {
-      repo.find.mockResolvedValue([{ id: 'tag-1', name: 'Tag 1' }]);
-
-      await expect(
-        service.getRecentTagsByIds('namespace-id', ['tag-1'], 10),
-      ).resolves.toEqual([{ id: 'tag-1', name: 'Tag 1' }]);
-      expect(repo.find).toHaveBeenCalledWith({
-        where: { namespaceId: 'namespace-id', id: expect.any(Object) },
-        order: { updatedAt: 'DESC' },
-        take: 10,
-      });
-    });
-  });
 });

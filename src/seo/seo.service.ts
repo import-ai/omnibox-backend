@@ -1,8 +1,10 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { generateHTML, loadHtmlTemplate } from 'omniboxd/seo/utils';
+import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
 import { Repository } from 'typeorm';
@@ -23,6 +25,7 @@ export class SeoService {
     private readonly resourceRepository: Repository<Resource>,
     @InjectRepository(UserOption)
     private readonly userOptionRepository: Repository<UserOption>,
+    private readonly sharedResourcesService: SharedResourcesService,
     private readonly configService: ConfigService,
   ) {
     this.baseUrl = this.configService.get<string>(
@@ -39,7 +42,7 @@ export class SeoService {
       where: { id: shareId },
     });
 
-    if (!share || !share.enabled) {
+    if (!share || !share.enabled || !share.userId) {
       return {
         html: loadHtmlTemplate('No share found'),
         status: HttpStatus.NOT_FOUND,
@@ -68,16 +71,20 @@ export class SeoService {
     }
 
     const targetResourceId = resourceId || share.resourceId;
-    const resource = await this.resourceRepository.findOne({
-      where: { id: targetResourceId },
-      select: ['id', 'name', 'content', 'attrs'],
-    });
-
-    if (!resource) {
-      return {
-        html: loadHtmlTemplate('Resource not found'),
-        status: HttpStatus.NOT_FOUND,
-      };
+    let resource: Resource;
+    try {
+      resource = await this.sharedResourcesService.getAndValidateResource(
+        share,
+        targetResourceId,
+      );
+    } catch (error) {
+      if (error instanceof AppException && error.getStatus() === 404) {
+        return {
+          html: loadHtmlTemplate('Resource not found'),
+          status: HttpStatus.NOT_FOUND,
+        };
+      }
+      throw error;
     }
 
     const baseUrl = `${this.baseUrl}/s/${shareId}/${targetResourceId}`;
@@ -105,7 +112,7 @@ export class SeoService {
       const option = await this.userOptionRepository.findOne({
         where: { userId: resource.userId, name: 'indexed' },
       });
-      if (option && option.value) {
+      if (option?.value === 'true') {
         const baseUrl = `${this.baseUrl}/${namespaceId}/${resourceId}`;
 
         return { html: generateHTML(baseUrl, resource), status: HttpStatus.OK };

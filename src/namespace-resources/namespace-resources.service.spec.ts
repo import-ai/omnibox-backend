@@ -2,7 +2,7 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 import { NamespaceResourcesService } from './namespace-resources.service';
 
-describe('NamespaceResourcesService.listChildren', () => {
+describe('NamespaceResourcesService', () => {
   const namespaceId = 'namespace-1';
   const resourceId = 'smart-folder-1';
   const userId = 'user-1';
@@ -11,6 +11,7 @@ describe('NamespaceResourcesService.listChildren', () => {
     const resourcesService = {
       getParentResourcesOrFail: jest.fn(),
       getChildren: jest.fn(),
+      resourceFilter: jest.fn(),
     };
     const smartFoldersService = {
       listChildren: jest.fn(),
@@ -68,5 +69,16 @@ describe('NamespaceResourcesService.listChildren', () => {
     );
     expect(resourcesService.getChildren).not.toHaveBeenCalled();
     expect(result).toBe(children);
+  });
+
+  it('returns an empty filter result when no resources are accessible', async () => {
+    const { resourcesService, service } = createService();
+
+    await expect(
+      service.resourceFilter(namespaceId, [], {
+        resourceTypes: [ResourceType.SMART_FOLDER],
+      }),
+    ).resolves.toEqual({ resources: [], total: 0 });
+    expect(resourcesService.resourceFilter).not.toHaveBeenCalled();
   });
 });

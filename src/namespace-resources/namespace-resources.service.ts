@@ -1428,6 +1428,10 @@ export class NamespaceResourcesService {
       limit?: number;
     },
   ): Promise<{ resources: InternalResourceDto[]; total: number }> {
+    if (resourceIds.length === 0) {
+      return { resources: [], total: 0 };
+    }
+
     let tagIds: string[] | undefined = undefined;
     if (!isOptional(options?.tagPattern)) {
       const tagEntities = await this.tagService.findByPattern(

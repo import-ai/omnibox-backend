@@ -31,6 +31,8 @@ const PRO_ONLY_FUNCTIONS = new Set<string>([
 export class TasksService {
   private readonly proUrl: string | undefined;
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
+  private readonly maxRetries: number;
+  private readonly heartbeatTimeoutMs: number;
 
   constructor(
     @InjectRepository(Task)
@@ -41,6 +43,14 @@ export class TasksService {
     private readonly s3Service: S3Service,
   ) {
     this.proUrl = this.configService.get<string>('OBB_PRO_URL');
+    this.maxRetries = parseInt(
+      this.configService.get<string>('OBB_TASK_MAX_RETRIES', '3'),
+      10,
+    );
+    this.heartbeatTimeoutMs = parseInt(
+      this.configService.get<string>('OBB_TASK_HEARTBEAT_TIMEOUT_MS', '30000'),
+      10,
+    );
   }
 
   async uploadHtmlToS3(html: string): Promise<string> {
@@ -314,6 +324,9 @@ export class TasksService {
         '(task.lastHeartbeat IS NULL OR task.lastHeartbeat < :heartbeatCutoff)',
         { heartbeatCutoff },
       )
+      .andWhere('task.numSchedules <= :maxRetries', {
+        maxRetries: this.maxRetries,
+      })
       .andWhere('task.function IN (:...functions)', { functions });
 
     if (limitedNamespaces.length > 0) {
@@ -341,7 +354,7 @@ export class TasksService {
   /**
    * Atomically claim a task for execution. The conditional WHERE guards against
    * two workers grabbing the same task: only a pending/running task whose
-   * heartbeat is missing or stale (older than 10s) can be claimed. Returns the
+   * heartbeat is missing or stale (older than 30s) can be claimed. Returns the
    * claimed task, or null if another worker won the race.
    */
   async claimTask(
@@ -358,6 +371,7 @@ export class TasksService {
         startedAt: now,
         lastHeartbeat: now,
         workerId,
+        numSchedules: () => 'num_schedules + 1',
       })
       .where('id = :taskId', { taskId })
       .andWhere('status IN (:...statuses)', {
@@ -367,11 +381,36 @@ export class TasksService {
         '(last_heartbeat IS NULL OR last_heartbeat < :heartbeatCutoff)',
         { heartbeatCutoff },
       )
+      .andWhere('num_schedules <= :maxRetries', {
+        maxRetries: this.maxRetries,
+      })
       .execute();
     if (!result.affected) {
       return null;
     }
     return await this.taskRepository.findOne({ where: { id: taskId } });
+  }
+
+  heartbeatCutoff(): Date {
+    return new Date(Date.now() - this.heartbeatTimeoutMs);
+  }
+
+  async failTasksExceedingScheduleLimit(): Promise<number> {
+    const heartbeatCutoff = this.heartbeatCutoff();
+    const result = await this.taskRepository
+      .createQueryBuilder()
+      .update(Task)
+      .set({
+        status: TaskStatus.ERROR,
+        endedAt: () => 'now()',
+        exception: () =>
+          `'{"error":"Task exceeded maximum schedules","type":"ScheduleLimitExceeded"}'::jsonb`,
+      })
+      .where('status = :status', { status: TaskStatus.RUNNING })
+      .andWhere('last_heartbeat < :heartbeatCutoff', { heartbeatCutoff })
+      .andWhere('num_schedules > :maxRetries', { maxRetries: this.maxRetries })
+      .execute();
+    return result.affected ?? 0;
   }
 
   async listNamespacesAtParallelismLimit(

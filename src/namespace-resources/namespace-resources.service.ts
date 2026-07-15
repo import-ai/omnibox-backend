@@ -135,14 +135,25 @@ export class NamespaceResourcesService {
       })
       .andWhere('resource.tag_ids && :tagIds', { tagIds })
       .getMany();
-    const filteredResources = await this.permissionFilter(
+
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
       namespaceId,
+      resources.map((resource) => resource.id),
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
-      resources,
+      namespaceId,
+      [...resourceMetaMap.values()],
     );
-    return filteredResources.map((resource) =>
-      ResourceMetaDto.fromEntity(resource),
-    );
+    return resources
+      .filter((resource) => {
+        const permission = permissionMap.get(resource.id);
+        return (
+          permission &&
+          comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+        );
+      })
+      .map((resource) => ResourceMetaDto.fromEntity(resource));
   }
 
   private async getResourceIdsByTagNames(
@@ -343,27 +354,35 @@ export class NamespaceResourcesService {
   async permissionFilter<
     T extends string | Resource | PrivateSearchResourceDto,
   >(namespaceId: string, userId: string, resources: T[]): Promise<T[]> {
-    const filtered: T[] = [];
     if (resources.length <= 0) {
-      return filtered;
+      return [];
     }
-    for (const res of resources) {
-      const resourceId: string = typeof res === 'string' ? res : res.id;
-      try {
-        const hasPermission: boolean =
-          await this.permissionsService.userHasPermission(
-            namespaceId,
-            resourceId,
-            userId,
-          );
-        if (hasPermission) {
-          filtered.push(res);
-        }
-      } catch {
-        /* ignore error */
-      }
-    }
-    return filtered;
+
+    const resourceIds = [
+      ...new Set(
+        resources.map((resource) =>
+          typeof resource === 'string' ? resource : resource.id,
+        ),
+      ),
+    ];
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [...resourceMetaMap.values()],
+    );
+
+    return resources.filter((resource) => {
+      const resourceId = typeof resource === 'string' ? resource : resource.id;
+      const permission = permissionMap.get(resourceId);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      );
+    });
   }
 
   async query(

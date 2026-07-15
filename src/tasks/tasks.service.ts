@@ -48,7 +48,7 @@ export class TasksService {
       10,
     );
     this.heartbeatTimeoutMs = parseInt(
-      this.configService.get<string>('OBB_TASK_HEARTBEAT_TIMEOUT_MS', '10000'),
+      this.configService.get<string>('OBB_TASK_HEARTBEAT_TIMEOUT_MS', '30000'),
       10,
     );
   }

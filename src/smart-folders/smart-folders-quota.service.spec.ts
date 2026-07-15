@@ -47,11 +47,11 @@ describe('SmartFoldersQuotaService', () => {
       i18n as any,
     );
 
-    return { entitlementsProvider, queryBuilder, service };
+    return { entitlementsProvider, i18n, queryBuilder, service };
   }
 
   it('rejects create when rule count exceeds entitlement limit', async () => {
-    const { service } = createService({ ruleLimit: 1 });
+    const { i18n, service } = createService({ ruleLimit: 1 });
 
     await expect(
       service.assertEntitlements(
@@ -62,7 +62,10 @@ describe('SmartFoldersQuotaService', () => {
       ),
     ).rejects.toMatchObject<Partial<AppException>>({
       code: 'SMART_FOLDER_RULE_LIMIT_EXCEEDED',
+      message:
+        'Too many smart folder conditions: received 2, but the current plan allows at most 1. Retry with 1 or fewer conditions.',
     });
+    expect(i18n.t).not.toHaveBeenCalled();
   });
 
   it('rejects create when active folder count reaches owner-scope quota', async () => {

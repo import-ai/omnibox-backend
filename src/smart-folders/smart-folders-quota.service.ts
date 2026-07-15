@@ -77,11 +77,8 @@ export class SmartFoldersQuotaService {
       userId,
     );
     if (ruleCount > entitlements.ruleLimit) {
-      const message = this.i18n.t(
-        'resource.errors.smartFolderRuleLimitExceeded',
-      );
       throw new AppException(
-        message,
+        `Too many smart folder conditions: received ${ruleCount}, but the current plan allows at most ${entitlements.ruleLimit}. Retry with ${entitlements.ruleLimit} or fewer conditions.`,
         'SMART_FOLDER_RULE_LIMIT_EXCEEDED',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );

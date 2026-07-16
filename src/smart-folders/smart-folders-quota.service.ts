@@ -77,9 +77,14 @@ export class SmartFoldersQuotaService {
       userId,
     );
     if (ruleCount > entitlements.ruleLimit) {
-      const message = this.i18n.t(
-        'resource.errors.smartFolderRuleLimitExceeded',
-      );
+      const tier = this.i18n.t(`smartFolder.tiers.${entitlements.tier}`);
+      const message = this.i18n.t('smartFolder.errors.ruleLimitExceeded', {
+        args: {
+          received: ruleCount,
+          tier,
+          limit: entitlements.ruleLimit,
+        },
+      });
       throw new AppException(
         message,
         'SMART_FOLDER_RULE_LIMIT_EXCEEDED',

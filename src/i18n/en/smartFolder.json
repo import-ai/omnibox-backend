@@ -2,7 +2,11 @@
   "errors": {
     "scopeInvalid": "Team smart folder can only filter teamspace resources",
     "quotaExceeded": "Smart folder quota exceeded",
-    "ruleLimitExceeded": "Smart folder rule limit exceeded",
+    "ruleLimitExceeded": "Too many smart folder conditions: received {received}. This workspace uses the {tier} tier, which allows at most {limit} conditions. Retry with {limit} or fewer conditions; if the folder already has {limit}, remove or replace one first.",
     "notFound": "Smart folder not found"
+  },
+  "tiers": {
+    "basic": "basic",
+    "premium": "premium"
   }
 }

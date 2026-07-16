@@ -7,6 +7,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { SmartFolderConfig } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { InternalSmartFoldersController } from 'omniboxd/smart-folders/internal.smart-folders.controller';
 import { SmartFolderEntitlementsController } from 'omniboxd/smart-folders/smart-folder-entitlements.controller';
 import {
   SMART_FOLDER_ENTITLEMENTS_PROVIDER,
@@ -52,7 +53,11 @@ import { TagModule } from 'omniboxd/tag/tag.module';
       useExisting: SmartFoldersService,
     },
   ],
-  controllers: [SmartFolderEntitlementsController, SmartFoldersController],
+  controllers: [
+    InternalSmartFoldersController,
+    SmartFolderEntitlementsController,
+    SmartFoldersController,
+  ],
   exports: [
     SmartFoldersService,
     SmartFoldersRuleService,

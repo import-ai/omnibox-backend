@@ -13,6 +13,7 @@ describe('SmartFoldersQuotaService', () => {
   }
 
   function createService(values?: {
+    tier?: 'basic' | 'premium';
     privateLimit?: number;
     teamLimit?: number;
     ruleLimit?: number;
@@ -20,7 +21,7 @@ describe('SmartFoldersQuotaService', () => {
   }) {
     const entitlementsProvider = {
       getEntitlements: jest.fn().mockResolvedValue({
-        tier: 'basic',
+        tier: values?.tier ?? 'basic',
         privateLimit: values?.privateLimit ?? 2,
         teamLimit: values?.teamLimit ?? 2,
         privateUsed: 0,
@@ -47,22 +48,38 @@ describe('SmartFoldersQuotaService', () => {
       i18n as any,
     );
 
-    return { entitlementsProvider, queryBuilder, service };
+    return { entitlementsProvider, i18n, queryBuilder, service };
   }
 
   it('rejects create when rule count exceeds entitlement limit', async () => {
-    const { service } = createService({ ruleLimit: 1 });
+    const { i18n, service } = createService({
+      tier: 'premium',
+      ruleLimit: 10,
+    });
 
     await expect(
       service.assertEntitlements(
         'namespace-id',
         'user-id',
         SmartFolderOwnerScope.PRIVATE,
-        2,
+        11,
       ),
     ).rejects.toMatchObject<Partial<AppException>>({
       code: 'SMART_FOLDER_RULE_LIMIT_EXCEEDED',
+      message: 'smartFolder.errors.ruleLimitExceeded',
     });
+    expect(i18n.t).toHaveBeenNthCalledWith(1, 'smartFolder.tiers.premium');
+    expect(i18n.t).toHaveBeenNthCalledWith(
+      2,
+      'smartFolder.errors.ruleLimitExceeded',
+      {
+        args: {
+          received: 11,
+          tier: 'smartFolder.tiers.premium',
+          limit: 10,
+        },
+      },
+    );
   });
 
   it('rejects create when active folder count reaches owner-scope quota', async () => {

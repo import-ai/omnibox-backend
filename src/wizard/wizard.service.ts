@@ -180,6 +180,20 @@ export class WizardService {
       );
     }
 
+    const path = new URL(url).pathname.split('/').filter(Boolean);
+    const isOmniBoxResourceUrl =
+      (path.length === 2 || (path.length === 3 && path[2] === 'edit')) &&
+      /^[a-zA-Z0-9]{6}$/.test(path[0]) &&
+      /^[a-zA-Z0-9]{16}$/.test(path[1]);
+    if (isOmniBoxResourceUrl) {
+      const message = this.i18n.t('wizard.errors.cannotCollectOmniBoxUrl');
+      throw new AppException(
+        message,
+        'CANNOT_COLLECT_OMNIBOX_URL',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     // Create a placeholder resource for the URL
     const resourceDto: CreateResourceDto = {
       name: url,

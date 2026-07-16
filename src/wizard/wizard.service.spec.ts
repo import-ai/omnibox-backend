@@ -1,5 +1,8 @@
+import { validate } from 'class-validator';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 
+import { OpenCollectUrlRequestDto } from './dto/collect-url-request.dto';
+import { InternalCollectUrlRequestDto } from './dto/internal-collect-url-request.dto';
 import { WizardService } from './wizard.service';
 
 const createTask = (overrides: Partial<Task> = {}): Task => ({
@@ -27,6 +30,52 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
 });
 
 describe('WizardService', () => {
+  describe('collectUrl', () => {
+    it('accepts localhost URLs through public and internal request validation', async () => {
+      const url =
+        'http://localhost:5193/abc123/0123456789ABCDEF/edit?mode=write#top';
+      const publicRequest = Object.assign(new OpenCollectUrlRequestDto(), {
+        url,
+      });
+      const internalRequest = Object.assign(
+        new InternalCollectUrlRequestDto(),
+        { url, parentId: 'parent-id' },
+      );
+
+      await expect(validate(publicRequest)).resolves.toHaveLength(0);
+      await expect(validate(internalRequest)).resolves.toHaveLength(0);
+    });
+
+    it.each([
+      'https://www.omnibox.pro/1DnZTW/DO3H9lDu8AXFjbuJ',
+      'https://box.example.com/abc123/0123456789ABCDEF',
+      'http://localhost:5193/abc123/0123456789ABCDEF/edit?mode=write#top',
+    ])('rejects an OmniBox URL: %s', async (url) => {
+      const namespaceResourcesService = { create: jest.fn() };
+      const i18n = { t: jest.fn((key: string) => key) };
+      const service = new WizardService(
+        {} as any,
+        {} as any,
+        namespaceResourcesService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        i18n as any,
+      );
+
+      await expect(
+        service.collectUrl('namespace-id', 'user-id', url, 'parent-id'),
+      ).rejects.toMatchObject({
+        code: 'CANNOT_COLLECT_OMNIBOX_URL',
+      });
+      expect(i18n.t).toHaveBeenCalledWith(
+        'wizard.errors.cannotCollectOmniBoxUrl',
+      );
+      expect(namespaceResourcesService.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('taskDoneCallback', () => {
     it('keeps content-too-long callbacks as error and does not dispatch next tasks', async () => {
       const task = createTask();

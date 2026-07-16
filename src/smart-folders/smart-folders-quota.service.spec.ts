@@ -66,10 +66,20 @@ describe('SmartFoldersQuotaService', () => {
       ),
     ).rejects.toMatchObject<Partial<AppException>>({
       code: 'SMART_FOLDER_RULE_LIMIT_EXCEEDED',
-      message:
-        'Too many smart folder conditions: received 11. This workspace uses the premium tier, which allows at most 10 conditions. Retry with 10 or fewer conditions; if the folder already has 10, remove or replace one first.',
+      message: 'smartFolder.errors.ruleLimitExceeded',
     });
-    expect(i18n.t).not.toHaveBeenCalled();
+    expect(i18n.t).toHaveBeenNthCalledWith(1, 'smartFolder.tiers.premium');
+    expect(i18n.t).toHaveBeenNthCalledWith(
+      2,
+      'smartFolder.errors.ruleLimitExceeded',
+      {
+        args: {
+          received: 11,
+          tier: 'smartFolder.tiers.premium',
+          limit: 10,
+        },
+      },
+    );
   });
 
   it('rejects create when active folder count reaches owner-scope quota', async () => {

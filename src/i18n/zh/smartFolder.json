@@ -2,7 +2,11 @@
   "errors": {
     "scopeInvalid": "团队智能文件夹只能筛选团队空间资源",
     "quotaExceeded": "智能文件夹配额已用尽",
-    "ruleLimitExceeded": "智能文件夹规则数量超出限制",
+    "ruleLimitExceeded": "智能文件夹条件过多：收到 {received} 个条件。当前工作空间为{tier}，最多允许 {limit} 个条件。请使用不超过 {limit} 个条件重试；如果文件夹已有 {limit} 个条件，请先删除或替换一个条件。",
     "notFound": "智能文件夹未找到"
+  },
+  "tiers": {
+    "basic": "基础版",
+    "premium": "高级版"
   }
 }

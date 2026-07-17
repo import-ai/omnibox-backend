@@ -1,6 +1,7 @@
 import { buffer } from 'node:stream/consumers';
 
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -40,6 +41,7 @@ export class WizardService {
   private readonly processors: Record<string, Processor>;
 
   private readonly gzipHtmlFolder: string = 'collect/html/gzip';
+  private readonly baseHostname: string;
 
   constructor(
     private readonly wizardTaskService: WizardTaskService,
@@ -50,7 +52,12 @@ export class WizardService {
     private readonly s3Service: S3Service,
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
+    private readonly configService: ConfigService,
   ) {
+    this.baseHostname = new URL(
+      this.configService.get<string>('OBB_BASE_URL', 'https://www.omnibox.pro'),
+    ).hostname;
+
     // All file_reader_* kinds share post-processing; one ReaderProcessor instance
     // is registered under every per-format kind. The legacy `file_reader` name is
     // also registered so tasks emitted before the per-format split still get
@@ -180,12 +187,7 @@ export class WizardService {
       );
     }
 
-    const path = new URL(url).pathname.split('/').filter(Boolean);
-    const isOmniBoxResourceUrl =
-      (path.length === 2 || (path.length === 3 && path[2] === 'edit')) &&
-      /^[a-zA-Z0-9]{6}$/.test(path[0]) &&
-      /^[a-zA-Z0-9]{16}$/.test(path[1]);
-    if (isOmniBoxResourceUrl) {
+    if (new URL(url).hostname === this.baseHostname) {
       const message = this.i18n.t('wizard.errors.cannotCollectOmniBoxUrl');
       throw new AppException(
         message,

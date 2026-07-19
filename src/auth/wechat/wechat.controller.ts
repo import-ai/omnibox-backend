@@ -97,6 +97,16 @@ export class WechatController extends SocialController {
     return res.json(loginData);
   }
 
+  /** App: bind WeChat to current user (requires JWT) */
+  @Post('bind/native')
+  bindNative(
+    @UserId() userId: string,
+    @Body('code') code: string,
+    @Body('source') source?: string,
+  ) {
+    return this.wechatService.bindNative(userId, code, source);
+  }
+
   @Public()
   @Post('login/mini_program')
   async miniProgramLogin(

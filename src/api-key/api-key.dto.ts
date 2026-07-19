@@ -9,10 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
-import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
-import { NamespaceUsageDto } from 'omniboxd/namespaces/dto/namespace-usage.dto';
-import { OpenAPIRequestsQuotaDto } from 'omniboxd/open-api/open-api-quota.dto';
-import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
+import { CurrentInfoResponseDto } from 'omniboxd/namespaces/dto/current-info-response.dto';
 
 import { APIKey, APIKeyAttrs, APIKeyPermission } from './api-key.entity';
 
@@ -100,37 +97,11 @@ export class APIKeyResponseDto {
   }
 }
 
-export class APIKeyInfoResponseDto {
+export class APIKeyInfoResponseDto extends CurrentInfoResponseDto {
   @ApiProperty({
     description: 'API key details',
     type: () => APIKeyResponseDto,
   })
   @Expose({ name: 'api_key' })
   apiKey: APIKeyResponseDto;
-
-  @ApiProperty({
-    description: 'Associated namespace details',
-    type: () => NamespaceResponseDto,
-  })
-  namespace: NamespaceResponseDto;
-
-  @ApiProperty({
-    description: 'Associated user details',
-    type: () => UserResponseDto,
-  })
-  user: UserResponseDto;
-
-  @ApiProperty({
-    description: 'Namespace usage and quota information',
-    type: () => NamespaceUsageDto,
-  })
-  @Expose({ name: 'namespace_usage' })
-  namespaceUsage: NamespaceUsageDto;
-
-  @ApiProperty({
-    description: 'Open API requests per 24h quota status',
-    type: () => OpenAPIRequestsQuotaDto,
-  })
-  @Expose({ name: 'open_api_requests_quota' })
-  openApiRequestsQuota: OpenAPIRequestsQuotaDto;
 }

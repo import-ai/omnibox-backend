@@ -39,6 +39,8 @@ export class GoogleService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly redirectUri: string;
+  private readonly iosClientId: string;
+  private readonly androidClientId: string;
   private readonly googleOAuthAPIBaseUrl: string;
   private readonly googleAPIBaseUrl: string;
 
@@ -51,14 +53,20 @@ export class GoogleService {
     private readonly i18n: I18nService,
     private readonly socialService: SocialService,
   ) {
-    this.clientId = this.configService.get<string>('OBB_GOOGLE_CLIENT_ID', '');
-    this.clientSecret = this.configService.get<string>(
-      'OBB_GOOGLE_CLIENT_SECRET',
-      '',
+    this.clientId = this.cleanEnv(
+      this.configService.get<string>('OBB_GOOGLE_CLIENT_ID', ''),
     );
-    this.redirectUri = this.configService.get<string>(
-      'OBB_GOOGLE_REDIRECT_URI',
-      '',
+    this.clientSecret = this.cleanEnv(
+      this.configService.get<string>('OBB_GOOGLE_CLIENT_SECRET', ''),
+    );
+    this.redirectUri = this.cleanEnv(
+      this.configService.get<string>('OBB_GOOGLE_REDIRECT_URI', ''),
+    );
+    this.iosClientId = this.cleanEnv(
+      this.configService.get<string>('OBB_GOOGLE_IOS_CLIENT_ID', ''),
+    );
+    this.androidClientId = this.cleanEnv(
+      this.configService.get<string>('OBB_GOOGLE_ANDROID_CLIENT_ID', ''),
     );
     this.googleOAuthAPIBaseUrl = this.configService.get<string>(
       'OBB_GOOGLE_OAUTH_API_BASE_URL',
@@ -312,6 +320,225 @@ export class GoogleService {
       stateInfo.userInfo = returnValue;
       await this.socialService.updateState(state, stateInfo);
       return returnValue;
+    });
+  }
+
+  private cleanEnv(value?: string | null): string {
+    if (!value) {
+      return '';
+    }
+    return value.trim().replace(/^["']|["']$/g, '');
+  }
+
+  private getAllowedAudiences(): string[] {
+    return [this.clientId, this.iosClientId, this.androidClientId].filter(
+      (id) => !!id,
+    );
+  }
+
+  async handleMobileCallback(
+    idToken: string,
+    userId?: string,
+    lang?: string,
+  ): Promise<any> {
+    if (!idToken) {
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.invalidTokenResponse', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'INVALID_TOKEN_RESPONSE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const tokenInfoResponse = await fetchWithRetry(
+      `${this.googleOAuthAPIBaseUrl}/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+    );
+
+    if (!tokenInfoResponse.ok) {
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.invalidTokenResponse', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'INVALID_TOKEN_RESPONSE',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    const tokenInfo: {
+      sub?: string;
+      email?: string;
+      email_verified?: string | boolean;
+      name?: string;
+      given_name?: string;
+      family_name?: string;
+      picture?: string;
+      locale?: string;
+      aud?: string;
+      azp?: string;
+      exp?: string;
+    } = await tokenInfoResponse.json();
+
+    const allowedAudiences = this.getAllowedAudiences();
+    const audience = tokenInfo.aud || tokenInfo.azp;
+    if (
+      allowedAudiences.length > 0 &&
+      audience &&
+      !allowedAudiences.includes(audience)
+    ) {
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.invalidTokenResponse', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'INVALID_TOKEN_AUDIENCE',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    if (!tokenInfo.sub || !tokenInfo.email) {
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.invalidUserData', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'INVALID_USER_DATA',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const googleSub = tokenInfo.sub;
+    const googleEmail = tokenInfo.email;
+    const userData: GoogleUserInfo = {
+      sub: googleSub,
+      email: googleEmail,
+      email_verified:
+        tokenInfo.email_verified === true ||
+        tokenInfo.email_verified === 'true',
+      name: tokenInfo.name,
+      given_name: tokenInfo.given_name,
+      family_name: tokenInfo.family_name,
+      picture: tokenInfo.picture,
+      locale: tokenInfo.locale,
+    };
+
+    if (userId) {
+      const googleUser = await this.userService.findByLoginId(userData.sub);
+      if (googleUser) {
+        if (googleUser.id !== userId) {
+          const providerName = this.i18n.t('auth.providers.google');
+          const message = this.i18n.t('auth.errors.invalidProviderData', {
+            args: { provider: providerName },
+          });
+          throw new AppException(
+            message,
+            'ACCOUNT_ALREADY_BOUND',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        return {
+          isBinding: true,
+          id: googleUser.id,
+          access_token: this.jwtService.sign({
+            sub: googleUser.id,
+            username: googleUser.username,
+          }),
+        };
+      }
+
+      const existingUser = await this.userService.bindingExistUser({
+        userId,
+        loginType: 'google',
+        loginId: userData.sub,
+        metadata: userData,
+      });
+      return {
+        isBinding: true,
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    const existingUser = await this.userService.findByLoginId(userData.sub);
+    if (existingUser) {
+      return {
+        id: existingUser.id,
+        access_token: this.jwtService.sign({
+          sub: existingUser.id,
+          username: existingUser.username,
+        }),
+      };
+    }
+
+    const linkedAccount = await this.userService.findByEmail(googleEmail);
+    if (linkedAccount) {
+      const boundUser = await this.userService.bindingExistUser({
+        userId: linkedAccount.id,
+        loginType: 'google',
+        loginId: userData.sub,
+        metadata: userData,
+      });
+      return {
+        id: boundUser.id,
+        access_token: this.jwtService.sign({
+          sub: boundUser.id,
+          username: boundUser.username,
+        }),
+      };
+    }
+
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const manager = tx.entityManager;
+
+      let nickname = userData.name;
+      if (!nickname) {
+        nickname = userData.given_name;
+      }
+      if (!nickname && userData.email) {
+        nickname = userData.email.split('@')[0];
+      }
+      if (!nickname) {
+        nickname = userData.sub;
+      }
+      const username = await this.socialService.getValidUsername(
+        nickname,
+        manager,
+      );
+      this.logger.debug({ nickname, username, source: 'google-mobile' });
+      const googleUser = await this.userService.createUserBinding(
+        {
+          username,
+          loginType: 'google',
+          loginId: googleSub,
+          email: googleEmail,
+          lang,
+          metadata: userData,
+        } as CreateUserBindingDto,
+        manager,
+      );
+
+      await this.namespaceService.createUserNamespace(
+        googleUser.id,
+        googleUser.username,
+        tx,
+      );
+
+      return {
+        id: googleUser.id,
+        access_token: this.jwtService.sign({
+          sub: googleUser.id,
+          username: googleUser.username,
+        }),
+      };
     });
   }
 

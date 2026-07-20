@@ -53,20 +53,22 @@ export class GoogleService {
     private readonly i18n: I18nService,
     private readonly socialService: SocialService,
   ) {
-    this.clientId = this.cleanEnv(
-      this.configService.get<string>('OBB_GOOGLE_CLIENT_ID', ''),
+    this.clientId = this.configService.get<string>('OBB_GOOGLE_CLIENT_ID', '');
+    this.clientSecret = this.configService.get<string>(
+      'OBB_GOOGLE_CLIENT_SECRET',
+      '',
     );
-    this.clientSecret = this.cleanEnv(
-      this.configService.get<string>('OBB_GOOGLE_CLIENT_SECRET', ''),
+    this.redirectUri = this.configService.get<string>(
+      'OBB_GOOGLE_REDIRECT_URI',
+      '',
     );
-    this.redirectUri = this.cleanEnv(
-      this.configService.get<string>('OBB_GOOGLE_REDIRECT_URI', ''),
+    this.iosClientId = this.configService.get<string>(
+      'OBB_GOOGLE_IOS_CLIENT_ID',
+      '',
     );
-    this.iosClientId = this.cleanEnv(
-      this.configService.get<string>('OBB_GOOGLE_IOS_CLIENT_ID', ''),
-    );
-    this.androidClientId = this.cleanEnv(
-      this.configService.get<string>('OBB_GOOGLE_ANDROID_CLIENT_ID', ''),
+    this.androidClientId = this.configService.get<string>(
+      'OBB_GOOGLE_ANDROID_CLIENT_ID',
+      '',
     );
     this.googleOAuthAPIBaseUrl = this.configService.get<string>(
       'OBB_GOOGLE_OAUTH_API_BASE_URL',
@@ -321,13 +323,6 @@ export class GoogleService {
       await this.socialService.updateState(state, stateInfo);
       return returnValue;
     });
-  }
-
-  private cleanEnv(value?: string | null): string {
-    if (!value) {
-      return '';
-    }
-    return value.trim().replace(/^["']|["']$/g, '');
   }
 
   private getAllowedAudiences(): string[] {

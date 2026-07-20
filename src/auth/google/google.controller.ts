@@ -69,6 +69,17 @@ export class GoogleController extends SocialController {
     @Res() res: Response,
     @Body() body: { id_token: string; lang?: string },
   ) {
+    return res.json({
+      obb_google_ios_client_id: this.configService.get(
+        'OBB_GOOGLE_IOS_CLIENT_ID',
+        '',
+      ),
+      obb_google_android_client_id: this.configService.get(
+        'OBB_GOOGLE_ANDROID_CLIENT_ID',
+        '',
+      ),
+    });
+
     const userId = this.findUserId(req.headers.authorization);
 
     const loginData = await this.googleService.handleMobileCallback(

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import {
+  FeaturePreviewListResponseDto,
   FeaturePreviewResponseDto,
   UpdateFeaturePreviewRequestDto,
 } from 'omniboxd/feature-previews/dto/feature-preview.dto';
@@ -16,7 +17,7 @@ export class FeaturePreviewsController {
   async list(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
-  ): Promise<FeaturePreviewResponseDto[]> {
+  ): Promise<FeaturePreviewListResponseDto> {
     return await this.featurePreviewsService.list(namespaceId, userId);
   }
 

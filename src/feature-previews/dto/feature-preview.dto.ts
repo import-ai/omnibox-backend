@@ -6,6 +6,10 @@ export enum FeaturePreviewFeature {
   EDITOR_V2 = 'editor_v2',
 }
 
+export interface FeaturePreviewListResponseDto {
+  features: Record<FeaturePreviewFeature, boolean>;
+}
+
 export class UpdateFeaturePreviewRequestDto {
   @IsEnum(FeaturePreviewFeature, {
     message: i18nValidationMessage('validation.errors.isEnum'),
@@ -27,13 +31,6 @@ export class FeaturePreviewResponseDto {
     const dto = new FeaturePreviewResponseDto();
     dto.feature = entity.feature as FeaturePreviewFeature;
     dto.enabled = entity.enabled;
-    return dto;
-  }
-
-  static disabled(feature: FeaturePreviewFeature): FeaturePreviewResponseDto {
-    const dto = new FeaturePreviewResponseDto();
-    dto.feature = feature;
-    dto.enabled = false;
     return dto;
   }
 }

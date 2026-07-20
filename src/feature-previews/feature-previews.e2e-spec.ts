@@ -22,12 +22,11 @@ describe('FeaturePreviewsController (e2e)', () => {
       .get(`/api/v1/namespaces/${client.namespace.id}/feature-previews`)
       .expect(HttpStatus.OK);
 
-    expect(response.body).toEqual([
-      {
-        feature: FeaturePreviewFeature.EDITOR_V2,
-        enabled: false,
+    expect(response.body).toEqual({
+      features: {
+        [FeaturePreviewFeature.EDITOR_V2]: false,
       },
-    ]);
+    });
   });
 
   it('should enable and disable a feature preview', async () => {
@@ -47,12 +46,11 @@ describe('FeaturePreviewsController (e2e)', () => {
     });
 
     const enabledListResponse = await client.get(url).expect(HttpStatus.OK);
-    expect(enabledListResponse.body).toEqual([
-      {
-        feature: FeaturePreviewFeature.EDITOR_V2,
-        enabled: true,
+    expect(enabledListResponse.body).toEqual({
+      features: {
+        [FeaturePreviewFeature.EDITOR_V2]: true,
       },
-    ]);
+    });
 
     const disableResponse = await client
       .put(url)
@@ -68,12 +66,11 @@ describe('FeaturePreviewsController (e2e)', () => {
     });
 
     const disabledListResponse = await client.get(url).expect(HttpStatus.OK);
-    expect(disabledListResponse.body).toEqual([
-      {
-        feature: FeaturePreviewFeature.EDITOR_V2,
-        enabled: false,
+    expect(disabledListResponse.body).toEqual({
+      features: {
+        [FeaturePreviewFeature.EDITOR_V2]: false,
       },
-    ]);
+    });
   });
 
   it('should reject invalid feature values', async () => {

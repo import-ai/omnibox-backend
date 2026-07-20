@@ -4,6 +4,7 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   FeaturePreviewFeature,
+  FeaturePreviewListResponseDto,
   FeaturePreviewResponseDto,
 } from 'omniboxd/feature-previews/dto/feature-preview.dto';
 import { FeaturePreview } from 'omniboxd/feature-previews/entities/feature-preview.entity';
@@ -24,7 +25,7 @@ export class FeaturePreviewsService {
   async list(
     namespaceId: string,
     userId: string,
-  ): Promise<FeaturePreviewResponseDto[]> {
+  ): Promise<FeaturePreviewListResponseDto> {
     await this.assertUserInNamespace(userId, namespaceId);
 
     const previews = await this.featurePreviewRepository.find({
@@ -38,12 +39,12 @@ export class FeaturePreviewsService {
       previews.map((preview) => [preview.feature, preview]),
     );
 
-    return this.features.map((feature) => {
+    const features = {} as Record<FeaturePreviewFeature, boolean>;
+    for (const feature of this.features) {
       const preview = previewsByFeature.get(feature);
-      return preview
-        ? FeaturePreviewResponseDto.fromEntity(preview)
-        : FeaturePreviewResponseDto.disabled(feature);
-    });
+      features[feature] = preview?.enabled ?? false;
+    }
+    return { features };
   }
 
   async update(

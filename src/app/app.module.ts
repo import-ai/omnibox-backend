@@ -27,6 +27,7 @@ import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
+import { FeaturePreviewsModule } from 'omniboxd/feature-previews/feature-previews.module';
 import { FilesModule } from 'omniboxd/files/files.module';
 import { GroupsModule } from 'omniboxd/groups/groups.module';
 import { SerializerInterceptor } from 'omniboxd/interceptor/serializer.interceptor';
@@ -82,6 +83,7 @@ import { MigrateFileReaderTaskFunctions1781259717294 } from 'omniboxd/migrations
 import { AddWorkerIdToTasks1781511514000 } from 'omniboxd/migrations/1781511514000-add-worker-id-to-tasks';
 import { AddNumSchedulesToTasks1784095735711 } from 'omniboxd/migrations/1784095735711-add-num-schedules-to-tasks';
 import { BackfillUserEmailFromOauthBindings1784109716584 } from 'omniboxd/migrations/1784109716584-backfill-user-email-from-oauth-bindings';
+import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-feature-previews';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -194,6 +196,7 @@ export class AppModule implements NestModule {
         OpenAPIModule,
         SubscribeMessageModule,
         AppConfigModule,
+        FeaturePreviewsModule,
         WizardUrlProviderModule,
         NotificationsModule,
         SmartFoldersModule,
@@ -272,6 +275,7 @@ export class AppModule implements NestModule {
               AddWorkerIdToTasks1781511514000,
               AddNumSchedulesToTasks1784095735711,
               BackfillUserEmailFromOauthBindings1784109716584,
+              FeaturePreviews1784521510168,
               ...extraMigrations,
             ],
             migrationsRun: true,

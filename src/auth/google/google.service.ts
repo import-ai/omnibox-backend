@@ -352,33 +352,25 @@ export class GoogleService {
       `${this.googleOAuthAPIBaseUrl}/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
     );
 
-    const tokenInfo: {
-      sub?: string;
-      email?: string;
-      email_verified?: string | boolean;
-      name?: string;
-      given_name?: string;
-      family_name?: string;
-      picture?: string;
-      locale?: string;
-      aud?: string;
-      azp?: string;
-      iss?: string;
-      exp?: string;
-      error?: string;
-      error_description?: string;
-    } = await tokenInfoResponse.json();
-
+    const tokenInfoText = await tokenInfoResponse.text();
     const allowedAudiences = this.getAllowedAudiences();
     const debugGoogleMobileToken =
       this.configService.get('OBB_GOOGLE_MOBILE_TOKEN_DEBUG', 'true') ===
       'true';
 
     if (debugGoogleMobileToken) {
-      return {
-        google_tokeninfo_status: tokenInfoResponse.status,
-        google_tokeninfo_ok: tokenInfoResponse.ok,
-        google_tokeninfo_body: {
+      let tokenInfoBody: unknown = tokenInfoText;
+      try {
+        const tokenInfo = JSON.parse(tokenInfoText) as {
+          aud?: string;
+          azp?: string;
+          iss?: string;
+          exp?: string;
+          email_verified?: string | boolean;
+          error?: string;
+          error_description?: string;
+        };
+        tokenInfoBody = {
           aud: tokenInfo.aud,
           azp: tokenInfo.azp,
           iss: tokenInfo.iss,
@@ -386,7 +378,15 @@ export class GoogleService {
           email_verified: tokenInfo.email_verified,
           error: tokenInfo.error,
           error_description: tokenInfo.error_description,
-        },
+        };
+      } catch {
+        tokenInfoBody = tokenInfoText;
+      }
+
+      return {
+        google_tokeninfo_status: tokenInfoResponse.status,
+        google_tokeninfo_ok: tokenInfoResponse.ok,
+        google_tokeninfo_body: tokenInfoBody,
         allowed_audiences: allowedAudiences,
       };
     }
@@ -402,6 +402,20 @@ export class GoogleService {
         HttpStatus.UNAUTHORIZED,
       );
     }
+
+    const tokenInfo: {
+      sub?: string;
+      email?: string;
+      email_verified?: string | boolean;
+      name?: string;
+      given_name?: string;
+      family_name?: string;
+      picture?: string;
+      locale?: string;
+      aud?: string;
+      azp?: string;
+      exp?: string;
+    } = JSON.parse(tokenInfoText);
 
     const audience = tokenInfo.aud || tokenInfo.azp;
     if (

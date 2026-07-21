@@ -42,6 +42,7 @@ export class GoogleService {
   private readonly iosClientId: string;
   private readonly androidClientId: string;
   private readonly googleOAuthAPIBaseUrl: string;
+  private readonly googleTokenInfoAPIBaseUrl: string;
   private readonly googleAPIBaseUrl: string;
 
   constructor(
@@ -73,6 +74,10 @@ export class GoogleService {
     this.googleOAuthAPIBaseUrl = this.configService.get<string>(
       'OBB_GOOGLE_OAUTH_API_BASE_URL',
       'https://oauth2.googleapis.com',
+    );
+    this.googleTokenInfoAPIBaseUrl = this.configService.get<string>(
+      'OBB_GOOGLE_TOKENINFO_API_BASE_URL',
+      this.googleOAuthAPIBaseUrl,
     );
     this.googleAPIBaseUrl = this.configService.get<string>(
       'OBB_GOOGLE_API_BASE_URL',
@@ -349,47 +354,8 @@ export class GoogleService {
     }
 
     const tokenInfoResponse = await fetchWithRetry(
-      `${this.googleOAuthAPIBaseUrl}/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+      `${this.googleTokenInfoAPIBaseUrl}/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
     );
-
-    const tokenInfoText = await tokenInfoResponse.text();
-    const allowedAudiences = this.getAllowedAudiences();
-    const debugGoogleMobileToken =
-      this.configService.get('OBB_GOOGLE_MOBILE_TOKEN_DEBUG', 'true') ===
-      'true';
-
-    if (debugGoogleMobileToken) {
-      let tokenInfoBody: unknown = tokenInfoText;
-      try {
-        const tokenInfo = JSON.parse(tokenInfoText) as {
-          aud?: string;
-          azp?: string;
-          iss?: string;
-          exp?: string;
-          email_verified?: string | boolean;
-          error?: string;
-          error_description?: string;
-        };
-        tokenInfoBody = {
-          aud: tokenInfo.aud,
-          azp: tokenInfo.azp,
-          iss: tokenInfo.iss,
-          exp: tokenInfo.exp,
-          email_verified: tokenInfo.email_verified,
-          error: tokenInfo.error,
-          error_description: tokenInfo.error_description,
-        };
-      } catch {
-        tokenInfoBody = tokenInfoText;
-      }
-
-      return {
-        google_tokeninfo_status: tokenInfoResponse.status,
-        google_tokeninfo_ok: tokenInfoResponse.ok,
-        google_tokeninfo_body: tokenInfoBody,
-        allowed_audiences: allowedAudiences,
-      };
-    }
 
     if (!tokenInfoResponse.ok) {
       const providerName = this.i18n.t('auth.providers.google');
@@ -415,8 +381,9 @@ export class GoogleService {
       aud?: string;
       azp?: string;
       exp?: string;
-    } = JSON.parse(tokenInfoText);
+    } = await tokenInfoResponse.json();
 
+    const allowedAudiences = this.getAllowedAudiences();
     const audience = tokenInfo.aud || tokenInfo.azp;
     if (
       allowedAudiences.length > 0 &&

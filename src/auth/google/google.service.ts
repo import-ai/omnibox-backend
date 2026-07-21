@@ -352,6 +352,45 @@ export class GoogleService {
       `${this.googleOAuthAPIBaseUrl}/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
     );
 
+    const tokenInfo: {
+      sub?: string;
+      email?: string;
+      email_verified?: string | boolean;
+      name?: string;
+      given_name?: string;
+      family_name?: string;
+      picture?: string;
+      locale?: string;
+      aud?: string;
+      azp?: string;
+      iss?: string;
+      exp?: string;
+      error?: string;
+      error_description?: string;
+    } = await tokenInfoResponse.json();
+
+    const allowedAudiences = this.getAllowedAudiences();
+    const debugGoogleMobileToken =
+      this.configService.get('OBB_GOOGLE_MOBILE_TOKEN_DEBUG', 'true') ===
+      'true';
+
+    if (debugGoogleMobileToken) {
+      return {
+        google_tokeninfo_status: tokenInfoResponse.status,
+        google_tokeninfo_ok: tokenInfoResponse.ok,
+        google_tokeninfo_body: {
+          aud: tokenInfo.aud,
+          azp: tokenInfo.azp,
+          iss: tokenInfo.iss,
+          exp: tokenInfo.exp,
+          email_verified: tokenInfo.email_verified,
+          error: tokenInfo.error,
+          error_description: tokenInfo.error_description,
+        },
+        allowed_audiences: allowedAudiences,
+      };
+    }
+
     if (!tokenInfoResponse.ok) {
       const providerName = this.i18n.t('auth.providers.google');
       const message = this.i18n.t('auth.errors.invalidTokenResponse', {
@@ -364,21 +403,6 @@ export class GoogleService {
       );
     }
 
-    const tokenInfo: {
-      sub?: string;
-      email?: string;
-      email_verified?: string | boolean;
-      name?: string;
-      given_name?: string;
-      family_name?: string;
-      picture?: string;
-      locale?: string;
-      aud?: string;
-      azp?: string;
-      exp?: string;
-    } = await tokenInfoResponse.json();
-
-    const allowedAudiences = this.getAllowedAudiences();
     const audience = tokenInfo.aud || tokenInfo.azp;
     if (
       allowedAudiences.length > 0 &&

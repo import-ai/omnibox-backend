@@ -12,12 +12,6 @@ export class AddSystemNotifications1784619840000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.addColumns('notifications', [
       new TableColumn({
-        name: 'summary',
-        type: 'character varying',
-        length: '128',
-        isNullable: true,
-      }),
-      new TableColumn({
         name: 'is_global',
         type: 'boolean',
         default: false,
@@ -110,10 +104,6 @@ export class AddSystemNotifications1784619840000 implements MigrationInterface {
         expression: '"user_id" IS NOT NULL OR "namespace_id" IS NOT NULL',
       }),
     );
-    await queryRunner.dropColumns('notifications', [
-      'dedup_key',
-      'is_global',
-      'summary',
-    ]);
+    await queryRunner.dropColumns('notifications', ['dedup_key', 'is_global']);
   }
 }

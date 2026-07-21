@@ -1,5 +1,7 @@
 import { Expose } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsIn,
   IsInt,
@@ -94,12 +96,19 @@ export class CreateSystemNotificationRequestDto {
   @MaxLength(255)
   title: string;
 
-  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(8)
+  @IsString({
+    each: true,
+    message: i18nValidationMessage('validation.errors.isString'),
+  })
   @IsNotEmpty({
+    each: true,
     message: i18nValidationMessage('validation.errors.isNotEmpty'),
   })
-  @MaxLength(128)
-  summary: string;
+  @MaxLength(32, { each: true })
+  tags: string[];
 
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsNotEmpty({

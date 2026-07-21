@@ -26,9 +26,6 @@ export class Notification extends Base {
   @Column('text', { nullable: true })
   content: string | null;
 
-  @Column('varchar', { length: 128, nullable: true })
-  summary: string | null;
-
   @Column('enum', {
     enum: NotificationStatus,
     default: NotificationStatus.UNREAD,

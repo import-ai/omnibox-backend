@@ -21,7 +21,7 @@ describe('System notifications (e2e)', () => {
     const payload = {
       dedup_key: randomUUID(),
       title: 'System update',
-      summary: 'A short update',
+      tags: ['System announcement', 'Product update'],
       content: '## New feature',
     };
 
@@ -46,7 +46,7 @@ describe('System notifications (e2e)', () => {
         expect.objectContaining({
           id: created.body.id,
           notification_type: 'system',
-          summary: payload.summary,
+          tags: payload.tags,
           status: 'unread',
         }),
       );

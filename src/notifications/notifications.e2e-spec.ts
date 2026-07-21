@@ -40,7 +40,7 @@ describe('System notifications (e2e)', () => {
 
     for (const client of [firstClient, secondClient]) {
       const list = await client
-        .get('/api/v1/notifications')
+        .get('/api/v1/notifications?status=unread&offset=0&limit=20')
         .expect(HttpStatus.OK);
       expect(list.body.list).toContainEqual(
         expect.objectContaining({

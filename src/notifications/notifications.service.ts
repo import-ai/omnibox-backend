@@ -132,7 +132,7 @@ export class NotificationsService {
     }
 
     const [notifications, total] = await queryBuilder
-      .orderBy('notification.created_at', 'DESC')
+      .orderBy('notification.createdAt', 'DESC')
       .skip(offset)
       .take(limit)
       .getManyAndCount();

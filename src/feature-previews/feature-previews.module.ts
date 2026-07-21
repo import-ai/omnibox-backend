@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 
 import { FeaturePreview } from './entities/feature-preview.entity';
 import { FeaturePreviewsController } from './feature-previews.controller';
@@ -10,6 +9,6 @@ import { FeaturePreviewsService } from './feature-previews.service';
   providers: [FeaturePreviewsService],
   controllers: [FeaturePreviewsController],
   exports: [FeaturePreviewsService],
-  imports: [TypeOrmModule.forFeature([FeaturePreview]), PermissionsModule],
+  imports: [TypeOrmModule.forFeature([FeaturePreview])],
 })
 export class FeaturePreviewsModule {}

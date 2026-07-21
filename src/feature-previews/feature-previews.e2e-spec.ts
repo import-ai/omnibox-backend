@@ -19,7 +19,7 @@ describe('FeaturePreviewsController (e2e)', () => {
 
   it('should list supported feature previews as disabled by default', async () => {
     const response = await client
-      .get(`/api/v1/namespaces/${client.namespace.id}/feature-previews`)
+      .get('/api/v1/feature-previews')
       .expect(HttpStatus.OK);
 
     expect(response.body).toEqual({
@@ -30,7 +30,7 @@ describe('FeaturePreviewsController (e2e)', () => {
   });
 
   it('should enable and disable a feature preview', async () => {
-    const url = `/api/v1/namespaces/${client.namespace.id}/feature-previews`;
+    const url = '/api/v1/feature-previews';
 
     const enableResponse = await client
       .put(url)
@@ -75,7 +75,7 @@ describe('FeaturePreviewsController (e2e)', () => {
 
   it('should reject invalid feature values', async () => {
     await client
-      .put(`/api/v1/namespaces/${client.namespace.id}/feature-previews`)
+      .put('/api/v1/feature-previews')
       .send({
         feature: 'unknown_feature',
         enabled: true,
@@ -83,20 +83,34 @@ describe('FeaturePreviewsController (e2e)', () => {
       .expect(HttpStatus.BAD_REQUEST);
   });
 
-  it('should reject access from a user outside the namespace', async () => {
+  it('should store feature previews independently for each user', async () => {
     const otherClient = await TestClient.create();
     tempClients.push(otherClient);
 
-    await otherClient
-      .get(`/api/v1/namespaces/${client.namespace.id}/feature-previews`)
-      .expect(HttpStatus.FORBIDDEN);
-
-    await otherClient
-      .put(`/api/v1/namespaces/${client.namespace.id}/feature-previews`)
+    await client
+      .put('/api/v1/feature-previews')
       .send({
         feature: FeaturePreviewFeature.EDITOR_V2,
         enabled: true,
       })
-      .expect(HttpStatus.FORBIDDEN);
+      .expect(HttpStatus.OK);
+
+    const otherUserResponse = await otherClient
+      .get('/api/v1/feature-previews')
+      .expect(HttpStatus.OK);
+    expect(otherUserResponse.body).toEqual({
+      features: {
+        [FeaturePreviewFeature.EDITOR_V2]: false,
+      },
+    });
+
+    const currentUserResponse = await client
+      .get('/api/v1/feature-previews')
+      .expect(HttpStatus.OK);
+    expect(currentUserResponse.body).toEqual({
+      features: {
+        [FeaturePreviewFeature.EDITOR_V2]: true,
+      },
+    });
   });
 });

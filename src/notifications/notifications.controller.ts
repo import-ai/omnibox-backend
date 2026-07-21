@@ -30,7 +30,10 @@ export class NotificationsController {
   ) {
     return await this.notificationsService.list(userId, {
       namespaceId,
-      status: status || 'all',
+      status:
+        status === 'unread' || status === 'read' || status === 'all'
+          ? status
+          : 'all',
       tags,
       offset: Number.isFinite(Number(offset)) ? Number(offset) : 0,
       limit: Number.isFinite(Number(limit)) ? Number(limit) : 20,

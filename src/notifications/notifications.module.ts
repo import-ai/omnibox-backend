@@ -4,7 +4,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { UserModule } from 'omniboxd/user/user.module';
 
-import { Notification } from './entities/notification.entity';
+import { Notification, NotificationRead } from './entities/notification.entity';
 import { InternalNotificationsController } from './internal.notifications.controller';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
@@ -14,7 +14,7 @@ import { NotificationsService } from './notifications.service';
   providers: [NotificationsService],
   exports: [NotificationsService],
   imports: [
-    TypeOrmModule.forFeature([Notification]),
+    TypeOrmModule.forFeature([Notification, NotificationRead]),
     UserModule,
     PermissionsModule,
     ResourcesModule,

@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   Min,
   Validate,
   ValidationArguments,
@@ -77,6 +78,38 @@ export class CreateNotificationRequestDto {
 
   @Validate(NotificationReceiverRequiredConstraint)
   receiverRequired?: boolean;
+}
+
+export class CreateSystemNotificationRequestDto {
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
+  @Expose({ name: 'dedup_key' })
+  dedupKey: string;
+
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  @MaxLength(255)
+  title: string;
+
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  @MaxLength(128)
+  summary: string;
+
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  content: string;
+
+  @IsOptional()
+  @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
+  attrs?: Record<string, any>;
 }
 
 export class ListNotificationsRequestDto {

@@ -1,7 +1,10 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 
-import { CreateNotificationRequestDto } from './dto';
+import {
+  CreateNotificationRequestDto,
+  CreateSystemNotificationRequestDto,
+} from './dto';
 import { NotificationsService } from './notifications.service';
 
 @Controller('internal/api/v1')
@@ -12,6 +15,19 @@ export class InternalNotificationsController {
   @Post('notifications')
   async create(@Body() dto: CreateNotificationRequestDto) {
     const notification = await this.notificationsService.createInternal(dto);
+    return {
+      id: notification.id,
+      status: notification.status,
+    };
+  }
+
+  @Public()
+  @Post('system-notifications')
+  async createSystemNotification(
+    @Body() dto: CreateSystemNotificationRequestDto,
+  ) {
+    const notification =
+      await this.notificationsService.createSystemNotification(dto);
     return {
       id: notification.id,
       status: notification.status,

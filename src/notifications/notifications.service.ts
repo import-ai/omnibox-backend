@@ -4,17 +4,16 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   Brackets,
-  FindOptionsWhere,
-  In,
-  IsNull,
-  MoreThanOrEqual,
+  QueryFailedError,
   Repository,
+  SelectQueryBuilder,
 } from 'typeorm';
 
 import {
   ClearNotificationsRequestDto,
   ClearNotificationsResponseDto,
   CreateNotificationRequestDto,
+  CreateSystemNotificationRequestDto,
   NotificationDetailResponseDto,
   NotificationItemDto,
   NotificationListResponseDto,
@@ -24,6 +23,7 @@ import {
 } from './dto';
 import {
   Notification,
+  NotificationRead,
   NotificationStatus,
 } from './entities/notification.entity';
 
@@ -31,7 +31,7 @@ const NOTIFICATION_RETENTION_DAYS = 30;
 
 interface ListNotificationsOptions {
   namespaceId?: string;
-  status?: string;
+  status?: 'all' | 'unread' | 'read';
   tags?: string;
   offset?: number;
   limit?: number;
@@ -42,6 +42,8 @@ export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
+    @InjectRepository(NotificationRead)
+    private readonly notificationReadRepository: Repository<NotificationRead>,
     private readonly i18n: I18nService,
   ) {}
 
@@ -54,8 +56,11 @@ export class NotificationsService {
       namespaceId: createNotificationDto.namespaceId || null,
       title: createNotificationDto.title,
       content: createNotificationDto.content || null,
+      summary: null,
       status: NotificationStatus.UNREAD,
       notificationType: createNotificationDto.notificationType,
+      isGlobal: false,
+      dedupKey: null,
       target: createNotificationDto.target || {},
       tags: createNotificationDto.tags || [],
       attrs: createNotificationDto.attrs || {},
@@ -63,6 +68,46 @@ export class NotificationsService {
     });
 
     return await this.notificationRepository.save(notification);
+  }
+
+  async createSystemNotification(dto: CreateSystemNotificationRequestDto) {
+    const existing = await this.notificationRepository.findOne({
+      where: { dedupKey: dto.dedupKey },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    const notification = this.notificationRepository.create({
+      userId: null,
+      namespaceId: null,
+      title: dto.title,
+      summary: dto.summary,
+      content: dto.content,
+      status: NotificationStatus.UNREAD,
+      notificationType: 'system',
+      isGlobal: true,
+      dedupKey: dto.dedupKey,
+      target: {},
+      tags: ['system'],
+      attrs: dto.attrs || {},
+      readedAt: null,
+    });
+
+    try {
+      return await this.notificationRepository.save(notification);
+    } catch (error) {
+      if (
+        error instanceof QueryFailedError &&
+        (error as QueryFailedError & { driverError?: { code?: string } })
+          .driverError?.code === '23505'
+      ) {
+        return await this.notificationRepository.findOneByOrFail({
+          dedupKey: dto.dedupKey,
+        });
+      }
+      throw error;
+    }
   }
 
   async list(
@@ -78,55 +123,15 @@ export class NotificationsService {
       .map((tag) => tag.trim())
       .filter((tag) => tag.length > 0);
 
-    const queryBuilder =
-      this.notificationRepository.createQueryBuilder('notification');
+    const queryBuilder = this.createVisibleQuery(userId, namespaceId);
 
-    if (namespaceId) {
-      queryBuilder.where(
-        new Brackets((qb) => {
-          qb.where(
-            'notification.user_id IS NULL AND notification.namespace_id = :namespaceId',
-            {
-              namespaceId,
-            },
-          )
-            .orWhere(
-              'notification.user_id = :userId AND notification.namespace_id IS NULL',
-              {
-                userId,
-              },
-            )
-            .orWhere(
-              'notification.user_id = :userId AND notification.namespace_id = :namespaceId',
-              {
-                userId,
-                namespaceId,
-              },
-            );
-        }),
-      );
-    } else {
-      queryBuilder.where(
-        'notification.user_id = :userId AND notification.namespace_id IS NULL',
-        {
-          userId,
-        },
-      );
-    }
-
-    if (status !== 'all') {
-      queryBuilder.andWhere('notification.status = :status', { status });
-    }
+    this.applyStatusFilter(queryBuilder, status);
 
     if (tagList && tagList.length > 0) {
       queryBuilder.andWhere('notification.tags && :tags', {
         tags: tagList,
       });
     }
-
-    queryBuilder.andWhere('notification.created_at >= :retainedAfter', {
-      retainedAfter: this.getRetainedAfter(),
-    });
 
     const [notifications, total] = await queryBuilder
       .orderBy('notification.created_at', 'DESC')
@@ -173,11 +178,9 @@ export class NotificationsService {
     userId: string,
     namespaceId?: string,
   ): Promise<NotificationUnreadCountResponseDto> {
-    const unreadCount = await this.notificationRepository.count({
-      where: this.buildVisibilityWhere(userId, namespaceId, {
-        status: NotificationStatus.UNREAD,
-      }),
-    });
+    const queryBuilder = this.createVisibleQuery(userId, namespaceId);
+    this.applyStatusFilter(queryBuilder, NotificationStatus.UNREAD);
+    const unreadCount = await queryBuilder.getCount();
 
     return {
       unread_count: unreadCount,
@@ -205,7 +208,34 @@ export class NotificationsService {
       );
     }
 
-    const readedAt = notification.readedAt || new Date();
+    const readedAt = notification.isGlobal
+      ? notification.userRead?.readAt || new Date()
+      : notification.readedAt || new Date();
+
+    if (notification.isGlobal) {
+      if (!notification.userRead) {
+        await this.notificationReadRepository
+          .createQueryBuilder()
+          .insert()
+          .values({
+            notificationId: notification.id,
+            userId,
+            readAt: readedAt,
+          })
+          .orIgnore()
+          .execute();
+      }
+      const receipt = await this.notificationReadRepository.findOneByOrFail({
+        notificationId: notification.id,
+        userId,
+      });
+      return {
+        id: notification.id,
+        status: NotificationStatus.READ,
+        readed_at: receipt.readAt.toISOString(),
+      };
+    }
+
     const saved = await this.notificationRepository.save({
       ...notification,
       status:
@@ -233,16 +263,14 @@ export class NotificationsService {
       };
     }
 
-    const where = this.buildVisibilityWhere(userId, namespaceId, {
-      status: NotificationStatus.UNREAD,
-      ...(clearNotifications.ids && clearNotifications.ids.length > 0
-        ? { id: In(clearNotifications.ids) }
-        : {}),
-    });
-
-    const notifications = await this.notificationRepository.find({
-      where,
-    });
+    const queryBuilder = this.createVisibleQuery(userId, namespaceId);
+    this.applyStatusFilter(queryBuilder, NotificationStatus.UNREAD);
+    if (clearNotifications.ids && clearNotifications.ids.length > 0) {
+      queryBuilder.andWhere('notification.id IN (:...ids)', {
+        ids: clearNotifications.ids,
+      });
+    }
+    const notifications = await queryBuilder.getMany();
 
     if (notifications.length === 0) {
       return {
@@ -251,55 +279,115 @@ export class NotificationsService {
     }
 
     const readedAt = new Date();
-    await this.notificationRepository.save(
-      notifications.map((notification) => ({
-        ...notification,
-        status: NotificationStatus.READ,
-        readedAt,
-      })),
+    const globalNotifications = notifications.filter(
+      (notification) => notification.isGlobal,
     );
+    const directNotifications = notifications.filter(
+      (notification) => !notification.isGlobal,
+    );
+
+    if (globalNotifications.length > 0) {
+      await this.notificationReadRepository.upsert(
+        globalNotifications.map((notification) => ({
+          notificationId: notification.id,
+          userId,
+          readAt: readedAt,
+        })),
+        ['notificationId', 'userId'],
+      );
+    }
+
+    if (directNotifications.length > 0) {
+      await this.notificationRepository.save(
+        directNotifications.map((notification) => ({
+          ...notification,
+          status: NotificationStatus.READ,
+          readedAt,
+        })),
+      );
+    }
 
     return {
       readed_count: notifications.length,
     };
   }
 
-  private buildVisibilityWhere(
+  private createVisibleQuery(
     userId: string,
     namespaceId?: string,
-    extra: FindOptionsWhere<Notification> = {},
-  ): FindOptionsWhere<Notification>[] | FindOptionsWhere<Notification> {
-    const retainedAfter = this.getRetainedAfter();
+  ): SelectQueryBuilder<Notification> {
+    const queryBuilder = this.notificationRepository
+      .createQueryBuilder('notification')
+      .leftJoinAndMapOne(
+        'notification.userRead',
+        NotificationRead,
+        'notificationRead',
+        'notificationRead.notification_id = notification.id AND notificationRead.user_id = :userId',
+        { userId },
+      )
+      .where(
+        new Brackets((visibility) => {
+          visibility.where('notification.is_global = true');
+          if (namespaceId) {
+            visibility
+              .orWhere(
+                'notification.user_id IS NULL AND notification.namespace_id = :namespaceId',
+                { namespaceId },
+              )
+              .orWhere(
+                'notification.user_id = :userId AND notification.namespace_id IS NULL',
+                { userId },
+              )
+              .orWhere(
+                'notification.user_id = :userId AND notification.namespace_id = :namespaceId',
+                { userId, namespaceId },
+              );
+          } else {
+            visibility.orWhere(
+              'notification.user_id = :userId AND notification.namespace_id IS NULL',
+              { userId },
+            );
+          }
+        }),
+      )
+      .andWhere('notification.created_at >= :retainedAfter', {
+        retainedAfter: this.getRetainedAfter(),
+      });
 
-    if (!namespaceId) {
-      return {
-        createdAt: MoreThanOrEqual(retainedAfter),
-        ...extra,
-        userId,
-        namespaceId: IsNull(),
-      };
+    return queryBuilder;
+  }
+
+  private applyStatusFilter(
+    queryBuilder: SelectQueryBuilder<Notification>,
+    status: string,
+  ) {
+    if (status === 'all') {
+      return;
     }
 
-    return [
-      {
-        createdAt: MoreThanOrEqual(retainedAfter),
-        ...extra,
-        userId: IsNull(),
-        namespaceId,
-      },
-      {
-        createdAt: MoreThanOrEqual(retainedAfter),
-        ...extra,
-        userId,
-        namespaceId: IsNull(),
-      },
-      {
-        createdAt: MoreThanOrEqual(retainedAfter),
-        ...extra,
-        userId,
-        namespaceId,
-      },
-    ];
+    queryBuilder.andWhere(
+      new Brackets((statusQuery) => {
+        if (status === 'unread') {
+          statusQuery
+            .where(
+              'notification.is_global = true AND notificationRead.id IS NULL',
+            )
+            .orWhere(
+              'notification.is_global = false AND notification.status = :status',
+              { status },
+            );
+        } else {
+          statusQuery
+            .where(
+              'notification.is_global = true AND notificationRead.id IS NOT NULL',
+            )
+            .orWhere(
+              'notification.is_global = false AND notification.status = :status',
+              { status },
+            );
+        }
+      }),
+    );
   }
 
   private async findVisibleNotification(
@@ -307,11 +395,9 @@ export class NotificationsService {
     userId: string,
     namespaceId?: string,
   ): Promise<Notification | null> {
-    return await this.notificationRepository.findOne({
-      where: this.buildVisibilityWhere(userId, namespaceId, {
-        id,
-      }),
-    });
+    return await this.createVisibleQuery(userId, namespaceId)
+      .andWhere('notification.id = :id', { id })
+      .getOne();
   }
 
   private getRetainedAfter(): Date {

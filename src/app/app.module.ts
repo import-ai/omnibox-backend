@@ -84,6 +84,7 @@ import { AddWorkerIdToTasks1781511514000 } from 'omniboxd/migrations/17815115140
 import { AddNumSchedulesToTasks1784095735711 } from 'omniboxd/migrations/1784095735711-add-num-schedules-to-tasks';
 import { BackfillUserEmailFromOauthBindings1784109716584 } from 'omniboxd/migrations/1784109716584-backfill-user-email-from-oauth-bindings';
 import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-feature-previews';
+import { AddSystemNotifications1784619840000 } from 'omniboxd/migrations/1784619840000-add-system-notifications';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -267,6 +268,7 @@ export class AppModule implements NestModule {
               MakeSizeNullable1769478367000,
               RenameVerifyCodeToKey1774965861436,
               AddNotifications1776070800000,
+              AddSystemNotifications1784619840000,
               AddStatusEnqueuedIndexToTasks1776071000000,
               DeduplicateResourceNames1775666229211,
               AddSmartFolders1779344088692,

@@ -51,7 +51,16 @@ describe('GoogleService', () => {
       access_token: 'access-token',
     });
     expect(fetchWithRetry).toHaveBeenCalledWith(
-      'https://oauth2.googleapis.com/tokeninfo?id_token=id-token',
+      'https://oauth2.googleapis.com/tokeninfo',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }),
     );
+    const [, options] = jest.mocked(fetchWithRetry).mock.calls[0];
+    expect(options?.body).toBeInstanceOf(URLSearchParams);
+    expect((options?.body as URLSearchParams).get('id_token')).toBe('id-token');
   });
 });

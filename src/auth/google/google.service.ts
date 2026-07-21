@@ -354,7 +354,14 @@ export class GoogleService {
     }
 
     const tokenInfoResponse = await fetchWithRetry(
-      `${this.googleTokenInfoAPIBaseUrl}/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+      `${this.googleTokenInfoAPIBaseUrl}/tokeninfo`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ id_token: idToken }),
+      },
     );
 
     if (!tokenInfoResponse.ok) {

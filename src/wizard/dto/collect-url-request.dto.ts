@@ -9,7 +9,11 @@ export class BaseCollectUrlRequestDto {
     example: 'https://example.com/article',
   })
   @IsUrl(
-    { protocols: ['http', 'https'], require_protocol: true },
+    {
+      protocols: ['http', 'https'],
+      require_protocol: true,
+      require_tld: false,
+    },
     {
       message: i18nValidationMessage('validation.errors.url.isUrl'),
     },

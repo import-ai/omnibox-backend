@@ -7,7 +7,11 @@ export class InternalCollectUrlRequestDto {
   @Expose({ name: 'parent_id' })
   parentId: string;
 
-  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
   @IsNotEmpty()
   @IsString()
   url: string;

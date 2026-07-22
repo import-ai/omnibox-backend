@@ -87,7 +87,9 @@ export class GoogleService {
 
   available() {
     return {
-      available: !!(this.clientId && this.clientSecret && this.redirectUri),
+      available:
+        !!(this.clientId && this.clientSecret && this.redirectUri) ||
+        !!(this.iosClientId || this.androidClientId),
     };
   }
 
@@ -393,8 +395,8 @@ export class GoogleService {
     const allowedAudiences = this.getAllowedAudiences();
     const audience = tokenInfo.aud || tokenInfo.azp;
     if (
-      allowedAudiences.length > 0 &&
-      audience &&
+      allowedAudiences.length === 0 ||
+      !audience ||
       !allowedAudiences.includes(audience)
     ) {
       const providerName = this.i18n.t('auth.providers.google');

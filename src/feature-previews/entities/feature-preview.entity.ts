@@ -16,6 +16,13 @@ export class FeaturePreview extends Base {
   @Column()
   feature: string;
 
-  @Column({ default: false })
-  enabled: boolean;
+  @Column({ type: 'boolean', nullable: true })
+  userEnabled: boolean | null;
+
+  @Column({ type: 'boolean', nullable: true })
+  rolloutEnabled: boolean | null;
+
+  get enabled(): boolean {
+    return this.userEnabled || this.rolloutEnabled || false;
+  }
 }

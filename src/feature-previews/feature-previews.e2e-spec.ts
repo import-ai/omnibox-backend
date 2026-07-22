@@ -1,6 +1,8 @@
 import { HttpStatus } from '@nestjs/common';
 import { FeaturePreviewFeature } from 'omniboxd/feature-previews/dto/feature-preview.dto';
+import { FeaturePreview } from 'omniboxd/feature-previews/entities/feature-preview.entity';
 import { TestClient } from 'test/test-client';
+import { DataSource } from 'typeorm';
 
 describe('FeaturePreviewsController (e2e)', () => {
   let client: TestClient;
@@ -112,5 +114,42 @@ describe('FeaturePreviewsController (e2e)', () => {
         [FeaturePreviewFeature.EDITOR_V2]: true,
       },
     });
+  });
+
+  it('should combine rollout and user settings without updating rollout', async () => {
+    const rolloutClient = await TestClient.create();
+    tempClients.push(rolloutClient);
+    const repository = rolloutClient.app
+      .get(DataSource)
+      .getRepository(FeaturePreview);
+
+    await repository.save({
+      userId: rolloutClient.user.id,
+      feature: FeaturePreviewFeature.EDITOR_V2,
+      userEnabled: null,
+      rolloutEnabled: true,
+    });
+
+    const url = '/api/v1/feature-previews';
+    const rolloutResponse = await rolloutClient.get(url).expect(HttpStatus.OK);
+    expect(rolloutResponse.body.features).toEqual({
+      [FeaturePreviewFeature.EDITOR_V2]: true,
+    });
+
+    const updateResponse = await rolloutClient
+      .put(url)
+      .send({ feature: FeaturePreviewFeature.EDITOR_V2, enabled: false })
+      .expect(HttpStatus.OK);
+    expect(updateResponse.body).toEqual({
+      feature: FeaturePreviewFeature.EDITOR_V2,
+      enabled: true,
+    });
+
+    const preview = await repository.findOneByOrFail({
+      userId: rolloutClient.user.id,
+      feature: FeaturePreviewFeature.EDITOR_V2,
+    });
+    expect(preview.userEnabled).toBe(false);
+    expect(preview.rolloutEnabled).toBe(true);
   });
 });

@@ -45,9 +45,9 @@ export class FeaturePreviewsService {
       .createQueryBuilder()
       .insert()
       .into(FeaturePreview)
-      .values({ userId, feature, enabled })
+      .values({ userId, feature, userEnabled: enabled })
       .onConflict(
-        '("user_id", "feature") WHERE "deleted_at" IS NULL DO UPDATE SET "enabled" = EXCLUDED."enabled", "updated_at" = now()',
+        '("user_id", "feature") WHERE "deleted_at" IS NULL DO UPDATE SET "user_enabled" = EXCLUDED."user_enabled", "updated_at" = now()',
       )
       .execute();
 

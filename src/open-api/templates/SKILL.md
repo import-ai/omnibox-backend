@@ -75,6 +75,16 @@ Use `GET /api-keys/info` to inspect `open_api_requests_quota.limit`, `used`, `re
 
 ## Common workflows
 
+### Understand OmniBox workspace resource URLs
+
+OmniBox workspace resource URLs use this path route:
+
+```text
+/<namespace_id>/<resource_id>[/edit]
+```
+
+The first path segment is the namespace ID and the second is the resource ID. The optional `/edit` suffix, query string, and fragment do not change those IDs. When given one of these URLs, compare its namespace ID with the namespace returned by `GET /api-keys/info`, then read the resource with `GET /resources/<resource_id>`.
+
 ### Inspect the current API key
 
 Call this first when you need to understand the key's namespace, root resource, and permissions.

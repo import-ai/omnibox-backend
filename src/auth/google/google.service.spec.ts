@@ -133,4 +133,42 @@ describe('GoogleService', () => {
       AppException,
     );
   });
+
+  it('rejects mobile callback when email is not verified (unverified email)', async () => {
+    const config = {
+      OBB_GOOGLE_IOS_CLIENT_ID: 'ios-client',
+      OBB_GOOGLE_ANDROID_CLIENT_ID: 'android-client',
+    };
+    const configService = {
+      get: jest.fn((key) => config[key as keyof typeof config] || ''),
+    } as unknown as ConfigService;
+    const userService = {
+      findByLoginId: jest.fn().mockResolvedValue({
+        id: 'user-id',
+        username: 'username',
+      }),
+    };
+    const i18n = { t: jest.fn() };
+    const service = new GoogleService(
+      configService,
+      {} as any,
+      userService as never,
+      null as any,
+      null as any,
+      i18n as never,
+      null as any,
+    );
+    jest.mocked(fetchWithRetry).mockResolvedValue(
+      Response.json({
+        sub: 'sub',
+        email: 'email',
+        aud: 'ios-client',
+        email_verified: false,
+      }),
+    );
+
+    await expect(service.handleMobileCallback('id-token')).rejects.toThrow(
+      AppException,
+    );
+  });
 });

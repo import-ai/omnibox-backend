@@ -87,9 +87,7 @@ export class GoogleService {
 
   available() {
     return {
-      available:
-        !!(this.clientId && this.clientSecret && this.redirectUri) ||
-        !!(this.iosClientId || this.androidClientId),
+      available: !!(this.clientId && this.clientSecret && this.redirectUri),
     };
   }
 
@@ -424,12 +422,25 @@ export class GoogleService {
 
     const googleSub = tokenInfo.sub;
     const googleEmail = tokenInfo.email;
+    const emailVerified =
+      tokenInfo.email_verified === true || tokenInfo.email_verified === 'true';
+
+    if (!emailVerified) {
+      const providerName = this.i18n.t('auth.providers.google');
+      const message = this.i18n.t('auth.errors.unverifiedEmail', {
+        args: { provider: providerName },
+      });
+      throw new AppException(
+        message,
+        'GOOGLE_UNVERIFIED_EMAIL',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
     const userData: GoogleUserInfo = {
       sub: googleSub,
       email: googleEmail,
-      email_verified:
-        tokenInfo.email_verified === true ||
-        tokenInfo.email_verified === 'true',
+      email_verified: emailVerified,
       name: tokenInfo.name,
       given_name: tokenInfo.given_name,
       family_name: tokenInfo.family_name,

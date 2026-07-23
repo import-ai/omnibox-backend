@@ -84,6 +84,8 @@ import { AddWorkerIdToTasks1781511514000 } from 'omniboxd/migrations/17815115140
 import { AddNumSchedulesToTasks1784095735711 } from 'omniboxd/migrations/1784095735711-add-num-schedules-to-tasks';
 import { BackfillUserEmailFromOauthBindings1784109716584 } from 'omniboxd/migrations/1784109716584-backfill-user-email-from-oauth-bindings';
 import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-feature-previews';
+import { UserScopedFeaturePreviews1784629544658 } from 'omniboxd/migrations/1784629544658-user-scoped-feature-previews';
+import { SplitFeaturePreviewEnabled1784710706445 } from 'omniboxd/migrations/1784710706445-split-feature-preview-enabled';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -276,6 +278,8 @@ export class AppModule implements NestModule {
               AddNumSchedulesToTasks1784095735711,
               BackfillUserEmailFromOauthBindings1784109716584,
               FeaturePreviews1784521510168,
+              UserScopedFeaturePreviews1784629544658,
+              SplitFeaturePreviewEnabled1784710706445,
               ...extraMigrations,
             ],
             migrationsRun: true,

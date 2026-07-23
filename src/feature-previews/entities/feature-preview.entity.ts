@@ -1,17 +1,10 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('feature_previews')
-@Index(['namespaceId', 'userId', 'feature'], {
-  unique: true,
-  where: '"deletedAt" IS NULL',
-})
 export class FeaturePreview extends Base {
   @PrimaryGeneratedColumn()
   id: string;
-
-  @Column()
-  namespaceId: string;
 
   @Column('uuid')
   userId: string;
@@ -19,6 +12,13 @@ export class FeaturePreview extends Base {
   @Column()
   feature: string;
 
-  @Column({ default: false })
-  enabled: boolean;
+  @Column({ type: 'boolean', nullable: true })
+  userEnabled: boolean | null;
+
+  @Column({ type: 'boolean', nullable: true })
+  rolloutEnabled: boolean | null;
+
+  get enabled(): boolean {
+    return this.userEnabled ?? this.rolloutEnabled ?? false;
+  }
 }

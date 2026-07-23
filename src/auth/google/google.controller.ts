@@ -62,6 +62,38 @@ export class GoogleController extends SocialController {
     return res.json(loginData);
   }
 
+  @Public()
+  @Post('mobile')
+  async handleMobileCallback(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() body: { id_token: string; lang?: string },
+  ) {
+    const userId = this.findUserId(req.headers.authorization);
+
+    const loginData = await this.googleService.handleMobileCallback(
+      body.id_token,
+      userId,
+      body.lang,
+    );
+
+    if (loginData && loginData.access_token) {
+      const jwtExpireSeconds = parseInt(
+        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
+        10,
+      );
+      res.cookie('token', loginData.access_token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/',
+        maxAge: jwtExpireSeconds * 1000,
+      });
+    }
+
+    return res.json(loginData);
+  }
+
   @Post('unbind')
   unbind(@UserId() userId: string) {
     return this.googleService.unbind(userId);

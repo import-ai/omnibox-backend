@@ -2,6 +2,7 @@
   "errors": {
     "missingFile": "缺少文件",
     "missingRequiredFields": "缺少必填字段",
+    "cannotCollectOmniBoxUrl": "暂不支持把 OmniBox 链接收藏回 OmniBox，请直接打开或读取该资源。",
     "invalidTaskPayload": "无效的任务载荷",
     "taskNotStarted": "任务 {taskId} 尚未开始"
   }

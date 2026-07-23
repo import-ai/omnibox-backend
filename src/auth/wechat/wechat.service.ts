@@ -514,6 +514,56 @@ export class WechatService {
     });
   }
 
+  async bindNative(
+    userId: string,
+    code: string,
+    source?: string,
+  ): Promise<{ isBinding: true; id: string; source: string }> {
+    const userData = await this.fetchWechatUserData(
+      this.nativeAppId || this.appId,
+      this.nativeAppSecret || this.appSecret,
+      code,
+    );
+
+    const wechatUser = await this.userService.findByLoginId(userData.unionid);
+    if (wechatUser) {
+      if (wechatUser.id !== userId) {
+        const providerName = this.i18n.t('auth.providers.wechat');
+        const message = this.i18n.t('auth.errors.invalidProviderData', {
+          args: { provider: providerName },
+        });
+        throw new AppException(
+          message,
+          'ACCOUNT_ALREADY_BOUND',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      await this.userService.updateUserBindingWhenMetadataEmpty(
+        wechatUser.id,
+        'wechat',
+        userData,
+      );
+      return {
+        isBinding: true,
+        id: wechatUser.id,
+        source: source || 'native_ios',
+      };
+    }
+
+    const existingUser = await this.userService.bindingExistUser({
+      userId,
+      loginType: 'wechat',
+      loginId: userData.unionid,
+      metadata: userData,
+    });
+
+    return {
+      isBinding: true,
+      id: existingUser.id,
+      source: source || 'native_ios',
+    };
+  }
+
   async migrationQrCode(type: 'new' | 'old' = 'new') {
     const isOld = type === 'old';
     const state = await this.socialService.generateState('open_weixin', type);

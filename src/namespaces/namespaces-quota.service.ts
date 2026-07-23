@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { plainToInstance } from 'class-transformer';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -28,6 +28,7 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
 
 @Injectable()
 export class NamespacesQuotaService {
+  private readonly logger = new Logger(NamespacesQuotaService.name);
   private readonly proUrl: string | undefined;
 
   constructor(private readonly configService: ConfigService) {
@@ -76,8 +77,28 @@ export class NamespacesQuotaService {
   }
 
   async getNamespaceTier(namespaceId: string): Promise<NamespaceTier> {
-    const namespaces = await this.batchGetNamespaceInfos([namespaceId]);
-    return namespaces[0]?.tier ?? NamespaceTier.BASIC;
+    try {
+      const namespace = (await this.batchGetNamespaceInfos([namespaceId])).find(
+        ({ namespace_id }) => namespace_id === namespaceId,
+      );
+      if (
+        namespace?.tier !== NamespaceTier.BASIC &&
+        namespace?.tier !== NamespaceTier.PREMIUM
+      ) {
+        if (this.proUrl) {
+          this.logger.warn(
+            `Invalid namespace tier for ${namespaceId}; falling back to basic`,
+          );
+        }
+        return NamespaceTier.BASIC;
+      }
+      return namespace.tier;
+    } catch {
+      this.logger.warn(
+        `Failed to get namespace tier for ${namespaceId}; falling back to basic`,
+      );
+      return NamespaceTier.BASIC;
+    }
   }
 
   private async batchGetNamespaceInfos(

@@ -5,7 +5,7 @@ import {
 } from 'test/migration-test-utils';
 import { DataSource, QueryRunner } from 'typeorm';
 
-import { AddSystemNotifications1784803893255 } from './1784803893255-add-system-notifications';
+import { AddSystemNotifications1784619840000 } from './1784619840000-add-system-notifications';
 
 describe('AddSystemNotifications Migration E2E', () => {
   let dataSource: DataSource;
@@ -35,6 +35,17 @@ describe('AddSystemNotifications Migration E2E', () => {
     await destroyDataSource(dataSource);
   });
 
+  it('should preserve the deployed migration identifier', async () => {
+    const migrations = await queryRunner.query(
+      'SELECT name FROM migrations WHERE name = $1',
+      ['AddSystemNotifications1784619840000'],
+    );
+
+    expect(migrations).toEqual([
+      { name: 'AddSystemNotifications1784619840000' },
+    ]);
+  });
+
   it('should remove global notifications before restoring the old constraint', async () => {
     const notificationId = '11111111-1111-1111-1111-111111111111';
     await queryRunner.query(
@@ -45,7 +56,7 @@ describe('AddSystemNotifications Migration E2E', () => {
       [notificationId],
     );
 
-    const migration = new AddSystemNotifications1784803893255();
+    const migration = new AddSystemNotifications1784619840000();
     await expect(migration.down(queryRunner)).resolves.not.toThrow();
 
     const rows = await queryRunner.query(

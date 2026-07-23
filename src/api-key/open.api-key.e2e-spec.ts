@@ -42,11 +42,21 @@ describe('OpenAPIKeyController (e2e)', () => {
         id: client.namespace.id,
         name: client.namespace.name,
         root_resource_id: client.namespace.root_resource_id,
+        tier: 'basic',
       },
       user: {
         id: client.user.id,
         username: client.user.username,
         email: client.user.email,
+      },
+      namespace_usage: {
+        readonly: false,
+      },
+      open_api_requests_quota: {
+        limit: 0,
+        used: 0,
+        remaining: null,
+        reset_at: null,
       },
     });
     expect(response.body.api_key.value).toBeDefined();

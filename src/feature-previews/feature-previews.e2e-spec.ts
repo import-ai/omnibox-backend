@@ -116,7 +116,7 @@ describe('FeaturePreviewsController (e2e)', () => {
     });
   });
 
-  it('should combine rollout and user settings without updating rollout', async () => {
+  it('should prefer user settings without updating rollout', async () => {
     const rolloutClient = await TestClient.create();
     tempClients.push(rolloutClient);
     const repository = rolloutClient.app
@@ -142,7 +142,7 @@ describe('FeaturePreviewsController (e2e)', () => {
       .expect(HttpStatus.OK);
     expect(updateResponse.body).toEqual({
       feature: FeaturePreviewFeature.EDITOR_V2,
-      enabled: true,
+      enabled: false,
     });
 
     const preview = await repository.findOneByOrFail({

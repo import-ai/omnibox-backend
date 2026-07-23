@@ -46,9 +46,9 @@ export class FeaturePreviewsService {
       .insert()
       .into(FeaturePreview)
       .values({ userId, feature, userEnabled: enabled })
-      .onConflict(
-        '("user_id", "feature") WHERE "deleted_at" IS NULL DO UPDATE SET "user_enabled" = EXCLUDED."user_enabled", "updated_at" = now()',
-      )
+      .orUpdate(['user_enabled'], ['user_id', 'feature'], {
+        indexPredicate: '"deleted_at" IS NULL',
+      })
       .execute();
 
     const preview = await this.featurePreviewRepository.findOneOrFail({

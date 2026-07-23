@@ -20,14 +20,10 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { NamespaceResponseDto } from 'omniboxd/namespaces/dto/namespace-response.dto';
+import { CurrentInfoService } from 'omniboxd/namespaces/current-info.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
-import { OpenAPIQuotaService } from 'omniboxd/open-api/open-api-quota.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { UserResponseDto } from 'omniboxd/user/dto/user-response.dto';
-import { UserService } from 'omniboxd/user/user.service';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -39,9 +35,7 @@ export class APIKeyService {
     private readonly applicationsRepository: Repository<Applications>,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesService: NamespacesService,
-    private readonly namespacesQuotaService: NamespacesQuotaService,
-    private readonly openAPIQuotaService: OpenAPIQuotaService,
-    private readonly userService: UserService,
+    private readonly currentInfoService: CurrentInfoService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -354,34 +348,14 @@ export class APIKeyService {
   }
 
   async info(apiKey: APIKey): Promise<APIKeyInfoResponseDto> {
-    // Get the namespace
-    const namespace = await this.namespacesService.getNamespace(
+    const currentInfo = await this.currentInfoService.getCurrentInfo(
+      apiKey.userId,
       apiKey.namespaceId,
     );
 
-    // Get the user
-    const user = await this.userService.find(apiKey.userId);
-
-    // Get the namespace usage and Open API quota status
-    const namespaceUsage = await this.namespacesQuotaService.getNamespaceUsage(
-      apiKey.namespaceId,
-    );
-    const openApiRequestsQuota = await this.openAPIQuotaService.getQuotaStatus(
-      apiKey.namespaceId,
-      namespaceUsage,
-    );
-
-    // Convert entities to DTOs and return
-    const apiKeyDto = APIKeyResponseDto.fromEntity(apiKey);
-    const namespaceDto = NamespaceResponseDto.fromEntity(namespace);
-    const userDto = UserResponseDto.fromEntity(user);
-
-    return {
-      apiKey: apiKeyDto,
-      namespace: namespaceDto,
-      user: userDto,
-      namespaceUsage: namespaceUsage,
-      openApiRequestsQuota,
-    };
+    return Object.assign(new APIKeyInfoResponseDto(), {
+      apiKey: APIKeyResponseDto.fromEntity(apiKey),
+      ...currentInfo,
+    });
   }
 }

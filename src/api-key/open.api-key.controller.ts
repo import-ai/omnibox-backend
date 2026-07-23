@@ -23,7 +23,7 @@ export class OpenAPIKeyController {
   @ApiOperation({
     summary: 'Get API key information',
     description:
-      'Returns metadata for the current API key, including its namespace, root resource scope, and configured permissions.',
+      'Returns the current API key, user, namespace, namespace tier, usage, quota, root resource scope, and configured permissions.',
   })
   @ApiResponse({
     status: 200,

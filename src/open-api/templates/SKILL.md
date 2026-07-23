@@ -71,7 +71,7 @@ These endpoints do not consume Open API request quota:
 - `POST /wizard/collect/gzip`
 - `POST /wizard/ask`
 
-Use `GET /api-keys/info` to inspect `open_api_requests_quota.limit`, `used`, `remaining`, and `reset_at`.
+Use `GET /api-keys/info` to inspect the current user, namespace, namespace tier, usage limits, and `open_api_requests_quota.limit`, `used`, `remaining`, and `reset_at`.
 
 ## Common workflows
 
@@ -87,7 +87,7 @@ The first path segment is the namespace ID and the second is the resource ID. Th
 
 ### Inspect the current API key
 
-Call this first when you need to understand the key's namespace, root resource, and permissions.
+Call this first when you need to understand the current user, namespace, namespace tier, usage and quota limits, root resource, or permissions. Do not guess this information from prior messages.
 
 ```http
 GET /api-keys/info

@@ -4,10 +4,7 @@ import { APIKeyController } from 'omniboxd/api-key/api-key.controller';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
-import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
-import { OpenAPIQuotaModule } from 'omniboxd/open-api/open-api-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
-import { UserModule } from 'omniboxd/user/user.module';
 
 import { APIKey } from './api-key.entity';
 
@@ -19,9 +16,6 @@ import { APIKey } from './api-key.entity';
     TypeOrmModule.forFeature([APIKey, Applications]),
     PermissionsModule,
     NamespacesModule,
-    NamespacesQuotaModule,
-    OpenAPIQuotaModule,
-    UserModule,
   ],
 })
 export class APIKeyModule {}

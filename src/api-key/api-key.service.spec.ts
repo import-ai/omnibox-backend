@@ -1,15 +1,14 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { instanceToPlain } from 'class-transformer';
 import { I18nService } from 'nestjs-i18n';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { CurrentInfoService } from 'omniboxd/namespaces/current-info.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
-import { OpenAPIQuotaService } from 'omniboxd/open-api/open-api-quota.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { UserService } from 'omniboxd/user/user.service';
 import { Repository } from 'typeorm';
 
 import { CreateAPIKeyDto } from './api-key.dto';
@@ -26,6 +25,7 @@ describe('APIKeyService', () => {
   let applicationsRepository: jest.Mocked<Repository<Applications>>;
   let permissionsService: jest.Mocked<PermissionsService>;
   let namespacesService: jest.Mocked<NamespacesService>;
+  let currentInfoService: jest.Mocked<CurrentInfoService>;
 
   const mockApiKey = {
     id: 'test-api-key-id',
@@ -68,10 +68,6 @@ describe('APIKeyService', () => {
       getMemberByUserId: jest.fn(),
     };
 
-    const mockUserService = {
-      find: jest.fn(),
-    };
-
     const mockI18nService = {
       t: jest.fn((key: string, options?: any) => {
         // Return mock translations for test purposes
@@ -99,13 +95,8 @@ describe('APIKeyService', () => {
       }),
     };
 
-    const mockNamespacesQuotaService = {
-      getNamespaceUsage: jest.fn(),
-      isNamespaceReadonly: jest.fn().mockResolvedValue(false),
-    };
-
-    const mockOpenAPIQuotaService = {
-      getQuotaStatus: jest.fn(),
+    const mockCurrentInfoService = {
+      getCurrentInfo: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -128,20 +119,12 @@ describe('APIKeyService', () => {
           useValue: mockNamespacesService,
         },
         {
-          provide: UserService,
-          useValue: mockUserService,
+          provide: CurrentInfoService,
+          useValue: mockCurrentInfoService,
         },
         {
           provide: I18nService,
           useValue: mockI18nService,
-        },
-        {
-          provide: NamespacesQuotaService,
-          useValue: mockNamespacesQuotaService,
-        },
-        {
-          provide: OpenAPIQuotaService,
-          useValue: mockOpenAPIQuotaService,
         },
       ],
     }).compile();
@@ -151,10 +134,39 @@ describe('APIKeyService', () => {
     applicationsRepository = module.get(getRepositoryToken(Applications));
     permissionsService = module.get(PermissionsService);
     namespacesService = module.get(NamespacesService);
+    currentInfoService = module.get(CurrentInfoService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('info', () => {
+    it('should combine API key details with current user and namespace info', async () => {
+      const currentInfo = {
+        user: { id: 'test-user-id' },
+        namespace: { id: 'test-namespace-id', tier: 'basic' },
+        namespaceUsage: { used: 0, limit: 1024 },
+        openApiRequestsQuota: { used: 0, limit: 100, remaining: 100 },
+      } as any;
+      currentInfoService.getCurrentInfo.mockResolvedValue(currentInfo);
+
+      const result = await service.info(mockApiKey as APIKey);
+
+      expect(currentInfoService.getCurrentInfo).toHaveBeenCalledWith(
+        'test-user-id',
+        'test-namespace-id',
+      );
+      expect(result).toMatchObject({
+        apiKey: { id: 'test-api-key-id' },
+        ...currentInfo,
+      });
+      expect(instanceToPlain(result)).toMatchObject({
+        api_key: { id: 'test-api-key-id' },
+        namespace_usage: currentInfo.namespaceUsage,
+        open_api_requests_quota: currentInfo.openApiRequestsQuota,
+      });
+    });
   });
 
   describe('create', () => {

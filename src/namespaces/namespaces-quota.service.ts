@@ -1,5 +1,6 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { trace } from '@opentelemetry/api';
 import { plainToInstance } from 'class-transformer';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 
@@ -28,7 +29,6 @@ const DEFAULT_USAGE: NamespaceUsageDto = {
 
 @Injectable()
 export class NamespacesQuotaService {
-  private readonly logger = new Logger(NamespacesQuotaService.name);
   private readonly proUrl: string | undefined;
 
   constructor(private readonly configService: ConfigService) {
@@ -77,28 +77,11 @@ export class NamespacesQuotaService {
   }
 
   async getNamespaceTier(namespaceId: string): Promise<NamespaceTier> {
-    try {
-      const namespace = (await this.batchGetNamespaceInfos([namespaceId])).find(
-        ({ namespace_id }) => namespace_id === namespaceId,
-      );
-      if (
-        namespace?.tier !== NamespaceTier.BASIC &&
-        namespace?.tier !== NamespaceTier.PREMIUM
-      ) {
-        if (this.proUrl) {
-          this.logger.warn(
-            `Invalid namespace tier for ${namespaceId}; falling back to basic`,
-          );
-        }
-        return NamespaceTier.BASIC;
-      }
-      return namespace.tier;
-    } catch {
-      this.logger.warn(
-        `Failed to get namespace tier for ${namespaceId}; falling back to basic`,
-      );
+    if (!this.proUrl) {
       return NamespaceTier.BASIC;
     }
+    const namespaces = await this.batchGetNamespaceInfos([namespaceId]);
+    return namespaces[0].tier;
   }
 
   private async batchGetNamespaceInfos(
@@ -110,25 +93,31 @@ export class NamespacesQuotaService {
     const params = new URLSearchParams({
       namespace_ids: namespaceIds.join(','),
     });
-    let response: Response;
     try {
-      response = await fetch(
+      const response = await fetch(
         `${this.proUrl}/internal/api/v1/pro-namespaces?${params}`,
       );
-    } catch {
-      return [];
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as {
+          message?: string;
+          code?: string;
+        };
+        throw new AppException(
+          data.message ?? `Pro API error: ${response.statusText}`,
+          data.code ?? 'PRO_NAMESPACE_INFO_FAILED',
+          response.status as HttpStatus,
+        );
+      }
+      const data = (await response.json()) as {
+        namespaces: ProNamespaceInfo[];
+      };
+      return data.namespaces;
+    } catch (error) {
+      if (error instanceof Error) {
+        trace.getActiveSpan()?.recordException(error);
+      }
+      throw error;
     }
-    if (!response.ok) {
-      throw new AppException(
-        'Failed to get namespace info',
-        'INTERNAL_SERVER_ERROR',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-    const data = (await response.json()) as {
-      namespaces?: ProNamespaceInfo[];
-    };
-    return data.namespaces ?? [];
   }
 
   async isNamespaceReadonly(namespaceId: string): Promise<boolean> {

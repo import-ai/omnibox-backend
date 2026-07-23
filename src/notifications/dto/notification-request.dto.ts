@@ -1,5 +1,7 @@
 import { Expose } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsIn,
   IsInt,
@@ -8,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   Min,
   Validate,
   ValidationArguments,
@@ -77,6 +80,45 @@ export class CreateNotificationRequestDto {
 
   @Validate(NotificationReceiverRequiredConstraint)
   receiverRequired?: boolean;
+}
+
+export class CreateSystemNotificationRequestDto {
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
+  @Expose({ name: 'dedup_key' })
+  dedupKey: string;
+
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  @MaxLength(255)
+  title: string;
+
+  @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(8)
+  @IsString({
+    each: true,
+    message: i18nValidationMessage('validation.errors.isString'),
+  })
+  @IsNotEmpty({
+    each: true,
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  @MaxLength(32, { each: true })
+  tags: string[];
+
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  content: string;
+
+  @IsOptional()
+  @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
+  attrs?: Record<string, any>;
 }
 
 export class ListNotificationsRequestDto {

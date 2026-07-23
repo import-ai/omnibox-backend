@@ -5,6 +5,7 @@ export class NotificationItemDto {
   title: string;
   summary: string;
   status: string;
+  notification_type: string;
   readed_at: string | null;
   tags: string[];
   target: Record<string, any>;
@@ -16,8 +17,15 @@ export class NotificationItemDto {
     dto.id = notification.id;
     dto.title = notification.title;
     dto.summary = (notification.content || '').slice(0, 128);
-    dto.status = notification.status;
-    dto.readed_at = notification.readedAt?.toISOString() || null;
+    dto.notification_type = notification.notificationType;
+    dto.status = notification.isGlobal
+      ? notification.userRead
+        ? 'read'
+        : 'unread'
+      : notification.status;
+    dto.readed_at = notification.isGlobal
+      ? notification.userRead?.readAt.toISOString() || null
+      : notification.readedAt?.toISOString() || null;
     dto.tags = notification.tags || [];
     dto.target = notification.target || {};
     dto.attrs = notification.attrs || {};
@@ -43,6 +51,7 @@ export class NotificationDetailResponseDto {
   content: string;
   tags: string[];
   status: string;
+  notification_type: string;
   readed_at: string | null;
   target: Record<string, any>;
   attrs: Record<string, any>;
@@ -54,8 +63,15 @@ export class NotificationDetailResponseDto {
     dto.title = notification.title;
     dto.content = notification.content || '';
     dto.tags = notification.tags || [];
-    dto.status = notification.status;
-    dto.readed_at = notification.readedAt?.toISOString() || null;
+    dto.notification_type = notification.notificationType;
+    dto.status = notification.isGlobal
+      ? notification.userRead
+        ? 'read'
+        : 'unread'
+      : notification.status;
+    dto.readed_at = notification.isGlobal
+      ? notification.userRead?.readAt.toISOString() || null
+      : notification.readedAt?.toISOString() || null;
     dto.target = notification.target || {};
     dto.attrs = notification.attrs || {};
     dto.created_at = notification.createdAt.toISOString();

@@ -86,6 +86,7 @@ import { BackfillUserEmailFromOauthBindings1784109716584 } from 'omniboxd/migrat
 import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-feature-previews';
 import { UserScopedFeaturePreviews1784629544658 } from 'omniboxd/migrations/1784629544658-user-scoped-feature-previews';
 import { SplitFeaturePreviewEnabled1784710706445 } from 'omniboxd/migrations/1784710706445-split-feature-preview-enabled';
+import { AddSystemNotifications1784803893255 } from 'omniboxd/migrations/1784803893255-add-system-notifications';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -280,6 +281,7 @@ export class AppModule implements NestModule {
               FeaturePreviews1784521510168,
               UserScopedFeaturePreviews1784629544658,
               SplitFeaturePreviewEnabled1784710706445,
+              AddSystemNotifications1784803893255,
               ...extraMigrations,
             ],
             migrationsRun: true,

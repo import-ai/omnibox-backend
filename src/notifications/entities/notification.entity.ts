@@ -1,5 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Check, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Check, Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum NotificationStatus {
   UNREAD = 'unread',
@@ -7,7 +7,9 @@ export enum NotificationStatus {
 }
 
 @Entity('notifications')
-@Check('"user_id" IS NOT NULL OR "namespace_id" IS NOT NULL')
+@Check(
+  '("is_global" = true AND "user_id" IS NULL AND "namespace_id" IS NULL) OR ("is_global" = false AND ("user_id" IS NOT NULL OR "namespace_id" IS NOT NULL))',
+)
 export class Notification extends Base {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -33,6 +35,12 @@ export class Notification extends Base {
   @Column('varchar', { length: 32, name: 'notification_type' })
   notificationType: string;
 
+  @Column('boolean', { default: false })
+  isGlobal: boolean;
+
+  @Column('uuid', { nullable: true, unique: true })
+  dedupKey: string | null;
+
   @Column('jsonb', { default: {} })
   target: Record<string, any>;
 
@@ -44,4 +52,22 @@ export class Notification extends Base {
 
   @Column('timestamptz', { nullable: true, name: 'read_at' })
   readedAt: Date | null;
+
+  userRead?: NotificationRead;
+}
+
+@Entity('notification_reads')
+@Index(['notificationId', 'userId'], { unique: true })
+export class NotificationRead {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column('uuid')
+  notificationId: string;
+
+  @Column('uuid')
+  userId: string;
+
+  @Column('timestamptz')
+  readAt: Date;
 }

@@ -5,13 +5,15 @@ import { NamespaceTier } from './dto/namespace-tier.enum';
 import { NamespacesQuotaService } from './namespaces-quota.service';
 
 describe('NamespacesQuotaService', () => {
+  let warnSpy: jest.SpyInstance;
+
   const createService = (proUrl = 'https://pro.example.com') =>
     new NamespacesQuotaService({
       get: jest.fn().mockReturnValue(proUrl),
     } as unknown as ConfigService);
 
   beforeEach(() => {
-    jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+    warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
   });
 
   afterEach(() => {
@@ -58,6 +60,9 @@ describe('NamespacesQuotaService', () => {
 
     await expect(service.getNamespaceTier('namespace-id')).resolves.toBe(
       NamespaceTier.BASIC,
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed to get namespace tier for namespace-id; falling back to basic',
     );
   });
 

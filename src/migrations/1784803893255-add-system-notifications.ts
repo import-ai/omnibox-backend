@@ -8,7 +8,7 @@ import {
   TableIndex,
 } from 'typeorm';
 
-export class AddSystemNotifications1784619840000 implements MigrationInterface {
+export class AddSystemNotifications1784803893255 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.addColumns('notifications', [
       new TableColumn({
@@ -96,6 +96,9 @@ export class AddSystemNotifications1784619840000 implements MigrationInterface {
     await queryRunner.dropCheckConstraint(
       'notifications',
       'chk_notifications_receiver',
+    );
+    await queryRunner.query(
+      'DELETE FROM "notifications" WHERE "is_global" = true',
     );
     await queryRunner.createCheckConstraint(
       'notifications',

@@ -19,6 +19,7 @@ describe('OpenSkillController (e2e)', () => {
 
     expect(response.headers['content-type']).toContain('text/markdown');
     expect(response.text).toContain('/open/api/v1');
+    expect(response.text).toContain('/<namespace_id>/<resource_id>');
     expect(response.text).not.toContain('${OBB_OPEN_API_BASE_URL}');
     expect(response.text).not.toContain('OBB_OPEN_API_BASE_URL');
   });

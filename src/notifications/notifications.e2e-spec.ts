@@ -38,6 +38,34 @@ describe('System notifications (e2e)', () => {
       .expect(HttpStatus.CREATED);
     expect(duplicate.body.id).toBe(created.body.id);
 
+    for (const client of [firstClient, secondClient]) {
+      const list = await client
+        .get('/api/v1/notifications?status=unread&offset=0&limit=20')
+        .expect(HttpStatus.OK);
+      expect(list.body.list).toContainEqual(
+        expect.objectContaining({
+          id: created.body.id,
+          notification_type: 'system',
+          tags: payload.tags,
+          status: 'unread',
+        }),
+      );
+    }
+
+    await firstClient
+      .patch(`/api/v1/notifications/${created.body.id}`)
+      .send({ status: 'read' })
+      .expect(HttpStatus.OK);
+
+    const firstCount = await firstClient
+      .get('/api/v1/notifications/unread/count')
+      .expect(HttpStatus.OK);
+    const secondCount = await secondClient
+      .get('/api/v1/notifications/unread/count')
+      .expect(HttpStatus.OK);
+    expect(firstCount.body.unread_count).toBe(0);
+    expect(secondCount.body.unread_count).toBe(1);
+
     const direct = await firstClient
       .request()
       .post('/internal/api/v1/notifications')
@@ -68,33 +96,5 @@ describe('System notifications (e2e)', () => {
       limit: 20,
       total: expect.any(Number),
     });
-
-    for (const client of [firstClient, secondClient]) {
-      const list = await client
-        .get('/api/v1/notifications?status=unread&offset=0&limit=20')
-        .expect(HttpStatus.OK);
-      expect(list.body.list).toContainEqual(
-        expect.objectContaining({
-          id: created.body.id,
-          notification_type: 'system',
-          tags: payload.tags,
-          status: 'unread',
-        }),
-      );
-    }
-
-    await firstClient
-      .patch(`/api/v1/notifications/${created.body.id}`)
-      .send({ status: 'read' })
-      .expect(HttpStatus.OK);
-
-    const firstCount = await firstClient
-      .get('/api/v1/notifications/unread/count')
-      .expect(HttpStatus.OK);
-    const secondCount = await secondClient
-      .get('/api/v1/notifications/unread/count')
-      .expect(HttpStatus.OK);
-    expect(firstCount.body.unread_count).toBe(0);
-    expect(secondCount.body.unread_count).toBe(1);
   });
 });

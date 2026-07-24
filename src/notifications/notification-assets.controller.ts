@@ -1,6 +1,5 @@
 import { Controller, Get, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
-import { CookieAuth } from 'omniboxd/auth/decorators';
 
 import { NotificationAssetsService } from './notification-assets.service';
 
@@ -11,7 +10,6 @@ export class NotificationAssetsController {
   ) {}
 
   @Get(':assetName')
-  @CookieAuth()
   async get(
     @Param('assetName') assetName: string,
     @Res() response: Response,

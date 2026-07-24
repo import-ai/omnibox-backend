@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -15,6 +16,7 @@ import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import {
   CreateNotificationRequestDto,
   CreateSystemNotificationRequestDto,
+  ListSystemNotificationsRequestDto,
 } from './dto';
 import {
   NotificationAssetsService,
@@ -50,6 +52,12 @@ export class InternalNotificationsController {
       id: notification.id,
       status: notification.status,
     };
+  }
+
+  @Public()
+  @Get('system-notifications')
+  listSystemNotifications(@Query() query: ListSystemNotificationsRequestDto) {
+    return this.notificationsService.listSystemNotifications(query);
   }
 
   @Public()

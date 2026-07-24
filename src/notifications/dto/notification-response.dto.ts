@@ -45,6 +45,29 @@ export class NotificationListResponseDto {
   pagination: NotificationPaginationDto;
 }
 
+export class SystemNotificationItemDto {
+  id: string;
+  title: string;
+  content: string;
+  tags: string[];
+  created_at: string;
+
+  static fromEntity(notification: Notification): SystemNotificationItemDto {
+    const dto = new SystemNotificationItemDto();
+    dto.id = notification.id;
+    dto.title = notification.title;
+    dto.content = notification.content || '';
+    dto.tags = notification.tags || [];
+    dto.created_at = notification.createdAt.toISOString();
+    return dto;
+  }
+}
+
+export class SystemNotificationListResponseDto {
+  list: SystemNotificationItemDto[];
+  pagination: NotificationPaginationDto;
+}
+
 export class NotificationDetailResponseDto {
   id: string;
   title: string;

@@ -14,10 +14,13 @@ import {
   ClearNotificationsResponseDto,
   CreateNotificationRequestDto,
   CreateSystemNotificationRequestDto,
+  ListSystemNotificationsRequestDto,
   NotificationDetailResponseDto,
   NotificationItemDto,
   NotificationListResponseDto,
   NotificationUnreadCountResponseDto,
+  SystemNotificationItemDto,
+  SystemNotificationListResponseDto,
   UpdateNotificationRequestDto,
   UpdateNotificationResponseDto,
 } from './dto';
@@ -106,6 +109,30 @@ export class NotificationsService {
       }
       throw error;
     }
+  }
+
+  async listSystemNotifications(
+    query: ListSystemNotificationsRequestDto,
+  ): Promise<SystemNotificationListResponseDto> {
+    const offset = query.offset ?? 0;
+    const limit = query.limit ?? 20;
+    const [notifications, total] =
+      await this.notificationRepository.findAndCount({
+        where: {
+          isGlobal: true,
+          notificationType: 'system',
+        },
+        order: { createdAt: 'DESC' },
+        skip: offset,
+        take: limit,
+      });
+
+    return {
+      list: notifications.map((notification) =>
+        SystemNotificationItemDto.fromEntity(notification),
+      ),
+      pagination: { offset, limit, total },
+    };
   }
 
   async list(

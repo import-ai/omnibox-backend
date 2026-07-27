@@ -62,6 +62,7 @@ import { TagModule } from 'omniboxd/tag/tag.module';
     SmartFoldersService,
     SmartFoldersRuleService,
     SmartFoldersMatcherService,
+    SmartFolderResourcesService,
     SMART_FOLDERS_SERVICE,
     SMART_FOLDER_ENTITLEMENTS_PROVIDER,
   ],

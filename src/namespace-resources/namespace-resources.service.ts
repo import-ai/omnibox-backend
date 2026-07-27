@@ -131,7 +131,11 @@ export class NamespaceResourcesService {
       .where('resource.namespace_id = :namespaceId', { namespaceId })
       .andWhere('resource.parent_id IS NOT NULL')
       .andWhere('resource.resource_type NOT IN (:...resourceTypes)', {
-        resourceTypes: [ResourceType.FOLDER, ResourceType.SMART_FOLDER],
+        resourceTypes: [
+          ResourceType.FOLDER,
+          ResourceType.SMART_FOLDER,
+          ResourceType.RSS_FOLDER,
+        ],
       })
       .andWhere('resource.tag_ids && :tagIds', { tagIds })
       .getMany();
@@ -888,7 +892,11 @@ export class NamespaceResourcesService {
           namespaceId,
           parentId: Not(IsNull()),
           resourceType: Not(
-            In([ResourceType.FOLDER, ResourceType.SMART_FOLDER]),
+            In([
+              ResourceType.FOLDER,
+              ResourceType.SMART_FOLDER,
+              ResourceType.RSS_FOLDER,
+            ]),
           ),
         },
         order: { updatedAt: 'DESC' },
@@ -934,7 +942,13 @@ export class NamespaceResourcesService {
       where: {
         namespaceId,
         parentId: Not(IsNull()),
-        resourceType: Not(In([ResourceType.FOLDER, ResourceType.SMART_FOLDER])),
+        resourceType: Not(
+          In([
+            ResourceType.FOLDER,
+            ResourceType.SMART_FOLDER,
+            ResourceType.RSS_FOLDER,
+          ]),
+        ),
       },
       order: { updatedAt: 'DESC' },
     });

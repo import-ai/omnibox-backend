@@ -87,6 +87,7 @@ import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-
 import { UserScopedFeaturePreviews1784629544658 } from 'omniboxd/migrations/1784629544658-user-scoped-feature-previews';
 import { SplitFeaturePreviewEnabled1784710706445 } from 'omniboxd/migrations/1784710706445-split-feature-preview-enabled';
 import { AddSystemNotifications1784803893255 } from 'omniboxd/migrations/1784803893255-add-system-notifications';
+import { AddRssFolders1785152612959 } from 'omniboxd/migrations/1785152612959-add-rss-folders';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -96,6 +97,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { PhoneModule } from 'omniboxd/phone/phone.module';
 import { ResourceTagsModule } from 'omniboxd/resource-tags/resource-tags.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { RssModule } from 'omniboxd/rss/rss.module';
 import { SearchModule } from 'omniboxd/search/search.module';
 import { SeoModule } from 'omniboxd/seo/seo.module';
 import { SharedResourceTagsModule } from 'omniboxd/shared-resource-tags/shared-resource-tags.module';
@@ -203,6 +205,7 @@ export class AppModule implements NestModule {
         WizardUrlProviderModule,
         NotificationsModule,
         SmartFoldersModule,
+        RssModule,
         SharedResourceTagsModule,
         CacheModule.registerAsync({
           isGlobal: true,
@@ -282,6 +285,7 @@ export class AppModule implements NestModule {
               UserScopedFeaturePreviews1784629544658,
               SplitFeaturePreviewEnabled1784710706445,
               AddSystemNotifications1784803893255,
+              AddRssFolders1785152612959,
               ...extraMigrations,
             ],
             migrationsRun: true,

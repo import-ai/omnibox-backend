@@ -1,0 +1,7 @@
+{
+  "errors": {
+    "invalidFeed": "无法识别 RSS，请检查链接格式或内容是否公开",
+    "linkLimitExceeded": "订阅链接过多：收到 {received} 条。当前工作空间为{tier}，最多允许 {limit} 条。",
+    "notFound": "订阅文件夹未找到"
+  }
+}

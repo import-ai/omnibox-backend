@@ -27,6 +27,7 @@
     "smartFolderRuleLimitExceeded": "Smart folder rule limit exceeded",
     "smartFolderScopeInvalid": "Team smart folders can only filter teamspace resources",
     "smartFolderCannotBeParent": "Smart folders cannot be used as parent resources",
+    "rssFolderCannotBeParent": "RSS folders cannot be used as parent resources",
     "smartFolderNotFound": "Smart folder not found",
     "smartFolderConditionOperatorInvalid": "Invalid smart folder condition operator",
     "smartFolderConditionIncomplete": "Please complete this smart folder condition"

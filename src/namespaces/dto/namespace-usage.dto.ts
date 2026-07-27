@@ -33,4 +33,7 @@ export class NamespaceUsageDto {
 
   @Expose({ name: 'smart_folder_rule_limit' })
   smartFolderRuleLimit?: number;
+
+  @Expose({ name: 'rss_link_limit' })
+  rssLinkLimit?: number;
 }

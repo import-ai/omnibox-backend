@@ -107,15 +107,22 @@ export class ResourcesService {
   }
 
   private assertResourceCanBeParent(resource: ResourceMetaDto): void {
-    if (resource.resourceType !== ResourceType.SMART_FOLDER) {
-      return;
+    if (resource.resourceType === ResourceType.SMART_FOLDER) {
+      const message = this.i18n.t('resource.errors.smartFolderCannotBeParent');
+      throw new AppException(
+        message,
+        'SMART_FOLDER_CANNOT_BE_PARENT',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
-    const message = this.i18n.t('resource.errors.smartFolderCannotBeParent');
-    throw new AppException(
-      message,
-      'SMART_FOLDER_CANNOT_BE_PARENT',
-      HttpStatus.UNPROCESSABLE_ENTITY,
-    );
+    if (resource.resourceType === ResourceType.RSS_FOLDER) {
+      const message = this.i18n.t('resource.errors.rssFolderCannotBeParent');
+      throw new AppException(
+        message,
+        'RSS_FOLDER_CANNOT_BE_PARENT',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
   }
 
   private async assertCanUseAsParentResource(
@@ -928,7 +935,8 @@ export class ResourcesService {
       );
     } else if (
       resource.parentId &&
-      resource.resourceType !== ResourceType.SMART_FOLDER
+      resource.resourceType !== ResourceType.SMART_FOLDER &&
+      resource.resourceType !== ResourceType.RSS_FOLDER
     ) {
       // If it's not a root resource, create index task
       await this.wizardTaskService.emitUpsertIndexTask(

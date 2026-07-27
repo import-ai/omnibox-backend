@@ -40,9 +40,9 @@ describe('RssFoldersController (e2e)', () => {
       .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
       .send(body);
 
-  it('returns basic entitlements with a 1-link limit', async () => {
+  it('returns basic limits with a 1-link limit', async () => {
     const response = await client
-      .get(`/api/v1/namespaces/${client.namespace.id}/rss-folders/entitlements`)
+      .get(`/api/v1/namespaces/${client.namespace.id}/rss-folders/limits`)
       .expect(200);
     expect(response.body).toEqual({ tier: 'basic', link_limit: 1 });
   });

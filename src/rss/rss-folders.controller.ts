@@ -3,20 +3,46 @@ import {
   Controller,
   Delete,
   Get,
+  HttpStatus,
   Param,
   Patch,
   Post,
 } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
+import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
+import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
 import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
 import { RssFoldersService } from 'omniboxd/rss/rss-folders.service';
 
 @Controller('api/v1/namespaces/:namespaceId/rss-folders')
 export class RssFoldersController {
-  constructor(private readonly rssFoldersService: RssFoldersService) {}
+  constructor(
+    private readonly rssFoldersService: RssFoldersService,
+    private readonly permissionsService: PermissionsService,
+    private readonly i18n: I18nService,
+  ) {}
+
+  @Get('limits')
+  async getLimits(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+  ): Promise<RssFolderLimitsResponseDto> {
+    const allowed = await this.permissionsService.userInNamespace(
+      userId,
+      namespaceId,
+    );
+    if (!allowed) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+
+    return await this.rssFoldersService.getLimits(namespaceId);
+  }
 
   @Post()
   @CheckNamespaceReadonly()

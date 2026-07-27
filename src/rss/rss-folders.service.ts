@@ -1,7 +1,8 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
@@ -9,15 +10,12 @@ import {
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
+import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
 import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
 import { RssLinkRequestDto } from 'omniboxd/rss/dto/rss-link-request.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssFeedValidatorService } from 'omniboxd/rss/rss-feed-validator.service';
-import {
-  IRssFolderEntitlementsProvider,
-  RSS_FOLDER_ENTITLEMENTS_PROVIDER,
-} from 'omniboxd/rss/rss-folder-entitlements.interface';
 import { SmartFolderResourcesService } from 'omniboxd/smart-folders/smart-folder-resources.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { DataSource, Repository } from 'typeorm';
@@ -33,10 +31,21 @@ export class RssFoldersService {
     private readonly smartFolderResourcesService: SmartFolderResourcesService,
     private readonly feedValidator: RssFeedValidatorService,
     private readonly permissionsService: PermissionsService,
-    @Inject(RSS_FOLDER_ENTITLEMENTS_PROVIDER)
-    private readonly entitlementsProvider: IRssFolderEntitlementsProvider,
+    private readonly namespacesQuotaService: NamespacesQuotaService,
     private readonly i18n: I18nService,
   ) {}
+
+  async getLimits(namespaceId: string): Promise<RssFolderLimitsResponseDto> {
+    const [usage, namespaceTier] = await Promise.all([
+      this.namespacesQuotaService.getNamespaceUsage(namespaceId),
+      this.namespacesQuotaService.getNamespaceTier(namespaceId),
+    ]);
+
+    return RssFolderLimitsResponseDto.fromValues({
+      tier: namespaceTier,
+      linkLimit: usage.rssLinkLimit,
+    });
+  }
 
   async create(
     userId: string,
@@ -44,7 +53,7 @@ export class RssFoldersService {
     dto: CreateRssFolderRequestDto,
   ): Promise<RssFolderResponseDto> {
     const links = this.normalizeLinks(dto.links);
-    await this.assertLinkLimit(namespaceId, userId, links.length);
+    await this.assertLinkLimit(namespaceId, links.length);
     // Network I/O must stay outside the DB transaction below.
     const validatedLinks = await this.feedValidator.validateAll(links);
 
@@ -119,7 +128,7 @@ export class RssFoldersService {
     let validatedLinks: { url: string; name: string }[] | undefined;
     if (dto.links !== undefined) {
       const links = this.normalizeLinks(dto.links);
-      await this.assertLinkLimit(namespaceId, userId, links.length);
+      await this.assertLinkLimit(namespaceId, links.length);
       validatedLinks = await this.feedValidator.validateAll(links);
     }
 
@@ -178,20 +187,16 @@ export class RssFoldersService {
 
   private async assertLinkLimit(
     namespaceId: string,
-    userId: string,
     linkCount: number,
   ): Promise<void> {
-    const entitlements = await this.entitlementsProvider.getEntitlements(
-      namespaceId,
-      userId,
-    );
-    if (linkCount > entitlements.linkLimit) {
-      const tier = this.i18n.t(`smartFolder.tiers.${entitlements.tier}`);
+    const limits = await this.getLimits(namespaceId);
+    if (linkCount > limits.linkLimit) {
+      const tier = this.i18n.t(`smartFolder.tiers.${limits.tier}`);
       const message = this.i18n.t('rssFolder.errors.linkLimitExceeded', {
         args: {
           received: linkCount,
           tier,
-          limit: entitlements.linkLimit,
+          limit: limits.linkLimit,
         },
       });
       throw new AppException(

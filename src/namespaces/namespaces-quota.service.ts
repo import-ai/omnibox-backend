@@ -13,20 +13,6 @@ interface ProNamespaceInfo {
   max_parallelism: number;
 }
 
-const DEFAULT_USAGE: NamespaceUsageDto = {
-  storageQuota: 0,
-  storageUsage: 0,
-  taskPriority: 1,
-  taskParallelism: 1,
-  fileUploadSizeLimit: 20 * 1024 * 1024, // 20MB
-  trashRetentionDays: 7,
-  openApiRequestsPer24h: 0,
-  readonly: false,
-  smartFolderPrivateLimit: 1,
-  smartFolderTeamLimit: 1,
-  smartFolderRuleLimit: 3,
-};
-
 @Injectable()
 export class NamespacesQuotaService {
   private readonly proUrl: string | undefined;
@@ -37,7 +23,7 @@ export class NamespacesQuotaService {
 
   async getNamespaceUsage(namespaceId: string): Promise<NamespaceUsageDto> {
     if (!this.proUrl) {
-      return { ...DEFAULT_USAGE };
+      return new NamespaceUsageDto();
     }
     let response: Response;
     try {
@@ -45,7 +31,7 @@ export class NamespacesQuotaService {
         `${this.proUrl}/internal/api/v1/namespaces/${namespaceId}/usages`,
       );
     } catch {
-      return { ...DEFAULT_USAGE };
+      return new NamespaceUsageDto();
     }
     if (!response.ok) {
       throw new AppException(
@@ -55,6 +41,8 @@ export class NamespacesQuotaService {
       );
     }
     const data = await response.json();
+    // Fields absent from an older backend-pro's response fall back to the
+    // NamespaceUsageDto property defaults.
     return plainToInstance(NamespaceUsageDto, data);
   }
 
@@ -68,10 +56,11 @@ export class NamespacesQuotaService {
         namespace.max_parallelism,
       ]),
     );
+    const defaultTaskParallelism = new NamespaceUsageDto().taskParallelism;
     return Object.fromEntries(
       namespaceIds.map((id) => [
         id,
-        parallelismById.get(id) ?? DEFAULT_USAGE.taskParallelism,
+        parallelismById.get(id) ?? defaultTaskParallelism,
       ]),
     );
   }

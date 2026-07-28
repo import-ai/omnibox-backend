@@ -7,7 +7,6 @@ import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
-import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { S3Module } from 'omniboxd/s3/s3.module';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
@@ -52,7 +51,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     S3Module,
     SharedResourcesModule,
     SmartFoldersModule,
-    TypeOrmModule.forFeature([Task, RssItemContent]),
+    TypeOrmModule.forFeature([Task]),
   ],
   controllers: [
     WizardController,

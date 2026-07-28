@@ -2,7 +2,6 @@ import { buffer } from 'node:stream/consumers';
 
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -10,7 +9,6 @@ import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resou
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
-import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
@@ -29,11 +27,10 @@ import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { CollectUrlProcessor } from 'omniboxd/wizard/processors/collect-url.processor';
 import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-title.processor';
-import { ParseRssItemProcessor } from 'omniboxd/wizard/processors/parse-rss-item.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull } from 'typeorm';
 import { createGunzip } from 'zlib';
 
 import { TempfileDto } from './dto/tempfile.dto';
@@ -56,8 +53,6 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
-    @InjectRepository(RssItemContent)
-    private readonly rssItemContentRepository: Repository<RssItemContent>,
   ) {
     this.baseHostname = new URL(
       this.configService.get<string>('OBB_BASE_URL', 'https://www.omnibox.pro'),
@@ -111,10 +106,6 @@ export class WizardService {
       ),
       collect_url: new CollectUrlProcessor(
         this.namespaceResourcesService,
-        this.i18n,
-      ),
-      parse_rss_item: new ParseRssItemProcessor(
-        this.rssItemContentRepository,
         this.i18n,
       ),
     };

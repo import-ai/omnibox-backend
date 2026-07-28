@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
@@ -10,8 +9,8 @@ import {
   ParsedFeedItem,
   RssFeedFetcherService,
 } from 'omniboxd/rss/rss-feed-fetcher.service';
-import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { DataSource, Repository } from 'typeorm';
 
 // Each URL is polled at most once within this window; a freshly-inserted
@@ -32,11 +31,6 @@ interface StoredItem {
   title: string;
 }
 
-interface TaskOwner {
-  namespaceId: string;
-  userId: string;
-}
-
 @Injectable()
 export class RssPollingService {
   private readonly logger = new Logger(RssPollingService.name);
@@ -52,7 +46,7 @@ export class RssPollingService {
     private readonly rssItemRepository: Repository<RssItem>,
     private readonly dataSource: DataSource,
     private readonly feedFetcher: RssFeedFetcherService,
-    private readonly tasksService: TasksService,
+    private readonly wizardApiService: WizardAPIService,
   ) {}
 
   async pollDueLinks(): Promise<PollSummary> {
@@ -153,42 +147,38 @@ export class RssPollingService {
     url: string,
     items: ParsedFeedItem[],
   ): Promise<StoredItem[]> {
-    const taskOwner = await this.getTaskOwner(url);
     const stored: StoredItem[] = [];
     for (const item of items) {
       const { guid, content, title, articleUrl } = this.serializeItem(item);
-      const contentId = await this.upsertItemContent(
-        url,
-        guid,
-        content,
-        articleUrl,
-        taskOwner,
-      );
-      stored.push({ contentId, title });
+      const { id, inserted } = await this.upsertItemContent(url, guid, content);
+      // Only newly-inserted items are parsed; refreshed items keep their
+      // existing parsed content.
+      if (inserted && articleUrl) {
+        await this.parseItemContent(id, articleUrl);
+      }
+      stored.push({ contentId: id, title });
     }
     return stored;
   }
 
-  private async getTaskOwner(url: string): Promise<TaskOwner> {
-    const owner = await this.rssLinkRepository
-      .createQueryBuilder('link')
-      .innerJoin(
-        Resource,
-        'resource',
-        'resource.id = link.resource_id AND resource.deleted_at IS NULL',
-      )
-      .select('link.namespace_id', 'namespaceId')
-      .addSelect('resource.user_id', 'userId')
-      .where('link.url = :url', { url })
-      .andWhere('resource.user_id IS NOT NULL')
-      .orderBy('link.created_at', 'ASC')
-      .addOrderBy('link.id', 'ASC')
-      .getRawOne<TaskOwner>();
-
-    if (!owner) {
-      throw new Error(`No task owner found for RSS URL ${url}`);
+  // Renders the article to Markdown via the wizard and stores it. Best-effort:
+  // a failure leaves parsed_content null and never fails the poll.
+  private async parseItemContent(
+    contentId: string,
+    articleUrl: string,
+  ): Promise<void> {
+    try {
+      const { markdown } = await this.wizardApiService.parseRssItem(articleUrl);
+      if (markdown) {
+        await this.rssItemContentRepository.update(contentId, {
+          parsedContent: markdown,
+        });
+      }
+    } catch (err) {
+      this.logger.error(
+        `Failed to parse rss item ${contentId} (${articleUrl}): ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
-    return owner;
   }
 
   // Relates every rss_links row sharing the polled url to the stored contents,
@@ -227,36 +217,17 @@ export class RssPollingService {
     url: string,
     guid: string,
     content: string,
-    articleUrl: string,
-    taskOwner: TaskOwner,
-  ): Promise<string> {
-    return await transaction(this.dataSource.manager, async (tx) => {
-      const rows: Array<{ id: string; inserted: boolean }> =
-        await tx.entityManager.query(
-          `INSERT INTO rss_item_contents (url, guid, content)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (url, guid) DO UPDATE
-           SET content = EXCLUDED.content, updated_at = now()
-           RETURNING id, (xmax = 0) AS inserted`,
-          [url, guid, content],
-        );
-      const [row] = rows;
-
-      if (row.inserted) {
-        await this.tasksService.emitTask(
-          {
-            function: 'parse_rss_item',
-            input: { url: articleUrl },
-            payload: { rss_item_content_id: row.id },
-            namespaceId: taskOwner.namespaceId,
-            userId: taskOwner.userId,
-          },
-          tx,
-        );
-      }
-
-      return row.id;
-    });
+  ): Promise<{ id: string; inserted: boolean }> {
+    const rows: Array<{ id: string; inserted: boolean }> =
+      await this.rssItemContentRepository.query(
+        `INSERT INTO rss_item_contents (url, guid, content)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (url, guid) DO UPDATE
+         SET content = EXCLUDED.content, updated_at = now()
+         RETURNING id, (xmax = 0) AS inserted`,
+        [url, guid, content],
+      );
+    return rows[0];
   }
 
   private serializeItem(item: ParsedFeedItem): {

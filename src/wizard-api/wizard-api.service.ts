@@ -84,6 +84,16 @@ export class WizardAPIService {
     return { title: resp.title as string };
   }
 
+  async parseRssItem(url: string): Promise<{ markdown: string }> {
+    const resp = await this.request(
+      'POST',
+      '/internal/api/v1/wizard/rss/parse',
+      { url },
+      {},
+    );
+    return { markdown: (resp.markdown as string) ?? '' };
+  }
+
   async upsertWeaviateResource(
     req: UpsertWeaviateResourceRequestDto,
   ): Promise<WeaviateUpsertResponseDto> {

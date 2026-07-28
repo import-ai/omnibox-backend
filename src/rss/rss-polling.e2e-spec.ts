@@ -3,7 +3,7 @@ import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll } from 'omniboxd/rss/entities/rss-poll.entity';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { TestClient } from 'test/test-client';
 import { DataSource } from 'typeorm';
 
@@ -56,11 +56,19 @@ describe('RssPolling (e2e)', () => {
   let pollingService: RssPollingService;
   let dataSource: DataSource;
   let folderResourceId: string;
+  // Stub the synchronous wizard parse call; echo the article url back as
+  // markdown so tests can assert which items were parsed.
+  let parseRssItemSpy: jest.SpyInstance;
 
   beforeAll(async () => {
     client = await TestClient.create();
     pollingService = client.app.get(RssPollingService);
     dataSource = client.app.get(DataSource);
+    parseRssItemSpy = jest
+      .spyOn(client.app.get(WizardAPIService), 'parseRssItem')
+      .mockImplementation((url: string) =>
+        Promise.resolve({ markdown: `# ${url}` }),
+      );
 
     feedItems = [
       {
@@ -96,9 +104,9 @@ describe('RssPolling (e2e)', () => {
   const contentRepo = () => dataSource.getRepository(RssItemContent);
   const itemRepo = () => dataSource.getRepository(RssItem);
   const linkRepo = () => dataSource.getRepository(RssLink);
-  const taskRepo = () => dataSource.getRepository(Task);
 
   it('polls a due link and stores its items', async () => {
+    parseRssItemSpy.mockClear();
     // Drive pollUrl directly rather than pollDueLinks(): the latter scans
     // rss_links globally (it is the system-wide polling cron), so in the
     // shared e2e container it would also poll feed urls left behind by other
@@ -126,31 +134,31 @@ describe('RssPolling (e2e)', () => {
     expect(items).toHaveLength(2);
     expect(items.map((item) => item.title).sort()).toEqual(['First', 'Second']);
 
-    const tasks = await taskRepo().find({
-      where: { function: 'parse_rss_item' },
-    });
-    expect(tasks).toHaveLength(2);
-    expect(tasks.map((task) => task.input.url).sort()).toEqual([
+    // Each new item is parsed synchronously via the wizard, keyed by its
+    // article url, and the returned markdown is stored on the content row.
+    expect(parseRssItemSpy.mock.calls.map((call) => call[0]).sort()).toEqual([
       'https://example.com/1',
       'https://example.com/2',
     ]);
-    expect(
-      tasks.map((task) => task.payload?.rss_item_content_id).sort(),
-    ).toEqual(contents.map((content) => content.id).sort());
+    expect(contents.map((content) => content.parsedContent).sort()).toEqual([
+      '# https://example.com/1',
+      '# https://example.com/2',
+    ]);
   });
 
   it('skips a link already polled within the window', async () => {
+    parseRssItemSpy.mockClear();
     const result = await pollingService.pollUrl(FEED_URL);
     expect(result).toBe('skipped');
 
     expect(await pollRepo().count({ where: { url: FEED_URL } })).toBe(1);
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(2);
-    expect(
-      await taskRepo().count({ where: { function: 'parse_rss_item' } }),
-    ).toBe(2);
+    // A skipped poll parses nothing.
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
   });
 
   it('deduplicates unchanged items and stores only new ones on re-poll', async () => {
+    parseRssItemSpy.mockClear();
     // Bypass the 5-minute window by clearing the previous poll marker.
     await pollRepo().delete({ url: FEED_URL });
 
@@ -173,9 +181,10 @@ describe('RssPolling (e2e)', () => {
 
     // Two originals deduped, one new row added.
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(3);
-    expect(
-      await taskRepo().count({ where: { function: 'parse_rss_item' } }),
-    ).toBe(3);
+    // Only the newly-inserted item is parsed; deduped items are left untouched.
+    expect(parseRssItemSpy.mock.calls.map((call) => call[0])).toEqual([
+      'https://example.com/3',
+    ]);
 
     // The link is now related to all three contents; the two existing
     // relations are untouched and only the new one is added.
@@ -242,6 +251,7 @@ describe('RssPolling (e2e)', () => {
   });
 
   it('refreshes the content of an existing guid on refetch', async () => {
+    parseRssItemSpy.mockClear();
     await pollRepo().delete({ url: FEED_URL });
 
     const before = await contentRepo().findOneOrFail({
@@ -262,9 +272,8 @@ describe('RssPolling (e2e)', () => {
     });
     expect(after.id).toBe(before.id);
     expect(JSON.parse(after.content).content).toBe('updated body');
-    expect(
-      await taskRepo().count({ where: { function: 'parse_rss_item' } }),
-    ).toBe(3);
+    // Refreshing an existing item does not re-parse it.
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
   });
 
   it('relates a newly-added link sharing the url to existing contents', async () => {
@@ -282,6 +291,7 @@ describe('RssPolling (e2e)', () => {
     expect(links).toHaveLength(2);
 
     // Bypass the window and re-poll: the poll relates every link sharing the url.
+    parseRssItemSpy.mockClear();
     await pollRepo().delete({ url: FEED_URL });
     await pollingService.pollUrl(FEED_URL);
 
@@ -290,9 +300,8 @@ describe('RssPolling (e2e)', () => {
       where: { url: FEED_URL },
     });
     expect(contentCount).toBe(3);
-    expect(
-      await taskRepo().count({ where: { function: 'parse_rss_item' } }),
-    ).toBe(3);
+    // Nothing new to insert, so nothing is parsed.
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
 
     // Every link is now related to all three contents.
     for (const link of links) {

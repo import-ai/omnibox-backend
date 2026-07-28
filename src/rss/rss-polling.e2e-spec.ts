@@ -14,6 +14,8 @@ interface FeedItem {
   link: string;
   guid: string;
   description: string;
+  // RFC-822 publish date; omitted when the feed provides no date.
+  pubDate?: string;
   // Full embedded HTML; when present the poller converts it directly instead
   // of fetching the link.
   contentEncoded?: string;
@@ -31,6 +33,10 @@ function buildRss(items: FeedItem[]): string {
         <link>${item.link}</link>
         <guid>${item.guid}</guid>
         <description>${item.description}</description>${
+          item.pubDate === undefined
+            ? ''
+            : `\n        <pubDate>${item.pubDate}</pubDate>`
+        }${
           item.contentEncoded === undefined
             ? ''
             : `\n        <content:encoded><![CDATA[${item.contentEncoded}]]></content:encoded>`
@@ -360,5 +366,64 @@ describe('RssPolling (e2e)', () => {
       where: { url: FEED_URL, guid: 'guid-embedded' },
     });
     expect(stored.parsedContent).toBe('# https://example.com/embedded');
+  });
+
+  it('stores pub date/title and lists items newest published first', async () => {
+    // Added out of chronological order so the assertion proves the API sorts by
+    // publish date, not insertion order.
+    const dated: FeedItem[] = [
+      {
+        title: 'Middle',
+        link: 'https://example.com/mid',
+        guid: 'guid-mid',
+        description: 'mid body',
+        pubDate: 'Sun, 01 Mar 2026 00:00:00 GMT',
+      },
+      {
+        title: 'Newest',
+        link: 'https://example.com/new',
+        guid: 'guid-new',
+        description: 'new body',
+        pubDate: 'Wed, 01 Apr 2026 00:00:00 GMT',
+      },
+      {
+        title: 'Oldest',
+        link: 'https://example.com/old',
+        guid: 'guid-old',
+        description: 'old body',
+        pubDate: 'Fri, 20 Feb 2026 00:00:00 GMT',
+      },
+    ];
+    feedItems = [...feedItems, ...dated];
+
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    // The content row carries the parsed title and pub date columns.
+    const newest = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-new' },
+    });
+    expect(newest.title).toBe('Newest');
+    expect(newest.pubDate?.toISOString()).toBe(
+      new Date('Wed, 01 Apr 2026 00:00:00 GMT').toISOString(),
+    );
+
+    const response = await client
+      .get(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderResourceId}/items`,
+      )
+      .expect(200);
+    const items = response.body as Array<Record<string, unknown>>;
+
+    // Items with a publish date sort ahead of the older undated ones (nulls
+    // last), most recent first.
+    expect(items.slice(0, 3).map((item) => item.title)).toEqual([
+      'Newest',
+      'Middle',
+      'Oldest',
+    ]);
+    expect(items[0].published_at).toBe(
+      new Date('Wed, 01 Apr 2026 00:00:00 GMT').toISOString(),
+    );
   });
 });

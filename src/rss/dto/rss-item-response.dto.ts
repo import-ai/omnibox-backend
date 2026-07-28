@@ -44,7 +44,11 @@ export class RssItemResponseDto {
     dto.title = item.title;
     dto.url = asString(parsed.link);
     dto.summary = asString(parsed.contentSnippet);
-    dto.published_at = asString(parsed.pubDate);
+    // Prefer the denormalized pub_date column; fall back to the date embedded in
+    // the stored content for rows polled before the column existed.
+    dto.published_at = item.pubDate
+      ? item.pubDate.toISOString()
+      : asString(parsed.pubDate);
     dto.created_at = item.createdAt.toISOString();
     return dto;
   }

@@ -146,7 +146,13 @@ export class RssFoldersService {
 
     const items = await this.rssItemRepository.find({
       where: { linkId: In(linkIds) },
-      order: { createdAt: 'DESC', id: 'DESC' },
+      // Newest published first. Items missing a feed date sort last, then fall
+      // back to insertion order.
+      order: {
+        pubDate: { direction: 'DESC', nulls: 'LAST' },
+        createdAt: 'DESC',
+        id: 'DESC',
+      },
       ...(limit !== undefined && limit > 0 && { take: limit }),
     });
     if (items.length === 0) {

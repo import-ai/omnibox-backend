@@ -91,6 +91,7 @@ import { AddRssLinks1785152612959 } from 'omniboxd/migrations/1785152612959-add-
 import { AddRssPolling1785167264273 } from 'omniboxd/migrations/1785167264273-add-rss-polling';
 import { AddRssItems1785215540513 } from 'omniboxd/migrations/1785215540513-add-rss-items';
 import { AddParsedContentToRssItemContents1785232404377 } from 'omniboxd/migrations/1785232404377-add-parsed-content-to-rss-item-contents';
+import { AddPubDateAndTitleToRssTables1785238404377 } from 'omniboxd/migrations/1785238404377-add-pub-date-and-title-to-rss-tables';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -292,6 +293,7 @@ export class AppModule implements NestModule {
               AddRssPolling1785167264273,
               AddRssItems1785215540513,
               AddParsedContentToRssItemContents1785232404377,
+              AddPubDateAndTitleToRssTables1785238404377,
               ...extraMigrations,
             ],
             migrationsRun: true,

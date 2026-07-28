@@ -19,4 +19,12 @@ export class RssItemContent extends Base {
 
   @Column('text', { nullable: true })
   parsedContent: string | null;
+
+  // The feed item's title and published date. Null when the feed omits them (or
+  // for content rows stored before these columns existed).
+  @Column('text', { nullable: true })
+  title: string | null;
+
+  @Column('timestamptz', { nullable: true })
+  pubDate: Date | null;
 }

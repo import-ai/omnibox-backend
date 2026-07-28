@@ -19,4 +19,10 @@ export class RssItem extends Base {
 
   @Column('text')
   title: string;
+
+  // Denormalized from the feed item (like title) so items can be ordered by
+  // publish date without joining rss_item_contents. Null when the feed omits a
+  // parseable date.
+  @Column('timestamptz', { nullable: true })
+  pubDate: Date | null;
 }

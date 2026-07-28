@@ -24,11 +24,12 @@ export interface PollSummary {
   failed: number;
 }
 
-// A stored feed item: the deduped content row id plus its title (denormalized
-// onto rss_items when linking).
+// A stored feed item: the deduped content row id plus its title and publish
+// date (denormalized onto rss_items when linking).
 interface StoredItem {
   contentId: string;
   title: string;
+  pubDate: Date | null;
 }
 
 @Injectable()
@@ -149,15 +150,21 @@ export class RssPollingService {
   ): Promise<StoredItem[]> {
     const stored: StoredItem[] = [];
     for (const item of items) {
-      const { guid, content, title, articleUrl, articleContent } =
+      const { guid, content, title, pubDate, articleUrl, articleContent } =
         this.serializeItem(item);
-      const { id, inserted } = await this.upsertItemContent(url, guid, content);
+      const { id, inserted } = await this.upsertItemContent(
+        url,
+        guid,
+        content,
+        title,
+        pubDate,
+      );
       // Only newly-inserted items are parsed; refreshed items keep their
       // existing parsed content.
       if (inserted && (articleUrl || articleContent)) {
         await this.parseItemContent(id, articleUrl, articleContent);
       }
-      stored.push({ contentId: id, title });
+      stored.push({ contentId: id, title, pubDate });
     }
     return stored;
   }
@@ -206,6 +213,7 @@ export class RssPollingService {
         linkId: link.id,
         contentId: item.contentId,
         title: item.title,
+        pubDate: item.pubDate,
       })),
     );
 
@@ -224,15 +232,20 @@ export class RssPollingService {
     url: string,
     guid: string,
     content: string,
+    title: string,
+    pubDate: Date | null,
   ): Promise<{ id: string; inserted: boolean }> {
     const rows: Array<{ id: string; inserted: boolean }> =
       await this.rssItemContentRepository.query(
-        `INSERT INTO rss_item_contents (url, guid, content)
-         VALUES ($1, $2, $3)
+        `INSERT INTO rss_item_contents (url, guid, content, title, pub_date)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (url, guid) DO UPDATE
-         SET content = EXCLUDED.content, updated_at = now()
+         SET content = EXCLUDED.content,
+             title = EXCLUDED.title,
+             pub_date = EXCLUDED.pub_date,
+             updated_at = now()
          RETURNING id, (xmax = 0) AS inserted`,
-        [url, guid, content],
+        [url, guid, content, title, pubDate],
       );
     return rows[0];
   }
@@ -241,6 +254,7 @@ export class RssPollingService {
     guid: string;
     content: string;
     title: string;
+    pubDate: Date | null;
     articleUrl: string;
     articleContent: string;
   } {
@@ -252,6 +266,9 @@ export class RssPollingService {
     const encoded = item['content:encoded'];
     const articleContent = typeof encoded === 'string' ? encoded.trim() : '';
     const title = item.title ?? '';
+    // rss-parser normalizes pubDate to `isoDate`; fall back to the raw pubDate.
+    // Store null when neither is a parseable date.
+    const pubDate = this.parsePubDate(item.isoDate ?? item.pubDate ?? null);
     const content = JSON.stringify({
       title: item.title ?? null,
       link: item.link ?? null,
@@ -270,9 +287,20 @@ export class RssPollingService {
       guid,
       content,
       title,
+      pubDate,
       articleUrl: item.link?.trim() ?? '',
       articleContent,
     };
+  }
+
+  // Parses an RFC-822 / ISO feed date into a Date, or null when absent or
+  // unparseable.
+  private parsePubDate(raw: string | null): Date | null {
+    if (!raw) {
+      return null;
+    }
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private async finishPoll(

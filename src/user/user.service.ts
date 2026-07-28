@@ -8,6 +8,8 @@ import { Applications } from 'omniboxd/applications/applications.entity';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { maskPhone } from 'omniboxd/common/validators';
+import { FeaturePreviewFeature } from 'omniboxd/feature-previews/dto/feature-preview.dto';
+import { FeaturePreview } from 'omniboxd/feature-previews/entities/feature-preview.entity';
 import { Invitation } from 'omniboxd/invitations/entities/invitation.entity';
 import { MailService } from 'omniboxd/mail/mail.service';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
@@ -140,6 +142,21 @@ export class UserService {
     return true;
   }
 
+  private async initializeFeaturePreviews(
+    userId: string,
+    manager?: EntityManager,
+  ) {
+    const repository = manager
+      ? manager.getRepository(FeaturePreview)
+      : this.dataSource.getRepository(FeaturePreview);
+    await repository.insert({
+      userId,
+      feature: FeaturePreviewFeature.EDITOR_V2,
+      userEnabled: null,
+      rolloutEnabled: true,
+    });
+  }
+
   async create(account: CreateUserDto, manager?: EntityManager) {
     // Filter emoji from username if provided
     if (account.username) {
@@ -191,6 +208,7 @@ export class UserService {
         manager,
       );
     }
+    await this.initializeFeaturePreviews(reset.id, manager);
     return reset;
   }
 
@@ -338,6 +356,7 @@ export class UserService {
     });
 
     await bindingRepo.save(newBinding);
+    await this.initializeFeaturePreviews(reset.id, manager);
 
     return reset;
   }
@@ -459,6 +478,7 @@ export class UserService {
     });
 
     await bindingRepo.save(newBinding);
+    await this.initializeFeaturePreviews(result.id, manager);
 
     return result;
   }

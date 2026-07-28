@@ -149,26 +149,33 @@ export class RssPollingService {
   ): Promise<StoredItem[]> {
     const stored: StoredItem[] = [];
     for (const item of items) {
-      const { guid, content, title, articleUrl } = this.serializeItem(item);
+      const { guid, content, title, articleUrl, articleContent } =
+        this.serializeItem(item);
       const { id, inserted } = await this.upsertItemContent(url, guid, content);
       // Only newly-inserted items are parsed; refreshed items keep their
       // existing parsed content.
-      if (inserted && articleUrl) {
-        await this.parseItemContent(id, articleUrl);
+      if (inserted && (articleUrl || articleContent)) {
+        await this.parseItemContent(id, articleUrl, articleContent);
       }
       stored.push({ contentId: id, title });
     }
     return stored;
   }
 
-  // Renders the article to Markdown via the wizard and stores it. Best-effort:
-  // a failure leaves parsed_content null and never fails the poll.
+  // Renders the article to Markdown via the wizard and stores it. When the feed
+  // embedded full content the wizard converts that directly (no link fetch);
+  // otherwise it scrapes articleUrl. Best-effort: a failure leaves
+  // parsed_content null and never fails the poll.
   private async parseItemContent(
     contentId: string,
     articleUrl: string,
+    articleContent: string,
   ): Promise<void> {
     try {
-      const { markdown } = await this.wizardApiService.parseRssItem(articleUrl);
+      const { markdown } = await this.wizardApiService.parseRssItem({
+        url: articleUrl,
+        content: articleContent,
+      });
       if (markdown) {
         await this.rssItemContentRepository.update(contentId, {
           parsedContent: markdown,
@@ -235,9 +242,15 @@ export class RssPollingService {
     content: string;
     title: string;
     articleUrl: string;
+    articleContent: string;
   } {
     const contentBody =
       item.content ?? (item['content:encoded'] as string | undefined) ?? '';
+    // Only the full <content:encoded> body counts as embedded content; a bare
+    // <description> (which rss-parser maps to item.content) still fetches the
+    // link. Guard the type: a non-CDATA feed can yield a parsed object here.
+    const encoded = item['content:encoded'];
+    const articleContent = typeof encoded === 'string' ? encoded.trim() : '';
     const title = item.title ?? '';
     const content = JSON.stringify({
       title: item.title ?? null,
@@ -253,7 +266,13 @@ export class RssPollingService {
       createHash('sha256')
         .update(`${item.link ?? ''}\n${contentBody}`)
         .digest('hex');
-    return { guid, content, title, articleUrl: item.link?.trim() ?? '' };
+    return {
+      guid,
+      content,
+      title,
+      articleUrl: item.link?.trim() ?? '',
+      articleContent,
+    };
   }
 
   private async finishPoll(

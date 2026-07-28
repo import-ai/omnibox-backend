@@ -84,11 +84,14 @@ export class WizardAPIService {
     return { title: resp.title as string };
   }
 
-  async parseRssItem(url: string): Promise<{ markdown: string }> {
+  async parseRssItem(params: {
+    url?: string;
+    content?: string;
+  }): Promise<{ markdown: string }> {
     const resp = await this.request(
       'POST',
       '/internal/api/v1/wizard/rss/parse',
-      { url },
+      { url: params.url ?? '', content: params.content ?? '' },
       {},
     );
     return { markdown: (resp.markdown as string) ?? '' };

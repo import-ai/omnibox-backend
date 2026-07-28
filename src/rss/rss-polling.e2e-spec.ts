@@ -14,6 +14,9 @@ interface FeedItem {
   link: string;
   guid: string;
   description: string;
+  // Full embedded HTML; when present the poller converts it directly instead
+  // of fetching the link.
+  contentEncoded?: string;
 }
 
 // Mutable so individual tests can change what the feed returns.
@@ -27,12 +30,16 @@ function buildRss(items: FeedItem[]): string {
         <title>${item.title}</title>
         <link>${item.link}</link>
         <guid>${item.guid}</guid>
-        <description>${item.description}</description>
+        <description>${item.description}</description>${
+          item.contentEncoded === undefined
+            ? ''
+            : `\n        <content:encoded><![CDATA[${item.contentEncoded}]]></content:encoded>`
+        }
       </item>`,
     )
     .join('');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Example RSS Feed</title>
     <link>https://example.com</link>
@@ -56,8 +63,9 @@ describe('RssPolling (e2e)', () => {
   let pollingService: RssPollingService;
   let dataSource: DataSource;
   let folderResourceId: string;
-  // Stub the synchronous wizard parse call; echo the article url back as
-  // markdown so tests can assert which items were parsed.
+  // Stub the synchronous wizard parse call; echo the article url (or a marker
+  // when only content is sent) back as markdown so tests can assert what was
+  // parsed and how.
   let parseRssItemSpy: jest.SpyInstance;
 
   beforeAll(async () => {
@@ -66,8 +74,8 @@ describe('RssPolling (e2e)', () => {
     dataSource = client.app.get(DataSource);
     parseRssItemSpy = jest
       .spyOn(client.app.get(WizardAPIService), 'parseRssItem')
-      .mockImplementation((url: string) =>
-        Promise.resolve({ markdown: `# ${url}` }),
+      .mockImplementation((params: { url?: string; content?: string }) =>
+        Promise.resolve({ markdown: `# ${params.url || 'content'}` }),
       );
 
     feedItems = [
@@ -134,12 +142,11 @@ describe('RssPolling (e2e)', () => {
     expect(items).toHaveLength(2);
     expect(items.map((item) => item.title).sort()).toEqual(['First', 'Second']);
 
-    // Each new item is parsed synchronously via the wizard, keyed by its
-    // article url, and the returned markdown is stored on the content row.
-    expect(parseRssItemSpy.mock.calls.map((call) => call[0]).sort()).toEqual([
-      'https://example.com/1',
-      'https://example.com/2',
-    ]);
+    // These items carry only a <description> (no <content:encoded>), so each is
+    // parsed by fetching its article url, and the markdown is stored.
+    expect(
+      parseRssItemSpy.mock.calls.map((call) => call[0].url).sort(),
+    ).toEqual(['https://example.com/1', 'https://example.com/2']);
     expect(contents.map((content) => content.parsedContent).sort()).toEqual([
       '# https://example.com/1',
       '# https://example.com/2',
@@ -182,7 +189,7 @@ describe('RssPolling (e2e)', () => {
     // Two originals deduped, one new row added.
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(3);
     // Only the newly-inserted item is parsed; deduped items are left untouched.
-    expect(parseRssItemSpy.mock.calls.map((call) => call[0])).toEqual([
+    expect(parseRssItemSpy.mock.calls.map((call) => call[0].url)).toEqual([
       'https://example.com/3',
     ]);
 
@@ -322,5 +329,36 @@ describe('RssPolling (e2e)', () => {
     const polls = await pollRepo().find({ where: { url: FEED_URL } });
     expect(polls).toHaveLength(1);
     expect(polls[0].status).toBe('succeed');
+  });
+
+  it('converts embedded content:encoded without fetching the link', async () => {
+    const embeddedHtml = '<p>Full <b>article</b> body</p>';
+    feedItems = [
+      ...feedItems,
+      {
+        title: 'Embedded',
+        link: 'https://example.com/embedded',
+        guid: 'guid-embedded',
+        description: 'short summary',
+        contentEncoded: embeddedHtml,
+      },
+    ];
+
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    // The item with embedded content is parsed from that content, with its link
+    // passed only as an image base — not fetched.
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
+    expect(parseRssItemSpy.mock.calls[0][0]).toEqual({
+      url: 'https://example.com/embedded',
+      content: embeddedHtml,
+    });
+
+    const stored = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-embedded' },
+    });
+    expect(stored.parsedContent).toBe('# https://example.com/embedded');
   });
 });

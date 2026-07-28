@@ -2,9 +2,11 @@ import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
 import { BaseColumns } from './base-columns';
 
-export class AddRssFolders1785152612959 implements MigrationInterface {
+export class AddRssLinks1785152612959 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await this.addRssFolderResourceType(queryRunner);
+    await queryRunner.query(`
+      ALTER TYPE resource_type ADD VALUE IF NOT EXISTS 'rss_folder'
+    `);
 
     const existingTable = await queryRunner.getTable('rss_links');
     if (existingTable) {
@@ -69,26 +71,6 @@ export class AddRssFolders1785152612959 implements MigrationInterface {
     });
 
     await queryRunner.createTable(table, true, true, true);
-  }
-
-  private async addRssFolderResourceType(
-    queryRunner: QueryRunner,
-  ): Promise<void> {
-    const enumExists = await queryRunner.query(`
-      SELECT 1 FROM pg_enum
-      WHERE enumlabel = 'rss_folder'
-      AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'resource_type')
-    `);
-
-    if (enumExists.length > 0) {
-      return;
-    }
-
-    await queryRunner.commitTransaction();
-    await queryRunner.query(`
-      ALTER TYPE resource_type ADD VALUE 'rss_folder'
-    `);
-    await queryRunner.startTransaction();
   }
 
   public down(): Promise<void> {

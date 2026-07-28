@@ -167,4 +167,11 @@ describe('RssFoldersController (e2e)', () => {
       links: [{ url: 'not-a-url' }],
     }).expect(HttpStatus.BAD_REQUEST);
   });
+
+  it('rejects a missing parent_id', async () => {
+    await createFolder({
+      name: 'No Parent',
+      links: [{ url: 'https://example.com/feed' }],
+    }).expect(HttpStatus.BAD_REQUEST);
+  });
 });

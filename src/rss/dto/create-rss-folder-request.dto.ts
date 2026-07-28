@@ -3,7 +3,6 @@ import {
   ArrayMinSize,
   IsArray,
   IsNotEmpty,
-  IsOptional,
   IsString,
   MaxLength,
   ValidateNested,
@@ -24,7 +23,6 @@ export class CreateRssFolderRequestDto {
   })
   name: string;
 
-  @IsOptional()
   @IsString({
     message: i18nValidationMessage('validation.errors.parentId.isString'),
   })
@@ -32,7 +30,7 @@ export class CreateRssFolderRequestDto {
     message: i18nValidationMessage('validation.errors.parentId.isNotEmpty'),
   })
   @Expose({ name: 'parent_id' })
-  parentId?: string;
+  parentId: string;
 
   @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
   @ArrayMinSize(1, {

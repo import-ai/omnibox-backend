@@ -87,7 +87,8 @@ import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-
 import { UserScopedFeaturePreviews1784629544658 } from 'omniboxd/migrations/1784629544658-user-scoped-feature-previews';
 import { SplitFeaturePreviewEnabled1784710706445 } from 'omniboxd/migrations/1784710706445-split-feature-preview-enabled';
 import { AddSystemNotifications1784803893255 } from 'omniboxd/migrations/1784803893255-add-system-notifications';
-import { AddRssFolders1785152612959 } from 'omniboxd/migrations/1785152612959-add-rss-folders';
+import { AddRssLinks1785152612959 } from 'omniboxd/migrations/1785152612959-add-rss-links';
+import { AddRssPolling1785167264273 } from 'omniboxd/migrations/1785167264273-add-rss-polling';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -285,7 +286,8 @@ export class AppModule implements NestModule {
               UserScopedFeaturePreviews1784629544658,
               SplitFeaturePreviewEnabled1784710706445,
               AddSystemNotifications1784803893255,
-              AddRssFolders1785152612959,
+              AddRssLinks1785152612959,
+              AddRssPolling1785167264273,
               ...extraMigrations,
             ],
             migrationsRun: true,

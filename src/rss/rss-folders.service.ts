@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
@@ -16,7 +17,6 @@ import { RssLinkRequestDto } from 'omniboxd/rss/dto/rss-link-request.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssFeedValidatorService } from 'omniboxd/rss/rss-feed-validator.service';
-import { SmartFolderResourcesService } from 'omniboxd/smart-folders/smart-folder-resources.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { DataSource, Repository } from 'typeorm';
 
@@ -28,7 +28,7 @@ export class RssFoldersService {
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
-    private readonly smartFolderResourcesService: SmartFolderResourcesService,
+    private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly feedValidator: RssFeedValidatorService,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
@@ -57,21 +57,14 @@ export class RssFoldersService {
     // Network I/O must stay outside the DB transaction below.
     const validatedLinks = await this.feedValidator.validateAll(links);
 
-    const parentId =
-      dto.parentId ??
-      (await this.smartFolderResourcesService.getPrivateRootId(
-        userId,
-        namespaceId,
-      ));
-
     const resource = await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
-      const createdResource = await this.smartFolderResourcesService.create(
+      const createdResource = await this.namespaceResourcesService.create(
         userId,
         namespaceId,
         {
           name: dto.name,
-          parentId,
+          parentId: dto.parentId,
           resourceType: ResourceType.RSS_FOLDER,
           content: '',
           attrs: {},
@@ -104,7 +97,7 @@ export class RssFoldersService {
     resourceId: string,
   ): Promise<RssFolderResponseDto> {
     await this.getRssFolderOrFail(namespaceId, resourceId);
-    const resource = await this.smartFolderResourcesService.getResource({
+    const resource = await this.namespaceResourcesService.getResource({
       userId,
       namespaceId,
       resourceId,
@@ -136,7 +129,7 @@ export class RssFoldersService {
       const manager = tx.entityManager;
 
       if (dto.name !== undefined) {
-        await this.smartFolderResourcesService.update(
+        await this.namespaceResourcesService.update(
           namespaceId,
           userId,
           resourceId,
@@ -171,7 +164,7 @@ export class RssFoldersService {
   ): Promise<void> {
     await this.getRssFolderOrFail(namespaceId, resourceId);
     await this.assertCanEdit(namespaceId, resourceId, userId);
-    await this.smartFolderResourcesService.delete(
+    await this.namespaceResourcesService.delete(
       userId,
       namespaceId,
       resourceId,

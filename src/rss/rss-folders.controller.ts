@@ -18,6 +18,7 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
 import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
 import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
+import { RssItemDetailResponseDto } from 'omniboxd/rss/dto/rss-item-detail-response.dto';
 import { RssItemResponseDto } from 'omniboxd/rss/dto/rss-item-response.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
 import { RssFoldersService } from 'omniboxd/rss/rss-folders.service';
@@ -78,6 +79,21 @@ export class RssFoldersController {
       namespaceId,
       resourceId,
       limit,
+    );
+  }
+
+  @Get(':resourceId/items/:itemId')
+  async getItem(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('itemId') itemId: string,
+  ): Promise<RssItemDetailResponseDto> {
+    return await this.rssFoldersService.getItem(
+      userId,
+      namespaceId,
+      resourceId,
+      itemId,
     );
   }
 

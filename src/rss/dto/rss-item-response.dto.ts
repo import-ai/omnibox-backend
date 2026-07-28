@@ -15,6 +15,7 @@ function asString(value: unknown): string | null {
 export class RssItemResponseDto {
   id: string;
   link_id: string;
+  link_name: string | null;
   title: string;
   // The article url, published date and snippet come from the stored content.
   url: string | null;
@@ -25,6 +26,7 @@ export class RssItemResponseDto {
   static fromData(
     item: RssItem,
     content: RssItemContent | undefined,
+    linkName: string | null,
   ): RssItemResponseDto {
     let parsed: ParsedContent = {};
     if (content) {
@@ -38,6 +40,7 @@ export class RssItemResponseDto {
     const dto = new RssItemResponseDto();
     dto.id = item.id;
     dto.link_id = item.linkId;
+    dto.link_name = linkName;
     dto.title = item.title;
     dto.url = asString(parsed.link);
     dto.summary = asString(parsed.contentSnippet);

@@ -90,6 +90,7 @@ import { AddSystemNotifications1784803893255 } from 'omniboxd/migrations/1784803
 import { AddRssLinks1785152612959 } from 'omniboxd/migrations/1785152612959-add-rss-links';
 import { AddRssPolling1785167264273 } from 'omniboxd/migrations/1785167264273-add-rss-polling';
 import { AddRssItems1785215540513 } from 'omniboxd/migrations/1785215540513-add-rss-items';
+import { AddParsedContentToRssItemContents1785232404377 } from 'omniboxd/migrations/1785232404377-add-parsed-content-to-rss-item-contents';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -290,6 +291,7 @@ export class AppModule implements NestModule {
               AddRssLinks1785152612959,
               AddRssPolling1785167264273,
               AddRssItems1785215540513,
+              AddParsedContentToRssItemContents1785232404377,
               ...extraMigrations,
             ],
             migrationsRun: true,

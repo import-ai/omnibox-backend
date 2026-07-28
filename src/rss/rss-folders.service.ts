@@ -13,6 +13,7 @@ import {
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
 import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
 import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
+import { RssItemDetailResponseDto } from 'omniboxd/rss/dto/rss-item-detail-response.dto';
 import { RssItemResponseDto } from 'omniboxd/rss/dto/rss-item-response.dto';
 import { RssLinkRequestDto } from 'omniboxd/rss/dto/rss-link-request.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
@@ -135,12 +136,13 @@ export class RssFoldersService {
 
     const links = await this.rssLinkRepository.find({
       where: { namespaceId, resourceId },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (links.length === 0) {
       return [];
     }
     const linkIds = links.map((link) => link.id);
+    const linkNameById = new Map(links.map((link) => [link.id, link.name]));
 
     const items = await this.rssItemRepository.find({
       where: { linkId: In(linkIds) },
@@ -158,7 +160,63 @@ export class RssFoldersService {
     const contentById = new Map(contents.map((c) => [c.id, c]));
 
     return items.map((item) =>
-      RssItemResponseDto.fromData(item, contentById.get(item.contentId)),
+      RssItemResponseDto.fromData(
+        item,
+        contentById.get(item.contentId),
+        linkNameById.get(item.linkId) ?? null,
+      ),
+    );
+  }
+
+  async getItem(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    itemId: string,
+  ): Promise<RssItemDetailResponseDto> {
+    await this.getRssFolderOrFail(namespaceId, resourceId);
+    await this.namespaceResourcesService.getResource({
+      userId,
+      namespaceId,
+      resourceId,
+    });
+
+    const links = await this.rssLinkRepository.find({
+      where: { namespaceId, resourceId },
+      select: { id: true, name: true },
+    });
+    const linkNameById = new Map(links.map((link) => [link.id, link.name]));
+    const item = await this.rssItemRepository.findOne({
+      where: {
+        id: itemId,
+        linkId: In(links.map((link) => link.id)),
+      },
+    });
+    if (!item) {
+      const message = this.i18n.t('rssFolder.errors.itemNotFound');
+      throw new AppException(
+        message,
+        'RSS_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const content = await this.rssItemContentRepository.findOne({
+      where: { id: item.contentId },
+    });
+    if (!content) {
+      const message = this.i18n.t('rssFolder.errors.itemNotFound');
+      throw new AppException(
+        message,
+        'RSS_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return RssItemDetailResponseDto.fromData(
+      item,
+      content,
+      linkNameById.get(item.linkId) ?? null,
     );
   }
 

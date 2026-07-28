@@ -73,6 +73,7 @@ describe('WizardService', () => {
         {} as any,
         i18n as any,
         configService as any,
+        { update: jest.fn() } as any,
       );
 
       await expect(
@@ -101,6 +102,7 @@ describe('WizardService', () => {
         {} as any,
         { t: jest.fn() } as any,
         { get: jest.fn().mockReturnValue('https://box.example.com') } as any,
+        { update: jest.fn() } as any,
       );
 
       await expect(
@@ -141,6 +143,7 @@ describe('WizardService', () => {
         { getResourceOrFail: jest.fn() } as any,
         i18n as any,
         { get: jest.fn().mockReturnValue('https://www.omnibox.pro') } as any,
+        { update: jest.fn() } as any,
       );
       const message =
         '当前文件内容（32769 字符）超过系统可处理上限（32768 字符），请尝试拆分文档后重新上传。';

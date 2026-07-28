@@ -14,6 +14,7 @@ import { RssFoldersController } from 'omniboxd/rss/rss-folders.controller';
 import { RssFoldersService } from 'omniboxd/rss/rss-folders.service';
 import { RssPollingCronService } from 'omniboxd/rss/rss-polling.cron.service';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
+import { TasksModule } from 'omniboxd/tasks/tasks.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
     NamespacesQuotaModule,
     PermissionsModule,
     NamespaceResourcesModule,
+    TasksModule,
   ],
   providers: [
     RssFoldersService,

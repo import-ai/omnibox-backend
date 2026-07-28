@@ -16,4 +16,7 @@ export class RssItemContent extends Base {
 
   @Column('text')
   content: string;
+
+  @Column('text', { nullable: true })
+  parsedContent: string | null;
 }

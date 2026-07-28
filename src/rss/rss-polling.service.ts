@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
@@ -9,6 +10,7 @@ import {
   ParsedFeedItem,
   RssFeedFetcherService,
 } from 'omniboxd/rss/rss-feed-fetcher.service';
+import { TasksService } from 'omniboxd/tasks/tasks.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { DataSource, Repository } from 'typeorm';
 
@@ -30,6 +32,11 @@ interface StoredItem {
   title: string;
 }
 
+interface TaskOwner {
+  namespaceId: string;
+  userId: string;
+}
+
 @Injectable()
 export class RssPollingService {
   private readonly logger = new Logger(RssPollingService.name);
@@ -45,6 +52,7 @@ export class RssPollingService {
     private readonly rssItemRepository: Repository<RssItem>,
     private readonly dataSource: DataSource,
     private readonly feedFetcher: RssFeedFetcherService,
+    private readonly tasksService: TasksService,
   ) {}
 
   async pollDueLinks(): Promise<PollSummary> {
@@ -145,13 +153,42 @@ export class RssPollingService {
     url: string,
     items: ParsedFeedItem[],
   ): Promise<StoredItem[]> {
+    const taskOwner = await this.getTaskOwner(url);
     const stored: StoredItem[] = [];
     for (const item of items) {
-      const { guid, content, title } = this.serializeItem(item);
-      const contentId = await this.upsertItemContent(url, guid, content);
+      const { guid, content, title, articleUrl } = this.serializeItem(item);
+      const contentId = await this.upsertItemContent(
+        url,
+        guid,
+        content,
+        articleUrl,
+        taskOwner,
+      );
       stored.push({ contentId, title });
     }
     return stored;
+  }
+
+  private async getTaskOwner(url: string): Promise<TaskOwner> {
+    const owner = await this.rssLinkRepository
+      .createQueryBuilder('link')
+      .innerJoin(
+        Resource,
+        'resource',
+        'resource.id = link.resource_id AND resource.deleted_at IS NULL',
+      )
+      .select('link.namespace_id', 'namespaceId')
+      .addSelect('resource.user_id', 'userId')
+      .where('link.url = :url', { url })
+      .andWhere('resource.user_id IS NOT NULL')
+      .orderBy('link.created_at', 'ASC')
+      .addOrderBy('link.id', 'ASC')
+      .getRawOne<TaskOwner>();
+
+    if (!owner) {
+      throw new Error(`No task owner found for RSS URL ${url}`);
+    }
+    return owner;
   }
 
   // Relates every rss_links row sharing the polled url to the stored contents,
@@ -190,24 +227,43 @@ export class RssPollingService {
     url: string,
     guid: string,
     content: string,
+    articleUrl: string,
+    taskOwner: TaskOwner,
   ): Promise<string> {
-    const result = await this.rssItemContentRepository
-      .createQueryBuilder()
-      .insert()
-      .into(RssItemContent)
-      .values({ url, guid, content })
-      .orUpdate(['content', 'updated_at'], ['url', 'guid'])
-      .returning('id')
-      .execute();
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const rows: Array<{ id: string; inserted: boolean }> =
+        await tx.entityManager.query(
+          `INSERT INTO rss_item_contents (url, guid, content)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (url, guid) DO UPDATE
+           SET content = EXCLUDED.content, updated_at = now()
+           RETURNING id, (xmax = 0) AS inserted`,
+          [url, guid, content],
+        );
+      const [row] = rows;
 
-    // ON CONFLICT DO UPDATE always returns the row (inserted or updated).
-    return result.raw[0].id as string;
+      if (row.inserted) {
+        await this.tasksService.emitTask(
+          {
+            function: 'parse_rss_item',
+            input: { url: articleUrl },
+            payload: { rss_item_content_id: row.id },
+            namespaceId: taskOwner.namespaceId,
+            userId: taskOwner.userId,
+          },
+          tx,
+        );
+      }
+
+      return row.id;
+    });
   }
 
   private serializeItem(item: ParsedFeedItem): {
     guid: string;
     content: string;
     title: string;
+    articleUrl: string;
   } {
     const contentBody =
       item.content ?? (item['content:encoded'] as string | undefined) ?? '';
@@ -226,7 +282,7 @@ export class RssPollingService {
       createHash('sha256')
         .update(`${item.link ?? ''}\n${contentBody}`)
         .digest('hex');
-    return { guid, content, title };
+    return { guid, content, title, articleUrl: item.link?.trim() ?? '' };
   }
 
   private async finishPoll(

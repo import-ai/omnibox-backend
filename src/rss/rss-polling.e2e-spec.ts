@@ -3,6 +3,7 @@ import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll } from 'omniboxd/rss/entities/rss-poll.entity';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TestClient } from 'test/test-client';
 import { DataSource } from 'typeorm';
 
@@ -95,6 +96,7 @@ describe('RssPolling (e2e)', () => {
   const contentRepo = () => dataSource.getRepository(RssItemContent);
   const itemRepo = () => dataSource.getRepository(RssItem);
   const linkRepo = () => dataSource.getRepository(RssLink);
+  const taskRepo = () => dataSource.getRepository(Task);
 
   it('polls a due link and stores its items', async () => {
     const summary = await pollingService.pollDueLinks();
@@ -119,6 +121,18 @@ describe('RssPolling (e2e)', () => {
     const items = await itemRepo().find({ where: { linkId: link.id } });
     expect(items).toHaveLength(2);
     expect(items.map((item) => item.title).sort()).toEqual(['First', 'Second']);
+
+    const tasks = await taskRepo().find({
+      where: { function: 'parse_rss_item' },
+    });
+    expect(tasks).toHaveLength(2);
+    expect(tasks.map((task) => task.input.url).sort()).toEqual([
+      'https://example.com/1',
+      'https://example.com/2',
+    ]);
+    expect(
+      tasks.map((task) => task.payload?.rss_item_content_id).sort(),
+    ).toEqual(contents.map((content) => content.id).sort());
   });
 
   it('skips a link already polled within the window', async () => {
@@ -127,6 +141,9 @@ describe('RssPolling (e2e)', () => {
 
     expect(await pollRepo().count({ where: { url: FEED_URL } })).toBe(1);
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(2);
+    expect(
+      await taskRepo().count({ where: { function: 'parse_rss_item' } }),
+    ).toBe(2);
   });
 
   it('deduplicates unchanged items and stores only new ones on re-poll', async () => {
@@ -152,6 +169,9 @@ describe('RssPolling (e2e)', () => {
 
     // Two originals deduped, one new row added.
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(3);
+    expect(
+      await taskRepo().count({ where: { function: 'parse_rss_item' } }),
+    ).toBe(3);
 
     // The link is now related to all three contents; the two existing
     // relations are untouched and only the new one is added.
@@ -199,6 +219,24 @@ describe('RssPolling (e2e)', () => {
     expect(response.body).toHaveLength(2);
   });
 
+  it('gets parsed content for an item through the detail api', async () => {
+    const [item] = await itemRepo().find();
+    await contentRepo().update(item.contentId, {
+      parsedContent: '# Parsed article',
+    });
+
+    const response = await client
+      .get(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderResourceId}/items/${item.id}`,
+      )
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      id: item.id,
+      parsed_content: '# Parsed article',
+    });
+  });
+
   it('refreshes the content of an existing guid on refetch', async () => {
     await pollRepo().delete({ url: FEED_URL });
 
@@ -220,6 +258,9 @@ describe('RssPolling (e2e)', () => {
     });
     expect(after.id).toBe(before.id);
     expect(JSON.parse(after.content).content).toBe('updated body');
+    expect(
+      await taskRepo().count({ where: { function: 'parse_rss_item' } }),
+    ).toBe(3);
   });
 
   it('relates a newly-added link sharing the url to existing contents', async () => {
@@ -245,6 +286,9 @@ describe('RssPolling (e2e)', () => {
       where: { url: FEED_URL },
     });
     expect(contentCount).toBe(3);
+    expect(
+      await taskRepo().count({ where: { function: 'parse_rss_item' } }),
+    ).toBe(3);
 
     // Every link is now related to all three contents.
     for (const link of links) {

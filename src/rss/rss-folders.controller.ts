@@ -5,8 +5,10 @@ import {
   Get,
   HttpStatus,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -16,6 +18,7 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
 import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
 import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
+import { RssItemResponseDto } from 'omniboxd/rss/dto/rss-item-response.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
 import { RssFoldersService } from 'omniboxd/rss/rss-folders.service';
 
@@ -61,6 +64,21 @@ export class RssFoldersController {
     @Param('resourceId') resourceId: string,
   ): Promise<RssFolderResponseDto> {
     return await this.rssFoldersService.get(userId, namespaceId, resourceId);
+  }
+
+  @Get(':resourceId/items')
+  async listItems(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ): Promise<RssItemResponseDto[]> {
+    return await this.rssFoldersService.listItems(
+      userId,
+      namespaceId,
+      resourceId,
+      limit,
+    );
   }
 
   @Patch(':resourceId/config')

@@ -1,4 +1,6 @@
+import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
+import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll } from 'omniboxd/rss/entities/rss-poll.entity';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
 import { TestClient } from 'test/test-client';
@@ -52,6 +54,7 @@ describe('RssPolling (e2e)', () => {
   let client: TestClient;
   let pollingService: RssPollingService;
   let dataSource: DataSource;
+  let folderResourceId: string;
 
   beforeAll(async () => {
     client = await TestClient.create();
@@ -73,7 +76,7 @@ describe('RssPolling (e2e)', () => {
       },
     ];
 
-    await client
+    const created = await client
       .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
       .send({
         name: 'Poller',
@@ -81,6 +84,7 @@ describe('RssPolling (e2e)', () => {
         links: [{ url: FEED_URL }],
       })
       .expect(201);
+    folderResourceId = created.body.resource.id;
   });
 
   afterAll(async () => {
@@ -89,6 +93,8 @@ describe('RssPolling (e2e)', () => {
 
   const pollRepo = () => dataSource.getRepository(RssPoll);
   const contentRepo = () => dataSource.getRepository(RssItemContent);
+  const itemRepo = () => dataSource.getRepository(RssItem);
+  const linkRepo = () => dataSource.getRepository(RssLink);
 
   it('polls a due link and stores its items', async () => {
     const summary = await pollingService.pollDueLinks();
@@ -107,6 +113,12 @@ describe('RssPolling (e2e)', () => {
       title: expect.any(String),
       guid: expect.any(String),
     });
+
+    // Each content is related to the single link, with the item title.
+    const [link] = await linkRepo().find({ where: { url: FEED_URL } });
+    const items = await itemRepo().find({ where: { linkId: link.id } });
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.title).sort()).toEqual(['First', 'Second']);
   });
 
   it('skips a link already polled within the window', async () => {
@@ -140,6 +152,51 @@ describe('RssPolling (e2e)', () => {
 
     // Two originals deduped, one new row added.
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(3);
+
+    // The link is now related to all three contents; the two existing
+    // relations are untouched and only the new one is added.
+    const [link] = await linkRepo().find({ where: { url: FEED_URL } });
+    const items = await itemRepo().find({ where: { linkId: link.id } });
+    expect(items).toHaveLength(3);
+    expect(items.map((item) => item.title).sort()).toEqual([
+      'First',
+      'Second',
+      'Third',
+    ]);
+  });
+
+  it('lists the items of an rss folder via the api', async () => {
+    const response = await client
+      .get(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderResourceId}/items`,
+      )
+      .expect(200);
+
+    const items = response.body as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(3);
+    expect(items.map((item) => item.title).sort()).toEqual([
+      'First',
+      'Second',
+      'Third',
+    ]);
+    // Each item exposes the article url parsed from the stored content.
+    const first = items.find((item) => item.title === 'First');
+    expect(first).toMatchObject({
+      id: expect.any(String),
+      link_id: expect.any(String),
+      url: 'https://example.com/1',
+      created_at: expect.any(String),
+    });
+  });
+
+  it('caps the listed items with the limit query param', async () => {
+    const response = await client
+      .get(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderResourceId}/items?limit=2`,
+      )
+      .expect(200);
+
+    expect(response.body).toHaveLength(2);
   });
 
   it('refreshes the content of an existing guid on refetch', async () => {
@@ -163,5 +220,35 @@ describe('RssPolling (e2e)', () => {
     });
     expect(after.id).toBe(before.id);
     expect(JSON.parse(after.content).content).toBe('updated body');
+  });
+
+  it('relates a newly-added link sharing the url to existing contents', async () => {
+    // A second folder points at the same feed url, adding another rss_links row.
+    await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
+      .send({
+        name: 'Poller 2',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: FEED_URL }],
+      })
+      .expect(201);
+
+    const links = await linkRepo().find({ where: { url: FEED_URL } });
+    expect(links).toHaveLength(2);
+
+    // Bypass the window and re-poll: the poll scans every link sharing the url.
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollDueLinks();
+
+    // Contents are still deduped globally per url.
+    const contentCount = await contentRepo().count({
+      where: { url: FEED_URL },
+    });
+    expect(contentCount).toBe(3);
+
+    // Every link is now related to all three contents.
+    for (const link of links) {
+      expect(await itemRepo().count({ where: { linkId: link.id } })).toBe(3);
+    }
   });
 });

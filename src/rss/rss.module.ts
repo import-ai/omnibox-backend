@@ -4,6 +4,7 @@ import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll } from 'omniboxd/rss/entities/rss-poll.entity';
@@ -16,7 +17,13 @@ import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RssLink, Resource, RssPoll, RssItemContent]),
+    TypeOrmModule.forFeature([
+      RssLink,
+      Resource,
+      RssPoll,
+      RssItemContent,
+      RssItem,
+    ]),
     NamespacesQuotaModule,
     PermissionsModule,
     NamespaceResourcesModule,

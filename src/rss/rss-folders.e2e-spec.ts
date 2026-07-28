@@ -1,5 +1,8 @@
 import { HttpStatus } from '@nestjs/common';
+import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
+import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { TestClient } from 'test/test-client';
+import { DataSource } from 'typeorm';
 
 const RSS_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -137,6 +140,59 @@ describe('RssFoldersController (e2e)', () => {
 
     await client.delete(base).expect(200);
     await client.get(`${base}/config`).expect(HttpStatus.NOT_FOUND);
+  });
+
+  it('updates links that already have polled items without a foreign key violation', async () => {
+    const dataSource = client.app.get(DataSource);
+    const contentRepo = dataSource.getRepository(RssItemContent);
+    const itemRepo = dataSource.getRepository(RssItem);
+
+    const created = (
+      await createFolder({
+        name: 'Has Items',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed', name: 'Kept' }],
+      }).expect(201)
+    ).body;
+    const base = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}`;
+    const keptLinkId = created.links[0].id;
+
+    // Simulate a poll having related an item to the folder's link.
+    const content = await contentRepo.save(
+      contentRepo.create({
+        url: 'https://example.com/feed',
+        guid: 'guid-1',
+        content: 'body',
+      }),
+    );
+    await itemRepo.save(
+      itemRepo.create({
+        linkId: keptLinkId,
+        contentId: content.id,
+        title: 'An item',
+      }),
+    );
+
+    // Renaming the same feed reuses the existing link row, so its id and the
+    // related rss_item survive the edit.
+    const renamed = (
+      await client
+        .patch(`${base}/config`)
+        .send({ links: [{ url: 'https://example.com/feed', name: 'Renamed' }] })
+        .expect(200)
+    ).body;
+    expect(renamed.links[0].id).toBe(keptLinkId);
+    expect(renamed.links[0].name).toBe('Renamed');
+    expect(await itemRepo.countBy({ linkId: keptLinkId })).toBe(1);
+
+    // Replacing the feed removes the link and its now-orphaned rss_items.
+    await client
+      .patch(`${base}/config`)
+      .send({ links: [{ url: 'https://example.com/other', name: 'Other' }] })
+      .expect(200);
+    expect(await itemRepo.countBy({ linkId: keptLinkId })).toBe(0);
+
+    await client.delete(base).expect(200);
   });
 
   it('rejects creating resources inside an rss folder', async () => {

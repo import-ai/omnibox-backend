@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
+import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll, RssPollStatus } from 'omniboxd/rss/entities/rss-poll.entity';
@@ -22,6 +23,13 @@ export interface PollSummary {
   failed: number;
 }
 
+// A stored feed item: the deduped content row id plus its title (denormalized
+// onto rss_items when linking).
+interface StoredItem {
+  contentId: string;
+  title: string;
+}
+
 @Injectable()
 export class RssPollingService {
   private readonly logger = new Logger(RssPollingService.name);
@@ -33,6 +41,8 @@ export class RssPollingService {
     private readonly rssPollRepository: Repository<RssPoll>,
     @InjectRepository(RssItemContent)
     private readonly rssItemContentRepository: Repository<RssItemContent>,
+    @InjectRepository(RssItem)
+    private readonly rssItemRepository: Repository<RssItem>,
     private readonly dataSource: DataSource,
     private readonly feedFetcher: RssFeedFetcherService,
   ) {}
@@ -82,7 +92,10 @@ export class RssPollingService {
         return 'failed';
       }
 
-      const contentIds = await this.storeItems(url, feed.items ?? []);
+      const stored = await this.storeItems(url, feed.items ?? []);
+      // Relate every link sharing this url to the polled contents.
+      await this.linkItems(url, stored);
+      const contentIds = stored.map((item) => item.contentId);
       await this.finishPoll(poll.id, RssPollStatus.SUCCEED, { contentIds });
       return 'succeed';
     } catch (err) {
@@ -131,13 +144,44 @@ export class RssPollingService {
   private async storeItems(
     url: string,
     items: ParsedFeedItem[],
-  ): Promise<string[]> {
-    const contentIds: string[] = [];
+  ): Promise<StoredItem[]> {
+    const stored: StoredItem[] = [];
     for (const item of items) {
-      const { guid, content } = this.serializeItem(item);
-      contentIds.push(await this.upsertItemContent(url, guid, content));
+      const { guid, content, title } = this.serializeItem(item);
+      const contentId = await this.upsertItemContent(url, guid, content);
+      stored.push({ contentId, title });
     }
-    return contentIds;
+    return stored;
+  }
+
+  // Relates every rss_links row sharing the polled url to the stored contents,
+  // one rss_items row per (link, content) pair. Idempotent: the unique
+  // (link_id, content_id) index + ON CONFLICT DO NOTHING means only pairs not
+  // yet related get inserted, so re-polls add only newly-appeared items.
+  private async linkItems(url: string, stored: StoredItem[]): Promise<void> {
+    if (stored.length === 0) {
+      return;
+    }
+    const links = await this.rssLinkRepository.find({ where: { url } });
+    if (links.length === 0) {
+      return;
+    }
+
+    const rows = links.flatMap((link) =>
+      stored.map((item) => ({
+        linkId: link.id,
+        contentId: item.contentId,
+        title: item.title,
+      })),
+    );
+
+    await this.rssItemRepository
+      .createQueryBuilder()
+      .insert()
+      .into(RssItem)
+      .values(rows)
+      .orIgnore()
+      .execute();
   }
 
   // Deduplicates per (url, guid); refreshes the content of an existing row on
@@ -163,9 +207,11 @@ export class RssPollingService {
   private serializeItem(item: ParsedFeedItem): {
     guid: string;
     content: string;
+    title: string;
   } {
     const contentBody =
       item.content ?? (item['content:encoded'] as string | undefined) ?? '';
+    const title = item.title ?? '';
     const content = JSON.stringify({
       title: item.title ?? null,
       link: item.link ?? null,
@@ -180,7 +226,7 @@ export class RssPollingService {
       createHash('sha256')
         .update(`${item.link ?? ''}\n${contentBody}`)
         .digest('hex');
-    return { guid, content };
+    return { guid, content, title };
   }
 
   private async finishPoll(

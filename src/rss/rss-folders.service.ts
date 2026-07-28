@@ -13,18 +13,25 @@ import {
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
 import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
 import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
+import { RssItemResponseDto } from 'omniboxd/rss/dto/rss-item-response.dto';
 import { RssLinkRequestDto } from 'omniboxd/rss/dto/rss-link-request.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
+import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
+import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssFeedValidatorService } from 'omniboxd/rss/rss-feed-validator.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 
 @Injectable()
 export class RssFoldersService {
   constructor(
     @InjectRepository(RssLink)
     private readonly rssLinkRepository: Repository<RssLink>,
+    @InjectRepository(RssItem)
+    private readonly rssItemRepository: Repository<RssItem>,
+    @InjectRepository(RssItemContent)
+    private readonly rssItemContentRepository: Repository<RssItemContent>,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
@@ -109,6 +116,52 @@ export class RssFoldersService {
     return RssFolderResponseDto.fromData({ resource, links: linkEntities });
   }
 
+  // Lists the polled items of an rss folder, newest first. Items are the
+  // (link, content) relations produced by polling, joined to their stored
+  // content for the article url/date/snippet.
+  async listItems(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    limit?: number,
+  ): Promise<RssItemResponseDto[]> {
+    await this.getRssFolderOrFail(namespaceId, resourceId);
+    // Enforces read permission on the folder resource (throws if no access).
+    await this.namespaceResourcesService.getResource({
+      userId,
+      namespaceId,
+      resourceId,
+    });
+
+    const links = await this.rssLinkRepository.find({
+      where: { namespaceId, resourceId },
+      select: { id: true },
+    });
+    if (links.length === 0) {
+      return [];
+    }
+    const linkIds = links.map((link) => link.id);
+
+    const items = await this.rssItemRepository.find({
+      where: { linkId: In(linkIds) },
+      order: { createdAt: 'DESC', id: 'DESC' },
+      ...(limit !== undefined && limit > 0 && { take: limit }),
+    });
+    if (items.length === 0) {
+      return [];
+    }
+
+    const contentIds = [...new Set(items.map((item) => item.contentId))];
+    const contents = await this.rssItemContentRepository.find({
+      where: { id: In(contentIds) },
+    });
+    const contentById = new Map(contents.map((c) => [c.id, c]));
+
+    return items.map((item) =>
+      RssItemResponseDto.fromData(item, contentById.get(item.contentId)),
+    );
+  }
+
   async update(
     userId: string,
     namespaceId: string,
@@ -138,10 +191,39 @@ export class RssFoldersService {
       }
 
       if (validatedLinks !== undefined) {
-        await manager.delete(RssLink, { namespaceId, resourceId });
-        await manager.save(
-          RssLink,
-          validatedLinks.map((link, index) =>
+        const existingLinks = await manager.find(RssLink, {
+          where: { namespaceId, resourceId },
+        });
+        const existingByIndex = new Map(
+          existingLinks.map((link) => [link.index, link]),
+        );
+
+        const removeLink = async (link: RssLink) => {
+          // Soft-delete the link's items first: rss_items references rss_links
+          // without ON DELETE CASCADE, and soft-deleting a still-related link
+          // would otherwise leave the items pointing at a dead row.
+          await manager.softDelete(RssItem, { linkId: link.id });
+          await manager.softDelete(RssLink, link.id);
+        };
+
+        // Reconcile the links position by position (by index). A position whose
+        // url is unchanged keeps its row id, and with it the rss_items polled
+        // against it: a rename updates the row in place, an unchanged position is
+        // left untouched. When the url at a position changes (or the position is
+        // new), the old row (if any) is soft-deleted and a fresh one inserted.
+        for (const [index, link] of validatedLinks.entries()) {
+          const existing = existingByIndex.get(index);
+          if (existing && existing.url === link.url) {
+            if (existing.name !== link.name) {
+              existing.name = link.name;
+              await manager.save(existing);
+            }
+            continue;
+          }
+          if (existing) {
+            await removeLink(existing);
+          }
+          await manager.save(
             manager.create(RssLink, {
               namespaceId,
               resourceId,
@@ -149,8 +231,15 @@ export class RssFoldersService {
               url: link.url,
               name: link.name,
             }),
-          ),
-        );
+          );
+        }
+
+        // Positions dropped from the end of the list are removed.
+        for (const link of existingLinks) {
+          if (link.index >= validatedLinks.length) {
+            await removeLink(link);
+          }
+        }
       }
     });
 

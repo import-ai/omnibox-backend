@@ -99,8 +99,12 @@ describe('RssPolling (e2e)', () => {
   const taskRepo = () => dataSource.getRepository(Task);
 
   it('polls a due link and stores its items', async () => {
-    const summary = await pollingService.pollDueLinks();
-    expect(summary).toEqual({ claimed: 1, succeeded: 1, failed: 0 });
+    // Drive pollUrl directly rather than pollDueLinks(): the latter scans
+    // rss_links globally (it is the system-wide polling cron), so in the
+    // shared e2e container it would also poll feed urls left behind by other
+    // spec files. Per-url polling keeps this spec's assertions deterministic.
+    const result = await pollingService.pollUrl(FEED_URL);
+    expect(result).toBe('succeed');
 
     const polls = await pollRepo().find({ where: { url: FEED_URL } });
     expect(polls).toHaveLength(1);
@@ -136,8 +140,8 @@ describe('RssPolling (e2e)', () => {
   });
 
   it('skips a link already polled within the window', async () => {
-    const summary = await pollingService.pollDueLinks();
-    expect(summary).toEqual({ claimed: 0, succeeded: 0, failed: 0 });
+    const result = await pollingService.pollUrl(FEED_URL);
+    expect(result).toBe('skipped');
 
     expect(await pollRepo().count({ where: { url: FEED_URL } })).toBe(1);
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(2);
@@ -160,8 +164,8 @@ describe('RssPolling (e2e)', () => {
       },
     ];
 
-    const summary = await pollingService.pollDueLinks();
-    expect(summary).toEqual({ claimed: 1, succeeded: 1, failed: 0 });
+    const result = await pollingService.pollUrl(FEED_URL);
+    expect(result).toBe('succeed');
 
     const polls = await pollRepo().find({ where: { url: FEED_URL } });
     expect(polls).toHaveLength(1);
@@ -249,7 +253,7 @@ describe('RssPolling (e2e)', () => {
       item.guid === 'guid-1' ? { ...item, description: 'updated body' } : item,
     );
 
-    await pollingService.pollDueLinks();
+    await pollingService.pollUrl(FEED_URL);
 
     // No new row for the guid, but its content is refreshed.
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(3);
@@ -277,9 +281,9 @@ describe('RssPolling (e2e)', () => {
     const links = await linkRepo().find({ where: { url: FEED_URL } });
     expect(links).toHaveLength(2);
 
-    // Bypass the window and re-poll: the poll scans every link sharing the url.
+    // Bypass the window and re-poll: the poll relates every link sharing the url.
     await pollRepo().delete({ url: FEED_URL });
-    await pollingService.pollDueLinks();
+    await pollingService.pollUrl(FEED_URL);
 
     // Contents are still deduped globally per url.
     const contentCount = await contentRepo().count({
@@ -294,5 +298,20 @@ describe('RssPolling (e2e)', () => {
     for (const link of links) {
       expect(await itemRepo().count({ where: { linkId: link.id } })).toBe(3);
     }
+  });
+
+  it('discovers and polls a due link through pollDueLinks', async () => {
+    // Covers the cron entrypoint's due-link discovery. It scans rss_links
+    // globally, so other spec files may contribute additional urls in the
+    // shared container; assert only that our due link was claimed and polled.
+    await pollRepo().delete({ url: FEED_URL });
+
+    const summary = await pollingService.pollDueLinks();
+    expect(summary.claimed).toBeGreaterThanOrEqual(1);
+    expect(summary.succeeded).toBeGreaterThanOrEqual(1);
+
+    const polls = await pollRepo().find({ where: { url: FEED_URL } });
+    expect(polls).toHaveLength(1);
+    expect(polls[0].status).toBe('succeed');
   });
 });

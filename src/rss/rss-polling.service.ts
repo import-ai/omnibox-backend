@@ -267,8 +267,9 @@ export class RssPollingService {
     const articleContent = typeof encoded === 'string' ? encoded.trim() : '';
     const title = item.title ?? '';
     // rss-parser normalizes pubDate to `isoDate`; fall back to the raw pubDate.
-    // Store null when neither is a parseable date.
-    const pubDate = this.parsePubDate(item.isoDate ?? item.pubDate ?? null);
+    // When neither is a parseable date, default to the current time.
+    const pubDate =
+      this.parsePubDate(item.isoDate ?? item.pubDate ?? null) ?? new Date();
     const content = JSON.stringify({
       title: item.title ?? null,
       link: item.link ?? null,

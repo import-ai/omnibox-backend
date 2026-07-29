@@ -73,12 +73,14 @@ export class RssFoldersController {
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
   ): Promise<RssItemResponseDto[]> {
     return await this.rssFoldersService.listItems(
       userId,
       namespaceId,
       resourceId,
       limit,
+      offset,
     );
   }
 

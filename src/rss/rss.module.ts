@@ -14,6 +14,9 @@ import { RssFoldersController } from 'omniboxd/rss/rss-folders.controller';
 import { RssFoldersService } from 'omniboxd/rss/rss-folders.service';
 import { RssPollingCronService } from 'omniboxd/rss/rss-polling.cron.service';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
+import { SharedRssFoldersController } from 'omniboxd/rss/shared-rss-folders.controller';
+import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
+import { SharesModule } from 'omniboxd/shares/shares.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
 @Module({
@@ -29,6 +32,8 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     PermissionsModule,
     NamespaceResourcesModule,
     WizardAPIModule,
+    SharesModule,
+    SharedResourcesModule,
   ],
   providers: [
     RssFoldersService,
@@ -37,6 +42,6 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     RssPollingService,
     RssPollingCronService,
   ],
-  controllers: [RssFoldersController],
+  controllers: [RssFoldersController, SharedRssFoldersController],
 })
 export class RssModule {}

@@ -117,22 +117,38 @@ export class RssFoldersService {
     return RssFolderResponseDto.fromData({ resource, links: linkEntities });
   }
 
-  // Lists the polled items of an rss folder, newest first. Items are the
-  // (link, content) relations produced by polling, joined to their stored
-  // content for the article url/date/snippet.
+  // Lists the polled items of an rss folder, newest first. Enforces read
+  // permission on the folder resource, then delegates to the permission-free
+  // fetch used by both the authenticated and shared read paths.
   async listItems(
     userId: string,
     namespaceId: string,
     resourceId: string,
     limit?: number,
+    offset?: number,
   ): Promise<RssItemResponseDto[]> {
-    await this.getRssFolderOrFail(namespaceId, resourceId);
     // Enforces read permission on the folder resource (throws if no access).
     await this.namespaceResourcesService.getResource({
       userId,
       namespaceId,
       resourceId,
     });
+    return await this.listFolderItems(namespaceId, resourceId, limit, offset);
+  }
+
+  // Fetches an rss folder's items without any per-user permission check. Callers
+  // must authorize access to the folder first: the authenticated path via
+  // namespaceResourcesService.getResource, the shared path via a validated share
+  // (SharedResourcesService.getAndValidateResource). Items are the (link,
+  // content) relations produced by polling, joined to their stored content for
+  // the article url/date/snippet.
+  async listFolderItems(
+    namespaceId: string,
+    resourceId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<RssItemResponseDto[]> {
+    await this.getRssFolderOrFail(namespaceId, resourceId);
 
     const links = await this.rssLinkRepository.find({
       where: { namespaceId, resourceId },
@@ -154,6 +170,7 @@ export class RssFoldersService {
         id: 'DESC',
       },
       ...(limit !== undefined && limit > 0 && { take: limit }),
+      ...(offset !== undefined && offset > 0 && { skip: offset }),
     });
     if (items.length === 0) {
       return [];
@@ -174,18 +191,30 @@ export class RssFoldersService {
     );
   }
 
+  // Reads a single item of an rss folder. Enforces read permission, then
+  // delegates to the permission-free fetch.
   async getItem(
     userId: string,
     namespaceId: string,
     resourceId: string,
     itemId: string,
   ): Promise<RssItemDetailResponseDto> {
-    await this.getRssFolderOrFail(namespaceId, resourceId);
     await this.namespaceResourcesService.getResource({
       userId,
       namespaceId,
       resourceId,
     });
+    return await this.getFolderItem(namespaceId, resourceId, itemId);
+  }
+
+  // Permission-free single-item fetch. Callers must authorize folder access
+  // first (see listFolderItems).
+  async getFolderItem(
+    namespaceId: string,
+    resourceId: string,
+    itemId: string,
+  ): Promise<RssItemDetailResponseDto> {
+    await this.getRssFolderOrFail(namespaceId, resourceId);
 
     const links = await this.rssLinkRepository.find({
       where: { namespaceId, resourceId },

@@ -65,5 +65,36 @@ describe('System notifications (e2e)', () => {
       .expect(HttpStatus.OK);
     expect(firstCount.body.unread_count).toBe(0);
     expect(secondCount.body.unread_count).toBe(1);
+
+    const direct = await firstClient
+      .request()
+      .post('/internal/api/v1/notifications')
+      .send({
+        user_id: firstClient.user.id,
+        title: 'Direct notification',
+        content: 'Not part of system notification history',
+        type: 'system',
+      })
+      .expect(HttpStatus.CREATED);
+
+    const history = await firstClient
+      .request()
+      .get('/internal/api/v1/system-notifications?offset=0&limit=20')
+      .expect(HttpStatus.OK);
+    expect(history.body.list).toContainEqual({
+      id: created.body.id,
+      title: payload.title,
+      content: payload.content,
+      tags: payload.tags,
+      created_at: expect.any(String),
+    });
+    expect(history.body.list).not.toContainEqual(
+      expect.objectContaining({ id: direct.body.id }),
+    );
+    expect(history.body.pagination).toEqual({
+      offset: 0,
+      limit: 20,
+      total: expect.any(Number),
+    });
   });
 });

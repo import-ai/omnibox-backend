@@ -152,19 +152,19 @@ export class RssPollingService {
     for (const item of items) {
       const { guid, content, title, pubDate, articleUrl, articleContent } =
         this.serializeItem(item);
-      const { id, inserted } = await this.upsertItemContent(
-        url,
-        guid,
-        content,
-        title,
-        pubDate,
-      );
+      const {
+        id,
+        inserted,
+        pubDate: effectivePubDate,
+      } = await this.upsertItemContent(url, guid, content, title, pubDate);
       // Only newly-inserted items are parsed; refreshed items keep their
       // existing parsed content.
       if (inserted && (articleUrl || articleContent)) {
         await this.parseItemContent(id, articleUrl, articleContent);
       }
-      stored.push({ contentId: id, title, pubDate });
+      // Use the stored pub_date (preserved from first fetch) so rss_items rows
+      // for newly-appearing links match the content row's publish date.
+      stored.push({ contentId: id, title, pubDate: effectivePubDate });
     }
     return stored;
   }
@@ -226,25 +226,26 @@ export class RssPollingService {
       .execute();
   }
 
-  // Deduplicates per (url, guid); refreshes the content of an existing row on
-  // refetch. Returns the id of the existing or new row.
+  // Deduplicates per (url, guid); refreshes the content/title of an existing
+  // row on refetch, but preserves the original pub_date so a re-fetch never
+  // moves an item's publish date (important for items whose date we defaulted
+  // to the fetch time). Returns the row id and its effective pub_date.
   private async upsertItemContent(
     url: string,
     guid: string,
     content: string,
     title: string,
     pubDate: Date | null,
-  ): Promise<{ id: string; inserted: boolean }> {
-    const rows: Array<{ id: string; inserted: boolean }> =
+  ): Promise<{ id: string; inserted: boolean; pubDate: Date | null }> {
+    const rows: Array<{ id: string; inserted: boolean; pubDate: Date | null }> =
       await this.rssItemContentRepository.query(
         `INSERT INTO rss_item_contents (url, guid, content, title, pub_date)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (url, guid) DO UPDATE
          SET content = EXCLUDED.content,
              title = EXCLUDED.title,
-             pub_date = EXCLUDED.pub_date,
              updated_at = now()
-         RETURNING id, (xmax = 0) AS inserted`,
+         RETURNING id, (xmax = 0) AS inserted, pub_date AS "pubDate"`,
         [url, guid, content, title, pubDate],
       );
     return rows[0];

@@ -415,15 +415,58 @@ describe('RssPolling (e2e)', () => {
       .expect(200);
     const items = response.body as Array<Record<string, unknown>>;
 
-    // Items with a publish date sort ahead of the older undated ones (nulls
-    // last), most recent first.
-    expect(items.slice(0, 3).map((item) => item.title)).toEqual([
-      'Newest',
-      'Middle',
-      'Oldest',
-    ]);
-    expect(items[0].published_at).toBe(
+    // Items are listed most-recently-published first. The three dated items
+    // sort among themselves newest-first. (Items from earlier specs had no feed
+    // date and were stored with their fetch time, so they sort ahead of these
+    // backdated ones — see the "now" fallback in the polling service.)
+    const titles = items.map((item) => item.title);
+    const newestIdx = titles.indexOf('Newest');
+    const middleIdx = titles.indexOf('Middle');
+    const oldestIdx = titles.indexOf('Oldest');
+    expect(newestIdx).toBeGreaterThanOrEqual(0);
+    expect(newestIdx).toBeLessThan(middleIdx);
+    expect(middleIdx).toBeLessThan(oldestIdx);
+
+    // The stored publish date is surfaced verbatim for a dated item.
+    const newestItem = items.find((item) => item.title === 'Newest');
+    expect(newestItem?.published_at).toBe(
       new Date('Wed, 01 Apr 2026 00:00:00 GMT').toISOString(),
     );
+  });
+
+  it('keeps the original publish date when an undated item is re-fetched', async () => {
+    // An item with no feed date is stored with the fetch time. Re-fetching it
+    // updates the content but must not move its publish date forward.
+    feedItems = [
+      {
+        title: 'Undated',
+        link: 'https://example.com/undated',
+        guid: 'guid-undated',
+        description: 'no date here',
+      },
+    ];
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+    const first = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-undated' },
+    });
+    expect(first.pubDate).not.toBeNull();
+
+    // Re-poll the same guid with changed content, bypassing the poll window.
+    feedItems = [
+      {
+        title: 'Undated (edited)',
+        link: 'https://example.com/undated',
+        guid: 'guid-undated',
+        description: 'still no date',
+      },
+    ];
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+    const second = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-undated' },
+    });
+    expect(second.title).toBe('Undated (edited)');
+    expect(second.pubDate?.toISOString()).toBe(first.pubDate?.toISOString());
   });
 });

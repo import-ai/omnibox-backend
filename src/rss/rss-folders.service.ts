@@ -162,8 +162,9 @@ export class RssFoldersService {
 
     const items = await this.rssItemRepository.find({
       where: { linkId: In(linkIds) },
-      // Newest published first. Items missing a feed date sort last, then fall
-      // back to insertion order.
+      // Newest published first. Items store the fetch time when the feed omits
+      // a date, so pub_date is normally set; NULLS LAST is defensive, and
+      // createdAt/id break ties in insertion order.
       order: {
         pubDate: { direction: 'DESC', nulls: 'LAST' },
         createdAt: 'DESC',

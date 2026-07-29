@@ -19,15 +19,35 @@ describe('FeaturePreviewsController (e2e)', () => {
     }
   });
 
-  it('should list supported feature previews as disabled by default', async () => {
+  it('should enable editor v2 by default for new users', async () => {
     const response = await client
       .get('/api/v1/feature-previews')
       .expect(HttpStatus.OK);
 
     expect(response.body).toEqual({
       features: {
-        [FeaturePreviewFeature.EDITOR_V2]: false,
+        [FeaturePreviewFeature.EDITOR_V2]: true,
       },
+    });
+  });
+
+  it('should keep editor v2 disabled when a user has no rollout record', async () => {
+    const existingUserClient = await TestClient.create();
+    tempClients.push(existingUserClient);
+    const repository = existingUserClient.app
+      .get(DataSource)
+      .getRepository(FeaturePreview);
+
+    await repository.delete({
+      userId: existingUserClient.user.id,
+      feature: FeaturePreviewFeature.EDITOR_V2,
+    });
+
+    const response = await existingUserClient
+      .get('/api/v1/feature-previews')
+      .expect(HttpStatus.OK);
+    expect(response.body.features).toEqual({
+      [FeaturePreviewFeature.EDITOR_V2]: false,
     });
   });
 
@@ -93,7 +113,7 @@ describe('FeaturePreviewsController (e2e)', () => {
       .put('/api/v1/feature-previews')
       .send({
         feature: FeaturePreviewFeature.EDITOR_V2,
-        enabled: true,
+        enabled: false,
       })
       .expect(HttpStatus.OK);
 
@@ -102,7 +122,7 @@ describe('FeaturePreviewsController (e2e)', () => {
       .expect(HttpStatus.OK);
     expect(otherUserResponse.body).toEqual({
       features: {
-        [FeaturePreviewFeature.EDITOR_V2]: false,
+        [FeaturePreviewFeature.EDITOR_V2]: true,
       },
     });
 
@@ -111,7 +131,7 @@ describe('FeaturePreviewsController (e2e)', () => {
       .expect(HttpStatus.OK);
     expect(currentUserResponse.body).toEqual({
       features: {
-        [FeaturePreviewFeature.EDITOR_V2]: true,
+        [FeaturePreviewFeature.EDITOR_V2]: false,
       },
     });
   });
@@ -122,13 +142,6 @@ describe('FeaturePreviewsController (e2e)', () => {
     const repository = rolloutClient.app
       .get(DataSource)
       .getRepository(FeaturePreview);
-
-    await repository.save({
-      userId: rolloutClient.user.id,
-      feature: FeaturePreviewFeature.EDITOR_V2,
-      userEnabled: null,
-      rolloutEnabled: true,
-    });
 
     const url = '/api/v1/feature-previews';
     const rolloutResponse = await rolloutClient.get(url).expect(HttpStatus.OK);

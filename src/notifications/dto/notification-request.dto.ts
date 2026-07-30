@@ -1,4 +1,4 @@
-import { Expose } from 'class-transformer';
+import { Expose, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   Validate,
@@ -119,6 +120,21 @@ export class CreateSystemNotificationRequestDto {
   @IsOptional()
   @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
   attrs?: Record<string, any>;
+}
+
+export class ListSystemNotificationsRequestDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: i18nValidationMessage('validation.errors.isInt') })
+  @Min(0, { message: i18nValidationMessage('validation.errors.min') })
+  offset?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: i18nValidationMessage('validation.errors.isInt') })
+  @Min(1, { message: i18nValidationMessage('validation.errors.min') })
+  @Max(100)
+  limit?: number;
 }
 
 export class ListNotificationsRequestDto {

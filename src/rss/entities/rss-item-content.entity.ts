@@ -22,8 +22,9 @@ export class RssItemContent extends Base {
 
   // Wizard parse retry state, used only while parsed_content is still null: how
   // many parse attempts have failed, and the earliest time to try again
-  // (exponential backoff). Untouched by a content refresh so a re-fetch never
-  // resets an item's backoff.
+  // (exponential backoff). Preserved across an unchanged refetch, but reset
+  // (along with parsed_content) when the item's body actually changes so the
+  // revised content is parsed afresh.
   @Column('int', { default: 0 })
   parseAttempts: number;
 

@@ -1,8 +1,9 @@
 import { HttpStatus } from '@nestjs/common';
 import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
+import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { TestClient } from 'test/test-client';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 
 const RSS_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -161,6 +162,60 @@ describe('RssFoldersController (e2e)', () => {
 
     await client.delete(base).expect(200);
     await client.get(`${base}/config`).expect(HttpStatus.NOT_FOUND);
+  });
+
+  it('rolls back the name when the link update fails in the same request', async () => {
+    const created = (
+      await createFolder({
+        name: 'Atomic',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed', name: 'Original' }],
+      }).expect(201)
+    ).body;
+    const base = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}`;
+
+    // Fail only the rss_links write, which runs after the name update inside the
+    // same transaction. If the two are not atomic, the name change would survive
+    // this failure.
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- reapplied with an explicit `this` below
+    const originalSave = EntityManager.prototype.save;
+    const saveSpy = jest
+      .spyOn(EntityManager.prototype, 'save')
+      .mockImplementation(function (this: EntityManager, ...args: any[]) {
+        const target = args[0];
+        const savingLink =
+          target instanceof RssLink ||
+          (Array.isArray(target) && target[0] instanceof RssLink);
+        if (savingLink) {
+          throw new Error('injected rss_links failure');
+        }
+        return (originalSave as any).apply(this, args);
+      });
+
+    try {
+      await client
+        .patch(`${base}/config`)
+        .send({
+          name: 'Atomic Renamed',
+          links: [{ url: 'https://example.com/other', name: 'Other' }],
+        })
+        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
+    } finally {
+      saveSpy.mockRestore();
+    }
+
+    // The failed link write must have rolled back the name change too, and left
+    // the original link untouched.
+    const fetched = (await client.get(`${base}/config`).expect(200)).body;
+    expect(fetched.resource.name).toBe('Atomic');
+    expect(fetched.links).toEqual([
+      expect.objectContaining({
+        url: 'https://example.com/feed',
+        name: 'Original',
+      }),
+    ]);
+
+    await client.delete(base).expect(200);
   });
 
   it('updates links that already have polled items without a foreign key violation', async () => {

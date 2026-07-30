@@ -285,8 +285,9 @@ describe('RssPolling (e2e)', () => {
     });
     expect(after.id).toBe(before.id);
     expect(JSON.parse(after.content).content).toBe('updated body');
-    // Refreshing an existing item does not re-parse it.
-    expect(parseRssItemSpy).not.toHaveBeenCalled();
+    // The body changed, so the item is re-parsed against its new content.
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
+    expect(after.parsedContent).toBe('# https://example.com/1');
   });
 
   it('relates a newly-added link sharing the url to existing contents', async () => {
@@ -540,7 +541,7 @@ describe('RssPolling (e2e)', () => {
     expect(after.parseNextAttemptAt).toBeNull();
   });
 
-  it('keeps parsed content and attempts when a parsed item is refreshed', async () => {
+  it('re-parses and refreshes the title when a parsed item is edited', async () => {
     feedItems = [
       {
         title: 'Flaky (edited)',
@@ -554,15 +555,39 @@ describe('RssPolling (e2e)', () => {
     await pollRepo().delete({ url: FEED_URL });
     await pollingService.pollUrl(FEED_URL);
 
-    // An item that already has parsed content is never re-parsed, and the
-    // content refresh must not reset its retry bookkeeping.
-    expect(parseRssItemSpy).not.toHaveBeenCalled();
+    // The body changed, so the stale parse result is dropped and the revised
+    // content is parsed afresh, with its retry bookkeeping reset.
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
     const stored = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: RETRY_GUID },
     });
     expect(stored.title).toBe('Flaky (edited)');
     expect(stored.parsedContent).toBe('# https://example.com/flaky');
-    expect(stored.parseAttempts).toBe(1);
+    expect(stored.parseAttempts).toBe(0);
+    expect(stored.parseNextAttemptAt).toBeNull();
+
+    // The denormalized rss_items title follows the revised feed title, so list
+    // and detail views show the new title rather than the first-fetch one.
+    const items = await itemRepo().find({ where: { contentId: stored.id } });
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.title).toBe('Flaky (edited)');
+    }
+  });
+
+  it('keeps parsed content when an unchanged item is refetched', async () => {
+    // feedItems is unchanged from the previous test, so refetching the same
+    // guid must leave the parsed result (and its bookkeeping) untouched.
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
+    const stored = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: RETRY_GUID },
+    });
+    expect(stored.parsedContent).toBe('# https://example.com/flaky');
+    expect(stored.parseAttempts).toBe(0);
   });
 
   it('treats empty wizard markdown as a failed attempt', async () => {
@@ -611,5 +636,123 @@ describe('RssPolling (e2e)', () => {
     });
     expect(capped.parsedContent).toBeNull();
     expect(capped.parseAttempts).toBe(6);
+  });
+
+  // Restores the shared wizard stub to its default echo behavior; individual
+  // tests that swap in their own implementation call this to avoid leaking it.
+  const restoreDefaultWizardStub = () =>
+    parseRssItemSpy.mockImplementation(
+      (params: { url?: string; content?: string }) =>
+        Promise.resolve({ markdown: `# ${params.url || 'content'}` }),
+    );
+
+  it('parses feed items in parallel up to the configured cap', async () => {
+    // Eight fresh guids so every item needs a parse.
+    feedItems = Array.from({ length: 8 }, (_, i) => ({
+      title: `Parallel ${i}`,
+      link: `https://example.com/parallel-${i}`,
+      guid: `guid-parallel-${i}`,
+      description: `parallel body ${i}`,
+    }));
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    parseRssItemSpy.mockClear();
+    parseRssItemSpy.mockImplementation(async (params: { url?: string }) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      // Hold the slot briefly so concurrent parses overlap.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      inFlight -= 1;
+      return { markdown: `# ${params.url || 'content'}` };
+    });
+
+    try {
+      await pollRepo().delete({ url: FEED_URL });
+      await pollingService.pollUrl(FEED_URL);
+    } finally {
+      restoreDefaultWizardStub();
+    }
+
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(8);
+    // More than one in flight proves parallelism; never above the default cap of
+    // 5 (OBB_RSS_POLL_ITEM_CONCURRENCY is unset in tests).
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(maxInFlight).toBeLessThanOrEqual(5);
+  });
+
+  it('stops processing items once the poll window elapses', async () => {
+    feedItems = Array.from({ length: 4 }, (_, i) => ({
+      title: `Windowed ${i}`,
+      link: `https://example.com/windowed-${i}`,
+      guid: `guid-windowed-${i}`,
+      description: `windowed body ${i}`,
+    }));
+
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    // maxRunMs 0: the deadline is already past when the first batch is checked,
+    // so nothing is stored or parsed.
+    await pollingService.pollUrl(FEED_URL, { maxRunMs: 0 });
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
+    for (const item of feedItems) {
+      expect(
+        await contentRepo().count({
+          where: { url: FEED_URL, guid: item.guid },
+        }),
+      ).toBe(0);
+    }
+
+    // A normal poll (full window) then processes every item, so truncation lost
+    // nothing and the poll resumes cleanly.
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(feedItems.length);
+    for (const item of feedItems) {
+      expect(
+        await contentRepo().count({
+          where: { url: FEED_URL, guid: item.guid },
+        }),
+      ).toBe(1);
+    }
+  });
+
+  it('polls a feed that lists the same guid twice without error', async () => {
+    // A malformed feed repeats a guid. The two items collapse to one content row,
+    // so linking must not try to relate the same (link, content) pair twice in a
+    // single ON CONFLICT DO UPDATE (which Postgres rejects).
+    feedItems = [
+      {
+        title: 'Dup',
+        link: 'https://example.com/dup',
+        guid: 'guid-dup',
+        description: 'dup body',
+      },
+      {
+        title: 'Dup again',
+        link: 'https://example.com/dup',
+        guid: 'guid-dup',
+        description: 'dup body',
+      },
+    ];
+
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    expect(await pollingService.pollUrl(FEED_URL)).toBe('succeed');
+
+    // Deduped to a single content row and a single rss_items relation per link.
+    expect(
+      await contentRepo().count({ where: { url: FEED_URL, guid: 'guid-dup' } }),
+    ).toBe(1);
+    const content = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-dup' },
+    });
+    for (const link of await linkRepo().find({ where: { url: FEED_URL } })) {
+      expect(
+        await itemRepo().count({
+          where: { linkId: link.id, contentId: content.id },
+        }),
+      ).toBe(1);
+    }
   });
 });

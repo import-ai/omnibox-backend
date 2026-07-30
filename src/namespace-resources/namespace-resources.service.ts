@@ -1559,6 +1559,7 @@ export class NamespaceResourcesService {
     resourceId: string,
     data: UpdateResourceDto,
     autoRenameOnConflict: boolean = false,
+    tx?: Transaction,
   ) {
     if (data.parentId) {
       await this.resourcesService.getResourceOrFail(namespaceId, data.parentId);
@@ -1580,7 +1581,7 @@ export class NamespaceResourcesService {
         attrs: data.attrs,
         parentId: data.parentId,
       },
-      undefined,
+      tx,
       autoRenameOnConflict,
     );
   }

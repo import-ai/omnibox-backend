@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
 import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
@@ -14,9 +15,16 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { DataSource, Repository } from 'typeorm';
 
 // Each URL is polled at most once within this window; a freshly-inserted
-// `polling` row blocks re-polling even before it finishes.
-const POLL_WINDOW = "interval '5 minutes'";
+// `polling` row blocks re-polling even before it finishes. A single source of
+// truth in ms: the SQL claim window and the per-worker deadline must match, so
+// a worker never runs past the point where another poll may re-claim its URL.
+const POLL_WINDOW_MS = 5 * 60 * 1000;
+const POLL_WINDOW = `interval '${POLL_WINDOW_MS} milliseconds'`;
 const POLL_CONCURRENCY = 5;
+
+// Default max number of items parsed in parallel within a single feed poll.
+// Overridable via OBB_RSS_POLL_ITEM_CONCURRENCY.
+const DEFAULT_ITEM_CONCURRENCY = 5;
 
 // A wizard parse that fails transiently (restart, timeout, network blip) leaves
 // parsed_content null; the next polls retry it with exponential backoff until it
@@ -47,6 +55,9 @@ interface StoredItem {
 @Injectable()
 export class RssPollingService {
   private readonly logger = new Logger(RssPollingService.name);
+  // Max items parsed in parallel within one feed poll; bounds how long a single
+  // large feed can occupy a poll slot before its per-worker deadline is checked.
+  private readonly itemConcurrency: number;
 
   constructor(
     @InjectRepository(RssLink)
@@ -60,7 +71,20 @@ export class RssPollingService {
     private readonly dataSource: DataSource,
     private readonly feedFetcher: RssFeedFetcherService,
     private readonly wizardApiService: WizardAPIService,
-  ) {}
+    configService: ConfigService,
+  ) {
+    // Clamp to >= 1 so a malformed value can never stall the loop.
+    this.itemConcurrency = Math.max(
+      1,
+      parseInt(
+        configService.get(
+          'OBB_RSS_POLL_ITEM_CONCURRENCY',
+          String(DEFAULT_ITEM_CONCURRENCY),
+        ),
+        10,
+      ) || DEFAULT_ITEM_CONCURRENCY,
+    );
+  }
 
   async pollDueLinks(): Promise<PollSummary> {
     const rows = await this.rssLinkRepository
@@ -89,14 +113,23 @@ export class RssPollingService {
   }
 
   // Polls a single URL. Returns 'skipped' when another poll already claimed the
-  // URL within the window, otherwise the resulting poll status.
-  async pollUrl(url: string): Promise<'skipped' | 'succeed' | 'failed'> {
+  // URL within the window, otherwise the resulting poll status. `maxRunMs` bounds
+  // how long the worker keeps parsing items after it claimed the URL (defaults to
+  // the claim window); a large feed is truncated at that deadline and its
+  // remaining items resume on the next poll.
+  async pollUrl(
+    url: string,
+    options?: { maxRunMs?: number },
+  ): Promise<'skipped' | 'succeed' | 'failed'> {
     let poll: RssPoll | null = null;
     try {
       poll = await this.claim(url);
       if (poll === null) {
         return 'skipped';
       }
+      // Bound the worker to the claim window: a poll that ran past it could
+      // overlap a second poll that has re-claimed the same URL.
+      const deadline = Date.now() + (options?.maxRunMs ?? POLL_WINDOW_MS);
 
       // Network I/O stays outside any transaction.
       const feed = await this.feedFetcher.fetchAndParse(url);
@@ -107,7 +140,7 @@ export class RssPollingService {
         return 'failed';
       }
 
-      const stored = await this.storeItems(url, feed.items ?? []);
+      const stored = await this.storeItems(url, feed.items ?? [], deadline);
       // Relate every link sharing this url to the polled contents.
       await this.linkItems(url, stored);
       const contentIds = stored.map((item) => item.contentId);
@@ -156,45 +189,73 @@ export class RssPollingService {
     });
   }
 
+  // Stores (and, where needed, parses) a feed's items, up to `itemConcurrency` at
+  // a time. Stops launching new work once `deadline` (ms epoch) passes so one
+  // huge feed can't monopolize a poll slot; items not reached this round are
+  // stored/parsed on the next poll (unparsed contents re-parse via the
+  // parsed_content-null path, unseen items are inserted then). An individual
+  // in-flight Wizard parse is not interrupted — it is bounded by its own timeout.
   private async storeItems(
     url: string,
     items: ParsedFeedItem[],
+    deadline: number,
   ): Promise<StoredItem[]> {
     const stored: StoredItem[] = [];
-    for (const item of items) {
-      const { guid, content, title, pubDate, articleUrl, articleContent } =
-        this.serializeItem(item);
-      const {
-        id,
-        pubDate: effectivePubDate,
-        parsedContent,
-        parseAttempts,
-        parseNextAttemptAt,
-      } = await this.upsertItemContent(url, guid, content, title, pubDate);
-      // Parse items that still have no parsed content: newly-inserted ones on
-      // the spot, and previously-failed ones once their backoff has elapsed and
-      // while attempts remain. Already-parsed items are never re-parsed, and
-      // items with nothing to parse never accumulate attempts. The url's
-      // advisory lock serializes this, so no two polls parse the same row.
-      const shouldParse =
-        Boolean(articleUrl || articleContent) &&
-        parsedContent === null &&
-        parseAttempts < MAX_PARSE_ATTEMPTS &&
-        (parseNextAttemptAt === null ||
-          parseNextAttemptAt.getTime() <= Date.now());
-      if (shouldParse) {
-        await this.parseItemContent(
-          id,
-          parseAttempts,
-          articleUrl,
-          articleContent,
+    for (let i = 0; i < items.length; i += this.itemConcurrency) {
+      if (Date.now() >= deadline) {
+        this.logger.warn(
+          `Poll window elapsed for ${url}; processed ${i}/${items.length} items, ` +
+            'remaining items will resume on the next poll',
         );
+        break;
       }
-      // Use the stored pub_date (preserved from first fetch) so rss_items rows
-      // for newly-appearing links match the content row's publish date.
-      stored.push({ contentId: id, title, pubDate: effectivePubDate });
+      const batch = items.slice(i, i + this.itemConcurrency);
+      const batchStored = await Promise.all(
+        batch.map((item) => this.storeItem(url, item)),
+      );
+      stored.push(...batchStored);
     }
     return stored;
+  }
+
+  // Stores a single feed item's content and parses it when needed. Safe to run
+  // in parallel with sibling items: each has a distinct guid, and the rare
+  // duplicate guid is resolved by the (url, guid) ON CONFLICT.
+  private async storeItem(
+    url: string,
+    item: ParsedFeedItem,
+  ): Promise<StoredItem> {
+    const { guid, content, title, pubDate, articleUrl, articleContent } =
+      this.serializeItem(item);
+    const {
+      id,
+      pubDate: effectivePubDate,
+      parsedContent,
+      parseAttempts,
+      parseNextAttemptAt,
+    } = await this.upsertItemContent(url, guid, content, title, pubDate);
+    // Parse items that still have no parsed content: newly-inserted ones on the
+    // spot, and previously-failed ones once their backoff has elapsed and while
+    // attempts remain. Already-parsed items are never re-parsed, and items with
+    // nothing to parse never accumulate attempts. The poll window keeps a url's
+    // polls from overlapping, so no two polls parse the same row.
+    const shouldParse =
+      Boolean(articleUrl || articleContent) &&
+      parsedContent === null &&
+      parseAttempts < MAX_PARSE_ATTEMPTS &&
+      (parseNextAttemptAt === null ||
+        parseNextAttemptAt.getTime() <= Date.now());
+    if (shouldParse) {
+      await this.parseItemContent(
+        id,
+        parseAttempts,
+        articleUrl,
+        articleContent,
+      );
+    }
+    // Use the stored pub_date (preserved from first fetch) so rss_items rows for
+    // newly-appearing links match the content row's publish date.
+    return { contentId: id, title, pubDate: effectivePubDate };
   }
 
   // Renders the article to Markdown via the wizard and stores it. When the feed
@@ -253,9 +314,11 @@ export class RssPollingService {
   }
 
   // Relates every rss_links row sharing the polled url to the stored contents,
-  // one rss_items row per (link, content) pair. Idempotent: the unique
-  // (link_id, content_id) index + ON CONFLICT DO NOTHING means only pairs not
-  // yet related get inserted, so re-polls add only newly-appeared items.
+  // one rss_items row per (link, content) pair. Idempotent on the unique
+  // (link_id, content_id) index: a pair not yet related is inserted, while an
+  // existing pair has its denormalized title refreshed to the latest feed title
+  // (a revised item then shows its new title in list/detail views). pub_date is
+  // deliberately left as-is so a refetch never moves an item's publish date.
   private async linkItems(url: string, stored: StoredItem[]): Promise<void> {
     if (stored.length === 0) {
       return;
@@ -274,12 +337,21 @@ export class RssPollingService {
       })),
     );
 
+    // A feed can list the same guid twice, which collapses to one content row and
+    // thus duplicate (link, content) rows here. ON CONFLICT DO UPDATE — unlike the
+    // DO NOTHING this used to be — rejects a statement that touches the same
+    // conflict key twice, so dedupe first, keeping the last occurrence's title.
+    const deduped = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      deduped.set(`${row.linkId}:${row.contentId}`, row);
+    }
+
     await this.rssItemRepository
       .createQueryBuilder()
       .insert()
       .into(RssItem)
-      .values(rows)
-      .orIgnore()
+      .values([...deduped.values()])
+      .orUpdate(['title'], ['link_id', 'content_id'])
       .execute();
   }
 
@@ -287,9 +359,10 @@ export class RssPollingService {
   // row on refetch, but preserves the original pub_date so a re-fetch never
   // moves an item's publish date (important for items whose date we defaulted
   // to the fetch time). Returns the row id, its effective pub_date and its parse
-  // state. The DO UPDATE deliberately leaves parsed_content and the parse retry
-  // columns alone, so refreshing an item never drops its parsed content nor
-  // resets its retry backoff.
+  // state. When the item's body actually changes the DO UPDATE drops the stale
+  // parsed_content and resets the retry backoff, so the returned parse state
+  // makes the caller re-parse the revised content; an unchanged refetch leaves
+  // parsed_content and the retry bookkeeping untouched.
   private async upsertItemContent(
     url: string,
     guid: string,
@@ -315,7 +388,16 @@ export class RssPollingService {
          ON CONFLICT (url, guid) DO UPDATE
          SET content = EXCLUDED.content,
              title = EXCLUDED.title,
-             updated_at = now()
+             updated_at = now(),
+             parsed_content = CASE
+               WHEN rss_item_contents.content IS DISTINCT FROM EXCLUDED.content
+               THEN NULL ELSE rss_item_contents.parsed_content END,
+             parse_attempts = CASE
+               WHEN rss_item_contents.content IS DISTINCT FROM EXCLUDED.content
+               THEN 0 ELSE rss_item_contents.parse_attempts END,
+             parse_next_attempt_at = CASE
+               WHEN rss_item_contents.content IS DISTINCT FROM EXCLUDED.content
+               THEN NULL ELSE rss_item_contents.parse_next_attempt_at END
          RETURNING id, pub_date AS "pubDate",
                    parsed_content AS "parsedContent",
                    parse_attempts AS "parseAttempts",

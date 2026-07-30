@@ -182,6 +182,9 @@ importers:
       typeorm-naming-strategies:
         specifier: ^4.1.0
         version: 4.1.0(typeorm@0.3.28(pg@8.20.0)(redis@4.7.1)(ts-node@10.9.2(@swc/core@1.15.24)(@types/node@22.19.17)(typescript@5.9.3)))
+      undici:
+        specifier: ^7.16.0
+        version: 7.24.7
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.3.5

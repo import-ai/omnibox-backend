@@ -288,9 +288,14 @@ export class RssFoldersService {
         const existingLinks = await manager.find(RssLink, {
           where: { namespaceId, resourceId },
         });
-        const existingByIndex = new Map(
-          existingLinks.map((link) => [link.index, link]),
-        );
+        const existingByUrl = new Map<string, RssLink>();
+        for (const link of existingLinks) {
+          // First row per url wins; any stale duplicate rows for the same url
+          // are removed below (not reused).
+          if (!existingByUrl.has(link.url)) {
+            existingByUrl.set(link.url, link);
+          }
+        }
 
         const removeLink = async (link: RssLink) => {
           // Soft-delete the link's items first: rss_items references rss_links
@@ -300,22 +305,23 @@ export class RssFoldersService {
           await manager.softDelete(RssLink, link.id);
         };
 
-        // Reconcile the links position by position (by index). A position whose
-        // url is unchanged keeps its row id, and with it the rss_items polled
-        // against it: a rename updates the row in place, an unchanged position is
-        // left untouched. When the url at a position changes (or the position is
-        // new), the old row (if any) is soft-deleted and a fresh one inserted.
+        // Reconcile by url identity, not position. An existing link whose url is
+        // still present is reused at its new index (preserving the rss_items
+        // polled against it), updating its index/name in place; a rename or a
+        // reorder is thus a cheap update, not a delete + re-poll. A new url is
+        // inserted, and any existing row not reused (url removed, or a stale
+        // duplicate) is soft-deleted afterwards.
+        const reusedIds = new Set<string>();
         for (const [index, link] of validatedLinks.entries()) {
-          const existing = existingByIndex.get(index);
-          if (existing && existing.url === link.url) {
-            if (existing.name !== link.name) {
+          const existing = existingByUrl.get(link.url);
+          if (existing && !reusedIds.has(existing.id)) {
+            reusedIds.add(existing.id);
+            if (existing.index !== index || existing.name !== link.name) {
+              existing.index = index;
               existing.name = link.name;
               await manager.save(existing);
             }
             continue;
-          }
-          if (existing) {
-            await removeLink(existing);
           }
           await manager.save(
             manager.create(RssLink, {
@@ -328,9 +334,8 @@ export class RssFoldersService {
           );
         }
 
-        // Positions dropped from the end of the list are removed.
         for (const link of existingLinks) {
-          if (link.index >= validatedLinks.length) {
+          if (!reusedIds.has(link.id)) {
             await removeLink(link);
           }
         }
@@ -355,10 +360,20 @@ export class RssFoldersService {
   }
 
   private normalizeLinks(links: RssLinkRequestDto[]): RssLinkRequestDto[] {
-    return links.map((link) => ({
-      url: link.url.trim(),
-      name: link.name?.trim(),
-    }));
+    const seen = new Set<string>();
+    const normalized: RssLinkRequestDto[] = [];
+    for (const link of links) {
+      const url = link.url.trim();
+      // Collapse duplicate urls within a folder (first occurrence wins).
+      // Otherwise the poller would relate the same content to two links and the
+      // folder would list every item twice.
+      if (seen.has(url)) {
+        continue;
+      }
+      seen.add(url);
+      normalized.push({ url, name: link.name?.trim() });
+    }
+    return normalized;
   }
 
   private async assertLinkLimit(

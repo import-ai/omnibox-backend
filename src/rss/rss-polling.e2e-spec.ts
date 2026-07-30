@@ -469,4 +469,147 @@ describe('RssPolling (e2e)', () => {
     expect(second.title).toBe('Undated (edited)');
     expect(second.pubDate?.toISOString()).toBe(first.pubDate?.toISOString());
   });
+
+  // A transient wizard failure (restart, timeout, network blip) must not leave an
+  // item permanently unparsed: later polls retry it with a backoff.
+  const RETRY_GUID = 'guid-retry';
+
+  it('records an attempt with a backoff when the wizard parse fails', async () => {
+    feedItems = [
+      {
+        title: 'Flaky',
+        link: 'https://example.com/flaky',
+        guid: RETRY_GUID,
+        description: 'flaky body',
+      },
+    ];
+
+    parseRssItemSpy.mockClear();
+    parseRssItemSpy.mockRejectedValueOnce(new Error('wizard unavailable'));
+    await pollRepo().delete({ url: FEED_URL });
+    // The failed parse is swallowed, so the poll itself still succeeds.
+    expect(await pollingService.pollUrl(FEED_URL)).toBe('succeed');
+
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
+    const stored = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: RETRY_GUID },
+    });
+    expect(stored.parsedContent).toBeNull();
+    expect(stored.parseAttempts).toBe(1);
+    const nextAt = stored.parseNextAttemptAt;
+    expect(nextAt).not.toBeNull();
+    expect(nextAt?.getTime() ?? 0).toBeGreaterThan(Date.now());
+  });
+
+  it('leaves the item alone until its parse backoff has elapsed', async () => {
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    // The scheduled retry is still in the future, so nothing is re-parsed.
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
+    const stored = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: RETRY_GUID },
+    });
+    expect(stored.parsedContent).toBeNull();
+    expect(stored.parseAttempts).toBe(1);
+  });
+
+  it('re-parses a failed item once its backoff has elapsed', async () => {
+    const before = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: RETRY_GUID },
+    });
+    // Pretend the backoff window has passed.
+    await contentRepo().update(before.id, {
+      parseNextAttemptAt: new Date(Date.now() - 1000),
+    });
+
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    // The retry uses the article inputs taken fresh from the live feed.
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
+    expect(parseRssItemSpy.mock.calls[0][0]).toMatchObject({
+      url: 'https://example.com/flaky',
+    });
+    const after = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: RETRY_GUID },
+    });
+    expect(after.parsedContent).toBe('# https://example.com/flaky');
+    expect(after.parseNextAttemptAt).toBeNull();
+  });
+
+  it('keeps parsed content and attempts when a parsed item is refreshed', async () => {
+    feedItems = [
+      {
+        title: 'Flaky (edited)',
+        link: 'https://example.com/flaky',
+        guid: RETRY_GUID,
+        description: 'edited body',
+      },
+    ];
+
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    // An item that already has parsed content is never re-parsed, and the
+    // content refresh must not reset its retry bookkeeping.
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
+    const stored = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: RETRY_GUID },
+    });
+    expect(stored.title).toBe('Flaky (edited)');
+    expect(stored.parsedContent).toBe('# https://example.com/flaky');
+    expect(stored.parseAttempts).toBe(1);
+  });
+
+  it('treats empty wizard markdown as a failed attempt', async () => {
+    feedItems = [
+      {
+        title: 'Empty',
+        link: 'https://example.com/empty',
+        guid: 'guid-empty',
+        description: 'empty body',
+      },
+    ];
+
+    parseRssItemSpy.mockClear();
+    parseRssItemSpy.mockResolvedValueOnce({ markdown: '' });
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
+    const stored = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-empty' },
+    });
+    // Counted as an attempt: otherwise the item would be re-parsed on every
+    // poll forever with no backoff.
+    expect(stored.parsedContent).toBeNull();
+    expect(stored.parseAttempts).toBe(1);
+    expect(stored.parseNextAttemptAt).not.toBeNull();
+  });
+
+  it('stops retrying once the attempt cap is reached', async () => {
+    const stored = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-empty' },
+    });
+    // Exhaust the attempts (MAX_PARSE_ATTEMPTS) with the backoff already past.
+    await contentRepo().update(stored.id, {
+      parseAttempts: 6,
+      parseNextAttemptAt: new Date(Date.now() - 1000),
+    });
+
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
+    const capped = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-empty' },
+    });
+    expect(capped.parsedContent).toBeNull();
+    expect(capped.parseAttempts).toBe(6);
+  });
 });

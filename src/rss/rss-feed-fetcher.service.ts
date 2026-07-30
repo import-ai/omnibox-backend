@@ -59,13 +59,8 @@ export class RssFeedFetcherService {
       return null;
     }
 
-    let body: string;
-    try {
-      body = await response.text();
-    } catch {
-      return null;
-    }
-    if (body.length > MAX_FEED_SIZE_BYTES) {
+    const body = await this.readCappedText(response);
+    if (body === null) {
       return null;
     }
 
@@ -74,5 +69,49 @@ export class RssFeedFetcherService {
     } catch {
       return null;
     }
+  }
+
+  // Reads the response body as UTF-8 text, aborting once more than
+  // MAX_FEED_SIZE_BYTES have been read. The content-length header is easily
+  // omitted (chunked responses), so this streaming cap — not the header check —
+  // is what actually bounds memory. Returns null when the cap is exceeded or the
+  // body can't be read.
+  private async readCappedText(response: Response): Promise<string | null> {
+    const stream = response.body;
+    if (!stream) {
+      // No readable stream (unusual for a fetch response); fall back to
+      // buffering, still guarded by the post-read length check.
+      try {
+        const text = await response.text();
+        return text.length > MAX_FEED_SIZE_BYTES ? null : text;
+      } catch {
+        return null;
+      }
+    }
+
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        if (!value) {
+          continue;
+        }
+        total += value.byteLength;
+        if (total > MAX_FEED_SIZE_BYTES) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(value);
+      }
+    } catch {
+      return null;
+    }
+
+    return Buffer.concat(chunks).toString('utf-8');
   }
 }

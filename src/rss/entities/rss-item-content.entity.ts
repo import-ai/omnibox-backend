@@ -20,6 +20,16 @@ export class RssItemContent extends Base {
   @Column('text', { nullable: true })
   parsedContent: string | null;
 
+  // Wizard parse retry state, used only while parsed_content is still null: how
+  // many parse attempts have failed, and the earliest time to try again
+  // (exponential backoff). Untouched by a content refresh so a re-fetch never
+  // resets an item's backoff.
+  @Column('int', { default: 0 })
+  parseAttempts: number;
+
+  @Column('timestamptz', { nullable: true })
+  parseNextAttemptAt: Date | null;
+
   // The feed item's title and published date. Null when the feed omits them (or
   // for content rows stored before these columns existed).
   @Column('text', { nullable: true })

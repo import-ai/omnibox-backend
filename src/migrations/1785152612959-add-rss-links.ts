@@ -4,9 +4,14 @@ import { BaseColumns } from './base-columns';
 
 export class AddRssLinks1785152612959 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // ALTER TYPE ... ADD VALUE cannot run inside a transaction block, so commit
+    // the migration's surrounding transaction around it (mirrors how
+    // add-smart-folders introduced its own resource_type value).
+    await queryRunner.commitTransaction();
     await queryRunner.query(`
       ALTER TYPE resource_type ADD VALUE IF NOT EXISTS 'rss_folder'
     `);
+    await queryRunner.startTransaction();
 
     const existingTable = await queryRunner.getTable('rss_links');
     if (existingTable) {

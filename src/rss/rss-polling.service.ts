@@ -18,6 +18,18 @@ import { DataSource, Repository } from 'typeorm';
 const POLL_WINDOW = "interval '5 minutes'";
 const POLL_CONCURRENCY = 5;
 
+// A wizard parse that fails transiently (restart, timeout, network blip) leaves
+// parsed_content null; the next polls retry it with exponential backoff until it
+// succeeds or the attempt cap is reached, so an item is never stuck unparsed.
+const MAX_PARSE_ATTEMPTS = 6;
+const PARSE_BACKOFF_BASE_MS = 5 * 60 * 1000; // matches the poll cadence
+const PARSE_BACKOFF_CAP_MS = 6 * 60 * 60 * 1000;
+
+// Delay before the nth failed attempt may be retried: 10m, 20m, 40m, ... capped.
+function parseBackoffMs(attempts: number): number {
+  return Math.min(PARSE_BACKOFF_CAP_MS, PARSE_BACKOFF_BASE_MS * 2 ** attempts);
+}
+
 export interface PollSummary {
   claimed: number;
   succeeded: number;
@@ -154,13 +166,29 @@ export class RssPollingService {
         this.serializeItem(item);
       const {
         id,
-        inserted,
         pubDate: effectivePubDate,
+        parsedContent,
+        parseAttempts,
+        parseNextAttemptAt,
       } = await this.upsertItemContent(url, guid, content, title, pubDate);
-      // Only newly-inserted items are parsed; refreshed items keep their
-      // existing parsed content.
-      if (inserted && (articleUrl || articleContent)) {
-        await this.parseItemContent(id, articleUrl, articleContent);
+      // Parse items that still have no parsed content: newly-inserted ones on
+      // the spot, and previously-failed ones once their backoff has elapsed and
+      // while attempts remain. Already-parsed items are never re-parsed, and
+      // items with nothing to parse never accumulate attempts. The url's
+      // advisory lock serializes this, so no two polls parse the same row.
+      const shouldParse =
+        Boolean(articleUrl || articleContent) &&
+        parsedContent === null &&
+        parseAttempts < MAX_PARSE_ATTEMPTS &&
+        (parseNextAttemptAt === null ||
+          parseNextAttemptAt.getTime() <= Date.now());
+      if (shouldParse) {
+        await this.parseItemContent(
+          id,
+          parseAttempts,
+          articleUrl,
+          articleContent,
+        );
       }
       // Use the stored pub_date (preserved from first fetch) so rss_items rows
       // for newly-appearing links match the content row's publish date.
@@ -172,9 +200,12 @@ export class RssPollingService {
   // Renders the article to Markdown via the wizard and stores it. When the feed
   // embedded full content the wizard converts that directly (no link fetch);
   // otherwise it scrapes articleUrl. Best-effort: a failure leaves
-  // parsed_content null and never fails the poll.
+  // parsed_content null and never fails the poll, but it records the attempt so
+  // a later poll retries it after a backoff. `attempts` is the number of
+  // attempts that have already failed for this item.
   private async parseItemContent(
     contentId: string,
+    attempts: number,
     articleUrl: string,
     articleContent: string,
   ): Promise<void> {
@@ -183,14 +214,40 @@ export class RssPollingService {
         url: articleUrl,
         content: articleContent,
       });
-      if (markdown) {
-        await this.rssItemContentRepository.update(contentId, {
-          parsedContent: markdown,
-        });
+      // Empty markdown is a failed parse too: without counting it as an attempt
+      // the item would be re-parsed on every poll forever.
+      if (!markdown) {
+        throw new Error('wizard returned empty markdown');
       }
+      await this.rssItemContentRepository.update(contentId, {
+        parsedContent: markdown,
+        parseNextAttemptAt: null,
+      });
     } catch (err) {
       this.logger.error(
         `Failed to parse rss item ${contentId} (${articleUrl}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+      await this.recordParseFailure(contentId, attempts);
+    }
+  }
+
+  // Schedules the next parse retry. Also best-effort: failing to record an
+  // attempt must not fail the poll.
+  private async recordParseFailure(
+    contentId: string,
+    attempts: number,
+  ): Promise<void> {
+    const parseAttempts = attempts + 1;
+    try {
+      await this.rssItemContentRepository.update(contentId, {
+        parseAttempts,
+        parseNextAttemptAt: new Date(
+          Date.now() + parseBackoffMs(parseAttempts),
+        ),
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to record parse attempt ${parseAttempts} for rss item ${contentId}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }
@@ -229,25 +286,42 @@ export class RssPollingService {
   // Deduplicates per (url, guid); refreshes the content/title of an existing
   // row on refetch, but preserves the original pub_date so a re-fetch never
   // moves an item's publish date (important for items whose date we defaulted
-  // to the fetch time). Returns the row id and its effective pub_date.
+  // to the fetch time). Returns the row id, its effective pub_date and its parse
+  // state. The DO UPDATE deliberately leaves parsed_content and the parse retry
+  // columns alone, so refreshing an item never drops its parsed content nor
+  // resets its retry backoff.
   private async upsertItemContent(
     url: string,
     guid: string,
     content: string,
     title: string,
     pubDate: Date | null,
-  ): Promise<{ id: string; inserted: boolean; pubDate: Date | null }> {
-    const rows: Array<{ id: string; inserted: boolean; pubDate: Date | null }> =
-      await this.rssItemContentRepository.query(
-        `INSERT INTO rss_item_contents (url, guid, content, title, pub_date)
+  ): Promise<{
+    id: string;
+    pubDate: Date | null;
+    parsedContent: string | null;
+    parseAttempts: number;
+    parseNextAttemptAt: Date | null;
+  }> {
+    const rows: Array<{
+      id: string;
+      pubDate: Date | null;
+      parsedContent: string | null;
+      parseAttempts: number;
+      parseNextAttemptAt: Date | null;
+    }> = await this.rssItemContentRepository.query(
+      `INSERT INTO rss_item_contents (url, guid, content, title, pub_date)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (url, guid) DO UPDATE
          SET content = EXCLUDED.content,
              title = EXCLUDED.title,
              updated_at = now()
-         RETURNING id, (xmax = 0) AS inserted, pub_date AS "pubDate"`,
-        [url, guid, content, title, pubDate],
-      );
+         RETURNING id, pub_date AS "pubDate",
+                   parsed_content AS "parsedContent",
+                   parse_attempts AS "parseAttempts",
+                   parse_next_attempt_at AS "parseNextAttemptAt"`,
+      [url, guid, content, title, pubDate],
+    );
     return rows[0];
   }
 

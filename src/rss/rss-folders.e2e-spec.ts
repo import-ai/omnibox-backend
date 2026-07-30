@@ -77,6 +77,27 @@ describe('RssFoldersController (e2e)', () => {
     expect(response.body.links[0].name).toBe('Custom Name');
   });
 
+  it('collapses duplicate urls to a single link', async () => {
+    const response = await createFolder({
+      name: 'Duplicate Links',
+      parent_id: client.namespace.root_resource_id,
+      // The same url twice would otherwise create two links and list every
+      // item twice; it also stays within the basic tier's 1-link limit only
+      // because the duplicate is collapsed before the limit is checked.
+      links: [
+        { url: 'https://example.com/feed', name: 'First' },
+        { url: 'https://example.com/feed', name: 'Second' },
+      ],
+    }).expect(201);
+
+    expect(response.body.links).toHaveLength(1);
+    expect(response.body.links[0]).toMatchObject({
+      index: 0,
+      url: 'https://example.com/feed',
+      name: 'First',
+    });
+  });
+
   it('rejects more links than the basic tier allows', async () => {
     const response = await createFolder({
       name: 'Too Many Links',

@@ -1,7 +1,7 @@
 import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
-import { RssPoll } from 'omniboxd/rss/entities/rss-poll.entity';
+import { RssPoll, RssPollStatus } from 'omniboxd/rss/entities/rss-poll.entity';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { TestClient } from 'test/test-client';
@@ -754,5 +754,73 @@ describe('RssPolling (e2e)', () => {
         }),
       ).toBe(1);
     }
+  });
+
+  it('skips a url whose poll is still in progress', async () => {
+    await pollRepo().delete({ url: FEED_URL });
+    // A worker is mid-poll: a fresh POLLING marker with no terminal row after it.
+    const inProgress = await pollRepo().save(
+      pollRepo().create({
+        url: FEED_URL,
+        status: RssPollStatus.POLLING,
+        contentIds: [],
+        error: null,
+      }),
+    );
+
+    parseRssItemSpy.mockClear();
+    // Claim must not overlap the in-progress worker.
+    expect(await pollingService.pollUrl(FEED_URL)).toBe('skipped');
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
+
+    // No new marker was inserted and the in-progress one is left untouched.
+    const polls = await pollRepo().find({ where: { url: FEED_URL } });
+    expect(polls).toHaveLength(1);
+    expect(polls[0].id).toBe(inProgress.id);
+    expect(polls[0].status).toBe('polling');
+  });
+
+  it('recovers a stale in-progress poll and re-claims the url', async () => {
+    feedItems = [
+      {
+        title: 'Recovered',
+        link: 'https://example.com/recovered',
+        guid: 'guid-recovered',
+        description: 'recovered body',
+      },
+    ];
+
+    await pollRepo().delete({ url: FEED_URL });
+    // A worker that died mid-poll left this marker behind; age it past the stale
+    // threshold (POLL_STALE_MS = 10 min) so claim treats it as dead.
+    const stale = await pollRepo().save(
+      pollRepo().create({
+        url: FEED_URL,
+        status: RssPollStatus.POLLING,
+        contentIds: [],
+        error: null,
+      }),
+    );
+    await pollRepo().query(
+      `UPDATE rss_polls SET created_at = now() - interval '11 minutes' WHERE id = $1`,
+      [stale.id],
+    );
+
+    parseRssItemSpy.mockClear();
+    expect(await pollingService.pollUrl(FEED_URL)).toBe('succeed');
+
+    // The stale marker is retired, and a fresh succeeding poll took over.
+    const recovered = await pollRepo().findOneByOrFail({ id: stale.id });
+    expect(recovered.status).toBe('failed');
+    expect(recovered.error).toBe('stale poll recovered');
+    const succeeded = await pollRepo().find({
+      where: { url: FEED_URL, status: RssPollStatus.SUCCEED },
+    });
+    expect(succeeded).toHaveLength(1);
+    expect(
+      await contentRepo().count({
+        where: { url: FEED_URL, guid: 'guid-recovered' },
+      }),
+    ).toBe(1);
   });
 });

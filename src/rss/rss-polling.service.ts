@@ -14,17 +14,27 @@ import { transaction } from 'omniboxd/utils/transaction-utils';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { DataSource, Repository } from 'typeorm';
 
-// Each URL is polled at most once within this window; a freshly-inserted
-// `polling` row blocks re-polling even before it finishes. A single source of
-// truth in ms: the SQL claim window and the per-worker deadline must match, so
-// a worker never runs past the point where another poll may re-claim its URL.
+// Each URL is polled at most once within this window; an in-progress `polling`
+// row also blocks re-polling until it finishes (see claim()). The same value
+// bounds the per-worker deadline, so a worker never runs past the point where a
+// later poll could re-claim its URL.
 const POLL_WINDOW_MS = 5 * 60 * 1000;
-const POLL_WINDOW = `interval '${POLL_WINDOW_MS} milliseconds'`;
 const POLL_CONCURRENCY = 5;
 
 // Default max number of items parsed in parallel within a single feed poll.
 // Overridable via OBB_RSS_POLL_ITEM_CONCURRENCY.
 const DEFAULT_ITEM_CONCURRENCY = 5;
+
+// Hard cap on a single wizard parse. Without it a stalled wizard request would
+// never settle and its batch's Promise.all — and thus the whole poll — would
+// hang past the poll window, letting a later poll re-claim and overlap. On
+// timeout the parse is recorded as a failed attempt and retried with backoff.
+const WIZARD_PARSE_TIMEOUT_MS = 60 * 1000;
+
+// A poll left in POLLING past this age is treated as dead (its worker crashed or
+// was killed) and may be re-claimed; the stale row is marked failed. Comfortably
+// larger than a healthy poll's bound (POLL_WINDOW_MS + one final wizard parse).
+const POLL_STALE_MS = 2 * POLL_WINDOW_MS;
 
 // A wizard parse that fails transiently (restart, timeout, network blip) leaves
 // parsed_content null; the next polls retry it with exponential backoff until it
@@ -159,8 +169,14 @@ export class RssPollingService {
     }
   }
 
-  // Race-safe claim across instances: serialize on the URL via an advisory
-  // lock, then insert a `polling` marker only if none exists within the window.
+  // Race-safe claim across instances: serialize on the URL via an advisory lock,
+  // then decide against the most recent poll for the url:
+  //   - still POLLING and not yet stale -> another worker owns it, skip (this is
+  //     what prevents two workers from polling the same url at once);
+  //   - POLLING but older than POLL_STALE_MS -> its worker died mid-poll, mark it
+  //     failed (stale recovery) and re-claim;
+  //   - terminal but polled within POLL_WINDOW -> too soon, skip;
+  //   - otherwise -> claim by inserting a fresh POLLING marker.
   private async claim(url: string): Promise<RssPoll | null> {
     return await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
@@ -169,14 +185,25 @@ export class RssPollingService {
         [`rss-poll:${url}`],
       );
 
-      const recent = await manager.query(
-        `SELECT 1 FROM rss_polls
-         WHERE url = $1 AND created_at > now() - ${POLL_WINDOW}
-         LIMIT 1`,
-        [url],
-      );
-      if (recent.length > 0) {
-        return null;
+      const latest = await manager.findOne(RssPoll, {
+        where: { url },
+        order: { createdAt: 'DESC' },
+      });
+      if (latest !== null) {
+        const ageMs = Date.now() - latest.createdAt.getTime();
+        if (latest.status === RssPollStatus.POLLING) {
+          if (ageMs < POLL_STALE_MS) {
+            return null;
+          }
+          // Stale recovery: the previous worker never finished, so retire its row
+          // before claiming so it can't be mistaken for an in-progress poll.
+          await manager.update(RssPoll, latest.id, {
+            status: RssPollStatus.FAILED,
+            error: 'stale poll recovered',
+          });
+        } else if (ageMs < POLL_WINDOW_MS) {
+          return null;
+        }
       }
 
       const poll = manager.create(RssPoll, {
@@ -271,10 +298,13 @@ export class RssPollingService {
     articleContent: string,
   ): Promise<void> {
     try {
-      const { markdown } = await this.wizardApiService.parseRssItem({
-        url: articleUrl,
-        content: articleContent,
-      });
+      const { markdown } = await this.wizardApiService.parseRssItem(
+        {
+          url: articleUrl,
+          content: articleContent,
+        },
+        AbortSignal.timeout(WIZARD_PARSE_TIMEOUT_MS),
+      );
       // Empty markdown is a failed parse too: without counting it as an attempt
       // the item would be re-parsed on every poll forever.
       if (!markdown) {

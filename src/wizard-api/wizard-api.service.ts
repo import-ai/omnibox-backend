@@ -84,6 +84,23 @@ export class WizardAPIService {
     return { title: resp.title as string };
   }
 
+  async parseRssItem(
+    params: {
+      url?: string;
+      content?: string;
+    },
+    signal?: AbortSignal,
+  ): Promise<{ markdown: string }> {
+    const resp = await this.request(
+      'POST',
+      '/internal/api/v1/wizard/rss/parse',
+      { url: params.url ?? '', content: params.content ?? '' },
+      {},
+      signal,
+    );
+    return { markdown: (resp.markdown as string) ?? '' };
+  }
+
   async upsertWeaviateResource(
     req: UpsertWeaviateResourceRequestDto,
   ): Promise<WeaviateUpsertResponseDto> {
@@ -138,6 +155,7 @@ export class WizardAPIService {
     path: string,
     body: Record<string, any>,
     headers: Record<string, string>,
+    signal?: AbortSignal,
   ): Promise<Record<string, any>> {
     const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl();
     const url = `${wizardBaseUrl}${path}`;
@@ -147,10 +165,13 @@ export class WizardAPIService {
       ...this.getTraceHeaders(),
     };
 
+    // Without a signal a stalled wizard fetch never settles, so callers that pass
+    // AbortSignal.timeout() are bounded; others keep the previous unbounded wait.
     const response = await fetch(url, {
       method,
       headers: requestHeaders,
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {

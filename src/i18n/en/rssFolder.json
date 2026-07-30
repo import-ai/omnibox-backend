@@ -1,0 +1,8 @@
+{
+  "errors": {
+    "invalidFeed": "Unable to recognize an RSS feed. Check the link format or make sure the content is public.",
+    "linkLimitExceeded": "Too many feed links: received {received}. This workspace uses the {tier} tier, which allows at most {limit}.",
+    "notFound": "RSS folder not found",
+    "itemNotFound": "RSS item not found"
+  }
+}

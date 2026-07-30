@@ -55,9 +55,8 @@ export class SearchResourceFilterService {
       return null;
     }
 
-    const resources = await this.resourcesService.batchGetResources(
-      namespaceId,
-      resourceIds,
+    const resources = this.excludeRssFolderResources(
+      await this.resourcesService.batchGetResources(namespaceId, resourceIds),
     );
     const resourcesWithTagNames = await this.withTagNames(
       namespaceId,
@@ -102,9 +101,11 @@ export class SearchResourceFilterService {
         userId,
         namespaceId,
       );
-    const resources = await this.resourcesService.batchGetResources(
-      namespaceId,
-      visibleResources.map((resource) => resource.id),
+    const resources = this.excludeRssFolderResources(
+      await this.resourcesService.batchGetResources(
+        namespaceId,
+        visibleResources.map((resource) => resource.id),
+      ),
     );
     const conditions = options.conditions || [];
     if (conditions.length <= 0) {
@@ -135,6 +136,26 @@ export class SearchResourceFilterService {
       items,
       total: items.length,
     };
+  }
+
+  /**
+   * Smart folders must never surface subscription (RSS) folders or anything
+   * living inside them. Such entries would otherwise render an expandable node
+   * in the tree that errors when opened, so we drop the RSS folders themselves
+   * and any resource parented directly under one.
+   */
+  private excludeRssFolderResources(resources: Resource[]): Resource[] {
+    const rssFolderIds = new Set(
+      resources
+        .filter((resource) => resource.resourceType === ResourceType.RSS_FOLDER)
+        .map((resource) => resource.id),
+    );
+
+    return resources.filter(
+      (resource) =>
+        resource.resourceType !== ResourceType.RSS_FOLDER &&
+        !(resource.parentId && rssFolderIds.has(resource.parentId)),
+    );
   }
 
   private async withTagNames(

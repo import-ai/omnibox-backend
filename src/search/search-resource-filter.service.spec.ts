@@ -120,6 +120,97 @@ describe('SearchResourceFilterService', () => {
     ]);
   });
 
+  function createServiceWithResources(
+    resources: any[],
+    resourceIds?: string[],
+  ) {
+    const ids = resourceIds ?? resources.map((item) => item.id);
+    const namespaceResourcesService = {
+      getAllResourcesByUser: jest
+        .fn()
+        .mockResolvedValue(ids.map((id) => ({ id }))),
+    };
+    const resourcesService = {
+      batchGetResources: jest.fn().mockResolvedValue(resources),
+    };
+    const tagService = {
+      getTagsByIds: jest
+        .fn()
+        .mockResolvedValue([{ id: 'tag-id', name: 'Roadmap' }]),
+    };
+    const ruleService = { normalize: jest.fn((conditions) => conditions) };
+    const service = new SearchResourceFilterService(
+      namespaceResourcesService as any,
+      resourcesService as any,
+      tagService as any,
+      ruleService as any,
+      new SmartFoldersMatcherService(),
+    );
+
+    return { service };
+  }
+
+  const tagCondition = {
+    field: SmartFolderField.TAGS,
+    operator: SmartFolderOperator.CONTAINS,
+    value: 'roadmap',
+  };
+
+  it('excludes rss folders and resources inside them from smart folder matches', async () => {
+    const { service } = createServiceWithResources([
+      resource({ id: 'doc-id', name: 'Doc', tagIds: ['tag-id'] }),
+      resource({
+        id: 'rss-folder-id',
+        name: 'Feeds',
+        resourceType: ResourceType.RSS_FOLDER,
+        tagIds: ['tag-id'],
+      }),
+      resource({
+        id: 'rss-child-id',
+        name: 'Feed item',
+        parentId: 'rss-folder-id',
+        tagIds: ['tag-id'],
+      }),
+    ]);
+
+    const result = await service.searchResourcesByFilters(userId, namespaceId, {
+      conditions: [tagCondition],
+      matchMode: SmartFolderMatchMode.ALL,
+    });
+
+    expect(result.map((item: any) => item.resourceId)).toEqual(['doc-id']);
+  });
+
+  it('excludes rss folders and their children from getMatchedResourceIds', async () => {
+    const resourceIds = ['doc-id', 'rss-folder-id', 'rss-child-id'];
+    const { service } = createServiceWithResources(
+      [
+        resource({ id: 'doc-id', name: 'Doc', tagIds: ['tag-id'] }),
+        resource({
+          id: 'rss-folder-id',
+          name: 'Feeds',
+          resourceType: ResourceType.RSS_FOLDER,
+          tagIds: ['tag-id'],
+        }),
+        resource({
+          id: 'rss-child-id',
+          name: 'Feed item',
+          parentId: 'rss-folder-id',
+          tagIds: ['tag-id'],
+        }),
+      ],
+      resourceIds,
+    );
+
+    const matched = await service.getMatchedResourceIds(
+      namespaceId,
+      resourceIds,
+      { conditions: [tagCondition], matchMode: SmartFolderMatchMode.ALL },
+    );
+
+    expect(matched && Array.from(matched)).toEqual(['doc-id']);
+  });
+
   it('returns default visible resources when no filter condition is provided', async () => {
     const { service, tagService } = createService();
 

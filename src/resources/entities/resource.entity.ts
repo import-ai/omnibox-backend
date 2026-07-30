@@ -9,6 +9,7 @@ export enum ResourceType {
   FILE = 'file',
   FOLDER = 'folder',
   SMART_FOLDER = 'smart_folder',
+  RSS_FOLDER = 'rss_folder',
 }
 
 @Entity('resources')

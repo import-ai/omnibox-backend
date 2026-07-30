@@ -87,6 +87,12 @@ import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-
 import { UserScopedFeaturePreviews1784629544658 } from 'omniboxd/migrations/1784629544658-user-scoped-feature-previews';
 import { SplitFeaturePreviewEnabled1784710706445 } from 'omniboxd/migrations/1784710706445-split-feature-preview-enabled';
 import { AddSystemNotifications1784803893255 } from 'omniboxd/migrations/1784803893255-add-system-notifications';
+import { AddRssLinks1785152612959 } from 'omniboxd/migrations/1785152612959-add-rss-links';
+import { AddRssPolling1785167264273 } from 'omniboxd/migrations/1785167264273-add-rss-polling';
+import { AddRssItems1785215540513 } from 'omniboxd/migrations/1785215540513-add-rss-items';
+import { AddParsedContentToRssItemContents1785232404377 } from 'omniboxd/migrations/1785232404377-add-parsed-content-to-rss-item-contents';
+import { AddPubDateAndTitleToRssTables1785238404377 } from 'omniboxd/migrations/1785238404377-add-pub-date-and-title-to-rss-tables';
+import { AddParseRetryToRssItemContents1785404258645 } from 'omniboxd/migrations/1785404258645-add-parse-retry-to-rss-item-contents';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -96,6 +102,7 @@ import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { PhoneModule } from 'omniboxd/phone/phone.module';
 import { ResourceTagsModule } from 'omniboxd/resource-tags/resource-tags.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
+import { RssModule } from 'omniboxd/rss/rss.module';
 import { SearchModule } from 'omniboxd/search/search.module';
 import { SeoModule } from 'omniboxd/seo/seo.module';
 import { SharedResourceTagsModule } from 'omniboxd/shared-resource-tags/shared-resource-tags.module';
@@ -203,6 +210,7 @@ export class AppModule implements NestModule {
         WizardUrlProviderModule,
         NotificationsModule,
         SmartFoldersModule,
+        RssModule,
         SharedResourceTagsModule,
         CacheModule.registerAsync({
           isGlobal: true,
@@ -282,6 +290,12 @@ export class AppModule implements NestModule {
               UserScopedFeaturePreviews1784629544658,
               SplitFeaturePreviewEnabled1784710706445,
               AddSystemNotifications1784803893255,
+              AddRssLinks1785152612959,
+              AddRssPolling1785167264273,
+              AddRssItems1785215540513,
+              AddParsedContentToRssItemContents1785232404377,
+              AddPubDateAndTitleToRssTables1785238404377,
+              AddParseRetryToRssItemContents1785404258645,
               ...extraMigrations,
             ],
             migrationsRun: true,

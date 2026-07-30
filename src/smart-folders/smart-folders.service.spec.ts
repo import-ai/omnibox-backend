@@ -65,6 +65,28 @@ describe('SmartFoldersService.listChildren', () => {
         createdAt: new Date('2026-05-18T00:00:00.000Z'),
         updatedAt: new Date('2026-05-18T00:00:00.000Z'),
       },
+      {
+        id: 'rss-folder-child-id',
+        name: 'Matched rss folder',
+        parentId: 'private-root',
+        namespaceId: 'namespace-id',
+        resourceType: ResourceType.RSS_FOLDER,
+        attrs: {},
+        tagIds: [],
+        createdAt: new Date('2026-05-18T00:00:00.000Z'),
+        updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+      },
+      {
+        id: 'rss-item-resource-id',
+        name: 'Matched rss item resource',
+        parentId: 'rss-folder-child-id',
+        namespaceId: 'namespace-id',
+        resourceType: ResourceType.DOC,
+        attrs: {},
+        tagIds: [],
+        createdAt: new Date('2026-05-18T00:00:00.000Z'),
+        updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+      },
     ];
     const resourceRepository = {
       find: jest.fn(({ where }) => {
@@ -84,7 +106,12 @@ describe('SmartFoldersService.listChildren', () => {
       getScopedVisibleResourceIds: jest
         .fn()
         .mockResolvedValue(
-          new Set(['matched-doc-id', 'smart-folder-child-id']),
+          new Set([
+            'matched-doc-id',
+            'smart-folder-child-id',
+            'rss-folder-child-id',
+            'rss-item-resource-id',
+          ]),
         ),
     };
     const tagService = {
@@ -129,5 +156,20 @@ describe('SmartFoldersService.listChildren', () => {
       },
     });
     expect(result.map((resource) => resource.id)).toEqual(['matched-doc-id']);
+  });
+
+  it('excludes rss folders and resources inside them', async () => {
+    const { service } = createService();
+
+    const result = await service.listChildren(
+      'user-id',
+      'namespace-id',
+      'smart-folder-id',
+    );
+
+    const ids = result.map((resource) => resource.id);
+    expect(ids).not.toContain('rss-folder-child-id');
+    expect(ids).not.toContain('rss-item-resource-id');
+    expect(ids).toEqual(['matched-doc-id']);
   });
 });

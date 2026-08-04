@@ -8,6 +8,7 @@ import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
+import { sortResources } from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
@@ -340,7 +341,14 @@ export class SharedResourcesService {
       share.resourceId,
     );
 
-    if (!share.allResources) {
+    if (
+      !share.allResources &&
+      ![
+        ResourceType.FOLDER,
+        ResourceType.SMART_FOLDER,
+        ResourceType.RSS_FOLDER,
+      ].includes(resource.resourceType)
+    ) {
       return [];
     }
 
@@ -373,7 +381,10 @@ export class SharedResourcesService {
         .map((child) => child.parentId)
         .filter((parentId): parentId is string => parentId !== null),
     );
-    return children.map((child) =>
+    return sortResources(children, {
+      sortBy: share.sortBy,
+      sortOrder: share.sortOrder,
+    }).map((child) =>
       SharedResourceMetaDto.fromResourceMeta(
         share,
         ResourceMetaDto.fromEntity(child),

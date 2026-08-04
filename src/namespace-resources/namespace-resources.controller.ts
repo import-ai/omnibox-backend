@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { I18n, I18nContext } from 'nestjs-i18n';
@@ -16,16 +17,22 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourceSortingService } from 'omniboxd/namespace-resources/resource-sorting.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
+import { ResourceSortRequestDto } from 'omniboxd/resources/dto/resource-sort-request.dto';
 
 import {
   BatchCreateFolderDto,
   BatchMoveResourcesDto,
   BatchResourceIdsDto,
 } from './dto/batch-resource-actions.dto';
+import {
+  InitializeManualSortRequestDto,
+  UpdateManualSortRequestDto,
+} from './dto/manual-resource-sort.dto';
 import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 
@@ -33,6 +40,7 @@ import { TrashListResponseDto } from './dto/trash-list-response.dto';
 export class NamespaceResourcesController {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourceSortingService: ResourceSortingService,
     private readonly permissionsService: PermissionsService,
   ) {}
 
@@ -112,12 +120,14 @@ export class NamespaceResourcesController {
     @Param('namespaceId') namespaceId: string,
     @Query('parentId') parentId: string,
     @Query('tags') tags: string,
+    @Query() sortRequest: ResourceSortRequestDto,
   ) {
     return await this.namespaceResourcesService.query(
       namespaceId,
       parentId,
       userId,
       tags,
+      sortRequest,
     );
   }
 
@@ -129,13 +139,40 @@ export class NamespaceResourcesController {
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
     @Query('summary') summary?: string,
+    @Query() sortRequest?: ResourceSortRequestDto,
   ): Promise<ResourceSummaryDto[]> {
     return this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
       userId,
-      { summary: summary === 'true', limit, offset },
+      { summary: summary === 'true', limit, offset, ...sortRequest },
     );
+  }
+
+  @Post(':rootResourceId/manual-sort')
+  @CheckNamespaceReadonly()
+  async initializeManualSort(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('rootResourceId') rootResourceId: string,
+    @Body() request: InitializeManualSortRequestDto,
+  ) {
+    return await this.resourceSortingService.initialize(
+      userId,
+      namespaceId,
+      rootResourceId,
+      request,
+    );
+  }
+
+  @Put('manual-sort')
+  @CheckNamespaceReadonly()
+  async updateManualSort(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() request: UpdateManualSortRequestDto,
+  ): Promise<void> {
+    await this.resourceSortingService.update(userId, namespaceId, request);
   }
 
   @Post(':resourceId/move/:targetId')

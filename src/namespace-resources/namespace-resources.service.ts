@@ -18,6 +18,10 @@ import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
+import {
+  ResourceSortOptions,
+  sortResources,
+} from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import {
@@ -205,6 +209,7 @@ export class NamespaceResourcesService {
         'namespaceId',
         'resourceType',
         'tagIds',
+        'manualSortIndex',
       ],
     });
 
@@ -394,6 +399,7 @@ export class NamespaceResourcesService {
     parentId: string,
     userId?: string, // if is undefined, would skip the permission filter
     tags?: string, // separated by `,`
+    sortOptions?: ResourceSortOptions,
   ): Promise<Resource[]> {
     let resourceIds: string[] = [];
 
@@ -444,9 +450,10 @@ export class NamespaceResourcesService {
       tags: tagsMap.get(resource.id) || [],
     }));
 
-    return userId
+    const visibleResources = userId
       ? await this.permissionFilter(namespaceId, userId, resourcesWithTags)
       : resourcesWithTags;
+    return sortResources(visibleResources, sortOptions);
   }
 
   async move(
@@ -1038,98 +1045,17 @@ export class NamespaceResourcesService {
       summary?: boolean;
       limit?: number;
       offset?: number;
-    },
+    } & ResourceSortOptions,
     entityManager?: EntityManager,
   ): Promise<ResourceSummaryDto[]> {
-    const { summary = false, limit, offset } = options || {};
-
-    const parents = await this.resourcesService.getParentResourcesOrFail(
+    const { resources } = await this.listChildrenWithTotal(
       namespaceId,
       resourceId,
-      entityManager,
-    );
-    // getParentResourcesOrFail returns the chain target-first ([target, ..., root]),
-    // so the target resource (which may be a smart folder) is parents[0].
-    const resource = parents[0];
-
-    if (resource?.resourceType === ResourceType.SMART_FOLDER) {
-      return await this.smartFoldersService.listChildren(
-        userId,
-        namespaceId,
-        resourceId,
-        {
-          limit,
-          offset,
-        },
-      );
-    }
-
-    let children = await this.resourcesService.getChildren(
-      namespaceId,
-      [resourceId],
-      { summary, limit, offset },
-      entityManager,
-    );
-
-    let subChildren = await this.resourcesService.getChildren(
-      namespaceId,
-      children.map((child) => child.id),
-      {},
-      entityManager,
-    );
-
-    const allResources = [
-      ...parents,
-      ...children.map((r) => ResourceMetaDto.fromEntity(r)),
-      ...subChildren.map((r) => ResourceMetaDto.fromEntity(r)),
-    ];
-    const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
-      namespaceId,
-      allResources,
+      options,
       entityManager,
     );
-
-    children = children.filter((res) => {
-      const permission = permissionMap.get(res.id);
-      return (
-        permission &&
-        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
-      );
-    });
-
-    subChildren = subChildren.filter((res) => {
-      const permission = permissionMap.get(res.id);
-      return (
-        permission &&
-        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
-      );
-    });
-
-    const hasChildrenMap = new Map<string, boolean>();
-    for (const resource of subChildren) {
-      if (resource.parentId) {
-        hasChildrenMap.set(resource.parentId, true);
-      }
-    }
-
-    if (summary) {
-      const firstAttachments =
-        await this.resourceAttachmentsService.getFirstAttachments(
-          namespaceId,
-          children.map((r) => r.id),
-        );
-      return children.map((res) =>
-        ResourceSummaryDto.fromEntity(
-          res,
-          !!hasChildrenMap.get(res.id),
-          firstAttachments.get(res.id),
-        ),
-      );
-    }
-    return children.map((res) =>
-      ResourceSummaryDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
-    );
+    return resources;
   }
 
   async listChildrenWithTotal(
@@ -1140,7 +1066,7 @@ export class NamespaceResourcesService {
       summary?: boolean;
       limit?: number;
       offset?: number;
-    },
+    } & ResourceSortOptions,
     entityManager?: EntityManager,
   ): Promise<{ resources: ResourceSummaryDto[]; total: number }> {
     const { summary = false, limit, offset } = options || {};
@@ -1188,14 +1114,15 @@ export class NamespaceResourcesService {
       );
     });
 
-    const total = visibleChildren.length;
+    const sortedChildren = sortResources(visibleChildren, options);
+    const total = sortedChildren.length;
     const normalizedOffset = Math.max(0, offset ?? 0);
     const normalizedLimit =
       limit === undefined ? undefined : Math.max(1, limit);
     const pagedChildren =
       normalizedLimit === undefined
-        ? visibleChildren.slice(normalizedOffset)
-        : visibleChildren.slice(
+        ? sortedChildren.slice(normalizedOffset)
+        : sortedChildren.slice(
             normalizedOffset,
             normalizedOffset + normalizedLimit,
           );

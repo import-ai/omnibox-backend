@@ -13,6 +13,7 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ResourceSortOptions } from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
@@ -840,18 +841,24 @@ export class NamespacesService {
     });
   }
 
-  async getRoot(namespaceId: string, userId: string) {
+  async getRoot(
+    namespaceId: string,
+    userId: string,
+    sortOptions?: ResourceSortOptions,
+  ) {
     const privateRoot = await this.getPrivateRoot(userId, namespaceId);
     const privateChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       privateRoot.id,
       userId,
+      sortOptions,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
     const teamspaceChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       teamspaceRoot.id,
       userId,
+      sortOptions,
     );
     const spaces: any = {
       private: { ...privateRoot, parentId: '0', children: privateChildren },

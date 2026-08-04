@@ -14,7 +14,7 @@ describe('NamespaceResourcesService', () => {
       resourceFilter: jest.fn(),
     };
     const smartFoldersService = {
-      listChildren: jest.fn(),
+      listChildrenWithTotal: jest.fn(),
     };
     const service = new NamespaceResourcesService(
       {} as any,
@@ -54,14 +54,17 @@ describe('NamespaceResourcesService', () => {
         resourceType: ResourceType.FOLDER,
       },
     ]);
-    smartFoldersService.listChildren.mockResolvedValue(children);
+    smartFoldersService.listChildrenWithTotal.mockResolvedValue({
+      resources: children,
+      total: children.length,
+    });
 
     const result = await service.listChildren(namespaceId, resourceId, userId, {
       limit: 10,
       offset: 0,
     });
 
-    expect(smartFoldersService.listChildren).toHaveBeenCalledWith(
+    expect(smartFoldersService.listChildrenWithTotal).toHaveBeenCalledWith(
       userId,
       namespaceId,
       resourceId,

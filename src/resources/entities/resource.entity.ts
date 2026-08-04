@@ -57,4 +57,10 @@ export class Resource extends Base {
 
   @Column('timestamptz', { nullable: true })
   permanentDeletedAt: Date | null;
+
+  @Column('bigint', { nullable: true })
+  manualSortIndex: string | null;
+
+  @Column('timestamptz', { nullable: true })
+  manualSortInitializedAt: Date | null;
 }

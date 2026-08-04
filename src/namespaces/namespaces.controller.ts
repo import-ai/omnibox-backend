@@ -6,10 +6,12 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { ResourceSortRequestDto } from 'omniboxd/resources/dto/resource-sort-request.dto';
 
 import { NamespaceAdmin } from './decorators/namespace-admin.decorator';
 import { NamespaceOwner } from './decorators/namespace-owner.decorator';
@@ -109,8 +111,13 @@ export class NamespacesSingleController {
   async getRoot(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
+    @Query() sortRequest: ResourceSortRequestDto,
   ) {
-    return await this.namespacesService.getRoot(namespaceId, userId);
+    return await this.namespacesService.getRoot(
+      namespaceId,
+      userId,
+      sortRequest,
+    );
   }
 
   @Get('private')

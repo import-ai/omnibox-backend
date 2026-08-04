@@ -1,4 +1,8 @@
 import { Base } from 'omniboxd/common/base.entity';
+import {
+  ResourceSortBy,
+  ResourceSortOrder,
+} from 'omniboxd/resources/resource-sort';
 import generateId from 'omniboxd/utils/generate-id';
 import { BeforeInsert, Column, Entity, PrimaryColumn } from 'typeorm';
 
@@ -44,4 +48,10 @@ export class Share extends Base {
 
   @Column('timestamptz', { nullable: true })
   expiresAt: Date | null;
+
+  @Column('varchar', { default: ResourceSortBy.UPDATED_AT })
+  sortBy: ResourceSortBy;
+
+  @Column('varchar', { default: ResourceSortOrder.DESC })
+  sortOrder: ResourceSortOrder;
 }

@@ -4,6 +4,8 @@
     "shareIdNotFound": "请求中未找到分享ID参数 'shareId'",
     "shareNotFound": "未找到 ID 为 {shareId} 的分享",
     "shareRequiresLogin": "此分享需要登录",
-    "invalidPassword": "分享 {shareId} 的密码无效"
+    "invalidPassword": "分享 {shareId} 的密码无效",
+    "resourceSortRequiresAllResources": "资源排序要求同时分享子资源",
+    "manualSortNotAvailable": "请先在资源列表中完成一次手动排序"
   }
 }

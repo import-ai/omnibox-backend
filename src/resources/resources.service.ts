@@ -248,6 +248,7 @@ export class ResourcesService {
         'fileId',
         'createdAt',
         'updatedAt',
+        'manualSortInitializedAt',
       ],
       where: { namespaceId, id: resourceId },
     });
@@ -283,6 +284,7 @@ export class ResourcesService {
         'fileId',
         'createdAt',
         'updatedAt',
+        'manualSortInitializedAt',
       ],
       ...(includeDeleted ? { withDeleted: true } : {}),
       where: { namespaceId, id: In(resourceIds) },
@@ -404,6 +406,7 @@ export class ResourcesService {
       'attrs',
       'createdAt',
       'updatedAt',
+      'manualSortIndex',
     ];
     const summaryFields: (keyof Resource)[] = ['content'];
     const select = options?.summary
@@ -675,6 +678,7 @@ export class ResourcesService {
       tagIds?: string[];
       content?: string;
       attrs?: Record<string, any>;
+      manualSortIndex?: string | null;
     },
     tx?: Transaction,
     autoRenameOnConflict: boolean = false,
@@ -772,6 +776,8 @@ export class ResourcesService {
     const updatedProps = {
       ...props,
       name: resolvedName,
+      ...(props.parentId !== undefined &&
+        props.manualSortIndex === undefined && { manualSortIndex: null }),
     };
 
     const contentSize =
@@ -988,6 +994,11 @@ export class ResourcesService {
     if (result.affected !== 1) {
       return;
     }
+    await tx.entityManager.update(
+      Resource,
+      { namespaceId, id: resourceId },
+      { manualSortIndex: null },
+    );
     if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
       await this.storageUsagesService.updateStorageUsage(
         namespaceId,
@@ -1302,9 +1313,13 @@ export class ResourcesService {
       where: { namespaceId, id: In(moveIds) },
       lock: { mode: 'pessimistic_write' },
     });
-    await repo.update({ namespaceId, id: In(moveIds) }, { parentId: targetId });
+    await repo.update(
+      { namespaceId, id: In(moveIds) },
+      { parentId: targetId, manualSortIndex: null },
+    );
     resources.forEach((resource) => {
       resource.parentId = targetId;
+      resource.manualSortIndex = null;
     });
     await this.emitUpsertIndexTasks(namespaceId, userId, resources, tx);
     return { movedIds: moveIds, nameConflictIds };

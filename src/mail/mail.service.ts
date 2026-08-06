@@ -87,14 +87,15 @@ export class MailService {
     });
 
     const changeTime = new Date().toLocaleString(
-      lang === 'zh' ? 'zh-CN' : 'en-US',
+      lang?.startsWith('zh') ? 'zh-CN' : 'en-US',
       {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-        timeZoneName: 'short',
+        timeZone: 'Asia/Shanghai',
+        timeZoneName: 'long',
       },
     );
 

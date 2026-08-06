@@ -94,7 +94,8 @@ export class MailService {
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-        timeZoneName: 'short',
+        timeZone: 'Asia/Shanghai',
+        timeZoneName: 'long',
       },
     );
 

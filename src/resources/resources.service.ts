@@ -407,6 +407,7 @@ export class ResourcesService {
       'createdAt',
       'updatedAt',
       'manualSortIndex',
+      'manualSortUnspecifiedAt',
     ];
     const summaryFields: (keyof Resource)[] = ['content'];
     const select = options?.summary
@@ -777,7 +778,10 @@ export class ResourcesService {
       ...props,
       name: resolvedName,
       ...(props.parentId !== undefined &&
-        props.manualSortIndex === undefined && { manualSortIndex: null }),
+        props.manualSortIndex === undefined && {
+          manualSortIndex: null,
+          manualSortUnspecifiedAt: new Date(),
+        }),
     };
 
     const contentSize =
@@ -878,6 +882,7 @@ export class ResourcesService {
     const createProps = {
       ...props,
       name: resolvedName,
+      manualSortUnspecifiedAt: new Date(),
     };
 
     if (createProps.fileId) {
@@ -997,7 +1002,10 @@ export class ResourcesService {
     await tx.entityManager.update(
       Resource,
       { namespaceId, id: resourceId },
-      { manualSortIndex: null },
+      {
+        manualSortIndex: null,
+        manualSortUnspecifiedAt: new Date(),
+      },
     );
     if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
       await this.storageUsagesService.updateStorageUsage(
@@ -1313,13 +1321,19 @@ export class ResourcesService {
       where: { namespaceId, id: In(moveIds) },
       lock: { mode: 'pessimistic_write' },
     });
+    const manualSortUnspecifiedAt = new Date();
     await repo.update(
       { namespaceId, id: In(moveIds) },
-      { parentId: targetId, manualSortIndex: null },
+      {
+        parentId: targetId,
+        manualSortIndex: null,
+        manualSortUnspecifiedAt,
+      },
     );
     resources.forEach((resource) => {
       resource.parentId = targetId;
       resource.manualSortIndex = null;
+      resource.manualSortUnspecifiedAt = manualSortUnspecifiedAt;
     });
     await this.emitUpsertIndexTasks(namespaceId, userId, resources, tx);
     return { movedIds: moveIds, nameConflictIds };

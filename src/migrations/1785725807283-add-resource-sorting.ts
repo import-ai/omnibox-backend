@@ -13,7 +13,17 @@ export class AddResourceSorting1785725807283 implements MigrationInterface {
         type: 'timestamp with time zone',
         isNullable: true,
       }),
+      new TableColumn({
+        name: 'manual_sort_unspecified_at',
+        type: 'timestamp with time zone',
+        isNullable: true,
+      }),
     ]);
+    await queryRunner.query(
+      `UPDATE resources
+       SET manual_sort_unspecified_at = updated_at
+       WHERE manual_sort_index IS NULL`,
+    );
     await queryRunner.addColumns('shares', [
       new TableColumn({
         name: 'sort_by',
@@ -35,6 +45,7 @@ export class AddResourceSorting1785725807283 implements MigrationInterface {
     await queryRunner.dropColumns('resources', [
       'manual_sort_index',
       'manual_sort_initialized_at',
+      'manual_sort_unspecified_at',
     ]);
   }
 }

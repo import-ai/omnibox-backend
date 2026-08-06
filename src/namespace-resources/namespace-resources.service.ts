@@ -210,6 +210,7 @@ export class NamespaceResourcesService {
         'resourceType',
         'tagIds',
         'manualSortIndex',
+        'manualSortUnspecifiedAt',
       ],
     });
 
@@ -439,6 +440,8 @@ export class NamespaceResourcesService {
         'namespaceId',
         'resourceType',
         'tagIds',
+        'manualSortIndex',
+        'manualSortUnspecifiedAt',
       ],
     });
 

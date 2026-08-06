@@ -10,6 +10,7 @@ import {
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import {
+  applyPartialManualOrder,
   ResourceSortBy,
   sortResources,
 } from 'omniboxd/resources/resource-sort';
@@ -104,7 +105,8 @@ export class ResourceSortingService {
       const namespaceParameter = parameters.push(namespaceId);
       await entityManager.query(
         `UPDATE resources AS resource
-         SET manual_sort_index = sorted.manual_sort_index
+         SET manual_sort_index = sorted.manual_sort_index,
+             manual_sort_unspecified_at = NULL
          FROM (VALUES ${values.join(', ')}) AS sorted(id, manual_sort_index)
          WHERE resource.namespace_id = $${namespaceParameter}
            AND resource.id = sorted.id`,
@@ -142,6 +144,7 @@ export class ResourceSortingService {
 
       const allResources = await manager.find(Resource, {
         where: { namespaceId },
+        lock: { mode: 'pessimistic_write' },
       });
       const childrenByParent = new Map<string, Resource[]>();
       for (const resource of allResources) {
@@ -224,12 +227,32 @@ export class ResourceSortingService {
     const childrenById = new Map(
       children.map((resource) => [resource.id, resource]),
     );
-    const resourceIds = new Set(order.resourceIds);
+    if (order.resourceIds.some((resourceId) => !childrenById.has(resourceId))) {
+      throw this.invalidManualSort(
+        'resource.errors.invalidManualSortOrder',
+        'INVALID_MANUAL_SORT_ORDER',
+      );
+    }
+    const resourcesWithParents =
+      await this.resourcesService.batchGetParentResources(
+        namespaceId,
+        order.resourceIds,
+        entityManager,
+      );
+    const visibleResources =
+      await this.permissionsService.filterResourcesByPermission(
+        userId,
+        namespaceId,
+        [...resourcesWithParents.values()],
+        ResourcePermission.CAN_VIEW,
+        entityManager,
+      );
+    const visibleResourceIds = new Set(
+      visibleResources.map((resource) => resource.id),
+    );
     if (
-      order.resourceIds.some((resourceId) => !childrenById.has(resourceId)) ||
-      children.some(
-        (resource) =>
-          resource.manualSortIndex !== null && !resourceIds.has(resource.id),
+      order.resourceIds.some(
+        (resourceId) => !visibleResourceIds.has(resourceId),
       )
     ) {
       throw this.invalidManualSort(
@@ -237,11 +260,7 @@ export class ResourceSortingService {
         'INVALID_MANUAL_SORT_ORDER',
       );
     }
-    return order.resourceIds.map((resourceId, index) => {
-      const resource = childrenById.get(resourceId)!;
-      resource.manualSortIndex = String(index + 1);
-      return resource;
-    });
+    return applyPartialManualOrder(children, order.resourceIds);
   }
 
   async update(

@@ -62,5 +62,8 @@ export class Resource extends Base {
   manualSortIndex: string | null;
 
   @Column('timestamptz', { nullable: true })
+  manualSortUnspecifiedAt: Date | null;
+
+  @Column('timestamptz', { nullable: true })
   manualSortInitializedAt: Date | null;
 }

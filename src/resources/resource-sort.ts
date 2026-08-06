@@ -32,7 +32,11 @@ function compareTitle(left: Resource, right: Resource): number {
 
 function compareManual(left: Resource, right: Resource): number {
   if (left.manualSortIndex == null && right.manualSortIndex == null) {
-    return left.id.localeCompare(right.id);
+    return (
+      (left.manualSortUnspecifiedAt?.getTime() ?? left.updatedAt.getTime()) -
+        (right.manualSortUnspecifiedAt?.getTime() ??
+          right.updatedAt.getTime()) || left.id.localeCompare(right.id)
+    );
   }
   if (left.manualSortIndex == null) {
     return 1;
@@ -84,4 +88,27 @@ export function sortResources<T extends Resource>(
     }
     return sortOrder === ResourceSortOrder.DESC ? -comparison : comparison;
   });
+}
+
+export function applyPartialManualOrder<T extends Resource>(
+  resources: T[],
+  orderedIds: string[],
+): T[] {
+  const resourcesById = new Map(
+    resources.map((resource) => [resource.id, resource]),
+  );
+  const requestedResources = orderedIds.map((id) => resourcesById.get(id)!);
+  const requestedIds = new Set(orderedIds);
+  let requestedIndex = 0;
+  const merged = sortResources(resources, {
+    sortBy: ResourceSortBy.MANUAL,
+  }).map((resource) =>
+    requestedIds.has(resource.id)
+      ? requestedResources[requestedIndex++]
+      : resource,
+  );
+  merged.forEach((resource, index) => {
+    resource.manualSortIndex = String(index + 1);
+  });
+  return merged;
 }

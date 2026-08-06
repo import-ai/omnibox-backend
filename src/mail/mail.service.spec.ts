@@ -23,13 +23,13 @@ describe('MailService', () => {
     jest.useRealTimers();
   });
 
-  it('formats the change time in China Standard Time', async () => {
+  it('formats zh-CN change time in China Standard Time', async () => {
     await service.sendEmailChangeNotification(
       'old@example.com',
       'old@example.com',
       'new@example.com',
       'user',
-      'zh',
+      'zh-CN',
     );
 
     expect(sendMail).toHaveBeenCalledWith(

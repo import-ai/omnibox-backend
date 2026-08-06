@@ -87,7 +87,7 @@ export class MailService {
     });
 
     const changeTime = new Date().toLocaleString(
-      lang === 'zh' ? 'zh-CN' : 'en-US',
+      lang?.startsWith('zh') ? 'zh-CN' : 'en-US',
       {
         year: 'numeric',
         month: 'long',

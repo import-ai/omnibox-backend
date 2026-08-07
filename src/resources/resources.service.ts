@@ -248,6 +248,7 @@ export class ResourcesService {
         'fileId',
         'createdAt',
         'updatedAt',
+        'manualSortInitializedAt',
       ],
       where: { namespaceId, id: resourceId },
     });
@@ -283,6 +284,7 @@ export class ResourcesService {
         'fileId',
         'createdAt',
         'updatedAt',
+        'manualSortInitializedAt',
       ],
       ...(includeDeleted ? { withDeleted: true } : {}),
       where: { namespaceId, id: In(resourceIds) },
@@ -404,6 +406,8 @@ export class ResourcesService {
       'attrs',
       'createdAt',
       'updatedAt',
+      'manualSortIndex',
+      'manualSortUnspecifiedAt',
     ];
     const summaryFields: (keyof Resource)[] = ['content'];
     const select = options?.summary
@@ -675,6 +679,7 @@ export class ResourcesService {
       tagIds?: string[];
       content?: string;
       attrs?: Record<string, any>;
+      manualSortIndex?: string | null;
     },
     tx?: Transaction,
     autoRenameOnConflict: boolean = false,
@@ -772,6 +777,11 @@ export class ResourcesService {
     const updatedProps = {
       ...props,
       name: resolvedName,
+      ...(props.parentId !== undefined &&
+        props.manualSortIndex === undefined && {
+          manualSortIndex: null,
+          manualSortUnspecifiedAt: new Date(),
+        }),
     };
 
     const contentSize =
@@ -872,6 +882,7 @@ export class ResourcesService {
     const createProps = {
       ...props,
       name: resolvedName,
+      manualSortUnspecifiedAt: new Date(),
     };
 
     if (createProps.fileId) {
@@ -988,6 +999,14 @@ export class ResourcesService {
     if (result.affected !== 1) {
       return;
     }
+    await tx.entityManager.update(
+      Resource,
+      { namespaceId, id: resourceId },
+      {
+        manualSortIndex: null,
+        manualSortUnspecifiedAt: new Date(),
+      },
+    );
     if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
       await this.storageUsagesService.updateStorageUsage(
         namespaceId,
@@ -1298,15 +1317,74 @@ export class ResourcesService {
       return { movedIds: [], nameConflictIds };
     }
     const repo = tx.entityManager.getRepository(Resource);
+    const targetUnspecifiedResources = await repo.find({
+      where: {
+        namespaceId,
+        parentId: targetId,
+        manualSortIndex: IsNull(),
+      },
+      lock: { mode: 'pessimistic_write' },
+    });
     const resources = await repo.find({
       where: { namespaceId, id: In(moveIds) },
       lock: { mode: 'pessimistic_write' },
     });
-    await repo.update({ namespaceId, id: In(moveIds) }, { parentId: targetId });
-    resources.forEach((resource) => {
-      resource.parentId = targetId;
+    const latestUnspecifiedAt = targetUnspecifiedResources.reduce(
+      (latest, resource) =>
+        Math.max(
+          latest,
+          (resource.manualSortUnspecifiedAt ?? resource.updatedAt).getTime(),
+        ),
+      0,
+    );
+    const firstUnspecifiedAt = new Date(
+      Math.max(Date.now(), latestUnspecifiedAt) + 1,
+    );
+    const unspecifiedAtById = new Map(
+      moveIds.map((resourceId, index) => [
+        resourceId,
+        new Date(firstUnspecifiedAt.getTime() + index),
+      ]),
+    );
+    const parameters: (string | Date | string[])[] = [targetId];
+    const timestampCases = moveIds.map((resourceId) => {
+      const idParameter = parameters.push(resourceId);
+      const timestampParameter = parameters.push(
+        unspecifiedAtById.get(resourceId)!,
+      );
+      return `WHEN resource.id = $${idParameter} THEN $${timestampParameter}`;
     });
-    await this.emitUpsertIndexTasks(namespaceId, userId, resources, tx);
+    const namespaceParameter = parameters.push(namespaceId);
+    const idsParameter = parameters.push(moveIds);
+    await tx.entityManager.query(
+      `UPDATE resources AS resource
+       SET parent_id = $1,
+           manual_sort_index = NULL,
+           manual_sort_unspecified_at = CASE
+             ${timestampCases.join('\n             ')}
+             ELSE resource.manual_sort_unspecified_at
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE resource.namespace_id = $${namespaceParameter}
+         AND resource.id = ANY($${idsParameter}::varchar[])`,
+      parameters,
+    );
+    const resourcesInMoveOrder = moveIds
+      .map((resourceId) =>
+        resources.find((resource) => resource.id === resourceId),
+      )
+      .filter((resource): resource is Resource => resource !== undefined);
+    resourcesInMoveOrder.forEach((resource) => {
+      resource.parentId = targetId;
+      resource.manualSortIndex = null;
+      resource.manualSortUnspecifiedAt = unspecifiedAtById.get(resource.id)!;
+    });
+    await this.emitUpsertIndexTasks(
+      namespaceId,
+      userId,
+      resourcesInMoveOrder,
+      tx,
+    );
     return { movedIds: moveIds, nameConflictIds };
   }
 

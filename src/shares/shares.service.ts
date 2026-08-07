@@ -5,6 +5,10 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import {
+  getDefaultSortOrder,
+  ResourceSortBy,
+} from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { PublicShareInfoDto } from 'omniboxd/shared-resources/dto/public-share-info.dto';
 import { SharedResourceMetaDto } from 'omniboxd/shared-resources/dto/shared-resource-meta.dto';
@@ -27,6 +31,14 @@ export class SharesService {
     private readonly userService: UserService,
     private readonly i18n: I18nService,
   ) {}
+
+  private isFolderResource(resourceType: ResourceType): boolean {
+    return [
+      ResourceType.FOLDER,
+      ResourceType.SMART_FOLDER,
+      ResourceType.RSS_FOLDER,
+    ].includes(resourceType);
+  }
 
   async getShareById(shareId: string): Promise<Share | null> {
     return await this.shareRepo.findOne({
@@ -156,10 +168,36 @@ export class SharesService {
         resourceId,
       },
     });
+    const manualSortAvailable = await this.isManualSortAvailable(
+      namespaceId,
+      resourceId,
+    );
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
     if (!share) {
-      return ShareInfoDto.new(namespaceId, resourceId);
+      const dto = ShareInfoDto.new(namespaceId, resourceId);
+      dto.manualSortAvailable = manualSortAvailable;
+      dto.allResources = this.isFolderResource(resource.resourceType);
+      return dto;
     }
-    return ShareInfoDto.fromEntity(share);
+    const dto = ShareInfoDto.fromEntity(share, manualSortAvailable);
+    if (this.isFolderResource(resource.resourceType)) {
+      dto.allResources = true;
+    }
+    return dto;
+  }
+
+  private async isManualSortAvailable(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<boolean> {
+    const parents = await this.resourcesService.getParentResourcesOrFail(
+      namespaceId,
+      resourceId,
+    );
+    return parents.at(-1)?.manualSortInitializedAt != null;
   }
 
   async updateShareInfo(
@@ -186,6 +224,35 @@ export class SharesService {
         expiresAt: null,
       });
     }
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
+    const manualSortAvailable = await this.isManualSortAvailable(
+      namespaceId,
+      resourceId,
+    );
+    if (this.isFolderResource(resource.resourceType)) {
+      share.allResources = true;
+    }
+    const allResources = req.allResources ?? share.allResources;
+    if (
+      (req.sortBy !== undefined || req.sortOrder !== undefined) &&
+      !allResources
+    ) {
+      throw new AppException(
+        this.i18n.t('share.errors.resourceSortRequiresAllResources'),
+        'RESOURCE_SORT_REQUIRES_ALL_RESOURCES',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (req.sortBy === ResourceSortBy.MANUAL && !manualSortAvailable) {
+      throw new AppException(
+        this.i18n.t('share.errors.manualSortNotAvailable'),
+        'MANUAL_SORT_NOT_AVAILABLE',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
     if (share.enabled && !share.userId) {
       share.userId = userId;
     }
@@ -194,7 +261,9 @@ export class SharesService {
       share.userId = userId;
     }
     if (req.allResources !== undefined) {
-      share.allResources = req.allResources;
+      share.allResources = this.isFolderResource(resource.resourceType)
+        ? true
+        : req.allResources;
     }
     if (req.requireLogin !== undefined) {
       share.requireLogin = req.requireLogin;
@@ -216,7 +285,16 @@ export class SharesService {
     if (req.expiresSeconds !== undefined) {
       share.expiresAt = new Date(Date.now() + req.expiresSeconds * 1000);
     }
+    if (req.sortBy !== undefined) {
+      share.sortBy = req.sortBy;
+      if (req.sortOrder === undefined) {
+        share.sortOrder = getDefaultSortOrder(req.sortBy);
+      }
+    }
+    if (req.sortOrder !== undefined) {
+      share.sortOrder = req.sortOrder;
+    }
     const savedShare = await this.shareRepo.save(share);
-    return ShareInfoDto.fromEntity(savedShare);
+    return ShareInfoDto.fromEntity(savedShare, manualSortAvailable);
   }
 }

@@ -4,6 +4,8 @@
     "shareIdNotFound": "Share ID parameter 'shareId' not found in request",
     "shareNotFound": "No share found with id {shareId}",
     "shareRequiresLogin": "This share requires login",
-    "invalidPassword": "Invalid password for share {shareId}"
+    "invalidPassword": "Invalid password for share {shareId}",
+    "resourceSortRequiresAllResources": "Resource sorting requires sharing child resources",
+    "manualSortNotAvailable": "Initialize manual sorting in the resource list first"
   }
 }

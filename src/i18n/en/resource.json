@@ -30,6 +30,10 @@
     "rssFolderCannotBeParent": "RSS folders cannot be used as parent resources",
     "smartFolderNotFound": "Smart folder not found",
     "smartFolderConditionOperatorInvalid": "Invalid smart folder condition operator",
-    "smartFolderConditionIncomplete": "Please complete this smart folder condition"
+    "smartFolderConditionIncomplete": "Please complete this smart folder condition",
+    "invalidManualSortRoot": "Manual sorting requires a personal or team space root",
+    "invalidManualSortSource": "Manual sorting cannot be initialized from manual sorting",
+    "invalidManualSortOrder": "The submitted manual resource order is invalid or stale",
+    "manualSortNotInitialized": "Manual sorting has not been initialized for this space"
   }
 }

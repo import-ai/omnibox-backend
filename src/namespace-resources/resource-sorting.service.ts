@@ -289,6 +289,10 @@ export class ResourceSortingService {
 
     await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
+      await manager.findOne(Namespace, {
+        where: { id: namespaceId },
+        lock: { mode: 'pessimistic_write' },
+      });
       const root = await this.getEditableRoot(
         userId,
         namespaceId,

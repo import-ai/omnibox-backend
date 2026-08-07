@@ -612,6 +612,10 @@ export class NamespaceResourcesService {
     nameConflictIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
+      await tx.entityManager.findOne(Namespace, {
+        where: { id: namespaceId },
+        lock: { mode: 'pessimistic_write' },
+      });
       const batchResourceIds = await this.getBatchTopLevelResourceIds(
         namespaceId,
         resourceIds,
@@ -676,6 +680,10 @@ export class NamespaceResourcesService {
     nameConflictIds: string[];
   }> {
     return await transaction(this.dataSource.manager, async (tx) => {
+      await tx.entityManager.findOne(Namespace, {
+        where: { id: namespaceId },
+        lock: { mode: 'pessimistic_write' },
+      });
       const batchResourceIds = await this.getBatchTopLevelResourceIds(
         namespaceId,
         data.resourceIds,

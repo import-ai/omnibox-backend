@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { QQBot } from 'omniboxd/applications/apps/qq-bot';
+import { TelegramBot } from 'omniboxd/applications/apps/telegram-bot';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -28,6 +29,7 @@ export class ApplicationsService {
     private readonly applicationsRepository: Repository<Applications>,
     private readonly wechatBot: WechatBot,
     private readonly qqBot: QQBot,
+    private readonly telegramBot: TelegramBot,
     private readonly wechatClaw: WechatClaw,
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
@@ -51,6 +53,9 @@ export class ApplicationsService {
     }
     if (this.isAppEnabled(WechatClaw.appId, enabledAppIds)) {
       this.apps[WechatClaw.appId] = this.wechatClaw;
+    }
+    if (this.isAppEnabled(TelegramBot.appId, enabledAppIds)) {
+      this.apps[TelegramBot.appId] = this.telegramBot;
     }
   }
 

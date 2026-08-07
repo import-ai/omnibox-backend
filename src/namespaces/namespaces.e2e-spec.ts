@@ -878,10 +878,26 @@ describe('NamespacesController (e2e)', () => {
     });
 
     describe('Member permissions', () => {
-      it('should prevent member from listing members', async () => {
-        await thirdClient
+      it('should allow member to list members', async () => {
+        const response = await thirdClient
+          .get(`/api/v1/namespaces/${adminTestNamespaceId}/members`)
+          .expect(HttpStatus.OK);
+
+        expect(response.body).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ user_id: thirdClient.user.id }),
+          ]),
+        );
+      });
+
+      it('should prevent non-member from listing members', async () => {
+        const nonMemberClient = await TestClient.create();
+
+        await nonMemberClient
           .get(`/api/v1/namespaces/${adminTestNamespaceId}/members`)
           .expect(HttpStatus.FORBIDDEN);
+
+        await nonMemberClient.close();
       });
 
       it('should prevent member from updating namespace settings', async () => {

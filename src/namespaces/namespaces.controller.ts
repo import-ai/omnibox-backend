@@ -57,9 +57,12 @@ export class NamespacesSingleController {
     return await this.namespacesService.getNamespace(namespaceId);
   }
 
-  @NamespaceAdmin()
   @Get('members')
-  async listMembers(@Param('namespaceId') namespaceId: string) {
+  async listMembers(
+    @Param('namespaceId') namespaceId: string,
+    @UserId() userId: string,
+  ) {
+    await this.namespacesService.getMe(namespaceId, userId);
     return await this.namespacesService.listMembers(namespaceId);
   }
 

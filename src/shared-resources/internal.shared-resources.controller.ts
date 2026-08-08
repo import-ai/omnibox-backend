@@ -19,7 +19,7 @@ export class InternalSharedResourcesController {
   ) {}
 
   @Public()
-  @ValidateShare()
+  @ValidateShare({ trustedInternal: true })
   @Get('roots')
   async getRoots(@ValidatedShare() share: Share) {
     const root = await this.sharedResourcesService.getAndValidateResourceMeta(
@@ -36,7 +36,7 @@ export class InternalSharedResourcesController {
   }
 
   @Public()
-  @ValidateShare()
+  @ValidateShare({ trustedInternal: true })
   @Get('filter')
   async filterResources(
     @ValidatedShare() share: Share,
@@ -51,7 +51,7 @@ export class InternalSharedResourcesController {
   }
 
   @Public()
-  @ValidateShare()
+  @ValidateShare({ trustedInternal: true })
   @Get(':resourceId/list')
   async listResourceChildren(
     @ValidatedShare() share: Share,
@@ -71,7 +71,7 @@ export class InternalSharedResourcesController {
   }
 
   @Public()
-  @ValidateShare()
+  @ValidateShare({ trustedInternal: true })
   @Get(':resourceId')
   async getResource(
     @ValidatedShare() share: Share,

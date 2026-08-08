@@ -42,9 +42,6 @@ export class ValidateShareInterceptor implements NestInterceptor {
 
     // Extract parameters using fixed parameter names
     const shareId = request.params['shareId'];
-    const password = request.cookies?.['share-password'];
-    const userId = request.user?.id; // Assuming user is attached to request by auth middleware
-
     if (!shareId) {
       const message = this.i18n.t('share.errors.shareIdNotFound');
       throw new AppException(
@@ -63,12 +60,13 @@ export class ValidateShareInterceptor implements NestInterceptor {
       );
     }
 
-    // Validate the share
-    const validatedShare = await this.sharesService.getAndValidateShare(
-      shareId,
-      password,
-      userId,
-    );
+    const validatedShare = validateOptions.trustedInternal
+      ? await this.sharesService.getAvailableShareOrFail(shareId)
+      : await this.sharesService.getAndValidateShare(
+          shareId,
+          request.cookies?.['share-password'],
+          request.user?.id,
+        );
 
     // Additional chat validation if required
     if (validateOptions.requireChat) {

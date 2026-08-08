@@ -5,6 +5,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { ResourceSortPreferenceService } from 'omniboxd/namespace-resources/resource-sort-preference.service';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -19,7 +20,9 @@ import {
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import {
+  hasExplicitSortOptions,
   ResourceSortOptions,
+  ResourceSortSpaceType,
   sortResources,
 } from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
@@ -75,6 +78,7 @@ export class NamespaceResourcesService {
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    private readonly resourceSortPreferenceService: ResourceSortPreferenceService,
     @Inject(SMART_FOLDERS_SERVICE)
     private readonly smartFoldersService: ISmartFoldersService,
   ) {}
@@ -1125,7 +1129,17 @@ export class NamespaceResourcesService {
       );
     });
 
-    const sortedChildren = sortResources(visibleChildren, options);
+    const rootResource = parents.at(-1);
+    const sortOptions = hasExplicitSortOptions(options)
+      ? options
+      : await this.resourceSortPreferenceService.getSortOptions(
+          userId,
+          namespaceId,
+          rootResource?.userId === userId
+            ? ResourceSortSpaceType.PRIVATE
+            : ResourceSortSpaceType.TEAMSPACE,
+        );
+    const sortedChildren = sortResources(visibleChildren, sortOptions);
     const total = sortedChildren.length;
     const normalizedOffset = Math.max(0, offset ?? 0);
     const normalizedLimit =

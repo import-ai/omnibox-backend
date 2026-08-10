@@ -1,8 +1,10 @@
 import { HttpStatus } from '@nestjs/common';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { SmartFolderRootScope } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { TestClient } from 'test/test-client';
+import { DataSource } from 'typeorm';
 
 describe('ResourcesController (e2e)', () => {
   let client: TestClient;
@@ -1404,6 +1406,108 @@ describe('ResourcesController (e2e)', () => {
       expect(childrenResponse.body.map((r: any) => r.id)).toEqual(
         expect.arrayContaining([first.id, second.id]),
       );
+    });
+
+    it('should serialize batch and manual moves with the namespace lock', async () => {
+      const firstFolder = await createFolder(
+        'Concurrent Batch Move First Folder',
+        client.namespace.root_resource_id,
+      );
+      const secondFolder = await createFolder(
+        'Concurrent Batch Move Second Folder',
+        client.namespace.root_resource_id,
+      );
+      const first = await createDoc(
+        'Concurrent Batch Move First',
+        firstFolder.id,
+      );
+      const second = await createDoc(
+        'Concurrent Batch Move Second',
+        secondFolder.id,
+      );
+      await client
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${client.namespace.root_resource_id}/manual-sort`,
+        )
+        .send({ sort_by: 'title', sort_order: 'asc' })
+        .expect(HttpStatus.CREATED);
+      const dataSource = client.app.get(DataSource);
+      const queryRunner = dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+      let requests:
+        | Promise<Array<{ body: { success_ids?: string[] } }>>
+        | undefined;
+
+      try {
+        await queryRunner.manager.findOne(Namespace, {
+          where: { id: client.namespace.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        requests = Promise.all([
+          client
+            .post(
+              `/api/v1/namespaces/${client.namespace.id}/resources/batch-move`,
+            )
+            .send({ resourceIds: [first.id], targetId: secondFolder.id })
+            .expect(HttpStatus.CREATED),
+          client
+            .put(
+              `/api/v1/namespaces/${client.namespace.id}/resources/manual-sort`,
+            )
+            .send({
+              root_resource_id: client.namespace.root_resource_id,
+              resource_id: second.id,
+              target_parent_id: firstFolder.id,
+              orders: [
+                { parent_id: secondFolder.id, resource_ids: [] },
+                { parent_id: firstFolder.id, resource_ids: [second.id] },
+              ],
+            })
+            .expect(HttpStatus.OK),
+        ]);
+        let waitingCount = 0;
+        for (let attempt = 0; attempt < 50 && waitingCount < 2; attempt++) {
+          const [waiting] = await dataSource.query<{ count: number }[]>(
+            `SELECT COUNT(*)::int AS count
+             FROM pg_stat_activity
+             WHERE datname = current_database()
+               AND wait_event_type = 'Lock'
+               AND query ILIKE '%namespaces%'
+               AND query ILIKE '%FOR UPDATE%'`,
+          );
+          waitingCount = waiting.count;
+          if (waitingCount < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+        }
+        expect(waitingCount).toBeGreaterThanOrEqual(2);
+        await queryRunner.commitTransaction();
+        const [firstResponse] = await requests;
+        expect(firstResponse.body.success_ids).toEqual([first.id]);
+        const firstFolderChildren = await client
+          .get(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${firstFolder.id}/children`,
+          )
+          .expect(HttpStatus.OK);
+        const secondFolderChildren = await client
+          .get(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${secondFolder.id}/children`,
+          )
+          .expect(HttpStatus.OK);
+        expect(
+          firstFolderChildren.body.map((resource: any) => resource.id),
+        ).toContain(second.id);
+        expect(
+          secondFolderChildren.body.map((resource: any) => resource.id),
+        ).toContain(first.id);
+      } finally {
+        if (queryRunner.isTransactionActive) {
+          await queryRunner.rollbackTransaction();
+        }
+        await queryRunner.release();
+        await requests?.catch(() => undefined);
+      }
     });
 
     it('should reject batch move to smart folder', async () => {

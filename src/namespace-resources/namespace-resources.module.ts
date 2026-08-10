@@ -6,6 +6,7 @@ import { InternalResourcesController } from 'omniboxd/namespace-resources/intern
 import { NamespaceResourcesController } from 'omniboxd/namespace-resources/namespace-resources.controller';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
+import { ResourceSortingService } from 'omniboxd/namespace-resources/resource-sorting.service';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
@@ -19,7 +20,11 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
 
 @Module({
   exports: [NamespaceResourcesService, OpenResourcesService],
-  providers: [NamespaceResourcesService, OpenResourcesService],
+  providers: [
+    NamespaceResourcesService,
+    OpenResourcesService,
+    ResourceSortingService,
+  ],
   controllers: [
     NamespaceResourcesController,
     InternalResourcesController,

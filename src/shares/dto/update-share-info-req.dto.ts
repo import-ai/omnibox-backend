@@ -8,6 +8,10 @@ import {
   IsString,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+import {
+  ResourceSortBy,
+  ResourceSortOrder,
+} from 'omniboxd/resources/resource-sort';
 
 import { ShareType } from '../entities/share.entity';
 
@@ -57,4 +61,18 @@ export class UpdateShareInfoReqDto {
   @IsInt({ message: i18nValidationMessage('validation.errors.isInt') })
   @Expose({ name: 'expires_seconds' })
   expiresSeconds?: number;
+
+  @IsOptional()
+  @IsEnum(ResourceSortBy, {
+    message: i18nValidationMessage('validation.errors.isEnum'),
+  })
+  @Expose({ name: 'sort_by' })
+  sortBy?: ResourceSortBy;
+
+  @IsOptional()
+  @IsEnum(ResourceSortOrder, {
+    message: i18nValidationMessage('validation.errors.isEnum'),
+  })
+  @Expose({ name: 'sort_order' })
+  sortOrder?: ResourceSortOrder;
 }

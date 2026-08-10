@@ -10,6 +10,8 @@ export const VALIDATE_SHARE_KEY = 'validate-share';
 
 export interface ValidateShareOptions {
   requireChat?: boolean;
+  /** Only for network-isolated internal endpoints called after visitor access is validated. */
+  trustedInternal?: boolean;
 }
 
 /**

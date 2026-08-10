@@ -30,6 +30,10 @@
     "rssFolderCannotBeParent": "订阅文件夹不能作为父资源",
     "smartFolderNotFound": "智能文件夹未找到",
     "smartFolderConditionOperatorInvalid": "智能文件夹条件操作符无效",
-    "smartFolderConditionIncomplete": "请补全智能文件夹条件"
+    "smartFolderConditionIncomplete": "请补全智能文件夹条件",
+    "invalidManualSortRoot": "手动排序必须作用于个人或团队空间根资源",
+    "invalidManualSortSource": "不能使用手动排序初始化手动排序",
+    "invalidManualSortOrder": "提交的手动资源顺序无效或已经过期",
+    "manualSortNotInitialized": "当前空间尚未初始化手动排序"
   }
 }

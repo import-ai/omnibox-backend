@@ -93,6 +93,8 @@ import { AddRssItems1785215540513 } from 'omniboxd/migrations/1785215540513-add-
 import { AddParsedContentToRssItemContents1785232404377 } from 'omniboxd/migrations/1785232404377-add-parsed-content-to-rss-item-contents';
 import { AddPubDateAndTitleToRssTables1785238404377 } from 'omniboxd/migrations/1785238404377-add-pub-date-and-title-to-rss-tables';
 import { AddParseRetryToRssItemContents1785404258645 } from 'omniboxd/migrations/1785404258645-add-parse-retry-to-rss-item-contents';
+import { AddResourceSorting1785725807283 } from 'omniboxd/migrations/1785725807283-add-resource-sorting';
+import { AddManualSortUnspecifiedAt1786014524273 } from 'omniboxd/migrations/1786014524273-add-manual-sort-unspecified-at';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -296,6 +298,8 @@ export class AppModule implements NestModule {
               AddParsedContentToRssItemContents1785232404377,
               AddPubDateAndTitleToRssTables1785238404377,
               AddParseRetryToRssItemContents1785404258645,
+              AddResourceSorting1785725807283,
+              AddManualSortUnspecifiedAt1786014524273,
               ...extraMigrations,
             ],
             migrationsRun: true,

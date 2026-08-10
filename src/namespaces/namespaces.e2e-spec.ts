@@ -713,9 +713,11 @@ describe('NamespacesController (e2e)', () => {
   describe('Admin Role Management', () => {
     let adminTestNamespaceId: string;
     let thirdClient: TestClient;
+    let nonMemberClient: TestClient;
 
     beforeAll(async () => {
       thirdClient = await TestClient.create();
+      nonMemberClient = await TestClient.create();
 
       // Create a namespace for admin role testing
       const response = await client
@@ -747,6 +749,7 @@ describe('NamespacesController (e2e)', () => {
         .delete(`/api/v1/namespaces/${adminTestNamespaceId}`)
         .catch(() => {});
       await thirdClient.close();
+      await nonMemberClient.close();
     });
 
     describe('Adding members via invitations', () => {
@@ -878,8 +881,20 @@ describe('NamespacesController (e2e)', () => {
     });
 
     describe('Member permissions', () => {
-      it('should prevent member from listing members', async () => {
-        await thirdClient
+      it('should allow member to list members', async () => {
+        const response = await thirdClient
+          .get(`/api/v1/namespaces/${adminTestNamespaceId}/members`)
+          .expect(HttpStatus.OK);
+
+        expect(response.body).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ user_id: thirdClient.user.id }),
+          ]),
+        );
+      });
+
+      it('should prevent non-member from listing members', async () => {
+        await nonMemberClient
           .get(`/api/v1/namespaces/${adminTestNamespaceId}/members`)
           .expect(HttpStatus.FORBIDDEN);
       });
@@ -999,14 +1014,10 @@ describe('NamespacesController (e2e)', () => {
       });
 
       it('should prevent transfer to non-member', async () => {
-        const nonMemberClient = await TestClient.create();
-
         await client
           .post(`/api/v1/namespaces/${adminTestNamespaceId}/transfer-ownership`)
           .send({ newOwnerId: nonMemberClient.user.id })
           .expect(HttpStatus.UNPROCESSABLE_ENTITY);
-
-        await nonMemberClient.close();
       });
     });
 

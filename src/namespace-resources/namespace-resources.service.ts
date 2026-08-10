@@ -23,6 +23,10 @@ import {
   sortResources,
 } from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import {
+  IRssFoldersQuotaService,
+  RSS_FOLDERS_QUOTA_SERVICE,
+} from 'omniboxd/rss/rss-folders-quota.interface';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import {
   ISmartFoldersService,
@@ -77,6 +81,8 @@ export class NamespaceResourcesService {
     private readonly namespacesQuotaService: NamespacesQuotaService,
     @Inject(SMART_FOLDERS_SERVICE)
     private readonly smartFoldersService: ISmartFoldersService,
+    @Inject(RSS_FOLDERS_QUOTA_SERVICE)
+    private readonly rssFoldersQuotaService: IRssFoldersQuotaService,
   ) {}
 
   private async getTagsByIds(
@@ -1568,6 +1574,15 @@ export class NamespaceResourcesService {
     // Check smart folder quota before restoring
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
       await this.smartFoldersService.assertRestoreEntitlements(
+        namespaceId,
+        userId,
+        resourceId,
+      );
+    }
+
+    // Check rss folder quota before restoring
+    if (resource.resourceType === ResourceType.RSS_FOLDER) {
+      await this.rssFoldersQuotaService.assertRestoreQuota(
         namespaceId,
         userId,
         resourceId,

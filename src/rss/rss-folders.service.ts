@@ -21,6 +21,7 @@ import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssFeedValidatorService } from 'omniboxd/rss/rss-feed-validator.service';
+import { RssFoldersQuotaService } from 'omniboxd/rss/rss-folders-quota.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { DataSource, In, Repository } from 'typeorm';
 
@@ -40,18 +41,38 @@ export class RssFoldersService {
     private readonly feedValidator: RssFeedValidatorService,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    private readonly quotaService: RssFoldersQuotaService,
     private readonly i18n: I18nService,
   ) {}
 
-  async getLimits(namespaceId: string): Promise<RssFolderLimitsResponseDto> {
-    const [usage, namespaceTier] = await Promise.all([
-      this.namespacesQuotaService.getNamespaceUsage(namespaceId),
-      this.namespacesQuotaService.getNamespaceTier(namespaceId),
+  async getLimits(
+    namespaceId: string,
+    userId: string,
+  ): Promise<RssFolderLimitsResponseDto> {
+    const [usage, namespaceTier, privateRootId, teamspaceRootId] =
+      await Promise.all([
+        this.namespacesQuotaService.getNamespaceUsage(namespaceId),
+        this.namespacesQuotaService.getNamespaceTier(namespaceId),
+        this.quotaService.getPrivateRootId(namespaceId, userId),
+        this.quotaService.getTeamspaceRootId(namespaceId),
+      ]);
+
+    const [privateUsed, teamUsed] = await Promise.all([
+      privateRootId
+        ? this.quotaService.countActive(namespaceId, privateRootId)
+        : 0,
+      teamspaceRootId
+        ? this.quotaService.countActive(namespaceId, teamspaceRootId)
+        : 0,
     ]);
 
     return RssFolderLimitsResponseDto.fromValues({
       tier: namespaceTier,
       linkLimit: usage.rssLinkLimit,
+      folderPrivateLimit: usage.rssFolderPrivateLimit,
+      folderTeamLimit: usage.rssFolderTeamLimit,
+      folderPrivateUsed: privateUsed,
+      folderTeamUsed: teamUsed,
     });
   }
 
@@ -67,6 +88,11 @@ export class RssFoldersService {
 
     const resource = await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
+      await this.quotaService.assertCreateQuota(
+        namespaceId,
+        dto.parentId,
+        manager,
+      );
       const createdResource = await this.namespaceResourcesService.create(
         userId,
         namespaceId,
@@ -382,14 +408,17 @@ export class RssFoldersService {
     namespaceId: string,
     linkCount: number,
   ): Promise<void> {
-    const limits = await this.getLimits(namespaceId);
-    if (linkCount > limits.linkLimit) {
-      const tier = this.i18n.t(`smartFolder.tiers.${limits.tier}`);
+    const [usage, namespaceTier] = await Promise.all([
+      this.namespacesQuotaService.getNamespaceUsage(namespaceId),
+      this.namespacesQuotaService.getNamespaceTier(namespaceId),
+    ]);
+    if (linkCount > usage.rssLinkLimit) {
+      const tier = this.i18n.t(`smartFolder.tiers.${namespaceTier}`);
       const message = this.i18n.t('rssFolder.errors.linkLimitExceeded', {
         args: {
           received: linkCount,
           tier,
-          limit: limits.linkLimit,
+          limit: usage.rssLinkLimit,
         },
       });
       throw new AppException(

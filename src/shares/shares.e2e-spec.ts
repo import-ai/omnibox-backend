@@ -32,4 +32,33 @@ describe('SharesController (e2e)', () => {
     expect(res.body.enabled).toBe(true);
     expect(res.body.password_enabled).toBe(true);
   });
+
+  it('allows trusted internal reads for protected shares', async () => {
+    const shareUrl = `/api/v1/namespaces/${client.namespace.id}/resources/${client.namespace.root_resource_id}/share`;
+    const passwordShare = await client.patch(shareUrl).send({
+      enabled: true,
+      password: 'test-password',
+      require_login: false,
+    });
+    expect(passwordShare.status).toBe(200);
+
+    const shareId = passwordShare.body.id;
+    const publicShareUrl = `/api/v1/shares/${shareId}`;
+    const internalRootsUrl = `/internal/api/v1/shares/${shareId}/resources/roots`;
+
+    await client.request().get(publicShareUrl).expect(403);
+    await client.request().get(internalRootsUrl).expect(200);
+
+    const loginShare = await client.patch(shareUrl).send({
+      password: null,
+      require_login: true,
+    });
+    expect(loginShare.status).toBe(200);
+
+    await client.request().get(publicShareUrl).expect(401);
+    await client.request().get(internalRootsUrl).expect(200);
+
+    await client.patch(shareUrl).send({ enabled: false }).expect(200);
+    await client.request().get(internalRootsUrl).expect(404);
+  });
 });

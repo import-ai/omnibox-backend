@@ -18,7 +18,7 @@ export class InternalSharedResourceTagsController {
   ) {}
 
   @Public()
-  @ValidateShare()
+  @ValidateShare({ trustedInternal: true })
   @Get()
   async listTags(
     @ValidatedShare() share: Share,
@@ -28,7 +28,7 @@ export class InternalSharedResourceTagsController {
   }
 
   @Public()
-  @ValidateShare()
+  @ValidateShare({ trustedInternal: true })
   @Get('filter')
   async filterTags(
     @ValidatedShare() share: Share,

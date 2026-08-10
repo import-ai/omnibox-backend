@@ -3,7 +3,9 @@
     "taskNotFound": "任务 {id} 未找到",
     "taskAlreadyCanceled": "任务已被取消",
     "cannotCancelFinished": "无法取消已完成的任务",
-    "canOnlyRerunCanceled": "只能重新运行已取消的任务",
-    "invalidTaskPayload": "无效的任务载荷"
+    "canOnlyRerunFailedOrCanceled": "只能重新运行失败或已取消的任务",
+    "invalidTaskPayload": "无效的任务载荷",
+    "parseAlreadyRunning": "该资源正在解析中",
+    "nothingToRetry": "该资源没有需要重试的解析任务"
   }
 }

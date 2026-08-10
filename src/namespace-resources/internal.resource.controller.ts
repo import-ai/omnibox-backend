@@ -17,6 +17,7 @@ import { FilesService } from 'omniboxd/files/files.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourceRetryService } from 'omniboxd/namespace-resources/resource-retry.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
@@ -32,6 +33,7 @@ export class InternalResourcesController {
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly filesService: FilesService,
     private readonly permissionsService: PermissionsService,
+    private readonly resourceRetryService: ResourceRetryService,
   ) {}
 
   @Public()
@@ -137,6 +139,21 @@ export class InternalResourcesController {
         [resource],
       );
     return dto;
+  }
+
+  @Public()
+  @Post('namespaces/:namespaceId/resources/:resourceId/retry-parse')
+  @CheckNamespaceReadonly()
+  async retryParse(
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @HeaderUserId() userId: string,
+  ) {
+    return await this.resourceRetryService.retryParse(
+      namespaceId,
+      userId,
+      resourceId,
+    );
   }
 
   @Public()

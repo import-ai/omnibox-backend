@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TaskMetaDto } from 'omniboxd/tasks/dto/task.dto';
-import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { TaskStatus } from 'omniboxd/tasks/tasks.entity';
+import {
+  RERUNNABLE_TASK_STATUSES,
+  TasksService,
+} from 'omniboxd/tasks/tasks.service';
 
 @Injectable()
 export class NamespaceTasksService {
@@ -44,7 +48,9 @@ export class NamespaceTasksService {
         task.canCancel =
           (task.status === 'pending' || task.status === 'running') &&
           task.function !== 'delete_index';
-        task.canRerun = task.status === 'canceled';
+        task.canRerun = RERUNNABLE_TASK_STATUSES.includes(
+          task.status as TaskStatus,
+        );
         task.canRedirect = true;
       } else {
         task.canCancel = false;

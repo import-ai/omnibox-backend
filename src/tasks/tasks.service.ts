@@ -27,6 +27,33 @@ const PRO_ONLY_FUNCTIONS = new Set<string>([
   'generate_audio_note',
 ]);
 
+// Functions that turn a raw resource (an uploaded file or a link) into the
+// markdown stored in `resources.content`. The follow-up chain (extract_tags,
+// generate_title, upsert_index) is deliberately excluded: those never leave a
+// resource blank on their own.
+export const PARSE_FUNCTIONS = new Set<string>([
+  'collect',
+  'collect_url',
+  'web_analysis',
+  'file_reader',
+  'file_reader_text',
+  'file_reader_ppt',
+  'file_reader_word',
+  'file_reader_pdf',
+  'file_reader_audio',
+  'file_reader_video',
+  'file_reader_image',
+  'generate_video_note',
+  'generate_audio_note',
+]);
+
+export const RERUNNABLE_TASK_STATUSES = [
+  TaskStatus.CANCELED,
+  TaskStatus.ERROR,
+  TaskStatus.TIMEOUT,
+  TaskStatus.INSUFFICIENT_QUOTA,
+];
+
 @Injectable()
 export class TasksService {
   private readonly proUrl: string | undefined;
@@ -275,11 +302,11 @@ export class TasksService {
   async rerunTask(id: string): Promise<TaskDto> {
     const originalTask = await this.get(id);
 
-    if (!originalTask.canceledAt) {
-      const message = this.i18n.t('task.errors.canOnlyRerunCanceled');
+    if (!RERUNNABLE_TASK_STATUSES.includes(originalTask.status)) {
+      const message = this.i18n.t('task.errors.canOnlyRerunFailedOrCanceled');
       throw new AppException(
         message,
-        'CAN_ONLY_RERUN_CANCELED',
+        'CAN_ONLY_RERUN_FAILED_OR_CANCELED',
         HttpStatus.BAD_REQUEST,
       );
     }
@@ -465,5 +492,20 @@ export class TasksService {
       .getMany();
 
     return tasks.map((task) => TaskMetaDto.fromEntity(task));
+  }
+
+  async getParseTasksByResourceId(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Task[]> {
+    return await this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.namespaceId = :namespaceId', { namespaceId })
+      .andWhere("task.payload->>'resource_id' = :resourceId", { resourceId })
+      .andWhere('task.function IN (:...functions)', {
+        functions: [...PARSE_FUNCTIONS],
+      })
+      .orderBy('task.createdAt', 'DESC')
+      .getMany();
   }
 }

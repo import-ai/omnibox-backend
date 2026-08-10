@@ -48,11 +48,8 @@ export class SharesService {
     });
   }
 
-  async getAndValidateShare(
-    shareId: string,
-    password?: string,
-    userId?: string,
-  ) {
+  /** Return an enabled, unexpired share without applying visitor access rules. */
+  async getAvailableShareOrFail(shareId: string): Promise<Share> {
     const share = await this.getShareById(shareId);
     if (!share || !share.enabled || !share.userId) {
       const message = this.i18n.t('share.errors.shareNotFound', {
@@ -67,6 +64,16 @@ export class SharesService {
       });
       throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
+
+    return share;
+  }
+
+  async getAndValidateShare(
+    shareId: string,
+    password?: string,
+    userId?: string,
+  ) {
+    const share = await this.getAvailableShareOrFail(shareId);
 
     if (share.requireLogin && !userId) {
       const message = this.i18n.t('share.errors.shareRequiresLogin');

@@ -1,5 +1,6 @@
 import { HttpStatus } from '@nestjs/common';
 import { QQBot } from 'omniboxd/applications/apps/qq-bot';
+import { TelegramBot } from 'omniboxd/applications/apps/telegram-bot';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
 import { TestClient } from 'test/test-client';
@@ -26,9 +27,10 @@ describe('ApplicationsController (e2e)', () => {
           { app_id: WechatBot.appId },
           { app_id: QQBot.appId },
           { app_id: WechatClaw.appId },
+          { app_id: TelegramBot.appId },
         ]),
       );
-      expect(getAllResponse.body).toHaveLength(3);
+      expect(getAllResponse.body).toHaveLength(4);
 
       const appData = {
         attrs: {
@@ -97,13 +99,14 @@ describe('ApplicationsController (e2e)', () => {
         .expect(200);
 
       // Should always have the registered apps available
-      expect(initialResponse.body).toHaveLength(3);
+      expect(initialResponse.body).toHaveLength(4);
       const appIds = initialResponse.body.map(
         (app: { app_id: string }) => app.app_id,
       );
       expect(appIds).toContain(WechatBot.appId);
       expect(appIds).toContain(QQBot.appId);
       expect(appIds).toContain(WechatClaw.appId);
+      expect(appIds).toContain(TelegramBot.appId);
 
       // The test passes if we can retrieve applications without query parameters
       // The specific content depends on test execution order

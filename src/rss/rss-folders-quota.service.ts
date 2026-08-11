@@ -11,7 +11,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { IRssFoldersQuotaService } from 'omniboxd/rss/rss-folders-quota.interface';
-import { EntityManager, IsNull, Repository } from 'typeorm';
+import { EntityManager, In, IsNull, Repository } from 'typeorm';
 
 @Injectable()
 export class RssFoldersQuotaService implements IRssFoldersQuotaService {
@@ -87,6 +87,49 @@ export class RssFoldersQuotaService implements IRssFoldersQuotaService {
     }
   }
 
+  // Blocks cross-space moves that would exceed the target space quota, including
+  // nested rss folders under a moved ordinary folder.
+  async assertMoveQuota(
+    namespaceId: string,
+    resourceIds: string[],
+    targetParentId: string,
+    entityManager: EntityManager,
+  ): Promise<void> {
+    if (resourceIds.length === 0) {
+      return;
+    }
+
+    const targetRootId = await this.getRootIdForParent(
+      namespaceId,
+      targetParentId,
+    );
+    const limit = await this.getFolderLimit(namespaceId, targetRootId);
+    if (limit < 0) {
+      return;
+    }
+
+    const incoming = await this.countIncomingRssFolders(
+      namespaceId,
+      resourceIds,
+      targetRootId,
+      entityManager,
+    );
+    if (incoming === 0) {
+      return;
+    }
+
+    await this.lockQuotaDimension(entityManager, namespaceId, targetRootId);
+    const count = await this.countActive(namespaceId, targetRootId);
+    if (count + incoming > limit) {
+      const message = this.i18n.t('rssFolder.errors.quotaExceeded');
+      throw new AppException(
+        message,
+        'RSS_FOLDER_QUOTA_EXCEEDED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
   async countActive(namespaceId: string, rootId: string): Promise<number> {
     const resources = await this.resourcesService.getAllSubResources(
       namespaceId,
@@ -137,6 +180,46 @@ export class RssFoldersQuotaService implements IRssFoldersQuotaService {
         parentId,
       );
     return parentResources[parentResources.length - 1].id;
+  }
+
+  private async countIncomingRssFolders(
+    namespaceId: string,
+    resourceIds: string[],
+    targetRootId: string,
+    entityManager: EntityManager,
+  ): Promise<number> {
+    const resourceRepository = entityManager.getRepository(Resource);
+    const movedRoots = await resourceRepository.find({
+      where: { namespaceId, id: In(resourceIds) },
+    });
+    const descendants = await this.resourcesService.getAllSubResources(
+      namespaceId,
+      resourceIds,
+    );
+    const candidates = new Map<string, { id: string; resourceType: string }>();
+    for (const resource of movedRoots) {
+      candidates.set(resource.id, resource);
+    }
+    for (const resource of descendants) {
+      candidates.set(resource.id, resource);
+    }
+
+    let incoming = 0;
+    for (const resource of candidates.values()) {
+      if (resource.resourceType !== (ResourceType.RSS_FOLDER as string)) {
+        continue;
+      }
+      const parents = await this.resourcesService.getParentResourcesOrFail(
+        namespaceId,
+        resource.id,
+        entityManager,
+      );
+      const sourceRootId = parents[parents.length - 1].id;
+      if (sourceRootId !== targetRootId) {
+        incoming += 1;
+      }
+    }
+    return incoming;
   }
 
   // Resolves the root the folder would land under when restored, mirroring the

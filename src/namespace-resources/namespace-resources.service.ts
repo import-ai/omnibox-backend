@@ -492,12 +492,21 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
-    await this.resourcesService.updateResource(
-      namespaceId,
-      resourceId,
-      userId,
-      { parentId: targetId },
-    );
+    await transaction(this.dataSource.manager, async (tx) => {
+      await this.rssFoldersQuotaService.assertMoveQuota(
+        namespaceId,
+        [resourceId],
+        targetId,
+        tx.entityManager,
+      );
+      await this.resourcesService.updateResource(
+        namespaceId,
+        resourceId,
+        userId,
+        { parentId: targetId },
+        tx,
+      );
+    });
   }
 
   private async getEditableResourceIds(
@@ -658,6 +667,12 @@ export class NamespaceResourcesService {
           HttpStatus.FORBIDDEN,
         );
       }
+      await this.rssFoldersQuotaService.assertMoveQuota(
+        namespaceId,
+        moveIds,
+        targetId,
+        tx.entityManager,
+      );
       const { movedIds, nameConflictIds } =
         await this.resourcesService.batchMoveResources(
           userId,
@@ -736,6 +751,13 @@ export class NamespaceResourcesService {
           nameConflictIds: [],
         };
       }
+
+      await this.rssFoldersQuotaService.assertMoveQuota(
+        namespaceId,
+        moveIds,
+        data.parentId,
+        tx.entityManager,
+      );
 
       const folder = await this.create(
         userId,

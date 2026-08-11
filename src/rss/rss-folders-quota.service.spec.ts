@@ -22,6 +22,7 @@ describe('RssFoldersQuotaService', () => {
     activeFolderCount?: number;
     parentDeleted?: boolean;
     restoreResource?: Record<string, any> | null;
+    movedResources?: Array<{ id: string; resourceType: ResourceType }>;
   }) {
     const activeFolderCount = values?.activeFolderCount ?? 0;
     const subResources = [
@@ -55,10 +56,20 @@ describe('RssFoldersQuotaService', () => {
       }),
     };
     const resourcesService = {
-      getParentResourcesOrFail: jest.fn().mockResolvedValue([
-        { id: 'parent-id', parentId: PRIVATE_ROOT_ID },
-        { id: PRIVATE_ROOT_ID, parentId: null },
-      ]),
+      getParentResourcesOrFail: jest
+        .fn()
+        .mockImplementation((_namespaceId: string, resourceId: string) => {
+          if (resourceId === 'team-parent-id' || resourceId === 'team-rss-id') {
+            return Promise.resolve([
+              { id: resourceId, parentId: TEAM_ROOT_ID },
+              { id: TEAM_ROOT_ID, parentId: null },
+            ]);
+          }
+          return Promise.resolve([
+            { id: resourceId, parentId: PRIVATE_ROOT_ID },
+            { id: PRIVATE_ROOT_ID, parentId: null },
+          ]);
+        }),
       getAllSubResources: jest.fn().mockResolvedValue(subResources),
       isParentDeleted: jest
         .fn()
@@ -75,6 +86,16 @@ describe('RssFoldersQuotaService', () => {
     };
     const entityManager = {
       query: jest.fn().mockResolvedValue([]),
+      getRepository: jest.fn().mockReturnValue({
+        find: jest.fn().mockResolvedValue(
+          values?.movedResources ?? [
+            {
+              id: 'resource-id',
+              resourceType: ResourceType.RSS_FOLDER,
+            },
+          ],
+        ),
+      }),
     };
     const service = new RssFoldersQuotaService(
       resourceRepository as any,
@@ -185,5 +206,71 @@ describe('RssFoldersQuotaService', () => {
     await expect(
       service.assertRestoreQuota(NAMESPACE_ID, 'user-id', 'resource-id'),
     ).resolves.toBeUndefined();
+  });
+
+  it('allows same-space move even when the target quota is full', async () => {
+    const { entityManager, service } = createService({
+      activeFolderCount: 1,
+      movedResources: [
+        { id: 'resource-id', resourceType: ResourceType.RSS_FOLDER },
+      ],
+    });
+    // Descendants empty; source root resolved from getParentResourcesOrFail defaults to private.
+    await expect(
+      service.assertMoveQuota(
+        NAMESPACE_ID,
+        ['resource-id'],
+        'parent-id',
+        entityManager as any,
+      ),
+    ).resolves.toBeUndefined();
+    expect(entityManager.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects cross-space move when the target quota is full', async () => {
+    const { entityManager, service } = createService({
+      privateLimit: 1,
+      teamLimit: 1,
+      activeFolderCount: 1,
+      movedResources: [
+        { id: 'team-rss-id', resourceType: ResourceType.RSS_FOLDER },
+      ],
+    });
+
+    // Source is team (team-rss-id), target parent resolves to private → incoming=1.
+    await expectAppException(
+      service.assertMoveQuota(
+        NAMESPACE_ID,
+        ['team-rss-id'],
+        'parent-id',
+        entityManager as any,
+      ),
+      'RSS_FOLDER_QUOTA_EXCEEDED',
+    );
+    expect(entityManager.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`rss-folder-quota:${NAMESPACE_ID}:${PRIVATE_ROOT_ID}`],
+    );
+  });
+
+  it('skips move quota checks when the target limit is unlimited', async () => {
+    const { entityManager, resourcesService, service } = createService({
+      privateLimit: -1,
+      activeFolderCount: 5,
+      movedResources: [
+        { id: 'team-rss-id', resourceType: ResourceType.RSS_FOLDER },
+      ],
+    });
+
+    await expect(
+      service.assertMoveQuota(
+        NAMESPACE_ID,
+        ['team-rss-id'],
+        'parent-id',
+        entityManager as any,
+      ),
+    ).resolves.toBeUndefined();
+    expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
+    expect(entityManager.query).not.toHaveBeenCalled();
   });
 });

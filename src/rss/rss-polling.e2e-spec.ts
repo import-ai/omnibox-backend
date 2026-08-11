@@ -291,12 +291,19 @@ describe('RssPolling (e2e)', () => {
   });
 
   it('relates a newly-added link sharing the url to existing contents', async () => {
-    // A second folder points at the same feed url, adding another rss_links row.
+    // A second folder points at the same feed url, adding another rss_links
+    // row. It lives in the private space: the teamspace folder quota is already
+    // taken by the folder created in beforeAll.
+    const privateRoot = (
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/private`)
+        .expect(200)
+    ).body;
     await client
       .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
       .send({
         name: 'Poller 2',
-        parent_id: client.namespace.root_resource_id,
+        parent_id: privateRoot.id,
         links: [{ url: FEED_URL }],
       })
       .expect(201);

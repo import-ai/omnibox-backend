@@ -45,7 +45,7 @@ export class RssFoldersController {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
-    return await this.rssFoldersService.getLimits(namespaceId);
+    return await this.rssFoldersService.getLimits(namespaceId, userId);
   }
 
   @Post()

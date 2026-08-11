@@ -44,11 +44,36 @@ describe('RssFoldersController (e2e)', () => {
       .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
       .send(body);
 
-  it('returns basic limits with a 1-link limit', async () => {
+  // The basic tier allows a single active rss folder per space, so each test
+  // must leave the shared namespace without active folders.
+  afterEach(async () => {
+    const dataSource = client.app.get(DataSource);
+    const folders: { id: string }[] = await dataSource.query(
+      `SELECT id FROM resources
+       WHERE namespace_id = $1 AND resource_type = 'rss_folder' AND deleted_at IS NULL`,
+      [client.namespace.id],
+    );
+    for (const folder of folders) {
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folder.id}`,
+        )
+        .expect(200);
+    }
+  });
+
+  it('returns basic limits with 1-link and 1-folder limits', async () => {
     const response = await client
       .get(`/api/v1/namespaces/${client.namespace.id}/rss-folders/limits`)
       .expect(200);
-    expect(response.body).toEqual({ tier: 'basic', link_limit: 1 });
+    expect(response.body).toEqual({
+      tier: 'basic',
+      link_limit: 1,
+      folder_private_limit: 1,
+      folder_team_limit: 1,
+      folder_private_used: 0,
+      folder_team_used: 0,
+    });
   });
 
   it('creates an rss folder and uses the feed title as default link name', async () => {
@@ -290,6 +315,111 @@ describe('RssFoldersController (e2e)', () => {
       .expect(HttpStatus.UNPROCESSABLE_ENTITY);
 
     expect(response.body.code).toBe('rss_folder_cannot_be_parent');
+  });
+
+  it('rejects a second folder in the same space and frees the quota on delete', async () => {
+    const first = (
+      await createFolder({
+        name: 'First Folder',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+
+    const rejected = await createFolder({
+      name: 'Second Folder',
+      parent_id: client.namespace.root_resource_id,
+      links: [{ url: 'https://example.com/feed' }],
+    }).expect(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect(rejected.body.code).toBe('rss_folder_quota_exceeded');
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${first.resource.id}`,
+      )
+      .expect(200);
+
+    await createFolder({
+      name: 'Second Folder',
+      parent_id: client.namespace.root_resource_id,
+      links: [{ url: 'https://example.com/feed' }],
+    }).expect(201);
+  });
+
+  it('counts teamspace folders against the team quota, not the private one', async () => {
+    const privateRoot = (
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/private`)
+        .expect(200)
+    ).body;
+
+    await createFolder({
+      name: 'Team Folder',
+      parent_id: client.namespace.root_resource_id,
+      links: [{ url: 'https://example.com/feed' }],
+    }).expect(201);
+
+    await createFolder({
+      name: 'Private Folder',
+      parent_id: privateRoot.id,
+      links: [{ url: 'https://example.com/feed' }],
+    }).expect(201);
+
+    const limits = (
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/rss-folders/limits`)
+        .expect(200)
+    ).body;
+    expect(limits).toEqual({
+      tier: 'basic',
+      link_limit: 1,
+      folder_private_limit: 1,
+      folder_team_limit: 1,
+      folder_private_used: 1,
+      folder_team_used: 1,
+    });
+  });
+
+  it('gates restoring an rss folder from trash by the quota', async () => {
+    const trashed = (
+      await createFolder({
+        name: 'Trashed Folder',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${trashed.resource.id}`,
+      )
+      .expect(200);
+
+    const occupying = (
+      await createFolder({
+        name: 'Occupying Folder',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+
+    const rejected = await client
+      .post(
+        `/api/v1/namespaces/${client.namespace.id}/resources/${trashed.resource.id}/restore`,
+      )
+      .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect(rejected.body.code).toBe('rss_folder_quota_exceeded');
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${occupying.resource.id}`,
+      )
+      .expect(200);
+
+    await client
+      .post(
+        `/api/v1/namespaces/${client.namespace.id}/resources/${trashed.resource.id}/restore`,
+      )
+      .expect(201);
   });
 
   it('rejects an invalid url at dto validation', async () => {

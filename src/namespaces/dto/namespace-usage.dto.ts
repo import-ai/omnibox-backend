@@ -36,4 +36,10 @@ export class NamespaceUsageDto {
 
   @Expose({ name: 'rss_link_limit' })
   rssLinkLimit: number = 1;
+
+  @Expose({ name: 'rss_folder_private_limit' })
+  rssFolderPrivateLimit: number = 1;
+
+  @Expose({ name: 'rss_folder_team_limit' })
+  rssFolderTeamLimit: number = 1;
 }

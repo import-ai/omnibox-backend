@@ -1,4 +1,6 @@
 import { HttpStatus } from '@nestjs/common';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { TestClient } from 'test/test-client';
 
 process.env.OBB_WIZARD_BASE_URL = 'http://localhost:8000';
@@ -23,13 +25,88 @@ global.fetch = jest.fn().mockResolvedValue({
 
 describe('WizardController (e2e)', () => {
   let client: TestClient;
+  let memberClient: TestClient;
+  let ownerConversationId: string;
 
   beforeAll(async () => {
     client = await TestClient.create();
+    memberClient = await TestClient.create();
+    const invitation = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/invitations`)
+      .send({
+        namespaceRole: NamespaceRole.MEMBER,
+        rootPermission: ResourcePermission.FULL_ACCESS,
+      })
+      .expect(HttpStatus.CREATED);
+    await memberClient
+      .post(
+        `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}/accept`,
+      )
+      .expect(HttpStatus.CREATED);
+    const conversation = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+      .expect(HttpStatus.CREATED);
+    ownerConversationId = conversation.body.id;
   });
 
   afterAll(async () => {
     await client.close();
+    await memberClient.close();
+  });
+
+  describe('Conversation ownership', () => {
+    const agentBody = (conversationId: string) => ({
+      query: 'Do not process this request',
+      conversation_id: conversationId,
+      tools: [],
+      enable_thinking: false,
+    });
+
+    it.each(['ask', 'write'])(
+      'rejects %s for another namespace member without creating messages',
+      async (endpoint) => {
+        const before = await client
+          .get(
+            `/api/v1/namespaces/${client.namespace.id}/conversations/${ownerConversationId}`,
+          )
+          .expect(HttpStatus.OK);
+
+        const response = await memberClient
+          .post(`/api/v1/namespaces/${client.namespace.id}/wizard/${endpoint}`)
+          .set('X-Request-Id', `unauthorized-${endpoint}`)
+          .send(agentBody(ownerConversationId));
+
+        // SSE commits the POST response before surfacing the stream error.
+        expect(response.status).toBe(HttpStatus.CREATED);
+        expect(response.headers['content-type']).toContain('text/event-stream');
+
+        const after = await client
+          .get(
+            `/api/v1/namespaces/${client.namespace.id}/conversations/${ownerConversationId}`,
+          )
+          .expect(HttpStatus.OK);
+        expect(Object.keys(after.body.mapping)).toHaveLength(
+          Object.keys(before.body.mapping).length,
+        );
+      },
+    );
+
+    it('rejects stream resume for another namespace member without exposing events', async () => {
+      const response = await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/stream/resume`)
+        .send({ conversation_id: ownerConversationId })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.headers['content-type']).toContain('text/event-stream');
+      expect(response.text).not.toContain(ownerConversationId);
+    });
+
+    it('rejects stream cancel for another namespace member', async () => {
+      await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/stream/cancel`)
+        .send({ conversation_id: ownerConversationId })
+        .expect(HttpStatus.FORBIDDEN);
+    });
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/wizard/ask', () => {

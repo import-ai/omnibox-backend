@@ -2,6 +2,7 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 
 function createService(mocks: {
+  conversationsService?: Record<string, jest.Mock>;
   namespaceResourcesService?: Record<string, jest.Mock>;
   sharedResourcesService?: Record<string, jest.Mock>;
   resourcesService?: Record<string, jest.Mock>;
@@ -11,6 +12,7 @@ function createService(mocks: {
     { get: jest.fn() } as any,
     {} as any,
     {} as any,
+    mocks.conversationsService as any,
     mocks.namespaceResourcesService as any,
     mocks.sharedResourcesService as any,
     mocks.resourcesService as any,
@@ -18,6 +20,71 @@ function createService(mocks: {
     {} as any,
   );
 }
+
+describe('StreamService conversation ownership', () => {
+  const accessDenied = new Error('conversation access denied');
+
+  it.each(['ask', 'write'] as const)(
+    'rejects %s before creating a user agent stream',
+    async (action) => {
+      const conversationsService = {
+        findOneForUserInNamespace: jest.fn().mockRejectedValue(accessDenied),
+      };
+      const service = createService({ conversationsService });
+      const createAgentStream = jest.spyOn(service as any, 'createAgentStream');
+
+      await expect(
+        service.createUserAgentStream(
+          'user-id',
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+          } as any,
+          'request-id',
+          action,
+        ),
+      ).rejects.toBe(accessDenied);
+
+      expect(createAgentStream).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects resume before reading stream state', async () => {
+    const conversationsService = {
+      findOneForUserInNamespace: jest.fn().mockRejectedValue(accessDenied),
+    };
+    const service = createService({ conversationsService });
+    const resumeAgentStream = jest.spyOn(service as any, 'resumeAgentStream');
+
+    await expect(
+      service.resumeUserAgentStream(
+        'user-id',
+        'namespace-id',
+        'conversation-id',
+      ),
+    ).rejects.toBe(accessDenied);
+
+    expect(resumeAgentStream).not.toHaveBeenCalled();
+  });
+
+  it('rejects cancel before mutating stream state', async () => {
+    const conversationsService = {
+      findOneForUserInNamespace: jest.fn().mockRejectedValue(accessDenied),
+    };
+    const service = createService({ conversationsService });
+    const cancelAgentStream = jest.spyOn(service as any, 'cancelAgentStream');
+
+    await expect(
+      service.cancelUserAgentStream(
+        'user-id',
+        'namespace-id',
+        'conversation-id',
+      ),
+    ).rejects.toBe(accessDenied);
+
+    expect(cancelAgentStream).not.toHaveBeenCalled();
+  });
+});
 
 describe('StreamService agent handler', () => {
   it('sends the persisted message creation time in bos data', async () => {

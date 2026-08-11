@@ -1,11 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { I18nService } from 'nestjs-i18n';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import {
   Message,
   MessageStatus,
   OpenAIMessage,
 } from 'omniboxd/messages/entities/message.entity';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { transaction } from 'omniboxd/utils/transaction-utils';
@@ -23,8 +27,12 @@ export class MessagesService {
   constructor(
     @InjectRepository(Message)
     private readonly messageRepository: Repository<Message>,
+    @InjectRepository(Conversation)
+    private readonly conversationRepository: Repository<Conversation>,
     private readonly dataSource: DataSource,
     private readonly wizardTaskService: WizardTaskService,
+    private readonly namespacesService: NamespacesService,
+    private readonly i18n: I18nService,
   ) {}
 
   async create(
@@ -34,6 +42,21 @@ export class MessagesService {
     dto: CreateMessageDto,
     index: boolean = true,
   ): Promise<Message> {
+    if (userId) {
+      await this.namespacesService.getMe(namespaceId, userId);
+      const ownsConversation = await this.conversationRepository.existsBy({
+        id: conversationId,
+        namespaceId,
+        userId,
+      });
+      if (!ownsConversation) {
+        throw new AppException(
+          this.i18n.t('conversation.errors.accessDenied'),
+          'CONVERSATION_ACCESS_DENIED',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+    }
     const message = this.messageRepository.create({
       message: dto.message,
       conversationId,

@@ -10,6 +10,7 @@ import { trace } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
 import { Span } from 'nestjs-otel';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
   Message,
   MessageStatus,
@@ -73,6 +74,7 @@ export class StreamService implements OnModuleDestroy {
     private readonly configService: ConfigService,
     private readonly wizardApiService: WizardAPIService,
     private readonly messagesService: MessagesService,
+    private readonly conversationsService: ConversationsService,
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
@@ -860,12 +862,17 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
-  resumeUserAgentStream(
+  async resumeUserAgentStream(
     userId: string,
     namespaceId: string,
     conversationId: string,
     lastEventId?: string,
-  ): Observable<MessageEvent> {
+  ): Promise<Observable<MessageEvent>> {
+    await this.conversationsService.findOneForUserInNamespace(
+      conversationId,
+      userId,
+      namespaceId,
+    );
     return this.resumeAgentStream(
       this.getStreamKey(namespaceId, conversationId, userId),
       lastEventId,
@@ -963,6 +970,11 @@ export class StreamService implements OnModuleDestroy {
     namespaceId: string,
     conversationId: string,
   ) {
+    await this.conversationsService.findOneForUserInNamespace(
+      conversationId,
+      userId,
+      namespaceId,
+    );
     await this.cancelAgentStream(
       this.getStreamKey(namespaceId, conversationId, userId),
       namespaceId,
@@ -1007,6 +1019,11 @@ export class StreamService implements OnModuleDestroy {
     mode: 'ask' | 'write',
   ): Promise<Observable<MessageEvent>> {
     try {
+      await this.conversationsService.findOneForUserInNamespace(
+        requestDto.conversation_id,
+        userId,
+        namespaceId,
+      );
       for (const tool of requestDto.tools || []) {
         if (tool.name === 'private_search') {
           tool.visible_resources = await this.getUserVisibleResources(

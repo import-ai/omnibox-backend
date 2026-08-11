@@ -13,6 +13,7 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { UserService } from 'omniboxd/user/user.service';
@@ -29,6 +30,7 @@ export class ConversationsService {
     private readonly conversationRepository: Repository<Conversation>,
     private readonly dataSource: DataSource,
     private readonly messagesService: MessagesService,
+    private readonly namespacesService: NamespacesService,
     private readonly userService: UserService,
     private readonly wizardApiService: WizardAPIService,
     private readonly wizardTaskService: WizardTaskService,
@@ -36,6 +38,7 @@ export class ConversationsService {
   ) {}
 
   async create(namespaceId: string, userId: string) {
+    await this.namespacesService.getMe(namespaceId, userId);
     const conversation = this.conversationRepository.create({
       namespaceId,
       userId: userId,
@@ -54,8 +57,12 @@ export class ConversationsService {
     return await this.conversationRepository.save(conversation);
   }
 
-  async update(id: string, title: string) {
-    const conversation = await this.findOne(id);
+  async update(namespaceId: string, id: string, userId: string, title: string) {
+    const conversation = await this.findOneForUserInNamespace(
+      id,
+      userId,
+      namespaceId,
+    );
     conversation.title = title;
     await this.conversationRepository.save(conversation);
   }
@@ -116,10 +123,16 @@ export class ConversationsService {
     return composed;
   }
 
-  async createTitle(id: string, userId: string): Promise<{ title: string }> {
-    const conversation = await this.conversationRepository.findOneOrFail({
-      where: { id, userId },
-    });
+  async createTitle(
+    namespaceId: string,
+    id: string,
+    userId: string,
+  ): Promise<{ title: string }> {
+    const conversation = await this.findOneForUserInNamespace(
+      id,
+      userId,
+      namespaceId,
+    );
     if (conversation.title) {
       return { title: conversation.title };
     }
@@ -174,6 +187,7 @@ export class ConversationsService {
     total: number;
     data: ConversationSummaryDto[];
   }> {
+    await this.namespacesService.getMe(namespaceId, userId);
     const conversations = await this.findAll(namespaceId, userId, options);
     const summaries: ConversationSummaryDto[] = await Promise.all(
       conversations.map((c) => this.getSummary(userId, c)),
@@ -234,12 +248,15 @@ export class ConversationsService {
   }
 
   async getConversationForUser(
+    namespaceId: string,
     conversationId: string,
     userId: string,
   ): Promise<ConversationDetailDto> {
-    const conversation = await this.conversationRepository.findOneOrFail({
-      where: { id: conversationId, userId: userId },
-    });
+    const conversation = await this.findOneForUserInNamespace(
+      conversationId,
+      userId,
+      namespaceId,
+    );
     const messages = await this.messagesService.findAll(
       userId,
       conversation.id,
@@ -272,12 +289,22 @@ export class ConversationsService {
     userId: string,
     namespaceId: string,
   ) {
-    return await this.conversationRepository.findOneOrFail({
+    await this.namespacesService.getMe(namespaceId, userId);
+    const conversation = await this.conversationRepository.findOne({
       where: { id: conversationId, userId, namespaceId },
     });
+    if (!conversation) {
+      throw new AppException(
+        this.i18n.t('namespace.errors.notAMember'),
+        'CONVERSATION_ACCESS_DENIED',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    return conversation;
   }
 
   async remove(namespaceId: string, userId: string, conversationId: string) {
+    await this.findOneForUserInNamespace(conversationId, userId, namespaceId);
     await transaction(this.dataSource.manager, async (tx) => {
       await this.wizardTaskService.emitDeleteConversationTask(
         namespaceId,
@@ -296,6 +323,7 @@ export class ConversationsService {
   }
 
   async restore(namespaceId: string, userId: string, conversationId: string) {
+    await this.findOneForUserInNamespace(conversationId, userId, namespaceId);
     const messages = await this.messagesService.findAll(userId, conversationId);
     return await transaction(this.dataSource.manager, async (tx) => {
       for (const message of messages) {

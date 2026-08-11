@@ -11,6 +11,7 @@ function createService(mocks: {
     { get: jest.fn() } as any,
     {} as any,
     {} as any,
+    {} as any,
     mocks.namespaceResourcesService as any,
     mocks.sharedResourcesService as any,
     mocks.resourcesService as any,

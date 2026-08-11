@@ -378,7 +378,43 @@ describe('ConversationsController (e2e)', () => {
         .get(
           `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
         )
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from FORBIDDEN
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it("should fail when updating another user's conversation", async () => {
+      const anotherClient = await TestClient.create();
+      tempClients.push(anotherClient);
+
+      await anotherClient
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
+        )
+        .send({ title: 'Unauthorized title' })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it("should fail when generating a title for another user's conversation", async () => {
+      const anotherClient = await TestClient.create();
+      tempClients.push(anotherClient);
+
+      await anotherClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}/title`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should fail when the conversation belongs to a different namespace', async () => {
+      const anotherNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: `Conversation access test ${Date.now()}` })
+        .expect(HttpStatus.CREATED);
+
+      await client
+        .get(
+          `/api/v1/namespaces/${anotherNamespace.body.id}/conversations/${conversationId}`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 

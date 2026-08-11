@@ -17,6 +17,7 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourceRetryService } from 'omniboxd/namespace-resources/resource-retry.service';
 import { ResourceSortingService } from 'omniboxd/namespace-resources/resource-sorting.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -42,6 +43,7 @@ export class NamespaceResourcesController {
     private readonly namespaceResourcesService: NamespaceResourcesService,
     private readonly resourceSortingService: ResourceSortingService,
     private readonly permissionsService: PermissionsService,
+    private readonly resourceRetryService: ResourceRetryService,
   ) {}
 
   @Get()
@@ -112,6 +114,20 @@ export class NamespaceResourcesController {
       userId,
       resourceId: newResource.id,
     });
+  }
+
+  @Post(':resourceId/retry')
+  @CheckNamespaceReadonly()
+  async retry(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return await this.resourceRetryService.retry(
+      namespaceId,
+      userId,
+      resourceId,
+    );
   }
 
   @Get('query')

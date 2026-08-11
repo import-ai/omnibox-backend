@@ -14,6 +14,7 @@ class TaskDtoBase {
   ended_at: string | null;
   canceled_at: string | null;
   resource_id?: string;
+  retried_from_task_id: string | null;
 
   protected static setValue(obj: TaskDtoBase, task: Task) {
     obj.id = task.id;
@@ -28,6 +29,7 @@ class TaskDtoBase {
     obj.ended_at = task.endedAt?.toISOString() || null;
     obj.canceled_at = task.canceledAt?.toISOString() || null;
     obj.resource_id = task.resourceId || task.payload?.resource_id;
+    obj.retried_from_task_id = task.retriedFromTaskId ?? null;
   }
 }
 

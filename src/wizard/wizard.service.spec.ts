@@ -26,6 +26,7 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   workerId: null,
   status: TaskStatus.RUNNING,
   numSchedules: 0,
+  retriedFromTaskId: null,
   ...overrides,
 });
 

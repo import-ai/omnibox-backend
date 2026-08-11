@@ -63,4 +63,13 @@ export class Task extends Base {
 
   @Column('int', { default: 0 })
   numSchedules: number;
+
+  /**
+   * The task this one was emitted to replace, set when a failed or canceled
+   * task is rerun. It is the only signal that an attempt has been retried:
+   * without it a stale one is indistinguishable from an unrelated re-run of the
+   * same function.
+   */
+  @Column('uuid', { nullable: true, default: null })
+  retriedFromTaskId: string | null;
 }

@@ -107,6 +107,7 @@ describe('CollectProcessor', () => {
       workerId: null,
       status: TaskStatus.PENDING,
       numSchedules: 0,
+      retriedFromTaskId: null,
       ...overrides,
     });
 

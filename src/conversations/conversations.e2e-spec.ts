@@ -42,7 +42,7 @@ describe('ConversationsController (e2e)', () => {
     it('should fail with invalid namespaceId', async () => {
       await client
         .post('/api/v1/namespaces/invalid-namespace/conversations')
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from FORBIDDEN
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 
@@ -107,7 +107,7 @@ describe('ConversationsController (e2e)', () => {
     it('should fail with invalid namespaceId', async () => {
       await client
         .get('/api/v1/namespaces/invalid-namespace/conversations')
-        .expect(HttpStatus.OK); // Changed from FORBIDDEN - API doesn't validate namespace ownership for listing
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 
@@ -205,7 +205,7 @@ describe('ConversationsController (e2e)', () => {
         .get(
           `/api/v1/namespaces/invalid-namespace/conversations/${conversationId}`,
         )
-        .expect(HttpStatus.OK); // Changed from FORBIDDEN - API doesn't validate namespace ownership
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 
@@ -322,7 +322,7 @@ describe('ConversationsController (e2e)', () => {
         .get(
           `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
         )
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from NOT_FOUND
+        .expect(HttpStatus.FORBIDDEN);
     });
 
     it('should fail with non-existent conversation', async () => {
@@ -338,7 +338,7 @@ describe('ConversationsController (e2e)', () => {
         .delete(
           `/api/v1/namespaces/invalid-namespace/conversations/${conversationId}`,
         )
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from FORBIDDEN
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 

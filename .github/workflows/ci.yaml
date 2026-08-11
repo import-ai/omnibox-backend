@@ -123,9 +123,7 @@ jobs:
           push: true
           tags: ${{ steps.meta_app.outputs.tags }}
           labels: ${{ steps.meta_app.outputs.labels }}
-          platforms: |
-            linux/amd64
-            linux/arm64
+          platforms: ${{ startsWith(github.ref, 'refs/tags/') && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

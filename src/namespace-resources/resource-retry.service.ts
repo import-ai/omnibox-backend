@@ -11,8 +11,8 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import {
-  FAILED_TASK_STATUSES,
   PARSE_FUNCTIONS,
+  RETRYABLE_TASK_STATUSES,
   TasksService,
 } from 'omniboxd/tasks/tasks.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -29,13 +29,15 @@ export class ResourceRetryService {
   ) {}
 
   /**
-   * Re-run everything that failed for a resource: quota-exhausted parsing, a
-   * timed-out index upsert, a tag extraction that errored, ... Each re-emitted
-   * task points back at the one it replaces through `retriedFromTaskId`, which
-   * is what lets the UI hide the superseded failure.
+   * Re-run everything a resource never got done: quota-exhausted parsing, a
+   * timed-out index upsert, a tag extraction that errored, a run the user
+   * canceled, ... Each re-emitted task points back at the one it replaces
+   * through `retriedFromTaskId`, which is what lets the UI hide the superseded
+   * attempt.
    *
-   * When nothing failed but the resource stayed blank without a surviving task
-   * row, fall back to re-reading the file or re-collecting the link URL.
+   * When nothing is left to re-run but the resource stayed blank without a
+   * surviving task row, fall back to re-reading the file or re-collecting the
+   * link URL.
    */
   async retry(
     namespaceId: string,
@@ -111,9 +113,9 @@ export class ResourceRetryService {
   }
 
   /**
-   * Failed tasks that no later task already replaced. A retry emitted for a
-   * failure carries that failure's id in `retriedFromTaskId`, so the failure is
-   * history and must not be re-emitted a second time.
+   * Failed or canceled tasks that no later task already replaced. A retry
+   * emitted for such a task carries its id in `retriedFromTaskId`, so that
+   * attempt is history and must not be re-emitted a second time.
    */
   private getRetryableTasks(tasks: Task[]): Task[] {
     const superseded = new Set(
@@ -123,7 +125,8 @@ export class ResourceRetryService {
     );
     return tasks.filter(
       (task) =>
-        FAILED_TASK_STATUSES.includes(task.status) && !superseded.has(task.id),
+        RETRYABLE_TASK_STATUSES.includes(task.status) &&
+        !superseded.has(task.id),
     );
   }
 

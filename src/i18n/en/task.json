@@ -6,6 +6,6 @@
     "canOnlyRerunFailedOrCanceled": "Can only rerun failed or canceled tasks",
     "invalidTaskPayload": "Invalid task payload",
     "retryAlreadyRunning": "A task is already running for this resource",
-    "nothingToRetry": "This resource has no failed task to retry"
+    "nothingToRetry": "This resource has no failed or canceled task to retry"
   }
 }

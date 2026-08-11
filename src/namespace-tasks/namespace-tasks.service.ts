@@ -3,7 +3,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TaskMetaDto } from 'omniboxd/tasks/dto/task.dto';
 import { TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import {
-  RERUNNABLE_TASK_STATUSES,
+  RETRYABLE_TASK_STATUSES,
   TasksService,
 } from 'omniboxd/tasks/tasks.service';
 
@@ -48,7 +48,7 @@ export class NamespaceTasksService {
         task.canCancel =
           (task.status === 'pending' || task.status === 'running') &&
           task.function !== 'delete_index';
-        task.canRerun = RERUNNABLE_TASK_STATUSES.includes(
+        task.canRerun = RETRYABLE_TASK_STATUSES.includes(
           task.status as TaskStatus,
         );
         task.canRedirect = true;

@@ -348,17 +348,71 @@ describe('Resource task retry (e2e)', () => {
     expect(response.body.code).toBe('retry_not_eligible');
   });
 
-  it('does not resurrect a canceled task', async () => {
+  it('re-emits a canceled task', async () => {
     const resource = await createLinkResource(
       'https://example.com/canceled',
       'already parsed',
     );
     await settlePendingTasks(resource.id);
-    await addTask(resource.id, {
+    const canceled = await addTask(resource.id, {
       function: 'extract_tags',
       status: TaskStatus.CANCELED,
       canceledAt: new Date(),
     });
+
+    const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0].function).toBe('extract_tags');
+    expect(response.body[0].status).toBe(TaskStatus.PENDING);
+    expect(response.body[0].retried_from_task_id).toBe(canceled.id);
+  });
+
+  it('re-emits canceled and failed tasks together', async () => {
+    const resource = await createFileResource('mixed.txt', 'text/plain');
+    const [parse] = await parseTasks(resource.id);
+    await taskRepo.update(parse.id, {
+      status: TaskStatus.CANCELED,
+      canceledAt: new Date(),
+      endedAt: new Date(),
+    });
+    const tags = await addTask(resource.id, {
+      function: 'extract_tags',
+      status: TaskStatus.ERROR,
+      exception: { error: 'boom' },
+    });
+
+    const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+    const pointers = (
+      response.body as { function: string; retried_from_task_id: string }[]
+    )
+      .map((task) => [task.function, task.retried_from_task_id])
+      .sort();
+    expect(pointers).toEqual(
+      [
+        ['file_reader_text', parse.id],
+        ['extract_tags', tags.id],
+      ].sort(),
+    );
+  });
+
+  it('does not re-emit a canceled task that was already retried', async () => {
+    const resource = await createLinkResource(
+      'https://example.com/recancel',
+      'already parsed',
+    );
+    await settlePendingTasks(resource.id);
+    const canceled = await addTask(resource.id, {
+      function: 'collect_url',
+      status: TaskStatus.CANCELED,
+      canceledAt: new Date(),
+    });
+
+    const first = await retry(resource.id).expect(HttpStatus.CREATED);
+    expect(first.body).toHaveLength(1);
+    expect(first.body[0].retried_from_task_id).toBe(canceled.id);
+    await settlePendingTasks(resource.id);
 
     const response = await retry(resource.id).expect(HttpStatus.CONFLICT);
     expect(response.body.code).toBe('retry_not_eligible');

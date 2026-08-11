@@ -47,18 +47,16 @@ export const PARSE_FUNCTIONS = new Set<string>([
   'generate_audio_note',
 ]);
 
-// Terminal statuses that mean the task did not do its job. A canceled task is
-// deliberately excluded: the user stopped it, so a resource-level retry must
-// not resurrect it. Mirrors FAILED_TASK_STATUSES on the web.
-export const FAILED_TASK_STATUSES = [
+// Terminal statuses that mean the task did not do its job, so running it again
+// is the only way to get the work done. A canceled task belongs here too: the
+// resource it should have processed is left just as unprocessed as after a
+// failure, and the user asking for a retry is asking for exactly that run back.
+// Mirrors RETRYABLE_TASK_STATUSES on the web.
+export const RETRYABLE_TASK_STATUSES = [
   TaskStatus.ERROR,
   TaskStatus.TIMEOUT,
   TaskStatus.INSUFFICIENT_QUOTA,
-];
-
-export const RERUNNABLE_TASK_STATUSES = [
   TaskStatus.CANCELED,
-  ...FAILED_TASK_STATUSES,
 ];
 
 @Injectable()
@@ -309,7 +307,7 @@ export class TasksService {
   async rerunTask(id: string): Promise<TaskDto> {
     const originalTask = await this.get(id);
 
-    if (!RERUNNABLE_TASK_STATUSES.includes(originalTask.status)) {
+    if (!RETRYABLE_TASK_STATUSES.includes(originalTask.status)) {
       const message = this.i18n.t('task.errors.canOnlyRerunFailedOrCanceled');
       throw new AppException(
         message,

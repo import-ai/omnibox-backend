@@ -11,7 +11,8 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import {
-  RERUNNABLE_TASK_STATUSES,
+  FAILED_TASK_STATUSES,
+  PARSE_FUNCTIONS,
   TasksService,
 } from 'omniboxd/tasks/tasks.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
@@ -28,15 +29,19 @@ export class ResourceRetryService {
   ) {}
 
   /**
-   * Re-run the parsing of a resource whose content is missing: either the last
-   * parse task failed (quota exhausted, timeout, unsupported function, ...) or
-   * no task survived at all and the resource stayed blank.
+   * Re-run everything that failed for a resource: quota-exhausted parsing, a
+   * timed-out index upsert, a tag extraction that errored, ... Each re-emitted
+   * task points back at the one it replaces through `retriedFromTaskId`, which
+   * is what lets the UI hide the superseded failure.
+   *
+   * When nothing failed but the resource stayed blank without a surviving task
+   * row, fall back to re-reading the file or re-collecting the link URL.
    */
-  async retryParse(
+  async retry(
     namespaceId: string,
     userId: string,
     resourceId: string,
-  ): Promise<TaskDto> {
+  ): Promise<TaskDto[]> {
     await this.permissionsService.userHasPermissionOrFail(
       namespaceId,
       resourceId,
@@ -47,7 +52,7 @@ export class ResourceRetryService {
       namespaceId,
       resourceId,
     );
-    const tasks = await this.tasksService.getParseTasksByResourceId(
+    const tasks = await this.tasksService.getTaskEntitiesByResourceId(
       namespaceId,
       resourceId,
     );
@@ -57,20 +62,37 @@ export class ResourceRetryService {
         [TaskStatus.PENDING, TaskStatus.RUNNING].includes(task.status),
       )
     ) {
-      const message = this.i18n.t('task.errors.parseAlreadyRunning');
+      const message = this.i18n.t('task.errors.retryAlreadyRunning');
       throw new AppException(
         message,
-        'PARSE_ALREADY_RUNNING',
+        'RETRY_ALREADY_RUNNING',
         HttpStatus.CONFLICT,
       );
     }
 
-    const staleError = isTaskErrorContent(resource.content, tasks);
-    const [latestTask] = tasks;
+    const retryable = this.getRetryableTasks(tasks);
+    // Only a parse failure ever writes a placeholder into the resource body, so
+    // only a parse retry may clear it. `staleError` is likewise resolved
+    // against parse tasks alone: real content and user edits stay untouched.
+    const staleError = isTaskErrorContent(
+      resource.content,
+      tasks.filter((task) => PARSE_FUNCTIONS.has(task.function)),
+    );
 
-    if (latestTask && RERUNNABLE_TASK_STATUSES.includes(latestTask.status)) {
-      await this.clearStaleErrorContent(resource, userId, staleError);
-      return await this.tasksService.rerunTask(latestTask.id);
+    if (retryable.length > 0) {
+      const reparsing = retryable.some((task) =>
+        PARSE_FUNCTIONS.has(task.function),
+      );
+      await this.clearStaleErrorContent(
+        resource,
+        userId,
+        staleError && reparsing,
+      );
+      const rerun: TaskDto[] = [];
+      for (const task of retryable) {
+        rerun.push(await this.tasksService.rerunTask(task.id));
+      }
+      return rerun;
     }
 
     if (resource.content && !staleError) {
@@ -83,8 +105,25 @@ export class ResourceRetryService {
     }
 
     await this.clearStaleErrorContent(resource, userId, staleError);
-    return TaskDto.fromEntity(
-      await this.emitBlankResourceTask(resource, userId),
+    return [
+      TaskDto.fromEntity(await this.emitBlankResourceTask(resource, userId)),
+    ];
+  }
+
+  /**
+   * Failed tasks that no later task already replaced. A retry emitted for a
+   * failure carries that failure's id in `retriedFromTaskId`, so the failure is
+   * history and must not be re-emitted a second time.
+   */
+  private getRetryableTasks(tasks: Task[]): Task[] {
+    const superseded = new Set(
+      tasks
+        .map((task) => task.retriedFromTaskId)
+        .filter((id): id is string => !!id),
+    );
+    return tasks.filter(
+      (task) =>
+        FAILED_TASK_STATUSES.includes(task.status) && !superseded.has(task.id),
     );
   }
 

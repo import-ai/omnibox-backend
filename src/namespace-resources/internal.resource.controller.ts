@@ -142,14 +142,14 @@ export class InternalResourcesController {
   }
 
   @Public()
-  @Post('namespaces/:namespaceId/resources/:resourceId/retry-parse')
+  @Post('namespaces/:namespaceId/resources/:resourceId/retry')
   @CheckNamespaceReadonly()
-  async retryParse(
+  async retry(
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @HeaderUserId() userId: string,
   ) {
-    return await this.resourceRetryService.retryParse(
+    return await this.resourceRetryService.retry(
       namespaceId,
       userId,
       resourceId,

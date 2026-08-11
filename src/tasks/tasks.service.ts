@@ -47,11 +47,18 @@ export const PARSE_FUNCTIONS = new Set<string>([
   'generate_audio_note',
 ]);
 
-export const RERUNNABLE_TASK_STATUSES = [
-  TaskStatus.CANCELED,
+// Terminal statuses that mean the task did not do its job. A canceled task is
+// deliberately excluded: the user stopped it, so a resource-level retry must
+// not resurrect it. Mirrors FAILED_TASK_STATUSES on the web.
+export const FAILED_TASK_STATUSES = [
   TaskStatus.ERROR,
   TaskStatus.TIMEOUT,
   TaskStatus.INSUFFICIENT_QUOTA,
+];
+
+export const RERUNNABLE_TASK_STATUSES = [
+  TaskStatus.CANCELED,
+  ...FAILED_TASK_STATUSES,
 ];
 
 @Injectable()
@@ -325,6 +332,9 @@ export class TasksService {
       function: originalTask.function,
       input,
       payload: originalTask.payload,
+      // Point at the task this run replaces, so the failure it supersedes can
+      // be recognized exactly instead of guessed from timestamps.
+      retriedFromTaskId: originalTask.id,
     });
 
     return TaskDto.fromEntity(newTask);
@@ -494,7 +504,11 @@ export class TasksService {
     return tasks.map((task) => TaskMetaDto.fromEntity(task));
   }
 
-  async getParseTasksByResourceId(
+  /**
+   * Every task of a resource as entities, newest first. `getTasksByResourceId`
+   * returns DTOs; the retry flow needs the entities to rerun them.
+   */
+  async getTaskEntitiesByResourceId(
     namespaceId: string,
     resourceId: string,
   ): Promise<Task[]> {
@@ -502,9 +516,6 @@ export class TasksService {
       .createQueryBuilder('task')
       .where('task.namespaceId = :namespaceId', { namespaceId })
       .andWhere("task.payload->>'resource_id' = :resourceId", { resourceId })
-      .andWhere('task.function IN (:...functions)', {
-        functions: [...PARSE_FUNCTIONS],
-      })
       .orderBy('task.createdAt', 'DESC')
       .getMany();
   }

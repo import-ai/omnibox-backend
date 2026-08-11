@@ -22,6 +22,7 @@ describe('TasksService.rerunTask', () => {
       payload: { resource_id: 'resource-1' },
       status: TaskStatus.FINISHED,
       canceledAt: null,
+      retriedFromTaskId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       ...overrides,
@@ -69,7 +70,46 @@ describe('TasksService.rerunTask', () => {
       function: original.function,
       input: original.input,
       payload: original.payload,
+      retriedFromTaskId: original.id,
     });
+  });
+
+  it('records the replaced task on the rerun so it can be recognized as superseded', async () => {
+    taskRepository.findOne.mockResolvedValue(
+      task({ id: 'failed-task', status: TaskStatus.ERROR }),
+    );
+    const emitTask = jest
+      .spyOn(service, 'emitTask')
+      .mockImplementation((data) =>
+        Promise.resolve(task({ id: 'task-2', ...data })),
+      );
+
+    await service.rerunTask('failed-task');
+
+    expect(emitTask).toHaveBeenCalledWith(
+      expect.objectContaining({ retriedFromTaskId: 'failed-task' }),
+    );
+  });
+
+  it('chains the pointer to the immediate predecessor, not the first failure', async () => {
+    taskRepository.findOne.mockResolvedValue(
+      task({
+        id: 'second-attempt',
+        status: TaskStatus.TIMEOUT,
+        retriedFromTaskId: 'first-attempt',
+      }),
+    );
+    const emitTask = jest
+      .spyOn(service, 'emitTask')
+      .mockImplementation((data) =>
+        Promise.resolve(task({ id: 'task-3', ...data })),
+      );
+
+    await service.rerunTask('second-attempt');
+
+    expect(emitTask).toHaveBeenCalledWith(
+      expect.objectContaining({ retriedFromTaskId: 'second-attempt' }),
+    );
   });
 
   it.each([TaskStatus.PENDING, TaskStatus.RUNNING, TaskStatus.FINISHED])(

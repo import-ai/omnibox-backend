@@ -7,9 +7,9 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { TestClient } from 'test/test-client';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
-describe('Resource parse retry (e2e)', () => {
+describe('Resource task retry (e2e)', () => {
   let client: TestClient;
   let viewerClient: TestClient;
   let taskRepo: Repository<Task>;
@@ -52,13 +52,16 @@ describe('Resource parse retry (e2e)', () => {
     return response.body;
   };
 
-  const parseTasks = async (resourceId: string) => {
-    const tasks = await taskRepo.find({
+  const allTasks = async (resourceId: string) =>
+    await taskRepo.find({
       where: { resourceId },
       order: { createdAt: 'DESC' },
     });
-    return tasks.filter((task) => task.function.startsWith('file_reader'));
-  };
+
+  const parseTasks = async (resourceId: string) =>
+    (await allTasks(resourceId)).filter((task) =>
+      task.function.startsWith('file_reader'),
+    );
 
   const getResource = async (resourceId: string) =>
     await resourceRepo.findOneByOrFail({
@@ -66,9 +69,39 @@ describe('Resource parse retry (e2e)', () => {
       id: resourceId,
     });
 
-  const retryParse = (resourceId: string) =>
+  const addTask = async (
+    resourceId: string,
+    overrides: Partial<Task>,
+  ): Promise<Task> =>
+    await taskRepo.save(
+      taskRepo.create({
+        namespaceId: namespaceId(),
+        userId: client.user.id,
+        function: 'extract_tags',
+        input: { resource_id: resourceId },
+        payload: { resource_id: resourceId },
+        status: TaskStatus.FINISHED,
+        endedAt: new Date(),
+        ...overrides,
+      }),
+    );
+
+  /**
+   * Creating a resource that already carries content emits the follow-up chain
+   * (extract_tags, upsert_index, ...). No worker runs in the e2e environment,
+   * so those stay pending and would make every retry a 409. Land them first
+   * whenever the test is about something else.
+   */
+  const settlePendingTasks = async (resourceId: string) => {
+    await taskRepo.update(
+      { resourceId, status: In([TaskStatus.PENDING, TaskStatus.RUNNING]) },
+      { status: TaskStatus.FINISHED, endedAt: new Date() },
+    );
+  };
+
+  const retry = (resourceId: string) =>
     client.post(
-      `/api/v1/namespaces/${namespaceId()}/resources/${resourceId}/retry-parse`,
+      `/api/v1/namespaces/${namespaceId()}/resources/${resourceId}/retry`,
     );
 
   beforeAll(async () => {
@@ -95,15 +128,20 @@ describe('Resource parse retry (e2e)', () => {
       .expect(HttpStatus.OK);
 
     const readerTasks = (
-      response.body as { function: string; status: string }[]
+      response.body as {
+        function: string;
+        status: string;
+        retried_from_task_id: string | null;
+      }[]
     ).filter((task) => task.function.startsWith('file_reader'));
     expect(readerTasks).toHaveLength(1);
     expect(readerTasks[0].function).toBe('file_reader_pdf');
     expect(readerTasks[0].status).toBe(TaskStatus.ERROR);
+    expect(readerTasks[0].retried_from_task_id).toBeNull();
     expect((await getResource(resource.id)).content).toBe('');
   });
 
-  it('re-emits the failed task with the same input and clears the stale error content', async () => {
+  it('re-emits the failed task pointing at it and clears the stale error content', async () => {
     const resource = await createFileResource('notes.txt', 'text/plain');
     const [task] = await parseTasks(resource.id);
     await taskRepo.update(task.id, {
@@ -124,14 +162,108 @@ describe('Resource parse retry (e2e)', () => {
       content: '当前 PDF 的页数为 12页，当前剩余额度为：3页',
     });
 
-    const response = await retryParse(resource.id).expect(HttpStatus.CREATED);
+    const response = await retry(resource.id).expect(HttpStatus.CREATED);
 
-    expect(response.body.id).not.toBe(task.id);
-    expect(response.body.function).toBe('file_reader_text');
-    expect(response.body.status).toBe(TaskStatus.PENDING);
-    expect(response.body.input).toEqual(task.input);
-    expect(response.body.attrs.resource_id).toBe(resource.id);
+    expect(response.body).toHaveLength(1);
+    const [rerun] = response.body;
+    expect(rerun.id).not.toBe(task.id);
+    expect(rerun.function).toBe('file_reader_text');
+    expect(rerun.status).toBe(TaskStatus.PENDING);
+    expect(rerun.input).toEqual(task.input);
+    expect(rerun.attrs.resource_id).toBe(resource.id);
+    expect(rerun.retried_from_task_id).toBe(task.id);
     expect((await getResource(resource.id)).content).toBe('');
+  });
+
+  it('re-emits every failed task of the resource in one call', async () => {
+    const resource = await createFileResource('multi.txt', 'text/plain');
+    const [parse] = await parseTasks(resource.id);
+    await taskRepo.update(parse.id, {
+      status: TaskStatus.TIMEOUT,
+      endedAt: new Date(),
+      exception: { error: 'slow' } as Record<string, any>,
+    });
+    const tags = await addTask(resource.id, {
+      function: 'extract_tags',
+      status: TaskStatus.ERROR,
+      exception: { error: 'boom' },
+    });
+    const index = await addTask(resource.id, {
+      function: 'upsert_index',
+      status: TaskStatus.TIMEOUT,
+      exception: { error: 'slow' },
+    });
+    await addTask(resource.id, {
+      function: 'generate_title',
+      status: TaskStatus.FINISHED,
+    });
+
+    const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+    const pointers = (
+      response.body as { function: string; retried_from_task_id: string }[]
+    )
+      .map((task) => [task.function, task.retried_from_task_id])
+      .sort();
+    expect(pointers).toEqual(
+      [
+        ['file_reader_text', parse.id],
+        ['extract_tags', tags.id],
+        ['upsert_index', index.id],
+      ].sort(),
+    );
+  });
+
+  it('retries a failed non-parse task even when parsing succeeded', async () => {
+    const resource = await createLinkResource(
+      'https://example.com/tags',
+      'real parsed markdown',
+    );
+    await settlePendingTasks(resource.id);
+    await addTask(resource.id, {
+      function: 'collect_url',
+      status: TaskStatus.FINISHED,
+    });
+    const tags = await addTask(resource.id, {
+      function: 'extract_tags',
+      status: TaskStatus.ERROR,
+      exception: { error: 'boom' },
+    });
+
+    const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0].function).toBe('extract_tags');
+    expect(response.body[0].retried_from_task_id).toBe(tags.id);
+    // A non-parse retry never touches the body, stale or not
+    expect((await getResource(resource.id)).content).toBe(
+      'real parsed markdown',
+    );
+  });
+
+  it('does not re-emit a failure that was already retried', async () => {
+    const resource = await createLinkResource('https://example.com/once');
+    const first = await addTask(resource.id, {
+      function: 'collect_url',
+      status: TaskStatus.ERROR,
+      exception: { error: 'boom' },
+    });
+
+    const firstRetry = await retry(resource.id).expect(HttpStatus.CREATED);
+    expect(firstRetry.body).toHaveLength(1);
+    const second = firstRetry.body[0].id;
+    expect(firstRetry.body[0].retried_from_task_id).toBe(first.id);
+
+    await taskRepo.update(second, {
+      status: TaskStatus.ERROR,
+      endedAt: new Date(),
+      exception: { error: 'boom again' } as Record<string, any>,
+    });
+
+    const secondRetry = await retry(resource.id).expect(HttpStatus.CREATED);
+
+    expect(secondRetry.body).toHaveLength(1);
+    expect(secondRetry.body[0].retried_from_task_id).toBe(second);
   });
 
   it('keeps real content when the resource already parsed successfully before failing', async () => {
@@ -139,61 +271,96 @@ describe('Resource parse retry (e2e)', () => {
       'https://example.com/kept',
       'real parsed markdown',
     );
-    await taskRepo.save(
-      taskRepo.create({
-        namespaceId: namespaceId(),
-        userId: client.user.id,
-        function: 'collect_url',
-        input: { url: 'https://example.com/kept' },
-        payload: { resource_id: resource.id },
-        status: TaskStatus.ERROR,
-        endedAt: new Date(),
-        exception: { error: 'boom' },
-      }),
-    );
+    await settlePendingTasks(resource.id);
+    await addTask(resource.id, {
+      function: 'collect_url',
+      input: { url: 'https://example.com/kept' },
+      status: TaskStatus.ERROR,
+      exception: { error: 'boom' },
+    });
 
-    await retryParse(resource.id).expect(HttpStatus.CREATED);
+    await retry(resource.id).expect(HttpStatus.CREATED);
 
     expect((await getResource(resource.id)).content).toBe(
       'real parsed markdown',
     );
   });
 
-  it('rejects a retry while a parse task is still pending', async () => {
+  it('rejects a retry while a task is still pending', async () => {
     const resource = await createFileResource('pending.txt', 'text/plain');
 
-    const response = await retryParse(resource.id).expect(HttpStatus.CONFLICT);
-    expect(response.body.code).toBe('parse_already_running');
+    const response = await retry(resource.id).expect(HttpStatus.CONFLICT);
+    expect(response.body.code).toBe('retry_already_running');
+  });
+
+  it('rejects a retry while a non-parse task is still running', async () => {
+    const resource = await createFileResource('indexing.txt', 'text/plain');
+    await settlePendingTasks(resource.id);
+    const [parse] = await parseTasks(resource.id);
+    await taskRepo.update(parse.id, {
+      status: TaskStatus.ERROR,
+      endedAt: new Date(),
+      exception: { error: 'boom' } as Record<string, any>,
+    });
+    await addTask(resource.id, {
+      function: 'upsert_index',
+      status: TaskStatus.RUNNING,
+      endedAt: null,
+    });
+
+    const response = await retry(resource.id).expect(HttpStatus.CONFLICT);
+    expect(response.body.code).toBe('retry_already_running');
   });
 
   it('re-emits a file reader task for a blank file resource without tasks', async () => {
     const resource = await createFileResource('orphan.txt', 'text/plain');
     await taskRepo.delete({ resourceId: resource.id });
 
-    const response = await retryParse(resource.id).expect(HttpStatus.CREATED);
+    const response = await retry(resource.id).expect(HttpStatus.CREATED);
 
-    expect(response.body.function).toBe('file_reader_text');
-    expect(response.body.status).toBe(TaskStatus.PENDING);
-    expect(response.body.input.resource_id).toBe(resource.id);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0].function).toBe('file_reader_text');
+    expect(response.body[0].status).toBe(TaskStatus.PENDING);
+    expect(response.body[0].input.resource_id).toBe(resource.id);
+    // The fallback replaces nothing: there is no predecessor to point at
+    expect(response.body[0].retried_from_task_id).toBeNull();
   });
 
   it('re-collects a blank link resource from its stored url', async () => {
     const resource = await createLinkResource('https://example.com/blank');
 
-    const response = await retryParse(resource.id).expect(HttpStatus.CREATED);
+    const response = await retry(resource.id).expect(HttpStatus.CREATED);
 
-    expect(response.body.function).toBe('collect_url');
-    expect(response.body.status).toBe(TaskStatus.PENDING);
-    expect(response.body.input.url).toBe('https://example.com/blank');
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0].function).toBe('collect_url');
+    expect(response.body[0].status).toBe(TaskStatus.PENDING);
+    expect(response.body[0].input.url).toBe('https://example.com/blank');
   });
 
-  it('rejects a retry when there is nothing to re-parse', async () => {
+  it('rejects a retry when there is nothing to re-run', async () => {
     const resource = await createLinkResource(
       'https://example.com/done',
       'already parsed',
     );
+    await settlePendingTasks(resource.id);
 
-    const response = await retryParse(resource.id).expect(HttpStatus.CONFLICT);
+    const response = await retry(resource.id).expect(HttpStatus.CONFLICT);
+    expect(response.body.code).toBe('retry_not_eligible');
+  });
+
+  it('does not resurrect a canceled task', async () => {
+    const resource = await createLinkResource(
+      'https://example.com/canceled',
+      'already parsed',
+    );
+    await settlePendingTasks(resource.id);
+    await addTask(resource.id, {
+      function: 'extract_tags',
+      status: TaskStatus.CANCELED,
+      canceledAt: new Date(),
+    });
+
+    const response = await retry(resource.id).expect(HttpStatus.CONFLICT);
     expect(response.body.code).toBe('retry_not_eligible');
   });
 
@@ -216,7 +383,7 @@ describe('Resource parse retry (e2e)', () => {
 
     await viewerClient
       .post(
-        `/api/v1/namespaces/${namespaceId()}/resources/${resource.id}/retry-parse`,
+        `/api/v1/namespaces/${namespaceId()}/resources/${resource.id}/retry`,
       )
       .expect(HttpStatus.FORBIDDEN);
   });
@@ -227,12 +394,13 @@ describe('Resource parse retry (e2e)', () => {
     const response = await client
       .request()
       .post(
-        `/internal/api/v1/namespaces/${namespaceId()}/resources/${resource.id}/retry-parse`,
+        `/internal/api/v1/namespaces/${namespaceId()}/resources/${resource.id}/retry`,
       )
       .set('X-User-ID', client.user.id)
       .expect(HttpStatus.CREATED);
 
-    expect(response.body.function).toBe('collect_url');
-    expect(response.body.status).toBe(TaskStatus.PENDING);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0].function).toBe('collect_url');
+    expect(response.body[0].status).toBe(TaskStatus.PENDING);
   });
 });

@@ -116,14 +116,14 @@ export class NamespaceResourcesController {
     });
   }
 
-  @Post(':resourceId/retry-parse')
+  @Post(':resourceId/retry')
   @CheckNamespaceReadonly()
-  async retryParse(
+  async retry(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
   ) {
-    return await this.resourceRetryService.retryParse(
+    return await this.resourceRetryService.retry(
       namespaceId,
       userId,
       resourceId,

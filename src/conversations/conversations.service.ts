@@ -295,7 +295,7 @@ export class ConversationsService {
     });
     if (!conversation) {
       throw new AppException(
-        this.i18n.t('namespace.errors.notAMember'),
+        this.i18n.t('conversation.errors.accessDenied'),
         'CONVERSATION_ACCESS_DENIED',
         HttpStatus.FORBIDDEN,
       );

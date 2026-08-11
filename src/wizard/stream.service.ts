@@ -1018,12 +1018,12 @@ export class StreamService implements OnModuleDestroy {
     requestId: string,
     mode: 'ask' | 'write',
   ): Promise<Observable<MessageEvent>> {
+    await this.conversationsService.findOneForUserInNamespace(
+      requestDto.conversation_id,
+      userId,
+      namespaceId,
+    );
     try {
-      await this.conversationsService.findOneForUserInNamespace(
-        requestDto.conversation_id,
-        userId,
-        namespaceId,
-      );
       for (const tool of requestDto.tools || []) {
         if (tool.name === 'private_search') {
           tool.visible_resources = await this.getUserVisibleResources(

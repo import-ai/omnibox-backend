@@ -3,7 +3,29 @@ import {
   MessageStatus,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { TestClient } from 'test/test-client';
+
+async function addNamespaceMember(
+  owner: TestClient,
+  member: TestClient,
+  namespaceId: string,
+) {
+  const invitation = await owner
+    .post(`/api/v1/namespaces/${namespaceId}/invitations`)
+    .send({
+      namespaceRole: NamespaceRole.MEMBER,
+      rootPermission: ResourcePermission.FULL_ACCESS,
+    })
+    .expect(HttpStatus.CREATED);
+
+  await member
+    .post(
+      `/api/v1/namespaces/${namespaceId}/invitations/${invitation.body.id}/accept`,
+    )
+    .expect(HttpStatus.CREATED);
+}
 
 describe('ConversationsController (e2e)', () => {
   let client: TestClient;
@@ -43,6 +65,37 @@ describe('ConversationsController (e2e)', () => {
       await client
         .post('/api/v1/namespaces/invalid-namespace/conversations')
         .expect(HttpStatus.FORBIDDEN);
+    });
+  });
+
+  describe('POST /api/v1/namespaces/:namespaceId/conversations/:id/messages', () => {
+    it('rejects a namespace member writing to another user conversation without creating a message', async () => {
+      const member = await TestClient.create();
+      tempClients.push(member);
+      await addNamespaceMember(client, member, client.namespace.id);
+      const conversation = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+        .expect(HttpStatus.CREATED);
+
+      await member
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversation.body.id}/messages`,
+        )
+        .send({
+          message: {
+            role: OpenAIMessageRole.USER,
+            content: 'This must not be persisted',
+          },
+          status: MessageStatus.SUCCESS,
+        })
+        .expect(HttpStatus.FORBIDDEN);
+
+      const detail = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversation.body.id}`,
+        )
+        .expect(HttpStatus.OK);
+      expect(Object.keys(detail.body.mapping)).toHaveLength(0);
     });
   });
 

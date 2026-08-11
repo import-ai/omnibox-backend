@@ -71,11 +71,14 @@ describe('WizardController (e2e)', () => {
           )
           .expect(HttpStatus.OK);
 
-        await memberClient
+        const response = await memberClient
           .post(`/api/v1/namespaces/${client.namespace.id}/wizard/${endpoint}`)
           .set('X-Request-Id', `unauthorized-${endpoint}`)
-          .send(agentBody(ownerConversationId))
-          .expect(HttpStatus.FORBIDDEN);
+          .send(agentBody(ownerConversationId));
+
+        // SSE commits the POST response before surfacing the stream error.
+        expect(response.status).toBe(HttpStatus.CREATED);
+        expect(response.headers['content-type']).toContain('text/event-stream');
 
         const after = await client
           .get(
@@ -88,17 +91,22 @@ describe('WizardController (e2e)', () => {
       },
     );
 
-    it.each(['resume', 'cancel'])(
-      'rejects stream %s for another namespace member',
-      async (endpoint) => {
-        await memberClient
-          .post(
-            `/api/v1/namespaces/${client.namespace.id}/wizard/stream/${endpoint}`,
-          )
-          .send({ conversation_id: ownerConversationId })
-          .expect(HttpStatus.FORBIDDEN);
-      },
-    );
+    it('rejects stream resume for another namespace member without exposing events', async () => {
+      const response = await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/stream/resume`)
+        .send({ conversation_id: ownerConversationId })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.headers['content-type']).toContain('text/event-stream');
+      expect(response.text).not.toContain(ownerConversationId);
+    });
+
+    it('rejects stream cancel for another namespace member', async () => {
+      await memberClient
+        .post(`/api/v1/namespaces/${client.namespace.id}/wizard/stream/cancel`)
+        .send({ conversation_id: ownerConversationId })
+        .expect(HttpStatus.FORBIDDEN);
+    });
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/wizard/ask', () => {

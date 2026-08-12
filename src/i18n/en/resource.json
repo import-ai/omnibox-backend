@@ -29,6 +29,7 @@
     "smartFolderCannotBeParent": "Smart folders cannot be used as parent resources",
     "rssFolderChildMustBeRssItem": "RSS folders can only contain subscription items",
     "rssItemParentMustBeRssFolder": "Subscription items can only live inside an RSS folder",
+    "rssItemCannotBeParent": "Subscription items cannot contain other resources",
     "readOnly": "This resource is read-only",
     "smartFolderNotFound": "Smart folder not found",
     "smartFolderConditionOperatorInvalid": "Invalid smart folder condition operator",

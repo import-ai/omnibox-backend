@@ -369,6 +369,74 @@ describe('RssFoldersController (e2e)', () => {
     ).rejects.toMatchObject({ code: 'RSS_ITEM_PARENT_MUST_BE_RSS_FOLDER' });
   });
 
+  it('rejects any child of an rss item', async () => {
+    // An item is a leaf: it is neither a container the user can fill nor a
+    // move target, otherwise resources would hide inside poller-owned rows.
+    const dataSource = client.app.get(DataSource);
+    const resourceRepo = dataSource.getRepository(Resource);
+    const created = (
+      await createFolder({
+        name: 'Leaf Items',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const item = await resourceRepo.save(
+      resourceRepo.create({
+        namespaceId: client.namespace.id,
+        userId: client.user.id,
+        parentId: created.resource.id,
+        name: 'Leaf item',
+        resourceType: ResourceType.RSS_ITEM,
+        content: 'body',
+        contentSize: '4',
+        attrs: { link_id: created.links[0].id, guid: 'guid-leaf' },
+      }),
+    );
+    const base = `/api/v1/namespaces/${client.namespace.id}/resources`;
+
+    for (const resourceType of ['doc', 'folder', 'link']) {
+      const response = await client
+        .post(base)
+        .send({
+          name: `child ${resourceType}`,
+          resourceType,
+          parentId: item.id,
+        })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+      expect(response.body.code).toBe('rss_item_cannot_be_parent');
+    }
+
+    // Moving an existing resource under an item is refused for the same reason.
+    const doc = (
+      await client
+        .post(base)
+        .send({
+          name: 'stray doc',
+          resourceType: 'doc',
+          parentId: client.namespace.root_resource_id,
+        })
+        .expect(201)
+    ).body;
+    const moved = await client
+      .post(`${base}/${doc.id}/move/${item.id}`)
+      .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect(moved.body.code).toBe('rss_item_cannot_be_parent');
+
+    // The item really has no children.
+    const children = await client
+      .get(`${base}/${item.id}/children`)
+      .expect(200);
+    expect(children.body.records ?? children.body.data ?? []).toHaveLength(0);
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}`,
+      )
+      .expect(200);
+    await resourceRepo.softDelete({ id: item.id });
+  });
+
   it('rejects every user-facing write to an rss item', async () => {
     const dataSource = client.app.get(DataSource);
     const resourceRepo = dataSource.getRepository(Resource);

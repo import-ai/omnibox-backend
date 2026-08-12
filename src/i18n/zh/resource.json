@@ -29,6 +29,7 @@
     "smartFolderCannotBeParent": "智能文件夹不能作为父资源",
     "rssFolderChildMustBeRssItem": "订阅文件夹只能包含订阅条目",
     "rssItemParentMustBeRssFolder": "订阅条目只能位于订阅文件夹中",
+    "rssItemCannotBeParent": "订阅条目不能包含其他资源",
     "readOnly": "该资源为只读",
     "smartFolderNotFound": "智能文件夹未找到",
     "smartFolderConditionOperatorInvalid": "智能文件夹条件操作符无效",

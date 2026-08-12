@@ -112,8 +112,8 @@ export class ResourcesService {
 
   /**
    * Containment rules of the resource tree. An rss folder holds exactly its
-   * polled items and nothing else, and an item exists nowhere but inside one;
-   * smart folders are virtual and hold nothing at all.
+   * polled items and nothing else, an item exists nowhere but inside one and
+   * is itself a leaf; smart folders are virtual and hold nothing at all.
    */
   private assertContainment(
     parent: ResourceMetaDto | null,
@@ -124,6 +124,14 @@ export class ResourcesService {
       throw new AppException(
         message,
         'SMART_FOLDER_CANNOT_BE_PARENT',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (parent?.resourceType === ResourceType.RSS_ITEM) {
+      const message = this.i18n.t('resource.errors.rssItemCannotBeParent');
+      throw new AppException(
+        message,
+        'RSS_ITEM_CANNOT_BE_PARENT',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }

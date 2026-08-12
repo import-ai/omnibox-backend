@@ -47,6 +47,12 @@ const MAX_PARSE_ATTEMPTS = 6;
 const PARSE_BACKOFF_BASE_MS = 5 * 60 * 1000; // matches the poll cadence
 const PARSE_BACKOFF_CAP_MS = 6 * 60 * 60 * 1000;
 
+// The partial unique index that carries an rss item's (link_id, guid) identity
+// (see the add-rss-item-resources migration). Postgres names it as the
+// violated constraint, which is how a losing insert is told apart from any
+// other unique violation raised while creating an item.
+const RSS_ITEM_IDENTITY_INDEX = 'uq_resources_rss_item_identity';
+
 // Delay before the nth failed attempt may be retried: 10m, 20m, 40m, ... capped.
 function parseBackoffMs(attempts: number): number {
   return Math.min(PARSE_BACKOFF_CAP_MS, PARSE_BACKOFF_BASE_MS * 2 ** attempts);
@@ -542,25 +548,34 @@ export class RssPollingService {
     try {
       await this.insertItemResource(link, folder, item);
     } catch (err) {
-      // An overlapping poll of the same url may have inserted this copy in
-      // between the existence check and here; the unique index rejects the
-      // second insert, which is exactly the outcome we want. Anything else is a
-      // real failure and fails the poll.
-      if (!this.isDuplicateItemError(err)) {
+      // An overlapping poll may have inserted this copy in between the
+      // existence check and here; the identity index rejects the second insert,
+      // which is exactly the outcome we want. Anything else — including another
+      // unique violation raised further down the insert, such as two polls
+      // racing to create the same owner's first storage-usage row — is a real
+      // failure and fails the poll.
+      if (!this.isDuplicateItemIdentityError(err)) {
         throw err;
       }
       this.logger.warn(
-        `Skipped rss item ${item.guid} for link ${link.id}: a concurrent poll created it`,
+        `Skipped rss item ${item.guid} for link ${link.id}: its (link_id, guid) copy already exists`,
       );
     }
   }
 
-  // Postgres unique_violation, however the driver wrapped it. The only unique
-  // constraint an item insert can hit is its (link_id, guid) identity: item
-  // names are deliberately exempt from the name-uniqueness check.
-  private isDuplicateItemError(err: unknown): boolean {
-    const error = err as { code?: string; driverError?: { code?: string } };
-    return error?.code === '23505' || error?.driverError?.code === '23505';
+  // Postgres unique_violation on the item's (link_id, guid) identity index,
+  // however the driver wrapped it. Matched by constraint name rather than by
+  // the 23505 code alone: an item insert also writes rows (storage usage, for
+  // one) whose own unique constraints must never be swallowed here.
+  private isDuplicateItemIdentityError(err: unknown): boolean {
+    const error = err as {
+      code?: string;
+      constraint?: string;
+      driverError?: { code?: string; constraint?: string };
+    };
+    const code = error?.driverError?.code ?? error?.code;
+    const constraint = error?.driverError?.constraint ?? error?.constraint;
+    return code === '23505' && constraint === RSS_ITEM_IDENTITY_INDEX;
   }
 
   private async insertItemResource(

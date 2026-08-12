@@ -1850,7 +1850,10 @@ export class NamespaceResourcesService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
-    // Fetch all trash items
+    // Fetch all trash items. Retired rss items are excluded for the same reason
+    // the trash listing hides them (getDeletedResources): they belong to their
+    // subscription, not to the user, so emptying the trash must neither delete
+    // them nor count them.
     const trashItems = await this.resourceRepository.find({
       withDeleted: true,
       where: {
@@ -1858,6 +1861,7 @@ export class NamespaceResourcesService {
         deletedAt: Not(IsNull()),
         parentId: Not(IsNull()),
         permanentDeletedAt: IsNull(),
+        resourceType: Not(ResourceType.RSS_ITEM),
       },
     });
 

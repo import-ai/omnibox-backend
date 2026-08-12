@@ -173,6 +173,112 @@ describe('SharedResources (e2e)', () => {
     expect(items.map((item) => item.name)).toEqual(['Newer', 'Older']);
   });
 
+  it('pages a shared feed and reports how many items it holds', async () => {
+    const first = await asViewer()
+      .get(
+        `/api/v1/shares/${shareId}/resources/${folderResourceId}/children?limit=1&offset=0`,
+      )
+      .expect(200);
+    expect(first.body.map((item: { name: string }) => item.name)).toEqual([
+      'Newer',
+    ]);
+    expect(first.headers['x-total-count']).toBe('2');
+
+    const second = await asViewer()
+      .get(
+        `/api/v1/shares/${shareId}/resources/${folderResourceId}/children?limit=1&offset=1`,
+      )
+      .expect(200);
+    expect(second.body.map((item: { name: string }) => item.name)).toEqual([
+      'Older',
+    ]);
+
+    // Past the end the listing is empty rather than the first page again, so a
+    // client paging to the bottom stops there.
+    const third = await asViewer()
+      .get(
+        `/api/v1/shares/${shareId}/resources/${folderResourceId}/children?limit=1&offset=2`,
+      )
+      .expect(200);
+    expect(third.body).toEqual([]);
+    expect(third.headers['x-total-count']).toBe('2');
+  });
+
+  describe('paging an ordinary shared folder', () => {
+    const PAGE_SIZE = 10;
+    let pagedFolderId: string;
+    let pagedShareId: string;
+
+    beforeAll(async () => {
+      pagedFolderId = (
+        await client
+          .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+          .send({
+            name: 'Paged folder',
+            resourceType: 'folder',
+            parentId: client.namespace.root_resource_id,
+          })
+          .expect(201)
+      ).body.id;
+      // Exactly one page's worth: the size a client requests, so a listing that
+      // ignored the window would look like there is always one more page.
+      for (let index = 1; index <= PAGE_SIZE; index++) {
+        await client
+          .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+          .send({
+            name: `Paged doc ${index}`,
+            resourceType: 'doc',
+            parentId: pagedFolderId,
+          })
+          .expect(201);
+      }
+      pagedShareId = (
+        await client
+          .patch(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${pagedFolderId}/share`,
+          )
+          .send({ enabled: true, all_resources: true })
+          .expect(200)
+      ).body.id;
+    });
+
+    const pageOf = (offset: number, limit: number) =>
+      asViewer()
+        .get(
+          `/api/v1/shares/${pagedShareId}/resources/${pagedFolderId}/children?limit=${limit}&offset=${offset}`,
+        )
+        .expect(200);
+
+    it('ends after a folder whose children exactly fill one page', async () => {
+      const first = await pageOf(0, PAGE_SIZE);
+      expect(first.body).toHaveLength(PAGE_SIZE);
+      expect(first.headers['x-total-count']).toBe(String(PAGE_SIZE));
+
+      const second = await pageOf(PAGE_SIZE, PAGE_SIZE);
+      expect(second.body).toEqual([]);
+    });
+
+    it('walks the listing without repeating or dropping a child', async () => {
+      const paged: string[] = [];
+      for (let offset = 0; offset < PAGE_SIZE + 3; offset += 3) {
+        const response = await pageOf(offset, 3);
+        paged.push(
+          ...response.body.map((child: { name: string }) => child.name),
+        );
+      }
+      expect(new Set(paged).size).toBe(PAGE_SIZE);
+
+      const whole = await asViewer()
+        .get(
+          `/api/v1/shares/${pagedShareId}/resources/${pagedFolderId}/children`,
+        )
+        .expect(200);
+      expect(paged).toEqual(
+        whole.body.map((child: { name: string }) => child.name),
+      );
+    });
+  });
+
   it('reports an rss item as a leaf', async () => {
     const items = await listChildren(folderResourceId);
     expect(await listChildren(items[0].id)).toEqual([]);

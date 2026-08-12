@@ -567,6 +567,26 @@ describe('RssFoldersController (e2e)', () => {
     expect(afterRestore.deletedAt).not.toBeNull();
     expect(afterRestore.parentId).toBe(folderId);
 
+    // Deleting it forever is not the user's call either: the trash never
+    // offered it, so the mutation must agree with the listing.
+    const purged = await client
+      .delete(`${base}/trash/${item.id}`)
+      .expect(HttpStatus.FORBIDDEN);
+    expect(purged.body.code).toBe('resource_read_only');
+
+    // Emptying the trash likewise reaches only what the trash listed, and says
+    // so in its count.
+    const listed = (await client.get(`${base}/trash?limit=100`).expect(200))
+      .body as { total: number };
+    const emptied = await client.delete(`${base}/trash`).expect(200);
+    expect(emptied.body.deleted_count).toBe(listed.total);
+    const afterEmpty = await resourceRepo.findOneOrFail({
+      where: { id: item.id },
+      withDeleted: true,
+    });
+    expect(afterEmpty.permanentDeletedAt).toBeNull();
+    expect(afterEmpty.deletedAt).not.toBeNull();
+
     // The same holds once the rss folder itself is in the trash: the refused
     // restore must not re-parent the item to the user root on its way out.
     await client

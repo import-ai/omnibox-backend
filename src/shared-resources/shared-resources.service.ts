@@ -23,6 +23,27 @@ import { last } from 'omniboxd/utils/arrays';
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 
+export interface PaginationOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface SharedChildrenPage {
+  resources: SharedResourceMetaDto[];
+  total: number;
+}
+
+// Same window semantics as the workspace children listing: no limit means the
+// whole (remaining) listing.
+function paginate<T>(items: T[], options?: PaginationOptions): T[] {
+  const offset = Math.max(0, options?.offset ?? 0);
+  const limit =
+    options?.limit === undefined ? undefined : Math.max(1, options.limit);
+  return limit === undefined
+    ? items.slice(offset)
+    : items.slice(offset, offset + limit);
+}
+
 @Injectable()
 export class SharedResourcesService {
   constructor(
@@ -275,27 +296,33 @@ export class SharedResourcesService {
 
   private async getSharedSmartFolderMatchedChildren(
     share: Share,
-  ): Promise<SharedResourceMetaDto[]> {
+    options?: PaginationOptions,
+  ): Promise<SharedChildrenPage> {
     const ownerUserId = this.getShareOwnerIdOrFail(share);
-    const children = await this.smartFoldersService.listChildren(
-      ownerUserId,
-      share.namespaceId,
-      share.resourceId,
-    );
-    return children.map((child) => {
-      const dto = new SharedResourceMetaDto();
-      dto.id = child.id;
-      dto.parentId = share.resourceId;
-      dto.name = child.name;
-      dto.resourceType = child.resourceType;
-      dto.createdAt = child.createdAt;
-      dto.updatedAt = child.updatedAt;
-      dto.hasChildren = child.hasChildren;
-      dto.attrs = { ...child.attrs };
-      delete dto.attrs.transcript;
-      delete dto.attrs.video_info;
-      return dto;
-    });
+    const { resources, total } =
+      await this.smartFoldersService.listChildrenWithTotal(
+        ownerUserId,
+        share.namespaceId,
+        share.resourceId,
+        { limit: options?.limit, offset: options?.offset },
+      );
+    return {
+      resources: resources.map((child) => {
+        const dto = new SharedResourceMetaDto();
+        dto.id = child.id;
+        dto.parentId = share.resourceId;
+        dto.name = child.name;
+        dto.resourceType = child.resourceType;
+        dto.createdAt = child.createdAt;
+        dto.updatedAt = child.updatedAt;
+        dto.hasChildren = child.hasChildren;
+        dto.attrs = { ...child.attrs };
+        delete dto.attrs.transcript;
+        delete dto.attrs.video_info;
+        return dto;
+      }),
+      total,
+    };
   }
 
   private async isSharedSmartFolderMatchOrDescendant(
@@ -338,7 +365,25 @@ export class SharedResourcesService {
   async getSharedResourceChildren(
     share: Share,
     resourceId: string,
+    options?: PaginationOptions,
   ): Promise<SharedResourceMetaDto[]> {
+    const { resources } = await this.getSharedResourceChildrenPage(
+      share,
+      resourceId,
+      options,
+    );
+    return resources;
+  }
+
+  // Pages a shared folder's children exactly like the workspace listing does:
+  // a viewer of a share holding thousands of rss items must be able to read a
+  // page at a time, and `total` lets a caller size the listing without walking
+  // it. Omitting the limit keeps the whole listing, as before.
+  async getSharedResourceChildrenPage(
+    share: Share,
+    resourceId: string,
+    options?: PaginationOptions,
+  ): Promise<SharedChildrenPage> {
     const resource = await this.getAndValidateResource(share, resourceId);
     const shareRoot = await this.resourcesService.getResource(
       share.namespaceId,
@@ -353,7 +398,7 @@ export class SharedResourcesService {
         ResourceType.RSS_FOLDER,
       ].includes(resource.resourceType)
     ) {
-      return [];
+      return { resources: [], total: 0 };
     }
 
     if (
@@ -361,11 +406,11 @@ export class SharedResourcesService {
       resource.id !== share.resourceId &&
       !(await this.isSharedSmartFolderMatchOrDescendant(share, resource))
     ) {
-      return [];
+      return { resources: [], total: 0 };
     }
 
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
-      return await this.getSharedSmartFolderMatchedChildren(share);
+      return await this.getSharedSmartFolderMatchedChildren(share, options);
     }
 
     const children = await this.resourcesService.getChildren(
@@ -373,18 +418,9 @@ export class SharedResourcesService {
       [resource.id],
     );
     if (children.length === 0) {
-      return [];
+      return { resources: [], total: 0 };
     }
 
-    const subChildren = await this.resourcesService.getChildren(
-      share.namespaceId,
-      children.map((child) => child.id),
-    );
-    const parentIds = new Set(
-      subChildren
-        .map((child) => child.parentId)
-        .filter((parentId): parentId is string => parentId !== null),
-    );
     // A feed reads newest-published first wherever it is shown, and the share's
     // own sort is about the resources its owner arranged, not about the
     // articles a poller filed under an rss folder.
@@ -395,13 +431,33 @@ export class SharedResourcesService {
             sortOrder: ResourceSortOrder.DESC,
           }
         : { sortBy: share.sortBy, sortOrder: share.sortOrder };
-    return sortResources(children, sortOptions).map((child) =>
-      SharedResourceMetaDto.fromResourceMeta(
-        share,
-        ResourceMetaDto.fromEntity(child),
-        parentIds.has(child.id),
-      ),
+    const sorted = sortResources(children, sortOptions);
+    const page = paginate(sorted, options);
+    if (page.length === 0) {
+      return { resources: [], total: sorted.length };
+    }
+
+    // Only the page being returned needs a has-children lookup; asking for the
+    // whole listing's descendants would put every child id in one IN list.
+    const subChildren = await this.resourcesService.getChildren(
+      share.namespaceId,
+      page.map((child) => child.id),
     );
+    const parentIds = new Set(
+      subChildren
+        .map((child) => child.parentId)
+        .filter((parentId): parentId is string => parentId !== null),
+    );
+    return {
+      resources: page.map((child) =>
+        SharedResourceMetaDto.fromResourceMeta(
+          share,
+          ResourceMetaDto.fromEntity(child),
+          parentIds.has(child.id),
+        ),
+      ),
+      total: sorted.length,
+    };
   }
 
   async getAndValidateResource(
@@ -518,10 +574,9 @@ export class SharedResourcesService {
       if (!share.allResources) {
         return [parent];
       }
-      return [
-        parent,
-        ...(await this.getSharedSmartFolderMatchedChildren(share)),
-      ];
+      const { resources } =
+        await this.getSharedSmartFolderMatchedChildren(share);
+      return [parent, ...resources];
     }
     const subResources = share.allResources
       ? await this.resourcesService.getAllSubResources(share.namespaceId, [

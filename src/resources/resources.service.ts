@@ -1654,6 +1654,11 @@ export class ResourcesService {
       );
     }
 
+    // Retired rss items are never listed in the trash and are not the user's to
+    // delete: they are dropped with their subscription, or restored with their
+    // folder.
+    this.assertNotReadOnly(resource.resourceType);
+
     // Check if already permanently deleted
     if (resource.permanentDeletedAt) {
       const message = this.i18n.t('resource.errors.trashItemNotFound');

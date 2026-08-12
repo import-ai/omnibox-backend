@@ -12,7 +12,7 @@ import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
 import { StorageType } from 'omniboxd/storage-usages/entities/storage-usage.entity';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { TestClient } from 'test/test-client';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
 
 // Feeds are addressed by url, so every scenario gets its own so that the specs
 // never share poll state.
@@ -696,6 +696,53 @@ describe('RssItem lifecycle (e2e)', () => {
   describe('concurrency', () => {
     const FEED_RACE = 'https://example.com/lifecycle-race';
     const FEED_LOSER = 'https://example.com/lifecycle-loser';
+    const FEED_WRAPPED = 'https://example.com/lifecycle-wrapped';
+    const FEED_OTHER_UNIQUE = 'https://example.com/lifecycle-other-unique';
+
+    // Commits the copy a rival poll would have created, on its own connection,
+    // so the create running inside the poller's transaction really collides
+    // with the (link_id, guid) identity index.
+    const insertRivalItemCopy = async (props: {
+      namespaceId: string;
+      parentId: string | null;
+      userId: string | null;
+      name?: string;
+      attrs?: Record<string, any>;
+    }) => {
+      await dataSource.query(
+        `INSERT INTO resources (id, namespace_id, user_id, parent_id, resource_type, name, content, attrs)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          `rival${Date.now().toString(36)}`.slice(0, 16),
+          props.namespaceId,
+          props.userId,
+          props.parentId,
+          ResourceType.RSS_ITEM,
+          props.name ?? '',
+          '',
+          JSON.stringify(props.attrs ?? {}),
+        ],
+      );
+    };
+
+    // A unique violation in the shape the driver hands up: the pg error carries
+    // the code and the constraint, and TypeORM wraps it. Nothing is copied onto
+    // the wrapper, so a predicate reading only the top-level `code` sees
+    // nothing at all.
+    const wrappedUniqueViolation = (constraint: string) => {
+      const driverError = new Error(
+        `duplicate key value violates unique constraint "${constraint}"`,
+      );
+      Object.defineProperties(driverError, {
+        code: { value: '23505', enumerable: false },
+        constraint: { value: constraint, enumerable: false },
+      });
+      return new QueryFailedError(
+        'INSERT INTO "resources" ...',
+        [],
+        driverError,
+      );
+    };
 
     it('drops a copy another poll already created instead of failing the poll', async () => {
       // Overlapping polls are prevented by the POLLING marker, but that lock
@@ -724,15 +771,25 @@ describe('RssItem lifecycle (e2e)', () => {
         )
       ).resource.id;
 
+      // The losing insert is not simulated: the first item's create is made to
+      // race for real. The mock lets a "concurrent poll" commit the identical
+      // copy on another connection and then calls the real create, which hits
+      // the identity index and fails exactly as it would in production.
       const resourcesService = client.app.get(ResourcesService);
+      const realCreateResource = resourcesService.createResource.bind(
+        resourcesService,
+      ) as typeof resourcesService.createResource;
+      let raced: unknown;
       const createSpy = jest
         .spyOn(resourcesService, 'createResource')
-        .mockImplementationOnce(() => {
-          const error: Error & { code?: string } = new Error(
-            'duplicate key value violates unique constraint',
-          );
-          error.code = '23505';
-          return Promise.reject(error);
+        .mockImplementationOnce(async (props, tx, autoRename, options) => {
+          await insertRivalItemCopy(props);
+          try {
+            return await realCreateResource(props, tx, autoRename, options);
+          } catch (err) {
+            raced = err;
+            throw err;
+          }
         });
       try {
         expect(await repoll(FEED_LOSER)).toBe('succeed');
@@ -740,13 +797,102 @@ describe('RssItem lifecycle (e2e)', () => {
         createSpy.mockRestore();
       }
 
-      // The item whose insert lost the race is simply absent; its sibling is
-      // created as usual and the next poll picks the loser up.
-      expect(await folderItems(folderId)).toHaveLength(1);
+      // The insert really did fail on the identity index, wrapped by the
+      // driver: the poller must recognise it in that shape, not only as a bare
+      // `code` on the thrown error.
+      expect(raced).toBeInstanceOf(QueryFailedError);
+      expect((raced as QueryFailedError).driverError).toMatchObject({
+        code: '23505',
+        constraint: 'uq_resources_rss_item_identity',
+      });
+
+      // The copy the poll lost is the rival's, so the folder holds one of each
+      // item and the poll as a whole still succeeded.
+      expect(
+        (await folderItems(folderId)).map((item) => item.name).sort(),
+      ).toEqual(['Lost race', 'Won race']);
       expect(await repoll(FEED_LOSER)).toBe('succeed');
       expect(
         (await folderItems(folderId)).map((item) => item.name).sort(),
       ).toEqual(['Lost race', 'Won race']);
+    });
+
+    it('recognises the violation when only the wrapped driver error carries it', async () => {
+      // Same failure, minus the properties TypeORM happens to copy onto the
+      // wrapper: a predicate that only reads the top-level `code` would treat
+      // this as a real failure and take the poll down.
+      feeds.set(FEED_WRAPPED, [
+        {
+          title: 'Wrapped',
+          link: 'https://example.com/wrapped',
+          guid: 'wrapped',
+          description: 'wrapped body',
+        },
+      ]);
+      const folderId = (
+        await createFolder(
+          otherClient,
+          'Wrapped folder',
+          await privateRootId(otherClient),
+          [FEED_WRAPPED],
+        )
+      ).resource.id;
+
+      const resourcesService = client.app.get(ResourcesService);
+      const createSpy = jest
+        .spyOn(resourcesService, 'createResource')
+        .mockImplementationOnce(() =>
+          Promise.reject(
+            wrappedUniqueViolation('uq_resources_rss_item_identity'),
+          ),
+        );
+      try {
+        expect(await repoll(FEED_WRAPPED)).toBe('succeed');
+      } finally {
+        createSpy.mockRestore();
+      }
+      expect(await folderItems(folderId)).toHaveLength(0);
+    });
+
+    it('fails the poll on a unique violation that is not the item identity', async () => {
+      // Creating an item also writes the owner's storage usage row, whose own
+      // unique index two concurrent polls of different urls can collide on.
+      // Swallowing that would silently drop the item; it must fail the poll.
+      feeds.set(FEED_OTHER_UNIQUE, [
+        {
+          title: 'Other unique',
+          link: 'https://example.com/other-unique',
+          guid: 'other-unique',
+          description: 'other unique body',
+        },
+      ]);
+      const folderId = (
+        await createFolder(
+          otherClient,
+          'Other unique folder',
+          await privateRootId(otherClient),
+          [FEED_OTHER_UNIQUE],
+        )
+      ).resource.id;
+
+      const resourcesService = client.app.get(ResourcesService);
+      const createSpy = jest
+        .spyOn(resourcesService, 'createResource')
+        .mockImplementationOnce(() =>
+          Promise.reject(
+            wrappedUniqueViolation('UQ_storage_usages_namespace_user_type'),
+          ),
+        );
+      try {
+        expect(await repoll(FEED_OTHER_UNIQUE)).toBe('failed');
+      } finally {
+        createSpy.mockRestore();
+      }
+      expect(await folderItems(folderId)).toHaveLength(0);
+
+      // Nothing was lost: the next poll creates the item as usual.
+      expect(await repoll(FEED_OTHER_UNIQUE)).toBe('succeed');
+      expect(await folderItems(folderId)).toHaveLength(1);
     });
 
     it('holds the (link, guid) identity under two concurrent polls', async () => {

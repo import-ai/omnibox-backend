@@ -555,9 +555,12 @@ export class RssPollingService {
     }
   }
 
+  // Postgres unique_violation, however the driver wrapped it. The only unique
+  // constraint an item insert can hit is its (link_id, guid) identity: item
+  // names are deliberately exempt from the name-uniqueness check.
   private isDuplicateItemError(err: unknown): boolean {
-    const code = (err as { code?: string } | null)?.code;
-    return code === '23505';
+    const error = err as { code?: string; driverError?: { code?: string } };
+    return error?.code === '23505' || error?.driverError?.code === '23505';
   }
 
   private async insertItemResource(

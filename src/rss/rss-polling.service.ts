@@ -434,11 +434,15 @@ export class RssPollingService {
   // own namespace, under its own rss folder resource. Only missing pairs are
   // created — an existing copy (even a soft-deleted one) is left alone, so a
   // removed item is never resurrected and a revised item is refreshed through
-  // the parse fan-out rather than re-created.
+  // the parse fan-out rather than re-created. A copy whose feed title changed
+  // is renamed in place.
   //
-  // A read-then-insert is safe without ON CONFLICT because the per-url advisory
-  // lock in claim() serializes every poll of this url across folders,
-  // namespaces and instances.
+  // Polls of one url do not normally overlap: claim() leaves a POLLING marker
+  // that makes every later claim skip the url. That is a lock with a timeout,
+  // though — after POLL_STALE_MS a second worker may take over a poll that is
+  // merely slow rather than dead — so the read-then-insert below can still race.
+  // The (link_id, guid) unique index is what actually guarantees a single copy;
+  // a losing insert is dropped instead of failing the poll.
   private async linkItems(url: string, stored: StoredItem[]): Promise<void> {
     if (stored.length === 0) {
       return;
@@ -463,13 +467,16 @@ export class RssPollingService {
     }
     const items = [...itemByGuid.values()];
 
-    const existing = new Set(
+    const existing = new Map(
       (
         await this.resourceRepository
           .createQueryBuilder('resource')
           // Soft-deleted copies count as existing.
           .withDeleted()
-          .select("resource.attrs->>'link_id'", 'linkId')
+          .select('resource.id', 'id')
+          .addSelect('resource.name', 'name')
+          .addSelect('resource.deleted_at', 'deletedAt')
+          .addSelect("resource.attrs->>'link_id'", 'linkId')
           .addSelect("resource.attrs->>'guid'", 'guid')
           .where('resource.resource_type = :resourceType', {
             resourceType: ResourceType.RSS_ITEM,
@@ -480,8 +487,14 @@ export class RssPollingService {
           .andWhere("resource.attrs->>'guid' IN (:...guids)", {
             guids: items.map((item) => item.guid),
           })
-          .getRawMany<{ linkId: string; guid: string }>()
-      ).map((row) => `${row.linkId}:${row.guid}`),
+          .getRawMany<{
+            id: string;
+            name: string;
+            deletedAt: Date | null;
+            linkId: string;
+            guid: string;
+          }>()
+      ).map((row) => [`${row.linkId}:${row.guid}`, row]),
     );
 
     for (const link of links) {
@@ -490,7 +503,9 @@ export class RssPollingService {
         continue;
       }
       for (const item of items) {
-        if (existing.has(`${link.id}:${item.guid}`)) {
+        const copy = existing.get(`${link.id}:${item.guid}`);
+        if (copy) {
+          await this.renameItemResource(folder, copy, item);
           continue;
         }
         await this.createItemResource(link, folder, item);
@@ -498,7 +513,54 @@ export class RssPollingService {
     }
   }
 
+  // Follows a corrected feed title on the copy that already exists. A retired
+  // copy is left as it was: it is no longer part of any subscription.
+  private async renameItemResource(
+    folder: Resource,
+    copy: { id: string; name: string; deletedAt: Date | null },
+    item: StoredItem,
+  ): Promise<void> {
+    if (copy.deletedAt !== null || copy.name === item.title) {
+      return;
+    }
+    await this.resourcesService.updateResource(
+      folder.namespaceId,
+      copy.id,
+      folder.userId!,
+      { name: item.title },
+      undefined,
+      false,
+      { internal: true },
+    );
+  }
+
   private async createItemResource(
+    link: RssLink,
+    folder: Resource,
+    item: StoredItem,
+  ): Promise<void> {
+    try {
+      await this.insertItemResource(link, folder, item);
+    } catch (err) {
+      // An overlapping poll of the same url may have inserted this copy in
+      // between the existence check and here; the unique index rejects the
+      // second insert, which is exactly the outcome we want. Anything else is a
+      // real failure and fails the poll.
+      if (!this.isDuplicateItemError(err)) {
+        throw err;
+      }
+      this.logger.warn(
+        `Skipped rss item ${item.guid} for link ${link.id}: a concurrent poll created it`,
+      );
+    }
+  }
+
+  private isDuplicateItemError(err: unknown): boolean {
+    const code = (err as { code?: string } | null)?.code;
+    return code === '23505';
+  }
+
+  private async insertItemResource(
     link: RssLink,
     folder: Resource,
     item: StoredItem,

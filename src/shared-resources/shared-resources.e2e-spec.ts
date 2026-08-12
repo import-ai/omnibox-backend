@@ -165,6 +165,14 @@ describe('SharedResources (e2e)', () => {
     });
   });
 
+  it('orders a shared feed newest-published first', async () => {
+    // The share's own sort (updated_at by default, and the poller rewrites an
+    // item's body whenever it re-parses) must not reshuffle a feed: a visitor
+    // reads it in the same order as its owner does.
+    const items = await listChildren(folderResourceId);
+    expect(items.map((item) => item.name)).toEqual(['Newer', 'Older']);
+  });
+
   it('reports an rss item as a leaf', async () => {
     const items = await listChildren(folderResourceId);
     expect(await listChildren(items[0].id)).toEqual([]);

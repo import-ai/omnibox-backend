@@ -1061,6 +1061,11 @@ export class ResourcesService {
       );
     }
 
+    // A read-only resource is only ever trashed by the product that owns it —
+    // an rss item goes with the subscription that stopped carrying it — so
+    // bringing it back is not the user's call either.
+    this.assertNotReadOnly(resource.resourceType);
+
     // The caller may have re-parented the resource (e.g. to the user root when
     // its own parent is gone), so re-check containment against where it lands.
     const parent = resource.parentId
@@ -1328,14 +1333,11 @@ export class ResourcesService {
       targetId,
       entityManager,
     );
-    // Fail fast on a target that can never receive a batch move: a smart folder
-    // is virtual, and an rss folder holds only its own (read-only) items.
-    if (
-      target.resourceType === ResourceType.SMART_FOLDER ||
-      target.resourceType === ResourceType.RSS_FOLDER
-    ) {
-      this.assertContainment(target, ResourceType.FOLDER);
-    }
+    // The target must be able to hold ordinary resources: a smart folder is
+    // virtual, an rss folder holds only its own (read-only) items and an rss
+    // item is a leaf. Read-only resources are never movable, so checking the
+    // target against a plain folder covers every legal batch.
+    this.assertContainment(target, ResourceType.FOLDER);
     const targetParents = await this.getParentResourcesOrFail(
       namespaceId,
       targetId,
@@ -1581,7 +1583,13 @@ export class ResourcesService {
       .andWhere('resource.deleted_at IS NOT NULL')
       .andWhere('resource.deleted_at >= :cutoffDate', { cutoffDate })
       .andWhere('resource.parent_id IS NOT NULL')
-      .andWhere('resource.permanent_deleted_at IS NULL');
+      .andWhere('resource.permanent_deleted_at IS NULL')
+      // Items retired with their subscription are neither restorable nor
+      // individually deletable, so listing them would only bury the user's own
+      // deleted documents under hundreds of articles.
+      .andWhere('resource.resource_type != :rssItem', {
+        rssItem: ResourceType.RSS_ITEM,
+      });
 
     if (search) {
       queryBuilder.andWhere('resource.name ILIKE :search', {

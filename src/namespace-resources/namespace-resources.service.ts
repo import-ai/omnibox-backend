@@ -15,6 +15,7 @@ import {
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
+  isReadOnlyResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -236,6 +237,9 @@ export class NamespaceResourcesService {
     return filteredResources.map((resource) => ({
       ...resource,
       tags: tagsMap.get(resource.id) || [],
+      // Same flag as ResourceDto/ResourceSummaryDto: a client that reaches a
+      // resource through this batch endpoint must gate its actions too.
+      readOnly: isReadOnlyResourceType(resource.resourceType),
     }));
   }
 
@@ -846,6 +850,9 @@ export class NamespaceResourcesService {
       // Cannot move to root directory
       parentId: Not(IsNull()),
       namespaceId,
+      // This powers the "move to" picker: a poller-owned item is neither
+      // movable nor a place to move something into.
+      resourceType: Not(ResourceType.RSS_ITEM),
     };
     // Self and child exclusions
     if (excludeResourceId) {
@@ -1597,6 +1604,12 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
+
+    // Reject before the re-parenting below: that write is not part of the
+    // restore transaction, so letting a read-only resource reach it would
+    // detach it from its owner (an rss item from its rss folder) even though
+    // the restore itself is refused.
+    this.resourcesService.assertNotReadOnly(resource.resourceType);
 
     // Check smart folder quota before restoring
     if (resource.resourceType === ResourceType.SMART_FOLDER) {

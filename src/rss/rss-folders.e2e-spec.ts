@@ -437,6 +437,249 @@ describe('RssFoldersController (e2e)', () => {
     await resourceRepo.softDelete({ id: item.id });
   });
 
+  it('rejects a batch move into an rss item or an rss folder', async () => {
+    // The single-move path checks containment; the batch path used to reach the
+    // raw parent_id update without ever looking at what the target is.
+    const dataSource = client.app.get(DataSource);
+    const resourceRepo = dataSource.getRepository(Resource);
+    const created = (
+      await createFolder({
+        name: 'Batch Target',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const folderId = created.resource.id;
+    const item = await resourceRepo.save(
+      resourceRepo.create({
+        namespaceId: client.namespace.id,
+        userId: client.user.id,
+        parentId: folderId,
+        name: 'Batch target item',
+        resourceType: ResourceType.RSS_ITEM,
+        content: 'body',
+        contentSize: '4',
+        attrs: { link_id: created.links[0].id, guid: 'guid-batch-target' },
+      }),
+    );
+    const base = `/api/v1/namespaces/${client.namespace.id}/resources`;
+    const doc = (
+      await client
+        .post(base)
+        .send({
+          name: 'batch doc',
+          resourceType: 'doc',
+          parentId: client.namespace.root_resource_id,
+        })
+        .expect(201)
+    ).body;
+    const folder = (
+      await client
+        .post(base)
+        .send({
+          name: 'batch folder',
+          resourceType: 'folder',
+          parentId: client.namespace.root_resource_id,
+        })
+        .expect(201)
+    ).body;
+
+    for (const [targetId, code] of [
+      [item.id, 'rss_item_cannot_be_parent'],
+      [folderId, 'rss_folder_child_must_be_rss_item'],
+    ] as const) {
+      const moved = await client
+        .post(`${base}/batch-move`)
+        .send({ resourceIds: [doc.id, folder.id], targetId })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+      expect(moved.body.code).toBe(code);
+      // Grouping the same resources into a new folder under the target is
+      // refused for the same reason.
+      const grouped = await client
+        .post(`${base}/batch-folder`)
+        .send({
+          resourceIds: [doc.id],
+          parentId: targetId,
+          name: `grouped ${targetId}`,
+        })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+      expect(grouped.body.code).toBe(code);
+    }
+
+    // Nothing moved.
+    for (const id of [doc.id, folder.id]) {
+      const after = await resourceRepo.findOneOrFail({ where: { id } });
+      expect(after.parentId).toBe(client.namespace.root_resource_id);
+    }
+
+    await client.delete(`${base}/${doc.id}`).expect(200);
+    await client.delete(`${base}/${folder.id}`).expect(200);
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+      )
+      .expect(200);
+    await resourceRepo.softDelete({ id: item.id });
+  });
+
+  it('keeps retired rss items out of the trash and out of restore', async () => {
+    const dataSource = client.app.get(DataSource);
+    const resourceRepo = dataSource.getRepository(Resource);
+    const created = (
+      await createFolder({
+        name: 'Retired Items',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const folderId = created.resource.id;
+    const item = await resourceRepo.save(
+      resourceRepo.create({
+        namespaceId: client.namespace.id,
+        userId: client.user.id,
+        parentId: folderId,
+        name: 'Retired item',
+        resourceType: ResourceType.RSS_ITEM,
+        content: 'body',
+        contentSize: '4',
+        attrs: { link_id: created.links[0].id, guid: 'guid-retired' },
+      }),
+    );
+    // The poller retires an item when its subscription stops carrying it.
+    await resourceRepo.softDelete({ id: item.id });
+    const base = `/api/v1/namespaces/${client.namespace.id}/resources`;
+
+    // It is the product's row, so it is not one of the user's deleted things.
+    const trash = await client.get(`${base}/trash?limit=100`).expect(200);
+    expect(
+      (trash.body.items as Array<{ id: string }>).map((entry) => entry.id),
+    ).not.toContain(item.id);
+
+    // ... and bringing it back is not the user's call either.
+    const restored = await client
+      .post(`${base}/${item.id}/restore`)
+      .expect(HttpStatus.FORBIDDEN);
+    expect(restored.body.code).toBe('resource_read_only');
+    const afterRestore = await resourceRepo.findOneOrFail({
+      where: { id: item.id },
+      withDeleted: true,
+    });
+    expect(afterRestore.deletedAt).not.toBeNull();
+    expect(afterRestore.parentId).toBe(folderId);
+
+    // The same holds once the rss folder itself is in the trash: the refused
+    // restore must not re-parent the item to the user root on its way out.
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+      )
+      .expect(200);
+    await client
+      .post(`${base}/${item.id}/restore`)
+      .expect(HttpStatus.FORBIDDEN);
+    const afterTrashedParent = await resourceRepo.findOneOrFail({
+      where: { id: item.id },
+      withDeleted: true,
+    });
+    expect(afterTrashedParent.parentId).toBe(folderId);
+  });
+
+  it('refuses to manually sort the contents of an rss folder', async () => {
+    const dataSource = client.app.get(DataSource);
+    const resourceRepo = dataSource.getRepository(Resource);
+    const created = (
+      await createFolder({
+        name: 'Sorted Items',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const folderId = created.resource.id;
+    const item = await resourceRepo.save(
+      resourceRepo.create({
+        namespaceId: client.namespace.id,
+        userId: client.user.id,
+        parentId: folderId,
+        name: 'Sorted item',
+        resourceType: ResourceType.RSS_ITEM,
+        content: 'body',
+        contentSize: '4',
+        attrs: { link_id: created.links[0].id, guid: 'guid-sorted' },
+      }),
+    );
+    const base = `/api/v1/namespaces/${client.namespace.id}/resources`;
+    await client
+      .post(`${base}/${client.namespace.root_resource_id}/manual-sort`)
+      .send({ sort_by: 'created_at', sort_order: 'desc', overwrite: true })
+      .expect(201);
+
+    // Naming the item is refused, and so is an order that names nothing at all:
+    // every child of the parent is reindexed either way.
+    for (const resourceIds of [[item.id], []]) {
+      const response = await client
+        .put(`${base}/manual-sort`)
+        .send({
+          root_resource_id: client.namespace.root_resource_id,
+          orders: [{ parent_id: folderId, resource_ids: resourceIds }],
+        })
+        .expect(HttpStatus.FORBIDDEN);
+      expect(response.body.code).toBe('resource_read_only');
+    }
+    const after = await resourceRepo.findOneOrFail({ where: { id: item.id } });
+    expect(after.manualSortIndex).toBeNull();
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+      )
+      .expect(200);
+    await resourceRepo.softDelete({ id: item.id });
+  });
+
+  it('never offers an rss item as a move target', async () => {
+    const dataSource = client.app.get(DataSource);
+    const resourceRepo = dataSource.getRepository(Resource);
+    const created = (
+      await createFolder({
+        name: 'Picker Items',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const folderId = created.resource.id;
+    const item = await resourceRepo.save(
+      resourceRepo.create({
+        namespaceId: client.namespace.id,
+        userId: client.user.id,
+        parentId: folderId,
+        name: 'Pickable item',
+        resourceType: ResourceType.RSS_ITEM,
+        content: 'body',
+        contentSize: '4',
+        attrs: { link_id: created.links[0].id, guid: 'guid-pickable' },
+      }),
+    );
+    const base = `/api/v1/namespaces/${client.namespace.id}/resources`;
+
+    const found = await client.get(`${base}/search?name=Pickable`).expect(200);
+    expect(found.body).toHaveLength(0);
+
+    // Clients that reach the item through the batch lookup still learn it is
+    // read-only, so they can gate its row actions.
+    const looked = await client.get(`${base}?id=${item.id}`).expect(200);
+    expect(looked.body[0]).toMatchObject({
+      id: item.id,
+      read_only: true,
+    });
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+      )
+      .expect(200);
+    await resourceRepo.softDelete({ id: item.id });
+  });
+
   it('rejects every user-facing write to an rss item', async () => {
     const dataSource = client.app.get(DataSource);
     const resourceRepo = dataSource.getRepository(Resource);

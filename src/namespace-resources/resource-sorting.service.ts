@@ -242,11 +242,11 @@ export class ResourceSortingService {
       );
     }
     // The product, not the user, decides what an rss folder contains and in
-    // what order.
-    for (const resourceId of order.resourceIds) {
-      this.resourcesService.assertNotReadOnly(
-        childrenById.get(resourceId)!.resourceType,
-      );
+    // what order. Every child is reindexed, not only the ones the request
+    // names, so the guard has to cover all of them — an order listing no ids
+    // at all would otherwise pin a whole feed.
+    for (const child of children) {
+      this.resourcesService.assertNotReadOnly(child.resourceType);
     }
     const resourcesWithParents =
       await this.resourcesService.batchGetParentResources(

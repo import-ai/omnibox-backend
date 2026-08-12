@@ -8,7 +8,11 @@ import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
-import { sortResources } from 'omniboxd/resources/resource-sort';
+import {
+  ResourceSortBy,
+  ResourceSortOrder,
+  sortResources,
+} from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
@@ -381,10 +385,17 @@ export class SharedResourcesService {
         .map((child) => child.parentId)
         .filter((parentId): parentId is string => parentId !== null),
     );
-    return sortResources(children, {
-      sortBy: share.sortBy,
-      sortOrder: share.sortOrder,
-    }).map((child) =>
+    // A feed reads newest-published first wherever it is shown, and the share's
+    // own sort is about the resources its owner arranged, not about the
+    // articles a poller filed under an rss folder.
+    const sortOptions =
+      resource.resourceType === ResourceType.RSS_FOLDER
+        ? {
+            sortBy: ResourceSortBy.CREATED_AT,
+            sortOrder: ResourceSortOrder.DESC,
+          }
+        : { sortBy: share.sortBy, sortOrder: share.sortOrder };
+    return sortResources(children, sortOptions).map((child) =>
       SharedResourceMetaDto.fromResourceMeta(
         share,
         ResourceMetaDto.fromEntity(child),

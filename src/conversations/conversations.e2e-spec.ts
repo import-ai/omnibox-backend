@@ -3,7 +3,29 @@ import {
   MessageStatus,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { TestClient } from 'test/test-client';
+
+async function addNamespaceMember(
+  owner: TestClient,
+  member: TestClient,
+  namespaceId: string,
+) {
+  const invitation = await owner
+    .post(`/api/v1/namespaces/${namespaceId}/invitations`)
+    .send({
+      namespaceRole: NamespaceRole.MEMBER,
+      rootPermission: ResourcePermission.FULL_ACCESS,
+    })
+    .expect(HttpStatus.CREATED);
+
+  await member
+    .post(
+      `/api/v1/namespaces/${namespaceId}/invitations/${invitation.body.id}/accept`,
+    )
+    .expect(HttpStatus.CREATED);
+}
 
 describe('ConversationsController (e2e)', () => {
   let client: TestClient;
@@ -42,7 +64,38 @@ describe('ConversationsController (e2e)', () => {
     it('should fail with invalid namespaceId', async () => {
       await client
         .post('/api/v1/namespaces/invalid-namespace/conversations')
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from FORBIDDEN
+        .expect(HttpStatus.FORBIDDEN);
+    });
+  });
+
+  describe('POST /api/v1/namespaces/:namespaceId/conversations/:id/messages', () => {
+    it('rejects a namespace member writing to another user conversation without creating a message', async () => {
+      const member = await TestClient.create();
+      tempClients.push(member);
+      await addNamespaceMember(client, member, client.namespace.id);
+      const conversation = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+        .expect(HttpStatus.CREATED);
+
+      await member
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversation.body.id}/messages`,
+        )
+        .send({
+          message: {
+            role: OpenAIMessageRole.USER,
+            content: 'This must not be persisted',
+          },
+          status: MessageStatus.SUCCESS,
+        })
+        .expect(HttpStatus.FORBIDDEN);
+
+      const detail = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversation.body.id}`,
+        )
+        .expect(HttpStatus.OK);
+      expect(Object.keys(detail.body.mapping)).toHaveLength(0);
     });
   });
 
@@ -107,7 +160,7 @@ describe('ConversationsController (e2e)', () => {
     it('should fail with invalid namespaceId', async () => {
       await client
         .get('/api/v1/namespaces/invalid-namespace/conversations')
-        .expect(HttpStatus.OK); // Changed from FORBIDDEN - API doesn't validate namespace ownership for listing
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 
@@ -205,7 +258,7 @@ describe('ConversationsController (e2e)', () => {
         .get(
           `/api/v1/namespaces/invalid-namespace/conversations/${conversationId}`,
         )
-        .expect(HttpStatus.OK); // Changed from FORBIDDEN - API doesn't validate namespace ownership
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 
@@ -322,7 +375,7 @@ describe('ConversationsController (e2e)', () => {
         .get(
           `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
         )
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from NOT_FOUND
+        .expect(HttpStatus.FORBIDDEN);
     });
 
     it('should fail with non-existent conversation', async () => {
@@ -338,7 +391,7 @@ describe('ConversationsController (e2e)', () => {
         .delete(
           `/api/v1/namespaces/invalid-namespace/conversations/${conversationId}`,
         )
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from FORBIDDEN
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 
@@ -378,7 +431,43 @@ describe('ConversationsController (e2e)', () => {
         .get(
           `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
         )
-        .expect(HttpStatus.INTERNAL_SERVER_ERROR); // Changed from FORBIDDEN
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it("should fail when updating another user's conversation", async () => {
+      const anotherClient = await TestClient.create();
+      tempClients.push(anotherClient);
+
+      await anotherClient
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}`,
+        )
+        .send({ title: 'Unauthorized title' })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it("should fail when generating a title for another user's conversation", async () => {
+      const anotherClient = await TestClient.create();
+      tempClients.push(anotherClient);
+
+      await anotherClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}/title`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should fail when the conversation belongs to a different namespace', async () => {
+      const anotherNamespace = await client
+        .post('/api/v1/namespaces')
+        .send({ name: `Conversation access test ${Date.now()}` })
+        .expect(HttpStatus.CREATED);
+
+      await client
+        .get(
+          `/api/v1/namespaces/${anotherNamespace.body.id}/conversations/${conversationId}`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
     });
   });
 

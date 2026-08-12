@@ -7,6 +7,7 @@ import { InternalResourcesController } from 'omniboxd/namespace-resources/intern
 import { NamespaceResourcesController } from 'omniboxd/namespace-resources/namespace-resources.controller';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
+import { ResourceRetryService } from 'omniboxd/namespace-resources/resource-retry.service';
 import { ResourceSortPreferenceController } from 'omniboxd/namespace-resources/resource-sort-preference.controller';
 import { ResourceSortPreferenceService } from 'omniboxd/namespace-resources/resource-sort-preference.service';
 import { ResourceSortingService } from 'omniboxd/namespace-resources/resource-sorting.service';
@@ -33,6 +34,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
     OpenResourcesService,
     ResourceSortPreferenceService,
     ResourceSortingService,
+    ResourceRetryService,
   ],
   controllers: [
     NamespaceResourcesController,

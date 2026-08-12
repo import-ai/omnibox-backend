@@ -47,23 +47,39 @@ export class ConversationsController {
 
   @Patch(':id')
   async update(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
     @Param('id') id: string,
     @Body() updateConversationDto: UpdateConversationDto,
   ) {
-    await this.conversationsService.update(id, updateConversationDto.title);
+    await this.conversationsService.update(
+      namespaceId,
+      id,
+      userId,
+      updateConversationDto.title,
+    );
   }
 
   @Get(':id')
   async get(
+    @Param('namespaceId') namespaceId: string,
     @Param('id') id: string,
     @UserId() userId: string,
   ): Promise<ConversationDetailDto> {
-    return await this.conversationsService.getConversationForUser(id, userId);
+    return await this.conversationsService.getConversationForUser(
+      namespaceId,
+      id,
+      userId,
+    );
   }
 
   @Post(':id/title')
-  async createTitle(@Param('id') id: string, @UserId() userId: string) {
-    return await this.conversationsService.createTitle(id, userId);
+  async createTitle(
+    @Param('namespaceId') namespaceId: string,
+    @Param('id') id: string,
+    @UserId() userId: string,
+  ) {
+    return await this.conversationsService.createTitle(namespaceId, id, userId);
   }
 
   @Delete(':id')

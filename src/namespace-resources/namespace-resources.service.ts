@@ -26,6 +26,10 @@ import {
   sortResources,
 } from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import {
+  IRssFoldersQuotaService,
+  RSS_FOLDERS_QUOTA_SERVICE,
+} from 'omniboxd/rss/rss-folders-quota.interface';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import {
   ISmartFoldersService,
@@ -81,6 +85,8 @@ export class NamespaceResourcesService {
     private readonly resourceSortPreferenceService: ResourceSortPreferenceService,
     @Inject(SMART_FOLDERS_SERVICE)
     private readonly smartFoldersService: ISmartFoldersService,
+    @Inject(RSS_FOLDERS_QUOTA_SERVICE)
+    private readonly rssFoldersQuotaService: IRssFoldersQuotaService,
   ) {}
 
   private async getTagsByIds(
@@ -490,12 +496,21 @@ export class NamespaceResourcesService {
       const message = this.i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
-    await this.resourcesService.updateResource(
-      namespaceId,
-      resourceId,
-      userId,
-      { parentId: targetId },
-    );
+    await transaction(this.dataSource.manager, async (tx) => {
+      await this.rssFoldersQuotaService.assertMoveQuota(
+        namespaceId,
+        [resourceId],
+        targetId,
+        tx.entityManager,
+      );
+      await this.resourcesService.updateResource(
+        namespaceId,
+        resourceId,
+        userId,
+        { parentId: targetId },
+        tx,
+      );
+    });
   }
 
   private async getEditableResourceIds(
@@ -656,6 +671,12 @@ export class NamespaceResourcesService {
           HttpStatus.FORBIDDEN,
         );
       }
+      await this.rssFoldersQuotaService.assertMoveQuota(
+        namespaceId,
+        moveIds,
+        targetId,
+        tx.entityManager,
+      );
       const { movedIds, nameConflictIds } =
         await this.resourcesService.batchMoveResources(
           userId,
@@ -734,6 +755,13 @@ export class NamespaceResourcesService {
           nameConflictIds: [],
         };
       }
+
+      await this.rssFoldersQuotaService.assertMoveQuota(
+        namespaceId,
+        moveIds,
+        data.parentId,
+        tx.entityManager,
+      );
 
       const folder = await this.create(
         userId,
@@ -1582,6 +1610,15 @@ export class NamespaceResourcesService {
     // Check smart folder quota before restoring
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
       await this.smartFoldersService.assertRestoreEntitlements(
+        namespaceId,
+        userId,
+        resourceId,
+      );
+    }
+
+    // Check rss folder quota before restoring
+    if (resource.resourceType === ResourceType.RSS_FOLDER) {
+      await this.rssFoldersQuotaService.assertRestoreQuota(
         namespaceId,
         userId,
         resourceId,

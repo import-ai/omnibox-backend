@@ -154,6 +154,9 @@ export class SearchResourceFilterService {
     return resources.filter(
       (resource) =>
         resource.resourceType !== ResourceType.RSS_FOLDER &&
+        // Items are always parented under an rss folder, but drop them by type
+        // too so an item whose folder is not in this batch is still excluded.
+        resource.resourceType !== ResourceType.RSS_ITEM &&
         !(resource.parentId && rssFolderIds.has(resource.parentId)),
     );
   }

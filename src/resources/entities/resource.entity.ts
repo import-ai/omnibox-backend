@@ -10,6 +10,16 @@ export enum ResourceType {
   FOLDER = 'folder',
   SMART_FOLDER = 'smart_folder',
   RSS_FOLDER = 'rss_folder',
+  // A single polled feed item. Always a child of an RSS_FOLDER, written only by
+  // the poller and read-only to users.
+  RSS_ITEM = 'rss_item',
+}
+
+// Resources whose content is owned by the product (written by a background
+// job), not by the user: every user-facing mutation is rejected and clients
+// surface them as read-only.
+export function isReadOnlyResourceType(resourceType: ResourceType): boolean {
+  return resourceType === ResourceType.RSS_ITEM;
 }
 
 @Entity('resources')

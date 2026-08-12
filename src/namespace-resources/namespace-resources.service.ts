@@ -145,6 +145,7 @@ export class NamespaceResourcesService {
           ResourceType.FOLDER,
           ResourceType.SMART_FOLDER,
           ResourceType.RSS_FOLDER,
+          ResourceType.RSS_ITEM,
         ],
       })
       .andWhere('resource.tag_ids && :tagIds', { tagIds })
@@ -889,6 +890,8 @@ export class NamespaceResourcesService {
     const sorted = allVisible
       .filter((r) => r.parentId !== null)
       .filter((r) => r.resourceType !== ResourceType.FOLDER)
+      // A busy feed would otherwise flood "recent" with polled items.
+      .filter((r) => r.resourceType !== ResourceType.RSS_ITEM)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const take = Math.max(1, Math.min(100, limit));
     const skip = Math.max(0, offset);
@@ -942,6 +945,7 @@ export class NamespaceResourcesService {
               ResourceType.FOLDER,
               ResourceType.SMART_FOLDER,
               ResourceType.RSS_FOLDER,
+              ResourceType.RSS_ITEM,
             ]),
           ),
         },
@@ -993,6 +997,7 @@ export class NamespaceResourcesService {
             ResourceType.FOLDER,
             ResourceType.SMART_FOLDER,
             ResourceType.RSS_FOLDER,
+            ResourceType.RSS_ITEM,
           ]),
         ),
       },

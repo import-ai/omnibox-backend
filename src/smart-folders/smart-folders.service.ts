@@ -204,6 +204,9 @@ export class SmartFoldersService implements ISmartFoldersService {
       .filter(
         (resource) =>
           resource.resourceType !== ResourceType.RSS_FOLDER &&
+          // Items are always parented under an rss folder, but drop them by
+          // type too so an item whose folder is not visible here is excluded.
+          resource.resourceType !== ResourceType.RSS_ITEM &&
           !(resource.parentId && rssFolderIds.has(resource.parentId)),
       )
       .map((resource) => resource.id);
@@ -279,7 +282,8 @@ export class SmartFoldersService implements ISmartFoldersService {
     if (
       !resource ||
       resource.resourceType === ResourceType.SMART_FOLDER ||
-      resource.resourceType === ResourceType.RSS_FOLDER
+      resource.resourceType === ResourceType.RSS_FOLDER ||
+      resource.resourceType === ResourceType.RSS_ITEM
     ) {
       return false;
     }

@@ -434,12 +434,22 @@ export class SharedResourcesService {
         );
       }
       if (!share.allResources) {
-        const message = this.i18n.t('resource.errors.resourceNotFound');
-        throw new AppException(
-          message,
-          'RESOURCE_NOT_FOUND',
-          HttpStatus.NOT_FOUND,
-        );
+        // An rss folder's items are its content rather than independent
+        // resources: sharing the folder shares the articles it collected, so
+        // they stay reachable even when the share covers only its root.
+        const isSharedRssFolderItem =
+          rootResource?.resourceType === ResourceType.RSS_FOLDER &&
+          resource.resourceType === ResourceType.RSS_ITEM &&
+          resource.parentId === share.resourceId;
+        if (!isSharedRssFolderItem) {
+          const message = this.i18n.t('resource.errors.resourceNotFound');
+          throw new AppException(
+            message,
+            'RESOURCE_NOT_FOUND',
+            HttpStatus.NOT_FOUND,
+          );
+        }
+        return resource;
       }
       const parents = await this.resourcesService.getParentResourcesOrFail(
         share.namespaceId,

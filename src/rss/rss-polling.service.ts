@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll, RssPollStatus } from 'omniboxd/rss/entities/rss-poll.entity';
@@ -12,7 +16,7 @@ import {
 } from 'omniboxd/rss/rss-feed-fetcher.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 
 // Each URL is polled at most once within this window; an in-progress `polling`
 // row also blocks re-polling until it finishes (see claim()). The same value
@@ -54,12 +58,17 @@ export interface PollSummary {
   failed: number;
 }
 
-// A stored feed item: the deduped content row id plus its title and publish
-// date (denormalized onto rss_items when linking).
+// A stored feed item: the deduped content row id plus everything needed to
+// materialize the item as a resource under each subscribing folder.
 interface StoredItem {
   contentId: string;
+  guid: string;
   title: string;
   pubDate: Date | null;
+  // Body for the item resource: the parsed markdown once the wizard has
+  // rendered it, otherwise the feed's own summary.
+  content: string;
+  articleUrl: string;
 }
 
 @Injectable()
@@ -76,11 +85,12 @@ export class RssPollingService {
     private readonly rssPollRepository: Repository<RssPoll>,
     @InjectRepository(RssItemContent)
     private readonly rssItemContentRepository: Repository<RssItemContent>,
-    @InjectRepository(RssItem)
-    private readonly rssItemRepository: Repository<RssItem>,
+    @InjectRepository(Resource)
+    private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
     private readonly feedFetcher: RssFeedFetcherService,
     private readonly wizardApiService: WizardAPIService,
+    private readonly resourcesService: ResourcesService,
     configService: ConfigService,
   ) {
     // Clamp to >= 1 so a malformed value can never stall the loop.
@@ -151,7 +161,7 @@ export class RssPollingService {
       }
 
       const stored = await this.storeItems(url, feed.items ?? [], deadline);
-      // Relate every link sharing this url to the polled contents.
+      // Give every folder subscribed to this url its own copy of each item.
       await this.linkItems(url, stored);
       const contentIds = stored.map((item) => item.contentId);
       await this.finishPoll(poll.id, RssPollStatus.SUCCEED, { contentIds });
@@ -252,8 +262,15 @@ export class RssPollingService {
     url: string,
     item: ParsedFeedItem,
   ): Promise<StoredItem> {
-    const { guid, content, title, pubDate, articleUrl, articleContent } =
-      this.serializeItem(item);
+    const {
+      guid,
+      content,
+      title,
+      pubDate,
+      summary,
+      articleUrl,
+      articleContent,
+    } = this.serializeItem(item);
     const {
       id,
       pubDate: effectivePubDate,
@@ -272,39 +289,54 @@ export class RssPollingService {
       parseAttempts < MAX_PARSE_ATTEMPTS &&
       (parseNextAttemptAt === null ||
         parseNextAttemptAt.getTime() <= Date.now());
-    if (shouldParse) {
-      await this.parseItemContent(
-        id,
-        parseAttempts,
-        articleUrl,
-        articleContent,
-      );
-    }
-    // Use the stored pub_date (preserved from first fetch) so rss_items rows for
+    const freshlyParsed = shouldParse
+      ? await this.parseItemContent(
+          url,
+          guid,
+          id,
+          parseAttempts,
+          articleUrl,
+          articleContent,
+        )
+      : null;
+    // Use the stored pub_date (preserved from first fetch) so item resources for
     // newly-appearing links match the content row's publish date.
-    return { contentId: id, title, pubDate: effectivePubDate };
+    return {
+      contentId: id,
+      guid,
+      title,
+      pubDate: effectivePubDate,
+      content: freshlyParsed ?? parsedContent ?? summary,
+      articleUrl,
+    };
   }
 
-  // Renders the article to Markdown via the wizard and stores it. When the feed
-  // embedded full content the wizard converts that directly (no link fetch);
-  // otherwise it scrapes articleUrl. Best-effort: a failure leaves
-  // parsed_content null and never fails the poll, but it records the attempt so
-  // a later poll retries it after a backoff. `attempts` is the number of
-  // attempts that have already failed for this item.
+  // Renders the article to Markdown via the wizard and stores it, then fans the
+  // result out to every existing item resource for this (url, guid) — the same
+  // article can be subscribed from several folders and namespaces, and each
+  // holds its own copy. Returns the markdown so a copy created later in this
+  // same poll starts out with it. When the feed embedded full content the wizard
+  // converts that directly (no link fetch); otherwise it scrapes articleUrl.
+  // Best-effort: a failure leaves parsed_content null and never fails the poll,
+  // but it records the attempt so a later poll retries it after a backoff.
+  // `attempts` is the number of attempts that have already failed for this item.
   private async parseItemContent(
+    url: string,
+    guid: string,
     contentId: string,
     attempts: number,
     articleUrl: string,
     articleContent: string,
-  ): Promise<void> {
+  ): Promise<string | null> {
+    let markdown: string;
     try {
-      const { markdown } = await this.wizardApiService.parseRssItem(
+      ({ markdown } = await this.wizardApiService.parseRssItem(
         {
           url: articleUrl,
           content: articleContent,
         },
         AbortSignal.timeout(WIZARD_PARSE_TIMEOUT_MS),
-      );
+      ));
       // Empty markdown is a failed parse too: without counting it as an attempt
       // the item would be re-parsed on every poll forever.
       if (!markdown) {
@@ -319,6 +351,59 @@ export class RssPollingService {
         `Failed to parse rss item ${contentId} (${articleUrl}): ${err instanceof Error ? err.message : String(err)}`,
       );
       await this.recordParseFailure(contentId, attempts);
+      return null;
+    }
+
+    // Storing the parse must not be undone by a fan-out failure, so this runs
+    // outside the update above and only logs on error; the next poll re-runs it
+    // for any copy left behind (content is compared before writing).
+    try {
+      await this.fanOutContent(url, guid, markdown);
+    } catch (err) {
+      this.logger.error(
+        `Failed to fan out parsed content of rss item ${contentId} (${articleUrl}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    return markdown;
+  }
+
+  // Pushes an item's freshly parsed markdown into every resource copy of it.
+  private async fanOutContent(
+    url: string,
+    guid: string,
+    markdown: string,
+  ): Promise<void> {
+    const links = await this.rssLinkRepository.find({ where: { url } });
+    if (links.length === 0) {
+      return;
+    }
+    const resources = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.resource_type = :resourceType', {
+        resourceType: ResourceType.RSS_ITEM,
+      })
+      .andWhere("resource.attrs->>'link_id' IN (:...linkIds)", {
+        linkIds: links.map((link) => link.id),
+      })
+      .andWhere("resource.attrs->>'guid' = :guid", { guid })
+      .getMany();
+
+    for (const resource of resources) {
+      if (resource.content === markdown || !resource.userId) {
+        continue;
+      }
+      // Goes through the resource service so the content size, the owner's
+      // storage usage and the search index all follow the new body. The item is
+      // read-only to users, hence the internal write.
+      await this.resourcesService.updateResource(
+        resource.namespaceId,
+        resource.id,
+        resource.userId,
+        { content: markdown },
+        undefined,
+        false,
+        { internal: true },
+      );
     }
   }
 
@@ -343,12 +428,17 @@ export class RssPollingService {
     }
   }
 
-  // Relates every rss_links row sharing the polled url to the stored contents,
-  // one rss_items row per (link, content) pair. Idempotent on the unique
-  // (link_id, content_id) index: a pair not yet related is inserted, while an
-  // existing pair has its denormalized title refreshed to the latest feed title
-  // (a revised item then shows its new title in list/detail views). pub_date is
-  // deliberately left as-is so a refetch never moves an item's publish date.
+  // Gives every rss_links row sharing the polled url its own resource copy of
+  // each stored item, one `rss_item` resource per (link, guid) pair. Items are
+  // deliberately not deduped across folders: each folder owns its copies, in its
+  // own namespace, under its own rss folder resource. Only missing pairs are
+  // created — an existing copy (even a soft-deleted one) is left alone, so a
+  // removed item is never resurrected and a revised item is refreshed through
+  // the parse fan-out rather than re-created.
+  //
+  // A read-then-insert is safe without ON CONFLICT because the per-url advisory
+  // lock in claim() serializes every poll of this url across folders,
+  // namespaces and instances.
   private async linkItems(url: string, stored: StoredItem[]): Promise<void> {
     if (stored.length === 0) {
       return;
@@ -358,31 +448,94 @@ export class RssPollingService {
       return;
     }
 
-    const rows = links.flatMap((link) =>
-      stored.map((item) => ({
-        linkId: link.id,
-        contentId: item.contentId,
-        title: item.title,
-        pubDate: item.pubDate,
-      })),
+    // Skip links whose rss folder resource is gone (deleted or trashed) or has
+    // no owner: there is nowhere to hang the items.
+    const folders = await this.resourceRepository.find({
+      where: { id: In(links.map((link) => link.resourceId)) },
+    });
+    const folderById = new Map(folders.map((folder) => [folder.id, folder]));
+
+    // A feed can list the same guid twice; both collapse to one content row and
+    // must produce a single resource per link.
+    const itemByGuid = new Map<string, StoredItem>();
+    for (const item of stored) {
+      itemByGuid.set(item.guid, item);
+    }
+    const items = [...itemByGuid.values()];
+
+    const existing = new Set(
+      (
+        await this.resourceRepository
+          .createQueryBuilder('resource')
+          // Soft-deleted copies count as existing.
+          .withDeleted()
+          .select("resource.attrs->>'link_id'", 'linkId')
+          .addSelect("resource.attrs->>'guid'", 'guid')
+          .where('resource.resource_type = :resourceType', {
+            resourceType: ResourceType.RSS_ITEM,
+          })
+          .andWhere("resource.attrs->>'link_id' IN (:...linkIds)", {
+            linkIds: links.map((link) => link.id),
+          })
+          .andWhere("resource.attrs->>'guid' IN (:...guids)", {
+            guids: items.map((item) => item.guid),
+          })
+          .getRawMany<{ linkId: string; guid: string }>()
+      ).map((row) => `${row.linkId}:${row.guid}`),
     );
 
-    // A feed can list the same guid twice, which collapses to one content row and
-    // thus duplicate (link, content) rows here. ON CONFLICT DO UPDATE — unlike the
-    // DO NOTHING this used to be — rejects a statement that touches the same
-    // conflict key twice, so dedupe first, keeping the last occurrence's title.
-    const deduped = new Map<string, (typeof rows)[number]>();
-    for (const row of rows) {
-      deduped.set(`${row.linkId}:${row.contentId}`, row);
+    for (const link of links) {
+      const folder = folderById.get(link.resourceId);
+      if (!folder || !folder.userId) {
+        continue;
+      }
+      for (const item of items) {
+        if (existing.has(`${link.id}:${item.guid}`)) {
+          continue;
+        }
+        await this.createItemResource(link, folder, item);
+      }
     }
+  }
 
-    await this.rssItemRepository
-      .createQueryBuilder()
-      .insert()
-      .into(RssItem)
-      .values([...deduped.values()])
-      .orUpdate(['title'], ['link_id', 'content_id'])
-      .execute();
+  private async createItemResource(
+    link: RssLink,
+    folder: Resource,
+    item: StoredItem,
+  ): Promise<void> {
+    await transaction(this.dataSource.manager, async (tx) => {
+      const resource = await this.resourcesService.createResource(
+        {
+          namespaceId: folder.namespaceId,
+          parentId: folder.id,
+          userId: folder.userId,
+          resourceType: ResourceType.RSS_ITEM,
+          // Feed titles repeat and may contain slashes; the internal create
+          // keeps them verbatim (identity is the guid, not the name).
+          name: item.title,
+          content: item.content,
+          attrs: {
+            link_id: link.id,
+            guid: item.guid,
+            // The feed url, plus the article's own url so a client can link out
+            // to the original.
+            url: link.url,
+            article_url: item.articleUrl || null,
+            published_at: item.pubDate ? item.pubDate.toISOString() : null,
+          },
+        },
+        tx,
+        false,
+        { internal: true },
+      );
+      // The item was published before it was polled, and the folder lists items
+      // newest-first by creation time.
+      const createdAt = item.pubDate ?? new Date();
+      await tx.entityManager.query(
+        `UPDATE resources SET created_at = $1 WHERE id = $2`,
+        [createdAt, resource.id],
+      );
+    });
   }
 
   // Deduplicates per (url, guid); refreshes the content/title of an existing
@@ -442,6 +595,7 @@ export class RssPollingService {
     content: string;
     title: string;
     pubDate: Date | null;
+    summary: string;
     articleUrl: string;
     articleContent: string;
   } {
@@ -476,6 +630,8 @@ export class RssPollingService {
       content,
       title,
       pubDate,
+      // Seed body for a new item resource until the wizard's markdown lands.
+      summary: item.contentSnippet?.trim() || contentBody || '',
       articleUrl: item.link?.trim() ?? '',
       articleContent,
     };

@@ -50,16 +50,18 @@ global.fetch = jest.fn().mockImplementation(() => {
   });
 }) as jest.MockedFunction<typeof fetch>;
 
-describe('SharedRssFolders (e2e)', () => {
+// Rss items are ordinary resources, so they are shared through the generic
+// shared-resource endpoints rather than an rss-specific read path.
+describe('SharedResources (e2e)', () => {
   let client: TestClient;
   let folderResourceId: string;
+  let docResourceId: string;
   let shareId: string;
 
   beforeAll(async () => {
     client = await TestClient.create();
 
-    // Echo the article url back as markdown so the item detail has parsed
-    // content to assert on.
+    // Echo the article url back as markdown so each item has content to assert.
     jest
       .spyOn(client.app.get(WizardAPIService), 'parseRssItem')
       .mockImplementation((params: { url?: string; content?: string }) =>
@@ -93,6 +95,18 @@ describe('SharedRssFolders (e2e)', () => {
       .expect(201);
     folderResourceId = created.body.resource.id;
 
+    // A sibling resource outside the share, used to prove the share's bounds.
+    docResourceId = (
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: 'Not shared',
+          resourceType: 'doc',
+          parentId: client.namespace.root_resource_id,
+        })
+        .expect(201)
+    ).body.id;
+
     // Populate items.
     await client.app.get(RssPollingService).pollUrl(FEED_URL);
 
@@ -111,67 +125,86 @@ describe('SharedRssFolders (e2e)', () => {
     await client.close();
   });
 
-  it('lists a shared rss folder items to an unauthenticated viewer, newest first', async () => {
-    // client.request() sends no auth headers — a public viewer.
-    const response = await client
-      .request()
-      .get(`/api/v1/shares/${shareId}/resources/${folderResourceId}/rss-items`)
+  // client.request() sends no auth headers — a public viewer.
+  const asViewer = () => client.request();
+
+  const listChildren = async (resourceId: string) =>
+    (
+      await asViewer()
+        .get(`/api/v1/shares/${shareId}/resources/${resourceId}/children`)
+        .expect(200)
+    ).body as Array<Record<string, any>>;
+
+  it('lists a shared rss folder items to an unauthenticated viewer', async () => {
+    const items = await listChildren(folderResourceId);
+    expect(items.map((item) => item.name).sort()).toEqual(['Newer', 'Older']);
+    for (const item of items) {
+      expect(item.resource_type).toBe('rss_item');
+      expect(item.parent_id).toBe(folderResourceId);
+    }
+  });
+
+  it('reads a single shared rss item, including its parsed content', async () => {
+    const items = await listChildren(folderResourceId);
+    const newer = items.find((item) => item.name === 'Newer')!;
+
+    const response = await asViewer()
+      .get(`/api/v1/shares/${shareId}/resources/${newer.id}`)
       .expect(200);
 
-    const items = response.body as Array<Record<string, unknown>>;
-    expect(items.map((item) => item.title)).toEqual(['Newer', 'Older']);
-    expect(items[0]).toMatchObject({
-      id: expect.any(String),
-      url: 'https://example.com/newer',
+    expect(response.body).toMatchObject({
+      id: newer.id,
+      name: 'Newer',
+      resource_type: 'rss_item',
+      content: '# https://example.com/newer',
+    });
+    expect(response.body.attrs).toMatchObject({
+      url: FEED_URL,
+      guid: 'shared-guid-newer',
       published_at: new Date('Wed, 01 Apr 2026 00:00:00 GMT').toISOString(),
     });
   });
 
-  it('reads a single shared rss item, including parsed content', async () => {
-    const list = await client
-      .request()
-      .get(`/api/v1/shares/${shareId}/resources/${folderResourceId}/rss-items`)
-      .expect(200);
-    const itemId = (list.body as Array<{ id: string }>)[0].id;
-
-    const response = await client
-      .request()
-      .get(
-        `/api/v1/shares/${shareId}/resources/${folderResourceId}/rss-items/${itemId}`,
-      )
-      .expect(200);
-
-    expect(response.body).toMatchObject({
-      id: itemId,
-      title: 'Newer',
-      parsed_content: '# https://example.com/newer',
-    });
+  it('reports an rss item as a leaf', async () => {
+    const items = await listChildren(folderResourceId);
+    expect(await listChildren(items[0].id)).toEqual([]);
   });
 
-  it('rejects listing items for a resource not covered by the share', async () => {
-    // The namespace root is not the shared folder and the share is not
-    // all_resources, so it is not reachable.
-    await client
-      .request()
+  it('rejects a resource not covered by the share', async () => {
+    // The share is not all_resources, so a sibling of the shared folder is not
+    // reachable through it.
+    await asViewer()
+      .get(`/api/v1/shares/${shareId}/resources/${docResourceId}`)
+      .expect(404);
+    await asViewer()
       .get(
-        `/api/v1/shares/${shareId}/resources/${client.namespace.root_resource_id}/rss-items`,
+        `/api/v1/shares/${shareId}/resources/${client.namespace.root_resource_id}`,
       )
       .expect(404);
   });
 
-  it('returns 404 for an unknown item id', async () => {
-    await client
-      .request()
-      .get(
-        `/api/v1/shares/${shareId}/resources/${folderResourceId}/rss-items/00000000-0000-0000-0000-000000000000`,
-      )
+  it('returns 404 for an unknown resource id', async () => {
+    await asViewer()
+      .get(`/api/v1/shares/${shareId}/resources/doesnotexist0001`)
       .expect(404);
   });
 
   it('returns 404 for an unknown share id', async () => {
+    await asViewer()
+      .get(`/api/v1/shares/does-not-01/resources/${folderResourceId}`)
+      .expect(404);
+  });
+
+  it('stops serving the items once the share is disabled', async () => {
     await client
-      .request()
-      .get(`/api/v1/shares/does-not-01/resources/${folderResourceId}/rss-items`)
+      .patch(
+        `/api/v1/namespaces/${client.namespace.id}/resources/${folderResourceId}/share`,
+      )
+      .send({ enabled: false })
+      .expect(200);
+
+    await asViewer()
+      .get(`/api/v1/shares/${shareId}/resources/${folderResourceId}/children`)
       .expect(404);
   });
 });

@@ -7,7 +7,6 @@ import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.modu
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
-import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll } from 'omniboxd/rss/entities/rss-poll.entity';
@@ -19,7 +18,6 @@ import { RSS_FOLDERS_QUOTA_SERVICE } from 'omniboxd/rss/rss-folders-quota.interf
 import { RssFoldersQuotaService } from 'omniboxd/rss/rss-folders-quota.service';
 import { RssPollingCronService } from 'omniboxd/rss/rss-polling.cron.service';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
-import { SharedRssFoldersController } from 'omniboxd/rss/shared-rss-folders.controller';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
@@ -32,7 +30,6 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
       Resource,
       RssPoll,
       RssItemContent,
-      RssItem,
       Namespace,
       NamespaceMember,
     ]),
@@ -56,7 +53,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     RssPollingService,
     RssPollingCronService,
   ],
-  controllers: [RssFoldersController, SharedRssFoldersController],
+  controllers: [RssFoldersController],
   exports: [RSS_FOLDERS_QUOTA_SERVICE],
 })
 export class RssModule {}

@@ -1,6 +1,9 @@
 import { HttpStatus } from '@nestjs/common';
-import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
-import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { TestClient } from 'test/test-client';
 import { DataSource, EntityManager } from 'typeorm';
@@ -243,10 +246,9 @@ describe('RssFoldersController (e2e)', () => {
     await client.delete(base).expect(200);
   });
 
-  it('updates links that already have polled items without a foreign key violation', async () => {
+  it("trashes a removed link's item resources and keeps a reused link's", async () => {
     const dataSource = client.app.get(DataSource);
-    const contentRepo = dataSource.getRepository(RssItemContent);
-    const itemRepo = dataSource.getRepository(RssItem);
+    const resourceRepo = dataSource.getRepository(Resource);
 
     const created = (
       await createFolder({
@@ -258,24 +260,22 @@ describe('RssFoldersController (e2e)', () => {
     const base = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}`;
     const keptLinkId = created.links[0].id;
 
-    // Simulate a poll having related an item to the folder's link.
-    const content = await contentRepo.save(
-      contentRepo.create({
-        url: 'https://example.com/feed',
-        guid: 'guid-1',
+    // Simulate a poll having created an item resource for the folder's link.
+    const item = await resourceRepo.save(
+      resourceRepo.create({
+        namespaceId: client.namespace.id,
+        userId: client.user.id,
+        parentId: created.resource.id,
+        name: 'An item',
+        resourceType: ResourceType.RSS_ITEM,
         content: 'body',
-      }),
-    );
-    await itemRepo.save(
-      itemRepo.create({
-        linkId: keptLinkId,
-        contentId: content.id,
-        title: 'An item',
+        contentSize: '4',
+        attrs: { link_id: keptLinkId, guid: 'guid-1' },
       }),
     );
 
-    // Renaming the same feed reuses the existing link row, so its id and the
-    // related rss_item survive the edit.
+    // Renaming the same feed reuses the existing link row, so its id and its
+    // item resources survive the edit.
     const renamed = (
       await client
         .patch(`${base}/config`)
@@ -284,19 +284,24 @@ describe('RssFoldersController (e2e)', () => {
     ).body;
     expect(renamed.links[0].id).toBe(keptLinkId);
     expect(renamed.links[0].name).toBe('Renamed');
-    expect(await itemRepo.countBy({ linkId: keptLinkId })).toBe(1);
+    expect(await resourceRepo.countBy({ id: item.id })).toBe(1);
 
-    // Replacing the feed removes the link and its now-orphaned rss_items.
+    // Replacing the feed removes the link and trashes its now-orphaned items.
     await client
       .patch(`${base}/config`)
       .send({ links: [{ url: 'https://example.com/other', name: 'Other' }] })
       .expect(200);
-    expect(await itemRepo.countBy({ linkId: keptLinkId })).toBe(0);
+    expect(await resourceRepo.countBy({ id: item.id })).toBe(0);
+    const trashed = await resourceRepo.findOneOrFail({
+      withDeleted: true,
+      where: { id: item.id },
+    });
+    expect(trashed.deletedAt).not.toBeNull();
 
     await client.delete(base).expect(200);
   });
 
-  it('rejects creating resources inside an rss folder', async () => {
+  it('rejects any child of an rss folder that is not an rss item', async () => {
     const created = (
       await createFolder({
         name: 'No Children',
@@ -314,7 +319,130 @@ describe('RssFoldersController (e2e)', () => {
       })
       .expect(HttpStatus.UNPROCESSABLE_ENTITY);
 
-    expect(response.body.code).toBe('rss_folder_cannot_be_parent');
+    expect(response.body.code).toBe('rss_folder_child_must_be_rss_item');
+  });
+
+  it('rejects an rss item created outside an rss folder', async () => {
+    // The public create DTO accepts any ResourceType, so the type itself is
+    // rejected first: items are written only by the poller.
+    const rejected = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+      .send({
+        name: 'orphan item',
+        resourceType: 'rss_item',
+        parentId: client.namespace.root_resource_id,
+      })
+      .expect(HttpStatus.FORBIDDEN);
+    expect(rejected.body.code).toBe('resource_read_only');
+
+    // ... and even the internal create path enforces the containment rule.
+    const resourcesService = client.app.get(ResourcesService);
+    await expect(
+      resourcesService.createResource(
+        {
+          namespaceId: client.namespace.id,
+          parentId: client.namespace.root_resource_id,
+          userId: client.user.id,
+          resourceType: ResourceType.RSS_ITEM,
+          name: 'orphan item',
+        },
+        undefined,
+        false,
+        { internal: true },
+      ),
+    ).rejects.toMatchObject({ code: 'RSS_ITEM_PARENT_MUST_BE_RSS_FOLDER' });
+
+    // A parent is required, too.
+    await expect(
+      resourcesService.createResource(
+        {
+          namespaceId: client.namespace.id,
+          parentId: null,
+          userId: client.user.id,
+          resourceType: ResourceType.RSS_ITEM,
+          name: 'parentless item',
+        },
+        undefined,
+        false,
+        { internal: true },
+      ),
+    ).rejects.toMatchObject({ code: 'RSS_ITEM_PARENT_MUST_BE_RSS_FOLDER' });
+  });
+
+  it('rejects every user-facing write to an rss item', async () => {
+    const dataSource = client.app.get(DataSource);
+    const resourceRepo = dataSource.getRepository(Resource);
+    const created = (
+      await createFolder({
+        name: 'Read Only',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const folderId = created.resource.id;
+    const item = await resourceRepo.save(
+      resourceRepo.create({
+        namespaceId: client.namespace.id,
+        userId: client.user.id,
+        parentId: folderId,
+        name: 'Read only item',
+        resourceType: ResourceType.RSS_ITEM,
+        content: 'body',
+        contentSize: '4',
+        attrs: { link_id: created.links[0].id, guid: 'guid-read-only' },
+      }),
+    );
+    const base = `/api/v1/namespaces/${client.namespace.id}/resources`;
+
+    // Reading it is fine, and it advertises itself as read-only.
+    const read = await client.get(`${base}/${item.id}`).expect(200);
+    expect(read.body).toMatchObject({
+      id: item.id,
+      resource_type: 'rss_item',
+      read_only: true,
+    });
+
+    const expectReadOnly = (body: Record<string, any>) =>
+      expect(body.code).toBe('resource_read_only');
+
+    expectReadOnly(
+      (
+        await client
+          .patch(`${base}/${item.id}`)
+          .send({ name: 'renamed' })
+          .expect(HttpStatus.FORBIDDEN)
+      ).body,
+    );
+    expectReadOnly(
+      (
+        await client
+          .post(`${base}/${item.id}/move/${client.namespace.root_resource_id}`)
+          .expect(HttpStatus.FORBIDDEN)
+      ).body,
+    );
+    expectReadOnly(
+      (await client.delete(`${base}/${item.id}`).expect(HttpStatus.FORBIDDEN))
+        .body,
+    );
+    expectReadOnly(
+      (
+        await client
+          .post(`${base}/${item.id}/duplicate`)
+          .expect(HttpStatus.FORBIDDEN)
+      ).body,
+    );
+
+    // The item is untouched by all of that.
+    const after = await resourceRepo.findOneOrFail({ where: { id: item.id } });
+    expect(after.name).toBe('Read only item');
+    expect(after.parentId).toBe(folderId);
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+      )
+      .expect(200);
+    await resourceRepo.softDelete({ id: item.id });
   });
 
   it('rejects a second folder in the same space and frees the quota on delete', async () => {

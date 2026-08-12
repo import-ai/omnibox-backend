@@ -171,7 +171,11 @@ export class ResourceSortingService {
         children.forEach((resource, resourceIndex) => {
           resource.manualSortIndex = String(resourceIndex + 1);
           sortedResources.push(resource);
-          parentIds.push(resource.id);
+          // Never descend into an rss folder: its items are ordered by the feed,
+          // not by the user.
+          if (resource.resourceType !== ResourceType.RSS_FOLDER) {
+            parentIds.push(resource.id);
+          }
         });
       }
 
@@ -235,6 +239,13 @@ export class ResourceSortingService {
       throw this.invalidManualSort(
         'resource.errors.invalidManualSortOrder',
         'INVALID_MANUAL_SORT_ORDER',
+      );
+    }
+    // The product, not the user, decides what an rss folder contains and in
+    // what order.
+    for (const resourceId of order.resourceIds) {
+      this.resourcesService.assertNotReadOnly(
+        childrenById.get(resourceId)!.resourceType,
       );
     }
     const resourcesWithParents =

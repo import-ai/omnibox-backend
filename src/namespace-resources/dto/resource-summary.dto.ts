@@ -1,5 +1,6 @@
 import { Expose, Transform } from 'class-transformer';
 import {
+  isReadOnlyResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -25,6 +26,11 @@ export class ResourceSummaryDto {
 
   @Expose({ name: 'has_children' })
   hasChildren: boolean;
+
+  // See ResourceDto.readOnly: lets a folder listing gate row actions without
+  // knowing which types the product owns.
+  @Expose({ name: 'read_only' })
+  readOnly: boolean;
 
   @Expose({ name: 'created_at' })
   @Transform(({ value }) => value.toISOString())
@@ -57,6 +63,7 @@ export class ResourceSummaryDto {
       .trim();
     dto.content = contentWithoutImages.slice(0, 100);
     dto.hasChildren = hasChildren;
+    dto.readOnly = isReadOnlyResourceType(resource.resourceType);
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
     dto.firstAttachment = firstAttachment;

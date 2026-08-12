@@ -477,6 +477,38 @@ export class ResourcesService {
     });
   }
 
+  /**
+   * Read just the `content` column for a known set of resources.
+   *
+   * A folder listing needs every child's metadata to sort and permission-filter
+   * before it knows which rows the page holds, but it only ever shows a content
+   * prefix for the rows it returns. Selecting `content` alongside the metadata
+   * would drag the whole folder's article bodies out of the toast table — tens
+   * of megabytes for an rss folder holding a few thousand items — to render ten
+   * hundred-character previews. Fetching content separately, keyed by the ids
+   * actually on the page, keeps that read proportional to the page.
+   */
+  async getContents(
+    namespaceId: string,
+    resourceIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<Map<string, string>> {
+    if (resourceIds.length === 0) {
+      return new Map();
+    }
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    const rows = await repo.find({
+      select: ['id', 'content'],
+      where: {
+        namespaceId,
+        id: In(resourceIds),
+      },
+    });
+    return new Map(rows.map((row) => [row.id, row.content]));
+  }
+
   async getAllSubResources(
     namespaceId: string,
     parentIds: string[],

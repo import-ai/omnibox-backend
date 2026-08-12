@@ -1143,10 +1143,15 @@ export class NamespaceResourcesService {
       );
     }
 
+    // Metadata only, even when the caller asked for summaries: sorting and the
+    // permission filter below need every child, but nothing here reads content.
+    // The page's content is fetched by id once the window is known, so a folder
+    // holding thousands of rss items no longer materializes every article body
+    // to return ten previews.
     const children = await this.resourcesService.getChildren(
       namespaceId,
       [resourceId],
-      { summary },
+      {},
       entityManager,
     );
 
@@ -1213,15 +1218,20 @@ export class NamespaceResourcesService {
     }
 
     if (summary) {
-      const firstAttachments =
-        await this.resourceAttachmentsService.getFirstAttachments(
+      const pagedIds = pagedChildren.map((r) => r.id);
+      const [firstAttachments, contents] = await Promise.all([
+        this.resourceAttachmentsService.getFirstAttachments(
           namespaceId,
-          pagedChildren.map((r) => r.id),
-        );
+          pagedIds,
+        ),
+        this.resourcesService.getContents(namespaceId, pagedIds, entityManager),
+      ]);
       return {
         resources: pagedChildren.map((res) =>
           ResourceSummaryDto.fromEntity(
-            res,
+            // The metadata read above left `content` unselected; the summary dto
+            // takes its prefix from here.
+            Object.assign(res, { content: contents.get(res.id) ?? '' }),
             !!hasChildrenMap.get(res.id),
             firstAttachments.get(res.id),
           ),

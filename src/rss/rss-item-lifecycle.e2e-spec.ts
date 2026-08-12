@@ -693,6 +693,117 @@ describe('RssItem lifecycle (e2e)', () => {
     });
   });
 
+  // A feed folder is read a page at a time, and each row shows a prefix of the
+  // parsed article rather than the whole thing, so the page and the content on
+  // it are read separately. These cases pin what that produces at the window
+  // boundaries: the pages must tile the newest-first listing exactly once, and
+  // every row must still be wearing its own article.
+  describe('paging a feed folder', () => {
+    const FEED_PAGED = 'https://example.com/lifecycle-paged';
+    const ITEM_COUNT = 12;
+    const PAGE_SIZE = 5;
+    let folderId: string;
+
+    // Published a day apart so the newest-first order is unambiguous, and
+    // titled in publish order so a page can be checked by name alone.
+    const itemUrl = (index: number) =>
+      `https://example.com/paged-${String(index).padStart(2, '0')}`;
+    const itemTitle = (index: number) =>
+      `Paged item ${String(index).padStart(2, '0')}`;
+
+    beforeAll(async () => {
+      feeds.set(
+        FEED_PAGED,
+        Array.from({ length: ITEM_COUNT }, (_unused, index) => ({
+          title: itemTitle(index),
+          link: itemUrl(index),
+          guid: `paged-${index}`,
+          description: `body ${index}`,
+          pubDate: `Mon, ${String(index + 1).padStart(2, '0')} Jun 2026 00:00:00 GMT`,
+        })),
+      );
+      folderId = (
+        await createFolder(
+          client,
+          'Paged feed',
+          client.namespace.root_resource_id,
+          [FEED_PAGED],
+        )
+      ).resource.id;
+      await repoll(FEED_PAGED);
+      expect(await folderItems(folderId)).toHaveLength(ITEM_COUNT);
+    });
+
+    const listPage = async (query: string) =>
+      (
+        await client
+          .get(
+            `/api/v1/namespaces/${client.namespace.id}/resources/${folderId}/children?${query}`,
+          )
+          .expect(200)
+      ).body as Array<{ id: string; name: string; content: string }>;
+
+    it('tiles the newest-first listing exactly once', async () => {
+      const unpaged = await listPage(
+        'summary=true&sort_by=created_at&sort_order=desc',
+      );
+      expect(unpaged.map((item) => item.name)).toEqual(
+        Array.from({ length: ITEM_COUNT }, (_unused, index) =>
+          itemTitle(ITEM_COUNT - 1 - index),
+        ),
+      );
+
+      const paged: typeof unpaged = [];
+      for (
+        let offset = 0;
+        offset < ITEM_COUNT + PAGE_SIZE;
+        offset += PAGE_SIZE
+      ) {
+        const page = await listPage(
+          `summary=true&limit=${PAGE_SIZE}&offset=${offset}&sort_by=created_at&sort_order=desc`,
+        );
+        expect(page).toHaveLength(
+          Math.min(PAGE_SIZE, Math.max(0, ITEM_COUNT - offset)),
+        );
+        paged.push(...page);
+      }
+      expect(paged.map((item) => item.id)).toEqual(
+        unpaged.map((item) => item.id),
+      );
+    });
+
+    it('keeps each row with its own article on every page', async () => {
+      for (let offset = 0; offset < ITEM_COUNT; offset += PAGE_SIZE) {
+        const page = await listPage(
+          `summary=true&limit=${PAGE_SIZE}&offset=${offset}&sort_by=created_at&sort_order=desc`,
+        );
+        for (const [position, item] of page.entries()) {
+          const index = ITEM_COUNT - 1 - (offset + position);
+          expect(item.name).toBe(itemTitle(index));
+          // The parse stub writes the article url into the markdown, so the
+          // summary shows which article this row actually carries.
+          expect(item.content).toBe(`# ${itemUrl(index)}`);
+        }
+      }
+    });
+
+    it('counts the whole feed at every window', async () => {
+      for (const offset of [0, 5, 10, ITEM_COUNT, 500]) {
+        const response = await client
+          .request()
+          .get(
+            `/internal/api/v1/namespaces/${client.namespace.id}/resources/${folderId}/list?limit=${PAGE_SIZE}&offset=${offset}`,
+          )
+          .set('x-user-id', client.user.id)
+          .expect(200);
+        expect(response.body.total).toBe(ITEM_COUNT);
+        expect(response.body.resources).toHaveLength(
+          Math.min(PAGE_SIZE, Math.max(0, ITEM_COUNT - offset)),
+        );
+      }
+    });
+  });
+
   describe('concurrency', () => {
     const FEED_RACE = 'https://example.com/lifecycle-race';
     const FEED_LOSER = 'https://example.com/lifecycle-loser';

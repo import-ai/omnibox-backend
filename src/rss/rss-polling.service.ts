@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   Resource,
   ResourceType,
@@ -362,8 +363,11 @@ export class RssPollingService {
     }
 
     // Storing the parse must not be undone by a fan-out failure, so this runs
-    // outside the update above and only logs on error; the next poll re-runs it
-    // for any copy left behind (content is compared before writing).
+    // outside the update above and only logs on error. Note that a fan-out that
+    // throws part-way is not repaired by the next poll: parsed_content is set,
+    // so the item is no longer selected for parsing at all, and any copy the
+    // fan-out did not reach keeps the feed snippet until something else
+    // rewrites it.
     try {
       await this.fanOutContent(url, guid, markdown);
     } catch (err) {
@@ -531,8 +535,14 @@ export class RssPollingService {
   }
 
   // Follows a corrected feed title on the live copy that already exists.
-  // Retired copies never reach here: linkItems only looks up live ones, and a
-  // retired copy is history that no later poll rewrites.
+  // Retired copies never reach here through linkItems, which looks up live ones
+  // only — but that read happens outside any transaction, so a `PATCH
+  // .../config` dropping the url can retire the copy in between. updateResource
+  // does not look at deleted rows and would throw RESOURCE_NOT_FOUND, failing
+  // the whole poll over a title that no longer has anywhere to go. The copy is
+  // skipped instead, the same way subscriptionIsLive skips an item whose
+  // subscription went away mid-poll; a retired copy is history that no later
+  // poll rewrites.
   private async renameItemResource(
     folder: Resource,
     copy: { id: string; name: string },
@@ -541,15 +551,24 @@ export class RssPollingService {
     if (copy.name === item.title) {
       return;
     }
-    await this.resourcesService.updateResource(
-      folder.namespaceId,
-      copy.id,
-      folder.userId!,
-      { name: item.title },
-      undefined,
-      false,
-      { internal: true },
-    );
+    try {
+      await this.resourcesService.updateResource(
+        folder.namespaceId,
+        copy.id,
+        folder.userId!,
+        { name: item.title },
+        undefined,
+        false,
+        { internal: true },
+      );
+    } catch (err) {
+      if (!(err instanceof AppException) || err.code !== 'RESOURCE_NOT_FOUND') {
+        throw err;
+      }
+      this.logger.warn(
+        `Skipped renaming rss item ${item.guid} (${copy.id}): its copy went away mid-poll`,
+      );
+    }
   }
 
   private async createItemResource(
@@ -611,7 +630,12 @@ export class RssPollingService {
   // items live underneath it (they come back when it is restored), so an item
   // inserted just as the folder is trashed is in exactly the state every other
   // item of that folder is in — only a folder that is already gone by the time
-  // this runs has nowhere to hang the item.
+  // this runs has nowhere to hang the item. Locking it would also invert this
+  // transaction's lock order: the insert below already takes FOR KEY SHARE on
+  // the folder row through the resources.parent_id self-FK, i.e. after this
+  // link lock, and every writer of a feed folder has to acquire in that same
+  // order — link row, then folder row — or deadlock (RssFoldersService.update
+  // reconciles links before it renames for exactly this reason).
   private async subscriptionIsLive(
     tx: Transaction,
     link: RssLink,

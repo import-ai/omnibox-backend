@@ -1053,6 +1053,12 @@ describe('RssItem lifecycle (e2e)', () => {
     const FEED_ORPHAN = 'https://example.com/lifecycle-orphan';
     const FEED_ORPHAN_KEEP = 'https://example.com/lifecycle-orphan-keep';
     const FEED_ORPHAN_FOLDER = 'https://example.com/lifecycle-orphan-folder';
+    const FEED_HELD = 'https://example.com/lifecycle-held';
+    const FEED_HELD_KEEP = 'https://example.com/lifecycle-held-keep';
+    const FEED_RENAMED = 'https://example.com/lifecycle-renamed';
+    const FEED_RENAMED_KEEP = 'https://example.com/lifecycle-renamed-keep';
+    const FEED_RETITLED = 'https://example.com/lifecycle-retitled';
+    const FEED_RETITLED_KEEP = 'https://example.com/lifecycle-retitled-keep';
 
     // Runs `interfere` in the window linkItems leaves open: its links, folders
     // and existing-copy reads have all happened and the insert has not opened
@@ -1070,6 +1076,59 @@ describe('RssItem lifecycle (e2e)', () => {
           await interfere();
           return await realInsert(...args);
         });
+    };
+
+    // The other half of the same race, and the half the re-check cannot cover:
+    // `interfere` is started *inside* the insert's transaction, right after
+    // subscriptionIsLive has taken its FOR SHARE on the link row, so the
+    // re-check has already said yes and only the lock pairing decides the
+    // outcome. The request is fired without awaiting — awaiting it here would
+    // hang, since the fix is precisely that it blocks — and the insert resumes
+    // once it has either settled (nothing held it up, which is the bug) or
+    // parked on the link row. The caller awaits it after the poll.
+    const interfereInsideInsert = (interfere: () => Promise<unknown>) => {
+      let interfering: Promise<unknown> = Promise.resolve();
+      const poller = pollingService as unknown as Record<
+        'subscriptionIsLive',
+        (...args: unknown[]) => Promise<boolean>
+      >;
+      const realCheck = poller.subscriptionIsLive.bind(pollingService);
+      const spy = jest
+        .spyOn(poller, 'subscriptionIsLive')
+        .mockImplementationOnce(async (...args: unknown[]) => {
+          const live = await realCheck(...args);
+          interfering = interfere();
+          // Handled here so an assertion failure inside the request surfaces
+          // when the caller awaits it rather than as an unhandled rejection.
+          const done = interfering.then(
+            () => true,
+            () => true,
+          );
+          await Promise.race([done, waitForLinkLockWaiter()]);
+          return live;
+        });
+      return {
+        restore: () => spy.mockRestore(),
+        settled: () => interfering,
+      };
+    };
+
+    // Resolves as soon as some backend is parked on a lock inside removeLink's
+    // `FOR UPDATE`, and gives up after a bound so a run where that never
+    // happens still finishes (it is raced against the request settling).
+    const waitForLinkLockWaiter = async () => {
+      const deadline = Date.now() + 5000;
+      while (Date.now() < deadline) {
+        const rows: Array<{ waiting: string }> = await dataSource.query(
+          `SELECT count(*) AS waiting FROM pg_stat_activity
+            WHERE wait_event_type = 'Lock'
+              AND query LIKE '%FROM rss_links WHERE id = $1 FOR UPDATE%'`,
+        );
+        if (Number(rows[0].waiting) > 0) {
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
     };
 
     // Commits the copy a rival poll would have created, on its own connection,
@@ -1400,6 +1459,193 @@ describe('RssItem lifecycle (e2e)', () => {
       });
       expect(folder?.deletedAt).not.toBeNull();
       expect(await folderItems(folderId, true)).toHaveLength(0);
+    });
+
+    // The two cases above only ever reach the re-check: their interference is
+    // over before the insert's transaction opens. This one starts the removal
+    // after the re-check has passed, which is the only interleaving the row
+    // locks exist for — with them gone (and the re-check left in place) the
+    // removal runs to completion while the insert is still open, and the copy
+    // it could not see stays live under a link that no longer exists.
+    it('retires a copy the removal could only see because it waited for the insert', async () => {
+      feeds.set(FEED_HELD, [
+        {
+          title: 'Held',
+          link: 'https://example.com/held',
+          guid: 'held',
+          description: 'held body',
+        },
+      ]);
+      feeds.set(FEED_HELD_KEEP, []);
+      const created = await createFolder(
+        client,
+        'Held folder',
+        await privateRootId(client),
+        [FEED_HELD, FEED_HELD_KEEP],
+      );
+      const folderId = created.resource.id;
+      const heldLinkId = created.links.find(
+        (link) => link.url === FEED_HELD,
+      )!.id;
+
+      const interference = interfereInsideInsert(() =>
+        client
+          .patch(
+            `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
+          )
+          .send({ links: [{ url: FEED_HELD_KEEP }] })
+          .expect(200),
+      );
+      try {
+        expect(await repoll(FEED_HELD)).toBe('succeed');
+        await interference.settled();
+      } finally {
+        interference.restore();
+      }
+
+      const link = await linkRepo().findOne({
+        where: { id: heldLinkId },
+        withDeleted: true,
+      });
+      expect(link?.deletedAt).not.toBeNull();
+      // The insert won the race — it held the link row, so the removal could
+      // not collect the items to trash until it had committed...
+      const all = await folderItems(folderId, true);
+      expect(all).toHaveLength(1);
+      expect(all[0].attrs.link_id).toBe(heldLinkId);
+      // ...and having waited, the removal saw the copy and took it with the
+      // link. Nothing live is left hanging off a retired subscription.
+      expect(all[0].deletedAt).not.toBeNull();
+      expect(await folderItems(folderId)).toHaveLength(0);
+    });
+
+    // Same interleaving, with the payload the web actually sends: every config
+    // save PATCHes name and links together. The rename locks the folder
+    // resource row and the removal locks the link row, and the insert holds the
+    // link row while the resources.parent_id self-FK makes it take the folder
+    // row — so the two must acquire in the same order or Postgres kills one of
+    // them. It kills the user's request: renaming before reconciling turns this
+    // case into a 500 and a lost config change.
+    it('renames and drops a url in one request while a poll holds the link', async () => {
+      feeds.set(FEED_RENAMED, [
+        {
+          title: 'Renamed',
+          link: 'https://example.com/renamed',
+          guid: 'renamed',
+          description: 'renamed body',
+        },
+      ]);
+      feeds.set(FEED_RENAMED_KEEP, []);
+      const created = await createFolder(
+        client,
+        'Renamed folder',
+        await privateRootId(client),
+        [FEED_RENAMED, FEED_RENAMED_KEEP],
+      );
+      const folderId = created.resource.id;
+
+      const interference = interfereInsideInsert(() =>
+        client
+          .patch(
+            `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
+          )
+          .send({
+            name: 'Renamed folder v2',
+            links: [{ url: FEED_RENAMED_KEEP }],
+          })
+          .expect(200),
+      );
+      try {
+        expect(await repoll(FEED_RENAMED)).toBe('succeed');
+        await interference.settled();
+      } finally {
+        interference.restore();
+      }
+
+      // Neither side was rolled back: the save applied in full and the poll
+      // reported success.
+      const config = (
+        await client
+          .get(
+            `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
+          )
+          .expect(200)
+      ).body;
+      expect(config.resource.name).toBe('Renamed folder v2');
+      expect(config.links).toHaveLength(1);
+      expect(config.links[0].url).toBe(FEED_RENAMED_KEEP);
+      expect(await folderItems(folderId)).toHaveLength(0);
+    });
+
+    // A feed that corrects an item's title makes the poll rename the copies it
+    // already has, outside any transaction — so a config save can retire the
+    // copy in between. The rename must skip it, the way the insert skips an
+    // item whose subscription went away; failing there would fail the whole
+    // poll over a title with nowhere left to go.
+    it('skips renaming a copy that was retired mid-poll', async () => {
+      feeds.set(FEED_RETITLED, [
+        {
+          title: 'Original title',
+          link: 'https://example.com/retitled',
+          guid: 'retitled',
+          description: 'retitled body',
+        },
+      ]);
+      feeds.set(FEED_RETITLED_KEEP, []);
+      const created = await createFolder(
+        client,
+        'Retitled folder',
+        await privateRootId(client),
+        [FEED_RETITLED, FEED_RETITLED_KEEP],
+      );
+      const folderId = created.resource.id;
+      expect(await repoll(FEED_RETITLED)).toBe('succeed');
+      const [copy] = await folderItems(folderId);
+      expect(copy.name).toBe('Original title');
+
+      // The feed publishes a corrected title, and the user drops the url while
+      // the poll is between reading the copy and renaming it.
+      feeds.set(FEED_RETITLED, [
+        {
+          title: 'Corrected title',
+          link: 'https://example.com/retitled',
+          guid: 'retitled',
+          description: 'retitled body',
+        },
+      ]);
+      const poller = pollingService as unknown as Record<
+        'renameItemResource',
+        (...args: unknown[]) => Promise<void>
+      >;
+      const realRename = poller.renameItemResource.bind(pollingService);
+      const spy = jest
+        .spyOn(poller, 'renameItemResource')
+        .mockImplementationOnce(async (...args: unknown[]) => {
+          await client
+            .patch(
+              `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
+            )
+            .send({ links: [{ url: FEED_RETITLED_KEEP }] })
+            .expect(200);
+          return await realRename(...args);
+        });
+      const logged = captureLogs();
+      try {
+        expect(await repoll(FEED_RETITLED)).toBe('succeed');
+      } finally {
+        spy.mockRestore();
+        logged.restore();
+      }
+
+      expect(logged.matching(/went away mid-poll/)).toHaveLength(1);
+      const retired = await resourceRepo().findOne({
+        where: { id: copy.id },
+        withDeleted: true,
+      });
+      expect(retired?.deletedAt).not.toBeNull();
+      // The retired copy keeps the title it was retired with; it is history
+      // now, and no later poll rewrites it.
+      expect(retired?.name).toBe('Original title');
     });
   });
 

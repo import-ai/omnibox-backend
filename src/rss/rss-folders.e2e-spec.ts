@@ -1,4 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
+import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
   Resource,
   ResourceType,
@@ -203,9 +204,10 @@ describe('RssFoldersController (e2e)', () => {
     ).body;
     const base = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}`;
 
-    // Fail only the rss_links write, which runs after the name update inside the
-    // same transaction. If the two are not atomic, the name change would survive
-    // this failure.
+    // Fail only the rss_links write. Name and links share one transaction, so
+    // neither half may outlive a failure in the other; the converse case (the
+    // name update failing after the links were written, which is the order the
+    // lock ordering imposes) is the test below.
     // eslint-disable-next-line @typescript-eslint/unbound-method -- reapplied with an explicit `this` below
     const originalSave = EntityManager.prototype.save;
     const saveSpy = jest
@@ -243,6 +245,57 @@ describe('RssFoldersController (e2e)', () => {
         name: 'Original',
       }),
     ]);
+
+    await client.delete(base).expect(200);
+  });
+
+  it('rolls back the links when the name update fails in the same request', async () => {
+    const created = (
+      await createFolder({
+        name: 'Atomic Both Ways',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed', name: 'Original' }],
+      }).expect(201)
+    ).body;
+    const base = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}`;
+
+    // The links are reconciled before the folder is renamed (that order is what
+    // keeps the config save from deadlocking against a poll inserting an item),
+    // so this is the half that can leave written rows behind: fail the rename
+    // and the swapped link must go back too.
+    const nameSpy = jest
+      .spyOn(NamespaceResourcesService.prototype, 'update')
+      .mockImplementation(() => {
+        throw new Error('injected rename failure');
+      });
+
+    try {
+      await client
+        .patch(`${base}/config`)
+        .send({
+          name: 'Atomic Both Ways Renamed',
+          links: [{ url: 'https://example.com/other', name: 'Other' }],
+        })
+        .expect(HttpStatus.INTERNAL_SERVER_ERROR);
+    } finally {
+      nameSpy.mockRestore();
+    }
+
+    const fetched = (await client.get(`${base}/config`).expect(200)).body;
+    expect(fetched.resource.name).toBe('Atomic Both Ways');
+    expect(fetched.links).toEqual([
+      expect.objectContaining({
+        url: 'https://example.com/feed',
+        name: 'Original',
+      }),
+    ]);
+    // Not merely absent from the response: the dropped link was never retired.
+    const links = await client.app
+      .get(DataSource)
+      .getRepository(RssLink)
+      .find({ where: { resourceId: created.resource.id }, withDeleted: true });
+    expect(links).toHaveLength(1);
+    expect(links[0].deletedAt).toBeNull();
 
     await client.delete(base).expect(200);
   });

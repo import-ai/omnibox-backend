@@ -373,17 +373,19 @@ export class RssFoldersService {
     await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
 
-      if (dto.name !== undefined) {
-        await this.namespaceResourcesService.update(
-          namespaceId,
-          userId,
-          resourceId,
-          { name: dto.name },
-          false,
-          tx,
-        );
-      }
-
+      // Links first, name second, and never the other way round: this is the
+      // lock order the poller cannot avoid, so it is the one every writer of a
+      // feed folder has to follow. RssPollingService.insertItemResource takes
+      // the link row FOR SHARE and only then inserts the item, and that insert
+      // makes Postgres take FOR KEY SHARE on the folder resource through the
+      // resources.parent_id self-FK — links before folder, with no place to put
+      // an earlier folder lock that would not serialise every poll against
+      // every folder edit. Renaming first here would take the folder row FOR
+      // UPDATE (ResourcesService.updateResource locks pessimistic_write) before
+      // waiting on the link row, i.e. folder before links, and two such
+      // transactions deadlock: Postgres kills this one, so the user's config
+      // save 500s and is lost. Both halves stay in this one transaction, so
+      // name and links still commit or roll back together either way.
       if (validatedLinks !== undefined) {
         const existingLinks = await manager.find(RssLink, {
           where: { namespaceId, resourceId },
@@ -452,6 +454,17 @@ export class RssFoldersService {
             await removeLink(link);
           }
         }
+      }
+
+      if (dto.name !== undefined) {
+        await this.namespaceResourcesService.update(
+          namespaceId,
+          userId,
+          resourceId,
+          { name: dto.name },
+          false,
+          tx,
+        );
       }
     });
 

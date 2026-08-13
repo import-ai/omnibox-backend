@@ -14,8 +14,14 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
 import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
 import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
+import { RssItemDetailResponseDto } from 'omniboxd/rss/dto/rss-item-detail-response.dto';
+import {
+  RssItemContentRef,
+  RssItemResponseDto,
+} from 'omniboxd/rss/dto/rss-item-response.dto';
 import { RssLinkRequestDto } from 'omniboxd/rss/dto/rss-link-request.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
+import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssFeedValidatorService } from 'omniboxd/rss/rss-feed-validator.service';
 import { RssFoldersQuotaService } from 'omniboxd/rss/rss-folders-quota.service';
@@ -27,6 +33,8 @@ export class RssFoldersService {
   constructor(
     @InjectRepository(RssLink)
     private readonly rssLinkRepository: Repository<RssLink>,
+    @InjectRepository(RssItemContent)
+    private readonly rssItemContentRepository: Repository<RssItemContent>,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
@@ -138,6 +146,193 @@ export class RssFoldersService {
       order: { index: 'ASC' },
     });
     return RssFolderResponseDto.fromData({ resource, links: linkEntities });
+  }
+
+  // Lists the polled items of an rss folder, newest first. Enforces read
+  // permission on the folder resource, then delegates to the permission-free
+  // fetch used by both the authenticated and shared read paths.
+  async listItems(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<RssItemResponseDto[]> {
+    // Enforces read permission on the folder resource (throws if no access).
+    await this.namespaceResourcesService.getResource({
+      userId,
+      namespaceId,
+      resourceId,
+    });
+    return await this.listFolderItems(namespaceId, resourceId, limit, offset);
+  }
+
+  // Fetches an rss folder's items without any per-user permission check.
+  // Callers must authorize access to the folder first: the authenticated path
+  // via namespaceResourcesService.getResource, the shared path via a validated
+  // share (SharedResourcesService.getAndValidateResource). Items are now the
+  // folder's `rss_item` resources, joined to the global (url, guid) fetch cache
+  // for the feed snippet and the first-seen date.
+  async listFolderItems(
+    namespaceId: string,
+    resourceId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<RssItemResponseDto[]> {
+    await this.getRssFolderOrFail(namespaceId, resourceId);
+
+    // Paged in SQL: a folder can hold thousands of items, and this endpoint
+    // must never materialize more than the requested window. Newest published
+    // first — an item resource's created_at is its publish date — which is the
+    // same order the generic listings give an rss folder's children.
+    const query = this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespaceId = :namespaceId', { namespaceId })
+      .andWhere('resource.parentId = :resourceId', { resourceId })
+      .andWhere('resource.resourceType = :resourceType', {
+        resourceType: ResourceType.RSS_ITEM,
+      })
+      .orderBy('resource.createdAt', 'DESC')
+      .addOrderBy('resource.id', 'DESC');
+    // Same window semantics as before: a missing or non-positive limit/offset
+    // means "no limit" / "from the start".
+    if (limit !== undefined && limit > 0) {
+      query.limit(limit);
+    }
+    if (offset !== undefined && offset > 0) {
+      query.offset(offset);
+    }
+    const items = await query.getMany();
+    if (items.length === 0) {
+      return [];
+    }
+
+    const [linkNameById, contentByKey] = await Promise.all([
+      this.getLinkNames(namespaceId, resourceId),
+      this.getItemContents(items),
+    ]);
+    return items.map((item) =>
+      RssItemResponseDto.fromData(
+        item,
+        contentByKey.get(this.contentKey(item)),
+        linkNameById.get(String(item.attrs?.link_id)) ?? null,
+      ),
+    );
+  }
+
+  // Reads a single item of an rss folder. Enforces read permission, then
+  // delegates to the permission-free fetch.
+  async getItem(
+    userId: string,
+    namespaceId: string,
+    resourceId: string,
+    itemId: string,
+  ): Promise<RssItemDetailResponseDto> {
+    await this.namespaceResourcesService.getResource({
+      userId,
+      namespaceId,
+      resourceId,
+    });
+    return await this.getFolderItem(namespaceId, resourceId, itemId);
+  }
+
+  // Permission-free single-item fetch. Callers must authorize folder access
+  // first (see listFolderItems). The item is looked up under its folder, so an
+  // item of another folder is never reachable through this one.
+  async getFolderItem(
+    namespaceId: string,
+    resourceId: string,
+    itemId: string,
+  ): Promise<RssItemDetailResponseDto> {
+    await this.getRssFolderOrFail(namespaceId, resourceId);
+
+    const item = await this.resourceRepository.findOne({
+      where: {
+        id: itemId,
+        namespaceId,
+        parentId: resourceId,
+        resourceType: ResourceType.RSS_ITEM,
+      },
+    });
+    if (!item) {
+      const message = this.i18n.t('rssFolder.errors.itemNotFound');
+      throw new AppException(
+        message,
+        'RSS_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const [linkNameById, contentByKey] = await Promise.all([
+      this.getLinkNames(namespaceId, resourceId),
+      this.getItemContents([item]),
+    ]);
+    return RssItemDetailResponseDto.fromData(
+      item,
+      contentByKey.get(this.contentKey(item)),
+      linkNameById.get(String(item.attrs?.link_id)) ?? null,
+    );
+  }
+
+  private async getLinkNames(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Map<string, string>> {
+    const links = await this.rssLinkRepository.find({
+      where: { namespaceId, resourceId },
+      select: { id: true, name: true },
+    });
+    return new Map(links.map((link) => [link.id, link.name]));
+  }
+
+  // An item resource points at its cache row by the (feed url, guid) carried in
+  // attrs — the same key rss_item_contents is unique on.
+  private contentKey(item: Resource): string {
+    return `${String(item.attrs?.url)}\n${String(item.attrs?.guid)}`;
+  }
+
+  // Loads the fetch/parse cache rows behind a page of items in one round trip,
+  // matching whole (url, guid) pairs rather than the cross product of the two
+  // columns.
+  private async getItemContents(
+    items: Resource[],
+  ): Promise<Map<string, RssItemContentRef>> {
+    const urls: string[] = [];
+    const guids: string[] = [];
+    for (const item of items) {
+      const url = item.attrs?.url;
+      const guid = item.attrs?.guid;
+      if (typeof url === 'string' && typeof guid === 'string') {
+        urls.push(url);
+        guids.push(guid);
+      }
+    }
+    if (urls.length === 0) {
+      return new Map();
+    }
+
+    const rows: Array<{
+      url: string;
+      guid: string;
+      content: string | null;
+      createdAt: Date;
+    }> = await this.rssItemContentRepository.query(
+      `SELECT content.url,
+              content.guid,
+              content.content,
+              content.created_at AS "createdAt"
+         FROM rss_item_contents content
+         JOIN unnest($1::text[], $2::text[]) AS key(url, guid)
+           ON content.url = key.url AND content.guid = key.guid
+        WHERE content.deleted_at IS NULL`,
+      [urls, guids],
+    );
+    return new Map(
+      rows.map((row) => [
+        `${row.url}\n${row.guid}`,
+        { content: row.content, createdAt: row.createdAt },
+      ]),
+    );
   }
 
   async update(

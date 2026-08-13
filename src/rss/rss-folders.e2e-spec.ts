@@ -1129,4 +1129,94 @@ describe('RssFoldersController (e2e)', () => {
       .delete(`/api/v1/namespaces/${client.namespace.id}/resources/${doc.id}`)
       .expect(200);
   });
+
+  // The wizard reaches rss folders through the internal surface, identified by
+  // the X-User-ID header rather than a session, exactly like smart folders.
+  describe('internal api', () => {
+    const internalBase = () =>
+      `/internal/api/v1/namespaces/${client.namespace.id}/rss-folders`;
+
+    it('creates, reads and updates a folder as the header user', async () => {
+      const created = (
+        await client
+          .request()
+          .post(internalBase())
+          .set('X-User-ID', client.user.id)
+          .send({
+            name: 'Internal Subscriptions',
+            parent_id: client.namespace.root_resource_id,
+            links: [{ url: 'https://example.com/feed' }],
+          })
+          .expect(201)
+      ).body;
+      expect(created.resource.resource_type).toBe('rss_folder');
+      expect(created.links).toHaveLength(1);
+      const resourceId = created.resource.id;
+
+      const fetched = (
+        await client
+          .request()
+          .get(`${internalBase()}/${resourceId}/config`)
+          .set('X-User-ID', client.user.id)
+          .expect(200)
+      ).body;
+      expect(fetched.resource.id).toBe(resourceId);
+      expect(fetched.links[0].url).toBe('https://example.com/feed');
+
+      const updated = (
+        await client
+          .request()
+          .patch(`${internalBase()}/${resourceId}/config`)
+          .set('X-User-ID', client.user.id)
+          .send({
+            name: 'Internal Renamed',
+            links: [{ url: 'https://example.com/other', name: 'Other' }],
+          })
+          .expect(200)
+      ).body;
+      expect(updated.resource.name).toBe('Internal Renamed');
+      expect(updated.links).toEqual([
+        expect.objectContaining({
+          index: 0,
+          url: 'https://example.com/other',
+          name: 'Other',
+        }),
+      ]);
+    });
+
+    it('reports feed validation failures with per-link indices', async () => {
+      const response = await client
+        .request()
+        .post(internalBase())
+        .set('X-User-ID', client.user.id)
+        .send({
+          name: 'Internal Invalid',
+          parent_id: client.namespace.root_resource_id,
+          links: [{ url: 'https://example.com/invalid' }],
+        })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+
+      expect(response.body.code).toBe('rss_feed_invalid');
+      expect(response.body.failed).toEqual([
+        { index: 0, url: 'https://example.com/invalid' },
+      ]);
+    });
+
+    it('requires the user header', async () => {
+      await client
+        .request()
+        .get(`${internalBase()}/missing/config`)
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('reports an unknown folder as not found', async () => {
+      const response = await client
+        .request()
+        .get(`${internalBase()}/00000000-0000-0000-0000-000000000000/config`)
+        .set('X-User-ID', client.user.id)
+        .expect(HttpStatus.NOT_FOUND);
+
+      expect(response.body.code).toBe('rss_folder_not_found');
+    });
+  });
 });

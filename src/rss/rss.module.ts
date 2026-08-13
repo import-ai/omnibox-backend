@@ -10,6 +10,7 @@ import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll } from 'omniboxd/rss/entities/rss-poll.entity';
+import { InternalRssFoldersController } from 'omniboxd/rss/internal.rss-folders.controller';
 import { RssFeedFetcherService } from 'omniboxd/rss/rss-feed-fetcher.service';
 import { RssFeedValidatorService } from 'omniboxd/rss/rss-feed-validator.service';
 import { RssFoldersController } from 'omniboxd/rss/rss-folders.controller';
@@ -54,7 +55,11 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     RssPollingService,
     RssPollingCronService,
   ],
-  controllers: [RssFoldersController, SharedRssFoldersController],
+  controllers: [
+    InternalRssFoldersController,
+    RssFoldersController,
+    SharedRssFoldersController,
+  ],
   exports: [RSS_FOLDERS_QUOTA_SERVICE],
 })
 export class RssModule {}

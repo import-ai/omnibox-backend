@@ -28,6 +28,15 @@ export class IndexedResourceDto {
 
   @ApiProperty({ enum: ResourceType })
   resourceType: ResourceType;
+
+  // Same flag as ResourceDto/ResourceSummaryDto. A search hit is a first-class
+  // way to reach a resource — the move-to and resource pickers offer their hits
+  // as destinations — so it has to carry the same gate as a folder listing.
+  @ApiProperty({
+    description:
+      'True for resources the product writes and the user may only read',
+  })
+  readOnly: boolean;
 }
 
 export class IndexedMessageDto {

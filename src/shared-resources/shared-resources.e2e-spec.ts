@@ -141,6 +141,9 @@ describe('SharedResources (e2e)', () => {
     for (const item of items) {
       expect(item.resource_type).toBe('rss_item');
       expect(item.parent_id).toBe(folderResourceId);
+      // Same gate as the workspace listing: a share viewer must be able to
+      // tell a read-only resource apart without knowing the type.
+      expect(item.read_only).toBe(true);
     }
   });
 
@@ -157,6 +160,7 @@ describe('SharedResources (e2e)', () => {
       name: 'Newer',
       resource_type: 'rss_item',
       content: '# https://example.com/newer',
+      read_only: true,
     });
     expect(response.body.attrs).toMatchObject({
       url: FEED_URL,

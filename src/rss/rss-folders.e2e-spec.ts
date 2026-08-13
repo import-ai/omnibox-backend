@@ -5,8 +5,9 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
+import { SmartFolderRootScope } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { TestClient } from 'test/test-client';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, In } from 'typeorm';
 
 const RSS_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -894,5 +895,238 @@ describe('RssFoldersController (e2e)', () => {
       name: 'No Parent',
       links: [{ url: 'https://example.com/feed' }],
     }).expect(HttpStatus.BAD_REQUEST);
+  });
+  // An rss folder is more than its resource row: it owns RssLink rows, needs
+  // its feeds validated, and counts against a per-space quota. The generic
+  // create endpoint knows none of that, so it must refuse the type outright
+  // rather than leave behind a folder that never polls and never counted.
+  it.each([ResourceType.RSS_FOLDER, ResourceType.SMART_FOLDER])(
+    'refuses to create a %s through the generic resource endpoint',
+    async (resourceType) => {
+      const dataSource = client.app.get(DataSource);
+      const before: { count: string }[] = await dataSource.query(
+        `SELECT count(*) FROM resources
+         WHERE namespace_id = $1 AND resource_type = $2`,
+        [client.namespace.id, resourceType],
+      );
+
+      const rejected = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          parentId: client.namespace.root_resource_id,
+          resourceType,
+          name: `Generic ${resourceType}`,
+        })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+      expect(rejected.body.code).toBe('resource_type_not_directly_creatable');
+
+      // Nothing was written: no orphan folder row survives the rejection.
+      const after: { count: string }[] = await dataSource.query(
+        `SELECT count(*) FROM resources
+         WHERE namespace_id = $1 AND resource_type = $2`,
+        [client.namespace.id, resourceType],
+      );
+      expect(after[0].count).toBe(before[0].count);
+    },
+  );
+
+  // Duplicating copies attrs and nothing else, so the copy would have no links
+  // to poll, and it would slip past the quota that gated the original.
+  it('refuses to duplicate an rss folder', async () => {
+    const created = (
+      await createFolder({
+        name: 'Duplicable',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+
+    const rejected = await client
+      .post(
+        `/api/v1/namespaces/${client.namespace.id}/resources/${created.resource.id}/duplicate`,
+      )
+      .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect(rejected.body.code).toBe('resource_type_not_directly_creatable');
+
+    const dataSource = client.app.get(DataSource);
+    const folders: { id: string }[] = await dataSource.query(
+      `SELECT id FROM resources
+       WHERE namespace_id = $1 AND resource_type = 'rss_folder'
+         AND deleted_at IS NULL`,
+      [client.namespace.id],
+    );
+    expect(folders.map((folder) => folder.id)).toEqual([created.resource.id]);
+  });
+
+  // The items are the poller's, not an arrangement their owner chose, so the
+  // server decides the order rather than the caller.
+  it('lists an rss folder newest-first whatever sort the caller asks for', async () => {
+    const dataSource = client.app.get(DataSource);
+    const resourceRepo = dataSource.getRepository(Resource);
+    const created = (
+      await createFolder({
+        name: 'Feed Order',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const folderId = created.resource.id;
+
+    const itemIds: string[] = [];
+    // One at a time so created_at strictly increases.
+    for (const guid of ['oldest', 'middle', 'newest']) {
+      const item = await resourceRepo.save(
+        resourceRepo.create({
+          namespaceId: client.namespace.id,
+          userId: client.user.id,
+          parentId: folderId,
+          name: `Item ${guid}`,
+          resourceType: ResourceType.RSS_ITEM,
+          content: 'body',
+          contentSize: '4',
+          attrs: { link_id: created.links[0].id, guid },
+        }),
+      );
+      itemIds.push(item.id);
+    }
+    const newestFirst = [...itemIds].reverse();
+
+    const base = `/api/v1/namespaces/${client.namespace.id}/resources/${folderId}/children`;
+    for (const query of [
+      '',
+      '?sort_by=created_at&sort_order=asc',
+      '?sort_by=title&sort_order=asc',
+      '?sort_by=updated_at&sort_order=asc',
+    ]) {
+      const listed = await client.get(`${base}${query}`).expect(200);
+      expect(listed.body.map((child: { id: string }) => child.id)).toEqual(
+        newestFirst,
+      );
+    }
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+      )
+      .expect(200);
+    await resourceRepo.softDelete({ id: In(itemIds) });
+  });
+
+  // The picker lists destinations, and neither of these accepts a user-placed
+  // resource: the server would reject the move with a containment error.
+  it('never offers an rss folder or a smart folder as a move target', async () => {
+    const created = (
+      await createFolder({
+        name: 'Unpickable Folder',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const smartFolder = (
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
+        .send({
+          name: 'Unpickable Smart',
+          parent_id: client.namespace.root_resource_id,
+          root_scope: SmartFolderRootScope.PRIVATE,
+          conditions: [],
+        })
+        .expect(201)
+    ).body;
+
+    const base = `/api/v1/namespaces/${client.namespace.id}/resources`;
+    const found = await client
+      .get(`${base}/search?name=Unpickable`)
+      .expect(200);
+    expect(found.body).toHaveLength(0);
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/smart-folders/${smartFolder.resource.id}`,
+      )
+      .expect(200);
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}`,
+      )
+      .expect(200);
+  });
+
+  // The response timestamps describe the folder. Reading them off links[0]
+  // made a folder report "now" as its creation time whenever links changed.
+  it('reports the folder own timestamps, not its links', async () => {
+    const created = (
+      await createFolder({
+        name: 'Timestamps',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const base = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}`;
+
+    expect(created.created_at).toBe(created.resource.created_at);
+    expect(created.updated_at).toBe(created.resource.updated_at);
+
+    const relinked = (
+      await client
+        .patch(`${base}/config`)
+        .send({ links: [{ url: 'https://example.com/other' }] })
+        .expect(200)
+    ).body;
+    expect(relinked.created_at).toBe(created.created_at);
+    expect(relinked.created_at).toBe(relinked.resource.created_at);
+  });
+  // "Recent" means recent work. The two recent paths (this listing and the
+  // one pro reads) must agree on what counts, or the same namespace looks
+  // different depending on which one asked.
+  it('keeps folders of every kind out of the recent listing', async () => {
+    const created = (
+      await createFolder({
+        name: 'Recent Feed',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/feed' }],
+      }).expect(201)
+    ).body;
+    const smartFolder = (
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
+        .send({
+          name: 'Recent Smart',
+          parent_id: client.namespace.root_resource_id,
+          root_scope: SmartFolderRootScope.PRIVATE,
+          conditions: [],
+        })
+        .expect(201)
+    ).body;
+    const doc = (
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: 'Recent Doc',
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content: 'body',
+        })
+        .expect(201)
+    ).body;
+
+    const recent = await client
+      .get(
+        `/api/v1/namespaces/${client.namespace.id}/resources/recent?limit=100`,
+      )
+      .expect(200);
+    const recentIds = recent.body.map((item: { id: string }) => item.id);
+    expect(recentIds).toContain(doc.id);
+    expect(recentIds).not.toContain(created.resource.id);
+    expect(recentIds).not.toContain(smartFolder.resource.id);
+
+    await client
+      .delete(
+        `/api/v1/namespaces/${client.namespace.id}/smart-folders/${smartFolder.resource.id}`,
+      )
+      .expect(200);
+    await client
+      .delete(`/api/v1/namespaces/${client.namespace.id}/resources/${doc.id}`)
+      .expect(200);
   });
 });

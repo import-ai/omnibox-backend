@@ -335,7 +335,47 @@ describe('SearchController (e2e)', () => {
         expect(item).toHaveProperty('resourceId');
         expect(item).toHaveProperty('title');
         expect(item).toHaveProperty('content');
+        expect(item.readOnly).toBe(false);
       });
+    });
+
+    // A search hit is a first-class way to reach a resource: the move-to and
+    // resource pickers offer their hits as destinations, so a hit has to carry
+    // the same read-only gate a folder listing does.
+    it('flags a read-only resource in its search hit', async () => {
+      type BatchGetParents = ResourcesService['batchGetParentResources'];
+      const resourcesService = app.get(ResourcesService);
+      const original: BatchGetParents =
+        resourcesService.batchGetParentResources.bind(resourcesService);
+      resourcesService.batchGetParentResources = ((
+        _namespaceId: string,
+        resourceIds: string[],
+      ) =>
+        Promise.resolve(
+          new Map(
+            (resourceIds || []).map((id) => [
+              id,
+              { id, attrs: {}, resourceType: ResourceType.RSS_ITEM },
+            ]),
+          ),
+        )) as unknown as BatchGetParents;
+
+      try {
+        const response = await request(app.getHttpServer())
+          .get(
+            `/api/v1/namespaces/${mockNamespaceId}/search?query=read-only-probe`,
+          )
+          .set('user', JSON.stringify(mockUser))
+          .expect(HttpStatus.OK);
+
+        expect(response.body.length).toBeGreaterThan(0);
+        expect(response.body[0]).toMatchObject({
+          resourceType: ResourceType.RSS_ITEM,
+          readOnly: true,
+        });
+      } finally {
+        resourcesService.batchGetParentResources = original;
+      }
     });
 
     it('should not return conversation results when message type is requested', async () => {

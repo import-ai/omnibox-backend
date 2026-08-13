@@ -87,18 +87,21 @@ export class RssFoldersService {
         dto.parentId,
         manager,
       );
-      const createdResource = await this.namespaceResourcesService.create(
-        userId,
-        namespaceId,
-        {
-          name: dto.name,
-          parentId: dto.parentId,
-          resourceType: ResourceType.RSS_FOLDER,
-          content: '',
-          attrs: {},
-        },
-        tx,
-      );
+      // createServiceOwned, not create: rss_folder is refused by the generic
+      // entry point because the RssLink rows below are part of the folder.
+      const createdResource =
+        await this.namespaceResourcesService.createServiceOwned(
+          userId,
+          namespaceId,
+          {
+            name: dto.name,
+            parentId: dto.parentId,
+            resourceType: ResourceType.RSS_FOLDER,
+            content: '',
+            attrs: {},
+          },
+          tx,
+        );
 
       await manager.save(
         RssLink,

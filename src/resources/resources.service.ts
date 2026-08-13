@@ -33,6 +33,7 @@ import {
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import {
   isReadOnlyResourceType,
+  READ_ONLY_RESOURCE_TYPES,
   Resource,
   ResourceType,
 } from './entities/resource.entity';
@@ -1619,8 +1620,8 @@ export class ResourcesService {
       // Items retired with their subscription are neither restorable nor
       // individually deletable, so listing them would only bury the user's own
       // deleted documents under hundreds of articles.
-      .andWhere('resource.resource_type != :rssItem', {
-        rssItem: ResourceType.RSS_ITEM,
+      .andWhere('resource.resource_type NOT IN (:...readOnlyTypes)', {
+        readOnlyTypes: READ_ONLY_RESOURCE_TYPES,
       });
 
     if (search) {

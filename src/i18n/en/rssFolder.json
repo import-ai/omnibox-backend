@@ -4,7 +4,6 @@
     "linkLimitExceeded": "Too many feed links: received {received}. This workspace uses the {tier} tier, which allows at most {limit}.",
     "quotaExceeded": "RSS folder quota exceeded. Upgrade to create more RSS folders",
     "quotaExhausted": "RSS folder quota exhausted. Unable to restore. Please clean up or upgrade.",
-    "notFound": "RSS folder not found",
-    "itemNotFound": "RSS item not found"
+    "notFound": "RSS folder not found"
   }
 }

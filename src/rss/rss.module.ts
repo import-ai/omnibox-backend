@@ -18,8 +18,6 @@ import { RSS_FOLDERS_QUOTA_SERVICE } from 'omniboxd/rss/rss-folders-quota.interf
 import { RssFoldersQuotaService } from 'omniboxd/rss/rss-folders-quota.service';
 import { RssPollingCronService } from 'omniboxd/rss/rss-polling.cron.service';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
-import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
-import { SharesModule } from 'omniboxd/shares/shares.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
 @Global()
@@ -38,8 +36,6 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     NamespaceResourcesModule,
     ResourcesModule,
     WizardAPIModule,
-    SharesModule,
-    SharedResourcesModule,
   ],
   providers: [
     RssFoldersService,

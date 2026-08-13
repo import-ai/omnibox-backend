@@ -6,6 +6,7 @@ import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-su
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
+  isSubscriptionResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -188,27 +189,12 @@ export class SmartFoldersService implements ISmartFoldersService {
         config.rootScope,
         visibleResources,
       );
-    // Smart folders must never surface subscription (RSS) folders or anything
-    // living inside them: such an entry renders an expandable node that errors
-    // when opened. RSS folders can't be a parent of a resource today, so the
-    // child check is defensive.
-    const rssFolderIds = new Set(
-      visibleResources
-        .filter((resource) => resource.resourceType === ResourceType.RSS_FOLDER)
-        .map((resource) => resource.id),
-    );
     const visibleIds = visibleResources
       .filter((resource) => scopedResourceIds.has(resource.id))
       .filter((resource) => resource.id !== resourceId)
       .filter((resource) => resource.resourceType !== ResourceType.SMART_FOLDER)
-      .filter(
-        (resource) =>
-          resource.resourceType !== ResourceType.RSS_FOLDER &&
-          // Items are always parented under an rss folder, but drop them by
-          // type too so an item whose folder is not visible here is excluded.
-          resource.resourceType !== ResourceType.RSS_ITEM &&
-          !(resource.parentId && rssFolderIds.has(resource.parentId)),
-      )
+      // See isSubscriptionResourceType.
+      .filter((resource) => !isSubscriptionResourceType(resource.resourceType))
       .map((resource) => resource.id);
 
     if (visibleIds.length <= 0) {
@@ -282,8 +268,7 @@ export class SmartFoldersService implements ISmartFoldersService {
     if (
       !resource ||
       resource.resourceType === ResourceType.SMART_FOLDER ||
-      resource.resourceType === ResourceType.RSS_FOLDER ||
-      resource.resourceType === ResourceType.RSS_ITEM
+      isSubscriptionResourceType(resource.resourceType)
     ) {
       return false;
     }

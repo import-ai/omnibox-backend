@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
+  isReadOnlyResourceType,
+  isSubscriptionResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -55,7 +57,7 @@ export class SearchResourceFilterService {
       return null;
     }
 
-    const resources = this.excludeRssFolderResources(
+    const resources = this.excludeSubscriptionResources(
       await this.resourcesService.batchGetResources(namespaceId, resourceIds),
     );
     const resourcesWithTagNames = await this.withTagNames(
@@ -101,7 +103,7 @@ export class SearchResourceFilterService {
         userId,
         namespaceId,
       );
-    const resources = this.excludeRssFolderResources(
+    const resources = this.excludeSubscriptionResources(
       await this.resourcesService.batchGetResources(
         namespaceId,
         visibleResources.map((resource) => resource.id),
@@ -138,26 +140,10 @@ export class SearchResourceFilterService {
     };
   }
 
-  /**
-   * Smart folders must never surface subscription (RSS) folders or anything
-   * living inside them. Such entries would otherwise render an expandable node
-   * in the tree that errors when opened, so we drop the RSS folders themselves
-   * and any resource parented directly under one.
-   */
-  private excludeRssFolderResources(resources: Resource[]): Resource[] {
-    const rssFolderIds = new Set(
-      resources
-        .filter((resource) => resource.resourceType === ResourceType.RSS_FOLDER)
-        .map((resource) => resource.id),
-    );
-
+  /** See isSubscriptionResourceType. */
+  private excludeSubscriptionResources(resources: Resource[]): Resource[] {
     return resources.filter(
-      (resource) =>
-        resource.resourceType !== ResourceType.RSS_FOLDER &&
-        // Items are always parented under an rss folder, but drop them by type
-        // too so an item whose folder is not in this batch is still excluded.
-        resource.resourceType !== ResourceType.RSS_ITEM &&
-        !(resource.parentId && rssFolderIds.has(resource.parentId)),
+      (resource) => !isSubscriptionResourceType(resource.resourceType),
     );
   }
 
@@ -208,6 +194,9 @@ export class SearchResourceFilterService {
       content: resource.content || '',
       attrs: resource.attrs || {},
       resourceType: resource.resourceType || ResourceType.DOC,
+      readOnly: isReadOnlyResourceType(
+        resource.resourceType || ResourceType.DOC,
+      ),
     };
   }
 }

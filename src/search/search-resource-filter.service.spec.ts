@@ -156,7 +156,9 @@ describe('SearchResourceFilterService', () => {
     value: 'roadmap',
   };
 
-  it('excludes rss folders and resources inside them from smart folder matches', async () => {
+  // Containment guarantees an rss folder's only children are rss items, so
+  // the whole subtree is excluded by type.
+  it('excludes rss folders and the items inside them from smart folder matches', async () => {
     const { service } = createServiceWithResources([
       resource({ id: 'doc-id', name: 'Doc', tagIds: ['tag-id'] }),
       resource({
@@ -169,6 +171,7 @@ describe('SearchResourceFilterService', () => {
         id: 'rss-child-id',
         name: 'Feed item',
         parentId: 'rss-folder-id',
+        resourceType: ResourceType.RSS_ITEM,
         tagIds: ['tag-id'],
       }),
     ]);
@@ -181,7 +184,7 @@ describe('SearchResourceFilterService', () => {
     expect(result.map((item: any) => item.resourceId)).toEqual(['doc-id']);
   });
 
-  it('excludes rss folders and their children from getMatchedResourceIds', async () => {
+  it('excludes rss folders and their items from getMatchedResourceIds', async () => {
     const resourceIds = ['doc-id', 'rss-folder-id', 'rss-child-id'];
     const { service } = createServiceWithResources(
       [
@@ -196,6 +199,7 @@ describe('SearchResourceFilterService', () => {
           id: 'rss-child-id',
           name: 'Feed item',
           parentId: 'rss-folder-id',
+          resourceType: ResourceType.RSS_ITEM,
           tagIds: ['tag-id'],
         }),
       ],

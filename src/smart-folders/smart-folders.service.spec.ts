@@ -81,7 +81,7 @@ describe('SmartFoldersService.listChildren', () => {
         name: 'Matched rss item resource',
         parentId: 'rss-folder-child-id',
         namespaceId: 'namespace-id',
-        resourceType: ResourceType.DOC,
+        resourceType: ResourceType.RSS_ITEM,
         attrs: {},
         tagIds: [],
         createdAt: new Date('2026-05-18T00:00:00.000Z'),
@@ -158,7 +158,9 @@ describe('SmartFoldersService.listChildren', () => {
     expect(result.map((resource) => resource.id)).toEqual(['matched-doc-id']);
   });
 
-  it('excludes rss folders and resources inside them', async () => {
+  // Containment guarantees an rss folder's only children are rss items, so
+  // the whole subtree is excluded by type.
+  it('excludes rss folders and the items inside them', async () => {
     const { service } = createService();
 
     const result = await service.listChildren(

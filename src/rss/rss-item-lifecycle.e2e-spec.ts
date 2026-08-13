@@ -552,11 +552,14 @@ describe('RssItem lifecycle (e2e)', () => {
         );
       }
       expect(await taskCountFor(here.id)).toBe(tasksBefore + 1);
-      // Usage follows the new body exactly, for each owner separately.
+      // content_size follows the new body (asserted above) but the owner's
+      // quota does not move: an item's bytes are never charged, however much
+      // longer the parsed markdown is than the seeded feed snippet.
+      expect(Buffer.byteLength(markdown, 'utf8')).not.toBe(
+        Number(here.contentSize),
+      );
       expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
-        usageBefore +
-          Buffer.byteLength(markdown, 'utf8') -
-          Number(here.contentSize),
+        usageBefore,
       );
       expect(there.content).not.toBe(markdown); // stale in-memory copy only
     });
@@ -692,21 +695,48 @@ describe('RssItem lifecycle (e2e)', () => {
     });
   });
 
+  // Items are poller-owned, read-only and stored once per subscribing folder:
+  // the same article would otherwise be billed to its owner once per folder,
+  // for content they never uploaded and cannot delete on its own. So no rss
+  // item path — create, parse fan-out, retire, restore — touches the owner's
+  // storage usage at all, in either direction. The row's own content_size is
+  // still maintained; only the quota bookkeeping skips it.
   describe('storage accounting', () => {
     let folderId: string;
     let itemId: string;
     let itemSize: number;
+    let docSize: number;
 
-    it('charges the folder owner for each item body', async () => {
-      feeds.set(FEED_CHARGED, [
-        {
-          title: 'Charged',
-          link: 'https://example.com/charged',
-          guid: 'charged',
-          description: 'charged body',
-        },
-      ]);
+    // A real document of the owner's, so every case below reads against a
+    // non-zero baseline: a stray refund for an item would show up as the usage
+    // dropping below the bytes this document genuinely occupies, and with the
+    // items retired it would take the amount negative.
+    beforeAll(async () => {
+      const content = 'a document that holds the baseline up';
+      docSize = Buffer.byteLength(content, 'utf8');
+      await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          parentId: client.namespace.root_resource_id,
+          resourceType: ResourceType.DOC,
+          name: 'Baseline doc',
+          content,
+        })
+        .expect(201);
+    });
+
+    it('charges nothing for the items a poll brings in', async () => {
+      feeds.set(
+        FEED_CHARGED,
+        Array.from({ length: 3 }, (_unused, index) => ({
+          title: `Charged ${index}`,
+          link: `https://example.com/charged-${index}`,
+          guid: `charged-${index}`,
+          description: `charged body ${index}`,
+        })),
+      );
       const before = await contentUsage(client.namespace.id, client.user.id);
+      expect(before).toBe(docSize);
       folderId = (
         await createFolder(
           client,
@@ -717,16 +747,24 @@ describe('RssItem lifecycle (e2e)', () => {
       ).resource.id;
       expect(await repoll(FEED_CHARGED)).toBe('succeed');
 
-      const [item] = await folderItems(folderId);
-      itemId = item.id;
-      itemSize = Number(item.contentSize);
-      expect(itemSize).toBe(Buffer.byteLength(item.content, 'utf8'));
+      const items = await folderItems(folderId);
+      expect(items).toHaveLength(3);
+      itemId = items[0].id;
+      itemSize = items.reduce((sum, item) => sum + Number(item.contentSize), 0);
+      // Every row still records its own size — that is real data about the row,
+      // used outside the quota — and none of it reached storage_usages.
+      for (const item of items) {
+        expect(Number(item.contentSize)).toBe(
+          Buffer.byteLength(item.content, 'utf8'),
+        );
+      }
+      expect(itemSize).toBeGreaterThan(0);
       expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
-        before + itemSize,
+        before,
       );
     });
 
-    it('releases the usage when the link is removed and re-charges on re-add', async () => {
+    it('refunds nothing when the link is removed, and stays put on re-add', async () => {
       const before = await contentUsage(client.namespace.id, client.user.id);
       // A folder always keeps at least one link, so swap in an unrelated (and
       // empty) feed rather than emptying the list.
@@ -737,8 +775,13 @@ describe('RssItem lifecycle (e2e)', () => {
         )
         .send({ links: [{ url: FEED_EMPTY }] })
         .expect(200);
+      // Nothing was charged for the items, so retiring them must refund
+      // nothing: a refund here would push the owner's usage below what their
+      // own documents occupy, and with no items left it would go negative.
+      expect(await folderItems(folderId)).toHaveLength(0);
+      expect(before).toBe(docSize);
       expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
-        before - itemSize,
+        docSize,
       );
 
       await client
@@ -748,12 +791,84 @@ describe('RssItem lifecycle (e2e)', () => {
         .send({ links: [{ url: FEED_CHARGED }] })
         .expect(200);
       expect(await repoll(FEED_CHARGED)).toBe('succeed');
+      expect(await folderItems(folderId)).toHaveLength(3);
       expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
         before,
       );
     });
 
-    it('keeps the items (and their usage) when the folder is trashed and restored', async () => {
+    it('charges nothing when a second folder subscribes to the same url', async () => {
+      const before = await contentUsage(client.namespace.id, client.user.id);
+      const secondId = (
+        await createFolder(
+          client,
+          'Charged folder twice',
+          client.namespace.root_resource_id,
+          [FEED_CHARGED],
+        )
+      ).resource.id;
+      expect(await repoll(FEED_CHARGED)).toBe('succeed');
+
+      // The second folder gets its own copy of every article — duplication is
+      // how items are stored — and the owner pays for neither set.
+      const copies = await folderItems(secondId);
+      expect(copies).toHaveLength(3);
+      expect(copies.reduce((sum, i) => sum + Number(i.contentSize), 0)).toBe(
+        itemSize,
+      );
+      expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
+        before,
+      );
+
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/rss-folders/${secondId}`,
+        )
+        .expect(200);
+      expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
+        before,
+      );
+    });
+
+    // The exemption is keyed on the resource type, so the regression to watch
+    // for is a document in the same namespace quietly stopping to count.
+    it('still charges and refunds an ordinary doc in the same namespace', async () => {
+      const before = await contentUsage(client.namespace.id, client.user.id);
+      const content = 'a plain document that does count';
+      const size = Buffer.byteLength(content, 'utf8');
+      const doc = (
+        await client
+          .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+          .send({
+            parentId: client.namespace.root_resource_id,
+            resourceType: ResourceType.DOC,
+            name: 'Counted doc',
+            content,
+          })
+          .expect(201)
+      ).body as { id: string };
+      expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
+        before + size,
+      );
+
+      const longer = content + ' — now with more bytes';
+      await client
+        .patch(`/api/v1/namespaces/${client.namespace.id}/resources/${doc.id}`)
+        .send({ content: longer })
+        .expect(200);
+      expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
+        before + Buffer.byteLength(longer, 'utf8'),
+      );
+
+      await client
+        .delete(`/api/v1/namespaces/${client.namespace.id}/resources/${doc.id}`)
+        .expect(200);
+      expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
+        before,
+      );
+    });
+
+    it('leaves the usage alone when the folder is trashed and restored', async () => {
       const before = await contentUsage(client.namespace.id, client.user.id);
       const [item] = await folderItems(folderId);
       await client
@@ -761,8 +876,8 @@ describe('RssItem lifecycle (e2e)', () => {
           `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
         )
         .expect(200);
-      // Trashing a folder hides its children rather than deleting them, so the
-      // owner is still charged for them — the same as for a normal folder.
+      // Trashing a folder hides its children rather than deleting them, and
+      // either way there is nothing to refund.
       expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
         before,
       );
@@ -1113,9 +1228,10 @@ describe('RssItem lifecycle (e2e)', () => {
     });
 
     it('fails the poll on a unique violation that is not the item identity', async () => {
-      // Creating an item also writes the owner's storage usage row, whose own
-      // unique index two concurrent polls of different urls can collide on.
-      // Swallowing that would silently drop the item; it must fail the poll.
+      // Only the item identity index may be swallowed. A unique violation from
+      // any other index — here storage_usages', which an item insert no longer
+      // touches but some other row it writes might — would silently drop the
+      // item, so it must fail the poll instead.
       feeds.set(FEED_OTHER_UNIQUE, [
         {
           title: 'Other unique',

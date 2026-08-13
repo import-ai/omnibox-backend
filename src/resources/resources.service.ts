@@ -33,6 +33,7 @@ import {
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import {
   isReadOnlyResourceType,
+  isStorageExemptResourceType,
   READ_ONLY_RESOURCE_TYPES,
   Resource,
   ResourceType,
@@ -896,8 +897,15 @@ export class ResourcesService {
       },
     });
 
-    // Update storage usage if content changed and userId is present
-    if (props.content !== undefined && resource.userId) {
+    // Update storage usage if content changed and userId is present. A
+    // storage-exempt type keeps its content_size up to date above but is never
+    // charged, so the parse fan-out that replaces a seeded feed snippet with the
+    // parsed markdown costs its owner nothing.
+    if (
+      props.content !== undefined &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       const contentSizeDiff =
         bigintStringToNumber(resource.contentSize) -
         bigintStringToNumber(oldResource.contentSize);
@@ -1000,7 +1008,11 @@ export class ResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      if (createProps.userId && file.size !== null) {
+      if (
+        createProps.userId &&
+        file.size !== null &&
+        !isStorageExemptResourceType(createProps.resourceType)
+      ) {
         await this.storageUsagesService.updateStorageUsage(
           createProps.namespaceId,
           createProps.userId,
@@ -1023,7 +1035,14 @@ export class ResourcesService {
       }),
     );
 
-    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
+    // content_size is stored for every type; only the quota charge is skipped
+    // for a storage-exempt one (the poller's internal create path lands here
+    // too).
+    if (
+      bigintStringToNumber(resource.contentSize) > 0 &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       await this.storageUsagesService.updateStorageUsage(
         resource.namespaceId,
         resource.userId,
@@ -1125,7 +1144,11 @@ export class ResourcesService {
         manualSortUnspecifiedAt: new Date(),
       },
     );
-    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
+    if (
+      bigintStringToNumber(resource.contentSize) > 0 &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       await this.storageUsagesService.updateStorageUsage(
         namespaceId,
         resource.userId,
@@ -1134,7 +1157,11 @@ export class ResourcesService {
         tx,
       );
     }
-    if (resource.fileId && resource.userId) {
+    if (
+      resource.fileId &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       const fileMeta = await this.filesService.headFile(resource.fileId);
       if (fileMeta && fileMeta.contentLength) {
         await this.storageUsagesService.updateStorageUsage(
@@ -1166,7 +1193,13 @@ export class ResourcesService {
   ): Map<string, number> {
     const totals = new Map<string, number>();
     for (const resource of resources) {
-      if (!resource.userId) {
+      // Nothing was charged for a storage-exempt type, so nothing may be
+      // refunded for it either — refunding here would drive the owner's usage
+      // negative every time a feed's items are retired.
+      if (
+        !resource.userId ||
+        isStorageExemptResourceType(resource.resourceType)
+      ) {
         continue;
       }
       const amount = getAmount(resource);
@@ -1552,7 +1585,11 @@ export class ResourcesService {
       id: resourceId,
     });
 
-    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
+    if (
+      bigintStringToNumber(resource.contentSize) > 0 &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       await this.storageUsagesService.updateStorageUsage(
         namespaceId,
         resource.userId,
@@ -1562,7 +1599,11 @@ export class ResourcesService {
       );
     }
 
-    if (resource.fileId && resource.userId) {
+    if (
+      resource.fileId &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       const fileMeta = await this.filesService.headFile(resource.fileId);
       if (fileMeta && fileMeta.contentLength) {
         await this.storageUsagesService.updateStorageUsage(
@@ -1805,6 +1846,11 @@ export class ResourcesService {
             { contentSize: numberToBigintString(contentSize) },
           );
           if (result.affected !== 1) {
+            return;
+          }
+          // The backfilled content_size is kept for every type; only the quota
+          // charge is skipped for a storage-exempt one.
+          if (isStorageExemptResourceType(resource.resourceType)) {
             return;
           }
           await this.storageUsagesService.updateStorageUsage(

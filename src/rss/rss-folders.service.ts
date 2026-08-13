@@ -472,9 +472,10 @@ export class RssFoldersService {
     );
   }
 
-  // Soft-deletes every item resource polled against a link, releasing their
-  // storage usage and dropping them from the search index. Items are read-only
-  // to users, so this goes through the internal delete path.
+  // Soft-deletes every item resource polled against a link, dropping them from
+  // the search index. Items never counted against the owner's storage quota, so
+  // there is nothing to refund. Items are read-only to users, so this goes
+  // through the internal delete path.
   private async trashLinkItems(
     userId: string,
     namespaceId: string,

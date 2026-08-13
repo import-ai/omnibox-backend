@@ -377,7 +377,7 @@ export class RssPollingService {
   // Pushes an item's freshly parsed markdown into every live resource copy of
   // it. Retired copies are deliberately skipped (the query builder filters them
   // out): their subscription is gone, and rewriting them would resurrect their
-  // storage usage and search index entries.
+  // search index entries.
   private async fanOutContent(
     url: string,
     guid: string,
@@ -402,9 +402,10 @@ export class RssPollingService {
       if (resource.content === markdown || !resource.userId) {
         continue;
       }
-      // Goes through the resource service so the content size, the owner's
-      // storage usage and the search index all follow the new body. The item is
-      // read-only to users, hence the internal write.
+      // Goes through the resource service so the content size and the search
+      // index both follow the new body (an item's bytes never count against the
+      // owner's storage quota, so nothing is charged for the longer markdown).
+      // The item is read-only to users, hence the internal write.
       await this.resourcesService.updateResource(
         resource.namespaceId,
         resource.id,
@@ -562,10 +563,9 @@ export class RssPollingService {
       // An overlapping poll may have inserted this copy in between the
       // existence check and here; the identity index rejects the second insert
       // (it covers exactly the live rows that check looked at), which is the
-      // outcome we want. Anything else — including another unique violation
-      // raised further down the insert, such as two polls racing to create the
-      // same owner's first storage-usage row — is a real failure and fails the
-      // poll.
+      // outcome we want. Anything else — including a unique violation raised by
+      // one of the other rows an item insert writes (its resource id, its index
+      // task) — is a real failure and fails the poll.
       if (!this.isDuplicateItemIdentityError(err)) {
         throw err;
       }
@@ -577,8 +577,9 @@ export class RssPollingService {
 
   // Postgres unique_violation on the item's (link_id, guid) identity index,
   // however the driver wrapped it. Matched by constraint name rather than by
-  // the 23505 code alone: an item insert also writes rows (storage usage, for
-  // one) whose own unique constraints must never be swallowed here.
+  // the 23505 code alone: an item insert also writes other rows (its resource
+  // id, its index task) whose own unique constraints must never be swallowed
+  // here.
   private isDuplicateItemIdentityError(err: unknown): boolean {
     const error = err as {
       code?: string;
@@ -598,7 +599,7 @@ export class RssPollingService {
   // live item hanging off a retired link. Nothing ever clears that up — the
   // removal has already run, no later update revisits a soft-deleted link, and
   // the parse fan-out only refreshes copies of live links — so the folder would
-  // list the article forever, with no link name and charged to its owner.
+  // list the article forever, with no link name behind it.
   //
   // The link row is locked FOR SHARE so the answer holds for the rest of the
   // transaction: removeLink takes FOR UPDATE on the same row before it collects

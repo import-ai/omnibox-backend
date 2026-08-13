@@ -39,6 +39,24 @@ export function isSubscriptionResourceType(
   );
 }
 
+// Types whose bytes are never charged to the owning user's storage quota.
+// An rss item is written by the poller, read-only to its owner and stored once
+// per subscribing folder, so the same article would be billed N times for
+// content the user never uploaded and cannot delete on its own. Their
+// `content_size` is still recorded — it is real data about the row — but every
+// storage_usages adjustment skips them, symmetrically: a type listed here is
+// never charged on create/update/restore and never refunded on delete, so
+// usage cannot drift in either direction.
+export const STORAGE_EXEMPT_RESOURCE_TYPES: ResourceType[] = [
+  ResourceType.RSS_ITEM,
+];
+
+export function isStorageExemptResourceType(
+  resourceType: ResourceType,
+): boolean {
+  return STORAGE_EXEMPT_RESOURCE_TYPES.includes(resourceType);
+}
+
 // Types that carry side-car state their own service owns (rss folders need
 // rss_links plus feed validation and a quota check, smart folders need a
 // config row), so the generic create/duplicate endpoints must refuse them:

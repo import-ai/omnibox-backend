@@ -97,6 +97,7 @@ import { AddResourceSorting1785725807283 } from 'omniboxd/migrations/17857258072
 import { AddManualSortUnspecifiedAt1786014524273 } from 'omniboxd/migrations/1786014524273-add-manual-sort-unspecified-at';
 import { AddRetriedFromTaskIdToTasks1786412970105 } from 'omniboxd/migrations/1786412970105-add-retried-from-task-id-to-tasks';
 import { AddRssItemResources1786534451795 } from 'omniboxd/migrations/1786534451795-add-rss-item-resources';
+import { DropRssItemStorageUsage1786645558020 } from 'omniboxd/migrations/1786645558020-drop-rss-item-storage-usage';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -304,6 +305,7 @@ export class AppModule implements NestModule {
               AddManualSortUnspecifiedAt1786014524273,
               AddRetriedFromTaskIdToTasks1786412970105,
               AddRssItemResources1786534451795,
+              DropRssItemStorageUsage1786645558020,
               ...extraMigrations,
             ],
             migrationsRun: true,

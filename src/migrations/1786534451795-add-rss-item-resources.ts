@@ -111,10 +111,6 @@ export class AddRssItemResources1786534451795 implements MigrationInterface {
     // two rows collapsing to the same pair, which the unique index below would
     // reject. Keep the first.
     const seen = new Set<string>();
-    // Bytes of content materialized per owner, keyed by namespace and user.
-    // Accumulated from the rows actually inserted rather than re-aggregated from
-    // the table, so the usage delta can never count anything twice.
-    const usageByOwner = new Map<string, number>();
     for (const row of rows) {
       const identity = `${row.link_id}:${row.guid}`;
       if (seen.has(identity)) {
@@ -135,13 +131,11 @@ export class AddRssItemResources1786534451795 implements MigrationInterface {
         article_url: asString(feedItem.link),
         published_at: row.pub_date ? row.pub_date.toISOString() : null,
       };
+      // Recorded on the row like any other resource's, but never added to
+      // storage_usages: an rss item's bytes do not count against its owner's
+      // quota (see STORAGE_EXEMPT_RESOURCE_TYPES), so a database created from
+      // scratch starts out charging nothing for the rows backfilled here.
       const contentSize = Buffer.byteLength(content, 'utf8');
-      // A soft-deleted resource's content is excluded from usage everywhere
-      // else, so only live rows are counted.
-      if (row.deleted_at === null && row.user_id !== null && contentSize > 0) {
-        const owner = `${row.namespace_id}:${row.user_id}`;
-        usageByOwner.set(owner, (usageByOwner.get(owner) ?? 0) + contentSize);
-      }
       await queryRunner.query(
         `INSERT INTO resources (
            id, namespace_id, user_id, parent_id, name, resource_type,
@@ -163,21 +157,6 @@ export class AddRssItemResources1786534451795 implements MigrationInterface {
           row.updated_at,
           row.deleted_at,
         ],
-      );
-    }
-
-    // Keep quota accounting consistent with the content just materialized: the
-    // owner of each rss folder now stores its items' bodies.
-    for (const [owner, amount] of usageByOwner) {
-      const [namespaceId, userId] = owner.split(':');
-      await queryRunner.query(
-        `INSERT INTO storage_usages (namespace_id, user_id, storage_type, amount)
-         VALUES ($1, $2, 'content', $3)
-         ON CONFLICT (namespace_id, user_id, storage_type)
-           WHERE deleted_at IS NULL
-           DO UPDATE SET amount = storage_usages.amount + EXCLUDED.amount,
-                         updated_at = now()`,
-        [namespaceId, userId, amount],
       );
     }
   }

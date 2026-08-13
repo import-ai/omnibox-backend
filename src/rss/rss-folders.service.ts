@@ -267,9 +267,22 @@ export class RssFoldersService {
       this.getLinkNames(namespaceId, resourceId),
       this.getItemContents([item]),
     ]);
+    const content = contentByKey.get(this.contentKey(item));
+    // No cache row, no item: it carries the parsed content and the first-seen
+    // date, and this endpoint has answered 404 for a missing one since before
+    // items were resources. Serving the item without it would report the
+    // publish date as `created_at` and no `parsed_content` at all.
+    if (!content) {
+      const message = this.i18n.t('rssFolder.errors.itemNotFound');
+      throw new AppException(
+        message,
+        'RSS_ITEM_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
     return RssItemDetailResponseDto.fromData(
       item,
-      contentByKey.get(this.contentKey(item)),
+      content,
       linkNameById.get(String(item.attrs?.link_id)) ?? null,
     );
   }
@@ -315,11 +328,13 @@ export class RssFoldersService {
       url: string;
       guid: string;
       content: string | null;
+      parsedContent: string | null;
       createdAt: Date;
     }> = await this.rssItemContentRepository.query(
       `SELECT content.url,
               content.guid,
               content.content,
+              content.parsed_content AS "parsedContent",
               content.created_at AS "createdAt"
          FROM rss_item_contents content
          JOIN unnest($1::text[], $2::text[]) AS key(url, guid)
@@ -330,7 +345,11 @@ export class RssFoldersService {
     return new Map(
       rows.map((row) => [
         `${row.url}\n${row.guid}`,
-        { content: row.content, createdAt: row.createdAt },
+        {
+          content: row.content,
+          parsedContent: row.parsedContent,
+          createdAt: row.createdAt,
+        },
       ]),
     );
   }
@@ -379,6 +398,17 @@ export class RssFoldersService {
         }
 
         const removeLink = async (link: RssLink) => {
+          // Take the link row before reading its items: a poll of the same url
+          // may be about to insert one more copy, and it holds this row FOR
+          // SHARE across its insert (see RssPollingService.subscriptionIsLive).
+          // Locking here first means the poll either loses the row and skips
+          // the item, or commits before this read and has its copy trashed
+          // below — never inserts a live item under a link this transaction is
+          // retiring.
+          await manager.query(
+            `SELECT 1 FROM rss_links WHERE id = $1 FOR UPDATE`,
+            [link.id],
+          );
           // The link's items go with it: they are its resources, and leaving
           // them behind would show a subscription's articles after the
           // subscription is gone. They are soft-deleted rather than purged, so

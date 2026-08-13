@@ -23,6 +23,11 @@ interface RssItemAttrs {
 export interface RssItemContentRef {
   // The serialized feed item, as stored by the poller.
   content: string | null;
+  // The wizard's markdown, still null while the article has not been parsed —
+  // and forever for an item with nothing to parse. This is the only source of
+  // `parsed_content`: the item resource's body is seeded with the feed snippet,
+  // so reading it would report a snippet as parsed article text.
+  parsedContent: string | null;
   // When we first saw this item, which is what `created_at` has always meant
   // here — the resource's own created_at is the publish date.
   createdAt: Date;
@@ -73,8 +78,12 @@ export class RssItemResponseDto {
     dto.published_at = asString(attrs.published_at) ?? asString(parsed.pubDate);
     // Deliberately the content row's created_at, not the resource's: the
     // resource is created_at the publish date so the folder lists newest
-    // first, whereas this field means "when we first saw the item".
-    dto.created_at = (content?.createdAt ?? item.createdAt).toISOString();
+    // first, whereas this field means "when we first saw the item". With no
+    // cache row to read (only reachable if one is retired) the resource's
+    // updated_at is the closest first-seen we still hold — its created_at is
+    // the publish date, and reporting that here would silently erase the
+    // distinction between the two fields.
+    dto.created_at = (content?.createdAt ?? item.updatedAt).toISOString();
     return dto;
   }
 }

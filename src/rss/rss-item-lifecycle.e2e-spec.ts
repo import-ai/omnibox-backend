@@ -323,7 +323,7 @@ describe('RssItem lifecycle (e2e)', () => {
       expect(link?.deletedAt).not.toBeNull();
     });
 
-    it('re-adding a removed url gives the folder fresh live copies beside the retired ones', async () => {
+    it('re-adds a removed url, and a retired copy never blocks a fresh one', async () => {
       const feedALinkId = links.find((link) => link.url === FEED_A)!.id;
       const retiredBefore = (await folderItems(folderId, true)).filter(
         (item) => item.attrs.link_id === feedALinkId,
@@ -414,6 +414,49 @@ describe('RssItem lifecycle (e2e)', () => {
       expect(cachedAfter.map((row) => row.parsedContent)).toEqual(
         cachedBefore.map((row) => row.parsedContent),
       );
+
+      // Everything above would hold even if a retired copy still reserved its
+      // identity: a re-added url comes back on a NEW link, so none of these
+      // copies repeats a retired row's (link_id, guid). What the live-only
+      // identity actually buys is a copy retired under a link that is still
+      // subscribed. Nothing user-facing retires a single item — items go with
+      // their link or their folder — so retire them directly, then poll again.
+      const revivedIds = revived.map((item) => item.id);
+      await resourceRepo().softDelete(revivedIds);
+      expect((await folderItems(folderId)).map((item) => item.name)).toEqual([
+        'B middle',
+      ]);
+
+      parseSpy.mockClear();
+      expect(await repoll(FEED_A)).toBe('succeed');
+
+      // The folder gets the articles back as new rows on the same live link.
+      // A poll that counted retired copies as existing would skip them here and
+      // the folder would be short of those articles for good.
+      const fresh = (await folderItems(folderId)).filter((item) =>
+        item.name.startsWith('A '),
+      );
+      expect(fresh.map((item) => item.name).sort()).toEqual([
+        'A newer',
+        'A older',
+      ]);
+      for (const item of fresh) {
+        expect(item.attrs.link_id).toBe(newLinkId);
+        expect(revivedIds).not.toContain(item.id);
+      }
+      // The rows retired a moment ago keep their identity and stay retired.
+      for (const id of revivedIds) {
+        const row = await resourceRepo().findOneOrFail({
+          where: { id },
+          withDeleted: true,
+        });
+        expect(row.deletedAt).not.toBeNull();
+        expect(fresh.map((item) => item.attrs.guid)).toContain(
+          row.attrs.guid as string,
+        );
+      }
+      // Still no article fetched or parsed again: only the cache is consulted.
+      expect(parseSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -892,6 +935,27 @@ describe('RssItem lifecycle (e2e)', () => {
     const FEED_LOSER = 'https://example.com/lifecycle-loser';
     const FEED_WRAPPED = 'https://example.com/lifecycle-wrapped';
     const FEED_OTHER_UNIQUE = 'https://example.com/lifecycle-other-unique';
+    const FEED_ORPHAN = 'https://example.com/lifecycle-orphan';
+    const FEED_ORPHAN_KEEP = 'https://example.com/lifecycle-orphan-keep';
+    const FEED_ORPHAN_FOLDER = 'https://example.com/lifecycle-orphan-folder';
+
+    // Runs `interfere` in the window linkItems leaves open: its links, folders
+    // and existing-copy reads have all happened and the insert has not opened
+    // its transaction yet. A config change or a folder deletion landing here is
+    // the whole reason the insert re-checks the subscription.
+    const interfereBeforeInsert = (interfere: () => Promise<void>) => {
+      const poller = pollingService as unknown as Record<
+        'insertItemResource',
+        (...args: unknown[]) => Promise<void>
+      >;
+      const realInsert = poller.insertItemResource.bind(pollingService);
+      return jest
+        .spyOn(poller, 'insertItemResource')
+        .mockImplementationOnce(async (...args: unknown[]) => {
+          await interfere();
+          return await realInsert(...args);
+        });
+    };
 
     // Commits the copy a rival poll would have created, on its own connection,
     // so the create running inside the poller's transaction really collides
@@ -1117,6 +1181,109 @@ describe('RssItem lifecycle (e2e)', () => {
       expect(results.filter((result) => result === 'skipped')).toHaveLength(1);
       expect(await folderItems(folderId, true)).toHaveLength(1);
       expect(await contentRepo().count({ where: { url: FEED_RACE } })).toBe(1);
+    });
+
+    it('skips an item whose link was retired mid-poll', async () => {
+      feeds.set(FEED_ORPHAN, [
+        {
+          title: 'Orphan',
+          link: 'https://example.com/orphan',
+          guid: 'orphan',
+          description: 'orphan body',
+        },
+      ]);
+      feeds.set(FEED_ORPHAN_KEEP, []);
+      const created = await createFolder(
+        client,
+        'Orphan folder',
+        await privateRootId(client),
+        [FEED_ORPHAN, FEED_ORPHAN_KEEP],
+      );
+      const folderId = created.resource.id;
+      const orphanLinkId = created.links.find(
+        (link) => link.url === FEED_ORPHAN,
+      )!.id;
+
+      // The user drops the url while the poll is between its reads and its
+      // insert: the removal trashes the link's items (there are none yet) and
+      // retires the link, and both commit before the item is created.
+      const spy = interfereBeforeInsert(async () => {
+        await client
+          .patch(
+            `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
+          )
+          .send({ links: [{ url: FEED_ORPHAN_KEEP }] })
+          .expect(200);
+      });
+      const logged = captureLogs();
+      try {
+        expect(await repoll(FEED_ORPHAN)).toBe('succeed');
+      } finally {
+        spy.mockRestore();
+        logged.restore();
+      }
+
+      // The interleaving really happened.
+      const link = await linkRepo().findOne({
+        where: { id: orphanLinkId },
+        withDeleted: true,
+      });
+      expect(link?.deletedAt).not.toBeNull();
+      // And the poll left nothing behind. A copy created here would be live
+      // under a retired link: the removal has already run, no later config
+      // update revisits a soft-deleted link, and the parse fan-out only
+      // refreshes copies of live links — so the folder would list that article,
+      // with no link name and charged to its owner, until the folder itself is
+      // deleted.
+      expect(await folderItems(folderId, true)).toHaveLength(0);
+      expect(logged.matching(/subscription went away/)).toHaveLength(1);
+      const listed = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/items`,
+        )
+        .expect(200);
+      expect(listed.body).toEqual([]);
+    });
+
+    it('skips an item whose folder was deleted mid-poll', async () => {
+      feeds.set(FEED_ORPHAN_FOLDER, [
+        {
+          title: 'Doomed',
+          link: 'https://example.com/doomed',
+          guid: 'doomed',
+          description: 'doomed body',
+        },
+      ]);
+      const folderId = (
+        await createFolder(
+          client,
+          'Doomed folder',
+          await privateRootId(client),
+          [FEED_ORPHAN_FOLDER],
+        )
+      ).resource.id;
+
+      // Same window, the other end of the subscription: the folder the item
+      // would hang off is trashed before the insert opens its transaction.
+      const spy = interfereBeforeInsert(async () => {
+        await client
+          .delete(
+            `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+          )
+          .expect(200);
+      });
+      try {
+        expect(await repoll(FEED_ORPHAN_FOLDER)).toBe('succeed');
+      } finally {
+        spy.mockRestore();
+      }
+
+      const folder = await resourceRepo().findOne({
+        where: { id: folderId },
+        withDeleted: true,
+      });
+      expect(folder?.deletedAt).not.toBeNull();
+      expect(await folderItems(folderId, true)).toHaveLength(0);
     });
   });
 

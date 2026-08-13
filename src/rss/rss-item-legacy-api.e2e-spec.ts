@@ -1,5 +1,6 @@
 import { NamespaceUsageDto } from 'omniboxd/namespaces/dto/namespace-usage.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
+import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssPollingService } from 'omniboxd/rss/rss-polling.service';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
@@ -13,6 +14,8 @@ import { DataSource } from 'typeorm';
 const FEED_MAIN = 'https://example.com/legacy-api-main';
 const FEED_OTHER = 'https://example.com/legacy-api-other';
 const FEED_RETIRED = 'https://example.com/legacy-api-retired';
+const FEED_UNPARSED = 'https://example.com/legacy-api-unparsed';
+const FEED_GONE = 'https://example.com/legacy-api-gone';
 
 // The list DTO's fields, exactly as origin/main emitted them.
 const LIST_FIELDS = [
@@ -137,6 +140,8 @@ describe('RssItem legacy api (e2e)', () => {
   let mainLinkId: string;
   let otherFolderId: string;
   let retiredFolderId: string;
+  let unparsedFolderId: string;
+  let goneFolderId: string;
   let shareId: string;
 
   beforeAll(async () => {
@@ -179,6 +184,26 @@ describe('RssItem legacy api (e2e)', () => {
         pubDate: 'Tue, 03 Feb 2026 00:00:00 GMT',
       },
     ]);
+    // No article link, and no <content:encoded>: there is nothing for the
+    // wizard to parse, so this item's parsed content stays null forever.
+    feeds.set(FEED_UNPARSED, [
+      {
+        title: 'Unparsed',
+        link: '',
+        guid: 'legacy-unparsed',
+        description: 'unparsed body',
+        pubDate: 'Wed, 04 Feb 2026 00:00:00 GMT',
+      },
+    ]);
+    feeds.set(FEED_GONE, [
+      {
+        title: 'Gone',
+        link: 'https://example.com/legacy/gone',
+        guid: 'legacy-gone',
+        description: 'gone body',
+        pubDate: 'Thu, 05 Feb 2026 00:00:00 GMT',
+      },
+    ]);
 
     mainFolderId = await createFolder('Main', [
       { url: FEED_MAIN, name: 'Main feed' },
@@ -197,9 +222,21 @@ describe('RssItem legacy api (e2e)', () => {
       { url: FEED_RETIRED, name: 'Retired feed' },
       { url: FEED_OTHER, name: 'Kept feed' },
     ]);
+    unparsedFolderId = await createFolder('Unparsed', [
+      { url: FEED_UNPARSED, name: 'Unparsed feed' },
+    ]);
+    goneFolderId = await createFolder('Gone', [
+      { url: FEED_GONE, name: 'Gone feed' },
+    ]);
 
     const polling = client.app.get(RssPollingService);
-    for (const url of [FEED_MAIN, FEED_OTHER, FEED_RETIRED]) {
+    for (const url of [
+      FEED_MAIN,
+      FEED_OTHER,
+      FEED_RETIRED,
+      FEED_UNPARSED,
+      FEED_GONE,
+    ]) {
       expect(await polling.pollUrl(url)).toBe('succeed');
     }
 
@@ -321,6 +358,61 @@ describe('RssItem legacy api (e2e)', () => {
       ...newest,
       parsed_content: '# https://example.com/legacy/echo',
     });
+  });
+
+  it('leaves parsed_content null for an item with nothing to parse', async () => {
+    // A legacy client branches on `parsed_content === null` to fall back to the
+    // summary. This item has no article link and no embedded content, so no
+    // parse is ever attempted and the field stays null for good — reporting the
+    // item's body here would hand the client the feed's own snippet dressed up
+    // as parsed article markdown.
+    const [item] = await listItems(unparsedFolderId);
+    expect(item.summary).toBe('unparsed body');
+
+    const detail = await client
+      .get(`${itemsUrl(unparsedFolderId)}/${item.id}`)
+      .expect(200);
+    expect(Object.keys(detail.body).sort()).toEqual(DETAIL_FIELDS);
+    expect(detail.body.parsed_content).toBeNull();
+
+    // Nothing was parsed, yet the item resource does carry a body: the feed
+    // snippet it is seeded with, which is what parsed_content must not be.
+    const content = await dataSource
+      .getRepository(RssItemContent)
+      .findOneOrFail({
+        where: { url: FEED_UNPARSED, guid: 'legacy-unparsed' },
+      });
+    expect(content.parsedContent).toBeNull();
+    const resource = await dataSource
+      .getRepository(Resource)
+      .findOneOrFail({ where: { id: item.id } });
+    expect(resource.content).toBe('unparsed body');
+  });
+
+  it('404s an item whose content cache row is gone', async () => {
+    // The (url, guid) cache row carries the parsed article and the first-seen
+    // date, and the read skips soft-deleted ones. origin/main answered 404 when
+    // it was missing; serving the item anyway would report no parsed content
+    // and, for created_at, the item resource's own created_at — which is the
+    // publish date, the one distinction this endpoint exists to keep.
+    const [item] = await listItems(goneFolderId);
+    await client.get(`${itemsUrl(goneFolderId)}/${item.id}`).expect(200);
+
+    await dataSource
+      .getRepository(RssItemContent)
+      .softDelete({ url: FEED_GONE, guid: 'legacy-gone' });
+
+    await client.get(`${itemsUrl(goneFolderId)}/${item.id}`).expect(404);
+
+    // The listing still carries the row, and its created_at is still not the
+    // publish date.
+    const [listed] = await listItems(goneFolderId);
+    expect(listed.id).toBe(item.id);
+    expect(listed.published_at).toBe(item.published_at);
+    expect(listed.created_at).not.toBe(listed.published_at);
+    expect(new Date(listed.created_at).getTime()).toBeGreaterThan(
+      new Date(listed.published_at as string).getTime(),
+    );
   });
 
   it('returns 404 for an unknown item id', async () => {

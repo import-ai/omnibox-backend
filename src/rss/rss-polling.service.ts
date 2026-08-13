@@ -14,7 +14,7 @@ import {
   ParsedFeedItem,
   RssFeedFetcherService,
 } from 'omniboxd/rss/rss-feed-fetcher.service';
-import { transaction } from 'omniboxd/utils/transaction-utils';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { DataSource, In, Repository } from 'typeorm';
 
@@ -456,6 +456,10 @@ export class RssPollingService {
   // merely slow rather than dead — so the read-then-insert below can still race.
   // The (link_id, guid) unique index is what actually guarantees a single copy;
   // a losing insert is dropped instead of failing the poll.
+  //
+  // The three reads below are equally unsynchronised with the folder's own
+  // writes: a subscription can be dropped between them and the insert, so every
+  // create re-checks it inside its transaction (see subscriptionIsLive).
   private async linkItems(url: string, stored: StoredItem[]): Promise<void> {
     if (stored.length === 0) {
       return;
@@ -586,12 +590,59 @@ export class RssPollingService {
     return code === '23505' && constraint === RSS_ITEM_IDENTITY_INDEX;
   }
 
+  // Re-checks, inside the insert's own transaction, that the subscription this
+  // copy would hang off is still there. linkItems reads the links, the folders
+  // and the existing copies outside any transaction, so a `PATCH .../config`
+  // that drops the url can commit in between: it trashes the link's items and
+  // retires the link, and an insert that went ahead regardless would leave a
+  // live item hanging off a retired link. Nothing ever clears that up — the
+  // removal has already run, no later update revisits a soft-deleted link, and
+  // the parse fan-out only refreshes copies of live links — so the folder would
+  // list the article forever, with no link name and charged to its owner.
+  //
+  // The link row is locked FOR SHARE so the answer holds for the rest of the
+  // transaction: removeLink takes FOR UPDATE on the same row before it collects
+  // the items to trash, so only two interleavings remain — either the removal
+  // committed first and this poll skips the item, or the removal waits for this
+  // insert and then trashes the copy it just made.
+  //
+  // The folder resource is checked but not locked. Trashing a folder leaves its
+  // items live underneath it (they come back when it is restored), so an item
+  // inserted just as the folder is trashed is in exactly the state every other
+  // item of that folder is in — only a folder that is already gone by the time
+  // this runs has nowhere to hang the item.
+  private async subscriptionIsLive(
+    tx: Transaction,
+    link: RssLink,
+    folder: Resource,
+  ): Promise<boolean> {
+    const manager = tx.entityManager;
+    const liveLink: unknown[] = await manager.query(
+      `SELECT 1 FROM rss_links WHERE id = $1 AND deleted_at IS NULL FOR SHARE`,
+      [link.id],
+    );
+    if (liveLink.length === 0) {
+      return false;
+    }
+    const liveFolder: unknown[] = await manager.query(
+      `SELECT 1 FROM resources WHERE id = $1 AND deleted_at IS NULL`,
+      [folder.id],
+    );
+    return liveFolder.length > 0;
+  }
+
   private async insertItemResource(
     link: RssLink,
     folder: Resource,
     item: StoredItem,
   ): Promise<void> {
     await transaction(this.dataSource.manager, async (tx) => {
+      if (!(await this.subscriptionIsLive(tx, link, folder))) {
+        this.logger.warn(
+          `Skipped rss item ${item.guid} for link ${link.id}: its subscription went away mid-poll`,
+        );
+        return;
+      }
       const resource = await this.resourcesService.createResource(
         {
           namespaceId: folder.namespaceId,

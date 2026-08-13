@@ -7,16 +7,20 @@ export class RssItemDetailResponseDto extends RssItemResponseDto {
 
   static fromData(
     item: Resource,
-    content: RssItemContentRef | undefined,
+    content: RssItemContentRef,
     linkName: string | null,
   ): RssItemDetailResponseDto {
     const dto = Object.assign(
       new RssItemDetailResponseDto(),
       RssItemResponseDto.fromData(item, content, linkName),
     );
-    // The item resource's body: the wizard's markdown once it has landed, and
-    // the feed's own summary until then.
-    dto.parsed_content = item.content ?? null;
+    // Only the wizard's markdown counts as parsed content, and it stays null
+    // until the parse lands — forever for an item there is nothing to parse
+    // (no link and no embedded content). Clients branch on that null to fall
+    // back to the summary, so the item resource's body is not usable here: it
+    // is seeded with the feed's own snippet, which would read as parsed
+    // article markdown.
+    dto.parsed_content = content.parsedContent;
     return dto;
   }
 }

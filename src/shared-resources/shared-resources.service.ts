@@ -313,6 +313,7 @@ export class SharedResourcesService {
         dto.parentId = share.resourceId;
         dto.name = child.name;
         dto.resourceType = child.resourceType;
+        dto.readOnly = child.readOnly;
         dto.createdAt = child.createdAt;
         dto.updatedAt = child.updatedAt;
         dto.hasChildren = child.hasChildren;

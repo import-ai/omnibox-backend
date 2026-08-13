@@ -1,3 +1,4 @@
+import { HttpStatus, Logger } from '@nestjs/common';
 import { NamespaceUsageDto } from 'omniboxd/namespaces/dto/namespace-usage.dto';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import {
@@ -180,6 +181,25 @@ describe('RssItem lifecycle (e2e)', () => {
         .expect(200)
     ).body.id as string;
 
+  // Records everything the app logs at warn/error until restore(), so a test
+  // can assert that a code path stayed quiet (a swallowed unique violation, for
+  // instance, is only ever visible as a log line).
+  const captureLogs = () => {
+    const messages: string[] = [];
+    const spies = (['warn', 'error'] as const).map((level) =>
+      jest
+        .spyOn(Logger.prototype, level)
+        .mockImplementation((message: unknown) => {
+          messages.push(String(message));
+        }),
+    );
+    return {
+      restore: () => spies.forEach((spy) => spy.mockRestore()),
+      matching: (pattern: RegExp) =>
+        messages.filter((message) => pattern.test(message)),
+    };
+  };
+
   const contentUsage = async (namespaceId: string, userId: string) => {
     const row: Array<{ amount: string }> = await dataSource.query(
       `SELECT amount FROM storage_usages
@@ -303,7 +323,20 @@ describe('RssItem lifecycle (e2e)', () => {
       expect(link?.deletedAt).not.toBeNull();
     });
 
-    it('re-adding a removed url gives the folder fresh copies, not duplicates', async () => {
+    it('re-adding a removed url gives the folder fresh live copies beside the retired ones', async () => {
+      const feedALinkId = links.find((link) => link.url === FEED_A)!.id;
+      const retiredBefore = (await folderItems(folderId, true)).filter(
+        (item) => item.attrs.link_id === feedALinkId,
+      );
+      expect(retiredBefore).toHaveLength(2);
+      // The (url, guid) fetch/parse cache is global and outlives the
+      // subscription, which is what makes coming back cost nothing.
+      const cachedBefore = await contentRepo().find({
+        where: { url: FEED_A },
+        order: { guid: 'ASC' },
+      });
+      expect(cachedBefore).toHaveLength(2);
+
       const updated = await client
         .patch(
           `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
@@ -313,8 +346,18 @@ describe('RssItem lifecycle (e2e)', () => {
       const newLinkId = (
         updated.body.links as Array<{ id: string; url: string }>
       ).find((link) => link.url === FEED_A)!.id;
+      // A removed link row is retired, never reused, so the url comes back on a
+      // link of its own.
+      expect(newLinkId).not.toBe(feedALinkId);
 
-      expect(await repoll(FEED_A)).toBe('succeed');
+      parseSpy.mockClear();
+      const fetchesBefore = fetchCounts.get(FEED_A) ?? 0;
+      const logged = captureLogs();
+      try {
+        expect(await repoll(FEED_A)).toBe('succeed');
+      } finally {
+        logged.restore();
+      }
 
       const live = await folderItems(folderId);
       expect(live.map((item) => item.name).sort()).toEqual([
@@ -322,15 +365,55 @@ describe('RssItem lifecycle (e2e)', () => {
         'A older',
         'B middle',
       ]);
-      // The resurrected items belong to the new link, and each (link, guid)
-      // pair still appears exactly once.
-      for (const item of live.filter((item) => item.name.startsWith('A '))) {
+      // The folder's copies are fresh live rows on the new link, not the
+      // retired ones brought back.
+      const revived = live.filter((item) => item.name.startsWith('A '));
+      const retiredIds = new Set(retiredBefore.map((item) => item.id));
+      for (const item of revived) {
         expect(item.attrs.link_id).toBe(newLinkId);
+        expect(item.deletedAt).toBeNull();
+        expect(retiredIds.has(item.id)).toBe(false);
       }
-      const identities = (await folderItems(folderId, true)).map(
-        (item) => `${item.attrs.link_id}:${item.attrs.guid}`,
+
+      // The retired rows still exist, still retired, still on the old link.
+      const all = await folderItems(folderId, true);
+      const retiredAfter = all.filter(
+        (item) => item.attrs.link_id === feedALinkId,
       );
-      expect(new Set(identities).size).toBe(identities.length);
+      expect(retiredAfter.map((item) => item.id).sort()).toEqual(
+        [...retiredIds].sort(),
+      );
+      for (const item of retiredAfter) {
+        expect(item.deletedAt).not.toBeNull();
+      }
+
+      // Identity holds where it now applies: among live rows only. The retired
+      // rows repeat those guids under their old link, and that is allowed.
+      const liveIdentities = all
+        .filter((item) => item.deletedAt === null)
+        .map((item) => `${item.attrs.link_id}:${item.attrs.guid}`);
+      expect(new Set(liveIdentities).size).toBe(liveIdentities.length);
+      expect(retiredAfter.map((item) => item.attrs.guid).sort()).toEqual(
+        revived.map((item) => item.attrs.guid).sort(),
+      );
+
+      // Nothing collided on the identity index on the way in.
+      expect(logged.matching(/identity|duplicate key|23505/i)).toEqual([]);
+
+      // The feed itself is read once (that is what a poll does), but no article
+      // is fetched or parsed again: the cache rows are the very same ones.
+      expect(parseSpy).not.toHaveBeenCalled();
+      expect(fetchCounts.get(FEED_A)).toBe(fetchesBefore + 1);
+      const cachedAfter = await contentRepo().find({
+        where: { url: FEED_A },
+        order: { guid: 'ASC' },
+      });
+      expect(cachedAfter.map((row) => row.id)).toEqual(
+        cachedBefore.map((row) => row.id),
+      );
+      expect(cachedAfter.map((row) => row.parsedContent)).toEqual(
+        cachedBefore.map((row) => row.parsedContent),
+      );
     });
   });
 
@@ -1034,6 +1117,138 @@ describe('RssItem lifecycle (e2e)', () => {
       expect(results.filter((result) => result === 'skipped')).toHaveLength(1);
       expect(await folderItems(folderId, true)).toHaveLength(1);
       expect(await contentRepo().count({ where: { url: FEED_RACE } })).toBe(1);
+    });
+  });
+
+  // The migration chain runs against a fresh database for every e2e run, so
+  // these read back what it actually produced rather than what it says.
+  describe('schema the migration leaves behind', () => {
+    it('keeps the legacy rss_items table instead of dropping it', async () => {
+      // Retained but unused: item identity lives in resources.attrs now, yet
+      // the old rows are the only record of the pre-resource era.
+      const rows: Array<{ present: boolean }> = await dataSource.query(
+        `SELECT to_regclass('public.rss_items') IS NOT NULL AS present`,
+      );
+      expect(rows[0].present).toBe(true);
+    });
+
+    it('scopes the item identity index to live rows', async () => {
+      const rows: Array<{ indexdef: string }> = await dataSource.query(
+        `SELECT indexdef FROM pg_indexes
+          WHERE schemaname = 'public'
+            AND indexname = 'uq_resources_rss_item_identity'`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].indexdef).toContain("resource_type = 'rss_item'");
+      // Without this a retired copy would keep its (link_id, guid) reserved
+      // forever, so a re-subscribed folder could never get the article back.
+      expect(rows[0].indexdef).toContain('deleted_at IS NULL');
+    });
+  });
+
+  // Items go with their subscription or with their folder; a user never
+  // deletes one on its own. The narrowed identity index makes retired copies
+  // ordinary history, which must not turn them into something the user can act
+  // on.
+  describe('an item is never the user’s to delete', () => {
+    const FEED_LOCKED = 'https://example.com/lifecycle-locked';
+    let folderId: string;
+    let itemId: string;
+    let base: string;
+
+    beforeAll(async () => {
+      feeds.set(FEED_LOCKED, [
+        {
+          title: 'Locked',
+          link: 'https://example.com/locked',
+          guid: 'locked',
+          description: 'locked body',
+        },
+      ]);
+      folderId = (
+        await createFolder(
+          client,
+          'Locked folder',
+          await privateRootId(client),
+          [FEED_LOCKED],
+        )
+      ).resource.id;
+      expect(await repoll(FEED_LOCKED)).toBe('succeed');
+      const items = await folderItems(folderId);
+      expect(items).toHaveLength(1);
+      itemId = items[0].id;
+      base = `/api/v1/namespaces/${client.namespace.id}/resources`;
+    });
+
+    it('refuses to trash a live item and leaves it in the folder', async () => {
+      const rejected = await client
+        .delete(`${base}/${itemId}`)
+        .expect(HttpStatus.FORBIDDEN);
+      expect(rejected.body.code).toBe('resource_read_only');
+      expect((await folderItems(folderId)).map((item) => item.id)).toEqual([
+        itemId,
+      ]);
+    });
+
+    it('hides a retired item from the trash and refuses to purge it', async () => {
+      // Dropping the link is the only user-facing way to retire an item.
+      feeds.set(FEED_EMPTY, []);
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
+        )
+        .send({ links: [{ url: FEED_EMPTY }] })
+        .expect(200);
+      const retired = await resourceRepo().findOneOrFail({
+        where: { id: itemId },
+        withDeleted: true,
+      });
+      expect(retired.deletedAt).not.toBeNull();
+
+      const trash = await client.get(`${base}/trash?limit=100`).expect(200);
+      expect(
+        (trash.body.items as Array<{ id: string }>).map((entry) => entry.id),
+      ).not.toContain(itemId);
+
+      const purged = await client
+        .delete(`${base}/trash/${itemId}`)
+        .expect(HttpStatus.FORBIDDEN);
+      expect(purged.body.code).toBe('resource_read_only');
+
+      // Emptying the trash reaches only what the trash listed.
+      await client.delete(`${base}/trash`).expect(200);
+      const afterEmpty = await resourceRepo().findOneOrFail({
+        where: { id: itemId },
+        withDeleted: true,
+      });
+      expect(afterEmpty.permanentDeletedAt).toBeNull();
+      expect(afterEmpty.deletedAt).not.toBeNull();
+    });
+
+    it('takes the folder’s items out of reach when the folder is deleted', async () => {
+      // Re-subscribe so the folder holds a live item again, then delete the
+      // folder: that is the one action that does remove a user's items.
+      await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
+        )
+        .send({ links: [{ url: FEED_LOCKED }] })
+        .expect(200);
+      expect(await repoll(FEED_LOCKED)).toBe('succeed');
+      const [live] = await folderItems(folderId);
+      expect(live).toBeDefined();
+      await client.get(`${base}/${live.id}`).expect(200);
+
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+        )
+        .expect(200);
+
+      await client.get(`${base}/${live.id}`).expect(HttpStatus.NOT_FOUND);
+      // ... and a poll of the url no longer materializes anything for it.
+      expect(await repoll(FEED_LOCKED)).toBe('succeed');
+      expect(await folderItems(folderId, true)).toHaveLength(2);
     });
   });
 });

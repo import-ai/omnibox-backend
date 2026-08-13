@@ -927,15 +927,24 @@ describe('RssPolling (e2e)', () => {
     expect(await itemsOfGuid('guid-dup')).toHaveLength(1);
   });
 
-  it('never resurrects an item resource that was removed', async () => {
+  it('leaves a retired copy alone and polls a fresh one beside it', async () => {
     const [item] = await itemsOfGuid('guid-dup');
     await resourceRepo().softDelete({ id: item.id });
 
     await pollRepo().delete({ url: FEED_URL });
     expect(await pollingService.pollUrl(FEED_URL)).toBe('succeed');
 
-    // The soft-deleted copy still counts as existing, so nothing is re-created.
-    expect(await itemsOfGuid('guid-dup')).toHaveLength(0);
+    // A retired copy is history: it no longer counts as existing (the identity
+    // index does not cover it either), so the poll creates a fresh live copy.
+    const live = await itemsOfGuid('guid-dup');
+    expect(live).toHaveLength(1);
+    expect(live[0].id).not.toBe(item.id);
+    // The retired row is untouched, not revived and not purged.
+    const retired = await resourceRepo().findOneOrFail({
+      where: { id: item.id },
+      withDeleted: true,
+    });
+    expect(retired.deletedAt).not.toBeNull();
   });
 
   it('skips a url whose poll is still in progress', async () => {

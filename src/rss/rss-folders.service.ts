@@ -186,8 +186,9 @@ export class RssFoldersService {
         const removeLink = async (link: RssLink) => {
           // The link's items go with it: they are its resources, and leaving
           // them behind would show a subscription's articles after the
-          // subscription is gone. They stay soft-deleted (not purged) so a
-          // later poll of the same url cannot resurrect them.
+          // subscription is gone. They are soft-deleted rather than purged, so
+          // the history survives; re-subscribing to the same url does not bring
+          // these rows back but polls fresh copies alongside them.
           await this.trashLinkItems(userId, namespaceId, link.id, tx);
           await manager.softDelete(RssLink, link.id);
         };

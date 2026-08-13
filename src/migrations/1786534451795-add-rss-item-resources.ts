@@ -47,7 +47,8 @@ function parseFeedItem(raw: string | null): SerializedFeedItem {
 // its rss folder. Items stop being globally deduped: each subscribing folder
 // gets its own copy, which is what makes them ordinary resources. The global
 // (url, guid) fetch/parse cache (rss_item_contents) is untouched, so nothing is
-// re-fetched or re-parsed.
+// re-fetched or re-parsed, and rss_items itself is kept (retained but unused)
+// rather than dropped.
 export class AddRssItemResources1786534451795 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // ALTER TYPE ... ADD VALUE cannot run inside a transaction block, so commit
@@ -66,15 +67,19 @@ export class AddRssItemResources1786534451795 implements MigrationInterface {
     }
 
     // Identity of an item resource is (link, guid), not its name: feeds repeat
-    // titles freely. Deliberately covers soft-deleted rows so a removed item is
-    // never resurrected as a duplicate by a later poll.
+    // titles freely. Restricted to live rows: a retired copy is history, so it
+    // must not block the folder from getting a fresh copy of the same article
+    // when the subscription comes back (see RssPollingService.linkItems).
     await queryRunner.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS uq_resources_rss_item_identity
         ON resources ((attrs->>'link_id'), (attrs->>'guid'))
-        WHERE resource_type = 'rss_item'
+        WHERE resource_type = 'rss_item' AND deleted_at IS NULL
     `);
 
-    await queryRunner.query(`DROP TABLE IF EXISTS rss_items`);
+    // rss_items is deliberately left in place. Nothing reads or writes it any
+    // more — item identity now lives in resources.attrs — but its rows are the
+    // only record of the pre-resource era, so they are retained rather than
+    // destroyed.
   }
 
   private async backfill(queryRunner: QueryRunner): Promise<void> {

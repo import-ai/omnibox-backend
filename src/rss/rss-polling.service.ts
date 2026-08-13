@@ -48,9 +48,10 @@ const PARSE_BACKOFF_BASE_MS = 5 * 60 * 1000; // matches the poll cadence
 const PARSE_BACKOFF_CAP_MS = 6 * 60 * 60 * 1000;
 
 // The partial unique index that carries an rss item's (link_id, guid) identity
-// (see the add-rss-item-resources migration). Postgres names it as the
-// violated constraint, which is how a losing insert is told apart from any
-// other unique violation raised while creating an item.
+// among the live rows (see the add-rss-item-resources migration; it is
+// restricted to deleted_at IS NULL). Postgres names it as the violated
+// constraint, which is how a losing insert is told apart from any other unique
+// violation raised while creating an item.
 const RSS_ITEM_IDENTITY_INDEX = 'uq_resources_rss_item_identity';
 
 // Delay before the nth failed attempt may be retried: 10m, 20m, 40m, ... capped.
@@ -373,7 +374,10 @@ export class RssPollingService {
     return markdown;
   }
 
-  // Pushes an item's freshly parsed markdown into every resource copy of it.
+  // Pushes an item's freshly parsed markdown into every live resource copy of
+  // it. Retired copies are deliberately skipped (the query builder filters them
+  // out): their subscription is gone, and rewriting them would resurrect their
+  // storage usage and search index entries.
   private async fanOutContent(
     url: string,
     guid: string,
@@ -437,11 +441,14 @@ export class RssPollingService {
   // Gives every rss_links row sharing the polled url its own resource copy of
   // each stored item, one `rss_item` resource per (link, guid) pair. Items are
   // deliberately not deduped across folders: each folder owns its copies, in its
-  // own namespace, under its own rss folder resource. Only missing pairs are
-  // created — an existing copy (even a soft-deleted one) is left alone, so a
-  // removed item is never resurrected and a revised item is refreshed through
-  // the parse fan-out rather than re-created. A copy whose feed title changed
-  // is renamed in place.
+  // own namespace, under its own rss folder resource. Only pairs with no LIVE
+  // copy are created: an existing live copy is left alone (a revised item is
+  // refreshed through the parse fan-out rather than re-created, and a copy whose
+  // feed title changed is renamed in place), while a retired copy is ignored so
+  // a folder that re-subscribes to a url gets the article back as a fresh
+  // resource next to the soft-deleted history. Nothing user-facing can retire an
+  // individual item — items go only with their link or their folder — so a
+  // retired copy is only ever reachable again through a re-subscription.
   //
   // Polls of one url do not normally overlap: claim() leaves a POLLING marker
   // that makes every later claim skip the url. That is a lock with a timeout,
@@ -473,15 +480,15 @@ export class RssPollingService {
     }
     const items = [...itemByGuid.values()];
 
+    // Live copies only: a soft-deleted copy belongs to a subscription that is
+    // gone, and the identity index no longer covers it, so it must not stand in
+    // the way of a fresh copy.
     const existing = new Map(
       (
         await this.resourceRepository
           .createQueryBuilder('resource')
-          // Soft-deleted copies count as existing.
-          .withDeleted()
           .select('resource.id', 'id')
           .addSelect('resource.name', 'name')
-          .addSelect('resource.deleted_at', 'deletedAt')
           .addSelect("resource.attrs->>'link_id'", 'linkId')
           .addSelect("resource.attrs->>'guid'", 'guid')
           .where('resource.resource_type = :resourceType', {
@@ -496,7 +503,6 @@ export class RssPollingService {
           .getRawMany<{
             id: string;
             name: string;
-            deletedAt: Date | null;
             linkId: string;
             guid: string;
           }>()
@@ -519,14 +525,15 @@ export class RssPollingService {
     }
   }
 
-  // Follows a corrected feed title on the copy that already exists. A retired
-  // copy is left as it was: it is no longer part of any subscription.
+  // Follows a corrected feed title on the live copy that already exists.
+  // Retired copies never reach here: linkItems only looks up live ones, and a
+  // retired copy is history that no later poll rewrites.
   private async renameItemResource(
     folder: Resource,
-    copy: { id: string; name: string; deletedAt: Date | null },
+    copy: { id: string; name: string },
     item: StoredItem,
   ): Promise<void> {
-    if (copy.deletedAt !== null || copy.name === item.title) {
+    if (copy.name === item.title) {
       return;
     }
     await this.resourcesService.updateResource(
@@ -549,11 +556,12 @@ export class RssPollingService {
       await this.insertItemResource(link, folder, item);
     } catch (err) {
       // An overlapping poll may have inserted this copy in between the
-      // existence check and here; the identity index rejects the second insert,
-      // which is exactly the outcome we want. Anything else — including another
-      // unique violation raised further down the insert, such as two polls
-      // racing to create the same owner's first storage-usage row — is a real
-      // failure and fails the poll.
+      // existence check and here; the identity index rejects the second insert
+      // (it covers exactly the live rows that check looked at), which is the
+      // outcome we want. Anything else — including another unique violation
+      // raised further down the insert, such as two polls racing to create the
+      // same owner's first storage-usage row — is a real failure and fails the
+      // poll.
       if (!this.isDuplicateItemIdentityError(err)) {
         throw err;
       }

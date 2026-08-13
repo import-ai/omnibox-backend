@@ -9,6 +9,7 @@ import {
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
+import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
@@ -281,6 +282,10 @@ describe('SearchController (e2e)', () => {
         transform: true,
       }),
     );
+    // The real app registers this globally (app.module), so every HTTP payload
+    // below reaches the client in snake_case. Without it the assertions here
+    // would pass against camelCase names the API never actually emits.
+    app.useGlobalInterceptors(new SnakeCaseInterceptor());
 
     // Add middleware to parse user header for testing
     app.use((req: any, res: any, next: any) => {
@@ -332,10 +337,10 @@ describe('SearchController (e2e)', () => {
       // All returned items should be resources
       response.body.forEach((item: any) => {
         expect(item.type).toBe(DocType.RESOURCE);
-        expect(item).toHaveProperty('resourceId');
+        expect(item).toHaveProperty('resource_id');
         expect(item).toHaveProperty('title');
         expect(item).toHaveProperty('content');
-        expect(item.readOnly).toBe(false);
+        expect(item.read_only).toBe(false);
       });
     });
 
@@ -369,9 +374,11 @@ describe('SearchController (e2e)', () => {
           .expect(HttpStatus.OK);
 
         expect(response.body.length).toBeGreaterThan(0);
+        // Asserted with the wire names the SnakeCaseInterceptor emits, which is
+        // what a client actually receives.
         expect(response.body[0]).toMatchObject({
-          resourceType: ResourceType.RSS_ITEM,
-          readOnly: true,
+          resource_type: ResourceType.RSS_ITEM,
+          read_only: true,
         });
       } finally {
         resourcesService.batchGetParentResources = original;
@@ -607,11 +614,11 @@ describe('SearchController (e2e)', () => {
         if (item.type === DocType.RESOURCE) {
           expect(item).toHaveProperty('type', DocType.RESOURCE);
           expect(item).toHaveProperty('id');
-          expect(item).toHaveProperty('resourceId');
+          expect(item).toHaveProperty('resource_id');
           expect(item).toHaveProperty('title');
           expect(item).toHaveProperty('content');
           expect(typeof item.id).toBe('string');
-          expect(typeof item.resourceId).toBe('string');
+          expect(typeof item.resource_id).toBe('string');
           expect(typeof item.title).toBe('string');
           expect(typeof item.content).toBe('string');
         }

@@ -117,6 +117,44 @@ describe('SmartFoldersMatcherService', () => {
     ).toBe(false);
   });
 
+  // A feed can list an item with no link at all. Falling back to the feed's own
+  // address made every such item match a rule about the feed's host, and made
+  // IS_EMPTY answer false for an item that has no url whatsoever.
+  it.each([[null], [undefined], ['']])(
+    'gives an rss item with article_url %p no url to match',
+    (articleUrl) => {
+      const item = resource({
+        resourceType: ResourceType.RSS_ITEM,
+        attrs: {
+          url: 'https://hnrss.org/frontpage',
+          article_url: articleUrl,
+        },
+      });
+      const urlRule = (operator: SmartFolderOperator, value?: string) => [
+        {
+          field: SmartFolderField.URL,
+          operator,
+          value,
+        },
+      ];
+
+      expect(
+        service.matches(
+          item,
+          urlRule(SmartFolderOperator.CONTAINS, 'hnrss.org'),
+          SmartFolderMatchMode.ALL,
+        ),
+      ).toBe(false);
+      expect(
+        service.matches(
+          item,
+          urlRule(SmartFolderOperator.IS_EMPTY),
+          SmartFolderMatchMode.ALL,
+        ),
+      ).toBe(true);
+    },
+  );
+
   it('leaves a url rule unmatched for a resource with no address of its own', () => {
     const matched = service.matches(
       resource({

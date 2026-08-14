@@ -98,14 +98,14 @@ export class SmartFoldersMatcherService {
       case SmartFolderField.URL:
         // An rss item carries two: attrs.url is the feed it came from and
         // attrs.article_url the article itself. A rule about "the url" means
-        // the article.
-        return String(
-          (resource.resourceType === ResourceType.RSS_ITEM
-            ? resource.attrs?.article_url
-            : undefined) ||
-            resource.attrs?.url ||
-            '',
-        ).toLowerCase();
+        // the article — and an item with no article link has no url at all, so
+        // it must not silently fall back to the feed's address: that made every
+        // link-less item match a rule on the feed host, and made IS_EMPTY false
+        // for an item with nothing to match.
+        if (resource.resourceType === ResourceType.RSS_ITEM) {
+          return String(resource.attrs?.article_url ?? '').toLowerCase();
+        }
+        return String(resource.attrs?.url || '').toLowerCase();
       case SmartFolderField.FILE_NAME:
         return String(
           resource.attrs?.original_name || resource.attrs?.filename || '',

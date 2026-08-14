@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { buildContentSnippet } from 'omniboxd/resources/content-snippet.util';
 import {
   isReadOnlyResourceType,
   Resource,
@@ -14,12 +15,18 @@ import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 
+import { collapseDuplicateArticles } from './article-dedupe.util';
 import { DocType } from './doc-type.enum';
 import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
 
 export interface SearchFilterOptions {
   conditions?: SmartFolderCondition[];
   matchMode?: SmartFolderMatchMode;
+}
+
+export interface SearchFilterPagination {
+  offset: number;
+  limit: number;
 }
 
 export interface SearchFilterResult {
@@ -97,6 +104,7 @@ export class SearchResourceFilterService {
     userId: string,
     namespaceId: string,
     options: SearchFilterOptions,
+    pagination?: SearchFilterPagination,
   ): Promise<SearchFilterResult> {
     const visibleResources =
       await this.namespaceResourcesService.getAllResourcesByUser(
@@ -111,14 +119,7 @@ export class SearchResourceFilterService {
     );
     const conditions = options.conditions || [];
     if (conditions.length <= 0) {
-      const items = this.sortResources(resources).map((resource) =>
-        this.toIndexedResource(resource),
-      );
-
-      return {
-        items,
-        total: items.length,
-      };
+      return this.toResult(resources, pagination);
     }
 
     const resourcesWithTagNames = await this.withTagNames(
@@ -130,13 +131,30 @@ export class SearchResourceFilterService {
       this.smartFoldersMatcherService.matches(resource, conditions, matchMode),
     );
 
-    const items = this.sortResources(matched).map((resource) =>
-      this.toIndexedResource(resource),
-    );
+    return this.toResult(matched, pagination);
+  }
+
+  /**
+   * Orders the matched set, collapses the copies of an article the subscribing
+   * folders each hold, and only then cuts the page: collapsing after the slice
+   * would hand back short pages and a total that promises more results than the
+   * endpoint can ever return. The whole matched set is already in memory here —
+   * a content rule has to read every candidate's body — so there is nothing to
+   * save by collapsing later.
+   */
+  private toResult(
+    resources: Resource[],
+    pagination?: SearchFilterPagination,
+  ): SearchFilterResult {
+    const ordered = collapseDuplicateArticles(this.sortResources(resources));
+    // Only the page is turned into DTOs; the rest never gets a snippet built.
+    const page = pagination
+      ? ordered.slice(pagination.offset, pagination.offset + pagination.limit)
+      : ordered;
 
     return {
-      items,
-      total: items.length,
+      items: page.map((resource) => this.toIndexedResource(resource)),
+      total: ordered.length,
     };
   }
 
@@ -184,7 +202,11 @@ export class SearchResourceFilterService {
       id: resource.id,
       resourceId: resource.id,
       title: resource.name || 'Untitled',
-      content: resource.content || '',
+      // A hit carries the same preview a folder listing does. The semantic path
+      // returns the matched chunk here, and the search UI only ever renders the
+      // first line of either, so a whole article body is pure weight on the
+      // wire — a hundred feed items came to three quarters of a megabyte.
+      content: buildContentSnippet(resource.content),
       attrs: resource.attrs || {},
       resourceType: resource.resourceType || ResourceType.DOC,
       readOnly: isReadOnlyResourceType(

@@ -1,4 +1,5 @@
 import { Expose, Transform } from 'class-transformer';
+import { buildContentSnippet } from 'omniboxd/resources/content-snippet.util';
 import {
   isReadOnlyResourceType,
   Resource,
@@ -56,12 +57,7 @@ export class ResourceSummaryDto {
     dto.attrs = { ...resource.attrs };
     delete dto.attrs.transcript;
     delete dto.attrs.video_info;
-    // Content prefix: strip images and take first 100 chars
-    const contentWithoutImages = (resource.content || '')
-      .replace(/!\[.*?\]\(.*?\)/g, '')
-      .replace(/<img[^>]*>/gi, '')
-      .trim();
-    dto.content = contentWithoutImages.slice(0, 100);
+    dto.content = buildContentSnippet(resource.content);
     dto.hasChildren = hasChildren;
     dto.readOnly = isReadOnlyResourceType(resource.resourceType);
     dto.createdAt = resource.createdAt;

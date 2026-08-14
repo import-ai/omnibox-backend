@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
   isReadOnlyResourceType,
-  isSubscriptionResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -57,8 +56,9 @@ export class SearchResourceFilterService {
       return null;
     }
 
-    const resources = this.excludeSubscriptionResources(
-      await this.resourcesService.batchGetResources(namespaceId, resourceIds),
+    const resources = await this.resourcesService.batchGetResources(
+      namespaceId,
+      resourceIds,
     );
     const resourcesWithTagNames = await this.withTagNames(
       namespaceId,
@@ -103,11 +103,11 @@ export class SearchResourceFilterService {
         userId,
         namespaceId,
       );
-    const resources = this.excludeSubscriptionResources(
-      await this.resourcesService.batchGetResources(
-        namespaceId,
-        visibleResources.map((resource) => resource.id),
-      ),
+    // Every visible type is a filter candidate: an rss item is matched like any
+    // other content resource and an rss folder like any other container.
+    const resources = await this.resourcesService.batchGetResources(
+      namespaceId,
+      visibleResources.map((resource) => resource.id),
     );
     const conditions = options.conditions || [];
     if (conditions.length <= 0) {
@@ -138,13 +138,6 @@ export class SearchResourceFilterService {
       items,
       total: items.length,
     };
-  }
-
-  /** See isSubscriptionResourceType. */
-  private excludeSubscriptionResources(resources: Resource[]): Resource[] {
-    return resources.filter(
-      (resource) => !isSubscriptionResourceType(resource.resourceType),
-    );
   }
 
   private async withTagNames(

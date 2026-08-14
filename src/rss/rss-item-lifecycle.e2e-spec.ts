@@ -1780,4 +1780,192 @@ describe('RssItem lifecycle (e2e)', () => {
       expect(await folderItems(folderId, true)).toHaveLength(2);
     });
   });
+
+  // An article is a resource like any other: findable by the words in its body
+  // and collectable by a smart folder. Only the paths that mean "recent work"
+  // still leave items out, so a busy feed cannot flood them.
+  describe('search and smart folders', () => {
+    const FEED_SEARCHABLE = 'https://example.com/lifecycle-searchable';
+    // The slug lands in the parsed markdown, never in the item title, so a hit
+    // on it can only have come from the body.
+    const ARTICLE_SLUG = 'synthesizer-latency-budget';
+    const ARTICLE_URL = `https://example.com/${ARTICLE_SLUG}`;
+    let folderId: string;
+    let itemId: string;
+    let smartFolderId: string;
+
+    beforeAll(async () => {
+      feeds.set(FEED_SEARCHABLE, [
+        {
+          title: 'Discoverable digest',
+          link: ARTICLE_URL,
+          guid: 'searchable-1',
+          description: 'summary line',
+          pubDate: 'Mon, 09 Feb 2026 00:00:00 GMT',
+        },
+      ]);
+      folderId = (
+        await createFolder(
+          client,
+          'Discoverable Feed',
+          await privateRootId(client),
+          [FEED_SEARCHABLE],
+        )
+      ).resource.id;
+      expect(await repoll(FEED_SEARCHABLE)).toBe('succeed');
+      const items = await folderItems(folderId);
+      expect(items).toHaveLength(1);
+      itemId = items[0].id;
+      // The parse fan-out has rewritten the body; the slug is only in there.
+      expect(items[0].content).toContain(ARTICLE_SLUG);
+      expect(items[0].name).not.toContain(ARTICLE_SLUG);
+
+      smartFolderId = (
+        await client
+          .post(`/api/v1/namespaces/${client.namespace.id}/smart-folders`)
+          .send({
+            name: 'Digest rule',
+            parent_id: await privateRootId(client),
+            root_scope: 'private',
+            // One rule reaches the article by its body and the other reaches
+            // the feed folder by its name; the basic tier allows one smart
+            // folder per space, so both live on this one.
+            match_mode: 'any',
+            conditions: [
+              { field: 'content', operator: 'contains', value: ARTICLE_SLUG },
+              {
+                field: 'title',
+                operator: 'contains',
+                value: 'Discoverable Feed',
+              },
+            ],
+          })
+          .expect(201)
+      ).body.resource.id;
+    });
+
+    afterAll(async () => {
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/smart-folders/${smartFolderId}`,
+        )
+        .expect(200);
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}`,
+        )
+        .expect(200);
+    });
+
+    it('returns an rss item from a filtered search on its body text', async () => {
+      const found = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/search`)
+        .send({
+          conditions: [
+            { field: 'content', operator: 'contains', value: ARTICLE_SLUG },
+          ],
+          match_mode: 'all',
+          limit: 50,
+        })
+        .expect(201);
+
+      const hits = found.body.items as Array<{
+        resource_id: string;
+        resource_type: string;
+        read_only: boolean;
+      }>;
+      const hit = hits.find((entry) => entry.resource_id === itemId);
+      expect(hit).toBeDefined();
+      expect(hit!.resource_type).toBe(ResourceType.RSS_ITEM);
+      // Findable, but still not editable.
+      expect(hit!.read_only).toBe(true);
+    });
+
+    it('collects a matching article into a smart folder', async () => {
+      const children = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/smart-folders/${smartFolderId}/children?limit=100`,
+        )
+        .expect(200);
+      expect(
+        (children.body as Array<{ id: string }>).map((child) => child.id),
+      ).toContain(itemId);
+    });
+
+    it('collects the containing rss folder when a rule names it', async () => {
+      const children = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/smart-folders/${smartFolderId}/children?limit=100`,
+        )
+        .expect(200);
+      // An rss folder is a container like any other folder, so nothing keeps it
+      // out of a rule that matches it.
+      expect(
+        (children.body as Array<{ id: string }>).map((child) => child.id),
+      ).toContain(folderId);
+    });
+
+    it('still keeps rss items out of the recent listing', async () => {
+      const recent = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/recent?limit=100`,
+        )
+        .expect(200);
+      const recentIds = (recent.body as Array<{ id: string }>).map(
+        (entry) => entry.id,
+      );
+      expect(recentIds).not.toContain(itemId);
+      expect(recentIds).not.toContain(folderId);
+    });
+
+    it('still refuses an rss folder created through the generic endpoint', async () => {
+      const rejected = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: 'Hand-rolled feed',
+          resourceType: ResourceType.RSS_FOLDER,
+          parentId: await privateRootId(client),
+          content: '',
+        })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+      expect(rejected.body.code).toBe('resource_type_not_directly_creatable');
+    });
+
+    // Becoming findable does not make a feed folder a destination: the move
+    // picker's own listing is a different gate and still leaves it out.
+    it('still refuses an rss folder as a move target', async () => {
+      const doc = (
+        await client
+          .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+          .send({
+            name: 'Movable doc',
+            resourceType: ResourceType.DOC,
+            parentId: await privateRootId(client),
+            content: 'body',
+          })
+          .expect(201)
+      ).body as { id: string };
+
+      // The picker never lists the folder ...
+      const destinations = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/search?name=Discoverable`,
+        )
+        .expect(200);
+      expect(
+        (destinations.body as Array<{ id: string }>).map((entry) => entry.id),
+      ).not.toContain(folderId);
+
+      // ... and the move itself is refused.
+      const moved = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/batch-move`)
+        .send({ resourceIds: [doc.id], targetId: folderId })
+        .expect(HttpStatus.UNPROCESSABLE_ENTITY);
+      expect(moved.body.code).toBe('rss_folder_child_must_be_rss_item');
+
+      await client
+        .delete(`/api/v1/namespaces/${client.namespace.id}/resources/${doc.id}`)
+        .expect(200);
+    });
+  });
 });

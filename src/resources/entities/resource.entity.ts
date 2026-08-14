@@ -24,21 +24,6 @@ export function isReadOnlyResourceType(resourceType: ResourceType): boolean {
   return READ_ONLY_RESOURCE_TYPES.includes(resourceType);
 }
 
-// The subscription (RSS) subtree: a folder and the items a poller files under
-// it. Smart folders and the search filter drop the whole subtree — an rss
-// folder renders an expandable node that errors when opened, and a busy feed
-// would otherwise swamp every match list. Containment (assertContainment)
-// guarantees an rss folder's only children are rss items, so testing the type
-// covers the descendants too.
-export function isSubscriptionResourceType(
-  resourceType: ResourceType,
-): boolean {
-  return (
-    resourceType === ResourceType.RSS_FOLDER ||
-    resourceType === ResourceType.RSS_ITEM
-  );
-}
-
 // Types whose bytes are never charged to the owning user's storage quota.
 // An rss item is written by the poller, read-only to its owner and stored once
 // per subscribing folder, so the same article would be billed N times for
@@ -84,6 +69,18 @@ export const CONTENT_RESOURCE_TYPES: ResourceType[] = [
 
 export function isContentResourceType(resourceType: ResourceType): boolean {
   return CONTENT_RESOURCE_TYPES.includes(resourceType);
+}
+
+// Types that actually parent other rows. A smart folder is a virtual result set
+// and never appears in an ancestor chain, so walks up the tree looking for a
+// containing folder consider exactly these.
+export const CONTAINER_RESOURCE_TYPES: ResourceType[] = [
+  ResourceType.FOLDER,
+  ResourceType.RSS_FOLDER,
+];
+
+export function isContainerResourceType(resourceType: ResourceType): boolean {
+  return CONTAINER_RESOURCE_TYPES.includes(resourceType);
 }
 
 @Entity('resources')

@@ -6,7 +6,6 @@ import { ResourceSummaryDto } from 'omniboxd/namespace-resources/dto/resource-su
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
-  isSubscriptionResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -192,9 +191,10 @@ export class SmartFoldersService implements ISmartFoldersService {
     const visibleIds = visibleResources
       .filter((resource) => scopedResourceIds.has(resource.id))
       .filter((resource) => resource.id !== resourceId)
+      // Only other smart folders are excluded (a virtual set cannot be a member
+      // of another). Every real type is a candidate, rss folders and rss items
+      // included: they are matched exactly like folders and docs are.
       .filter((resource) => resource.resourceType !== ResourceType.SMART_FOLDER)
-      // See isSubscriptionResourceType.
-      .filter((resource) => !isSubscriptionResourceType(resource.resourceType))
       .map((resource) => resource.id);
 
     if (visibleIds.length <= 0) {
@@ -265,11 +265,7 @@ export class SmartFoldersService implements ISmartFoldersService {
     const resource = await this.resourceRepository.findOne({
       where: { namespaceId, id: resourceId },
     });
-    if (
-      !resource ||
-      resource.resourceType === ResourceType.SMART_FOLDER ||
-      isSubscriptionResourceType(resource.resourceType)
-    ) {
+    if (!resource || resource.resourceType === ResourceType.SMART_FOLDER) {
       return false;
     }
 

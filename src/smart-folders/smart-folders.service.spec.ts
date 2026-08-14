@@ -155,12 +155,16 @@ describe('SmartFoldersService.listChildren', () => {
         id: expect.any(Object),
       },
     });
-    expect(result.map((resource) => resource.id)).toEqual(['matched-doc-id']);
+    expect(result.map((resource) => resource.id)).toEqual([
+      'matched-doc-id',
+      'rss-folder-child-id',
+      'rss-item-resource-id',
+    ]);
   });
 
-  // Containment guarantees an rss folder's only children are rss items, so
-  // the whole subtree is excluded by type.
-  it('excludes rss folders and the items inside them', async () => {
+  // Only other smart folders are excluded. An rss folder is collected like any
+  // other container and an rss item like any other content resource.
+  it('includes rss folders and the items inside them', async () => {
     const { service } = createService();
 
     const result = await service.listChildren(
@@ -170,8 +174,8 @@ describe('SmartFoldersService.listChildren', () => {
     );
 
     const ids = result.map((resource) => resource.id);
-    expect(ids).not.toContain('rss-folder-child-id');
-    expect(ids).not.toContain('rss-item-resource-id');
-    expect(ids).toEqual(['matched-doc-id']);
+    expect(ids).toContain('rss-folder-child-id');
+    expect(ids).toContain('rss-item-resource-id');
+    expect(ids).not.toContain('smart-folder-child-id');
   });
 });

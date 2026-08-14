@@ -5,6 +5,7 @@ import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-i
 import { ResourceFilterOptionsDto } from 'omniboxd/resources/dto/resource-filter.request.dto';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
+  isContainerResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -123,7 +124,7 @@ export class SharedResourcesService {
       let firstMatchedFolderIndex = -1;
       for (let index = 0; index < parentPath.length; index++) {
         const parent = parentPath[index];
-        if (parent.resourceType !== ResourceType.FOLDER) {
+        if (!isContainerResourceType(parent.resourceType)) {
           continue;
         }
         const parentMatched = await this.smartFoldersService.isResourceMatched(
@@ -264,7 +265,7 @@ export class SharedResourcesService {
     let firstMatchedFolderIndex = -1;
     for (let index = 0; index < parentResources.length; index++) {
       const parent = parentResources[index];
-      if (parent.resourceType !== ResourceType.FOLDER) {
+      if (!isContainerResourceType(parent.resourceType)) {
         continue;
       }
       const parentMatched = await this.smartFoldersService.isResourceMatched(
@@ -346,7 +347,7 @@ export class SharedResourcesService {
       resource.parentId,
     );
     for (const parent of parents) {
-      if (parent.resourceType !== ResourceType.FOLDER) {
+      if (!isContainerResourceType(parent.resourceType)) {
         continue;
       }
       const parentMatched = await this.smartFoldersService.isResourceMatched(

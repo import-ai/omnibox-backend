@@ -35,7 +35,7 @@ export class SharedRssFoldersController {
   ) {}
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get()
   async listItems(
     @Param('resourceId') resourceId: string,
@@ -56,7 +56,7 @@ export class SharedRssFoldersController {
   }
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get(':itemId')
   async getItem(
     @Param('resourceId') resourceId: string,

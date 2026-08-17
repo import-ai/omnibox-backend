@@ -2,12 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
-import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll, RssPollStatus } from 'omniboxd/rss/entities/rss-poll.entity';
@@ -15,9 +10,9 @@ import {
   ParsedFeedItem,
   RssFeedFetcherService,
 } from 'omniboxd/rss/rss-feed-fetcher.service';
-import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 // Each URL is polled at most once within this window; an in-progress `polling`
 // row also blocks re-polling until it finishes (see claim()). The same value
@@ -48,13 +43,6 @@ const MAX_PARSE_ATTEMPTS = 6;
 const PARSE_BACKOFF_BASE_MS = 5 * 60 * 1000; // matches the poll cadence
 const PARSE_BACKOFF_CAP_MS = 6 * 60 * 60 * 1000;
 
-// The partial unique index that carries an rss item's (link_id, guid) identity
-// among the live rows (see the add-rss-item-resources migration; it is
-// restricted to deleted_at IS NULL). Postgres names it as the violated
-// constraint, which is how a losing insert is told apart from any other unique
-// violation raised while creating an item.
-const RSS_ITEM_IDENTITY_INDEX = 'uq_resources_rss_item_identity';
-
 // Delay before the nth failed attempt may be retried: 10m, 20m, 40m, ... capped.
 function parseBackoffMs(attempts: number): number {
   return Math.min(PARSE_BACKOFF_CAP_MS, PARSE_BACKOFF_BASE_MS * 2 ** attempts);
@@ -66,17 +54,12 @@ export interface PollSummary {
   failed: number;
 }
 
-// A stored feed item: the deduped content row id plus everything needed to
-// materialize the item as a resource under each subscribing folder.
+// A stored feed item: the deduped content row id plus its title and publish
+// date (denormalized onto rss_items when linking).
 interface StoredItem {
   contentId: string;
-  guid: string;
   title: string;
   pubDate: Date | null;
-  // Body for the item resource: the parsed markdown once the wizard has
-  // rendered it, otherwise the feed's own summary.
-  content: string;
-  articleUrl: string;
 }
 
 @Injectable()
@@ -93,12 +76,11 @@ export class RssPollingService {
     private readonly rssPollRepository: Repository<RssPoll>,
     @InjectRepository(RssItemContent)
     private readonly rssItemContentRepository: Repository<RssItemContent>,
-    @InjectRepository(Resource)
-    private readonly resourceRepository: Repository<Resource>,
+    @InjectRepository(RssItem)
+    private readonly rssItemRepository: Repository<RssItem>,
     private readonly dataSource: DataSource,
     private readonly feedFetcher: RssFeedFetcherService,
     private readonly wizardApiService: WizardAPIService,
-    private readonly resourcesService: ResourcesService,
     configService: ConfigService,
   ) {
     // Clamp to >= 1 so a malformed value can never stall the loop.
@@ -169,7 +151,7 @@ export class RssPollingService {
       }
 
       const stored = await this.storeItems(url, feed.items ?? [], deadline);
-      // Give every folder subscribed to this url its own copy of each item.
+      // Relate every link sharing this url to the polled contents.
       await this.linkItems(url, stored);
       const contentIds = stored.map((item) => item.contentId);
       await this.finishPoll(poll.id, RssPollStatus.SUCCEED, { contentIds });
@@ -270,15 +252,8 @@ export class RssPollingService {
     url: string,
     item: ParsedFeedItem,
   ): Promise<StoredItem> {
-    const {
-      guid,
-      content,
-      title,
-      pubDate,
-      summary,
-      articleUrl,
-      articleContent,
-    } = this.serializeItem(item);
+    const { guid, content, title, pubDate, articleUrl, articleContent } =
+      this.serializeItem(item);
     const {
       id,
       pubDate: effectivePubDate,
@@ -297,54 +272,39 @@ export class RssPollingService {
       parseAttempts < MAX_PARSE_ATTEMPTS &&
       (parseNextAttemptAt === null ||
         parseNextAttemptAt.getTime() <= Date.now());
-    const freshlyParsed = shouldParse
-      ? await this.parseItemContent(
-          url,
-          guid,
-          id,
-          parseAttempts,
-          articleUrl,
-          articleContent,
-        )
-      : null;
-    // Use the stored pub_date (preserved from first fetch) so item resources for
+    if (shouldParse) {
+      await this.parseItemContent(
+        id,
+        parseAttempts,
+        articleUrl,
+        articleContent,
+      );
+    }
+    // Use the stored pub_date (preserved from first fetch) so rss_items rows for
     // newly-appearing links match the content row's publish date.
-    return {
-      contentId: id,
-      guid,
-      title,
-      pubDate: effectivePubDate,
-      content: freshlyParsed ?? parsedContent ?? summary,
-      articleUrl,
-    };
+    return { contentId: id, title, pubDate: effectivePubDate };
   }
 
-  // Renders the article to Markdown via the wizard and stores it, then fans the
-  // result out to every existing item resource for this (url, guid) — the same
-  // article can be subscribed from several folders and namespaces, and each
-  // holds its own copy. Returns the markdown so a copy created later in this
-  // same poll starts out with it. When the feed embedded full content the wizard
-  // converts that directly (no link fetch); otherwise it scrapes articleUrl.
-  // Best-effort: a failure leaves parsed_content null and never fails the poll,
-  // but it records the attempt so a later poll retries it after a backoff.
-  // `attempts` is the number of attempts that have already failed for this item.
+  // Renders the article to Markdown via the wizard and stores it. When the feed
+  // embedded full content the wizard converts that directly (no link fetch);
+  // otherwise it scrapes articleUrl. Best-effort: a failure leaves
+  // parsed_content null and never fails the poll, but it records the attempt so
+  // a later poll retries it after a backoff. `attempts` is the number of
+  // attempts that have already failed for this item.
   private async parseItemContent(
-    url: string,
-    guid: string,
     contentId: string,
     attempts: number,
     articleUrl: string,
     articleContent: string,
-  ): Promise<string | null> {
-    let markdown: string;
+  ): Promise<void> {
     try {
-      ({ markdown } = await this.wizardApiService.parseRssItem(
+      const { markdown } = await this.wizardApiService.parseRssItem(
         {
           url: articleUrl,
           content: articleContent,
         },
         AbortSignal.timeout(WIZARD_PARSE_TIMEOUT_MS),
-      ));
+      );
       // Empty markdown is a failed parse too: without counting it as an attempt
       // the item would be re-parsed on every poll forever.
       if (!markdown) {
@@ -359,66 +319,6 @@ export class RssPollingService {
         `Failed to parse rss item ${contentId} (${articleUrl}): ${err instanceof Error ? err.message : String(err)}`,
       );
       await this.recordParseFailure(contentId, attempts);
-      return null;
-    }
-
-    // Storing the parse must not be undone by a fan-out failure, so this runs
-    // outside the update above and only logs on error. Note that a fan-out that
-    // throws part-way is not repaired by the next poll: parsed_content is set,
-    // so the item is no longer selected for parsing at all, and any copy the
-    // fan-out did not reach keeps the feed snippet until something else
-    // rewrites it.
-    try {
-      await this.fanOutContent(url, guid, markdown);
-    } catch (err) {
-      this.logger.error(
-        `Failed to fan out parsed content of rss item ${contentId} (${articleUrl}): ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-    return markdown;
-  }
-
-  // Pushes an item's freshly parsed markdown into every live resource copy of
-  // it. Retired copies are deliberately skipped (the query builder filters them
-  // out): their subscription is gone, and rewriting them would resurrect their
-  // search index entries.
-  private async fanOutContent(
-    url: string,
-    guid: string,
-    markdown: string,
-  ): Promise<void> {
-    const links = await this.rssLinkRepository.find({ where: { url } });
-    if (links.length === 0) {
-      return;
-    }
-    const resources = await this.resourceRepository
-      .createQueryBuilder('resource')
-      .where('resource.resource_type = :resourceType', {
-        resourceType: ResourceType.RSS_ITEM,
-      })
-      .andWhere("resource.attrs->>'link_id' IN (:...linkIds)", {
-        linkIds: links.map((link) => link.id),
-      })
-      .andWhere("resource.attrs->>'guid' = :guid", { guid })
-      .getMany();
-
-    for (const resource of resources) {
-      if (resource.content === markdown || !resource.userId) {
-        continue;
-      }
-      // Goes through the resource service so the content size and the search
-      // index both follow the new body (an item's bytes never count against the
-      // owner's storage quota, so nothing is charged for the longer markdown).
-      // The item is read-only to users, hence the internal write.
-      await this.resourcesService.updateResource(
-        resource.namespaceId,
-        resource.id,
-        resource.userId,
-        { content: markdown },
-        undefined,
-        false,
-        { internal: true },
-      );
     }
   }
 
@@ -443,28 +343,12 @@ export class RssPollingService {
     }
   }
 
-  // Gives every rss_links row sharing the polled url its own resource copy of
-  // each stored item, one `rss_item` resource per (link, guid) pair. Items are
-  // deliberately not deduped across folders: each folder owns its copies, in its
-  // own namespace, under its own rss folder resource. Only pairs with no LIVE
-  // copy are created: an existing live copy is left alone (a revised item is
-  // refreshed through the parse fan-out rather than re-created, and a copy whose
-  // feed title changed is renamed in place), while a retired copy is ignored so
-  // a folder that re-subscribes to a url gets the article back as a fresh
-  // resource next to the soft-deleted history. Nothing user-facing can retire an
-  // individual item — items go only with their link or their folder — so a
-  // retired copy is only ever reachable again through a re-subscription.
-  //
-  // Polls of one url do not normally overlap: claim() leaves a POLLING marker
-  // that makes every later claim skip the url. That is a lock with a timeout,
-  // though — after POLL_STALE_MS a second worker may take over a poll that is
-  // merely slow rather than dead — so the read-then-insert below can still race.
-  // The (link_id, guid) unique index is what actually guarantees a single copy;
-  // a losing insert is dropped instead of failing the poll.
-  //
-  // The three reads below are equally unsynchronised with the folder's own
-  // writes: a subscription can be dropped between them and the insert, so every
-  // create re-checks it inside its transaction (see subscriptionIsLive).
+  // Relates every rss_links row sharing the polled url to the stored contents,
+  // one rss_items row per (link, content) pair. Idempotent on the unique
+  // (link_id, content_id) index: a pair not yet related is inserted, while an
+  // existing pair has its denormalized title refreshed to the latest feed title
+  // (a revised item then shows its new title in list/detail views). pub_date is
+  // deliberately left as-is so a refetch never moves an item's publish date.
   private async linkItems(url: string, stored: StoredItem[]): Promise<void> {
     if (stored.length === 0) {
       return;
@@ -474,232 +358,31 @@ export class RssPollingService {
       return;
     }
 
-    // Skip links whose rss folder resource is gone (deleted or trashed) or has
-    // no owner: there is nowhere to hang the items.
-    const folders = await this.resourceRepository.find({
-      where: { id: In(links.map((link) => link.resourceId)) },
-    });
-    const folderById = new Map(folders.map((folder) => [folder.id, folder]));
-
-    // A feed can list the same guid twice; both collapse to one content row and
-    // must produce a single resource per link.
-    const itemByGuid = new Map<string, StoredItem>();
-    for (const item of stored) {
-      itemByGuid.set(item.guid, item);
-    }
-    const items = [...itemByGuid.values()];
-
-    // Live copies only: a soft-deleted copy belongs to a subscription that is
-    // gone, and the identity index no longer covers it, so it must not stand in
-    // the way of a fresh copy.
-    const existing = new Map(
-      (
-        await this.resourceRepository
-          .createQueryBuilder('resource')
-          .select('resource.id', 'id')
-          .addSelect('resource.name', 'name')
-          .addSelect("resource.attrs->>'link_id'", 'linkId')
-          .addSelect("resource.attrs->>'guid'", 'guid')
-          .where('resource.resource_type = :resourceType', {
-            resourceType: ResourceType.RSS_ITEM,
-          })
-          .andWhere("resource.attrs->>'link_id' IN (:...linkIds)", {
-            linkIds: links.map((link) => link.id),
-          })
-          .andWhere("resource.attrs->>'guid' IN (:...guids)", {
-            guids: items.map((item) => item.guid),
-          })
-          .getRawMany<{
-            id: string;
-            name: string;
-            linkId: string;
-            guid: string;
-          }>()
-      ).map((row) => [`${row.linkId}:${row.guid}`, row]),
+    const rows = links.flatMap((link) =>
+      stored.map((item) => ({
+        linkId: link.id,
+        contentId: item.contentId,
+        title: item.title,
+        pubDate: item.pubDate,
+      })),
     );
 
-    for (const link of links) {
-      const folder = folderById.get(link.resourceId);
-      if (!folder || !folder.userId) {
-        continue;
-      }
-      for (const item of items) {
-        const copy = existing.get(`${link.id}:${item.guid}`);
-        if (copy) {
-          await this.renameItemResource(folder, copy, item);
-          continue;
-        }
-        await this.createItemResource(link, folder, item);
-      }
+    // A feed can list the same guid twice, which collapses to one content row and
+    // thus duplicate (link, content) rows here. ON CONFLICT DO UPDATE — unlike the
+    // DO NOTHING this used to be — rejects a statement that touches the same
+    // conflict key twice, so dedupe first, keeping the last occurrence's title.
+    const deduped = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      deduped.set(`${row.linkId}:${row.contentId}`, row);
     }
-  }
 
-  // Follows a corrected feed title on the live copy that already exists.
-  // Retired copies never reach here through linkItems, which looks up live ones
-  // only — but that read happens outside any transaction, so a `PATCH
-  // .../config` dropping the url can retire the copy in between. updateResource
-  // does not look at deleted rows and would throw RESOURCE_NOT_FOUND, failing
-  // the whole poll over a title that no longer has anywhere to go. The copy is
-  // skipped instead, the same way subscriptionIsLive skips an item whose
-  // subscription went away mid-poll; a retired copy is history that no later
-  // poll rewrites.
-  private async renameItemResource(
-    folder: Resource,
-    copy: { id: string; name: string },
-    item: StoredItem,
-  ): Promise<void> {
-    if (copy.name === item.title) {
-      return;
-    }
-    try {
-      await this.resourcesService.updateResource(
-        folder.namespaceId,
-        copy.id,
-        folder.userId!,
-        { name: item.title },
-        undefined,
-        false,
-        { internal: true },
-      );
-    } catch (err) {
-      if (!(err instanceof AppException) || err.code !== 'RESOURCE_NOT_FOUND') {
-        throw err;
-      }
-      this.logger.warn(
-        `Skipped renaming rss item ${item.guid} (${copy.id}): its copy went away mid-poll`,
-      );
-    }
-  }
-
-  private async createItemResource(
-    link: RssLink,
-    folder: Resource,
-    item: StoredItem,
-  ): Promise<void> {
-    try {
-      await this.insertItemResource(link, folder, item);
-    } catch (err) {
-      // An overlapping poll may have inserted this copy in between the
-      // existence check and here; the identity index rejects the second insert
-      // (it covers exactly the live rows that check looked at), which is the
-      // outcome we want. Anything else — including a unique violation raised by
-      // one of the other rows an item insert writes (its resource id, its index
-      // task) — is a real failure and fails the poll.
-      if (!this.isDuplicateItemIdentityError(err)) {
-        throw err;
-      }
-      this.logger.warn(
-        `Skipped rss item ${item.guid} for link ${link.id}: its (link_id, guid) copy already exists`,
-      );
-    }
-  }
-
-  // Postgres unique_violation on the item's (link_id, guid) identity index,
-  // however the driver wrapped it. Matched by constraint name rather than by
-  // the 23505 code alone: an item insert also writes other rows (its resource
-  // id, its index task) whose own unique constraints must never be swallowed
-  // here.
-  private isDuplicateItemIdentityError(err: unknown): boolean {
-    const error = err as {
-      code?: string;
-      constraint?: string;
-      driverError?: { code?: string; constraint?: string };
-    };
-    const code = error?.driverError?.code ?? error?.code;
-    const constraint = error?.driverError?.constraint ?? error?.constraint;
-    return code === '23505' && constraint === RSS_ITEM_IDENTITY_INDEX;
-  }
-
-  // Re-checks, inside the insert's own transaction, that the subscription this
-  // copy would hang off is still there. linkItems reads the links, the folders
-  // and the existing copies outside any transaction, so a `PATCH .../config`
-  // that drops the url can commit in between: it trashes the link's items and
-  // retires the link, and an insert that went ahead regardless would leave a
-  // live item hanging off a retired link. Nothing ever clears that up — the
-  // removal has already run, no later update revisits a soft-deleted link, and
-  // the parse fan-out only refreshes copies of live links — so the folder would
-  // list the article forever, with no link name behind it.
-  //
-  // The link row is locked FOR SHARE so the answer holds for the rest of the
-  // transaction: removeLink takes FOR UPDATE on the same row before it collects
-  // the items to trash, so only two interleavings remain — either the removal
-  // committed first and this poll skips the item, or the removal waits for this
-  // insert and then trashes the copy it just made.
-  //
-  // The folder resource is checked but not locked. Trashing a folder leaves its
-  // items live underneath it (they come back when it is restored), so an item
-  // inserted just as the folder is trashed is in exactly the state every other
-  // item of that folder is in — only a folder that is already gone by the time
-  // this runs has nowhere to hang the item. Locking it would also invert this
-  // transaction's lock order: the insert below already takes FOR KEY SHARE on
-  // the folder row through the resources.parent_id self-FK, i.e. after this
-  // link lock, and every writer of a feed folder has to acquire in that same
-  // order — link row, then folder row — or deadlock (RssFoldersService.update
-  // reconciles links before it renames for exactly this reason).
-  private async subscriptionIsLive(
-    tx: Transaction,
-    link: RssLink,
-    folder: Resource,
-  ): Promise<boolean> {
-    const manager = tx.entityManager;
-    const liveLink: unknown[] = await manager.query(
-      `SELECT 1 FROM rss_links WHERE id = $1 AND deleted_at IS NULL FOR SHARE`,
-      [link.id],
-    );
-    if (liveLink.length === 0) {
-      return false;
-    }
-    const liveFolder: unknown[] = await manager.query(
-      `SELECT 1 FROM resources WHERE id = $1 AND deleted_at IS NULL`,
-      [folder.id],
-    );
-    return liveFolder.length > 0;
-  }
-
-  private async insertItemResource(
-    link: RssLink,
-    folder: Resource,
-    item: StoredItem,
-  ): Promise<void> {
-    await transaction(this.dataSource.manager, async (tx) => {
-      if (!(await this.subscriptionIsLive(tx, link, folder))) {
-        this.logger.warn(
-          `Skipped rss item ${item.guid} for link ${link.id}: its subscription went away mid-poll`,
-        );
-        return;
-      }
-      const resource = await this.resourcesService.createResource(
-        {
-          namespaceId: folder.namespaceId,
-          parentId: folder.id,
-          userId: folder.userId,
-          resourceType: ResourceType.RSS_ITEM,
-          // Feed titles repeat and may contain slashes; the internal create
-          // keeps them verbatim (identity is the guid, not the name).
-          name: item.title,
-          content: item.content,
-          attrs: {
-            link_id: link.id,
-            guid: item.guid,
-            // The feed url, plus the article's own url so a client can link out
-            // to the original.
-            url: link.url,
-            article_url: item.articleUrl || null,
-            published_at: item.pubDate ? item.pubDate.toISOString() : null,
-          },
-        },
-        tx,
-        false,
-        { internal: true },
-      );
-      // The item was published before it was polled, and the folder lists items
-      // newest-first by creation time.
-      const createdAt = item.pubDate ?? new Date();
-      await tx.entityManager.query(
-        `UPDATE resources SET created_at = $1 WHERE id = $2`,
-        [createdAt, resource.id],
-      );
-    });
+    await this.rssItemRepository
+      .createQueryBuilder()
+      .insert()
+      .into(RssItem)
+      .values([...deduped.values()])
+      .orUpdate(['title'], ['link_id', 'content_id'])
+      .execute();
   }
 
   // Deduplicates per (url, guid); refreshes the content/title of an existing
@@ -759,7 +442,6 @@ export class RssPollingService {
     content: string;
     title: string;
     pubDate: Date | null;
-    summary: string;
     articleUrl: string;
     articleContent: string;
   } {
@@ -794,8 +476,6 @@ export class RssPollingService {
       content,
       title,
       pubDate,
-      // Seed body for a new item resource until the wizard's markdown lands.
-      summary: item.contentSnippet?.trim() || contentBody || '',
       articleUrl: item.link?.trim() ?? '',
       articleContent,
     };

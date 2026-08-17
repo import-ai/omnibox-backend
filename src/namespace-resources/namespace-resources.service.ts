@@ -15,19 +15,11 @@ import {
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
-  CONTENT_RESOURCE_TYPES,
-  isContentResourceType,
-  isReadOnlyResourceType,
-  isServiceOwnedResourceType,
-  READ_ONLY_RESOURCE_TYPES,
   Resource,
   ResourceType,
-  SERVICE_OWNED_RESOURCE_TYPES,
 } from 'omniboxd/resources/entities/resource.entity';
 import {
-  ResourceSortBy,
   ResourceSortOptions,
-  ResourceSortOrder,
   sortResources,
 } from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
@@ -148,8 +140,12 @@ export class NamespaceResourcesService {
       .createQueryBuilder('resource')
       .where('resource.namespace_id = :namespaceId', { namespaceId })
       .andWhere('resource.parent_id IS NOT NULL')
-      .andWhere('resource.resource_type IN (:...resourceTypes)', {
-        resourceTypes: CONTENT_RESOURCE_TYPES,
+      .andWhere('resource.resource_type NOT IN (:...resourceTypes)', {
+        resourceTypes: [
+          ResourceType.FOLDER,
+          ResourceType.SMART_FOLDER,
+          ResourceType.RSS_FOLDER,
+        ],
       })
       .andWhere('resource.tag_ids && :tagIds', { tagIds })
       .getMany();
@@ -239,59 +235,10 @@ export class NamespaceResourcesService {
     return filteredResources.map((resource) => ({
       ...resource,
       tags: tagsMap.get(resource.id) || [],
-      // Same flag as ResourceDto/ResourceSummaryDto: a client that reaches a
-      // resource through this batch endpoint must gate its actions too.
-      readOnly: isReadOnlyResourceType(resource.resourceType),
     }));
   }
 
-  /**
-   * Generic resource creation. Types whose own service owns side-car state
-   * (rss folders, smart folders) are rejected here: a row created without that
-   * state is a permanently inert folder that also escapes its tier limit.
-   * Those services call createServiceOwned instead.
-   */
   async create(
-    userId: string,
-    namespaceId: string,
-    createReq: CreateResourceDto,
-    tx?: Transaction,
-    source?: string,
-    autoRenameOnConflict: boolean = false,
-  ): Promise<Resource> {
-    this.assertNotServiceOwnedResourceType(createReq.resourceType);
-    return await this.createServiceOwned(
-      userId,
-      namespaceId,
-      createReq,
-      tx,
-      source,
-      autoRenameOnConflict,
-    );
-  }
-
-  private assertNotServiceOwnedResourceType(
-    resourceType: ResourceType | undefined,
-  ): void {
-    if (!resourceType || !isServiceOwnedResourceType(resourceType)) {
-      return;
-    }
-    const message = this.i18n.t('resource.errors.serviceOwnedResourceType', {
-      args: { resourceTypes: SERVICE_OWNED_RESOURCE_TYPES.join(', ') },
-    });
-    throw new AppException(
-      message,
-      'RESOURCE_TYPE_NOT_DIRECTLY_CREATABLE',
-      HttpStatus.UNPROCESSABLE_ENTITY,
-    );
-  }
-
-  /**
-   * create() without the service-owned type guard. Only for the service that
-   * owns such a type and writes the rest of its state in the same transaction
-   * (RssFoldersService); everything else must go through create().
-   */
-  async createServiceOwned(
     userId: string,
     namespaceId: string,
     createReq: CreateResourceDto,
@@ -301,7 +248,7 @@ export class NamespaceResourcesService {
   ): Promise<Resource> {
     if (!tx) {
       return await transaction(this.dataSource.manager, async (tx) => {
-        return await this.createServiceOwned(
+        return await this.create(
           userId,
           namespaceId,
           createReq,
@@ -382,9 +329,6 @@ export class NamespaceResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
-    // A copy here would carry attrs but none of the side-car state (rss_links,
-    // smart folder config) and would skip that type's quota check.
-    this.assertNotServiceOwnedResourceType(resource.resourceType);
     const newResource = {
       name: duplicateName(resource.name),
       namespaceId: resource.namespaceId,
@@ -901,14 +845,6 @@ export class NamespaceResourcesService {
       // Cannot move to root directory
       parentId: Not(IsNull()),
       namespaceId,
-      // This powers the "move to" picker, so it lists destinations: a
-      // poller-owned item is a leaf, and folders whose children their own
-      // service produces (smart folders match, rss folders poll) never accept
-      // a user-placed resource. The client gates these too, but a non-web
-      // caller would otherwise get a 422 from assertContainment instead.
-      resourceType: Not(
-        In([...READ_ONLY_RESOURCE_TYPES, ...SERVICE_OWNED_RESOURCE_TYPES]),
-      ),
     };
     // Self and child exclusions
     if (excludeResourceId) {
@@ -952,10 +888,7 @@ export class NamespaceResourcesService {
     const allVisible = await this.getUserVisibleResources(userId, namespaceId);
     const sorted = allVisible
       .filter((r) => r.parentId !== null)
-      // Same selection as getRecentResources: containers of every kind are not
-      // "recent work", and a busy feed would otherwise flood the list with
-      // polled items.
-      .filter((r) => isContentResourceType(r.resourceType))
+      .filter((r) => r.resourceType !== ResourceType.FOLDER)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const take = Math.max(1, Math.min(100, limit));
     const skip = Math.max(0, offset);
@@ -1004,7 +937,13 @@ export class NamespaceResourcesService {
         where: {
           namespaceId,
           parentId: Not(IsNull()),
-          resourceType: In(CONTENT_RESOURCE_TYPES),
+          resourceType: Not(
+            In([
+              ResourceType.FOLDER,
+              ResourceType.SMART_FOLDER,
+              ResourceType.RSS_FOLDER,
+            ]),
+          ),
         },
         order: { updatedAt: 'DESC' },
         take: batchSize,
@@ -1049,7 +988,13 @@ export class NamespaceResourcesService {
       where: {
         namespaceId,
         parentId: Not(IsNull()),
-        resourceType: In(CONTENT_RESOURCE_TYPES),
+        resourceType: Not(
+          In([
+            ResourceType.FOLDER,
+            ResourceType.SMART_FOLDER,
+            ResourceType.RSS_FOLDER,
+          ]),
+        ),
       },
       order: { updatedAt: 'DESC' },
     });
@@ -1186,15 +1131,10 @@ export class NamespaceResourcesService {
       );
     }
 
-    // Metadata only, even when the caller asked for summaries: sorting and the
-    // permission filter below need every child, but nothing here reads content.
-    // The page's content is fetched by id once the window is known, so a folder
-    // holding thousands of rss items no longer materializes every article body
-    // to return ten previews.
     const children = await this.resourcesService.getChildren(
       namespaceId,
       [resourceId],
-      {},
+      { summary },
       entityManager,
     );
 
@@ -1213,20 +1153,7 @@ export class NamespaceResourcesService {
       );
     });
 
-    // A feed reads newest-published first wherever it is shown (the same rule
-    // shared-resources applies to a shared rss folder), and the items are the
-    // poller's, not an arrangement their owner chose. The web client already
-    // sends this sort for an rss folder; forcing it server-side makes the two
-    // listing paths agree and gives non-web callers feed order for free.
-    const sortedChildren = sortResources(
-      visibleChildren,
-      resource?.resourceType === ResourceType.RSS_FOLDER
-        ? {
-            sortBy: ResourceSortBy.CREATED_AT,
-            sortOrder: ResourceSortOrder.DESC,
-          }
-        : options,
-    );
+    const sortedChildren = sortResources(visibleChildren, options);
     const total = sortedChildren.length;
     const normalizedOffset = Math.max(0, offset ?? 0);
     const normalizedLimit =
@@ -1274,20 +1201,15 @@ export class NamespaceResourcesService {
     }
 
     if (summary) {
-      const pagedIds = pagedChildren.map((r) => r.id);
-      const [firstAttachments, contents] = await Promise.all([
-        this.resourceAttachmentsService.getFirstAttachments(
+      const firstAttachments =
+        await this.resourceAttachmentsService.getFirstAttachments(
           namespaceId,
-          pagedIds,
-        ),
-        this.resourcesService.getContents(namespaceId, pagedIds, entityManager),
-      ]);
+          pagedChildren.map((r) => r.id),
+        );
       return {
         resources: pagedChildren.map((res) =>
           ResourceSummaryDto.fromEntity(
-            // The metadata read above left `content` unselected; the summary dto
-            // takes its prefix from here.
-            Object.assign(res, { content: contents.get(res.id) ?? '' }),
+            res,
             !!hasChildrenMap.get(res.id),
             firstAttachments.get(res.id),
           ),
@@ -1671,12 +1593,6 @@ export class NamespaceResourcesService {
       );
     }
 
-    // Reject before the re-parenting below: that write is not part of the
-    // restore transaction, so letting a read-only resource reach it would
-    // detach it from its owner (an rss item from its rss folder) even though
-    // the restore itself is refused.
-    this.resourcesService.assertNotReadOnly(resource.resourceType);
-
     // Check smart folder quota before restoring
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
       await this.smartFoldersService.assertRestoreEntitlements(
@@ -1916,10 +1832,7 @@ export class NamespaceResourcesService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
 
-    // Fetch all trash items. Retired rss items are excluded for the same reason
-    // the trash listing hides them (getDeletedResources): they belong to their
-    // subscription, not to the user, so emptying the trash must neither delete
-    // them nor count them.
+    // Fetch all trash items
     const trashItems = await this.resourceRepository.find({
       withDeleted: true,
       where: {
@@ -1927,7 +1840,6 @@ export class NamespaceResourcesService {
         deletedAt: Not(IsNull()),
         parentId: Not(IsNull()),
         permanentDeletedAt: IsNull(),
-        resourceType: Not(In(READ_ONLY_RESOURCE_TYPES)),
       },
     });
 

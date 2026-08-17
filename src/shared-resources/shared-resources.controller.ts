@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-  Query,
-  Res,
-  UseInterceptors,
-} from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Get, Param, UseInterceptors } from '@nestjs/common';
 import { CookieAuth } from 'omniboxd/auth/decorators';
 import {
   ValidatedShare,
@@ -40,27 +31,16 @@ export class SharedResourcesController {
     );
   }
 
-  // Paged like the workspace children listing: a viewer must be able to read a
-  // shared folder holding thousands of rss items a page at a time. The body
-  // stays a plain array (the folder view shares one client for both listings);
-  // the full count is reported in X-Total-Count.
   @CookieAuth({ onAuthFail: 'continue' })
   @ValidateShare()
   @Get(':resourceId/children')
   async getResourceChildren(
     @Param('resourceId') resourceId: string,
     @ValidatedShare() share: Share,
-    @Res({ passthrough: true }) response: Response,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
-    @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
   ): Promise<SharedResourceMetaDto[]> {
-    const { resources, total } =
-      await this.sharedResourcesService.getSharedResourceChildrenPage(
-        share,
-        resourceId,
-        { limit, offset },
-      );
-    response.setHeader('X-Total-Count', total.toString());
-    return resources;
+    return await this.sharedResourcesService.getSharedResourceChildren(
+      share,
+      resourceId,
+    );
   }
 }

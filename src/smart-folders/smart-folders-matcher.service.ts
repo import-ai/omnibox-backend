@@ -36,9 +36,12 @@ export class SmartFoldersMatcherService {
       return this.matchesDateCondition(dateCandidate, condition);
     }
 
+    // A url rule only means something for a resource that has an address of its
+    // own: a saved link, or an article a feed pointed at.
     if (
       condition.field === SmartFolderField.URL &&
-      resource.resourceType !== ResourceType.LINK
+      resource.resourceType !== ResourceType.LINK &&
+      resource.resourceType !== ResourceType.RSS_ITEM
     ) {
       return false;
     }
@@ -93,7 +96,16 @@ export class SmartFoldersMatcherService {
       case SmartFolderField.TITLE:
         return (resource.name || '').toLowerCase();
       case SmartFolderField.URL:
-        return String(resource.attrs?.url || '').toLowerCase();
+        // An rss item carries two: attrs.url is the feed it came from and
+        // attrs.article_url the article itself. A rule about "the url" means
+        // the article.
+        return String(
+          (resource.resourceType === ResourceType.RSS_ITEM
+            ? resource.attrs?.article_url
+            : undefined) ||
+            resource.attrs?.url ||
+            '',
+        ).toLowerCase();
       case SmartFolderField.FILE_NAME:
         return String(
           resource.attrs?.original_name || resource.attrs?.filename || '',

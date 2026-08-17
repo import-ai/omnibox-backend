@@ -39,10 +39,11 @@ export class RssFolderResponseDto {
     const dto = new RssFolderResponseDto();
     dto.resource = params.resource;
     dto.links = params.links.map((link) => RssLinkResponseDto.fromEntity(link));
-    const createdAt = params.links[0]?.createdAt;
-    const updatedAt = params.links[0]?.updatedAt;
-    dto.createdAt = (createdAt ?? new Date()).toISOString();
-    dto.updatedAt = (updatedAt ?? new Date()).toISOString();
+    // The folder's own timestamps. Reading them off links[0] made a folder
+    // report "now" as its creation time whenever its links were rewritten, and
+    // made reordering links change them.
+    dto.createdAt = params.resource.created_at;
+    dto.updatedAt = params.resource.updated_at;
     return dto;
   }
 }

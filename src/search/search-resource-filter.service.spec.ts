@@ -156,7 +156,10 @@ describe('SearchResourceFilterService', () => {
     value: 'roadmap',
   };
 
-  it('excludes rss folders and resources inside them from smart folder matches', async () => {
+  // An rss item is a content resource like a doc and an rss folder a container
+  // like a folder: the filter applies the same rules to both, with no
+  // type-based exclusion of the subscription subtree.
+  it('includes rss folders and the items inside them in smart folder matches', async () => {
     const { service } = createServiceWithResources([
       resource({ id: 'doc-id', name: 'Doc', tagIds: ['tag-id'] }),
       resource({
@@ -169,6 +172,7 @@ describe('SearchResourceFilterService', () => {
         id: 'rss-child-id',
         name: 'Feed item',
         parentId: 'rss-folder-id',
+        resourceType: ResourceType.RSS_ITEM,
         tagIds: ['tag-id'],
       }),
     ]);
@@ -178,10 +182,14 @@ describe('SearchResourceFilterService', () => {
       matchMode: SmartFolderMatchMode.ALL,
     });
 
-    expect(result.map((item: any) => item.resourceId)).toEqual(['doc-id']);
+    expect(result.map((item: any) => item.resourceId)).toEqual([
+      'doc-id',
+      'rss-child-id',
+      'rss-folder-id',
+    ]);
   });
 
-  it('excludes rss folders and their children from getMatchedResourceIds', async () => {
+  it('includes rss folders and their items in getMatchedResourceIds', async () => {
     const resourceIds = ['doc-id', 'rss-folder-id', 'rss-child-id'];
     const { service } = createServiceWithResources(
       [
@@ -196,6 +204,7 @@ describe('SearchResourceFilterService', () => {
           id: 'rss-child-id',
           name: 'Feed item',
           parentId: 'rss-folder-id',
+          resourceType: ResourceType.RSS_ITEM,
           tagIds: ['tag-id'],
         }),
       ],
@@ -208,7 +217,40 @@ describe('SearchResourceFilterService', () => {
       { conditions: [tagCondition], matchMode: SmartFolderMatchMode.ALL },
     );
 
-    expect(matched && Array.from(matched)).toEqual(['doc-id']);
+    expect(matched && Array.from(matched)).toEqual([
+      'doc-id',
+      'rss-folder-id',
+      'rss-child-id',
+    ]);
+  });
+
+  // The point of dropping the exclusion: an article is findable by the words in
+  // its body, exactly as a doc is.
+  it('matches an rss item on its body text', async () => {
+    const { service } = createServiceWithResources([
+      resource({ id: 'doc-id', name: 'Doc', content: 'unrelated prose' }),
+      resource({
+        id: 'rss-item-id',
+        name: 'Feed item',
+        parentId: 'rss-folder-id',
+        resourceType: ResourceType.RSS_ITEM,
+        content: 'The quarterly rollout of the ranking pipeline',
+      }),
+    ]);
+
+    const result = await service.searchResourcesByFilters(userId, namespaceId, {
+      conditions: [
+        {
+          field: SmartFolderField.CONTENT,
+          operator: SmartFolderOperator.CONTAINS,
+          value: 'ranking pipeline',
+        },
+      ],
+      matchMode: SmartFolderMatchMode.ALL,
+    });
+
+    expect(result.map((item: any) => item.resourceId)).toEqual(['rss-item-id']);
+    expect((result[0] as any).readOnly).toBe(true);
   });
 
   it('returns default visible resources when no filter condition is provided', async () => {

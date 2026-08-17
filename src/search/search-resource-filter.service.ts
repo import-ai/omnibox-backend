@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
+  isReadOnlyResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -55,8 +56,9 @@ export class SearchResourceFilterService {
       return null;
     }
 
-    const resources = this.excludeRssFolderResources(
-      await this.resourcesService.batchGetResources(namespaceId, resourceIds),
+    const resources = await this.resourcesService.batchGetResources(
+      namespaceId,
+      resourceIds,
     );
     const resourcesWithTagNames = await this.withTagNames(
       namespaceId,
@@ -101,11 +103,11 @@ export class SearchResourceFilterService {
         userId,
         namespaceId,
       );
-    const resources = this.excludeRssFolderResources(
-      await this.resourcesService.batchGetResources(
-        namespaceId,
-        visibleResources.map((resource) => resource.id),
-      ),
+    // Every visible type is a filter candidate: an rss item is matched like any
+    // other content resource and an rss folder like any other container.
+    const resources = await this.resourcesService.batchGetResources(
+      namespaceId,
+      visibleResources.map((resource) => resource.id),
     );
     const conditions = options.conditions || [];
     if (conditions.length <= 0) {
@@ -136,26 +138,6 @@ export class SearchResourceFilterService {
       items,
       total: items.length,
     };
-  }
-
-  /**
-   * Smart folders must never surface subscription (RSS) folders or anything
-   * living inside them. Such entries would otherwise render an expandable node
-   * in the tree that errors when opened, so we drop the RSS folders themselves
-   * and any resource parented directly under one.
-   */
-  private excludeRssFolderResources(resources: Resource[]): Resource[] {
-    const rssFolderIds = new Set(
-      resources
-        .filter((resource) => resource.resourceType === ResourceType.RSS_FOLDER)
-        .map((resource) => resource.id),
-    );
-
-    return resources.filter(
-      (resource) =>
-        resource.resourceType !== ResourceType.RSS_FOLDER &&
-        !(resource.parentId && rssFolderIds.has(resource.parentId)),
-    );
   }
 
   private async withTagNames(
@@ -205,6 +187,9 @@ export class SearchResourceFilterService {
       content: resource.content || '',
       attrs: resource.attrs || {},
       resourceType: resource.resourceType || ResourceType.DOC,
+      readOnly: isReadOnlyResourceType(
+        resource.resourceType || ResourceType.DOC,
+      ),
     };
   }
 }

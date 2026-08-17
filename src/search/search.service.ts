@@ -13,8 +13,11 @@ import {
   comparePermission,
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import {
+  isReadOnlyResourceType,
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -327,6 +330,9 @@ export class SearchService {
         ...item,
         attrs: resourceMeta?.attrs || {},
         resourceType: resourceMeta?.resourceType || ResourceType.DOC,
+        readOnly: isReadOnlyResourceType(
+          resourceMeta?.resourceType || ResourceType.DOC,
+        ),
       });
     }
 
@@ -482,6 +488,9 @@ export class SearchService {
           content: chunk.text || '',
           attrs: resourceMeta?.attrs || {},
           resourceType: resourceMeta?.resourceType || ResourceType.DOC,
+          readOnly: isReadOnlyResourceType(
+            resourceMeta?.resourceType || ResourceType.DOC,
+          ),
         };
         items.push(resourceDto);
       }

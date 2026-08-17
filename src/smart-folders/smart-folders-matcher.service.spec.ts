@@ -91,6 +91,51 @@ describe('SmartFoldersMatcherService', () => {
     expect(matched).toBe(true);
   });
 
+  // An rss item has an address of its own, so a url rule reaches it — and it
+  // reads the article's url, not the feed the item arrived on.
+  it('matches an rss item on its article url, not its feed url', () => {
+    const item = resource({
+      resourceType: ResourceType.RSS_ITEM,
+      attrs: {
+        url: 'https://feeds.example.com/frontpage.xml',
+        article_url: 'https://example.com/posts/latency-budget',
+      },
+    });
+    const urlRule = (value: string) => [
+      {
+        field: SmartFolderField.URL,
+        operator: SmartFolderOperator.CONTAINS,
+        value,
+      },
+    ];
+
+    expect(
+      service.matches(item, urlRule('posts/latency'), SmartFolderMatchMode.ALL),
+    ).toBe(true);
+    expect(
+      service.matches(item, urlRule('feeds.example'), SmartFolderMatchMode.ALL),
+    ).toBe(false);
+  });
+
+  it('leaves a url rule unmatched for a resource with no address of its own', () => {
+    const matched = service.matches(
+      resource({
+        resourceType: ResourceType.DOC,
+        attrs: { url: 'https://example.com/posts/latency-budget' },
+      }),
+      [
+        {
+          field: SmartFolderField.URL,
+          operator: SmartFolderOperator.CONTAINS,
+          value: 'example.com',
+        },
+      ],
+      SmartFolderMatchMode.ALL,
+    );
+
+    expect(matched).toBe(false);
+  });
+
   it('handles empty value operators without requiring condition values', () => {
     const matched = service.matches(
       resource({ name: '' }),

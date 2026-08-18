@@ -171,11 +171,7 @@ export class ResourceSortingService {
         children.forEach((resource, resourceIndex) => {
           resource.manualSortIndex = String(resourceIndex + 1);
           sortedResources.push(resource);
-          // Never descend into an rss folder: its items are ordered by the feed,
-          // not by the user.
-          if (resource.resourceType !== ResourceType.RSS_FOLDER) {
-            parentIds.push(resource.id);
-          }
+          parentIds.push(resource.id);
         });
       }
 
@@ -240,13 +236,6 @@ export class ResourceSortingService {
         'resource.errors.invalidManualSortOrder',
         'INVALID_MANUAL_SORT_ORDER',
       );
-    }
-    // The product, not the user, decides what an rss folder contains and in
-    // what order. Every child is reindexed, not only the ones the request
-    // names, so the guard has to cover all of them — an order listing no ids
-    // at all would otherwise pin a whole feed.
-    for (const child of children) {
-      this.resourcesService.assertNotReadOnly(child.resourceType);
     }
     const resourcesWithParents =
       await this.resourcesService.batchGetParentResources(

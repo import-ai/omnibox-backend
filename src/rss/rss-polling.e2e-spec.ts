@@ -1,7 +1,4 @@
-import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
+import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssPoll, RssPollStatus } from 'omniboxd/rss/entities/rss-poll.entity';
@@ -57,7 +54,7 @@ function buildRss(items: FeedItem[]): string {
 </rss>`;
 }
 
-const fetchMock = jest.fn().mockImplementation(() => {
+global.fetch = jest.fn().mockImplementation(() => {
   return Promise.resolve({
     ok: true,
     status: 200,
@@ -65,8 +62,7 @@ const fetchMock = jest.fn().mockImplementation(() => {
     json: () => Promise.resolve({}),
     text: () => Promise.resolve(buildRss(feedItems)),
   });
-});
-global.fetch = fetchMock as unknown as typeof fetch;
+}) as jest.MockedFunction<typeof fetch>;
 
 describe('RssPolling (e2e)', () => {
   let client: TestClient;
@@ -120,26 +116,10 @@ describe('RssPolling (e2e)', () => {
 
   const pollRepo = () => dataSource.getRepository(RssPoll);
   const contentRepo = () => dataSource.getRepository(RssItemContent);
+  const itemRepo = () => dataSource.getRepository(RssItem);
   const linkRepo = () => dataSource.getRepository(RssLink);
-  const resourceRepo = () => dataSource.getRepository(Resource);
 
-  // Item resources of a folder, i.e. the folder's children of type rss_item.
-  const folderItems = (parentId: string) =>
-    resourceRepo().find({
-      where: { parentId, resourceType: ResourceType.RSS_ITEM },
-      order: { createdAt: 'DESC' },
-    });
-
-  const itemsOfGuid = (guid: string) =>
-    resourceRepo()
-      .createQueryBuilder('resource')
-      .where('resource.resource_type = :type', {
-        type: ResourceType.RSS_ITEM,
-      })
-      .andWhere("resource.attrs->>'guid' = :guid", { guid })
-      .getMany();
-
-  it('polls a due link and creates an item resource per feed item', async () => {
+  it('polls a due link and stores its items', async () => {
     parseRssItemSpy.mockClear();
     // Drive pollUrl directly rather than pollDueLinks(): the latter scans
     // rss_links globally (it is the system-wide polling cron), so in the
@@ -162,20 +142,11 @@ describe('RssPolling (e2e)', () => {
       guid: expect.any(String),
     });
 
-    // Each feed item became a resource parented to the rss folder.
+    // Each content is related to the single link, with the item title.
     const [link] = await linkRepo().find({ where: { url: FEED_URL } });
-    const items = await folderItems(folderResourceId);
+    const items = await itemRepo().find({ where: { linkId: link.id } });
     expect(items).toHaveLength(2);
-    expect(items.map((item) => item.name).sort()).toEqual(['First', 'Second']);
-    for (const item of items) {
-      expect(item.namespaceId).toBe(client.namespace.id);
-      expect(item.userId).toBe(client.user.id);
-      expect(item.attrs).toMatchObject({
-        link_id: link.id,
-        url: FEED_URL,
-        guid: expect.any(String),
-      });
-    }
+    expect(items.map((item) => item.title).sort()).toEqual(['First', 'Second']);
 
     // These items carry only a <description> (no <content:encoded>), so each is
     // parsed by fetching its article url, and the markdown is stored.
@@ -186,11 +157,6 @@ describe('RssPolling (e2e)', () => {
       '# https://example.com/1',
       '# https://example.com/2',
     ]);
-    // The item resource carries the parsed markdown as its body, sized for the
-    // owner's storage quota.
-    const first = items.find((item) => item.name === 'First')!;
-    expect(first.content).toBe('# https://example.com/1');
-    expect(Number(first.contentSize)).toBe(first.content.length);
   });
 
   it('skips a link already polled within the window', async () => {
@@ -233,48 +199,67 @@ describe('RssPolling (e2e)', () => {
       'https://example.com/3',
     ]);
 
-    // Only the new item becomes a resource; the two existing ones are not
-    // duplicated.
-    const items = await folderItems(folderResourceId);
-    expect(items.map((item) => item.name).sort()).toEqual([
+    // The link is now related to all three contents; the two existing
+    // relations are untouched and only the new one is added.
+    const [link] = await linkRepo().find({ where: { url: FEED_URL } });
+    const items = await itemRepo().find({ where: { linkId: link.id } });
+    expect(items).toHaveLength(3);
+    expect(items.map((item) => item.title).sort()).toEqual([
       'First',
       'Second',
       'Third',
     ]);
   });
 
-  it('lists the items as children of the rss folder resource', async () => {
+  it('lists the items of an rss folder via the api', async () => {
     const response = await client
       .get(
-        `/api/v1/namespaces/${client.namespace.id}/resources/${folderResourceId}/children`,
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderResourceId}/items`,
       )
       .expect(200);
 
     const items = response.body as Array<Record<string, unknown>>;
-    expect(items.map((item) => item.name).sort()).toEqual([
+    expect(items).toHaveLength(3);
+    expect(items.map((item) => item.title).sort()).toEqual([
       'First',
       'Second',
       'Third',
     ]);
-    for (const item of items) {
-      expect(item.resource_type).toBe('rss_item');
-      // Clients gate edit/move/delete on this flag rather than on the type.
-      expect(item.read_only).toBe(true);
-    }
+    // Each item exposes the article url parsed from the stored content.
+    const first = items.find((item) => item.title === 'First');
+    expect(first).toMatchObject({
+      id: expect.any(String),
+      link_id: expect.any(String),
+      url: 'https://example.com/1',
+      created_at: expect.any(String),
+    });
   });
 
-  it('reads an item through the generic resource api', async () => {
-    const [item] = await folderItems(folderResourceId);
+  it('caps the listed items with the limit query param', async () => {
     const response = await client
-      .get(`/api/v1/namespaces/${client.namespace.id}/resources/${item.id}`)
+      .get(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderResourceId}/items?limit=2`,
+      )
+      .expect(200);
+
+    expect(response.body).toHaveLength(2);
+  });
+
+  it('gets parsed content for an item through the detail api', async () => {
+    const [item] = await itemRepo().find();
+    await contentRepo().update(item.contentId, {
+      parsedContent: '# Parsed article',
+    });
+
+    const response = await client
+      .get(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderResourceId}/items/${item.id}`,
+      )
       .expect(200);
 
     expect(response.body).toMatchObject({
       id: item.id,
-      resource_type: 'rss_item',
-      read_only: true,
-      parent_id: folderResourceId,
-      content: item.content,
+      parsed_content: '# Parsed article',
     });
   });
 
@@ -288,13 +273,7 @@ describe('RssPolling (e2e)', () => {
 
     // Same guid, changed body.
     feedItems = feedItems.map((item) =>
-      item.guid === 'guid-1'
-        ? {
-            ...item,
-            description: 'updated body',
-            link: 'https://example.com/1-updated',
-          }
-        : item,
+      item.guid === 'guid-1' ? { ...item, description: 'updated body' } : item,
     );
 
     await pollingService.pollUrl(FEED_URL);
@@ -308,16 +287,10 @@ describe('RssPolling (e2e)', () => {
     expect(JSON.parse(after.content).content).toBe('updated body');
     // The body changed, so the item is re-parsed against its new content.
     expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
-    expect(after.parsedContent).toBe('# https://example.com/1-updated');
-
-    // The re-parsed markdown reaches the item resource, and no second copy is
-    // created for the same guid.
-    const copies = await itemsOfGuid('guid-1');
-    expect(copies).toHaveLength(1);
-    expect(copies[0].content).toBe('# https://example.com/1-updated');
+    expect(after.parsedContent).toBe('# https://example.com/1');
   });
 
-  it('gives a second folder on the same url its own item resources without re-fetching or re-parsing', async () => {
+  it('relates a newly-added link sharing the url to existing contents', async () => {
     // A second folder points at the same feed url, adding another rss_links
     // row. It lives in the private space: the teamspace folder quota is already
     // taken by the folder created in beforeAll.
@@ -326,180 +299,35 @@ describe('RssPolling (e2e)', () => {
         .get(`/api/v1/namespaces/${client.namespace.id}/private`)
         .expect(200)
     ).body;
-    const secondFolderId = (
-      await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
-        .send({
-          name: 'Poller 2',
-          parent_id: privateRoot.id,
-          links: [{ url: FEED_URL }],
-        })
-        .expect(201)
-    ).body.resource.id;
+    await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
+      .send({
+        name: 'Poller 2',
+        parent_id: privateRoot.id,
+        links: [{ url: FEED_URL }],
+      })
+      .expect(201);
 
     const links = await linkRepo().find({ where: { url: FEED_URL } });
     expect(links).toHaveLength(2);
 
-    const contentsBefore = await contentRepo().find({
+    // Bypass the window and re-poll: the poll relates every link sharing the url.
+    parseRssItemSpy.mockClear();
+    await pollRepo().delete({ url: FEED_URL });
+    await pollingService.pollUrl(FEED_URL);
+
+    // Contents are still deduped globally per url.
+    const contentCount = await contentRepo().count({
       where: { url: FEED_URL },
     });
-
-    // Bypass the window and re-poll.
-    parseRssItemSpy.mockClear();
-    fetchMock.mockClear();
-    await pollRepo().delete({ url: FEED_URL });
-    await pollingService.pollUrl(FEED_URL);
-
-    // The url is fetched once for both folders, and nothing is re-parsed: the
-    // global (url, guid) cache already holds every item's markdown.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(contentCount).toBe(3);
+    // Nothing new to insert, so nothing is parsed.
     expect(parseRssItemSpy).not.toHaveBeenCalled();
-    // Contents are still deduped globally per url.
-    expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(3);
 
-    // The second folder nonetheless gets its own copy of every item, with the
-    // parsed content already in place.
-    const firstItems = await folderItems(folderResourceId);
-    const secondItems = await folderItems(secondFolderId);
-    expect(firstItems).toHaveLength(3);
-    expect(secondItems).toHaveLength(3);
-    expect(secondItems.map((item) => item.name).sort()).toEqual(
-      firstItems.map((item) => item.name).sort(),
-    );
-    // Separate rows, not shared ones.
-    const firstIds = new Set(firstItems.map((item) => item.id));
-    expect(secondItems.some((item) => firstIds.has(item.id))).toBe(false);
-    const secondLink = links.find(
-      (link) => link.resourceId === secondFolderId,
-    )!;
-    for (const item of secondItems) {
-      expect(item.attrs.link_id).toBe(secondLink.id);
-      expect(item.content).toBe(
-        contentsBefore.find((content) => content.guid === item.attrs.guid)!
-          .parsedContent,
-      );
+    // Every link is now related to all three contents.
+    for (const link of links) {
+      expect(await itemRepo().count({ where: { linkId: link.id } })).toBe(3);
     }
-
-    // Clean up: the private folder would otherwise hold the private-space rss
-    // quota, and its items would keep showing up in per-guid assertions below.
-    // Trashing a folder leaves its children in place (they merely become
-    // unreachable), so retire the link and its items explicitly.
-    await client
-      .delete(
-        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${secondFolderId}`,
-      )
-      .expect(200);
-    await linkRepo().softDelete({ id: secondLink.id });
-    await resourceRepo().softDelete({ parentId: secondFolderId });
-  });
-
-  it('fans freshly parsed content out to every copy of an item', async () => {
-    // Two folders on the same url again, this time with an item that has never
-    // been parsed, so the parse happens while both copies already exist.
-    const privateRoot = (
-      await client
-        .get(`/api/v1/namespaces/${client.namespace.id}/private`)
-        .expect(200)
-    ).body;
-    const secondFolderId = (
-      await client
-        .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
-        .send({
-          name: 'Fan Out',
-          parent_id: privateRoot.id,
-          links: [{ url: FEED_URL }],
-        })
-        .expect(201)
-    ).body.resource.id;
-
-    feedItems = [
-      {
-        title: 'Fanned',
-        link: 'https://example.com/fanned',
-        guid: 'guid-fanned',
-        description: 'fanned summary',
-      },
-    ];
-
-    // First poll: the wizard fails, so both copies are created with the feed's
-    // own summary as their body.
-    parseRssItemSpy.mockClear();
-    parseRssItemSpy.mockRejectedValueOnce(new Error('wizard unavailable'));
-    await pollRepo().delete({ url: FEED_URL });
-    await pollingService.pollUrl(FEED_URL);
-
-    let copies = await itemsOfGuid('guid-fanned');
-    expect(copies).toHaveLength(2);
-    for (const copy of copies) {
-      expect(copy.content).toBe('fanned summary');
-    }
-
-    // Second poll, backoff elapsed: the parse succeeds and its markdown lands
-    // on both copies.
-    const content = await contentRepo().findOneOrFail({
-      where: { url: FEED_URL, guid: 'guid-fanned' },
-    });
-    await contentRepo().update(content.id, {
-      parseNextAttemptAt: new Date(Date.now() - 1000),
-    });
-    parseRssItemSpy.mockClear();
-    await pollRepo().delete({ url: FEED_URL });
-    await pollingService.pollUrl(FEED_URL);
-    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
-
-    copies = await itemsOfGuid('guid-fanned');
-    expect(copies).toHaveLength(2);
-    for (const copy of copies) {
-      expect(copy.content).toBe('# https://example.com/fanned');
-      expect(Number(copy.contentSize)).toBe(copy.content.length);
-    }
-
-    await client
-      .delete(
-        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${secondFolderId}`,
-      )
-      .expect(200);
-    const secondLink = await linkRepo().findOneOrFail({
-      where: { url: FEED_URL, resourceId: secondFolderId },
-    });
-    await linkRepo().softDelete({ id: secondLink.id });
-    await resourceRepo().softDelete({ parentId: secondFolderId });
-  });
-
-  it('creates every item of a feed that repeats a title', async () => {
-    // Feeds routinely reuse titles across items; identity is the guid, so all
-    // of them must be created verbatim — neither renamed nor rejected as a
-    // name conflict.
-    feedItems = [
-      {
-        title: 'Weekly Digest',
-        link: 'https://example.com/digest-1',
-        guid: 'guid-digest-1',
-        description: 'digest one',
-      },
-      {
-        title: 'Weekly Digest',
-        link: 'https://example.com/digest-2',
-        guid: 'guid-digest-2',
-        description: 'digest two',
-      },
-      {
-        // A slash in a title would be rejected for a user-created resource.
-        title: 'AC/DC news',
-        link: 'https://example.com/slash',
-        guid: 'guid-slash',
-        description: 'slashed title',
-      },
-    ];
-
-    await pollRepo().delete({ url: FEED_URL });
-    expect(await pollingService.pollUrl(FEED_URL)).toBe('succeed');
-
-    const items = await folderItems(folderResourceId);
-    const digests = items.filter((item) => item.name === 'Weekly Digest');
-    expect(digests).toHaveLength(2);
-    expect(new Set(digests.map((item) => item.attrs.guid)).size).toBe(2);
-    expect(items.some((item) => item.name === 'AC/DC news')).toBe(true);
   });
 
   it('discovers and polls a due link through pollDueLinks', async () => {
@@ -548,9 +376,9 @@ describe('RssPolling (e2e)', () => {
     expect(stored.parsedContent).toBe('# https://example.com/embedded');
   });
 
-  it('stores pub date/title and dates the item resource by publish time', async () => {
-    // Added out of chronological order so the assertion proves the item
-    // resources are dated by publish time, not insertion order.
+  it('stores pub date/title and lists items newest published first', async () => {
+    // Added out of chronological order so the assertion proves the API sorts by
+    // publish date, not insertion order.
     const dated: FeedItem[] = [
       {
         title: 'Middle',
@@ -588,24 +416,29 @@ describe('RssPolling (e2e)', () => {
       new Date('Wed, 01 Apr 2026 00:00:00 GMT').toISOString(),
     );
 
-    // Each item resource is created_at its publish date and carries it in attrs,
-    // so the generic children listing can sort a feed newest-first.
-    const items = await folderItems(folderResourceId);
-    const byName = new Map(items.map((item) => [item.name, item]));
-    for (const item of dated) {
-      const resource = byName.get(item.title)!;
-      expect(resource.createdAt.toISOString()).toBe(
-        new Date(item.pubDate!).toISOString(),
-      );
-      expect(resource.attrs.published_at).toBe(
-        new Date(item.pubDate!).toISOString(),
-      );
-    }
-    expect(byName.get('Newest')!.createdAt.getTime()).toBeGreaterThan(
-      byName.get('Middle')!.createdAt.getTime(),
-    );
-    expect(byName.get('Middle')!.createdAt.getTime()).toBeGreaterThan(
-      byName.get('Oldest')!.createdAt.getTime(),
+    const response = await client
+      .get(
+        `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderResourceId}/items`,
+      )
+      .expect(200);
+    const items = response.body as Array<Record<string, unknown>>;
+
+    // Items are listed most-recently-published first. The three dated items
+    // sort among themselves newest-first. (Items from earlier specs had no feed
+    // date and were stored with their fetch time, so they sort ahead of these
+    // backdated ones — see the "now" fallback in the polling service.)
+    const titles = items.map((item) => item.title);
+    const newestIdx = titles.indexOf('Newest');
+    const middleIdx = titles.indexOf('Middle');
+    const oldestIdx = titles.indexOf('Oldest');
+    expect(newestIdx).toBeGreaterThanOrEqual(0);
+    expect(newestIdx).toBeLessThan(middleIdx);
+    expect(middleIdx).toBeLessThan(oldestIdx);
+
+    // The stored publish date is surfaced verbatim for a dated item.
+    const newestItem = items.find((item) => item.title === 'Newest');
+    expect(newestItem?.published_at).toBe(
+      new Date('Wed, 01 Apr 2026 00:00:00 GMT').toISOString(),
     );
   });
 
@@ -674,10 +507,6 @@ describe('RssPolling (e2e)', () => {
     const nextAt = stored.parseNextAttemptAt;
     expect(nextAt).not.toBeNull();
     expect(nextAt?.getTime() ?? 0).toBeGreaterThan(Date.now());
-
-    // The item resource still exists, seeded with the feed's own summary.
-    const [item] = await itemsOfGuid(RETRY_GUID);
-    expect(item.content).toBe('flaky body');
   });
 
   it('leaves the item alone until its parse backoff has elapsed', async () => {
@@ -717,13 +546,9 @@ describe('RssPolling (e2e)', () => {
     });
     expect(after.parsedContent).toBe('# https://example.com/flaky');
     expect(after.parseNextAttemptAt).toBeNull();
-
-    // The markdown replaces the summary the item resource started with.
-    const [item] = await itemsOfGuid(RETRY_GUID);
-    expect(item.content).toBe('# https://example.com/flaky');
   });
 
-  it('re-parses when a parsed item is edited', async () => {
+  it('re-parses and refreshes the title when a parsed item is edited', async () => {
     feedItems = [
       {
         title: 'Flaky (edited)',
@@ -748,11 +573,13 @@ describe('RssPolling (e2e)', () => {
     expect(stored.parseAttempts).toBe(0);
     expect(stored.parseNextAttemptAt).toBeNull();
 
-    // A revised item is refreshed in place, never duplicated: identity is the
-    // guid, not the title.
-    const copies = await itemsOfGuid(RETRY_GUID);
-    expect(copies).toHaveLength(1);
-    expect(copies[0].content).toBe('# https://example.com/flaky');
+    // The denormalized rss_items title follows the revised feed title, so list
+    // and detail views show the new title rather than the first-fetch one.
+    const items = await itemRepo().find({ where: { contentId: stored.id } });
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item.title).toBe('Flaky (edited)');
+    }
   });
 
   it('keeps parsed content when an unchanged item is refetched', async () => {
@@ -899,8 +726,8 @@ describe('RssPolling (e2e)', () => {
 
   it('polls a feed that lists the same guid twice without error', async () => {
     // A malformed feed repeats a guid. The two items collapse to one content row,
-    // so item creation must not try to create two resources with the same
-    // (link, guid) identity.
+    // so linking must not try to relate the same (link, content) pair twice in a
+    // single ON CONFLICT DO UPDATE (which Postgres rejects).
     feedItems = [
       {
         title: 'Dup',
@@ -920,31 +747,20 @@ describe('RssPolling (e2e)', () => {
     await pollRepo().delete({ url: FEED_URL });
     expect(await pollingService.pollUrl(FEED_URL)).toBe('succeed');
 
-    // Deduped to a single content row and a single item resource per link.
+    // Deduped to a single content row and a single rss_items relation per link.
     expect(
       await contentRepo().count({ where: { url: FEED_URL, guid: 'guid-dup' } }),
     ).toBe(1);
-    expect(await itemsOfGuid('guid-dup')).toHaveLength(1);
-  });
-
-  it('leaves a retired copy alone and polls a fresh one beside it', async () => {
-    const [item] = await itemsOfGuid('guid-dup');
-    await resourceRepo().softDelete({ id: item.id });
-
-    await pollRepo().delete({ url: FEED_URL });
-    expect(await pollingService.pollUrl(FEED_URL)).toBe('succeed');
-
-    // A retired copy is history: it no longer counts as existing (the identity
-    // index does not cover it either), so the poll creates a fresh live copy.
-    const live = await itemsOfGuid('guid-dup');
-    expect(live).toHaveLength(1);
-    expect(live[0].id).not.toBe(item.id);
-    // The retired row is untouched, not revived and not purged.
-    const retired = await resourceRepo().findOneOrFail({
-      where: { id: item.id },
-      withDeleted: true,
+    const content = await contentRepo().findOneOrFail({
+      where: { url: FEED_URL, guid: 'guid-dup' },
     });
-    expect(retired.deletedAt).not.toBeNull();
+    for (const link of await linkRepo().find({ where: { url: FEED_URL } })) {
+      expect(
+        await itemRepo().count({
+          where: { linkId: link.id, contentId: content.id },
+        }),
+      ).toBe(1);
+    }
   });
 
   it('skips a url whose poll is still in progress', async () => {

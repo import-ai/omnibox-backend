@@ -1,7 +1,5 @@
-import { Expose } from 'class-transformer';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
-  isReadOnlyResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -27,11 +25,6 @@ export class ResourceDto {
   current_permission: ResourcePermission;
   path: BreadcrumbItemDto[];
   space_type: SpaceType;
-  // Derived from the resource type: true for resources the product writes and
-  // the user may only read (rss items today). Lets clients gate edit/move/
-  // delete/duplicate generically instead of type-matching.
-  @Expose({ name: 'read_only' })
-  readOnly: boolean;
   created_at: string;
   updated_at: string;
 
@@ -55,7 +48,6 @@ export class ResourceDto {
     dto.current_permission = currentPermission;
     dto.path = path;
     dto.space_type = spaceType;
-    dto.readOnly = isReadOnlyResourceType(resource.resourceType);
     dto.created_at = resource.createdAt.toISOString();
     dto.updated_at = resource.updatedAt.toISOString();
     return dto;

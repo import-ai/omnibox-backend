@@ -1,10 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
-import {
-  isReadOnlyResourceType,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { DocType } from 'omniboxd/search/doc-type.enum';
 import { IndexedResourceDto } from 'omniboxd/search/dto/indexed-doc.dto';
@@ -88,9 +85,6 @@ export class OpenSearchService {
         content: chunk.text || '',
         attrs: resourceMeta?.attrs || {},
         resourceType: resourceMeta?.resourceType || ResourceType.DOC,
-        readOnly: isReadOnlyResourceType(
-          resourceMeta?.resourceType || ResourceType.DOC,
-        ),
       });
     }
 

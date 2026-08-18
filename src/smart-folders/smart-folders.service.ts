@@ -188,13 +188,24 @@ export class SmartFoldersService implements ISmartFoldersService {
         config.rootScope,
         visibleResources,
       );
+    // Smart folders must never surface subscription (RSS) folders or anything
+    // living inside them: such an entry renders an expandable node that errors
+    // when opened. RSS folders can't be a parent of a resource today, so the
+    // child check is defensive.
+    const rssFolderIds = new Set(
+      visibleResources
+        .filter((resource) => resource.resourceType === ResourceType.RSS_FOLDER)
+        .map((resource) => resource.id),
+    );
     const visibleIds = visibleResources
       .filter((resource) => scopedResourceIds.has(resource.id))
       .filter((resource) => resource.id !== resourceId)
-      // Only other smart folders are excluded (a virtual set cannot be a member
-      // of another). Every real type is a candidate, rss folders and rss items
-      // included: they are matched exactly like folders and docs are.
       .filter((resource) => resource.resourceType !== ResourceType.SMART_FOLDER)
+      .filter(
+        (resource) =>
+          resource.resourceType !== ResourceType.RSS_FOLDER &&
+          !(resource.parentId && rssFolderIds.has(resource.parentId)),
+      )
       .map((resource) => resource.id);
 
     if (visibleIds.length <= 0) {
@@ -265,7 +276,11 @@ export class SmartFoldersService implements ISmartFoldersService {
     const resource = await this.resourceRepository.findOne({
       where: { namespaceId, id: resourceId },
     });
-    if (!resource || resource.resourceType === ResourceType.SMART_FOLDER) {
+    if (
+      !resource ||
+      resource.resourceType === ResourceType.SMART_FOLDER ||
+      resource.resourceType === ResourceType.RSS_FOLDER
+    ) {
       return false;
     }
 

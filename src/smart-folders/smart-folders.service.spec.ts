@@ -81,7 +81,7 @@ describe('SmartFoldersService.listChildren', () => {
         name: 'Matched rss item resource',
         parentId: 'rss-folder-child-id',
         namespaceId: 'namespace-id',
-        resourceType: ResourceType.RSS_ITEM,
+        resourceType: ResourceType.DOC,
         attrs: {},
         tagIds: [],
         createdAt: new Date('2026-05-18T00:00:00.000Z'),
@@ -155,16 +155,10 @@ describe('SmartFoldersService.listChildren', () => {
         id: expect.any(Object),
       },
     });
-    expect(result.map((resource) => resource.id)).toEqual([
-      'matched-doc-id',
-      'rss-folder-child-id',
-      'rss-item-resource-id',
-    ]);
+    expect(result.map((resource) => resource.id)).toEqual(['matched-doc-id']);
   });
 
-  // Only other smart folders are excluded. An rss folder is collected like any
-  // other container and an rss item like any other content resource.
-  it('includes rss folders and the items inside them', async () => {
+  it('excludes rss folders and resources inside them', async () => {
     const { service } = createService();
 
     const result = await service.listChildren(
@@ -174,8 +168,8 @@ describe('SmartFoldersService.listChildren', () => {
     );
 
     const ids = result.map((resource) => resource.id);
-    expect(ids).toContain('rss-folder-child-id');
-    expect(ids).toContain('rss-item-resource-id');
-    expect(ids).not.toContain('smart-folder-child-id');
+    expect(ids).not.toContain('rss-folder-child-id');
+    expect(ids).not.toContain('rss-item-resource-id');
+    expect(ids).toEqual(['matched-doc-id']);
   });
 });

@@ -437,10 +437,7 @@ export class StreamService implements OnModuleDestroy {
   ): PrivateSearchResourceDto['type'] {
     if (
       resourceType === ResourceType.FOLDER ||
-      resourceType === ResourceType.SMART_FOLDER ||
-      // An rss folder is a container like any other: attached as chat context
-      // it expands to the articles filed under it.
-      resourceType === ResourceType.RSS_FOLDER
+      resourceType === ResourceType.SMART_FOLDER
     ) {
       return 'folder';
     }

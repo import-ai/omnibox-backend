@@ -26,6 +26,7 @@ import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
 import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
+import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { FeaturePreviewsModule } from 'omniboxd/feature-previews/feature-previews.module';
 import { FilesModule } from 'omniboxd/files/files.module';
@@ -81,6 +82,7 @@ import { AddSmartFolders1779344088692 } from 'omniboxd/migrations/1779344088692-
 import { AddLastHeartbeatToTasks1780652045516 } from 'omniboxd/migrations/1780652045516-add-last-heartbeat-to-tasks';
 import { MigrateFileReaderTaskFunctions1781259717294 } from 'omniboxd/migrations/1781259717294-migrate-file-reader-task-functions';
 import { AddWorkerIdToTasks1781511514000 } from 'omniboxd/migrations/1781511514000-add-worker-id-to-tasks';
+import { ConversationShares1781600000000 } from 'omniboxd/migrations/1781600000000-conversation-shares';
 import { AddNumSchedulesToTasks1784095735711 } from 'omniboxd/migrations/1784095735711-add-num-schedules-to-tasks';
 import { BackfillUserEmailFromOauthBindings1784109716584 } from 'omniboxd/migrations/1784109716584-backfill-user-email-from-oauth-bindings';
 import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-feature-previews';
@@ -194,6 +196,7 @@ export class AppModule implements NestModule {
         GroupsModule,
         PermissionsModule,
         ConversationsModule,
+        ConversationSharesModule,
         MessagesModule,
         SearchModule,
         InvitationsModule,
@@ -287,6 +290,7 @@ export class AppModule implements NestModule {
               AddLastHeartbeatToTasks1780652045516,
               MigrateFileReaderTaskFunctions1781259717294,
               AddWorkerIdToTasks1781511514000,
+              ConversationShares1781600000000,
               AddNumSchedulesToTasks1784095735711,
               BackfillUserEmailFromOauthBindings1784109716584,
               FeaturePreviews1784521510168,

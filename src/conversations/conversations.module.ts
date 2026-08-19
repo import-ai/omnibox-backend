@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsController } from 'omniboxd/conversations/conversations.controller';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
@@ -20,6 +21,7 @@ import { UserModule } from '../user/user.module';
     UserModule,
     TasksModule,
     SharesModule,
+    ConversationSharesModule,
     TypeOrmModule.forFeature([Conversation]),
   ],
   providers: [ConversationsService],

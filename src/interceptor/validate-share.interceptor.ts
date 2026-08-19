@@ -83,6 +83,18 @@ export class ValidateShareInterceptor implements NestInterceptor {
       }
     }
 
+    // Chat-only shares expose their resources to the assistant, not to visitors.
+    if (validateOptions.requireResources) {
+      if (validatedShare.shareType === ShareType.CHAT_ONLY) {
+        const message = this.i18n.t('share.errors.resourceNotAllowed');
+        throw new AppException(
+          message,
+          'RESOURCE_NOT_ALLOWED',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+    }
+
     // Attach the validated share to the request for the @ValidatedShare decorator
     (request as any).validatedShare = validatedShare;
 

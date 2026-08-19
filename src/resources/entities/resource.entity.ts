@@ -10,6 +10,77 @@ export enum ResourceType {
   FOLDER = 'folder',
   SMART_FOLDER = 'smart_folder',
   RSS_FOLDER = 'rss_folder',
+  // A single polled feed item. Always a child of an RSS_FOLDER, written only by
+  // the poller and read-only to users.
+  RSS_ITEM = 'rss_item',
+}
+
+// Resources whose content is owned by the product (written by a background
+// job), not by the user: every user-facing mutation is rejected and clients
+// surface them as read-only.
+export const READ_ONLY_RESOURCE_TYPES: ResourceType[] = [ResourceType.RSS_ITEM];
+
+export function isReadOnlyResourceType(resourceType: ResourceType): boolean {
+  return READ_ONLY_RESOURCE_TYPES.includes(resourceType);
+}
+
+// Types whose bytes are never charged to the owning user's storage quota.
+// An rss item is written by the poller, read-only to its owner and stored once
+// per subscribing folder, so the same article would be billed N times for
+// content the user never uploaded and cannot delete on its own. Their
+// `content_size` is still recorded — it is real data about the row — but every
+// storage_usages adjustment skips them, symmetrically: a type listed here is
+// never charged on create/update/restore and never refunded on delete, so
+// usage cannot drift in either direction.
+export const STORAGE_EXEMPT_RESOURCE_TYPES: ResourceType[] = [
+  ResourceType.RSS_ITEM,
+];
+
+export function isStorageExemptResourceType(
+  resourceType: ResourceType,
+): boolean {
+  return STORAGE_EXEMPT_RESOURCE_TYPES.includes(resourceType);
+}
+
+// Types that carry side-car state their own service owns (rss folders need
+// rss_links plus feed validation and a quota check, smart folders need a
+// config row), so the generic create/duplicate endpoints must refuse them:
+// a row created there would be a permanently inert folder that also escapes
+// its tier limit.
+export const SERVICE_OWNED_RESOURCE_TYPES: ResourceType[] = [
+  ResourceType.RSS_FOLDER,
+  ResourceType.SMART_FOLDER,
+];
+
+export function isServiceOwnedResourceType(
+  resourceType: ResourceType,
+): boolean {
+  return SERVICE_OWNED_RESOURCE_TYPES.includes(resourceType);
+}
+
+// Types that hold user content. Folders of every kind are containers and rss
+// items belong to their subscription, so listings of "what the user has"
+// (recent, tag lookups, staleness) select these and nothing else.
+export const CONTENT_RESOURCE_TYPES: ResourceType[] = [
+  ResourceType.DOC,
+  ResourceType.LINK,
+  ResourceType.FILE,
+];
+
+export function isContentResourceType(resourceType: ResourceType): boolean {
+  return CONTENT_RESOURCE_TYPES.includes(resourceType);
+}
+
+// Types that actually parent other rows. A smart folder is a virtual result set
+// and never appears in an ancestor chain, so walks up the tree looking for a
+// containing folder consider exactly these.
+export const CONTAINER_RESOURCE_TYPES: ResourceType[] = [
+  ResourceType.FOLDER,
+  ResourceType.RSS_FOLDER,
+];
+
+export function isContainerResourceType(resourceType: ResourceType): boolean {
+  return CONTAINER_RESOURCE_TYPES.includes(resourceType);
 }
 
 @Entity('resources')

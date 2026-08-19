@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Query, UseInterceptors } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Query,
+  UseInterceptors,
+} from '@nestjs/common';
 import { Public } from 'omniboxd/auth';
 import {
   ValidatedShare,
@@ -56,18 +63,14 @@ export class InternalSharedResourcesController {
   async listResourceChildren(
     @ValidatedShare() share: Share,
     @Param('resourceId') resourceId: string,
-    @Query('offset') offset: number = 0,
-    @Query('limit') limit: number = 20,
+    @Query('offset', new ParseIntPipe({ optional: true })) offset: number = 0,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 20,
   ) {
-    const children =
-      await this.sharedResourcesService.getSharedResourceChildren(
-        share,
-        resourceId,
-      );
-    return {
-      resources: children.slice(offset, offset + limit),
-      total: children.length,
-    };
+    return await this.sharedResourcesService.getSharedResourceChildrenPage(
+      share,
+      resourceId,
+      { limit, offset },
+    );
   }
 
   @Public()

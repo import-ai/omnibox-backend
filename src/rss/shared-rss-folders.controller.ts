@@ -18,10 +18,14 @@ import { RssFoldersService } from 'omniboxd/rss/rss-folders.service';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
-// Viewer-side read path for a shared rss folder's items. Items are the folder's
-// content (not resources), so they are authorized purely by the folder's share
-// via SharedResourcesService.getAndValidateResource — no per-item share exists,
-// which is why individual items are not independently shareable.
+// Viewer-side read path for a shared rss folder's items, retained for older
+// clients (an item is a resource now, so the generic shared-resource endpoints
+// serve it too). Authorization is unchanged: the items are reached purely
+// through the folder's share via
+// SharedResourcesService.getAndValidateResource, and the service then looks
+// items up under that folder, so an item is visible only when the share covers
+// its parent rss folder. There is still no per-item share — individual items
+// are not independently shareable.
 @Controller('api/v1/shares/:shareId/resources/:resourceId/rss-items')
 @UseInterceptors(ValidateShareInterceptor)
 export class SharedRssFoldersController {
@@ -31,7 +35,7 @@ export class SharedRssFoldersController {
   ) {}
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get()
   async listItems(
     @Param('resourceId') resourceId: string,
@@ -52,7 +56,7 @@ export class SharedRssFoldersController {
   }
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get(':itemId')
   async getItem(
     @Param('resourceId') resourceId: string,

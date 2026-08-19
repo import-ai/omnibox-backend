@@ -31,7 +31,13 @@ import {
 } from 'typeorm';
 
 import { ResourceMetaDto } from './dto/resource-meta.dto';
-import { Resource, ResourceType } from './entities/resource.entity';
+import {
+  isReadOnlyResourceType,
+  isStorageExemptResourceType,
+  READ_ONLY_RESOURCE_TYPES,
+  Resource,
+  ResourceType,
+} from './entities/resource.entity';
 
 const TASK_PRIORITY = 5;
 
@@ -106,8 +112,16 @@ export class ResourcesService {
     }
   }
 
-  private assertResourceCanBeParent(resource: ResourceMetaDto): void {
-    if (resource.resourceType === ResourceType.SMART_FOLDER) {
+  /**
+   * Containment rules of the resource tree. An rss folder holds exactly its
+   * polled items and nothing else, an item exists nowhere but inside one and
+   * is itself a leaf; smart folders are virtual and hold nothing at all.
+   */
+  private assertContainment(
+    parent: ResourceMetaDto | null,
+    childResourceType: ResourceType,
+  ): void {
+    if (parent?.resourceType === ResourceType.SMART_FOLDER) {
       const message = this.i18n.t('resource.errors.smartFolderCannotBeParent');
       throw new AppException(
         message,
@@ -115,30 +129,65 @@ export class ResourcesService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
-    if (resource.resourceType === ResourceType.RSS_FOLDER) {
-      const message = this.i18n.t('resource.errors.rssFolderCannotBeParent');
+    if (parent?.resourceType === ResourceType.RSS_ITEM) {
+      const message = this.i18n.t('resource.errors.rssItemCannotBeParent');
       throw new AppException(
         message,
-        'RSS_FOLDER_CANNOT_BE_PARENT',
+        'RSS_ITEM_CANNOT_BE_PARENT',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (
+      parent?.resourceType === ResourceType.RSS_FOLDER &&
+      childResourceType !== ResourceType.RSS_ITEM
+    ) {
+      const message = this.i18n.t(
+        'resource.errors.rssFolderChildMustBeRssItem',
+      );
+      throw new AppException(
+        message,
+        'RSS_FOLDER_CHILD_MUST_BE_RSS_ITEM',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    if (
+      childResourceType === ResourceType.RSS_ITEM &&
+      parent?.resourceType !== ResourceType.RSS_FOLDER
+    ) {
+      const message = this.i18n.t(
+        'resource.errors.rssItemParentMustBeRssFolder',
+      );
+      throw new AppException(
+        message,
+        'RSS_ITEM_PARENT_MUST_BE_RSS_FOLDER',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
   }
 
+  /**
+   * Rejects user-facing writes to resources the product owns rather than the
+   * user. Poller-owned rss items are the only read-only type today; the poller
+   * writes them through the internal option on create/update.
+   */
+  assertNotReadOnly(resourceType: ResourceType): void {
+    if (!isReadOnlyResourceType(resourceType)) {
+      return;
+    }
+    const message = this.i18n.t('resource.errors.readOnly');
+    throw new AppException(message, 'RESOURCE_READ_ONLY', HttpStatus.FORBIDDEN);
+  }
+
   private async assertCanUseAsParentResource(
     namespaceId: string,
     parentId: string | null | undefined,
+    childResourceType: ResourceType,
     entityManager?: EntityManager,
   ): Promise<ResourceMetaDto | null> {
-    if (!parentId) {
-      return null;
-    }
-    const parent = await this.getResourceMetaOrFail(
-      namespaceId,
-      parentId,
-      entityManager,
-    );
-    this.assertResourceCanBeParent(parent);
+    const parent = parentId
+      ? await this.getResourceMetaOrFail(namespaceId, parentId, entityManager)
+      : null;
+    this.assertContainment(parent, childResourceType);
     return parent;
   }
 
@@ -430,6 +479,38 @@ export class ResourcesService {
     });
   }
 
+  /**
+   * Read just the `content` column for a known set of resources.
+   *
+   * A folder listing needs every child's metadata to sort and permission-filter
+   * before it knows which rows the page holds, but it only ever shows a content
+   * prefix for the rows it returns. Selecting `content` alongside the metadata
+   * would drag the whole folder's article bodies out of the toast table — tens
+   * of megabytes for an rss folder holding a few thousand items — to render ten
+   * hundred-character previews. Fetching content separately, keyed by the ids
+   * actually on the page, keeps that read proportional to the page.
+   */
+  async getContents(
+    namespaceId: string,
+    resourceIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<Map<string, string>> {
+    if (resourceIds.length === 0) {
+      return new Map();
+    }
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    const rows = await repo.find({
+      select: ['id', 'content'],
+      where: {
+        namespaceId,
+        id: In(resourceIds),
+      },
+    });
+    return new Map(rows.map((row) => [row.id, row.content]));
+  }
+
   async getAllSubResources(
     namespaceId: string,
     parentIds: string[],
@@ -683,6 +764,7 @@ export class ResourcesService {
     },
     tx?: Transaction,
     autoRenameOnConflict: boolean = false,
+    options?: { internal?: boolean },
   ): Promise<void> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
@@ -693,34 +775,12 @@ export class ResourcesService {
           props,
           tx,
           autoRenameOnConflict,
+          options,
         ),
       );
     }
 
     const entityManager = tx.entityManager;
-
-    if (props.parentId) {
-      await this.assertCanUseAsParentResource(
-        namespaceId,
-        props.parentId,
-        entityManager,
-      );
-      const parents = await this.getParentResourcesOrFail(
-        namespaceId,
-        props.parentId,
-        entityManager,
-      );
-      if (parents.find((resource) => resource.id === resourceId)) {
-        const message = this.i18n.t(
-          'resource.errors.cannotSetParentToSubResource',
-        );
-        throw new AppException(
-          message,
-          'CANNOT_SET_PARENT_TO_SUB_RESOURCE',
-          HttpStatus.UNPROCESSABLE_ENTITY,
-        );
-      }
-    }
 
     const repo = entityManager.getRepository(Resource);
 
@@ -740,9 +800,40 @@ export class ResourcesService {
       );
     }
 
-    // Validate and sanitize resource name
+    if (!options?.internal) {
+      this.assertNotReadOnly(oldResource.resourceType);
+    }
+
+    if (props.parentId) {
+      await this.assertCanUseAsParentResource(
+        namespaceId,
+        props.parentId,
+        oldResource.resourceType,
+        entityManager,
+      );
+      const parents = await this.getParentResourcesOrFail(
+        namespaceId,
+        props.parentId,
+        entityManager,
+      );
+      if (parents.find((resource) => resource.id === resourceId)) {
+        const message = this.i18n.t(
+          'resource.errors.cannotSetParentToSubResource',
+        );
+        throw new AppException(
+          message,
+          'CANNOT_SET_PARENT_TO_SUB_RESOURCE',
+          HttpStatus.UNPROCESSABLE_ENTITY,
+        );
+      }
+    }
+
+    // Validate and sanitize resource name. Item names are feed titles: they are
+    // neither unique nor slash-free, and nothing addresses an item by name.
+    const skipNameResolution =
+      oldResource.resourceType === ResourceType.RSS_ITEM;
     let resolvedName = props.name;
-    if (resolvedName !== undefined) {
+    if (resolvedName !== undefined && !skipNameResolution) {
       resolvedName = this.validateResourceName(
         resolvedName,
         autoRenameOnConflict,
@@ -750,7 +841,7 @@ export class ResourcesService {
     }
 
     // Resolve unique name on rename
-    if (resolvedName !== undefined && !props.parentId) {
+    if (resolvedName !== undefined && !skipNameResolution && !props.parentId) {
       resolvedName = await this.resolveUniqueName(
         namespaceId,
         oldResource.parentId,
@@ -761,7 +852,7 @@ export class ResourcesService {
       );
     }
     // Resolve unique name on move (or move + rename)
-    if (props.parentId) {
+    if (props.parentId && !skipNameResolution) {
       const effectiveName = resolvedName ?? oldResource.name;
       resolvedName = await this.resolveUniqueName(
         namespaceId,
@@ -806,8 +897,15 @@ export class ResourcesService {
       },
     });
 
-    // Update storage usage if content changed and userId is present
-    if (props.content !== undefined && resource.userId) {
+    // Update storage usage if content changed and userId is present. A
+    // storage-exempt type keeps its content_size up to date above but is never
+    // charged, so the parse fan-out that replaces a seeded feed snippet with the
+    // parsed markdown costs its owner nothing.
+    if (
+      props.content !== undefined &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       const contentSizeDiff =
         bigintStringToNumber(resource.contentSize) -
         bigintStringToNumber(oldResource.contentSize);
@@ -848,35 +946,47 @@ export class ResourcesService {
     },
     tx?: Transaction,
     autoRenameOnConflict: boolean = false,
+    options?: { internal?: boolean },
   ): Promise<Resource> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.createResource(props, tx, autoRenameOnConflict),
+        this.createResource(props, tx, autoRenameOnConflict, options),
       );
     }
 
     const entityManager = tx.entityManager;
 
+    if (!options?.internal) {
+      this.assertNotReadOnly(props.resourceType);
+    }
+
     await this.assertCanUseAsParentResource(
       props.namespaceId,
       props.parentId,
+      props.resourceType,
       entityManager,
     );
 
-    // Validate and sanitize resource name
-    let resolvedName = this.validateResourceName(
-      props.name,
-      autoRenameOnConflict,
-    );
-    // Resolve unique name (handles auto-rename on conflict)
-    resolvedName = await this.resolveUniqueName(
-      props.namespaceId,
-      props.parentId,
-      resolvedName,
-      autoRenameOnConflict,
-      undefined,
-      entityManager,
-    );
+    // Item names are feed titles, which repeat freely within one feed and may
+    // contain slashes. Their identity is the guid, so skip both the slash check
+    // and the uniqueness check that would otherwise rename or reject them.
+    let resolvedName = props.name;
+    if (props.resourceType !== ResourceType.RSS_ITEM) {
+      // Validate and sanitize resource name
+      resolvedName = this.validateResourceName(
+        props.name,
+        autoRenameOnConflict,
+      );
+      // Resolve unique name (handles auto-rename on conflict)
+      resolvedName = await this.resolveUniqueName(
+        props.namespaceId,
+        props.parentId,
+        resolvedName,
+        autoRenameOnConflict,
+        undefined,
+        entityManager,
+      );
+    }
 
     // Create props with resolved name
     const createProps = {
@@ -898,7 +1008,11 @@ export class ResourcesService {
           HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
-      if (createProps.userId && file.size !== null) {
+      if (
+        createProps.userId &&
+        file.size !== null &&
+        !isStorageExemptResourceType(createProps.resourceType)
+      ) {
         await this.storageUsagesService.updateStorageUsage(
           createProps.namespaceId,
           createProps.userId,
@@ -921,7 +1035,14 @@ export class ResourcesService {
       }),
     );
 
-    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
+    // content_size is stored for every type; only the quota charge is skipped
+    // for a storage-exempt one (the poller's internal create path lands here
+    // too).
+    if (
+      bigintStringToNumber(resource.contentSize) > 0 &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       await this.storageUsagesService.updateStorageUsage(
         resource.namespaceId,
         resource.userId,
@@ -992,6 +1113,22 @@ export class ResourcesService {
       );
     }
 
+    // A read-only resource is only ever trashed by the product that owns it —
+    // an rss item goes with the subscription that stopped carrying it — so
+    // bringing it back is not the user's call either.
+    this.assertNotReadOnly(resource.resourceType);
+
+    // The caller may have re-parented the resource (e.g. to the user root when
+    // its own parent is gone), so re-check containment against where it lands.
+    const parent = resource.parentId
+      ? await this.getResourceMeta(
+          namespaceId,
+          resource.parentId,
+          tx.entityManager,
+        )
+      : null;
+    this.assertContainment(parent, resource.resourceType);
+
     const result = await tx.entityManager.restore(Resource, {
       namespaceId,
       id: resourceId,
@@ -1007,7 +1144,11 @@ export class ResourcesService {
         manualSortUnspecifiedAt: new Date(),
       },
     );
-    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
+    if (
+      bigintStringToNumber(resource.contentSize) > 0 &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       await this.storageUsagesService.updateStorageUsage(
         namespaceId,
         resource.userId,
@@ -1016,7 +1157,11 @@ export class ResourcesService {
         tx,
       );
     }
-    if (resource.fileId && resource.userId) {
+    if (
+      resource.fileId &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       const fileMeta = await this.filesService.headFile(resource.fileId);
       if (fileMeta && fileMeta.contentLength) {
         await this.storageUsagesService.updateStorageUsage(
@@ -1048,7 +1193,13 @@ export class ResourcesService {
   ): Map<string, number> {
     const totals = new Map<string, number>();
     for (const resource of resources) {
-      if (!resource.userId) {
+      // Nothing was charged for a storage-exempt type, so nothing may be
+      // refunded for it either — refunding here would drive the owner's usage
+      // negative every time a feed's items are retired.
+      if (
+        !resource.userId ||
+        isStorageExemptResourceType(resource.resourceType)
+      ) {
         continue;
       }
       const amount = getAmount(resource);
@@ -1160,6 +1311,7 @@ export class ResourcesService {
     namespaceId: string,
     resourceIds: string[],
     tx: Transaction,
+    options?: { internal?: boolean },
   ): Promise<string[]> {
     if (resourceIds.length === 0) {
       return [];
@@ -1169,6 +1321,11 @@ export class ResourcesService {
       where: { namespaceId, id: In(resourceIds), parentId: Not(IsNull()) },
       lock: { mode: 'pessimistic_write' },
     });
+    if (!options?.internal) {
+      for (const resource of resources) {
+        this.assertNotReadOnly(resource.resourceType);
+      }
+    }
     const deleteIds = resources.map((resource) => resource.id);
     if (deleteIds.length === 0) {
       return [];
@@ -1237,11 +1394,16 @@ export class ResourcesService {
     if (resourceIds.length === 0) {
       return { moveIds: [], nameConflictIds: [] };
     }
-    await this.assertCanUseAsParentResource(
+    const target = await this.getResourceMetaOrFail(
       namespaceId,
       targetId,
       entityManager,
     );
+    // The target must be able to hold ordinary resources: a smart folder is
+    // virtual, an rss folder holds only its own (read-only) items and an rss
+    // item is a leaf. Read-only resources are never movable, so checking the
+    // target against a plain folder covers every legal batch.
+    this.assertContainment(target, ResourceType.FOLDER);
     const targetParents = await this.getParentResourcesOrFail(
       namespaceId,
       targetId,
@@ -1260,6 +1422,9 @@ export class ResourcesService {
       candidates,
       entityManager,
     );
+    for (const resource of resourceMap.values()) {
+      this.assertNotReadOnly(resource.resourceType);
+    }
     const targetChildren = await this.getChildren(
       namespaceId,
       [targetId],
@@ -1413,12 +1578,18 @@ export class ResourcesService {
       );
     }
 
+    this.assertNotReadOnly(resource.resourceType);
+
     await tx.entityManager.softDelete(Resource, {
       namespaceId,
       id: resourceId,
     });
 
-    if (bigintStringToNumber(resource.contentSize) > 0 && resource.userId) {
+    if (
+      bigintStringToNumber(resource.contentSize) > 0 &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       await this.storageUsagesService.updateStorageUsage(
         namespaceId,
         resource.userId,
@@ -1428,7 +1599,11 @@ export class ResourcesService {
       );
     }
 
-    if (resource.fileId && resource.userId) {
+    if (
+      resource.fileId &&
+      resource.userId &&
+      !isStorageExemptResourceType(resource.resourceType)
+    ) {
       const fileMeta = await this.filesService.headFile(resource.fileId);
       if (fileMeta && fileMeta.contentLength) {
         await this.storageUsagesService.updateStorageUsage(
@@ -1482,7 +1657,13 @@ export class ResourcesService {
       .andWhere('resource.deleted_at IS NOT NULL')
       .andWhere('resource.deleted_at >= :cutoffDate', { cutoffDate })
       .andWhere('resource.parent_id IS NOT NULL')
-      .andWhere('resource.permanent_deleted_at IS NULL');
+      .andWhere('resource.permanent_deleted_at IS NULL')
+      // Items retired with their subscription are neither restorable nor
+      // individually deletable, so listing them would only bury the user's own
+      // deleted documents under hundreds of articles.
+      .andWhere('resource.resource_type NOT IN (:...readOnlyTypes)', {
+        readOnlyTypes: READ_ONLY_RESOURCE_TYPES,
+      });
 
     if (search) {
       queryBuilder.andWhere('resource.name ILIKE :search', {
@@ -1546,6 +1727,11 @@ export class ResourcesService {
         HttpStatus.BAD_REQUEST,
       );
     }
+
+    // Retired rss items are never listed in the trash and are not the user's to
+    // delete: they are dropped with their subscription, or restored with their
+    // folder.
+    this.assertNotReadOnly(resource.resourceType);
 
     // Check if already permanently deleted
     if (resource.permanentDeletedAt) {
@@ -1660,6 +1846,11 @@ export class ResourcesService {
             { contentSize: numberToBigintString(contentSize) },
           );
           if (result.affected !== 1) {
+            return;
+          }
+          // The backfilled content_size is kept for every type; only the quota
+          // charge is skipped for a storage-exempt one.
+          if (isStorageExemptResourceType(resource.resourceType)) {
             return;
           }
           await this.storageUsagesService.updateStorageUsage(

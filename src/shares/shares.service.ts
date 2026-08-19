@@ -135,6 +135,17 @@ export class SharesService {
       throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
+    // A chat-only share still has to exist and resolve, but its visitor gets
+    // no resource metadata: no name, no type, no timestamps, no attrs.
+    if (share.shareType === ShareType.CHAT_ONLY) {
+      const owner = await this.userService.find(ownerUserId);
+      return PublicShareInfoDto.fromResourceMeta(
+        share,
+        undefined,
+        owner.username,
+      );
+    }
+
     let hasChildren = false;
     if (resource.resourceType === ResourceType.SMART_FOLDER) {
       const children = await this.smartFoldersService.listChildren(

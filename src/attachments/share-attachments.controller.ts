@@ -16,7 +16,7 @@ export class ShareAttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get(':attachmentId')
   async downloadAttachment(
     @Param('resourceId') resourceId: string,

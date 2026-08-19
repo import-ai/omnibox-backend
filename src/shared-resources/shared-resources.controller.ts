@@ -28,7 +28,7 @@ export class SharedResourcesController {
   ) {}
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get(':resourceId')
   async getResource(
     @Param('resourceId') resourceId: string,
@@ -45,7 +45,7 @@ export class SharedResourcesController {
   // stays a plain array (the folder view shares one client for both listings);
   // the full count is reported in X-Total-Count.
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get(':resourceId/children')
   async getResourceChildren(
     @Param('resourceId') resourceId: string,

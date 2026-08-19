@@ -492,3 +492,111 @@ describe('StreamService redis stream replay', () => {
     expect(client.quit).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('StreamService citations on a chat-only share', () => {
+  const citations = [
+    { title: 'Secret roadmap', snippet: 'Q4 slip', link: 'resource-id' },
+  ];
+
+  it.each(['bos', 'delta'] as const)(
+    'withholds %s citations from the visitor while keeping them stored',
+    async (responseType) => {
+      const stored: Record<string, any>[] = [];
+      const service = createService({});
+      (service as any).messagesService = {
+        create: jest.fn().mockImplementation((_ns, _c, _u, dto) => {
+          stored.push(dto.attrs);
+          return { id: 'message-id', createdAt: new Date(), message: {} };
+        }),
+        updateDelta: jest.fn().mockImplementation((_id, chunk) => {
+          stored.push(chunk.attrs);
+          return { message: {} };
+        }),
+      };
+      const sent: string[] = [];
+      const handler = service.agentHandler(
+        'namespace-id',
+        'conversation-id',
+        '',
+        (data: string) => {
+          sent.push(data);
+          return Promise.resolve();
+        },
+        true,
+      );
+
+      await handler(
+        JSON.stringify({
+          response_type: responseType,
+          role: 'assistant',
+          message: {},
+          attrs: { citations },
+        }),
+        { messageId: 'message-id' } as any,
+      );
+
+      const payload = JSON.parse(sent[0]);
+      expect(payload.attrs?.citations).toBeUndefined();
+      expect(sent[0]).not.toContain('Secret roadmap');
+      // The assistant's own record keeps them.
+      expect(stored[0]?.citations).toEqual(citations);
+    },
+  );
+
+  it('leaves citations intact on a share that grants resources', async () => {
+    const service = createService({});
+    (service as any).messagesService = {
+      updateDelta: jest.fn().mockResolvedValue({ message: {} }),
+    };
+    const sent: string[] = [];
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      '',
+      (data: string) => {
+        sent.push(data);
+        return Promise.resolve();
+      },
+      false,
+    );
+
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: {},
+        attrs: { citations },
+      }),
+      { messageId: 'message-id' } as any,
+    );
+
+    expect(JSON.parse(sent[0]).attrs.citations).toEqual(citations);
+  });
+
+  it('passes the chat-only flag through from a chat-only share', async () => {
+    const service = createService({ sharedResourcesService: {} as any });
+    const createAgentStream = jest
+      .spyOn(service as any, 'createAgentStream')
+      .mockResolvedValue({} as any);
+
+    await service.createShareAgentStream(
+      {
+        id: 'share-id',
+        namespaceId: 'namespace-id',
+        shareType: 'chat_only',
+      } as any,
+      { conversation_id: 'conversation-id', tools: [] } as any,
+      'request-id',
+      'ask',
+    );
+
+    expect(createAgentStream).toHaveBeenCalledWith(
+      'namespace-id',
+      expect.anything(),
+      'request-id',
+      'ask',
+      '',
+      'share-id',
+      true,
+    );
+  });
+});

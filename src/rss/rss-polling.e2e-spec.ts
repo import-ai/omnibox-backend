@@ -278,13 +278,14 @@ describe('RssPolling (e2e)', () => {
     });
   });
 
-  it('refreshes the content of an existing guid on refetch', async () => {
+  it('ignores a rewritten body on refetch', async () => {
     parseRssItemSpy.mockClear();
     await pollRepo().delete({ url: FEED_URL });
 
     const before = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: 'guid-1' },
     });
+    const [copyBefore] = await itemsOfGuid('guid-1');
 
     // Same guid, changed body.
     feedItems = feedItems.map((item) =>
@@ -299,22 +300,21 @@ describe('RssPolling (e2e)', () => {
 
     await pollingService.pollUrl(FEED_URL);
 
-    // No new row for the guid, but its content is refreshed.
+    // An item is a snapshot of its first sighting: the row is written once, so
+    // the revised body is not stored, not re-parsed and never reaches the copy.
     expect(await contentRepo().count({ where: { url: FEED_URL } })).toBe(3);
     const after = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: 'guid-1' },
     });
     expect(after.id).toBe(before.id);
-    expect(JSON.parse(after.content).content).toBe('updated body');
-    // The body changed, so the item is re-parsed against its new content.
-    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
-    expect(after.parsedContent).toBe('# https://example.com/1-updated');
+    expect(JSON.parse(after.content).content).toBe('first body');
+    expect(parseRssItemSpy).not.toHaveBeenCalled();
+    expect(after.parsedContent).toBe(before.parsedContent);
 
-    // The re-parsed markdown reaches the item resource, and no second copy is
-    // created for the same guid.
     const copies = await itemsOfGuid('guid-1');
     expect(copies).toHaveLength(1);
-    expect(copies[0].content).toBe('# https://example.com/1-updated');
+    expect(copies[0].id).toBe(copyBefore.id);
+    expect(copies[0].content).toBe(copyBefore.content);
   });
 
   it('gives a second folder on the same url its own item resources without re-fetching or re-parsing', async () => {
@@ -393,9 +393,9 @@ describe('RssPolling (e2e)', () => {
     await resourceRepo().softDelete({ parentId: secondFolderId });
   });
 
-  it('fans freshly parsed content out to every copy of an item', async () => {
-    // Two folders on the same url again, this time with an item that has never
-    // been parsed, so the parse happens while both copies already exist.
+  it('creates every copy of an item only once its parse settles', async () => {
+    // Two folders on the same url again, this time with an item that fails to
+    // parse: neither folder gets a copy until the parse finally lands.
     const privateRoot = (
       await client
         .get(`/api/v1/namespaces/${client.namespace.id}/private`)
@@ -421,24 +421,23 @@ describe('RssPolling (e2e)', () => {
       },
     ];
 
-    // First poll: the wizard fails, so both copies are created with the feed's
-    // own summary as their body.
+    // First poll: the wizard fails, so the item is stored but unsettled — a copy
+    // created now would carry the feed snippet for good, since the poller never
+    // rewrites one.
     parseRssItemSpy.mockClear();
     parseRssItemSpy.mockRejectedValueOnce(new Error('wizard unavailable'));
     await pollRepo().delete({ url: FEED_URL });
     await pollingService.pollUrl(FEED_URL);
 
-    let copies = await itemsOfGuid('guid-fanned');
-    expect(copies).toHaveLength(2);
-    for (const copy of copies) {
-      expect(copy.content).toBe('fanned summary');
-    }
-
-    // Second poll, backoff elapsed: the parse succeeds and its markdown lands
-    // on both copies.
+    expect(await itemsOfGuid('guid-fanned')).toHaveLength(0);
     const content = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: 'guid-fanned' },
     });
+    expect(content.parsedContent).toBeNull();
+
+    // Second poll, backoff elapsed: the parse succeeds, and both folders get
+    // their copy of it in the same poll — identical, because both are built
+    // from the one cached parse.
     await contentRepo().update(content.id, {
       parseNextAttemptAt: new Date(Date.now() - 1000),
     });
@@ -447,7 +446,7 @@ describe('RssPolling (e2e)', () => {
     await pollingService.pollUrl(FEED_URL);
     expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
 
-    copies = await itemsOfGuid('guid-fanned');
+    const copies = await itemsOfGuid('guid-fanned');
     expect(copies).toHaveLength(2);
     for (const copy of copies) {
       expect(copy.content).toBe('# https://example.com/fanned');
@@ -611,7 +610,7 @@ describe('RssPolling (e2e)', () => {
 
   it('keeps the original publish date when an undated item is re-fetched', async () => {
     // An item with no feed date is stored with the fetch time. Re-fetching it
-    // updates the content but must not move its publish date forward.
+    // must not move its publish date forward.
     feedItems = [
       {
         title: 'Undated',
@@ -641,7 +640,9 @@ describe('RssPolling (e2e)', () => {
     const second = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: 'guid-undated' },
     });
-    expect(second.title).toBe('Undated (edited)');
+    // The refetch is ignored wholesale, so both the title and the publish date
+    // are still the ones stored on first sight.
+    expect(second.title).toBe('Undated');
     expect(second.pubDate?.toISOString()).toBe(first.pubDate?.toISOString());
   });
 
@@ -675,9 +676,9 @@ describe('RssPolling (e2e)', () => {
     expect(nextAt).not.toBeNull();
     expect(nextAt?.getTime() ?? 0).toBeGreaterThan(Date.now());
 
-    // The item resource still exists, seeded with the feed's own summary.
-    const [item] = await itemsOfGuid(RETRY_GUID);
-    expect(item.content).toBe('flaky body');
+    // No copy yet: the poller writes a copy's body once, when it inserts it, so
+    // an item with nothing settled to write is simply not listed.
+    expect(await itemsOfGuid(RETRY_GUID)).toHaveLength(0);
   });
 
   it('leaves the item alone until its parse backoff has elapsed', async () => {
@@ -685,13 +686,15 @@ describe('RssPolling (e2e)', () => {
     await pollRepo().delete({ url: FEED_URL });
     await pollingService.pollUrl(FEED_URL);
 
-    // The scheduled retry is still in the future, so nothing is re-parsed.
+    // The scheduled retry is still in the future, so nothing is re-parsed and
+    // the item stays unlisted.
     expect(parseRssItemSpy).not.toHaveBeenCalled();
     const stored = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: RETRY_GUID },
     });
     expect(stored.parsedContent).toBeNull();
     expect(stored.parseAttempts).toBe(1);
+    expect(await itemsOfGuid(RETRY_GUID)).toHaveLength(0);
   });
 
   it('re-parses a failed item once its backoff has elapsed', async () => {
@@ -707,7 +710,7 @@ describe('RssPolling (e2e)', () => {
     await pollRepo().delete({ url: FEED_URL });
     await pollingService.pollUrl(FEED_URL);
 
-    // The retry uses the article inputs taken fresh from the live feed.
+    // The retry parses the article inputs frozen into the stored row.
     expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
     expect(parseRssItemSpy.mock.calls[0][0]).toMatchObject({
       url: 'https://example.com/flaky',
@@ -718,12 +721,13 @@ describe('RssPolling (e2e)', () => {
     expect(after.parsedContent).toBe('# https://example.com/flaky');
     expect(after.parseNextAttemptAt).toBeNull();
 
-    // The markdown replaces the summary the item resource started with.
+    // The item settles with this poll, which is also the poll that lists it.
     const [item] = await itemsOfGuid(RETRY_GUID);
     expect(item.content).toBe('# https://example.com/flaky');
   });
 
-  it('re-parses when a parsed item is edited', async () => {
+  it('never re-parses a parsed item, edited or not', async () => {
+    const [before] = await itemsOfGuid(RETRY_GUID);
     feedItems = [
       {
         title: 'Flaky (edited)',
@@ -737,37 +741,22 @@ describe('RssPolling (e2e)', () => {
     await pollRepo().delete({ url: FEED_URL });
     await pollingService.pollUrl(FEED_URL);
 
-    // The body changed, so the stale parse result is dropped and the revised
-    // content is parsed afresh, with its retry bookkeeping reset.
-    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
-    const stored = await contentRepo().findOneOrFail({
-      where: { url: FEED_URL, guid: RETRY_GUID },
-    });
-    expect(stored.title).toBe('Flaky (edited)');
-    expect(stored.parsedContent).toBe('# https://example.com/flaky');
-    expect(stored.parseAttempts).toBe(0);
-    expect(stored.parseNextAttemptAt).toBeNull();
-
-    // A revised item is refreshed in place, never duplicated: identity is the
-    // guid, not the title.
-    const copies = await itemsOfGuid(RETRY_GUID);
-    expect(copies).toHaveLength(1);
-    expect(copies[0].content).toBe('# https://example.com/flaky');
-  });
-
-  it('keeps parsed content when an unchanged item is refetched', async () => {
-    // feedItems is unchanged from the previous test, so refetching the same
-    // guid must leave the parsed result (and its bookkeeping) untouched.
-    parseRssItemSpy.mockClear();
-    await pollRepo().delete({ url: FEED_URL });
-    await pollingService.pollUrl(FEED_URL);
-
+    // A parsed item is done: the edit is not stored, not parsed, and the copy
+    // keeps the name and body it was created with.
     expect(parseRssItemSpy).not.toHaveBeenCalled();
     const stored = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: RETRY_GUID },
     });
+    expect(stored.title).toBe('Flaky');
     expect(stored.parsedContent).toBe('# https://example.com/flaky');
-    expect(stored.parseAttempts).toBe(0);
+    expect(stored.parseAttempts).toBe(1);
+    expect(stored.parseNextAttemptAt).toBeNull();
+
+    const copies = await itemsOfGuid(RETRY_GUID);
+    expect(copies).toHaveLength(1);
+    expect(copies[0].id).toBe(before.id);
+    expect(copies[0].name).toBe('Flaky');
+    expect(copies[0].content).toBe('# https://example.com/flaky');
   });
 
   it('treats empty wizard markdown as a failed attempt', async () => {
@@ -796,26 +785,34 @@ describe('RssPolling (e2e)', () => {
     expect(stored.parseNextAttemptAt).not.toBeNull();
   });
 
-  it('stops retrying once the attempt cap is reached', async () => {
+  it('keeps retrying a long-failing item, at the maximum backoff', async () => {
     const stored = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: 'guid-empty' },
     });
-    // Exhaust the attempts (MAX_PARSE_ATTEMPTS) with the backoff already past.
+    // Far past the point where the doubling stops, with the backoff elapsed.
     await contentRepo().update(stored.id, {
-      parseAttempts: 6,
+      parseAttempts: 20,
       parseNextAttemptAt: new Date(Date.now() - 1000),
     });
 
     parseRssItemSpy.mockClear();
+    parseRssItemSpy.mockResolvedValueOnce({ markdown: '' });
     await pollRepo().delete({ url: FEED_URL });
     await pollingService.pollUrl(FEED_URL);
 
-    expect(parseRssItemSpy).not.toHaveBeenCalled();
-    const capped = await contentRepo().findOneOrFail({
+    // Retries never give up — an item that stopped being retried would never
+    // be listed at all — and the interval has settled at its maximum.
+    expect(parseRssItemSpy).toHaveBeenCalledTimes(1);
+    const retried = await contentRepo().findOneOrFail({
       where: { url: FEED_URL, guid: 'guid-empty' },
     });
-    expect(capped.parsedContent).toBeNull();
-    expect(capped.parseAttempts).toBe(6);
+    expect(retried.parsedContent).toBeNull();
+    expect(retried.parseAttempts).toBe(21);
+    const maxIntervalMs = 5 * 60 * 1000 * 2 ** 6;
+    const waitMs = (retried.parseNextAttemptAt?.getTime() ?? 0) - Date.now();
+    expect(waitMs).toBeGreaterThan(maxIntervalMs - 60_000);
+    expect(waitMs).toBeLessThanOrEqual(maxIntervalMs);
+    expect(await itemsOfGuid('guid-empty')).toHaveLength(0);
   });
 
   // Restores the shared wizard stub to its default echo behavior; individual

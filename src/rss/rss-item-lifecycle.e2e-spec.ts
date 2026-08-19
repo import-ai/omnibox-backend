@@ -200,6 +200,14 @@ describe('RssItem lifecycle (e2e)', () => {
     };
   };
 
+  const indexTaskCount = async (resourceId: string) => {
+    const rows: Array<{ count: string }> = await dataSource.query(
+      `SELECT count(*) FROM tasks WHERE resource_id = $1 AND function = 'upsert_index'`,
+      [resourceId],
+    );
+    return Number(rows[0].count);
+  };
+
   const contentUsage = async (namespaceId: string, userId: string) => {
     const row: Array<{ amount: string }> = await dataSource.query(
       `SELECT amount FROM storage_usages
@@ -513,17 +521,36 @@ describe('RssItem lifecycle (e2e)', () => {
       expect(there[0].userId).toBe(otherClient.user.id);
     });
 
-    it('fans a changed body out to every copy and re-emits an index task', async () => {
-      const taskCountFor = async (resourceId: string) => {
-        const rows: Array<{ count: string }> = await dataSource.query(
-          `SELECT count(*) FROM tasks WHERE resource_id = $1 AND function = 'upsert_index'`,
-          [resourceId],
-        );
-        return Number(rows[0].count);
-      };
+    it('gives a later subscriber a copy identical to the first, unparsed again', async () => {
       const [here] = await folderItems(firstFolderId);
-      const [there] = await folderItems(secondFolderId);
-      const tasksBefore = await taskCountFor(here.id);
+      // A third folder, in the first namespace, subscribes long after the
+      // article was parsed.
+      const thirdFolderId = (
+        await createFolder(
+          client,
+          'Shared later',
+          await privateRootId(client),
+          [FEED_SHARED],
+        )
+      ).resource.id;
+
+      parseSpy.mockClear();
+      expect(await repoll(FEED_SHARED)).toBe('succeed');
+      expect(parseSpy).not.toHaveBeenCalled();
+
+      // Built from the same cached parse as the copies that came before it, so
+      // it matches them byte for byte without anything being rewritten.
+      const [later] = await folderItems(thirdFolderId);
+      expect(later.id).not.toBe(here.id);
+      expect(later.content).toBe(here.content);
+      expect(later.name).toBe(here.name);
+      expect(later.attrs.guid).toBe(here.attrs.guid);
+      expect(Number(later.contentSize)).toBe(Number(here.contentSize));
+    });
+
+    it('leaves the copies it already made alone when the feed revises the item', async () => {
+      const before = await folderItems(firstFolderId);
+      const tasksBefore = await indexTaskCount(before[0].id);
       const usageBefore = await contentUsage(
         client.namespace.id,
         client.user.id,
@@ -531,7 +558,7 @@ describe('RssItem lifecycle (e2e)', () => {
 
       feeds.set(FEED_SHARED, [
         {
-          title: 'Shared one',
+          title: 'Shared one, retitled',
           link: 'https://example.com/shared-1-v2',
           guid: 'shared-1',
           description: 'shared one, revised',
@@ -539,29 +566,20 @@ describe('RssItem lifecycle (e2e)', () => {
       ]);
       parseSpy.mockClear();
       expect(await repoll(FEED_SHARED)).toBe('succeed');
-      expect(parseSpy).toHaveBeenCalledTimes(1);
 
-      const markdown = '# https://example.com/shared-1-v2';
-      for (const copy of [
-        (await folderItems(firstFolderId))[0],
-        (await folderItems(secondFolderId))[0],
-      ]) {
-        expect(copy.content).toBe(markdown);
-        expect(Number(copy.contentSize)).toBe(
-          Buffer.byteLength(markdown, 'utf8'),
-        );
-      }
-      expect(await taskCountFor(here.id)).toBe(tasksBefore + 1);
-      // content_size follows the new body (asserted above) but the owner's
-      // quota does not move: an item's bytes are never charged, however much
-      // longer the parsed markdown is than the seeded feed snippet.
-      expect(Buffer.byteLength(markdown, 'utf8')).not.toBe(
-        Number(here.contentSize),
+      // The poller only ever inserts: the revision is not parsed, no copy's
+      // name or body moves, and no index task is re-emitted for it.
+      expect(parseSpy).not.toHaveBeenCalled();
+      const after = await folderItems(firstFolderId);
+      expect(after.map((item) => item.id)).toEqual(
+        before.map((item) => item.id),
       );
+      expect(after[0].name).toBe(before[0].name);
+      expect(after[0].content).toBe(before[0].content);
+      expect(await indexTaskCount(before[0].id)).toBe(tasksBefore);
       expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
         usageBefore,
       );
-      expect(there.content).not.toBe(markdown); // stale in-memory copy only
     });
   });
 
@@ -632,7 +650,7 @@ describe('RssItem lifecycle (e2e)', () => {
       });
     });
 
-    it('follows a corrected feed title on the copy it already has', async () => {
+    it('keeps the name it was created with when the feed retitles an item', async () => {
       feeds.set(FEED_ODD, [
         {
           title: 'Typo in the headlien',
@@ -660,9 +678,10 @@ describe('RssItem lifecycle (e2e)', () => {
       const [after] = (await folderItems(folderId)).filter(
         (item) => item.attrs.guid === 'typo',
       );
-      // Renamed in place: identity is the guid, so no second copy appears.
+      // A copy is written once and never updated, so the corrected headline is
+      // ignored; identity is the guid, so no second copy appears either.
       expect(after.id).toBe(before.id);
-      expect(after.name).toBe('Typo in the headline');
+      expect(after.name).toBe('Typo in the headlien');
     });
 
     it('keeps existing items when they disappear from the feed', async () => {
@@ -698,7 +717,7 @@ describe('RssItem lifecycle (e2e)', () => {
   // Items are poller-owned, read-only and stored once per subscribing folder:
   // the same article would otherwise be billed to its owner once per folder,
   // for content they never uploaded and cannot delete on its own. So no rss
-  // item path — create, parse fan-out, retire, restore — touches the owner's
+  // item path — create, retire, restore — touches the owner's
   // storage usage at all, in either direction. The row's own content_size is
   // still maintained; only the quota bookkeeping skips it.
   describe('storage accounting', () => {
@@ -1057,8 +1076,6 @@ describe('RssItem lifecycle (e2e)', () => {
     const FEED_HELD_KEEP = 'https://example.com/lifecycle-held-keep';
     const FEED_RENAMED = 'https://example.com/lifecycle-renamed';
     const FEED_RENAMED_KEEP = 'https://example.com/lifecycle-renamed-keep';
-    const FEED_RETITLED = 'https://example.com/lifecycle-retitled';
-    const FEED_RETITLED_KEEP = 'https://example.com/lifecycle-retitled-keep';
 
     // Runs `interfere` in the window linkItems leaves open: its links, folders
     // and existing-copy reads have all happened and the insert has not opened
@@ -1576,77 +1593,6 @@ describe('RssItem lifecycle (e2e)', () => {
       expect(config.links[0].url).toBe(FEED_RENAMED_KEEP);
       expect(await folderItems(folderId)).toHaveLength(0);
     });
-
-    // A feed that corrects an item's title makes the poll rename the copies it
-    // already has, outside any transaction — so a config save can retire the
-    // copy in between. The rename must skip it, the way the insert skips an
-    // item whose subscription went away; failing there would fail the whole
-    // poll over a title with nowhere left to go.
-    it('skips renaming a copy that was retired mid-poll', async () => {
-      feeds.set(FEED_RETITLED, [
-        {
-          title: 'Original title',
-          link: 'https://example.com/retitled',
-          guid: 'retitled',
-          description: 'retitled body',
-        },
-      ]);
-      feeds.set(FEED_RETITLED_KEEP, []);
-      const created = await createFolder(
-        client,
-        'Retitled folder',
-        await privateRootId(client),
-        [FEED_RETITLED, FEED_RETITLED_KEEP],
-      );
-      const folderId = created.resource.id;
-      expect(await repoll(FEED_RETITLED)).toBe('succeed');
-      const [copy] = await folderItems(folderId);
-      expect(copy.name).toBe('Original title');
-
-      // The feed publishes a corrected title, and the user drops the url while
-      // the poll is between reading the copy and renaming it.
-      feeds.set(FEED_RETITLED, [
-        {
-          title: 'Corrected title',
-          link: 'https://example.com/retitled',
-          guid: 'retitled',
-          description: 'retitled body',
-        },
-      ]);
-      const poller = pollingService as unknown as Record<
-        'renameItemResource',
-        (...args: unknown[]) => Promise<void>
-      >;
-      const realRename = poller.renameItemResource.bind(pollingService);
-      const spy = jest
-        .spyOn(poller, 'renameItemResource')
-        .mockImplementationOnce(async (...args: unknown[]) => {
-          await client
-            .patch(
-              `/api/v1/namespaces/${client.namespace.id}/rss-folders/${folderId}/config`,
-            )
-            .send({ links: [{ url: FEED_RETITLED_KEEP }] })
-            .expect(200);
-          return await realRename(...args);
-        });
-      const logged = captureLogs();
-      try {
-        expect(await repoll(FEED_RETITLED)).toBe('succeed');
-      } finally {
-        spy.mockRestore();
-        logged.restore();
-      }
-
-      expect(logged.matching(/went away mid-poll/)).toHaveLength(1);
-      const retired = await resourceRepo().findOne({
-        where: { id: copy.id },
-        withDeleted: true,
-      });
-      expect(retired?.deletedAt).not.toBeNull();
-      // The retired copy keeps the title it was retired with; it is history
-      // now, and no later poll rewrites it.
-      expect(retired?.name).toBe('Original title');
-    });
   });
 
   // The migration chain runs against a fresh database for every e2e run, so
@@ -1816,7 +1762,7 @@ describe('RssItem lifecycle (e2e)', () => {
       const items = await folderItems(folderId);
       expect(items).toHaveLength(1);
       itemId = items[0].id;
-      // The parse fan-out has rewritten the body; the slug is only in there.
+      // The copy is created from the parsed article; the slug is only in there.
       expect(items[0].content).toContain(ARTICLE_SLUG);
       expect(items[0].name).not.toContain(ARTICLE_SLUG);
 

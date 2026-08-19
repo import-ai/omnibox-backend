@@ -192,11 +192,22 @@ describe('Chat-only share (e2e)', () => {
     }
   });
 
-  it('still describes itself to a visitor', async () => {
+  it('still describes itself to a visitor, without the root resource', async () => {
     const info = await asViewer()
       .get(`/api/v1/shares/${chatOnlyShareId}`)
       .expect(200);
     expect(info.body.share_type).toBe('chat_only');
+    expect(info.body.username).toBeTruthy();
+    // The share is described; the resource behind it is not.
+    expect(info.body.resource).toBeUndefined();
+    expect(JSON.stringify(info.body)).not.toContain('Chat only folder');
+    expect(JSON.stringify(info.body)).not.toContain(chatOnlyFolderId);
+
+    // A share that grants resources still carries them.
+    const open = await asViewer()
+      .get(`/api/v1/shares/${openShareId}`)
+      .expect(200);
+    expect(open.body.resource?.name).toBe('Open folder');
   });
 
   it('still lets a visitor open a conversation', async () => {

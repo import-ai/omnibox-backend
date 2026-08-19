@@ -53,6 +53,43 @@ describe('attrsForVisitor', () => {
     expect(attrs?.tool_call?.in_streaming).toBe(false);
   });
 
+  it('drops the resources the sender scoped their turn to', () => {
+    const attrs = attrsForVisitor({
+      tools: [
+        {
+          name: 'private_search',
+          resources: [{ id: 'r-id', name: 'Secret roadmap' }],
+          visible_resources: undefined,
+        },
+        { name: 'web_search' },
+      ],
+      user_context: {
+        selected_resources: ['r-id', 'space/path'],
+        lang: 'zh',
+      },
+      composer: {
+        display_parts: [
+          { type: 'text', text: 'What about ' },
+          {
+            type: 'resource',
+            resource: { id: 'r-id', name: 'Secret roadmap' },
+          },
+        ],
+      },
+    });
+
+    const serialized = JSON.stringify(attrs);
+    expect(serialized).not.toContain('r-id');
+    expect(serialized).not.toContain('Secret roadmap');
+    expect(serialized).not.toContain('space/path');
+    // Non-resource state survives, so the turn still renders.
+    expect(attrs?.user_context?.lang).toBe('zh');
+    expect(attrs?.tools?.[1]).toEqual({ name: 'web_search' });
+    expect(attrs?.composer?.display_parts).toEqual([
+      { type: 'text', text: 'What about ' },
+    ]);
+  });
+
   it.each([undefined, null])('passes %s through', (value) => {
     const attrs = value as MessageAttrs | null | undefined;
     expect(attrsForVisitor(attrs)).toBe(attrs);

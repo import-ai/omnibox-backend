@@ -54,6 +54,38 @@ function stripToolCall(toolCall: Record<string, any>): Record<string, any> {
   };
 }
 
+/**
+ * The sender's own picks also name resources: each private_search tool carries
+ * the resources it was scoped to, user_context lists what was selected, and the
+ * composer keeps a rendered part per mention. A share switched to chat-only
+ * must stop replaying those from its history.
+ */
+function attrsWithoutSenderResources(attrs: MessageAttrs): void {
+  if (attrs.tools) {
+    attrs.tools = attrs.tools.map((tool) => {
+      if (!tool || typeof tool !== 'object' || !('resources' in tool)) {
+        return tool;
+      }
+      const visitorTool = { ...tool };
+      delete visitorTool.resources;
+      return visitorTool;
+    });
+  }
+  if (attrs.user_context?.selected_resources) {
+    const visitorContext = { ...attrs.user_context };
+    delete visitorContext.selected_resources;
+    attrs.user_context = visitorContext;
+  }
+  if (Array.isArray(attrs.composer?.display_parts)) {
+    attrs.composer = {
+      ...attrs.composer,
+      display_parts: attrs.composer.display_parts.filter(
+        (part: Record<string, any>) => part?.type !== 'resource',
+      ),
+    };
+  }
+}
+
 /** Drops citations and any resource id reachable through tool-call state. */
 export function attrsForVisitor<T extends MessageAttrs | null | undefined>(
   attrs: T,
@@ -69,6 +101,7 @@ export function attrsForVisitor<T extends MessageAttrs | null | undefined>(
       any
     >;
   }
+  attrsWithoutSenderResources(visitorAttrs);
   return visitorAttrs as T;
 }
 

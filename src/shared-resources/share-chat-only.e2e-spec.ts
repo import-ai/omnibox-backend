@@ -153,7 +153,23 @@ describe('Chat-only share (e2e)', () => {
       conversationId,
       null,
       {
-        message: { role: OpenAIMessageRole.ASSISTANT, content: 'An answer.' },
+        message: {
+          role: OpenAIMessageRole.ASSISTANT,
+          content: 'An answer.',
+          tool_calls: [
+            {
+              id: 'call-1',
+              type: 'function',
+              function: {
+                name: 'read_resource',
+                arguments: JSON.stringify({
+                  resource_id: chatOnlyDocId,
+                  query: 'roadmap',
+                }),
+              },
+            },
+          ],
+        },
         attrs: { citations },
       } as never,
       false,
@@ -166,6 +182,9 @@ describe('Chat-only share (e2e)', () => {
     const raw = JSON.stringify(history.body);
     expect(raw).not.toContain('Secret roadmap');
     expect(raw).not.toContain('The launch slips.');
+    // The tool the assistant called must not name the resource either.
+    expect(raw).not.toContain(chatOnlyDocId);
+    expect(raw).toContain('roadmap');
     for (const node of Object.values(history.body.mapping)) {
       expect(
         (node as { attrs?: { citations?: unknown } }).attrs?.citations,

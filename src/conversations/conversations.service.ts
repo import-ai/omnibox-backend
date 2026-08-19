@@ -14,6 +14,10 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import {
+  attrsForVisitor,
+  messageForVisitor,
+} from 'omniboxd/shares/chat-only-payload';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { UserService } from 'omniboxd/user/user.service';
@@ -232,19 +236,17 @@ export class ConversationsService {
         continue;
       }
       delete msg.attrs?.context;
-      // Citations name the shared resources; a chat-only share keeps them for
-      // the assistant and withholds them from the visitor's history.
-      if (chatOnly) {
-        delete msg.attrs?.citations;
-      }
+      // Citations and tool-call args name the shared resources; a chat-only
+      // share keeps them for the assistant and withholds them from the
+      // visitor's history.
       detail.mapping[msg.id] = {
         id: msg.id,
-        message: msg.message,
+        message: chatOnly ? messageForVisitor(msg.message) : msg.message,
         parent_id: msg.parentId,
         children: childrenMap[msg.id] || [],
         created_at: msg.createdAt.toISOString(),
         status: msg.status,
-        attrs: msg.attrs,
+        attrs: chatOnly ? attrsForVisitor(msg.attrs) : msg.attrs,
       } as ConversationMessageMappingDto;
     }
     if (messages.length > 0) {

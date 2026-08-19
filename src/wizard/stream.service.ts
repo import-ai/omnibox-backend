@@ -25,6 +25,10 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
+import {
+  attrsForVisitor,
+  messageForVisitor,
+} from 'omniboxd/shares/chat-only-payload';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import {
@@ -212,24 +216,26 @@ export class StreamService implements OnModuleDestroy {
   }
 
   /**
-   * Citations name the resources behind an answer. A chat-only share lends
-   * those to the assistant, never to the visitor, so they are dropped on the
-   * way out while staying in the stored message.
+   * Citations and tool-call args name the resources behind an answer. A
+   * chat-only share lends those to the assistant, never to the visitor, so
+   * they are dropped on the way out while staying in the stored message.
    */
   private forVisitor(chunk: ChatResponse, chatOnly: boolean): ChatResponse {
     if (!chatOnly) {
       return chunk;
     }
-    // Only these two carry attrs; the rest of the union has nothing to strip.
-    if (chunk.response_type !== 'bos' && chunk.response_type !== 'delta') {
-      return chunk;
+    // Only these two carry a payload; the rest of the union has nothing to strip.
+    if (chunk.response_type === 'bos') {
+      return { ...chunk, attrs: attrsForVisitor(chunk.attrs) };
     }
-    if (!chunk.attrs?.citations) {
-      return chunk;
+    if (chunk.response_type === 'delta') {
+      return {
+        ...chunk,
+        attrs: attrsForVisitor(chunk.attrs),
+        message: messageForVisitor(chunk.message),
+      };
     }
-    const attrs = { ...chunk.attrs };
-    delete attrs.citations;
-    return { ...chunk, attrs };
+    return chunk;
   }
 
   agentHandler(

@@ -5,7 +5,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { generateHTML, loadHtmlTemplate } from 'omniboxd/seo/utils';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
-import { Share } from 'omniboxd/shares/entities/share.entity';
+import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { UserOption } from 'omniboxd/user/entities/user-option.entity';
 import { Repository } from 'typeorm';
 
@@ -61,6 +61,15 @@ export class SeoService {
 
     if (share.password) {
       return response(loadHtmlTemplate('This content is password protected'));
+    }
+
+    // A chat-only share lends its resources to the assistant, never to a
+    // visitor, and a crawler is a visitor: bail out before the resource is
+    // read so neither its name nor its content reaches the html.
+    if (share.shareType === ShareType.CHAT_ONLY) {
+      return response(
+        loadHtmlTemplate('This share does not display resources'),
+      );
     }
 
     const targetResourceId = resourceId || share.resourceId;

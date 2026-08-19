@@ -19,7 +19,7 @@ export class SharedResourcesController {
   ) {}
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get(':resourceId')
   async getResource(
     @Param('resourceId') resourceId: string,
@@ -32,7 +32,7 @@ export class SharedResourcesController {
   }
 
   @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare()
+  @ValidateShare({ requireResources: true })
   @Get(':resourceId/children')
   async getResourceChildren(
     @Param('resourceId') resourceId: string,

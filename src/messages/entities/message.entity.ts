@@ -43,6 +43,10 @@ export interface MessageAttrs {
     status: 'compacting' | 'compacted';
   };
   user_context?: Record<string, any>;
+  // What the sender picked for this turn: the tools (each private_search tool
+  // carrying its resources) and the composer's rendered parts.
+  tools?: Record<string, any>[];
+  composer?: Record<string, any>;
   tool_call?: Record<string, any>;
   usage?: Record<string, any>;
   stream_event_id?: string;

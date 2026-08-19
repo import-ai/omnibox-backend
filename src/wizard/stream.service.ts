@@ -25,7 +25,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
-import { Share } from 'omniboxd/shares/entities/share.entity';
+import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import {
   AgentRequestDto,
@@ -211,11 +211,33 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Citations name the resources behind an answer. A chat-only share lends
+   * those to the assistant, never to the visitor, so they are dropped on the
+   * way out while staying in the stored message.
+   */
+  private forVisitor(chunk: ChatResponse, chatOnly: boolean): ChatResponse {
+    if (!chatOnly) {
+      return chunk;
+    }
+    // Only these two carry attrs; the rest of the union has nothing to strip.
+    if (chunk.response_type !== 'bos' && chunk.response_type !== 'delta') {
+      return chunk;
+    }
+    if (!chunk.attrs?.citations) {
+      return chunk;
+    }
+    const attrs = { ...chunk.attrs };
+    delete attrs.citations;
+    return { ...chunk, attrs };
+  }
+
   agentHandler(
     namespaceId: string,
     conversationId: string,
     userId: string,
     send: (data: string) => Promise<void>,
+    chatOnly = false,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
@@ -324,7 +346,7 @@ export class StreamService implements OnModuleDestroy {
         chunk.response_type !== 'checkpoint' &&
         context?.message?.role !== OpenAIMessageRole.SYSTEM
       ) {
-        await send(JSON.stringify(chunk));
+        await send(JSON.stringify(this.forVisitor(chunk, chatOnly)));
       }
     };
   }
@@ -538,6 +560,7 @@ export class StreamService implements OnModuleDestroy {
     mode: 'ask' | 'write',
     userId: string,
     shareId: string = '',
+    chatOnly = false,
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Message[] = [];
@@ -570,6 +593,7 @@ export class StreamService implements OnModuleDestroy {
           shareId,
           parentId,
           messages,
+          chatOnly,
         );
       return this.attachSession(session, subscriber);
     });
@@ -594,6 +618,7 @@ export class StreamService implements OnModuleDestroy {
     shareId: string,
     parentId: string | undefined,
     messages: Message[],
+    chatOnly = false,
   ): StreamSession {
     const session: StreamSession = {
       key,
@@ -612,6 +637,7 @@ export class StreamService implements OnModuleDestroy {
       requestDto.conversation_id,
       userId,
       (data) => this.sendSessionData(session, data),
+      chatOnly,
     );
     const tools = (requestDto.tools || []).map((tool) => {
       if (tool.name === 'private_search') {
@@ -1069,6 +1095,7 @@ export class StreamService implements OnModuleDestroy {
         mode,
         '',
         share.id,
+        share.shareType === ShareType.CHAT_ONLY,
       );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>

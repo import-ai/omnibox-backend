@@ -1,3 +1,5 @@
+import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
+import { MessagesService } from 'omniboxd/messages/messages.service';
 import { TestClient } from 'test/test-client';
 
 // A chat-only share lends its resources to the assistant, never to a visitor:
@@ -132,6 +134,43 @@ describe('Chat-only share (e2e)', () => {
       .get(`/api/v1/seo/shares/${openShareId}`)
       .expect(200);
     expect(openPage.text).toContain('Open folder');
+  });
+
+  it('returns no citation metadata in the conversation history', async () => {
+    const conversationId = (
+      await asViewer()
+        .post(`/api/v1/shares/${chatOnlyShareId}/conversations`)
+        .expect(201)
+    ).body.id;
+
+    // The assistant's stored answer keeps its citations; the visitor's view
+    // of the same conversation must not.
+    const citations = [
+      { title: 'Secret roadmap', snippet: 'The launch slips.', link: 'r-id' },
+    ];
+    await client.app.get(MessagesService).create(
+      client.namespace.id,
+      conversationId,
+      null,
+      {
+        message: { role: OpenAIMessageRole.ASSISTANT, content: 'An answer.' },
+        attrs: { citations },
+      } as never,
+      false,
+    );
+
+    const history = await asViewer()
+      .get(`/api/v1/shares/${chatOnlyShareId}/conversations/${conversationId}`)
+      .expect(200);
+
+    const raw = JSON.stringify(history.body);
+    expect(raw).not.toContain('Secret roadmap');
+    expect(raw).not.toContain('The launch slips.');
+    for (const node of Object.values(history.body.mapping)) {
+      expect(
+        (node as { attrs?: { citations?: unknown } }).attrs?.citations,
+      ).toBeUndefined();
+    }
   });
 
   it('still describes itself to a visitor', async () => {

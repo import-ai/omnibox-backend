@@ -14,7 +14,7 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { Share } from 'omniboxd/shares/entities/share.entity';
+import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
@@ -202,6 +202,7 @@ export class ConversationsService {
   private convertToConversationDetail(
     conversation: Conversation,
     messages: Message[],
+    chatOnly = false,
   ): ConversationDetailDto {
     const detail: ConversationDetailDto = {
       id: conversation.id,
@@ -231,6 +232,11 @@ export class ConversationsService {
         continue;
       }
       delete msg.attrs?.context;
+      // Citations name the shared resources; a chat-only share keeps them for
+      // the assistant and withholds them from the visitor's history.
+      if (chatOnly) {
+        delete msg.attrs?.citations;
+      }
       detail.mapping[msg.id] = {
         id: msg.id,
         message: msg.message,
@@ -275,7 +281,11 @@ export class ConversationsService {
       undefined,
       conversation.id,
     );
-    return this.convertToConversationDetail(conversation, messages);
+    return this.convertToConversationDetail(
+      conversation,
+      messages,
+      share.shareType === ShareType.CHAT_ONLY,
+    );
   }
 
   async findOne(id: string) {

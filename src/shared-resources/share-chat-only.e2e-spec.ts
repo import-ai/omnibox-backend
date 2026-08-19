@@ -114,6 +114,26 @@ describe('Chat-only share (e2e)', () => {
       .expect((response) => expect(response.status).not.toBe(403));
   });
 
+  it('serves no resource content through the seo html', async () => {
+    // The seo controller resolves the share itself instead of going through
+    // ValidateShareInterceptor, so it needs its own share-type check.
+    for (const path of [
+      `/api/v1/seo/shares/${chatOnlyShareId}`,
+      `/api/v1/seo/shares/${chatOnlyShareId}/${chatOnlyDocId}`,
+    ]) {
+      const page = await asViewer().get(path).expect(200);
+      expect(page.text).toContain('This share does not display resources');
+      expect(page.text).not.toContain('Chat only doc');
+      expect(page.text).not.toContain('Chat only folder');
+    }
+
+    // The same html on an open share still carries the resource name.
+    const openPage = await asViewer()
+      .get(`/api/v1/seo/shares/${openShareId}`)
+      .expect(200);
+    expect(openPage.text).toContain('Open folder');
+  });
+
   it('still describes itself to a visitor', async () => {
     const info = await asViewer()
       .get(`/api/v1/shares/${chatOnlyShareId}`)

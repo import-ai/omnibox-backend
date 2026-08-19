@@ -464,6 +464,7 @@ export class GoogleService {
         }
         return {
           isBinding: true,
+          is_new_user: false,
           id: googleUser.id,
           access_token: this.jwtService.sign({
             sub: googleUser.id,
@@ -480,6 +481,7 @@ export class GoogleService {
       });
       return {
         isBinding: true,
+        is_new_user: false,
         id: existingUser.id,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
@@ -492,6 +494,7 @@ export class GoogleService {
     if (existingUser) {
       return {
         id: existingUser.id,
+        is_new_user: false,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
           username: existingUser.username,
@@ -509,6 +512,7 @@ export class GoogleService {
       });
       return {
         id: boundUser.id,
+        is_new_user: false,
         access_token: this.jwtService.sign({
           sub: boundUser.id,
           username: boundUser.username,
@@ -554,6 +558,7 @@ export class GoogleService {
 
       return {
         id: googleUser.id,
+        is_new_user: true,
         access_token: this.jwtService.sign({
           sub: googleUser.id,
           username: googleUser.username,

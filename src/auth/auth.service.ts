@@ -185,6 +185,7 @@ export class AuthService {
       // User exists - login
       return {
         id: existingUser.id,
+        is_new_user: false,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
           username: existingUser.username,
@@ -225,6 +226,7 @@ export class AuthService {
 
       return {
         id: user.id,
+        is_new_user: true,
         access_token: this.jwtService.sign({
           sub: user.id,
           username: user.username,
@@ -298,6 +300,7 @@ export class AuthService {
       // User exists - login
       return {
         id: existingUser.id,
+        is_new_user: false,
         access_token: this.jwtService.sign({
           sub: existingUser.id,
           username: existingUser.username,
@@ -339,6 +342,7 @@ export class AuthService {
 
         return {
           id: user.id,
+          is_new_user: true,
           access_token: this.jwtService.sign({
             sub: user.id,
             username: user.username,
@@ -357,6 +361,7 @@ export class AuthService {
         if (retryUser) {
           return {
             id: retryUser.id,
+            is_new_user: false,
             access_token: this.jwtService.sign({
               sub: retryUser.id,
               username: retryUser.username,

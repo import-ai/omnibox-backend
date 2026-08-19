@@ -22,17 +22,18 @@ export class RssItemContent extends Base {
 
   // Wizard parse retry state, used only while parsed_content is still null: how
   // many parse attempts have failed, and the earliest time to try again
-  // (exponential backoff). Preserved across an unchanged refetch, but reset
-  // (along with parsed_content) when the item's body actually changes so the
-  // revised content is parsed afresh.
+  // (exponential backoff up to a maximum interval). Retries never give up, and
+  // nothing resets this state: the row is written once, so a refetch leaves it
+  // alone however the feed has since rewritten the item.
   @Column('int', { default: 0 })
   parseAttempts: number;
 
   @Column('timestamptz', { nullable: true })
   parseNextAttemptAt: Date | null;
 
-  // The feed item's title and published date. Null when the feed omits them (or
-  // for content rows stored before these columns existed).
+  // The feed item's title and published date, frozen with the rest of the row on
+  // first sight. Null when the feed omits them (or for content rows stored
+  // before these columns existed).
   @Column('text', { nullable: true })
   title: string | null;
 

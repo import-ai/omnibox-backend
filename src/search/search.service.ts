@@ -13,8 +13,11 @@ import {
   comparePermission,
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import {
+  isReadOnlyResourceType,
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -24,6 +27,7 @@ import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { Repository } from 'typeorm';
 
+import { getArticleIdentity } from './article-dedupe.util';
 import { DocType } from './doc-type.enum';
 import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
 import { WeaviateSyncStatsResponseDto } from './dto/weaviate-sync-stats-response.dto';
@@ -60,6 +64,9 @@ interface SemanticSearchCacheEntry {
   hasMoreRawResults: boolean;
   items: IndexedDocDto[];
   nextSearchOffset: number;
+  // The articles already accumulated, so the copies a second subscribing folder
+  // holds are dropped even when they arrive on a later wizard page.
+  seenArticleIdentities: Set<string>;
   seenResourceIds: Set<string>;
 }
 
@@ -176,15 +183,18 @@ export class SearchService {
           limit,
         };
       }
+      // The filter service cuts the page itself: it collapses the copies of an
+      // article first, so slicing out here would page over an uncollapsed list.
       const result =
         await this.searchResourceFilterService.searchResourcesByFiltersWithTotal(
           userId,
           namespaceId,
           filterOptions,
+          { offset, limit },
         );
 
       return {
-        items: result.items.slice(offset, offset + limit),
+        items: result.items,
         total: result.total,
         offset,
         limit,
@@ -263,6 +273,16 @@ export class SearchService {
           if (cacheEntry.seenResourceIds.has(item.resourceId)) {
             continue;
           }
+          // Collapsed as the accumulator is filled, i.e. before the page is
+          // sliced: the surviving copy is the one the wizard ranked highest,
+          // which keeps paging stable and the total honest.
+          const identity = getArticleIdentity(item);
+          if (identity !== null) {
+            if (cacheEntry.seenArticleIdentities.has(identity)) {
+              continue;
+            }
+            cacheEntry.seenArticleIdentities.add(identity);
+          }
           cacheEntry.seenResourceIds.add(item.resourceId);
         }
         cacheEntry.items.push(item);
@@ -327,6 +347,9 @@ export class SearchService {
         ...item,
         attrs: resourceMeta?.attrs || {},
         resourceType: resourceMeta?.resourceType || ResourceType.DOC,
+        readOnly: isReadOnlyResourceType(
+          resourceMeta?.resourceType || ResourceType.DOC,
+        ),
       });
     }
 
@@ -339,6 +362,7 @@ export class SearchService {
       hasMoreRawResults: true,
       items: [],
       nextSearchOffset: 0,
+      seenArticleIdentities: new Set<string>(),
       seenResourceIds: new Set<string>(),
     };
   }
@@ -451,6 +475,7 @@ export class SearchService {
     );
 
     seenResourceIds.clear();
+    const seenArticleIdentities = new Set<string>();
 
     for (const record of records) {
       if (record.type === IndexRecordType.CHUNK) {
@@ -474,6 +499,18 @@ export class SearchService {
         }
 
         const resourceMeta = resourceMetaMap.get(chunk.resourceId);
+        // One article, however many folders subscribe to its feed. The page is
+        // in wizard rank order, so the best-ranked copy is the one kept.
+        const identity = getArticleIdentity({
+          resourceType: resourceMeta?.resourceType,
+          attrs: resourceMeta?.attrs,
+        });
+        if (identity !== null) {
+          if (seenArticleIdentities.has(identity)) {
+            continue;
+          }
+          seenArticleIdentities.add(identity);
+        }
         const resourceDto: IndexedResourceDto = {
           type: DocType.RESOURCE,
           id: record.id,
@@ -482,6 +519,9 @@ export class SearchService {
           content: chunk.text || '',
           attrs: resourceMeta?.attrs || {},
           resourceType: resourceMeta?.resourceType || ResourceType.DOC,
+          readOnly: isReadOnlyResourceType(
+            resourceMeta?.resourceType || ResourceType.DOC,
+          ),
         };
         items.push(resourceDto);
       }

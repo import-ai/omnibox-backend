@@ -11,23 +11,28 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
       getParentResourcesOrFail: jest.fn(),
       resourceFilter: jest.fn(),
     };
-    const smartFoldersService = {
-      listChildren: jest.fn().mockResolvedValue([
-        {
-          id: 'matched-doc-id',
-          parentId: 'smart-folder-id',
-          name: 'Matched doc',
-          resourceType: ResourceType.DOC,
-          createdAt: new Date('2026-05-18T00:00:00.000Z'),
-          updatedAt: new Date('2026-05-18T00:00:00.000Z'),
-          hasChildren: false,
-          attrs: {
-            transcript: 'hidden',
-            video_info: 'hidden',
-            kept: true,
-          },
+    const matchedChildren = [
+      {
+        id: 'matched-doc-id',
+        parentId: 'smart-folder-id',
+        name: 'Matched doc',
+        resourceType: ResourceType.DOC,
+        createdAt: new Date('2026-05-18T00:00:00.000Z'),
+        updatedAt: new Date('2026-05-18T00:00:00.000Z'),
+        hasChildren: false,
+        attrs: {
+          transcript: 'hidden',
+          video_info: 'hidden',
+          kept: true,
         },
-      ]),
+      },
+    ];
+    const smartFoldersService = {
+      listChildren: jest.fn().mockResolvedValue(matchedChildren),
+      listChildrenWithTotal: jest.fn().mockResolvedValue({
+        resources: matchedChildren,
+        total: matchedChildren.length,
+      }),
       isResourceMatched: jest.fn(),
     };
     const service = new SharedResourcesService(
@@ -59,10 +64,11 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
       'smart-folder-id',
     );
 
-    expect(smartFoldersService.listChildren).toHaveBeenCalledWith(
+    expect(smartFoldersService.listChildrenWithTotal).toHaveBeenCalledWith(
       'owner-user-id',
       'namespace-id',
       'smart-folder-id',
+      { limit: undefined, offset: undefined },
     );
     expect(resourcesService.getChildren).not.toHaveBeenCalled();
     expect(result).toEqual([
@@ -99,10 +105,13 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
       allResources: true,
     } as any);
 
-    expect(smartFoldersService.listChildren).toHaveBeenCalledWith(
+    // Listing every shared resource is not a paged read: it asks for the whole
+    // matched set.
+    expect(smartFoldersService.listChildrenWithTotal).toHaveBeenCalledWith(
       'owner-user-id',
       'namespace-id',
       'smart-folder-id',
+      { limit: undefined, offset: undefined },
     );
     expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
     expect(result).toEqual([

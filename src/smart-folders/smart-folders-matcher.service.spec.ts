@@ -91,6 +91,89 @@ describe('SmartFoldersMatcherService', () => {
     expect(matched).toBe(true);
   });
 
+  // An rss item has an address of its own, so a url rule reaches it — and it
+  // reads the article's url, not the feed the item arrived on.
+  it('matches an rss item on its article url, not its feed url', () => {
+    const item = resource({
+      resourceType: ResourceType.RSS_ITEM,
+      attrs: {
+        url: 'https://feeds.example.com/frontpage.xml',
+        article_url: 'https://example.com/posts/latency-budget',
+      },
+    });
+    const urlRule = (value: string) => [
+      {
+        field: SmartFolderField.URL,
+        operator: SmartFolderOperator.CONTAINS,
+        value,
+      },
+    ];
+
+    expect(
+      service.matches(item, urlRule('posts/latency'), SmartFolderMatchMode.ALL),
+    ).toBe(true);
+    expect(
+      service.matches(item, urlRule('feeds.example'), SmartFolderMatchMode.ALL),
+    ).toBe(false);
+  });
+
+  // A feed can list an item with no link at all. Falling back to the feed's own
+  // address made every such item match a rule about the feed's host, and made
+  // IS_EMPTY answer false for an item that has no url whatsoever.
+  it.each([[null], [undefined], ['']])(
+    'gives an rss item with article_url %p no url to match',
+    (articleUrl) => {
+      const item = resource({
+        resourceType: ResourceType.RSS_ITEM,
+        attrs: {
+          url: 'https://hnrss.org/frontpage',
+          article_url: articleUrl,
+        },
+      });
+      const urlRule = (operator: SmartFolderOperator, value?: string) => [
+        {
+          field: SmartFolderField.URL,
+          operator,
+          value,
+        },
+      ];
+
+      expect(
+        service.matches(
+          item,
+          urlRule(SmartFolderOperator.CONTAINS, 'hnrss.org'),
+          SmartFolderMatchMode.ALL,
+        ),
+      ).toBe(false);
+      expect(
+        service.matches(
+          item,
+          urlRule(SmartFolderOperator.IS_EMPTY),
+          SmartFolderMatchMode.ALL,
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it('leaves a url rule unmatched for a resource with no address of its own', () => {
+    const matched = service.matches(
+      resource({
+        resourceType: ResourceType.DOC,
+        attrs: { url: 'https://example.com/posts/latency-budget' },
+      }),
+      [
+        {
+          field: SmartFolderField.URL,
+          operator: SmartFolderOperator.CONTAINS,
+          value: 'example.com',
+        },
+      ],
+      SmartFolderMatchMode.ALL,
+    );
+
+    expect(matched).toBe(false);
+  });
+
   it('handles empty value operators without requiring condition values', () => {
     const matched = service.matches(
       resource({ name: '' }),

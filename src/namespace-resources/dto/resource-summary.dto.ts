@@ -1,5 +1,7 @@
 import { Expose, Transform } from 'class-transformer';
+import { buildContentSnippet } from 'omniboxd/resources/content-snippet.util';
 import {
+  isReadOnlyResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -26,6 +28,11 @@ export class ResourceSummaryDto {
   @Expose({ name: 'has_children' })
   hasChildren: boolean;
 
+  // See ResourceDto.readOnly: lets a folder listing gate row actions without
+  // knowing which types the product owns.
+  @Expose({ name: 'read_only' })
+  readOnly: boolean;
+
   @Expose({ name: 'created_at' })
   @Transform(({ value }) => value.toISOString())
   createdAt: Date;
@@ -50,13 +57,9 @@ export class ResourceSummaryDto {
     dto.attrs = { ...resource.attrs };
     delete dto.attrs.transcript;
     delete dto.attrs.video_info;
-    // Content prefix: strip images and take first 100 chars
-    const contentWithoutImages = (resource.content || '')
-      .replace(/!\[.*?\]\(.*?\)/g, '')
-      .replace(/<img[^>]*>/gi, '')
-      .trim();
-    dto.content = contentWithoutImages.slice(0, 100);
+    dto.content = buildContentSnippet(resource.content);
     dto.hasChildren = hasChildren;
+    dto.readOnly = isReadOnlyResourceType(resource.resourceType);
     dto.createdAt = resource.createdAt;
     dto.updatedAt = resource.updatedAt;
     dto.firstAttachment = firstAttachment;

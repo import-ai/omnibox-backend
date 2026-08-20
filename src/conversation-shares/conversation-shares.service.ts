@@ -220,7 +220,7 @@ export class ConversationSharesService {
   private toResponse(share: ConversationShare): ConversationShareResponseDto {
     return {
       id: share.id,
-      url: `${this.baseUrl()}/conversation-shares/${share.id}`,
+      url: `${this.baseUrl()}/?share_id=${encodeURIComponent(share.id)}`,
       title: share.title,
       summary: share.summary,
     };
@@ -241,7 +241,10 @@ export class ConversationSharesService {
 
   private baseUrl() {
     return this.config
-      .get<string>('OBB_BASE_URL', 'https://www.omnibox.pro')
+      .get<string>(
+        'OBB_CONVERSATION_SHARE_URL',
+        'https://www.omnibox.pro/zh-cn/conversation-share',
+      )
       .replace(/\/$/, '');
   }
 

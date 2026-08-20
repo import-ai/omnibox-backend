@@ -189,7 +189,12 @@ describe('SearchService', () => {
         },
       ),
       searchResourcesByFiltersWithTotal: jest.fn(
-        async (_userId: string, _namespaceId: string, options: any) => {
+        async (
+          _userId: string,
+          _namespaceId: string,
+          options: any,
+          pagination?: { offset: number; limit: number },
+        ) => {
           const visibleResources =
             await namespaceResourcesService.getAllResourcesByUser(
               userId,
@@ -217,8 +222,15 @@ describe('SearchService', () => {
               resourceType: resource.resourceType,
             }));
 
+          // The real service collapses duplicate articles before it cuts the
+          // page, so the page comes back already sliced.
           return {
-            items,
+            items: pagination
+              ? items.slice(
+                  pagination.offset,
+                  pagination.offset + pagination.limit,
+                )
+              : items,
             total: items.length,
           };
         },
@@ -1215,6 +1227,142 @@ describe('SearchService', () => {
 
     expect(wizardApiService.search).not.toHaveBeenCalled();
     expect(result).toEqual([]);
+  });
+
+  // Three folders on one feed hold three copies of every article, written
+  // milliseconds apart, so the wizard hands them back adjacently and a reader
+  // saw results 1-2-3 as the same headline three times.
+  function rssItemCopyRecords(
+    guid: string,
+    copies: Array<{ id: string; linkId: string }>,
+  ) {
+    return copies.map((copy) => ({
+      id: `record-${copy.id}`,
+      type: IndexRecordType.CHUNK,
+      chunk: {
+        resourceId: copy.id,
+        title: 'A shared article',
+        text: 'A shared article body',
+      },
+      linkId: copy.linkId,
+      guid,
+    }));
+  }
+
+  function mockRssItemSemanticSearch(
+    {
+      permissionsService,
+      resourcesService,
+      wizardApiService,
+    }: ReturnType<typeof createService>,
+    records: Array<Record<string, any>>,
+  ) {
+    const metaById = new Map(
+      records.map((record) => [
+        record.chunk.resourceId,
+        {
+          id: record.chunk.resourceId,
+          name: record.chunk.title,
+          attrs: {
+            link_id: record.linkId,
+            guid: record.guid,
+            url: record.feedUrl || 'https://news.example.com/feed.xml',
+          },
+          resourceType: ResourceType.RSS_ITEM,
+        },
+      ]),
+    );
+    wizardApiService.search.mockImplementation((request: any) =>
+      Promise.resolve({ records: request.offset === 0 ? records : [] }),
+    );
+    resourcesService.batchGetParentResources.mockImplementation(
+      (_namespaceId: string, ids: string[]) =>
+        Promise.resolve(new Map(ids.map((id) => [id, metaById.get(id)]))),
+    );
+    permissionsService.getCurrentPermissions.mockImplementation(
+      (_userId: string, _namespaceId: string, resources: any[]) =>
+        Promise.resolve(
+          new Map(
+            resources.map((resource) => [
+              resource.id,
+              ResourcePermission.CAN_VIEW,
+            ]),
+          ),
+        ),
+    );
+  }
+
+  const rssItemCopyFixture = [
+    ...rssItemCopyRecords('guid-one', [
+      { id: 'one-copy-a', linkId: 'link-a' },
+      { id: 'one-copy-b', linkId: 'link-b' },
+      { id: 'one-copy-c', linkId: 'link-c' },
+    ]),
+    ...rssItemCopyRecords('guid-two', [
+      { id: 'two-copy-a', linkId: 'link-a' },
+      { id: 'two-copy-b', linkId: 'link-b' },
+    ]),
+  ];
+
+  it('returns a semantically matched article once per feed, not once per folder', async () => {
+    const context = createService();
+    mockRssItemSemanticSearch(context, rssItemCopyFixture);
+
+    const result = await context.service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      { offset: 0, limit: 20 },
+    );
+
+    // The surviving copy is the best-ranked one, so the page is stable.
+    expect(result.items.map((item: any) => item.resourceId)).toEqual([
+      'one-copy-a',
+      'two-copy-a',
+    ]);
+    // The total counts articles, not stored copies: it used to promise five.
+    expect(result.total).toBe(2);
+  });
+
+  it('collapses article copies for the unpaginated search too', async () => {
+    const context = createService();
+    mockRssItemSemanticSearch(context, rssItemCopyFixture);
+
+    const result = await context.service.search(userId, namespaceId, 'query');
+
+    expect(result.map((item: any) => item.resourceId)).toEqual([
+      'one-copy-a',
+      'two-copy-a',
+    ]);
+  });
+
+  it('keeps two articles that share a guid across different feeds', async () => {
+    const context = createService();
+    mockRssItemSemanticSearch(context, [
+      ...rssItemCopyRecords('shared-guid', [{ id: 'feed-one', linkId: 'a' }]),
+      {
+        ...rssItemCopyRecords('shared-guid', [
+          { id: 'feed-two', linkId: 'z' },
+        ])[0],
+        feedUrl: 'https://other.example.com/feed.xml',
+      },
+    ]);
+
+    const result = await context.service.searchPaginated(
+      userId,
+      namespaceId,
+      'query',
+      undefined,
+      {},
+      { offset: 0, limit: 20 },
+    );
+
+    expect(result.items.map((item: any) => item.resourceId)).toEqual([
+      'feed-one',
+      'feed-two',
+    ]);
   });
 
   it('rejects users outside the namespace', async () => {

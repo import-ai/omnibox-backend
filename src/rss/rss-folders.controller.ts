@@ -67,6 +67,9 @@ export class RssFoldersController {
     return await this.rssFoldersService.get(userId, namespaceId, resourceId);
   }
 
+  // Retained for older clients: rss items are ordinary resources now and the
+  // web reads them through the generic resource endpoints, but these two routes
+  // keep serving their original response shape from the new storage model.
   @Get(':resourceId/items')
   async listItems(
     @UserId() userId: string,

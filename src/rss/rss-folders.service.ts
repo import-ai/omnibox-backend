@@ -10,34 +10,36 @@ import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
 import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
 import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
 import { RssItemDetailResponseDto } from 'omniboxd/rss/dto/rss-item-detail-response.dto';
-import { RssItemResponseDto } from 'omniboxd/rss/dto/rss-item-response.dto';
+import {
+  RssItemContentRef,
+  RssItemResponseDto,
+} from 'omniboxd/rss/dto/rss-item-response.dto';
 import { RssLinkRequestDto } from 'omniboxd/rss/dto/rss-link-request.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
-import { RssItem } from 'omniboxd/rss/entities/rss-item.entity';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 import { RssFeedValidatorService } from 'omniboxd/rss/rss-feed-validator.service';
 import { RssFoldersQuotaService } from 'omniboxd/rss/rss-folders-quota.service';
-import { transaction } from 'omniboxd/utils/transaction-utils';
-import { DataSource, In, Repository } from 'typeorm';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 
 @Injectable()
 export class RssFoldersService {
   constructor(
     @InjectRepository(RssLink)
     private readonly rssLinkRepository: Repository<RssLink>,
-    @InjectRepository(RssItem)
-    private readonly rssItemRepository: Repository<RssItem>,
     @InjectRepository(RssItemContent)
     private readonly rssItemContentRepository: Repository<RssItemContent>,
     @InjectRepository(Resource)
     private readonly resourceRepository: Repository<Resource>,
     private readonly dataSource: DataSource,
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
     private readonly feedValidator: RssFeedValidatorService,
     private readonly permissionsService: PermissionsService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
@@ -93,18 +95,21 @@ export class RssFoldersService {
         dto.parentId,
         manager,
       );
-      const createdResource = await this.namespaceResourcesService.create(
-        userId,
-        namespaceId,
-        {
-          name: dto.name,
-          parentId: dto.parentId,
-          resourceType: ResourceType.RSS_FOLDER,
-          content: '',
-          attrs: {},
-        },
-        tx,
-      );
+      // createServiceOwned, not create: rss_folder is refused by the generic
+      // entry point because the RssLink rows below are part of the folder.
+      const createdResource =
+        await this.namespaceResourcesService.createServiceOwned(
+          userId,
+          namespaceId,
+          {
+            name: dto.name,
+            parentId: dto.parentId,
+            resourceType: ResourceType.RSS_FOLDER,
+            content: '',
+            attrs: {},
+          },
+          tx,
+        );
 
       await manager.save(
         RssLink,
@@ -162,12 +167,12 @@ export class RssFoldersService {
     return await this.listFolderItems(namespaceId, resourceId, limit, offset);
   }
 
-  // Fetches an rss folder's items without any per-user permission check. Callers
-  // must authorize access to the folder first: the authenticated path via
-  // namespaceResourcesService.getResource, the shared path via a validated share
-  // (SharedResourcesService.getAndValidateResource). Items are the (link,
-  // content) relations produced by polling, joined to their stored content for
-  // the article url/date/snippet.
+  // Fetches an rss folder's items without any per-user permission check.
+  // Callers must authorize access to the folder first: the authenticated path
+  // via namespaceResourcesService.getResource, the shared path via a validated
+  // share (SharedResourcesService.getAndValidateResource). Items are now the
+  // folder's `rss_item` resources, joined to the global (url, guid) fetch cache
+  // for the feed snippet and the first-seen date.
   async listFolderItems(
     namespaceId: string,
     resourceId: string,
@@ -176,44 +181,41 @@ export class RssFoldersService {
   ): Promise<RssItemResponseDto[]> {
     await this.getRssFolderOrFail(namespaceId, resourceId);
 
-    const links = await this.rssLinkRepository.find({
-      where: { namespaceId, resourceId },
-      select: { id: true, name: true },
-    });
-    if (links.length === 0) {
-      return [];
+    // Paged in SQL: a folder can hold thousands of items, and this endpoint
+    // must never materialize more than the requested window. Newest published
+    // first — an item resource's created_at is its publish date — which is the
+    // same order the generic listings give an rss folder's children.
+    const query = this.resourceRepository
+      .createQueryBuilder('resource')
+      .where('resource.namespaceId = :namespaceId', { namespaceId })
+      .andWhere('resource.parentId = :resourceId', { resourceId })
+      .andWhere('resource.resourceType = :resourceType', {
+        resourceType: ResourceType.RSS_ITEM,
+      })
+      .orderBy('resource.createdAt', 'DESC')
+      .addOrderBy('resource.id', 'DESC');
+    // Same window semantics as before: a missing or non-positive limit/offset
+    // means "no limit" / "from the start".
+    if (limit !== undefined && limit > 0) {
+      query.limit(limit);
     }
-    const linkIds = links.map((link) => link.id);
-    const linkNameById = new Map(links.map((link) => [link.id, link.name]));
-
-    const items = await this.rssItemRepository.find({
-      where: { linkId: In(linkIds) },
-      // Newest published first. Items store the fetch time when the feed omits
-      // a date, so pub_date is normally set; NULLS LAST is defensive, and
-      // createdAt/id break ties in insertion order.
-      order: {
-        pubDate: { direction: 'DESC', nulls: 'LAST' },
-        createdAt: 'DESC',
-        id: 'DESC',
-      },
-      ...(limit !== undefined && limit > 0 && { take: limit }),
-      ...(offset !== undefined && offset > 0 && { skip: offset }),
-    });
+    if (offset !== undefined && offset > 0) {
+      query.offset(offset);
+    }
+    const items = await query.getMany();
     if (items.length === 0) {
       return [];
     }
 
-    const contentIds = [...new Set(items.map((item) => item.contentId))];
-    const contents = await this.rssItemContentRepository.find({
-      where: { id: In(contentIds) },
-    });
-    const contentById = new Map(contents.map((c) => [c.id, c]));
-
+    const [linkNameById, contentByKey] = await Promise.all([
+      this.getLinkNames(namespaceId, resourceId),
+      this.getItemContents(items),
+    ]);
     return items.map((item) =>
       RssItemResponseDto.fromData(
         item,
-        contentById.get(item.contentId),
-        linkNameById.get(item.linkId) ?? null,
+        contentByKey.get(this.contentKey(item)),
+        linkNameById.get(String(item.attrs?.link_id)) ?? null,
       ),
     );
   }
@@ -235,7 +237,8 @@ export class RssFoldersService {
   }
 
   // Permission-free single-item fetch. Callers must authorize folder access
-  // first (see listFolderItems).
+  // first (see listFolderItems). The item is looked up under its folder, so an
+  // item of another folder is never reachable through this one.
   async getFolderItem(
     namespaceId: string,
     resourceId: string,
@@ -243,15 +246,12 @@ export class RssFoldersService {
   ): Promise<RssItemDetailResponseDto> {
     await this.getRssFolderOrFail(namespaceId, resourceId);
 
-    const links = await this.rssLinkRepository.find({
-      where: { namespaceId, resourceId },
-      select: { id: true, name: true },
-    });
-    const linkNameById = new Map(links.map((link) => [link.id, link.name]));
-    const item = await this.rssItemRepository.findOne({
+    const item = await this.resourceRepository.findOne({
       where: {
         id: itemId,
-        linkId: In(links.map((link) => link.id)),
+        namespaceId,
+        parentId: resourceId,
+        resourceType: ResourceType.RSS_ITEM,
       },
     });
     if (!item) {
@@ -263,9 +263,15 @@ export class RssFoldersService {
       );
     }
 
-    const content = await this.rssItemContentRepository.findOne({
-      where: { id: item.contentId },
-    });
+    const [linkNameById, contentByKey] = await Promise.all([
+      this.getLinkNames(namespaceId, resourceId),
+      this.getItemContents([item]),
+    ]);
+    const content = contentByKey.get(this.contentKey(item));
+    // No cache row, no item: it carries the parsed content and the first-seen
+    // date, and this endpoint has answered 404 for a missing one since before
+    // items were resources. Serving the item without it would report the
+    // publish date as `created_at` and no `parsed_content` at all.
     if (!content) {
       const message = this.i18n.t('rssFolder.errors.itemNotFound');
       throw new AppException(
@@ -274,11 +280,77 @@ export class RssFoldersService {
         HttpStatus.NOT_FOUND,
       );
     }
-
     return RssItemDetailResponseDto.fromData(
       item,
       content,
-      linkNameById.get(item.linkId) ?? null,
+      linkNameById.get(String(item.attrs?.link_id)) ?? null,
+    );
+  }
+
+  private async getLinkNames(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<Map<string, string>> {
+    const links = await this.rssLinkRepository.find({
+      where: { namespaceId, resourceId },
+      select: { id: true, name: true },
+    });
+    return new Map(links.map((link) => [link.id, link.name]));
+  }
+
+  // An item resource points at its cache row by the (feed url, guid) carried in
+  // attrs — the same key rss_item_contents is unique on.
+  private contentKey(item: Resource): string {
+    return `${String(item.attrs?.url)}\n${String(item.attrs?.guid)}`;
+  }
+
+  // Loads the fetch/parse cache rows behind a page of items in one round trip,
+  // matching whole (url, guid) pairs rather than the cross product of the two
+  // columns.
+  private async getItemContents(
+    items: Resource[],
+  ): Promise<Map<string, RssItemContentRef>> {
+    const urls: string[] = [];
+    const guids: string[] = [];
+    for (const item of items) {
+      const url = item.attrs?.url;
+      const guid = item.attrs?.guid;
+      if (typeof url === 'string' && typeof guid === 'string') {
+        urls.push(url);
+        guids.push(guid);
+      }
+    }
+    if (urls.length === 0) {
+      return new Map();
+    }
+
+    const rows: Array<{
+      url: string;
+      guid: string;
+      content: string | null;
+      parsedContent: string | null;
+      createdAt: Date;
+    }> = await this.rssItemContentRepository.query(
+      `SELECT content.url,
+              content.guid,
+              content.content,
+              content.parsed_content AS "parsedContent",
+              content.created_at AS "createdAt"
+         FROM rss_item_contents content
+         JOIN unnest($1::text[], $2::text[]) AS key(url, guid)
+           ON content.url = key.url AND content.guid = key.guid
+        WHERE content.deleted_at IS NULL`,
+      [urls, guids],
+    );
+    return new Map(
+      rows.map((row) => [
+        `${row.url}\n${row.guid}`,
+        {
+          content: row.content,
+          parsedContent: row.parsedContent,
+          createdAt: row.createdAt,
+        },
+      ]),
     );
   }
 
@@ -301,17 +373,19 @@ export class RssFoldersService {
     await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
 
-      if (dto.name !== undefined) {
-        await this.namespaceResourcesService.update(
-          namespaceId,
-          userId,
-          resourceId,
-          { name: dto.name },
-          false,
-          tx,
-        );
-      }
-
+      // Links first, name second, and never the other way round: this is the
+      // lock order the poller cannot avoid, so it is the one every writer of a
+      // feed folder has to follow. RssPollingService.insertItemResource takes
+      // the link row FOR SHARE and only then inserts the item, and that insert
+      // makes Postgres take FOR KEY SHARE on the folder resource through the
+      // resources.parent_id self-FK — links before folder, with no place to put
+      // an earlier folder lock that would not serialise every poll against
+      // every folder edit. Renaming first here would take the folder row FOR
+      // UPDATE (ResourcesService.updateResource locks pessimistic_write) before
+      // waiting on the link row, i.e. folder before links, and two such
+      // transactions deadlock: Postgres kills this one, so the user's config
+      // save 500s and is lost. Both halves stay in this one transaction, so
+      // name and links still commit or roll back together either way.
       if (validatedLinks !== undefined) {
         const existingLinks = await manager.find(RssLink, {
           where: { namespaceId, resourceId },
@@ -326,16 +400,29 @@ export class RssFoldersService {
         }
 
         const removeLink = async (link: RssLink) => {
-          // Soft-delete the link's items first: rss_items references rss_links
-          // without ON DELETE CASCADE, and soft-deleting a still-related link
-          // would otherwise leave the items pointing at a dead row.
-          await manager.softDelete(RssItem, { linkId: link.id });
+          // Take the link row before reading its items: a poll of the same url
+          // may be about to insert one more copy, and it holds this row FOR
+          // SHARE across its insert (see RssPollingService.subscriptionIsLive).
+          // Locking here first means the poll either loses the row and skips
+          // the item, or commits before this read and has its copy trashed
+          // below — never inserts a live item under a link this transaction is
+          // retiring.
+          await manager.query(
+            `SELECT 1 FROM rss_links WHERE id = $1 FOR UPDATE`,
+            [link.id],
+          );
+          // The link's items go with it: they are its resources, and leaving
+          // them behind would show a subscription's articles after the
+          // subscription is gone. They are soft-deleted rather than purged, so
+          // the history survives; re-subscribing to the same url does not bring
+          // these rows back but polls fresh copies alongside them.
+          await this.trashLinkItems(userId, namespaceId, link.id, tx);
           await manager.softDelete(RssLink, link.id);
         };
 
         // Reconcile by url identity, not position. An existing link whose url is
-        // still present is reused at its new index (preserving the rss_items
-        // polled against it), updating its index/name in place; a rename or a
+        // still present is reused at its new index (preserving the item
+        // resources polled against it), updating its index/name in place; a rename or a
         // reorder is thus a cheap update, not a delete + re-poll. A new url is
         // inserted, and any existing row not reused (url removed, or a stale
         // duplicate) is soft-deleted afterwards.
@@ -368,6 +455,17 @@ export class RssFoldersService {
           }
         }
       }
+
+      if (dto.name !== undefined) {
+        await this.namespaceResourcesService.update(
+          namespaceId,
+          userId,
+          resourceId,
+          { name: dto.name },
+          false,
+          tx,
+        );
+      }
     });
 
     return await this.get(userId, namespaceId, resourceId);
@@ -385,6 +483,45 @@ export class RssFoldersService {
       namespaceId,
       resourceId,
     );
+  }
+
+  // Soft-deletes every item resource polled against a link, dropping them from
+  // the search index. Items never counted against the owner's storage quota, so
+  // there is nothing to refund. Items are read-only to users, so this goes
+  // through the internal delete path.
+  private async trashLinkItems(
+    userId: string,
+    namespaceId: string,
+    linkId: string,
+    tx: Transaction,
+  ): Promise<void> {
+    const items = await this.findLinkItemIds(tx.entityManager, linkId);
+    if (items.length === 0) {
+      return;
+    }
+    await this.resourcesService.batchDeleteResources(
+      userId,
+      namespaceId,
+      items,
+      tx,
+      { internal: true },
+    );
+  }
+
+  private async findLinkItemIds(
+    manager: EntityManager,
+    linkId: string,
+  ): Promise<string[]> {
+    const rows = await manager
+      .getRepository(Resource)
+      .createQueryBuilder('resource')
+      .select('resource.id', 'id')
+      .where('resource.resource_type = :resourceType', {
+        resourceType: ResourceType.RSS_ITEM,
+      })
+      .andWhere("resource.attrs->>'link_id' = :linkId", { linkId })
+      .getRawMany<{ id: string }>();
+    return rows.map((row) => row.id);
   }
 
   private normalizeLinks(links: RssLinkRequestDto[]): RssLinkRequestDto[] {

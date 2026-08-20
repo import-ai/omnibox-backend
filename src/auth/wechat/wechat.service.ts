@@ -469,6 +469,7 @@ export class WechatService {
     if (wechatUser) {
       return {
         id: wechatUser.id,
+        is_new_user: false,
         username: wechatUser.username,
         access_token: this.jwtService.sign({
           sub: wechatUser.id,
@@ -504,6 +505,7 @@ export class WechatService {
       );
       return {
         id: createdUser.id,
+        is_new_user: true,
         username: createdUser.username,
         access_token: this.jwtService.sign({
           sub: createdUser.id,

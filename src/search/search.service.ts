@@ -29,7 +29,11 @@ import { Repository } from 'typeorm';
 
 import { getArticleIdentity } from './article-dedupe.util';
 import { DocType } from './doc-type.enum';
-import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
+import {
+  IndexedDocDto,
+  IndexedMessageDto,
+  IndexedResourceDto,
+} from './dto/indexed-doc.dto';
 import { WeaviateSyncStatsResponseDto } from './dto/weaviate-sync-stats-response.dto';
 import { SearchCandidateService } from './search-candidate.service';
 import {
@@ -110,7 +114,11 @@ export class SearchService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
     if (type === DocType.MESSAGE) {
-      return [];
+      return await this.searchMessages(
+        userId,
+        namespaceId,
+        (query || '').trim(),
+      );
     }
     const normalizedQuery = (query || '').trim();
     const filterOptions =
@@ -164,9 +172,14 @@ export class SearchService {
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
     if (type === DocType.MESSAGE) {
+      const items = await this.searchMessages(
+        userId,
+        namespaceId,
+        (query || '').trim(),
+      );
       return {
-        items: [],
-        total: 0,
+        items: items.slice(offset, offset + limit),
+        total: items.length,
         offset,
         limit,
       };
@@ -304,6 +317,88 @@ export class SearchService {
         : items,
       total: cacheEntry.items.length,
     };
+  }
+
+  private async searchMessages(
+    userId: string,
+    namespaceId: string,
+    normalizedQuery: string,
+  ): Promise<IndexedMessageDto[]> {
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const searchRequest = new SearchRequestDto();
+    searchRequest.query = normalizedQuery;
+    searchRequest.namespaceId = namespaceId;
+    searchRequest.userId = userId;
+    searchRequest.type = IndexRecordType.MESSAGE;
+    searchRequest.offset = 0;
+    searchRequest.limit = MAX_SEARCH_LIMIT;
+    const result = await this.wizardApiService.search(searchRequest);
+    const items: IndexedMessageDto[] = [];
+    const conversationTitles = new Map<string, string | null>();
+
+    for (const record of result?.records || []) {
+      if (record.type !== IndexRecordType.MESSAGE || !record.message) {
+        continue;
+      }
+
+      const { content, role } = record.message.message;
+      if (role !== 'user' && role !== 'assistant') {
+        continue;
+      }
+      if (!this.matchesMessageQuery(content, normalizedQuery)) {
+        continue;
+      }
+
+      const { conversationId, messageId } = record.message;
+      if (!messageId) {
+        continue;
+      }
+      let title = conversationTitles.get(conversationId);
+      if (title === undefined) {
+        const conversation =
+          await this.conversationsService.get(conversationId);
+        if (
+          !conversation ||
+          conversation.userId !== userId ||
+          conversation.namespaceId !== namespaceId
+        ) {
+          conversationTitles.set(conversationId, null);
+          continue;
+        }
+        title = conversation.title || '';
+        conversationTitles.set(conversationId, title);
+      }
+      if (title === null) {
+        continue;
+      }
+
+      items.push({
+        type: DocType.MESSAGE,
+        id: messageId,
+        messageId,
+        conversationId,
+        title,
+        role,
+        content,
+      });
+    }
+
+    return items;
+  }
+
+  private matchesMessageQuery(content: unknown, normalizedQuery: string) {
+    if (typeof content !== 'string') {
+      return false;
+    }
+
+    const normalizedContent = content.toLocaleLowerCase();
+    return normalizedQuery
+      .toLocaleLowerCase()
+      .split(/\s+/)
+      .every((keyword) => normalizedContent.includes(keyword));
   }
 
   private async refreshCachedResourcePermissions(

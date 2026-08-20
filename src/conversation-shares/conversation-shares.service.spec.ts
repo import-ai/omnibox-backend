@@ -20,7 +20,9 @@ describe('ConversationSharesService', () => {
     create: jest.fn(),
   };
   const config = {
-    get: jest.fn((_: string, defaultValue: string) => defaultValue),
+    get: jest.fn((key: string, defaultValue?: string) =>
+      key === 'OBB_BASE_URL' ? 'https://test.omnibox.pro' : defaultValue,
+    ),
   };
 
   function createService() {
@@ -78,7 +80,7 @@ describe('ConversationSharesService', () => {
     ]);
     expect(result).toEqual({
       id: 'share-1',
-      url: 'https://www.omnibox.pro/zh-cn/conversation-share/?share_id=share-1',
+      url: 'https://test.omnibox.pro/zh-cn/conversation-share/?share_id=share-1',
       title: 'A useful conversation',
       summary: 'First answer',
     });

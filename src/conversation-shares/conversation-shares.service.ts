@@ -240,12 +240,15 @@ export class ConversationSharesService {
   }
 
   private baseUrl() {
-    return this.config
-      .get<string>(
-        'OBB_CONVERSATION_SHARE_URL',
-        'https://www.omnibox.pro/zh-cn/conversation-share',
-      )
+    const configuredUrl = this.config
+      .get<string>('OBB_CONVERSATION_SHARE_URL')
+      ?.trim();
+    if (configuredUrl) return configuredUrl.replace(/\/$/, '');
+
+    const omniboxBaseUrl = this.config
+      .get<string>('OBB_BASE_URL', 'https://www.omnibox.pro')
       .replace(/\/$/, '');
+    return `${omniboxBaseUrl}/zh-cn/conversation-share`;
   }
 
   private invalidRequest(message: string) {

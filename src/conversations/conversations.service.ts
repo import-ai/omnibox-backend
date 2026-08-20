@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { ConversationSharesService } from 'omniboxd/conversation-shares/conversation-shares.service';
 import {
   ConversationDetailDto,
   ConversationMessageMappingDto,
@@ -38,6 +39,7 @@ export class ConversationsService {
     private readonly userService: UserService,
     private readonly wizardApiService: WizardAPIService,
     private readonly wizardTaskService: WizardTaskService,
+    private readonly conversationSharesService: ConversationSharesService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -326,11 +328,16 @@ export class ConversationsService {
         tx,
       );
       const manager = tx.entityManager;
-      return await manager.softDelete(Conversation, {
+      const result = await manager.softDelete(Conversation, {
         namespaceId,
         userId,
         id: conversationId,
       });
+      await this.conversationSharesService.invalidateBySourceConversation(
+        conversationId,
+        manager,
+      );
+      return result;
     });
   }
 

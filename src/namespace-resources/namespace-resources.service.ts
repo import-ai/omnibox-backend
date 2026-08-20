@@ -5,6 +5,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { ResourceSortPreferenceService } from 'omniboxd/namespace-resources/resource-sort-preference.service';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -25,9 +26,11 @@ import {
   SERVICE_OWNED_RESOURCE_TYPES,
 } from 'omniboxd/resources/entities/resource.entity';
 import {
+  hasExplicitSortOptions,
   ResourceSortBy,
   ResourceSortOptions,
   ResourceSortOrder,
+  ResourceSortSpaceType,
   sortResources,
 } from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
@@ -87,6 +90,7 @@ export class NamespaceResourcesService {
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
     private readonly namespacesQuotaService: NamespacesQuotaService,
+    private readonly resourceSortPreferenceService: ResourceSortPreferenceService,
     @Inject(SMART_FOLDERS_SERVICE)
     private readonly smartFoldersService: ISmartFoldersService,
     @Inject(RSS_FOLDERS_QUOTA_SERVICE)
@@ -1213,20 +1217,23 @@ export class NamespaceResourcesService {
       );
     });
 
-    // A feed reads newest-published first wherever it is shown (the same rule
-    // shared-resources applies to a shared rss folder), and the items are the
-    // poller's, not an arrangement their owner chose. The web client already
-    // sends this sort for an rss folder; forcing it server-side makes the two
-    // listing paths agree and gives non-web callers feed order for free.
-    const sortedChildren = sortResources(
-      visibleChildren,
+    const rootResource = parents.at(-1);
+    const sortOptions =
       resource?.resourceType === ResourceType.RSS_FOLDER
         ? {
             sortBy: ResourceSortBy.CREATED_AT,
             sortOrder: ResourceSortOrder.DESC,
           }
-        : options,
-    );
+        : hasExplicitSortOptions(options)
+          ? options
+          : await this.resourceSortPreferenceService.getSortOptions(
+              userId,
+              namespaceId,
+              rootResource?.userId === userId
+                ? ResourceSortSpaceType.PRIVATE
+                : ResourceSortSpaceType.TEAMSPACE,
+            );
+    const sortedChildren = sortResources(visibleChildren, sortOptions);
     const total = sortedChildren.length;
     const normalizedOffset = Math.max(0, offset ?? 0);
     const normalizedLimit =

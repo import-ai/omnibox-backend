@@ -12,9 +12,25 @@ export enum ResourceSortOrder {
   DESC = 'desc',
 }
 
+export enum ResourceSortSpaceType {
+  PRIVATE = 'private',
+  TEAMSPACE = 'teamspace',
+}
+
 export interface ResourceSortOptions {
   sortBy?: ResourceSortBy;
   sortOrder?: ResourceSortOrder;
+}
+
+export function getDefaultSortOptions(): ResourceSortOptions {
+  return {
+    sortBy: ResourceSortBy.UPDATED_AT,
+    sortOrder: ResourceSortOrder.DESC,
+  };
+}
+
+export function hasExplicitSortOptions(options?: ResourceSortOptions): boolean {
+  return options?.sortBy !== undefined || options?.sortOrder !== undefined;
 }
 
 const titleCollator = new Intl.Collator('zh-CN-u-co-pinyin', {

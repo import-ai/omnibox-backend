@@ -99,11 +99,11 @@ Ready to begin? Save your first item to OmniBox.
 
 export const WELCOME_CONTENT = {
   zh: {
-    name: '欢迎使用小黑 OmniBox',
+    name: '👏 Hi，欢迎来到小黑 OmniBox',
     content: WELCOME_CONTENT_ZH,
   },
   en: {
-    name: 'Welcome to OmniBox',
+    name: '👏 Hi, welcome to OmniBox',
     content: WELCOME_CONTENT_EN,
   },
 };

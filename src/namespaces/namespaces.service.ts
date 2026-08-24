@@ -1,7 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { I18nService } from 'nestjs-i18n';
+import { I18nContext, I18nService } from 'nestjs-i18n';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -31,6 +31,7 @@ import {
   NamespaceRole,
   ROLE_LEVEL,
 } from './entities/namespace-member.entity';
+import { WELCOME_CONTENT } from './welcome-content';
 
 @Injectable()
 export class NamespacesService {
@@ -194,10 +195,45 @@ export class NamespacesService {
     userName: string | null,
     tx?: Transaction,
   ): Promise<Namespace> {
+    if (!tx) {
+      return await transaction(this.dataSource.manager, (tx) =>
+        this.createUserNamespace(userId, userName, tx),
+      );
+    }
     const namespaceName = this.i18n.t('namespace.userNamespaceName', {
       args: { userName },
     });
-    return await this.createAndJoinNamespace(userId, namespaceName, tx);
+    const namespace = await this.createAndJoinNamespace(
+      userId,
+      namespaceName,
+      tx,
+    );
+
+    // Every sign-up path funnels through here, so this is the only hook point
+    // that gives the welcome doc to new users without also giving it to users
+    // joining someone else's namespace.
+    const lang = I18nContext.current()?.lang;
+    const welcome = lang?.startsWith('zh')
+      ? WELCOME_CONTENT.zh
+      : WELCOME_CONTENT.en;
+    const privateRootId = await this.getPrivateRootId(
+      userId,
+      namespace.id,
+      tx.entityManager,
+    );
+    await this.resourcesService.createResource(
+      {
+        namespaceId: namespace.id,
+        parentId: privateRootId,
+        userId,
+        resourceType: ResourceType.DOC,
+        name: welcome.name,
+        content: welcome.content,
+      },
+      tx,
+    );
+
+    return namespace;
   }
 
   async createAndJoinNamespace(

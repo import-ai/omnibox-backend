@@ -52,6 +52,7 @@ describe('GoogleService', () => {
 
     await expect(service.handleMobileCallback('id-token')).resolves.toEqual({
       id: 'user-id',
+      is_new_user: false,
       access_token: 'access-token',
     });
     expect(fetchWithRetry).toHaveBeenCalledWith(

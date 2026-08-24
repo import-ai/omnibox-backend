@@ -326,6 +326,7 @@ export class AppleService {
         }
         return {
           id: appleUser.id,
+          is_new_user: false,
           username: appleUser.username,
           email: appleUser.email,
           access_token: this.jwtService.sign({
@@ -354,6 +355,7 @@ export class AppleService {
 
       return {
         id: existingUser.id,
+        is_new_user: false,
         username: existingUser.username,
         email: existingUser.email,
         access_token: this.jwtService.sign({
@@ -367,6 +369,7 @@ export class AppleService {
     if (existingUser) {
       return {
         id: existingUser.id,
+        is_new_user: false,
         username: existingUser.username,
         email: existingUser.email,
         access_token: this.jwtService.sign({
@@ -398,6 +401,7 @@ export class AppleService {
 
         return {
           id: existingUser.id,
+          is_new_user: false,
           username: existingUser.username,
           email: existingUser.email,
           access_token: this.jwtService.sign({
@@ -462,6 +466,7 @@ export class AppleService {
 
       return {
         id: appleUser.id,
+        is_new_user: true,
         username: appleUser.username,
         email: appleUser.email,
         access_token: this.jwtService.sign({

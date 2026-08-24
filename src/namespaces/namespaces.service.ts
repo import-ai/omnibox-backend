@@ -212,7 +212,9 @@ export class NamespacesService {
     // Every sign-up path funnels through here, so this is the only hook point
     // that gives the welcome doc to new users without also giving it to users
     // joining someone else's namespace.
-    const lang = I18nContext.current()?.lang;
+    // QueryResolver returns req.query.lang verbatim, so a repeated ?lang=
+    // param arrives here as an array rather than a string.
+    const lang = [I18nContext.current()?.lang].flat()[0];
     const welcome = lang?.startsWith('zh')
       ? WELCOME_CONTENT.zh
       : WELCOME_CONTENT.en;

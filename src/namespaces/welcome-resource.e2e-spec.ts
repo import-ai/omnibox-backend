@@ -27,12 +27,17 @@ describe('Welcome resource (e2e)', () => {
    * Sign up a brand new user with the given `x-lang` header and read back the
    * children of the private root that was created for them.
    */
-  async function signUpWithLang(lang?: string): Promise<SignedUpUser> {
+  async function signUpWithLang(
+    lang?: string,
+    query: string = '',
+  ): Promise<SignedUpUser> {
     const username = randomString(10);
     const password = randomString(12);
     const email = `${randomString(15)}@qq.com`;
 
-    let signUpRequest = client.request().post('/internal/api/v1/sign-up');
+    let signUpRequest = client
+      .request()
+      .post(`/internal/api/v1/sign-up${query}`);
     if (lang) {
       signUpRequest = signUpRequest.set('x-lang', lang);
     }
@@ -110,6 +115,16 @@ describe('Welcome resource (e2e)', () => {
     expect(welcome.read_only).toBe(false);
 
     expect(await getWelcomeContent(user)).toBe(WELCOME_CONTENT.en.content);
+  });
+
+  it('handles a repeated lang query param', async () => {
+    // Express turns a repeated query param into an array, and the query
+    // resolver hands it over untouched, so the first value has to be picked
+    // out before it is matched against 'zh'.
+    const user = await signUpWithLang(undefined, '?lang=zh&lang=en');
+
+    expect(user.children).toHaveLength(1);
+    expect(user.children[0].name).toBe(WELCOME_CONTENT.zh.name);
   });
 
   it('falls back to English when no language header is sent', async () => {

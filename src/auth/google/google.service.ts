@@ -314,6 +314,7 @@ export class GoogleService {
         googleUser.id,
         googleUser.username,
         tx,
+        lang,
       );
 
       const returnValue = {
@@ -554,6 +555,7 @@ export class GoogleService {
         googleUser.id,
         googleUser.username,
         tx,
+        lang,
       );
 
       return {

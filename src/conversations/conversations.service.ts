@@ -172,6 +172,15 @@ export class ConversationsService {
     const check = (m: Message, role: OpenAIMessageRole) => {
       return m.message.role === role && m.message.content?.trim();
     };
+    const lastMessage = messages.findLast((m) => {
+      const content = m.message.content?.trim();
+      if (!content) return false;
+      if (m.message.role === OpenAIMessageRole.USER) return true;
+      return (
+        m.message.role === OpenAIMessageRole.ASSISTANT &&
+        !m.message.tool_calls?.length
+      );
+    });
     return {
       id: c.id,
       title: c.title,
@@ -182,6 +191,14 @@ export class ConversationsService {
       assistant_content: messages.find((m) =>
         check(m, OpenAIMessageRole.ASSISTANT),
       )?.message?.content,
+      last_message: lastMessage
+        ? {
+            role: lastMessage.message.role as
+              | OpenAIMessageRole.USER
+              | OpenAIMessageRole.ASSISTANT,
+            content: lastMessage.message.content!.trim(),
+          }
+        : undefined,
     };
   }
 

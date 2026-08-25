@@ -377,6 +377,7 @@ export class WechatService {
         wechatUser.id,
         wechatUser.username,
         tx,
+        lang,
       );
       const returnValue = {
         id: wechatUser.id,
@@ -502,6 +503,7 @@ export class WechatService {
         createdUser.id,
         createdUser.username,
         tx,
+        lang,
       );
       return {
         id: createdUser.id,
@@ -774,6 +776,7 @@ export class WechatService {
         wechatUser.id,
         wechatUser.username,
         tx,
+        lang,
       );
       return {
         id: wechatUser.id,

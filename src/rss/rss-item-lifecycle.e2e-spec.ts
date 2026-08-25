@@ -724,15 +724,21 @@ describe('RssItem lifecycle (e2e)', () => {
     let folderId: string;
     let itemId: string;
     let itemSize: number;
-    let docSize: number;
+    let ownDocsSize: number;
 
     // A real document of the owner's, so every case below reads against a
     // non-zero baseline: a stray refund for an item would show up as the usage
-    // dropping below the bytes this document genuinely occupies, and with the
-    // items retired it would take the amount negative.
+    // dropping below the bytes the owner's documents genuinely occupy, and with
+    // the items retired it would take the amount negative.
     beforeAll(async () => {
       const content = 'a document that holds the baseline up';
-      docSize = Buffer.byteLength(content, 'utf8');
+      // Sign-up already puts a welcome doc in the private root, so the owner's
+      // own bytes do not start at zero.
+      const welcomeSize = await contentUsage(
+        client.namespace.id,
+        client.user.id,
+      );
+      ownDocsSize = welcomeSize + Buffer.byteLength(content, 'utf8');
       await client
         .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
         .send({
@@ -755,7 +761,7 @@ describe('RssItem lifecycle (e2e)', () => {
         })),
       );
       const before = await contentUsage(client.namespace.id, client.user.id);
-      expect(before).toBe(docSize);
+      expect(before).toBe(ownDocsSize);
       folderId = (
         await createFolder(
           client,
@@ -798,9 +804,9 @@ describe('RssItem lifecycle (e2e)', () => {
       // nothing: a refund here would push the owner's usage below what their
       // own documents occupy, and with no items left it would go negative.
       expect(await folderItems(folderId)).toHaveLength(0);
-      expect(before).toBe(docSize);
+      expect(before).toBe(ownDocsSize);
       expect(await contentUsage(client.namespace.id, client.user.id)).toBe(
-        docSize,
+        ownDocsSize,
       );
 
       await client

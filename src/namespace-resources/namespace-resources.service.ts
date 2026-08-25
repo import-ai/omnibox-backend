@@ -1239,33 +1239,12 @@ export class NamespaceResourcesService {
             normalizedOffset + normalizedLimit,
           );
 
-    const subChildren = await this.resourcesService.getChildrenPermissionMeta(
+    const hasChildrenMap = await this.permissionsService.batchGetHasChildren(
       namespaceId,
+      userId,
       pagedChildren.map((child) => child.id),
       entityManager,
     );
-    const subChildrenPermissionMap =
-      await this.permissionsService.getCurrentPermissions(
-        userId,
-        namespaceId,
-        [
-          ...parents,
-          ...pagedChildren.map((child) => ResourceMetaDto.fromEntity(child)),
-          ...subChildren,
-        ],
-        entityManager,
-      );
-    const parentIdsWithVisibleChildren = new Set<string>();
-    for (const child of subChildren) {
-      const permission = subChildrenPermissionMap.get(child.id);
-      if (
-        child.parentId &&
-        permission &&
-        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
-      ) {
-        parentIdsWithVisibleChildren.add(child.parentId);
-      }
-    }
 
     if (summary) {
       const pagedIds = pagedChildren.map((r) => r.id);
@@ -1282,7 +1261,7 @@ export class NamespaceResourcesService {
             // The metadata read above left `content` unselected; the summary dto
             // takes its prefix from here.
             Object.assign(res, { content: contents.get(res.id) ?? '' }),
-            parentIdsWithVisibleChildren.has(res.id),
+            hasChildrenMap.get(res.id) ?? false,
             firstAttachments.get(res.id),
           ),
         ),
@@ -1291,10 +1270,7 @@ export class NamespaceResourcesService {
     }
     return {
       resources: pagedChildren.map((res) =>
-        ResourceSummaryDto.fromEntity(
-          res,
-          parentIdsWithVisibleChildren.has(res.id),
-        ),
+        ResourceSummaryDto.fromEntity(res, hasChildrenMap.get(res.id) ?? false),
       ),
       total,
     };

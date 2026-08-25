@@ -50,7 +50,7 @@ describe('Visible child markers (e2e)', () => {
     );
     const visibleParent = await createResource(
       'Visible child parent',
-      ResourceType.FOLDER,
+      ResourceType.DOC,
       container.id,
     );
     const hiddenOnlyParent = await createResource(

@@ -1,5 +1,4 @@
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 import { NamespaceResourcesService } from './namespace-resources.service';
@@ -13,10 +12,10 @@ describe('NamespaceResourcesService', () => {
     const resourcesService = {
       getParentResourcesOrFail: jest.fn(),
       getChildren: jest.fn(),
-      getChildrenPermissionMeta: jest.fn(),
       resourceFilter: jest.fn(),
     };
     const permissionsService = {
+      batchGetHasChildren: jest.fn(),
       getCurrentPermissions: jest.fn(),
     };
     const smartFoldersService = {
@@ -97,7 +96,7 @@ describe('NamespaceResourcesService', () => {
     expect(resourcesService.resourceFilter).not.toHaveBeenCalled();
   });
 
-  it('uses lightweight child metadata to calculate visible child markers', async () => {
+  it('batch checks visible child markers for every paged resource', async () => {
     const { permissionsService, resourcesService, service } = createService();
     const now = new Date('2026-08-25T00:00:00.000Z');
     const target = {
@@ -126,57 +125,33 @@ describe('NamespaceResourcesService', () => {
       tagIds: [],
       manualSortInitializedAt: null,
     }));
-    const subChildren = [
-      {
-        id: 'visible-child',
-        parentId: 'folder-with-child',
-        globalPermission: null,
-      },
-      {
-        id: 'hidden-child',
-        parentId: 'empty-folder',
-        globalPermission: null,
-      },
-    ];
-
     resourcesService.getParentResourcesOrFail.mockResolvedValue([target, root]);
     resourcesService.getChildren.mockResolvedValue(children);
-    resourcesService.getChildrenPermissionMeta.mockResolvedValue(subChildren);
-    permissionsService.getCurrentPermissions
-      .mockResolvedValueOnce(
-        new Map(
-          [target, root, ...children].map((resource) => [
-            resource.id,
-            ResourcePermission.CAN_VIEW,
-          ]),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Map([
-          ['visible-child', ResourcePermission.CAN_VIEW],
-          ['hidden-child', ResourcePermission.NO_ACCESS],
+    permissionsService.getCurrentPermissions.mockResolvedValue(
+      new Map(
+        [target, root, ...children].map((resource) => [
+          resource.id,
+          ResourcePermission.CAN_VIEW,
         ]),
-      );
+      ),
+    );
+    permissionsService.batchGetHasChildren.mockResolvedValue(
+      new Map([
+        ['folder-with-child', true],
+        ['empty-folder', false],
+      ]),
+    );
 
     const result = await service.listChildren(namespaceId, resourceId, userId);
 
     expect(resourcesService.getChildren).toHaveBeenCalledTimes(1);
-    expect(resourcesService.getChildrenPermissionMeta).toHaveBeenCalledWith(
+    expect(permissionsService.batchGetHasChildren).toHaveBeenCalledWith(
       namespaceId,
+      userId,
       ['folder-with-child', 'empty-folder'],
       undefined,
     );
-    expect(permissionsService.getCurrentPermissions).toHaveBeenLastCalledWith(
-      userId,
-      namespaceId,
-      [
-        target,
-        root,
-        ...children.map((child) => ResourceMetaDto.fromEntity(child as any)),
-        ...subChildren,
-      ],
-      undefined,
-    );
+    expect(permissionsService.getCurrentPermissions).toHaveBeenCalledTimes(1);
     expect(
       result.map((resource) => [resource.id, resource.hasChildren]),
     ).toEqual([

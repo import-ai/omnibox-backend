@@ -314,6 +314,82 @@ export class PermissionsService {
     return permissions;
   }
 
+  /**
+   * The caller guarantees that every parent is visible to the user. A child
+   * without direct permission rules therefore inherits visibility; otherwise
+   * only the child's own global, user, and group rules need to be considered.
+   */
+  async batchGetHasChildren(
+    namespaceId: string,
+    userId: string,
+    parentIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<Map<string, boolean>> {
+    const result = new Map(parentIds.map((parentId) => [parentId, false]));
+    if (parentIds.length === 0) {
+      return result;
+    }
+
+    const manager = entityManager ?? this.dataSource.manager;
+    const rows: { parentId: string }[] = await manager.query(
+      `
+        WITH children AS (
+          SELECT id, parent_id, global_permission
+          FROM resources
+          WHERE namespace_id = $1
+            AND parent_id = ANY($3::text[])
+            AND deleted_at IS NULL
+        ),
+        direct_permissions AS (
+          SELECT id AS resource_id, global_permission AS permission
+          FROM children
+          WHERE global_permission IS NOT NULL
+
+          UNION ALL
+
+          SELECT children.id AS resource_id, user_permissions.permission
+          FROM children
+          INNER JOIN user_permissions
+            ON user_permissions.namespace_id = $1
+            AND user_permissions.resource_id = children.id
+            AND user_permissions.user_id = $2
+            AND user_permissions.deleted_at IS NULL
+
+          UNION ALL
+
+          SELECT children.id AS resource_id, group_permissions.permission
+          FROM children
+          INNER JOIN group_permissions
+            ON group_permissions.namespace_id = $1
+            AND group_permissions.resource_id = children.id
+            AND group_permissions.deleted_at IS NULL
+          INNER JOIN group_users
+            ON group_users.namespace_id = $1
+            AND group_users.group_id = group_permissions.group_id
+            AND group_users.user_id = $2
+            AND group_users.deleted_at IS NULL
+        ),
+        visible_children AS (
+          SELECT children.id, children.parent_id
+          FROM children
+          LEFT JOIN direct_permissions
+            ON direct_permissions.resource_id = children.id
+          GROUP BY children.id, children.parent_id
+          HAVING COUNT(direct_permissions.permission) = 0
+            OR BOOL_OR(direct_permissions.permission <> $4::resource_permission)
+        )
+        SELECT DISTINCT parent_id AS "parentId"
+        FROM visible_children
+      `,
+      [namespaceId, userId, parentIds, ResourcePermission.NO_ACCESS],
+    );
+
+    for (const row of rows) {
+      result.set(row.parentId, true);
+    }
+    return result;
+  }
+
   async updateGlobalPermission(
     namespaceId: string,
     resourceId: string,

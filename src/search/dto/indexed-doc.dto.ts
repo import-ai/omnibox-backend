@@ -42,7 +42,10 @@ export class IndexedResourceDto {
 export class IndexedMessageDto {
   type: DocType.MESSAGE;
   id: string;
+  messageId: string;
   conversationId: string;
+  title: string;
+  role: 'user' | 'assistant';
   content: string;
 }
 

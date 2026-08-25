@@ -844,21 +844,24 @@ export class NamespacesService {
   async getRoot(
     namespaceId: string,
     userId: string,
-    sortOptions?: ResourceSortOptions,
+    sortOptions?: {
+      private?: ResourceSortOptions;
+      teamspace?: ResourceSortOptions;
+    },
   ) {
     const privateRoot = await this.getPrivateRoot(userId, namespaceId);
     const privateChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       privateRoot.id,
       userId,
-      sortOptions,
+      sortOptions?.private,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
     const teamspaceChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       teamspaceRoot.id,
       userId,
-      sortOptions,
+      sortOptions?.teamspace,
     );
     const spaces: any = {
       private: { ...privateRoot, parentId: '0', children: privateChildren },

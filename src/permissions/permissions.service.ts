@@ -307,6 +307,132 @@ export class PermissionsService {
     return permissions;
   }
 
+  async getParentIdsWithVisibleChildren(
+    userId: string,
+    namespaceId: string,
+    parentIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<Set<string>> {
+    if (parentIds.length === 0) {
+      return new Set();
+    }
+    if (!entityManager) {
+      return await this.dataSource.transaction((manager) =>
+        this.getParentIdsWithVisibleChildren(
+          userId,
+          namespaceId,
+          parentIds,
+          manager,
+        ),
+      );
+    }
+
+    const rows = await entityManager.query<{ parent_id: string }[]>(
+      `
+        WITH RECURSIVE
+        candidate_children AS (
+          SELECT resource.id, resource.parent_id
+          FROM resources resource
+          WHERE resource.namespace_id = $1
+            AND resource.parent_id = ANY($2::varchar[])
+            AND resource.deleted_at IS NULL
+        ),
+        ancestor_chain AS (
+          SELECT
+            candidate.id AS candidate_id,
+            resource.id AS ancestor_id,
+            resource.parent_id AS ancestor_parent_id,
+            resource.global_permission,
+            0 AS depth,
+            ARRAY[resource.id]::varchar[] AS path
+          FROM candidate_children candidate
+          JOIN resources resource
+            ON resource.id = candidate.id
+           AND resource.namespace_id = $1
+           AND resource.deleted_at IS NULL
+
+          UNION ALL
+
+          SELECT
+            chain.candidate_id,
+            parent.id,
+            parent.parent_id,
+            parent.global_permission,
+            chain.depth + 1,
+            chain.path || parent.id
+          FROM ancestor_chain chain
+          JOIN resources parent
+            ON parent.id = chain.ancestor_parent_id
+           AND parent.namespace_id = $1
+           AND parent.deleted_at IS NULL
+           AND NOT parent.id = ANY(chain.path)
+        ),
+        effective_global_permissions AS (
+          SELECT DISTINCT ON (candidate_id)
+            candidate_id,
+            global_permission AS permission
+          FROM ancestor_chain
+          WHERE global_permission IS NOT NULL
+          ORDER BY candidate_id, depth
+        ),
+        effective_user_permissions AS (
+          SELECT DISTINCT ON (chain.candidate_id)
+            chain.candidate_id,
+            permission.permission
+          FROM ancestor_chain chain
+          JOIN user_permissions permission
+            ON permission.resource_id = chain.ancestor_id
+           AND permission.namespace_id = $1
+           AND permission.user_id = $3
+           AND permission.deleted_at IS NULL
+          ORDER BY chain.candidate_id, chain.depth
+        ),
+        current_user_groups AS (
+          SELECT group_user.group_id
+          FROM group_users group_user
+          WHERE group_user.namespace_id = $1
+            AND group_user.user_id = $3
+            AND group_user.deleted_at IS NULL
+        ),
+        effective_group_permissions AS (
+          SELECT DISTINCT ON (chain.candidate_id, permission.group_id)
+            chain.candidate_id,
+            permission.group_id,
+            permission.permission
+          FROM ancestor_chain chain
+          JOIN group_permissions permission
+            ON permission.resource_id = chain.ancestor_id
+           AND permission.namespace_id = $1
+           AND permission.deleted_at IS NULL
+          JOIN current_user_groups user_group
+            ON user_group.group_id = permission.group_id
+          ORDER BY chain.candidate_id, permission.group_id, chain.depth
+        )
+        SELECT DISTINCT candidate.parent_id
+        FROM candidate_children candidate
+        LEFT JOIN effective_global_permissions global_permission
+          ON global_permission.candidate_id = candidate.id
+        LEFT JOIN effective_user_permissions user_permission
+          ON user_permission.candidate_id = candidate.id
+        WHERE (
+          global_permission.permission IS NOT NULL
+          AND global_permission.permission <> $4
+        ) OR (
+          user_permission.permission IS NOT NULL
+          AND user_permission.permission <> $4
+        ) OR EXISTS (
+          SELECT 1
+          FROM effective_group_permissions group_permission
+          WHERE group_permission.candidate_id = candidate.id
+            AND group_permission.permission <> $4
+        )
+      `,
+      [namespaceId, parentIds, userId, ResourcePermission.NO_ACCESS],
+    );
+
+    return new Set(rows.map((row) => row.parent_id));
+  }
+
   async updateGlobalPermission(
     namespaceId: string,
     resourceId: string,

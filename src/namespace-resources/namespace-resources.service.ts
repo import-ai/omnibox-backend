@@ -1239,39 +1239,13 @@ export class NamespaceResourcesService {
             normalizedOffset + normalizedLimit,
           );
 
-    let subChildren = await this.resourcesService.getChildren(
-      namespaceId,
-      pagedChildren.map((child) => child.id),
-      {},
-      entityManager,
-    );
-
-    const subChildrenPermissionMap =
-      await this.permissionsService.getCurrentPermissions(
+    const parentIdsWithVisibleChildren =
+      await this.permissionsService.getParentIdsWithVisibleChildren(
         userId,
         namespaceId,
-        [
-          ...parents,
-          ...pagedChildren.map((r) => ResourceMetaDto.fromEntity(r)),
-          ...subChildren.map((r) => ResourceMetaDto.fromEntity(r)),
-        ],
+        pagedChildren.map((child) => child.id),
         entityManager,
       );
-
-    subChildren = subChildren.filter((res) => {
-      const permission = subChildrenPermissionMap.get(res.id);
-      return (
-        permission &&
-        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
-      );
-    });
-
-    const hasChildrenMap = new Map<string, boolean>();
-    for (const resource of subChildren) {
-      if (resource.parentId) {
-        hasChildrenMap.set(resource.parentId, true);
-      }
-    }
 
     if (summary) {
       const pagedIds = pagedChildren.map((r) => r.id);
@@ -1288,7 +1262,7 @@ export class NamespaceResourcesService {
             // The metadata read above left `content` unselected; the summary dto
             // takes its prefix from here.
             Object.assign(res, { content: contents.get(res.id) ?? '' }),
-            !!hasChildrenMap.get(res.id),
+            parentIdsWithVisibleChildren.has(res.id),
             firstAttachments.get(res.id),
           ),
         ),
@@ -1297,7 +1271,10 @@ export class NamespaceResourcesService {
     }
     return {
       resources: pagedChildren.map((res) =>
-        ResourceSummaryDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
+        ResourceSummaryDto.fromEntity(
+          res,
+          parentIdsWithVisibleChildren.has(res.id),
+        ),
       ),
       total,
     };

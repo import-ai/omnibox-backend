@@ -11,11 +11,11 @@ import {
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
-import { ResourceSortRequestDto } from 'omniboxd/resources/dto/resource-sort-request.dto';
 
 import { NamespaceAdmin } from './decorators/namespace-admin.decorator';
 import { NamespaceOwner } from './decorators/namespace-owner.decorator';
 import { CreateNamespaceDto } from './dto/create-namespace.dto';
+import { RootResourceSortRequestDto } from './dto/root-resource-sort-request.dto';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceRole } from './entities/namespace-member.entity';
 
@@ -114,13 +114,18 @@ export class NamespacesSingleController {
   async getRoot(
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
-    @Query() sortRequest: ResourceSortRequestDto,
+    @Query() sortRequest: RootResourceSortRequestDto,
   ) {
-    return await this.namespacesService.getRoot(
-      namespaceId,
-      userId,
-      sortRequest,
-    );
+    return await this.namespacesService.getRoot(namespaceId, userId, {
+      private: {
+        sortBy: sortRequest.privateSortBy ?? sortRequest.sortBy,
+        sortOrder: sortRequest.privateSortOrder ?? sortRequest.sortOrder,
+      },
+      teamspace: {
+        sortBy: sortRequest.teamspaceSortBy ?? sortRequest.sortBy,
+        sortOrder: sortRequest.teamspaceSortOrder ?? sortRequest.sortOrder,
+      },
+    });
   }
 
   @Get('private')

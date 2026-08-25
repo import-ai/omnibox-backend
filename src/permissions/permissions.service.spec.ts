@@ -1,14 +1,25 @@
+import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
+import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
+
 import { PermissionsService } from './permissions.service';
 import { ResourcePermission } from './resource-permission.enum';
 
 describe('PermissionsService', () => {
-  it('returns parent ids reported by the visible-child query', async () => {
-    const query = jest
-      .fn()
-      .mockResolvedValue([
-        { parent_id: 'folder-1' },
-        { parent_id: 'folder-2' },
-      ]);
+  it('skips group permission queries when the user has no groups', async () => {
+    const find = jest.fn().mockImplementation((entity) => {
+      if (entity === GroupUser) {
+        return Promise.resolve([]);
+      }
+      if (entity === UserPermission) {
+        return Promise.resolve([
+          {
+            resourceId: 'child',
+            permission: ResourcePermission.CAN_VIEW,
+          },
+        ]);
+      }
+      throw new Error(`Unexpected entity: ${entity.name}`);
+    });
     const service = new PermissionsService(
       {} as any,
       {} as any,
@@ -22,42 +33,17 @@ describe('PermissionsService', () => {
       {} as any,
     );
 
-    const result = await service.getParentIdsWithVisibleChildren(
+    const result = await service.getCurrentPermissions(
       'user-1',
       'namespace-1',
-      ['folder-1', 'folder-2', 'folder-3'],
-      { query } as any,
+      [
+        { id: 'root', parentId: null, globalPermission: null },
+        { id: 'child', parentId: 'root', globalPermission: null },
+      ],
+      { find } as any,
     );
 
-    expect(query).toHaveBeenCalledWith(expect.any(String), [
-      'namespace-1',
-      ['folder-1', 'folder-2', 'folder-3'],
-      'user-1',
-      ResourcePermission.NO_ACCESS,
-    ]);
-    expect(result).toEqual(new Set(['folder-1', 'folder-2']));
-  });
-
-  it('does not query the database for an empty parent list', async () => {
-    const query = jest.fn();
-    const service = new PermissionsService(
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-    );
-
-    await expect(
-      service.getParentIdsWithVisibleChildren('user-1', 'namespace-1', [], {
-        query,
-      } as any),
-    ).resolves.toEqual(new Set());
-    expect(query).not.toHaveBeenCalled();
+    expect(find).toHaveBeenCalledTimes(2);
+    expect(result.get('child')).toBe(ResourcePermission.CAN_VIEW);
   });
 });

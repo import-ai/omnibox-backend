@@ -1239,13 +1239,33 @@ export class NamespaceResourcesService {
             normalizedOffset + normalizedLimit,
           );
 
-    const parentIdsWithVisibleChildren =
-      await this.permissionsService.getParentIdsWithVisibleChildren(
+    const subChildren = await this.resourcesService.getChildrenPermissionMeta(
+      namespaceId,
+      pagedChildren.map((child) => child.id),
+      entityManager,
+    );
+    const subChildrenPermissionMap =
+      await this.permissionsService.getCurrentPermissions(
         userId,
         namespaceId,
-        pagedChildren.map((child) => child.id),
+        [
+          ...parents,
+          ...pagedChildren.map((child) => ResourceMetaDto.fromEntity(child)),
+          ...subChildren,
+        ],
         entityManager,
       );
+    const parentIdsWithVisibleChildren = new Set<string>();
+    for (const child of subChildren) {
+      const permission = subChildrenPermissionMap.get(child.id);
+      if (
+        child.parentId &&
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      ) {
+        parentIdsWithVisibleChildren.add(child.parentId);
+      }
+    }
 
     if (summary) {
       const pagedIds = pagedChildren.map((r) => r.id);

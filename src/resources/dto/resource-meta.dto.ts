@@ -57,3 +57,8 @@ export class ResourceMetaDto {
     return dto;
   }
 }
+
+export type ResourcePermissionMeta = Pick<
+  ResourceMetaDto,
+  'id' | 'parentId' | 'globalPermission'
+>;

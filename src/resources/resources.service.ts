@@ -30,7 +30,10 @@ import {
   Repository,
 } from 'typeorm';
 
-import { ResourceMetaDto } from './dto/resource-meta.dto';
+import {
+  ResourceMetaDto,
+  ResourcePermissionMeta,
+} from './dto/resource-meta.dto';
 import {
   isReadOnlyResourceType,
   isStorageExemptResourceType,
@@ -476,6 +479,27 @@ export class ResourcesService {
       order: { updatedAt: 'DESC' },
       ...(options?.limit !== undefined && { take: options.limit }),
       ...(options?.offset !== undefined && { skip: options.offset }),
+    });
+  }
+
+  async getChildrenPermissionMeta(
+    namespaceId: string,
+    parentIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<ResourcePermissionMeta[]> {
+    if (parentIds.length === 0) {
+      return [];
+    }
+
+    const repo = entityManager
+      ? entityManager.getRepository(Resource)
+      : this.resourceRepository;
+    return await repo.find({
+      select: ['id', 'parentId', 'globalPermission'],
+      where: {
+        namespaceId,
+        parentId: In(parentIds),
+      },
     });
   }
 

@@ -120,7 +120,12 @@ describe('SearchService', () => {
       ]),
     };
     const conversationsService = {
-      has: jest.fn().mockResolvedValue(true),
+      get: jest.fn().mockResolvedValue({
+        id: conversationId,
+        namespaceId,
+        userId,
+        title: 'Conversation title',
+      }),
     };
     const ruleService = {
       normalize: jest.fn((conditions) => conditions),
@@ -311,7 +316,195 @@ describe('SearchService', () => {
         type: DocType.RESOURCE,
       });
     });
-    expect(conversationsService.has).not.toHaveBeenCalled();
+    expect(conversationsService.get).not.toHaveBeenCalled();
+  });
+
+  it('returns every authorized message result without conversation deduplication', async () => {
+    const { conversationsService, service, wizardApiService } = createService();
+    wizardApiService.search.mockResolvedValue({
+      records: [
+        {
+          id: 'message-result-id',
+          type: IndexRecordType.MESSAGE,
+          message: {
+            conversationId,
+            messageId: 'message-one',
+            message: { role: 'user', content: 'Matched message' },
+          },
+        },
+        {
+          id: 'duplicate-message-result-id',
+          type: IndexRecordType.MESSAGE,
+          message: {
+            conversationId,
+            messageId: 'message-two',
+            message: {
+              role: 'assistant',
+              content: 'Another matched message',
+            },
+          },
+        },
+      ],
+    });
+
+    const result = await service.search(
+      userId,
+      namespaceId,
+      'matched',
+      DocType.MESSAGE,
+    );
+
+    expect(wizardApiService.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: IndexRecordType.MESSAGE,
+        userId,
+        namespaceId,
+      }),
+    );
+    expect(conversationsService.get).toHaveBeenCalledTimes(1);
+    expect(conversationsService.get).toHaveBeenCalledWith(conversationId);
+    expect(result).toEqual([
+      {
+        type: DocType.MESSAGE,
+        id: 'message-one',
+        messageId: 'message-one',
+        conversationId,
+        title: 'Conversation title',
+        role: 'user',
+        content: 'Matched message',
+      },
+      {
+        type: DocType.MESSAGE,
+        id: 'message-two',
+        messageId: 'message-two',
+        conversationId,
+        title: 'Conversation title',
+        role: 'assistant',
+        content: 'Another matched message',
+      },
+    ]);
+  });
+
+  it('drops message results outside the current user namespace', async () => {
+    const { conversationsService, service } = createService();
+    conversationsService.get.mockResolvedValue({
+      id: conversationId,
+      namespaceId,
+      userId: 'another-user',
+      title: 'Private conversation',
+    });
+
+    const result = await service.search(
+      userId,
+      namespaceId,
+      'query',
+      DocType.MESSAGE,
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it('paginates message results', async () => {
+    const { conversationsService, service, wizardApiService } = createService();
+    wizardApiService.search.mockResolvedValue({
+      records: ['one', 'two'].map((suffix) => ({
+        id: `message-${suffix}`,
+        type: IndexRecordType.MESSAGE,
+        message: {
+          conversationId: `conversation-${suffix}`,
+          messageId: `message-${suffix}`,
+          message: { role: 'user', content: `Matched ${suffix}` },
+        },
+      })),
+    });
+    conversationsService.get.mockImplementation((id: string) =>
+      Promise.resolve({
+        id,
+        namespaceId,
+        userId,
+        title: id,
+      }),
+    );
+
+    const result = await service.searchPaginated(
+      userId,
+      namespaceId,
+      'matched',
+      DocType.MESSAGE,
+      undefined,
+      { offset: 1, limit: 1 },
+    );
+
+    expect(result).toMatchObject({
+      total: 2,
+      offset: 1,
+      limit: 1,
+      items: [expect.objectContaining({ conversationId: 'conversation-two' })],
+    });
+  });
+
+  it('drops semantic message results that do not contain every keyword', async () => {
+    const { conversationsService, service, wizardApiService } = createService();
+    wizardApiService.search.mockResolvedValue({
+      records: [
+        {
+          id: 'semantic-only-result',
+          type: IndexRecordType.MESSAGE,
+          message: {
+            conversationId,
+            messageId: 'semantic-only-result',
+            message: {
+              role: 'assistant',
+              content: 'Related but not an exact match',
+            },
+          },
+        },
+      ],
+    });
+
+    const result = await service.search(
+      userId,
+      namespaceId,
+      'missing keyword',
+      DocType.MESSAGE,
+    );
+
+    expect(result).toEqual([]);
+    expect(conversationsService.get).not.toHaveBeenCalled();
+  });
+
+  it('drops message records without a message id or displayable role', async () => {
+    const { conversationsService, service, wizardApiService } = createService();
+    wizardApiService.search.mockResolvedValue({
+      records: [
+        {
+          type: IndexRecordType.MESSAGE,
+          message: {
+            conversationId,
+            message: { role: 'user', content: 'Matched message' },
+          },
+        },
+        {
+          id: 'tool-message',
+          type: IndexRecordType.MESSAGE,
+          message: {
+            conversationId,
+            messageId: 'tool-message',
+            message: { role: 'tool', content: 'Matched tool output' },
+          },
+        },
+      ],
+    });
+
+    const result = await service.search(
+      userId,
+      namespaceId,
+      'matched',
+      DocType.MESSAGE,
+    );
+
+    expect(result).toEqual([]);
+    expect(conversationsService.get).not.toHaveBeenCalled();
   });
 
   it('filters visible resources without semantic search when query is empty', async () => {
@@ -1215,8 +1408,9 @@ describe('SearchService', () => {
     expect(result).toEqual([]);
   });
 
-  it('returns no conversations when message type is requested', async () => {
+  it('returns no conversations when the message index has no matching records', async () => {
     const { service, wizardApiService } = createService();
+    wizardApiService.search.mockResolvedValue({ records: [] });
 
     const result = await service.search(
       userId,
@@ -1225,7 +1419,9 @@ describe('SearchService', () => {
       DocType.MESSAGE,
     );
 
-    expect(wizardApiService.search).not.toHaveBeenCalled();
+    expect(wizardApiService.search).toHaveBeenCalledWith(
+      expect.objectContaining({ type: IndexRecordType.MESSAGE }),
+    );
     expect(result).toEqual([]);
   });
 

@@ -23,13 +23,11 @@ describe('Welcome resource (e2e)', () => {
     await client.close();
   });
 
-  /**
-   * Sign up a brand new user with the given `x-lang` header and read back the
-   * children of the private root that was created for them.
-   */
+  /** Sign up a new user and read back the children of their private root. */
   async function signUpWithLang(
     lang?: string,
     query: string = '',
+    bodyLang?: string,
   ): Promise<SignedUpUser> {
     const username = randomString(10);
     const password = randomString(12);
@@ -42,7 +40,7 @@ describe('Welcome resource (e2e)', () => {
       signUpRequest = signUpRequest.set('x-lang', lang);
     }
     const signUpResponse = await signUpRequest
-      .send({ username, password, email })
+      .send({ username, password, email, lang: bodyLang })
       .expect(HttpStatus.CREATED);
 
     const userId = signUpResponse.body.id as string;
@@ -102,6 +100,14 @@ describe('Welcome resource (e2e)', () => {
     expect(WELCOME_CONTENT.zh.content).toContain(
       '[[text-color color="var(--tt-color-text)"]',
     );
+  });
+
+  it('creates the Chinese welcome doc for body lang: zh-CN', async () => {
+    const user = await signUpWithLang(undefined, '', 'zh-CN');
+
+    expect(user.children).toHaveLength(1);
+    expect(user.children[0].name).toBe(WELCOME_CONTENT.zh.name);
+    expect(await getWelcomeContent(user)).toBe(WELCOME_CONTENT.zh.content);
   });
 
   it('creates the English welcome doc for x-lang: en', async () => {

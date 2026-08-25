@@ -194,10 +194,11 @@ export class NamespacesService {
     userId: string,
     userName: string | null,
     tx?: Transaction,
+    lang?: string,
   ): Promise<Namespace> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
-        this.createUserNamespace(userId, userName, tx),
+        this.createUserNamespace(userId, userName, tx, lang),
       );
     }
     const namespaceName = this.i18n.t('namespace.userNamespaceName', {
@@ -214,8 +215,8 @@ export class NamespacesService {
     // joining someone else's namespace.
     // QueryResolver returns req.query.lang verbatim, so a repeated ?lang=
     // param arrives here as an array rather than a string.
-    const lang = [I18nContext.current()?.lang].flat()[0];
-    const welcome = lang?.startsWith('zh')
+    const requestedLang = [lang ?? I18nContext.current()?.lang].flat()[0];
+    const welcome = requestedLang?.startsWith('zh')
       ? WELCOME_CONTENT.zh
       : WELCOME_CONTENT.en;
     const privateRootId = await this.getPrivateRootId(

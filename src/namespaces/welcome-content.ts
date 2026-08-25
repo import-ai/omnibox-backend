@@ -15,7 +15,7 @@ const WELCOME_CONTENT_ZH = `**小黑 OmniBox——随时随地，将万物变成
 
 [[text-color color="var(--tt-color-text)"]++下载移动端 App，从其他应用分享到小黑++[/text-color]](https://www.omnibox.pro/docs/zh-cn/download#mobile-app)
 
-[[text-color color="var(--tt-color-text)"]++绑定微信助手 ，保存其中的内容++[/text-color]](https://www.omnibox.pro/docs/zh-cn/applications/wechat-assistant)
+[[text-color color="var(--tt-color-text)"]++绑定微信助手，保存其中的内容++[/text-color]](https://www.omnibox.pro/docs/zh-cn/applications/wechat-assistant)
 
 [[text-color color="var(--tt-color-text)"]++创建 RSS 订阅文件夹，持续接收关注的内容++[/text-color]](https://www.omnibox.pro/docs/zh-cn/knowledge-base/rss-folders)
 
@@ -43,7 +43,7 @@ const WELCOME_CONTENT_ZH = `**小黑 OmniBox——随时随地，将万物变成
 
 现在，试着收藏你的第一份资料吧。
 
-# 四、更多
+## 四、更多
 
 - 阅读 [++使用指南++](https://www.omnibox.pro/docs/zh-cn/)，快速掌握小黑的功能与用法
 - 加入 [++黑友社区++](https://www.omnibox.pro/community/)，交流使用心得，一起让小黑变得更好
@@ -51,7 +51,7 @@ const WELCOME_CONTENT_ZH = `**小黑 OmniBox——随时随地，将万物变成
 
 `;
 
-const WELCOME_CONTENT_EN = `**OmniBox — anywhere,anything to memory,memory to anything.**
+const WELCOME_CONTENT_EN = `**OmniBox — anywhere, anything to memory, memory to anything.**
 
 ## 1. Anywhere
 

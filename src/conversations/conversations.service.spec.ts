@@ -20,6 +20,7 @@ describe('ConversationsService', () => {
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
     {} as unknown as I18nService,
   );
   const conversation = {

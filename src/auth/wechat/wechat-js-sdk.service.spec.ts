@@ -13,6 +13,7 @@ describe('WechatJsSdkService', () => {
     OBB_WECHAT_APP_ID: 'official-account-id',
     OBB_WECHAT_APP_SECRET: 'official-account-secret',
     OBB_WECHAT_APP_NATIVE_ID: 'mobile-app-id',
+    OB_STATIC_PROXY: 'http://proxy.example:8080',
     OBB_WECHAT_JS_SDK_ALLOWED_HOSTS:
       'test.omnibox.pro,pre.omnibox.pro,www.omnibox.pro',
   };
@@ -58,7 +59,20 @@ describe('WechatJsSdkService', () => {
     );
   });
 
-  it('fetches and caches access token and jsapi ticket on a cache miss', async () => {
+  it('accepts other HTTPS pages on a configured host for shared consumers', async () => {
+    cacheGet.mockResolvedValue('cached-ticket');
+    const service = new WechatJsSdkService(configService, cacheService);
+
+    await expect(
+      service.createSignature(
+        'https://test.omnibox.pro/zh-cn/?invite_code=123456',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({ appId: 'official-account-id' }),
+    );
+  });
+
+  it('fetches WeChat credentials through the configured proxy and caches them', async () => {
     cacheGet.mockResolvedValue(null);
     const fetchMock = jest
       .spyOn(global, 'fetch')
@@ -85,6 +99,22 @@ describe('WechatJsSdkService', () => {
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/cgi-bin/token?'),
+      expect.objectContaining({
+        dispatcher: expect.anything(),
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/cgi-bin/ticket/getticket?'),
+      expect.objectContaining({
+        dispatcher: expect.anything(),
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(cacheSet).toHaveBeenCalledWith(
       '/wechat-js-sdk',
       'access-token',
@@ -105,6 +135,37 @@ describe('WechatJsSdkService', () => {
     await expect(
       service.createSignature('https://attacker.example/conversation-share/'),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('shares credential requests between concurrent signatures', async () => {
+    cacheGet.mockResolvedValue(null);
+    let resolveAccessToken!: (response: Response) => void;
+    const accessTokenResponse = new Promise<Response>((resolve) => {
+      resolveAccessToken = resolve;
+    });
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockImplementationOnce(() => accessTokenResponse)
+      .mockResolvedValueOnce(
+        Response.json({ errcode: 0, ticket: 'jsapi-ticket', expires_in: 7200 }),
+      );
+    const service = new WechatJsSdkService(configService, cacheService);
+
+    const signatures = Promise.all([
+      service.createSignature('https://test.omnibox.pro/en/'),
+      service.createSignature('https://test.omnibox.pro/zh-cn/'),
+      service.createSignature(
+        'https://test.omnibox.pro/en/?invite_code=123456',
+      ),
+    ]);
+    await new Promise(setImmediate);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    resolveAccessToken(
+      Response.json({ access_token: 'access-token', expires_in: 7200 }),
+    );
+    await expect(signatures).resolves.toHaveLength(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('reports missing WeChat credentials', async () => {

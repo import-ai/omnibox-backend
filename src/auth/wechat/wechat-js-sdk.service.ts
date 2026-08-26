@@ -4,19 +4,22 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { trace } from '@opentelemetry/api';
 import { createHash, randomBytes } from 'crypto';
 import { CacheService } from 'omniboxd/common/cache.service';
+import { ProxyAgent } from 'undici';
 
-interface WechatAccessTokenResponse {
-  access_token?: string;
+interface WechatApiResponse {
   errcode?: number;
   errmsg?: string;
+}
+
+interface WechatAccessTokenResponse extends WechatApiResponse {
+  access_token?: string;
   expires_in?: number;
 }
 
-interface WechatTicketResponse {
-  errcode?: number;
-  errmsg?: string;
+interface WechatTicketResponse extends WechatApiResponse {
   expires_in?: number;
   ticket?: string;
 }
@@ -29,10 +32,49 @@ export interface WechatJsSdkSignature {
   timestamp: number;
 }
 
+type WechatApiOperation = 'access_token' | 'jsapi_ticket';
+
 const CACHE_NAMESPACE = '/wechat-js-sdk';
 const CACHE_TTL_MARGIN_SECONDS = 300;
 const DEFAULT_ALLOWED_HOSTS =
   'test.omnibox.pro,pre.omnibox.pro,www.omnibox.pro';
+const WECHAT_API_TIMEOUT_MS = 5_000;
+
+function recordWechatApiError(
+  operation: WechatApiOperation,
+  responseStatus: number,
+  data: WechatApiResponse,
+): void {
+  trace.getActiveSpan()?.addEvent('wechat.api.error', {
+    'wechat.api.operation': operation,
+    'wechat.api.errcode': data.errcode ?? -1,
+    'wechat.api.errmsg': data.errmsg ?? 'Invalid WeChat API response',
+    'http.response.status_code': responseStatus,
+  });
+}
+
+async function requestWechatApi<T extends WechatApiResponse>(
+  operation: WechatApiOperation,
+  url: string,
+  proxyAgent?: ProxyAgent,
+): Promise<{ data: T; response: Response }> {
+  let response: Response | undefined;
+  try {
+    response = await fetch(url, {
+      signal: AbortSignal.timeout(WECHAT_API_TIMEOUT_MS),
+      ...(proxyAgent ? { dispatcher: proxyAgent } : {}),
+    } as RequestInit);
+    return { data: (await response.json()) as T, response };
+  } catch (error) {
+    recordWechatApiError(operation, response?.status ?? 0, {
+      errmsg:
+        error instanceof Error ? error.message : 'WeChat API request failed',
+    });
+    throw new ServiceUnavailableException(
+      'Unable to communicate with the WeChat API',
+    );
+  }
+}
 
 @Injectable()
 export class WechatJsSdkService {
@@ -40,38 +82,42 @@ export class WechatJsSdkService {
   private readonly appSecret: string;
   private readonly mobileAppId: string;
   private readonly allowedHosts: Set<string>;
+  private readonly proxyAgent?: ProxyAgent;
+  private accessTokenPromise?: Promise<string>;
+  private jsApiTicketPromise?: Promise<string>;
 
   constructor(
-    private readonly configService: ConfigService,
+    configService: ConfigService,
     private readonly cacheService: CacheService,
   ) {
-    this.appId = this.configService.get<string>('OBB_WECHAT_APP_ID', '');
-    this.appSecret = this.configService.get<string>(
-      'OBB_WECHAT_APP_SECRET',
-      '',
-    );
-    this.mobileAppId = this.configService.get<string>(
+    this.appId = configService.get<string>('OBB_WECHAT_APP_ID', '');
+    this.appSecret = configService.get<string>('OBB_WECHAT_APP_SECRET', '');
+    this.mobileAppId = configService.get<string>(
       'OBB_WECHAT_APP_NATIVE_ID',
       '',
     );
     this.allowedHosts = new Set(
-      this.configService
+      configService
         .get<string>('OBB_WECHAT_JS_SDK_ALLOWED_HOSTS', DEFAULT_ALLOWED_HOSTS)
         .split(',')
         .map((host) => host.trim().toLowerCase())
         .filter(Boolean),
     );
+    const proxyUrl = configService.get<string>('OB_STATIC_PROXY', '');
+    if (proxyUrl) this.proxyAgent = new ProxyAgent(proxyUrl);
   }
 
-  /** Creates the WeChat JS-SDK signature for a public conversation-share URL. */
-  async createSignature(pageUrl: string): Promise<WechatJsSdkSignature> {
+  /** Creates a WeChat JS-SDK signature for an allowed public page URL. */
+  async createSignature(
+    pageUrl: string | undefined,
+  ): Promise<WechatJsSdkSignature> {
     if (!this.appId || !this.appSecret || !this.mobileAppId) {
       throw new ServiceUnavailableException(
         'WeChat JS-SDK configuration is incomplete',
       );
     }
 
-    const normalizedUrl = this.normalizeShareUrl(pageUrl);
+    const normalizedUrl = this.normalizePageUrl(pageUrl);
     const ticket = await this.getJsApiTicket();
     const nonceStr = randomBytes(16).toString('hex');
     const timestamp = Math.floor(Date.now() / 1000);
@@ -91,26 +137,21 @@ export class WechatJsSdkService {
     };
   }
 
-  private normalizeShareUrl(pageUrl: string): string {
-    const withoutFragment = pageUrl?.trim().split('#', 1)[0];
-    let parsed: URL;
-
+  private normalizePageUrl(pageUrl: string | undefined): string {
+    const withoutFragment = pageUrl?.trim().split('#', 1)[0] ?? '';
     try {
-      parsed = new URL(withoutFragment);
+      const parsed = new URL(withoutFragment);
+      const isAllowed =
+        parsed.protocol === 'https:' &&
+        !parsed.port &&
+        !parsed.username &&
+        !parsed.password &&
+        this.allowedHosts.has(parsed.hostname.toLowerCase());
+      if (!isAllowed) throw new Error('URL is not allowed');
+      return withoutFragment;
     } catch {
-      throw new BadRequestException('Invalid WeChat JS-SDK page URL');
-    }
-
-    const isAllowedProtocol = parsed.protocol === 'https:';
-    const isAllowedHost = this.allowedHosts.has(parsed.hostname.toLowerCase());
-    const isSharePage =
-      /^\/[a-z]{2}(?:-[a-z]{2})?\/conversation-share\/?$/.test(parsed.pathname);
-
-    if (!isAllowedProtocol || !isAllowedHost || !isSharePage) {
       throw new BadRequestException('WeChat JS-SDK page URL is not allowed');
     }
-
-    return withoutFragment;
   }
 
   private async getJsApiTicket(): Promise<string> {
@@ -120,25 +161,36 @@ export class WechatJsSdkService {
     );
     if (cachedTicket) return cachedTicket;
 
-    const accessToken = await this.getAccessToken();
-    const response = await fetch(
-      `https://api.weixin.qq.com/cgi-bin/ticket/getticket?access_token=${encodeURIComponent(accessToken)}&type=jsapi`,
-    );
-    const result = (await response.json()) as WechatTicketResponse;
+    if (!this.jsApiTicketPromise) {
+      this.jsApiTicketPromise = this.fetchAndCacheJsApiTicket().finally(() => {
+        this.jsApiTicketPromise = undefined;
+      });
+    }
+    return this.jsApiTicketPromise;
+  }
 
-    if (!response.ok || result.errcode !== 0 || !result.ticket) {
-      throw new ServiceUnavailableException(
-        `Unable to obtain WeChat JSAPI ticket${result.errmsg ? `: ${result.errmsg}` : ''}`,
-      );
+  private async fetchAndCacheJsApiTicket(): Promise<string> {
+    const params = new URLSearchParams({
+      access_token: await this.getAccessToken(),
+      type: 'jsapi',
+    });
+    const { data, response } = await requestWechatApi<WechatTicketResponse>(
+      'jsapi_ticket',
+      `https://api.weixin.qq.com/cgi-bin/ticket/getticket?${params}`,
+      this.proxyAgent,
+    );
+    if (!response.ok || data.errcode !== 0 || !data.ticket) {
+      recordWechatApiError('jsapi_ticket', response.status, data);
+      throw new ServiceUnavailableException('Unable to obtain WeChat ticket');
     }
 
     await this.cacheService.set(
       CACHE_NAMESPACE,
       'jsapi-ticket',
-      result.ticket,
-      this.getCacheTtl(result.expires_in),
+      data.ticket,
+      this.getCacheTtl(data.expires_in),
     );
-    return result.ticket;
+    return data.ticket;
   }
 
   private async getAccessToken(): Promise<string> {
@@ -148,29 +200,40 @@ export class WechatJsSdkService {
     );
     if (cachedToken) return cachedToken;
 
+    if (!this.accessTokenPromise) {
+      this.accessTokenPromise = this.fetchAndCacheAccessToken().finally(() => {
+        this.accessTokenPromise = undefined;
+      });
+    }
+    return this.accessTokenPromise;
+  }
+
+  private async fetchAndCacheAccessToken(): Promise<string> {
     const params = new URLSearchParams({
       appid: this.appId,
       grant_type: 'client_credential',
       secret: this.appSecret,
     });
-    const response = await fetch(
-      `https://api.weixin.qq.com/cgi-bin/token?${params.toString()}`,
-    );
-    const result = (await response.json()) as WechatAccessTokenResponse;
-
-    if (!response.ok || !result.access_token) {
+    const { data, response } =
+      await requestWechatApi<WechatAccessTokenResponse>(
+        'access_token',
+        `https://api.weixin.qq.com/cgi-bin/token?${params}`,
+        this.proxyAgent,
+      );
+    if (!response.ok || data.errcode || !data.access_token) {
+      recordWechatApiError('access_token', response.status, data);
       throw new ServiceUnavailableException(
-        `Unable to obtain WeChat access token${result.errmsg ? `: ${result.errmsg}` : ''}`,
+        'Unable to obtain WeChat access token',
       );
     }
 
     await this.cacheService.set(
       CACHE_NAMESPACE,
       'access-token',
-      result.access_token,
-      this.getCacheTtl(result.expires_in),
+      data.access_token,
+      this.getCacheTtl(data.expires_in),
     );
-    return result.access_token;
+    return data.access_token;
   }
 
   private getCacheTtl(expiresIn = 7200): number {

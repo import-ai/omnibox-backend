@@ -262,6 +262,7 @@ export class AppleService {
         appleUser.id,
         appleUser.username,
         tx,
+        lang,
       );
 
       const returnValue = {
@@ -462,6 +463,7 @@ export class AppleService {
         appleUser.id,
         appleUser.username,
         tx,
+        lang,
       );
 
       return {

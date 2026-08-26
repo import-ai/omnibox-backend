@@ -23,6 +23,7 @@ interface WechatTicketResponse {
 
 export interface WechatJsSdkSignature {
   appId: string;
+  mobileAppId: string;
   nonceStr: string;
   signature: string;
   timestamp: number;
@@ -37,6 +38,7 @@ const DEFAULT_ALLOWED_HOSTS =
 export class WechatJsSdkService {
   private readonly appId: string;
   private readonly appSecret: string;
+  private readonly mobileAppId: string;
   private readonly allowedHosts: Set<string>;
 
   constructor(
@@ -46,6 +48,10 @@ export class WechatJsSdkService {
     this.appId = this.configService.get<string>('OBB_WECHAT_APP_ID', '');
     this.appSecret = this.configService.get<string>(
       'OBB_WECHAT_APP_SECRET',
+      '',
+    );
+    this.mobileAppId = this.configService.get<string>(
+      'OBB_WECHAT_APP_NATIVE_ID',
       '',
     );
     this.allowedHosts = new Set(
@@ -59,9 +65,9 @@ export class WechatJsSdkService {
 
   /** Creates the WeChat JS-SDK signature for a public conversation-share URL. */
   async createSignature(pageUrl: string): Promise<WechatJsSdkSignature> {
-    if (!this.appId || !this.appSecret) {
+    if (!this.appId || !this.appSecret || !this.mobileAppId) {
       throw new ServiceUnavailableException(
-        'WeChat JS-SDK credentials are not configured',
+        'WeChat JS-SDK configuration is incomplete',
       );
     }
 
@@ -78,6 +84,7 @@ export class WechatJsSdkService {
 
     return {
       appId: this.appId,
+      mobileAppId: this.mobileAppId,
       nonceStr,
       signature: createHash('sha1').update(signatureSource).digest('hex'),
       timestamp,

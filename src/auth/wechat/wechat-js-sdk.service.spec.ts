@@ -12,6 +12,7 @@ describe('WechatJsSdkService', () => {
   const config: Record<string, string> = {
     OBB_WECHAT_APP_ID: 'official-account-id',
     OBB_WECHAT_APP_SECRET: 'official-account-secret',
+    OBB_WECHAT_APP_NATIVE_ID: 'mobile-app-id',
     OBB_WECHAT_JS_SDK_ALLOWED_HOSTS:
       'test.omnibox.pro,pre.omnibox.pro,www.omnibox.pro',
   };
@@ -45,6 +46,7 @@ describe('WechatJsSdkService', () => {
     );
 
     expect(result.appId).toBe('official-account-id');
+    expect(result.mobileAppId).toBe('mobile-app-id');
     expect(result.timestamp).toBe(1_725_000_000);
     expect(result.nonceStr).toMatch(/^[a-f0-9]{32}$/);
     expect(result.signature).toBe(
@@ -110,6 +112,23 @@ describe('WechatJsSdkService', () => {
       get: jest.fn((_key: string, fallback = '') => fallback),
     } as unknown as ConfigService;
     const service = new WechatJsSdkService(missingConfig, cacheService);
+
+    await expect(
+      service.createSignature(
+        'https://test.omnibox.pro/zh-cn/conversation-share/',
+      ),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('reports a missing WeChat mobile App ID', async () => {
+    const missingNativeIdConfig = {
+      get: jest.fn((key: string, fallback = '') =>
+        key === 'OBB_WECHAT_APP_NATIVE_ID'
+          ? fallback
+          : (config[key] ?? fallback),
+      ),
+    } as unknown as ConfigService;
+    const service = new WechatJsSdkService(missingNativeIdConfig, cacheService);
 
     await expect(
       service.createSignature(

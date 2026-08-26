@@ -86,6 +86,54 @@ describe('ConversationSharesService', () => {
     });
   });
 
+  it.each([
+    ['en', 'en'],
+    ['en-US', 'en'],
+    ['zh-CN', 'zh-cn'],
+  ])(
+    'uses the request language %s in the share URL',
+    async (language, locale) => {
+      mockCompletedConversation();
+
+      const result = await createService().create(
+        'namespace-1',
+        'user-1',
+        {
+          channel: ConversationShareChannel.COPY_LINK,
+          conversation_id: 'conversation-1',
+          group_ids: ['question-1'],
+        },
+        language,
+      );
+
+      expect(result.url).toBe(
+        `https://test.omnibox.pro/${locale}/conversation-share/?share_id=share-1`,
+      );
+    },
+  );
+
+  it('localizes a configured conversation share URL', async () => {
+    mockCompletedConversation();
+    config.get.mockReturnValueOnce(
+      'https://share.omnibox.pro/zh-cn/conversation-share/',
+    );
+
+    const result = await createService().create(
+      'namespace-1',
+      'user-1',
+      {
+        channel: ConversationShareChannel.COPY_LINK,
+        conversation_id: 'conversation-1',
+        group_ids: ['question-1'],
+      },
+      'en',
+    );
+
+    expect(result.url).toBe(
+      'https://share.omnibox.pro/en/conversation-share/?share_id=share-1',
+    );
+  });
+
   it('rejects a request while any message is streaming', async () => {
     conversationRepo.findOne.mockResolvedValue({
       id: 'conversation-1',
@@ -118,6 +166,23 @@ describe('ConversationSharesService', () => {
       }),
     );
   });
+
+  function mockCompletedConversation() {
+    conversationRepo.findOne.mockResolvedValue({
+      id: 'conversation-1',
+      namespaceId: 'namespace-1',
+      userId: 'user-1',
+      title: 'A useful conversation',
+    });
+    messageRepo.find.mockResolvedValue([
+      message('question-1', null, 'user', 'Question'),
+      message('answer-1', 'question-1', 'assistant', 'Answer'),
+    ]);
+    shareRepo.save.mockImplementation((value) => ({
+      ...value,
+      id: 'share-1',
+    }));
+  }
 });
 
 function message(

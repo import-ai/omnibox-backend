@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { I18n, I18nContext } from 'nestjs-i18n';
 import { Public } from 'omniboxd/auth/decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
@@ -16,11 +17,13 @@ export class ConversationSharesController {
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Body() request: CreateConversationShareDto,
+    @I18n() i18n: I18nContext,
   ) {
     return await this.conversationSharesService.create(
       namespaceId,
       userId,
       request,
+      i18n.lang,
     );
   }
 }

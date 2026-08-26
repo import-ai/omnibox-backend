@@ -45,6 +45,7 @@ export class ConversationSharesService {
     namespaceId: string,
     userId: string,
     request: CreateConversationShareDto,
+    language?: string,
   ): Promise<ConversationShareResponseDto> {
     const conversation = await this.conversationRepo.findOne({
       where: { id: request.conversation_id, namespaceId, userId },
@@ -94,7 +95,7 @@ export class ConversationSharesService {
       ],
     });
     const saved = await this.shareRepo.save(share);
-    return this.toResponse(saved);
+    return this.toResponse(saved, language);
   }
 
   async getPublic(shareId: string): Promise<PublicConversationShareDto> {
@@ -217,10 +218,13 @@ export class ConversationSharesService {
     return false;
   }
 
-  private toResponse(share: ConversationShare): ConversationShareResponseDto {
+  private toResponse(
+    share: ConversationShare,
+    language?: string,
+  ): ConversationShareResponseDto {
     return {
       id: share.id,
-      url: `${this.baseUrl()}/?share_id=${encodeURIComponent(share.id)}`,
+      url: `${this.baseUrl(language)}/?share_id=${encodeURIComponent(share.id)}`,
       title: share.title,
       summary: share.summary,
     };
@@ -239,16 +243,21 @@ export class ConversationSharesService {
     return `${text.slice(0, maxLength - 1).trimEnd()}…`;
   }
 
-  private baseUrl() {
+  private baseUrl(language?: string) {
+    const locale = language?.toLowerCase().startsWith('en') ? 'en' : 'zh-cn';
     const configuredUrl = this.config
       .get<string>('OBB_CONVERSATION_SHARE_URL')
       ?.trim();
-    if (configuredUrl) return configuredUrl.replace(/\/$/, '');
+    if (configuredUrl) {
+      return configuredUrl
+        .replace(/\/$/, '')
+        .replace(/\/(?:en|zh-cn)(?=\/conversation-share$)/i, `/${locale}`);
+    }
 
     const omniboxBaseUrl = this.config
       .get<string>('OBB_BASE_URL', 'https://www.omnibox.pro')
       .replace(/\/$/, '');
-    return `${omniboxBaseUrl}/zh-cn/conversation-share`;
+    return `${omniboxBaseUrl}/${locale}/conversation-share`;
   }
 
   private invalidRequest(message: string) {

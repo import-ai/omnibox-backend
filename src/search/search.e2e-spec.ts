@@ -140,7 +140,14 @@ describe('SearchController (e2e)', () => {
         {
           provide: ConversationsService,
           useValue: {
-            has: jest.fn().mockResolvedValue(true),
+            get: jest.fn().mockImplementation((id: string) =>
+              Promise.resolve({
+                id,
+                namespaceId: mockNamespaceId,
+                userId: mockUser.id,
+                title: 'Test conversation',
+              }),
+            ),
             listAll: jest.fn().mockResolvedValue([]),
           },
         },
@@ -385,7 +392,7 @@ describe('SearchController (e2e)', () => {
       }
     });
 
-    it('should not return conversation results when message type is requested', async () => {
+    it('should return conversation results when message type is requested', async () => {
       const response = await request(app.getHttpServer())
         .get(
           `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
@@ -394,7 +401,16 @@ describe('SearchController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body).toHaveLength(0);
+      expect(response.body).toEqual([
+        expect.objectContaining({
+          type: DocType.MESSAGE,
+          message_id: '550e8400-e29b-41d4-a716-446655440002',
+          conversation_id: '550e8400-e29b-41d4-a716-446655440001',
+          title: 'Test conversation',
+          role: 'user',
+          content: 'This is a test message content',
+        }),
+      ]);
     });
 
     it('should handle missing query parameter', async () => {
@@ -625,7 +641,7 @@ describe('SearchController (e2e)', () => {
       });
     });
 
-    it('should return an empty list for message results', async () => {
+    it('should return message results', async () => {
       const response = await request(app.getHttpServer())
         .get(
           `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
@@ -634,7 +650,14 @@ describe('SearchController (e2e)', () => {
         .expect(HttpStatus.OK);
 
       expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body).toHaveLength(0);
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0]).toMatchObject({
+        type: DocType.MESSAGE,
+        message_id: '550e8400-e29b-41d4-a716-446655440002',
+        conversation_id: '550e8400-e29b-41d4-a716-446655440001',
+        title: 'Test conversation',
+        role: 'user',
+      });
     });
   });
 });

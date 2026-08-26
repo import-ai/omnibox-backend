@@ -222,6 +222,7 @@ export class AuthService {
         user.id,
         user.username,
         tx,
+        lang,
       );
 
       return {
@@ -338,6 +339,7 @@ export class AuthService {
           user.id,
           user.username,
           tx,
+          lang,
         );
 
         return {
@@ -421,6 +423,7 @@ export class AuthService {
         user.id,
         user.username,
         tx,
+        data.lang,
       );
       if (payload.invitation) {
         await this.handleUserInvitation(user.id, payload.invitation, tx);
@@ -708,6 +711,7 @@ export class AuthService {
         user.id,
         user.username,
         tx,
+        lang,
       );
 
       // Add user to the invited namespace

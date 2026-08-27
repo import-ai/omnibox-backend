@@ -95,6 +95,7 @@ import { AddPubDateAndTitleToRssTables1785238404377 } from 'omniboxd/migrations/
 import { AddParseRetryToRssItemContents1785404258645 } from 'omniboxd/migrations/1785404258645-add-parse-retry-to-rss-item-contents';
 import { AddResourceSorting1785725807283 } from 'omniboxd/migrations/1785725807283-add-resource-sorting';
 import { AddManualSortUnspecifiedAt1786014524273 } from 'omniboxd/migrations/1786014524273-add-manual-sort-unspecified-at';
+import { AddResourceSortPreferences1786156765110 } from 'omniboxd/migrations/1786156765110-add-resource-sort-preferences';
 import { AddRetriedFromTaskIdToTasks1786412970105 } from 'omniboxd/migrations/1786412970105-add-retried-from-task-id-to-tasks';
 import { AddRssItemResources1786534451795 } from 'omniboxd/migrations/1786534451795-add-rss-item-resources';
 import { AddNamespaceParentIndexToResources1787654921509 } from 'omniboxd/migrations/1787654921509-add-namespace-parent-index-to-resources';
@@ -303,6 +304,7 @@ export class AppModule implements NestModule {
               AddParseRetryToRssItemContents1785404258645,
               AddResourceSorting1785725807283,
               AddManualSortUnspecifiedAt1786014524273,
+              AddResourceSortPreferences1786156765110,
               AddRetriedFromTaskIdToTasks1786412970105,
               AddRssItemResources1786534451795,
               AddNamespaceParentIndexToResources1787654921509,

@@ -21,6 +21,9 @@ describe('NamespaceResourcesService', () => {
     const smartFoldersService = {
       listChildrenWithTotal: jest.fn(),
     };
+    const resourceSortPreferenceService = {
+      getSortOptions: jest.fn().mockResolvedValue({}),
+    };
     const service = new NamespaceResourcesService(
       {} as any,
       {} as any,
@@ -33,6 +36,7 @@ describe('NamespaceResourcesService', () => {
       {} as any,
       {} as any,
       {} as any,
+      resourceSortPreferenceService as any,
       smartFoldersService as any,
       {} as any,
     );

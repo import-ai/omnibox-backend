@@ -7,13 +7,18 @@ import { Applications } from 'omniboxd/applications/applications.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourceSortPreferenceService } from 'omniboxd/namespace-resources/resource-sort-preference.service';
 import { MeNamespaceResponseDto } from 'omniboxd/namespaces/dto/me.namespace.response.dto';
 import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { ResourceSortOptions } from 'omniboxd/resources/resource-sort';
+import {
+  hasExplicitSortOptions,
+  ResourceSortOptions,
+  ResourceSortSpaceType,
+} from 'omniboxd/resources/resource-sort';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
@@ -48,6 +53,7 @@ export class NamespacesService {
     private readonly userService: UserService,
 
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourceSortPreferenceService: ResourceSortPreferenceService,
     private readonly resourcesService: ResourcesService,
 
     private readonly permissionsService: PermissionsService,
@@ -889,18 +895,32 @@ export class NamespacesService {
     },
   ) {
     const privateRoot = await this.getPrivateRoot(userId, namespaceId);
+    const privateSortOptions = hasExplicitSortOptions(sortOptions?.private)
+      ? sortOptions?.private
+      : await this.resourceSortPreferenceService.getSortOptions(
+          userId,
+          namespaceId,
+          ResourceSortSpaceType.PRIVATE,
+        );
     const privateChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       privateRoot.id,
       userId,
-      sortOptions?.private,
+      privateSortOptions,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
+    const teamspaceSortOptions = hasExplicitSortOptions(sortOptions?.teamspace)
+      ? sortOptions?.teamspace
+      : await this.resourceSortPreferenceService.getSortOptions(
+          userId,
+          namespaceId,
+          ResourceSortSpaceType.TEAMSPACE,
+        );
     const teamspaceChildren = await this.namespaceResourcesService.listChildren(
       namespaceId,
       teamspaceRoot.id,
       userId,
-      sortOptions?.teamspace,
+      teamspaceSortOptions,
     );
     const spaces: any = {
       private: { ...privateRoot, parentId: '0', children: privateChildren },

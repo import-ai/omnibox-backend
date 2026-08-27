@@ -4,6 +4,9 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 import { Resource, ResourceType } from '../entities/resource.entity';
 
 export class ResourceMetaDto {
+  @Exclude()
+  userId: string | null;
+
   @Expose()
   id: string;
 
@@ -41,6 +44,7 @@ export class ResourceMetaDto {
 
   static fromEntity(resource: Resource) {
     const dto = new ResourceMetaDto();
+    dto.userId = resource.userId;
     dto.id = resource.id;
     dto.parentId = resource.parentId;
     dto.name = resource.name;

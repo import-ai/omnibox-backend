@@ -9,10 +9,7 @@ import {
   NamespaceRole,
   ROLE_LEVEL,
 } from 'omniboxd/namespaces/entities/namespace-member.entity';
-import {
-  ResourceMetaDto,
-  ResourcePermissionMeta,
-} from 'omniboxd/resources/dto/resource-meta.dto';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { User } from 'omniboxd/user/entities/user.entity';
@@ -225,7 +222,7 @@ export class PermissionsService {
   async getCurrentPermissions(
     userId: string,
     namespaceId: string,
-    resources: ResourcePermissionMeta[],
+    resources: ResourceMetaDto[],
     entityManager?: EntityManager,
   ): Promise<Map<string, ResourcePermission>> {
     if (!entityManager) {
@@ -280,13 +277,13 @@ export class PermissionsService {
     for (const permission of userPermissions) {
       userPermissionMap.set(permission.resourceId, permission);
     }
-    // resourceId -> ResourcePermissionMeta
-    const resourceMap: Map<string, ResourcePermissionMeta> = new Map();
+    // resourceId -> ResourceMetaDto
+    const resourceMap: Map<string, ResourceMetaDto> = new Map();
     for (const resource of resources) {
       resourceMap.set(resource.id, resource);
     }
 
-    const calcUserPermission = (resource: ResourcePermissionMeta) => {
+    const calcUserPermission = (resource: ResourceMetaDto) => {
       while (true) {
         const userPermission = userPermissionMap.get(resource.id);
         if (userPermission) {
@@ -304,7 +301,7 @@ export class PermissionsService {
     };
 
     const calcGroupPermission = (
-      resource: ResourcePermissionMeta,
+      resource: ResourceMetaDto,
       groupId: string,
     ) => {
       while (true) {
@@ -325,7 +322,7 @@ export class PermissionsService {
       }
     };
 
-    const calcGlobalPermission = (resource: ResourcePermissionMeta) => {
+    const calcGlobalPermission = (resource: ResourceMetaDto) => {
       while (true) {
         if (resource.globalPermission) {
           return resource.globalPermission;
@@ -371,8 +368,8 @@ export class PermissionsService {
   async batchGetHasChildren(
     namespaceId: string,
     userId: string,
-    parents: ResourcePermissionMeta[],
-    ancestors: ResourcePermissionMeta[],
+    parents: ResourceMetaDto[],
+    ancestors: ResourceMetaDto[],
     entityManager?: EntityManager,
   ): Promise<Map<string, boolean>> {
     const result = new Map(parents.map((parent) => [parent.id, false]));

@@ -1,10 +1,18 @@
 import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
 import { UserPermission } from 'omniboxd/permissions/entities/user-permission.entity';
+import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 
 import { PermissionsService } from './permissions.service';
 import { ResourcePermission } from './resource-permission.enum';
 
 describe('PermissionsService', () => {
+  // Only these three fields take part in permission resolution.
+  const meta = (
+    id: string,
+    parentId: string | null,
+    globalPermission: ResourcePermission | null = null,
+  ) => ({ id, parentId, globalPermission }) as ResourceMetaDto;
+
   function createService(
     dataSource: Record<string, unknown> = {},
     resourcesService: Record<string, unknown> = {},
@@ -43,10 +51,7 @@ describe('PermissionsService', () => {
     const result = await service.getCurrentPermissions(
       'user-1',
       'namespace-1',
-      [
-        { id: 'root', parentId: null, globalPermission: null },
-        { id: 'child', parentId: 'root', globalPermission: null },
-      ],
+      [meta('root', null), meta('child', 'root')],
       { find } as any,
     );
 
@@ -55,16 +60,8 @@ describe('PermissionsService', () => {
   });
 
   describe('batchGetHasChildren', () => {
-    const root = {
-      id: 'root',
-      parentId: null,
-      globalPermission: ResourcePermission.CAN_VIEW,
-    };
-    const parent = (id: string) => ({
-      id,
-      parentId: 'root',
-      globalPermission: null,
-    });
+    const root = meta('root', null, ResourcePermission.CAN_VIEW);
+    const parent = (id: string) => meta(id, 'root');
 
     it('settles parents holding an inheriting child without reading their children', async () => {
       const query = jest

@@ -1269,7 +1269,7 @@ export class NamespaceResourcesService {
             // The metadata read above left `content` unselected; the summary dto
             // takes its prefix from here.
             Object.assign(res, { content: contents.get(res.id) ?? '' }),
-            hasChildrenMap.get(res.id) ?? false,
+            !!hasChildrenMap.get(res.id),
             firstAttachments.get(res.id),
           ),
         ),
@@ -1278,7 +1278,7 @@ export class NamespaceResourcesService {
     }
     return {
       resources: pagedChildren.map((res) =>
-        ResourceSummaryDto.fromEntity(res, hasChildrenMap.get(res.id) ?? false),
+        ResourceSummaryDto.fromEntity(res, !!hasChildrenMap.get(res.id)),
       ),
       total,
     };

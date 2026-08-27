@@ -33,6 +33,51 @@ import {
   ResourcePermission,
 } from './resource-permission.enum';
 
+/**
+ * Written as `EXISTS` rather than `SELECT DISTINCT parent_id` over the matching
+ * children: both return the same parents, but only the semi-join is free to
+ * stop at the first match instead of reading every child.
+ */
+const PARENTS_WITH_INHERITING_CHILD_SQL = `
+  WITH requested_parents AS (
+    SELECT UNNEST($3::text[]) AS id
+  ),
+  user_groups AS (
+    SELECT group_id
+    FROM group_users
+    WHERE namespace_id = $1
+      AND user_id = $2
+      AND deleted_at IS NULL
+  )
+  SELECT requested_parents.id AS "parentId"
+  FROM requested_parents
+  WHERE EXISTS (
+    SELECT 1
+    FROM resources
+    WHERE resources.namespace_id = $1
+      AND resources.parent_id = requested_parents.id
+      AND resources.deleted_at IS NULL
+      AND resources.global_permission IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM user_permissions
+        WHERE user_permissions.namespace_id = $1
+          AND user_permissions.resource_id = resources.id
+          AND user_permissions.user_id = $2
+          AND user_permissions.deleted_at IS NULL
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM group_permissions
+        INNER JOIN user_groups
+          ON user_groups.group_id = group_permissions.group_id
+        WHERE group_permissions.namespace_id = $1
+          AND group_permissions.resource_id = resources.id
+          AND group_permissions.deleted_at IS NULL
+      )
+  )
+`;
+
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -315,168 +360,72 @@ export class PermissionsService {
   }
 
   /**
-   * The caller guarantees that every parent is visible to the user. Resolve
-   * each permission channel independently so direct rules only override the
-   * same inherited channel.
+   * Whether each parent has at least one visible child, for the expand arrow in
+   * the resource tree.
+   *
+   * Callers guarantee every parent is itself visible, and pass the chain above
+   * them as `ancestors`. That is what makes the first query decisive: a child
+   * carrying no rule of its own inherits every channel from its parent
+   * unchanged, so it resolves to whatever the parent resolves to.
    */
   async batchGetHasChildren(
     namespaceId: string,
     userId: string,
-    parentIds: string[],
+    parents: ResourcePermissionMeta[],
+    ancestors: ResourcePermissionMeta[],
     entityManager?: EntityManager,
   ): Promise<Map<string, boolean>> {
-    const result = new Map(parentIds.map((parentId) => [parentId, false]));
-    if (parentIds.length === 0) {
+    const result = new Map(parents.map((parent) => [parent.id, false]));
+    if (parents.length === 0) {
       return result;
     }
 
     const manager = entityManager ?? this.dataSource.manager;
-    const rows: { parentId: string }[] = await manager.query(
-      `
-        WITH RECURSIVE requested_parents AS (
-          SELECT UNNEST($3::text[]) AS id
-        ),
-        ancestor_chain AS (
-          SELECT
-            requested_parents.id AS requested_parent_id,
-            resources.id AS resource_id,
-            resources.parent_id,
-            resources.global_permission,
-            0 AS depth
-          FROM requested_parents
-          INNER JOIN resources
-            ON resources.namespace_id = $1
-            AND resources.id = requested_parents.id
-            AND resources.deleted_at IS NULL
 
-          UNION ALL
-
-          SELECT
-            ancestor_chain.requested_parent_id,
-            parent.id AS resource_id,
-            parent.parent_id,
-            parent.global_permission,
-            ancestor_chain.depth + 1
-          FROM ancestor_chain
-          INNER JOIN resources parent
-            ON parent.namespace_id = $1
-            AND parent.id = ancestor_chain.parent_id
-            AND parent.deleted_at IS NULL
-        ),
-        user_groups AS (
-          SELECT group_id
-          FROM group_users
-          WHERE namespace_id = $1
-            AND user_id = $2
-            AND deleted_at IS NULL
-        ),
-        parent_global_permissions AS (
-          SELECT DISTINCT ON (requested_parent_id)
-            requested_parent_id,
-            global_permission AS permission
-          FROM ancestor_chain
-          WHERE global_permission IS NOT NULL
-          ORDER BY requested_parent_id, depth
-        ),
-        parent_user_permissions AS (
-          SELECT DISTINCT ON (ancestor_chain.requested_parent_id)
-            ancestor_chain.requested_parent_id,
-            user_permissions.permission
-          FROM ancestor_chain
-          INNER JOIN user_permissions
-            ON user_permissions.namespace_id = $1
-            AND user_permissions.resource_id = ancestor_chain.resource_id
-            AND user_permissions.user_id = $2
-            AND user_permissions.deleted_at IS NULL
-          ORDER BY ancestor_chain.requested_parent_id, ancestor_chain.depth
-        ),
-        parent_group_permissions AS (
-          SELECT DISTINCT ON (
-            ancestor_chain.requested_parent_id,
-            group_permissions.group_id
-          )
-            ancestor_chain.requested_parent_id,
-            group_permissions.group_id,
-            group_permissions.permission
-          FROM ancestor_chain
-          INNER JOIN group_permissions
-            ON group_permissions.namespace_id = $1
-            AND group_permissions.resource_id = ancestor_chain.resource_id
-            AND group_permissions.deleted_at IS NULL
-          INNER JOIN user_groups
-            ON user_groups.group_id = group_permissions.group_id
-          ORDER BY
-            ancestor_chain.requested_parent_id,
-            group_permissions.group_id,
-            ancestor_chain.depth
-        ),
-        children AS (
-          SELECT id, parent_id, global_permission
-          FROM resources
-          WHERE namespace_id = $1
-            AND parent_id = ANY($3::text[])
-            AND deleted_at IS NULL
-        ),
-        effective_permissions AS (
-          SELECT
-            children.id AS resource_id,
-            children.parent_id,
-            COALESCE(
-              children.global_permission,
-              parent_global_permissions.permission
-            ) AS permission
-          FROM children
-          LEFT JOIN parent_global_permissions
-            ON parent_global_permissions.requested_parent_id = children.parent_id
-
-          UNION ALL
-
-          SELECT
-            children.id AS resource_id,
-            children.parent_id,
-            COALESCE(
-              user_permissions.permission,
-              parent_user_permissions.permission
-            ) AS permission
-          FROM children
-          LEFT JOIN user_permissions
-            ON user_permissions.namespace_id = $1
-            AND user_permissions.resource_id = children.id
-            AND user_permissions.user_id = $2
-            AND user_permissions.deleted_at IS NULL
-          LEFT JOIN parent_user_permissions
-            ON parent_user_permissions.requested_parent_id = children.parent_id
-
-          UNION ALL
-
-          SELECT
-            children.id AS resource_id,
-            children.parent_id,
-            COALESCE(
-              group_permissions.permission,
-              parent_group_permissions.permission
-            ) AS permission
-          FROM children
-          CROSS JOIN user_groups
-          LEFT JOIN group_permissions
-            ON group_permissions.namespace_id = $1
-            AND group_permissions.resource_id = children.id
-            AND group_permissions.group_id = user_groups.group_id
-            AND group_permissions.deleted_at IS NULL
-          LEFT JOIN parent_group_permissions
-            ON parent_group_permissions.requested_parent_id = children.parent_id
-            AND parent_group_permissions.group_id = user_groups.group_id
-        )
-        SELECT DISTINCT parent_id AS "parentId"
-        FROM effective_permissions
-        WHERE permission IS NOT NULL
-          AND permission <> $4::resource_permission
-      `,
-      [namespaceId, userId, parentIds, ResourcePermission.NO_ACCESS],
+    const settled: { parentId: string }[] = await manager.query(
+      PARENTS_WITH_INHERITING_CHILD_SQL,
+      [namespaceId, userId, parents.map((parent) => parent.id)],
     );
-
-    for (const row of rows) {
+    for (const row of settled) {
       result.set(row.parentId, true);
+    }
+
+    // Overrides are the exception, so a parent reaching this point holds few
+    // children, or none at all, and can be resolved directly.
+    const remainingParents = parents.filter((parent) => !result.get(parent.id));
+    if (remainingParents.length === 0) {
+      return result;
+    }
+
+    const children = await this.resourcesService.getChildren(
+      namespaceId,
+      remainingParents.map((parent) => parent.id),
+      {},
+      manager,
+    );
+    if (children.length === 0) {
+      return result;
+    }
+
+    const permissions = await this.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [
+        ...ancestors,
+        ...parents,
+        ...children.map((child) => ResourceMetaDto.fromEntity(child)),
+      ],
+      manager,
+    );
+    for (const child of children) {
+      const permission = permissions.get(child.id);
+      if (
+        child.parentId &&
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      ) {
+        result.set(child.parentId, true);
+      }
     }
     return result;
   }

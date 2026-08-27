@@ -1249,7 +1249,8 @@ export class NamespaceResourcesService {
     const hasChildrenMap = await this.permissionsService.batchGetHasChildren(
       namespaceId,
       userId,
-      pagedChildren.map((child) => child.id),
+      pagedChildren.map((child) => ResourceMetaDto.fromEntity(child)),
+      parents,
       entityManager,
     );
 

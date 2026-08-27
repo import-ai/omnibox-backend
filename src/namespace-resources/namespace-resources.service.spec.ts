@@ -152,7 +152,11 @@ describe('NamespaceResourcesService', () => {
     expect(permissionsService.batchGetHasChildren).toHaveBeenCalledWith(
       namespaceId,
       userId,
-      ['folder-with-child', 'empty-folder'],
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'folder-with-child' }),
+        expect.objectContaining({ id: 'empty-folder' }),
+      ]),
+      [target, root],
       undefined,
     );
     expect(permissionsService.getCurrentPermissions).toHaveBeenCalledTimes(1);

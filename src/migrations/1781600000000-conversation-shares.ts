@@ -120,7 +120,11 @@ export class ConversationShares1781600000000 implements MigrationInterface {
     );
   }
 
-  public down(): Promise<void> {
-    throw new Error('Not supported.');
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.dropTable('conversation_share_events', true, true, true);
+    await queryRunner.dropTable('conversation_share_groups', true, true, true);
+    await queryRunner.dropTable('conversation_shares', true, true, true);
+    await queryRunner.query('DROP TYPE IF EXISTS conversation_share_channel');
+    await queryRunner.query('DROP TYPE IF EXISTS conversation_share_status');
   }
 }

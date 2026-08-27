@@ -11,6 +11,10 @@ import {
 import { EntityManager, Repository } from 'typeorm';
 
 import {
+  sanitizeConversationShareAnswer,
+  sanitizeConversationShareQuestion,
+} from './conversation-share-content';
+import {
   ConversationShareResponseDto,
   PublicConversationShareDto,
 } from './dto/conversation-share-response.dto';
@@ -59,16 +63,14 @@ export class ConversationSharesService {
       order: { createdAt: 'ASC' },
     });
     this.ensureNotGenerating(messages);
-    const selectedGroups = this.resolveSelectedGroups(
-      messages,
-      request.group_ids,
-    );
-    const title = this.resolveTitle(
-      conversation.title,
-      selectedGroups[0].question,
+    const selectedGroups = this.resolveRequestedGroups(messages, request);
+    const title = sanitizeConversationShareQuestion(
+      this.resolveTitle(conversation.title, selectedGroups[0].question),
     );
     const summary = this.summarize(
-      selectedGroups[0].answer.message.content ?? '',
+      sanitizeConversationShareAnswer(
+        selectedGroups[0].answer.message.content ?? '',
+      ),
     );
 
     const share = this.shareRepo.create({
@@ -82,8 +84,12 @@ export class ConversationSharesService {
       groups: this.groupRepo.create(
         selectedGroups.map(({ question, answer }, ordinal) => ({
           ordinal,
-          questionContent: question.message.content?.trim() ?? '',
-          answerContent: answer.message.content?.trim() ?? '',
+          questionContent: sanitizeConversationShareQuestion(
+            question.message.content?.trim() ?? '',
+          ),
+          answerContent: sanitizeConversationShareAnswer(
+            answer.message.content?.trim() ?? '',
+          ),
         })),
       ),
       events: [
@@ -109,13 +115,13 @@ export class ConversationSharesService {
 
     return {
       id: share.id,
-      title: share.title,
-      summary: share.summary,
+      title: sanitizeConversationShareQuestion(share.title),
+      summary: sanitizeConversationShareAnswer(share.summary),
       groups: share.groups
         .sort((left, right) => left.ordinal - right.ordinal)
         .map((group) => ({
-          question: group.questionContent,
-          answer: group.answerContent,
+          question: sanitizeConversationShareQuestion(group.questionContent),
+          answer: sanitizeConversationShareAnswer(group.answerContent),
         })),
     };
   }
@@ -164,6 +170,81 @@ export class ConversationSharesService {
       );
     }
     return selected;
+  }
+
+  private resolveRequestedGroups(
+    messages: Message[],
+    request: CreateConversationShareDto,
+  ) {
+    const hasAnswerIds = request.answer_ids !== undefined;
+    const hasLegacyGroupIds = request.group_ids !== undefined;
+    if (hasAnswerIds === hasLegacyGroupIds) {
+      throw this.invalidRequest(
+        'Provide exactly one of answer_ids or group_ids.',
+      );
+    }
+    return hasAnswerIds
+      ? this.resolveSelectedAnswers(messages, request.answer_ids ?? [])
+      : this.resolveSelectedGroups(messages, request.group_ids ?? []);
+  }
+
+  private resolveSelectedAnswers(
+    messages: Message[],
+    answerIds: string[],
+  ): ResolvedShareGroup[] {
+    const selectedIds = new Set(answerIds);
+    if (selectedIds.size === 0 || selectedIds.size !== answerIds.length) {
+      throw this.invalidRequest('Select unique completed answers.');
+    }
+
+    const messagesById = new Map(
+      messages.map((message) => [message.id, message]),
+    );
+    const messageOrder = new Map(
+      messages.map((message, index) => [message.id, index]),
+    );
+    const questionIds = new Set<string>();
+    const groups = answerIds.map((answerId) => {
+      const answer = messagesById.get(answerId);
+      if (!answer || !this.isFinalAnswer(answer)) {
+        throw this.invalidRequest(
+          'Each selected answer must be completed and shareable.',
+        );
+      }
+
+      const question = this.findNearestQuestion(answer, messagesById);
+      if (!question || questionIds.has(question.id)) {
+        throw this.invalidRequest(
+          'Each selected answer must resolve to a unique question.',
+        );
+      }
+      questionIds.add(question.id);
+      return { answer, question };
+    });
+
+    return groups.sort(
+      (left, right) =>
+        (messageOrder.get(left.question.id) ?? Number.MAX_SAFE_INTEGER) -
+        (messageOrder.get(right.question.id) ?? Number.MAX_SAFE_INTEGER),
+    );
+  }
+
+  private findNearestQuestion(
+    answer: Message,
+    messagesById: ReadonlyMap<string, Message>,
+  ): Message | null {
+    const visited = new Set<string>();
+    let parentId = answer.parentId;
+    while (parentId) {
+      if (visited.has(parentId)) return null;
+      visited.add(parentId);
+
+      const parent = messagesById.get(parentId);
+      if (!parent) return null;
+      if (this.isShareableQuestion(parent)) return parent;
+      parentId = parent.parentId;
+    }
+    return null;
   }
 
   private ensureNotGenerating(messages: Message[]) {

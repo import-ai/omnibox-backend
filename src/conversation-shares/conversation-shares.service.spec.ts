@@ -86,6 +86,122 @@ describe('ConversationSharesService', () => {
     });
   });
 
+  it('snapshots the exact regenerated answer selected by the client', async () => {
+    conversationRepo.findOne.mockResolvedValue({
+      id: 'conversation-1',
+      namespaceId: 'namespace-1',
+      userId: 'user-1',
+      title: 'Regenerated answer',
+    });
+    messageRepo.find.mockResolvedValue([
+      message('question-1', null, 'user', 'Question'),
+      message('answer-old', 'question-1', 'assistant', 'Old answer'),
+      message('answer-new', 'question-1', 'assistant', 'Selected answer'),
+    ]);
+    shareRepo.save.mockImplementation((value) => ({
+      ...value,
+      id: 'share-1',
+    }));
+
+    await createService().create('namespace-1', 'user-1', {
+      channel: ConversationShareChannel.COPY_LINK,
+      conversation_id: 'conversation-1',
+      answer_ids: ['answer-new'],
+    });
+
+    expect(groupRepo.create).toHaveBeenCalledWith([
+      expect.objectContaining({
+        ordinal: 0,
+        questionContent: 'Question',
+        answerContent: 'Selected answer',
+      }),
+    ]);
+  });
+
+  it('removes internal resource and citation markers from a new snapshot', async () => {
+    conversationRepo.findOne.mockResolvedValue({
+      id: 'conversation-1',
+      namespaceId: 'namespace-1',
+      userId: 'user-1',
+      title: 'Resource summary',
+    });
+    messageRepo.find.mockResolvedValue([
+      message(
+        'question-1',
+        null,
+        'user',
+        '[砌体工程量计算规则](#ifm2qXxxkixL3XE) 总结一下这个文件，保留 [[9]]',
+      ),
+      message(
+        'answer-1',
+        'question-1',
+        'assistant',
+        '结论[[1]](C1-resource)\n\n补充 [[2]]。\n\n1. 第一项\n2. 第二项',
+      ),
+    ]);
+
+    await createService().create('namespace-1', 'user-1', {
+      channel: ConversationShareChannel.COPY_LINK,
+      conversation_id: 'conversation-1',
+      answer_ids: ['answer-1'],
+    });
+
+    expect(groupRepo.create).toHaveBeenCalledWith([
+      expect.objectContaining({
+        questionContent: '砌体工程量计算规则 总结一下这个文件，保留 [[9]]',
+        answerContent: '结论\n\n补充。\n\n1. 第一项\n2. 第二项',
+      }),
+    ]);
+  });
+
+  it('removes internal markers from historical snapshots returned publicly', async () => {
+    shareRepo.findOne.mockResolvedValue({
+      id: 'share-1',
+      title: 'Resource summary',
+      summary: 'Summary',
+      groups: [
+        {
+          ordinal: 0,
+          questionContent:
+            '[砌体工程量计算规则](#ifm2qXxxkixL3XE) 总结一下这个文件，保留 [[9]]',
+          answerContent:
+            '结论[[1]](C1-resource)\n\n保留普通 [1]。\n\n1. 第一项',
+        },
+      ],
+    });
+
+    await expect(createService().getPublic('share-1')).resolves.toMatchObject({
+      groups: [
+        {
+          question: '砌体工程量计算规则 总结一下这个文件，保留 [[9]]',
+          answer: '结论\n\n保留普通 [1]。\n\n1. 第一项',
+        },
+      ],
+    });
+  });
+
+  it('rejects selected answers that resolve to the same question', async () => {
+    conversationRepo.findOne.mockResolvedValue({
+      id: 'conversation-1',
+      namespaceId: 'namespace-1',
+      userId: 'user-1',
+      title: 'Regenerated answer',
+    });
+    messageRepo.find.mockResolvedValue([
+      message('question-1', null, 'user', 'Question'),
+      message('answer-old', 'question-1', 'assistant', 'Old answer'),
+      message('answer-new', 'question-1', 'assistant', 'Selected answer'),
+    ]);
+
+    await expect(
+      createService().create('namespace-1', 'user-1', {
+        channel: ConversationShareChannel.COPY_LINK,
+        conversation_id: 'conversation-1',
+        answer_ids: ['answer-old', 'answer-new'],
+      }),
+    ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+  });
+
   it.each([
     ['en', 'en'],
     ['en-US', 'en'],

@@ -315,9 +315,9 @@ export class PermissionsService {
   }
 
   /**
-   * The caller guarantees that every parent is visible to the user. A child
-   * without direct permission rules therefore inherits visibility; otherwise
-   * only the child's own global, user, and group rules need to be considered.
+   * The caller guarantees that every parent is visible to the user. Resolve
+   * each permission channel independently so direct rules only override the
+   * same inherited channel.
    */
   async batchGetHasChildren(
     namespaceId: string,
@@ -333,53 +333,144 @@ export class PermissionsService {
     const manager = entityManager ?? this.dataSource.manager;
     const rows: { parentId: string }[] = await manager.query(
       `
-        WITH children AS (
+        WITH RECURSIVE requested_parents AS (
+          SELECT UNNEST($3::text[]) AS id
+        ),
+        ancestor_chain AS (
+          SELECT
+            requested_parents.id AS requested_parent_id,
+            resources.id AS resource_id,
+            resources.parent_id,
+            resources.global_permission,
+            0 AS depth
+          FROM requested_parents
+          INNER JOIN resources
+            ON resources.namespace_id = $1
+            AND resources.id = requested_parents.id
+            AND resources.deleted_at IS NULL
+
+          UNION ALL
+
+          SELECT
+            ancestor_chain.requested_parent_id,
+            parent.id AS resource_id,
+            parent.parent_id,
+            parent.global_permission,
+            ancestor_chain.depth + 1
+          FROM ancestor_chain
+          INNER JOIN resources parent
+            ON parent.namespace_id = $1
+            AND parent.id = ancestor_chain.parent_id
+            AND parent.deleted_at IS NULL
+        ),
+        user_groups AS (
+          SELECT group_id
+          FROM group_users
+          WHERE namespace_id = $1
+            AND user_id = $2
+            AND deleted_at IS NULL
+        ),
+        parent_global_permissions AS (
+          SELECT DISTINCT ON (requested_parent_id)
+            requested_parent_id,
+            global_permission AS permission
+          FROM ancestor_chain
+          WHERE global_permission IS NOT NULL
+          ORDER BY requested_parent_id, depth
+        ),
+        parent_user_permissions AS (
+          SELECT DISTINCT ON (ancestor_chain.requested_parent_id)
+            ancestor_chain.requested_parent_id,
+            user_permissions.permission
+          FROM ancestor_chain
+          INNER JOIN user_permissions
+            ON user_permissions.namespace_id = $1
+            AND user_permissions.resource_id = ancestor_chain.resource_id
+            AND user_permissions.user_id = $2
+            AND user_permissions.deleted_at IS NULL
+          ORDER BY ancestor_chain.requested_parent_id, ancestor_chain.depth
+        ),
+        parent_group_permissions AS (
+          SELECT DISTINCT ON (
+            ancestor_chain.requested_parent_id,
+            group_permissions.group_id
+          )
+            ancestor_chain.requested_parent_id,
+            group_permissions.group_id,
+            group_permissions.permission
+          FROM ancestor_chain
+          INNER JOIN group_permissions
+            ON group_permissions.namespace_id = $1
+            AND group_permissions.resource_id = ancestor_chain.resource_id
+            AND group_permissions.deleted_at IS NULL
+          INNER JOIN user_groups
+            ON user_groups.group_id = group_permissions.group_id
+          ORDER BY
+            ancestor_chain.requested_parent_id,
+            group_permissions.group_id,
+            ancestor_chain.depth
+        ),
+        children AS (
           SELECT id, parent_id, global_permission
           FROM resources
           WHERE namespace_id = $1
             AND parent_id = ANY($3::text[])
             AND deleted_at IS NULL
         ),
-        direct_permissions AS (
-          SELECT id AS resource_id, global_permission AS permission
+        effective_permissions AS (
+          SELECT
+            children.id AS resource_id,
+            children.parent_id,
+            COALESCE(
+              children.global_permission,
+              parent_global_permissions.permission
+            ) AS permission
           FROM children
-          WHERE global_permission IS NOT NULL
+          LEFT JOIN parent_global_permissions
+            ON parent_global_permissions.requested_parent_id = children.parent_id
 
           UNION ALL
 
-          SELECT children.id AS resource_id, user_permissions.permission
+          SELECT
+            children.id AS resource_id,
+            children.parent_id,
+            COALESCE(
+              user_permissions.permission,
+              parent_user_permissions.permission
+            ) AS permission
           FROM children
-          INNER JOIN user_permissions
+          LEFT JOIN user_permissions
             ON user_permissions.namespace_id = $1
             AND user_permissions.resource_id = children.id
             AND user_permissions.user_id = $2
             AND user_permissions.deleted_at IS NULL
+          LEFT JOIN parent_user_permissions
+            ON parent_user_permissions.requested_parent_id = children.parent_id
 
           UNION ALL
 
-          SELECT children.id AS resource_id, group_permissions.permission
+          SELECT
+            children.id AS resource_id,
+            children.parent_id,
+            COALESCE(
+              group_permissions.permission,
+              parent_group_permissions.permission
+            ) AS permission
           FROM children
-          INNER JOIN group_permissions
+          CROSS JOIN user_groups
+          LEFT JOIN group_permissions
             ON group_permissions.namespace_id = $1
             AND group_permissions.resource_id = children.id
+            AND group_permissions.group_id = user_groups.group_id
             AND group_permissions.deleted_at IS NULL
-          INNER JOIN group_users
-            ON group_users.namespace_id = $1
-            AND group_users.group_id = group_permissions.group_id
-            AND group_users.user_id = $2
-            AND group_users.deleted_at IS NULL
-        ),
-        visible_children AS (
-          SELECT children.id, children.parent_id
-          FROM children
-          LEFT JOIN direct_permissions
-            ON direct_permissions.resource_id = children.id
-          GROUP BY children.id, children.parent_id
-          HAVING COUNT(direct_permissions.permission) = 0
-            OR BOOL_OR(direct_permissions.permission <> $4::resource_permission)
+          LEFT JOIN parent_group_permissions
+            ON parent_group_permissions.requested_parent_id = children.parent_id
+            AND parent_group_permissions.group_id = user_groups.group_id
         )
         SELECT DISTINCT parent_id AS "parentId"
-        FROM visible_children
+        FROM effective_permissions
+        WHERE permission IS NOT NULL
+          AND permission <> $4::resource_permission
       `,
       [namespaceId, userId, parentIds, ResourcePermission.NO_ACCESS],
     );

@@ -72,7 +72,7 @@ describe('PermissionsService', () => {
     );
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining('WITH children AS'),
+      expect.stringContaining('WITH RECURSIVE requested_parents AS'),
       [
         'namespace-1',
         '00000000-0000-0000-0000-000000000001',

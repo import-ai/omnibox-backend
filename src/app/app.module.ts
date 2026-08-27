@@ -309,6 +309,7 @@ export class AppModule implements NestModule {
               ...extraMigrations,
             ],
             migrationsRun: true,
+            migrationsTransactionMode: 'each',
             namingStrategy: new SnakeNamingStrategy(),
           }),
         }),

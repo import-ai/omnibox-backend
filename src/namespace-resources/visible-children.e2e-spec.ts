@@ -6,6 +6,8 @@ import { TestClient } from 'test/test-client';
 describe('Visible child markers (e2e)', () => {
   let owner: TestClient;
   let member: TestClient;
+  let firstGroupId: string;
+  let secondGroupId: string;
 
   beforeAll(async () => {
     owner = await TestClient.create();
@@ -23,6 +25,22 @@ describe('Visible child markers (e2e)', () => {
         `/api/v1/namespaces/${owner.namespace.id}/invitations/${invitation.body.id}/accept`,
       )
       .expect(HttpStatus.CREATED);
+
+    const createGroup = async (title: string) => {
+      const response = await owner
+        .post(`/api/v1/namespaces/${owner.namespace.id}/groups`)
+        .send({ title })
+        .expect(HttpStatus.CREATED);
+      await owner
+        .post(
+          `/api/v1/namespaces/${owner.namespace.id}/groups/${response.body.id}/users`,
+        )
+        .send({ userIds: [member.user.id] })
+        .expect(HttpStatus.CREATED);
+      return response.body.id as string;
+    };
+    firstGroupId = await createGroup('Visible child group 1');
+    secondGroupId = await createGroup('Visible child group 2');
   });
 
   afterAll(async () => {
@@ -58,6 +76,21 @@ describe('Visible child markers (e2e)', () => {
       ResourceType.FOLDER,
       container.id,
     );
+    const globalGrantParent = await createResource(
+      'Global grant parent',
+      ResourceType.FOLDER,
+      container.id,
+    );
+    const groupGrantParent = await createResource(
+      'Group grant parent',
+      ResourceType.FOLDER,
+      container.id,
+    );
+    const mixedGroupParent = await createResource(
+      'Mixed group parent',
+      ResourceType.FOLDER,
+      container.id,
+    );
     await createResource(
       'Visible grandchild',
       ResourceType.DOC,
@@ -68,13 +101,73 @@ describe('Visible child markers (e2e)', () => {
       ResourceType.DOC,
       hiddenOnlyParent.id,
     );
+    const globalGrantGrandchild = await createResource(
+      'Global grant grandchild',
+      ResourceType.DOC,
+      globalGrantParent.id,
+    );
+    const groupGrantGrandchild = await createResource(
+      'Group grant grandchild',
+      ResourceType.DOC,
+      groupGrantParent.id,
+    );
+    const mixedGroupGrandchild = await createResource(
+      'Mixed group grandchild',
+      ResourceType.DOC,
+      mixedGroupParent.id,
+    );
 
-    await owner
-      .patch(
-        `/api/v1/namespaces/${owner.namespace.id}/resources/${hiddenGrandchild.id}/permissions/users/${member.user.id}`,
-      )
-      .send({ permission: ResourcePermission.NO_ACCESS })
-      .expect(HttpStatus.OK);
+    const setUserPermission = async (
+      resourceId: string,
+      permission: ResourcePermission,
+    ) => {
+      await owner
+        .patch(
+          `/api/v1/namespaces/${owner.namespace.id}/resources/${resourceId}/permissions/users/${member.user.id}`,
+        )
+        .send({ permission })
+        .expect(HttpStatus.OK);
+    };
+    const setGroupPermission = async (
+      resourceId: string,
+      groupId: string,
+      permission: ResourcePermission,
+    ) => {
+      await owner
+        .patch(
+          `/api/v1/namespaces/${owner.namespace.id}/resources/${resourceId}/permissions/groups/${groupId}`,
+        )
+        .send({ permission })
+        .expect(HttpStatus.OK);
+    };
+
+    await Promise.all([
+      setUserPermission(hiddenGrandchild.id, ResourcePermission.NO_ACCESS),
+      setUserPermission(globalGrantGrandchild.id, ResourcePermission.NO_ACCESS),
+      setUserPermission(groupGrantGrandchild.id, ResourcePermission.NO_ACCESS),
+      setUserPermission(mixedGroupGrandchild.id, ResourcePermission.NO_ACCESS),
+      owner
+        .patch(
+          `/api/v1/namespaces/${owner.namespace.id}/resources/${globalGrantParent.id}/permissions`,
+        )
+        .send({ permission: ResourcePermission.CAN_VIEW })
+        .expect(HttpStatus.OK),
+      setGroupPermission(
+        groupGrantParent.id,
+        firstGroupId,
+        ResourcePermission.CAN_VIEW,
+      ),
+      setGroupPermission(
+        mixedGroupGrandchild.id,
+        firstGroupId,
+        ResourcePermission.NO_ACCESS,
+      ),
+      setGroupPermission(
+        mixedGroupGrandchild.id,
+        secondGroupId,
+        ResourcePermission.CAN_VIEW,
+      ),
+    ]);
 
     const response = await member
       .get(
@@ -90,5 +183,8 @@ describe('Visible child markers (e2e)', () => {
 
     expect(hasChildrenById.get(visibleParent.id)).toBe(true);
     expect(hasChildrenById.get(hiddenOnlyParent.id)).toBe(false);
+    expect(hasChildrenById.get(globalGrantParent.id)).toBe(true);
+    expect(hasChildrenById.get(groupGrantParent.id)).toBe(true);
+    expect(hasChildrenById.get(mixedGroupParent.id)).toBe(true);
   });
 });

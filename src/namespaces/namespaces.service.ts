@@ -889,12 +889,14 @@ export class NamespacesService {
   async getRoot(
     namespaceId: string,
     userId: string,
-    sortOptions?: ResourceSortOptions,
+    sortOptions?: {
+      private?: ResourceSortOptions;
+      teamspace?: ResourceSortOptions;
+    },
   ) {
     const privateRoot = await this.getPrivateRoot(userId, namespaceId);
-    const hasExplicitSort = hasExplicitSortOptions(sortOptions);
-    const privateSortOptions = hasExplicitSort
-      ? sortOptions
+    const privateSortOptions = hasExplicitSortOptions(sortOptions?.private)
+      ? sortOptions?.private
       : await this.resourceSortPreferenceService.getSortOptions(
           userId,
           namespaceId,
@@ -907,8 +909,8 @@ export class NamespacesService {
       privateSortOptions,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(namespaceId);
-    const teamspaceSortOptions = hasExplicitSort
-      ? sortOptions
+    const teamspaceSortOptions = hasExplicitSortOptions(sortOptions?.teamspace)
+      ? sortOptions?.teamspace
       : await this.resourceSortPreferenceService.getSortOptions(
           userId,
           namespaceId,

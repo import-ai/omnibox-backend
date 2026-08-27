@@ -28,6 +28,7 @@ describe('NamespaceResourcesService', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
       smartFoldersService as any,
       {} as any,
     );

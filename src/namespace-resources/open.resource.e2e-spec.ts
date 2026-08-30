@@ -4,8 +4,12 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { uploadLanguageDatasets } from 'omniboxd/namespace-resources/file-resources.e2e-spec';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { TestClient } from 'test/test-client';
+import { DataSource } from 'typeorm';
 
 describe('OpenResourcesController (e2e)', () => {
   let client: TestClient;
@@ -628,6 +632,33 @@ describe('OpenResourcesController (e2e)', () => {
         .get(`/open/api/v1/resources/${resourceId}`)
         .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
         .expect(404);
+    });
+
+    it('should reject folder content updates', async () => {
+      const resourceResponse = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Folder Content Update',
+          resource_type: ResourceType.FOLDER,
+        })
+        .expect(201);
+
+      const rejected = await client
+        .request()
+        .patch(`/open/api/v1/resources/${resourceResponse.body.id}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ content: 'Folder content should not be accepted' })
+        .expect(400);
+
+      expect(rejected.body.code).toBe('content_not_allowed_for_folder');
+      const resource = await client.app
+        .get(DataSource)
+        .getRepository(Resource)
+        .findOneByOrFail({ id: resourceResponse.body.id });
+      expect(resource.content).toBe('');
+      expect(resource.contentSize).toBe('0');
     });
 
     it('should move and update resource tags with open api field names', async () => {

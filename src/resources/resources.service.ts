@@ -804,6 +804,18 @@ export class ResourcesService {
       this.assertNotReadOnly(oldResource.resourceType);
     }
 
+    if (
+      oldResource.resourceType === ResourceType.FOLDER &&
+      props.content !== undefined
+    ) {
+      const message = this.i18n.t('resource.errors.contentNotAllowedForFolder');
+      throw new AppException(
+        message,
+        'CONTENT_NOT_ALLOWED_FOR_FOLDER',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     if (props.parentId) {
       await this.assertCanUseAsParentResource(
         namespaceId,

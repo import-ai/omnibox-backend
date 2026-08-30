@@ -1,7 +1,10 @@
 import { HttpStatus } from '@nestjs/common';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
 import { SmartFolderRootScope } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { TestClient } from 'test/test-client';
 import { DataSource } from 'typeorm';
@@ -603,6 +606,35 @@ describe('ResourcesController (e2e)', () => {
           `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}`,
         )
         .expect(HttpStatus.NOT_FOUND);
+    });
+
+    it('should reject internal folder content updates', async () => {
+      const resourceResponse = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Internal Folder Content'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.FOLDER,
+          parentId: client.namespace.root_resource_id,
+          content: '',
+          attrs: {},
+        })
+        .expect(HttpStatus.CREATED);
+
+      const rejected = await client
+        .patch(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${resourceResponse.body.id}`,
+        )
+        .send({ content: 'Folder content should not be accepted' })
+        .expect(HttpStatus.BAD_REQUEST);
+
+      expect(rejected.body.code).toBe('content_not_allowed_for_folder');
+      const resource = await client.app
+        .get(DataSource)
+        .getRepository(Resource)
+        .findOneByOrFail({ id: resourceResponse.body.id });
+      expect(resource.content).toBe('');
+      expect(resource.contentSize).toBe('0');
     });
 
     it('should reject internal patch move when target is not editable', async () => {

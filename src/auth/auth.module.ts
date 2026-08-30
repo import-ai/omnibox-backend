@@ -22,6 +22,8 @@ import { OtpService } from 'omniboxd/auth/otp.service';
 import { SocialService } from 'omniboxd/auth/social.service';
 import { WechatController } from 'omniboxd/auth/wechat/wechat.controller';
 import { WechatService } from 'omniboxd/auth/wechat/wechat.service';
+import { WechatJsSdkController } from 'omniboxd/auth/wechat/wechat-js-sdk.controller';
+import { WechatJsSdkService } from 'omniboxd/auth/wechat/wechat-js-sdk.service';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { GroupsModule } from 'omniboxd/groups/groups.module';
 import { MailModule } from 'omniboxd/mail/mail.module';
@@ -47,6 +49,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     AuthController,
     InternalAuthController,
     WechatController,
+    WechatJsSdkController,
     GoogleController,
     AppleController,
   ],
@@ -55,6 +58,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     SocialService,
     OtpService,
     WechatService,
+    WechatJsSdkService,
     GoogleService,
     AppleService,
     JwtStrategy,

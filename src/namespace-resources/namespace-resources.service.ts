@@ -1246,39 +1246,13 @@ export class NamespaceResourcesService {
             normalizedOffset + normalizedLimit,
           );
 
-    let subChildren = await this.resourcesService.getChildren(
+    const hasChildrenMap = await this.permissionsService.batchGetHasChildren(
       namespaceId,
-      pagedChildren.map((child) => child.id),
-      {},
+      userId,
+      pagedChildren.map((child) => ResourceMetaDto.fromEntity(child)),
+      parents,
       entityManager,
     );
-
-    const subChildrenPermissionMap =
-      await this.permissionsService.getCurrentPermissions(
-        userId,
-        namespaceId,
-        [
-          ...parents,
-          ...pagedChildren.map((r) => ResourceMetaDto.fromEntity(r)),
-          ...subChildren.map((r) => ResourceMetaDto.fromEntity(r)),
-        ],
-        entityManager,
-      );
-
-    subChildren = subChildren.filter((res) => {
-      const permission = subChildrenPermissionMap.get(res.id);
-      return (
-        permission &&
-        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
-      );
-    });
-
-    const hasChildrenMap = new Map<string, boolean>();
-    for (const resource of subChildren) {
-      if (resource.parentId) {
-        hasChildrenMap.set(resource.parentId, true);
-      }
-    }
 
     if (summary) {
       const pagedIds = pagedChildren.map((r) => r.id);

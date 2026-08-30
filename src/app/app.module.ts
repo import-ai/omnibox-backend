@@ -26,6 +26,7 @@ import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
 import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
+import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { FeaturePreviewsModule } from 'omniboxd/feature-previews/feature-previews.module';
 import { FilesModule } from 'omniboxd/files/files.module';
@@ -81,6 +82,7 @@ import { AddSmartFolders1779344088692 } from 'omniboxd/migrations/1779344088692-
 import { AddLastHeartbeatToTasks1780652045516 } from 'omniboxd/migrations/1780652045516-add-last-heartbeat-to-tasks';
 import { MigrateFileReaderTaskFunctions1781259717294 } from 'omniboxd/migrations/1781259717294-migrate-file-reader-task-functions';
 import { AddWorkerIdToTasks1781511514000 } from 'omniboxd/migrations/1781511514000-add-worker-id-to-tasks';
+import { ConversationShares1781600000000 } from 'omniboxd/migrations/1781600000000-conversation-shares';
 import { AddNumSchedulesToTasks1784095735711 } from 'omniboxd/migrations/1784095735711-add-num-schedules-to-tasks';
 import { BackfillUserEmailFromOauthBindings1784109716584 } from 'omniboxd/migrations/1784109716584-backfill-user-email-from-oauth-bindings';
 import { FeaturePreviews1784521510168 } from 'omniboxd/migrations/1784521510168-feature-previews';
@@ -98,6 +100,7 @@ import { AddManualSortUnspecifiedAt1786014524273 } from 'omniboxd/migrations/178
 import { AddResourceSortPreferences1786156765110 } from 'omniboxd/migrations/1786156765110-add-resource-sort-preferences';
 import { AddRetriedFromTaskIdToTasks1786412970105 } from 'omniboxd/migrations/1786412970105-add-retried-from-task-id-to-tasks';
 import { AddRssItemResources1786534451795 } from 'omniboxd/migrations/1786534451795-add-rss-item-resources';
+import { AddNamespaceParentIndexToResources1787654921509 } from 'omniboxd/migrations/1787654921509-add-namespace-parent-index-to-resources';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -196,6 +199,7 @@ export class AppModule implements NestModule {
         GroupsModule,
         PermissionsModule,
         ConversationsModule,
+        ConversationSharesModule,
         MessagesModule,
         SearchModule,
         InvitationsModule,
@@ -289,6 +293,7 @@ export class AppModule implements NestModule {
               AddLastHeartbeatToTasks1780652045516,
               MigrateFileReaderTaskFunctions1781259717294,
               AddWorkerIdToTasks1781511514000,
+              ConversationShares1781600000000,
               AddNumSchedulesToTasks1784095735711,
               BackfillUserEmailFromOauthBindings1784109716584,
               FeaturePreviews1784521510168,
@@ -306,9 +311,11 @@ export class AppModule implements NestModule {
               AddResourceSortPreferences1786156765110,
               AddRetriedFromTaskIdToTasks1786412970105,
               AddRssItemResources1786534451795,
+              AddNamespaceParentIndexToResources1787654921509,
               ...extraMigrations,
             ],
             migrationsRun: true,
+            migrationsTransactionMode: 'each',
             namingStrategy: new SnakeNamingStrategy(),
           }),
         }),

@@ -30,6 +30,51 @@ import {
   ResourcePermission,
 } from './resource-permission.enum';
 
+/**
+ * Written as `EXISTS` rather than `SELECT DISTINCT parent_id` over the matching
+ * children: both return the same parents, but only the semi-join is free to
+ * stop at the first match instead of reading every child.
+ */
+const PARENTS_WITH_INHERITING_CHILD_SQL = `
+  WITH requested_parents AS (
+    SELECT UNNEST($3::text[]) AS id
+  ),
+  user_groups AS (
+    SELECT group_id
+    FROM group_users
+    WHERE namespace_id = $1
+      AND user_id = $2
+      AND deleted_at IS NULL
+  )
+  SELECT requested_parents.id AS "parentId"
+  FROM requested_parents
+  WHERE EXISTS (
+    SELECT 1
+    FROM resources
+    WHERE resources.namespace_id = $1
+      AND resources.parent_id = requested_parents.id
+      AND resources.deleted_at IS NULL
+      AND resources.global_permission IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM user_permissions
+        WHERE user_permissions.namespace_id = $1
+          AND user_permissions.resource_id = resources.id
+          AND user_permissions.user_id = $2
+          AND user_permissions.deleted_at IS NULL
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM group_permissions
+        INNER JOIN user_groups
+          ON user_groups.group_id = group_permissions.group_id
+        WHERE group_permissions.namespace_id = $1
+          AND group_permissions.resource_id = resources.id
+          AND group_permissions.deleted_at IS NULL
+      )
+  )
+`;
+
 @Injectable()
 export class PermissionsService {
   constructor(
@@ -200,20 +245,24 @@ export class PermissionsService {
     const groupIds = groups.map((group) => group.groupId);
     const resourceIds = resources.map((resource) => resource.id);
 
-    const groupPermissions = await entityManager.find(GroupPermission, {
-      where: {
-        namespaceId,
-        groupId: In(groupIds),
-        resourceId: In(resourceIds),
-      },
-    });
-    const userPermissions = await entityManager.find(UserPermission, {
-      where: {
-        namespaceId,
-        userId,
-        resourceId: In(resourceIds),
-      },
-    });
+    const [groupPermissions, userPermissions] = await Promise.all([
+      groupIds.length > 0
+        ? entityManager.find(GroupPermission, {
+            where: {
+              namespaceId,
+              groupId: In(groupIds),
+              resourceId: In(resourceIds),
+            },
+          })
+        : Promise.resolve([]),
+      entityManager.find(UserPermission, {
+        where: {
+          namespaceId,
+          userId,
+          resourceId: In(resourceIds),
+        },
+      }),
+    ]);
 
     // resourceId + groupId -> GroupPermission
     const groupPermissionKeyMap: Map<string, GroupPermission> = new Map();
@@ -305,6 +354,77 @@ export class PermissionsService {
       permissions.set(resource.id, permission || ResourcePermission.NO_ACCESS);
     }
     return permissions;
+  }
+
+  /**
+   * Whether each parent has at least one visible child, for the expand arrow in
+   * the resource tree.
+   *
+   * Callers guarantee every parent is itself visible, and pass the chain above
+   * them as `ancestors`. That is what makes the first query decisive: a child
+   * carrying no rule of its own inherits every channel from its parent
+   * unchanged, so it resolves to whatever the parent resolves to.
+   */
+  async batchGetHasChildren(
+    namespaceId: string,
+    userId: string,
+    parents: ResourceMetaDto[],
+    ancestors: ResourceMetaDto[],
+    entityManager?: EntityManager,
+  ): Promise<Map<string, boolean>> {
+    const result = new Map(parents.map((parent) => [parent.id, false]));
+    if (parents.length === 0) {
+      return result;
+    }
+
+    const manager = entityManager ?? this.dataSource.manager;
+
+    const settled: { parentId: string }[] = await manager.query(
+      PARENTS_WITH_INHERITING_CHILD_SQL,
+      [namespaceId, userId, parents.map((parent) => parent.id)],
+    );
+    for (const row of settled) {
+      result.set(row.parentId, true);
+    }
+
+    // Overrides are the exception, so a parent reaching this point holds few
+    // children, or none at all, and can be resolved directly.
+    const remainingParents = parents.filter((parent) => !result.get(parent.id));
+    if (remainingParents.length === 0) {
+      return result;
+    }
+
+    const children = await this.resourcesService.getChildren(
+      namespaceId,
+      remainingParents.map((parent) => parent.id),
+      {},
+      manager,
+    );
+    if (children.length === 0) {
+      return result;
+    }
+
+    const permissions = await this.getCurrentPermissions(
+      userId,
+      namespaceId,
+      [
+        ...ancestors,
+        ...parents,
+        ...children.map((child) => ResourceMetaDto.fromEntity(child)),
+      ],
+      manager,
+    );
+    for (const child of children) {
+      const permission = permissions.get(child.id);
+      if (
+        child.parentId &&
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_VIEW) >= 0
+      ) {
+        result.set(child.parentId, true);
+      }
+    }
+    return result;
   }
 
   async updateGlobalPermission(

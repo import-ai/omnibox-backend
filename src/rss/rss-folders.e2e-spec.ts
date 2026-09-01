@@ -6,6 +6,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
+import { RssPoll, RssPollStatus } from 'omniboxd/rss/entities/rss-poll.entity';
 import { SmartFolderRootScope } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { TestClient } from 'test/test-client';
 import { DataSource, EntityManager, In } from 'typeorm';
@@ -96,6 +97,50 @@ describe('RssFoldersController (e2e)', () => {
       url: 'https://example.com/feed',
       name: 'Example RSS Feed',
     });
+    expect(response.body.initial_sync_status).toBe('pending');
+  });
+
+  it('reports the initial feed sync lifecycle', async () => {
+    const created = (
+      await createFolder({
+        name: 'Sync Status',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/sync-status' }],
+      }).expect(201)
+    ).body;
+    const configUrl = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}/config`;
+    const repository = client.app.get(DataSource).getRepository(RssPoll);
+    const poll = await repository.save(
+      repository.create({
+        url: 'https://example.com/sync-status',
+        status: RssPollStatus.POLLING,
+        contentIds: [],
+        error: null,
+      }),
+    );
+
+    expect(
+      (await client.get(configUrl).expect(200)).body.initial_sync_status,
+    ).toBe('polling');
+
+    poll.status = RssPollStatus.FAILED;
+    poll.error = 'unavailable';
+    await repository.save(poll);
+    expect(
+      (await client.get(configUrl).expect(200)).body.initial_sync_status,
+    ).toBe('failed');
+
+    await repository.save(
+      repository.create({
+        url: 'https://example.com/sync-status',
+        status: RssPollStatus.SUCCEED,
+        contentIds: [],
+        error: null,
+      }),
+    );
+    expect(
+      (await client.get(configUrl).expect(200)).body.initial_sync_status,
+    ).toBe('succeeded');
   });
 
   it('keeps the user-provided link name', async () => {

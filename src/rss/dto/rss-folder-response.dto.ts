@@ -2,6 +2,13 @@ import { Expose } from 'class-transformer';
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
 
+export enum RssFolderInitialSyncStatus {
+  PENDING = 'pending',
+  POLLING = 'polling',
+  SUCCEEDED = 'succeeded',
+  FAILED = 'failed',
+}
+
 export class RssLinkResponseDto {
   @Expose()
   id: string;
@@ -31,10 +38,13 @@ export class RssFolderResponseDto {
   createdAt: string;
   @Expose({ name: 'updated_at' })
   updatedAt: string;
+  @Expose({ name: 'initial_sync_status' })
+  initialSyncStatus: RssFolderInitialSyncStatus;
 
   static fromData(params: {
     resource: ResourceDto;
     links: RssLink[];
+    initialSyncStatus: RssFolderInitialSyncStatus;
   }): RssFolderResponseDto {
     const dto = new RssFolderResponseDto();
     dto.resource = params.resource;
@@ -44,6 +54,7 @@ export class RssFolderResponseDto {
     // made reordering links change them.
     dto.createdAt = params.resource.created_at;
     dto.updatedAt = params.resource.updated_at;
+    dto.initialSyncStatus = params.initialSyncStatus;
     return dto;
   }
 }

@@ -217,25 +217,42 @@ describe('RssPolling (e2e)', () => {
 
     const poll = pollingService.pollUrl(url);
     await fetchStarted;
-    const created = await client
-      .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
-      .send({
-        name: 'Overlapping empty feed',
-        parent_id: client.namespace.root_resource_id,
-        links: [{ url }],
-      })
-      .expect(201);
-    releaseFetch();
+    const privateRoot = (
+      await client
+        .get(`/api/v1/namespaces/${client.namespace.id}/private`)
+        .expect(200)
+    ).body;
+    let resourceId: string | undefined;
+    try {
+      const created = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
+        .send({
+          name: 'Overlapping empty feed',
+          parent_id: privateRoot.id,
+          links: [{ url }],
+        })
+        .expect(201);
+      resourceId = created.body.resource.id;
+      releaseFetch();
 
-    await expect(poll).resolves.toBe('succeed');
-    const link = await linkRepo().findOneByOrFail({
-      resourceId: created.body.resource.id,
-    });
-    expect(link.initialSyncedAt).toBeInstanceOf(Date);
-    const configUrl = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.body.resource.id}/config`;
-    expect(
-      (await client.get(configUrl).expect(200)).body.initial_sync_status,
-    ).toBe('succeeded');
+      await expect(poll).resolves.toBe('succeed');
+      const link = await linkRepo().findOneByOrFail({ resourceId });
+      expect(link.initialSyncedAt).toBeInstanceOf(Date);
+      const configUrl = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${resourceId}/config`;
+      expect(
+        (await client.get(configUrl).expect(200)).body.initial_sync_status,
+      ).toBe('succeeded');
+    } finally {
+      releaseFetch();
+      await poll;
+      if (resourceId !== undefined) {
+        await client
+          .delete(
+            `/api/v1/namespaces/${client.namespace.id}/rss-folders/${resourceId}`,
+          )
+          .expect(200);
+      }
+    }
   });
 
   it('skips a link already polled within the window', async () => {

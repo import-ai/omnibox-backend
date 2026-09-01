@@ -19,19 +19,47 @@ describe('RssFoldersService initial sync status', () => {
   it.each([
     [[], RssFolderInitialSyncStatus.SUCCEEDED],
     [
-      [{ hasSucceeded: false, hasPolling: false, pollCount: 0 }],
+      [
+        {
+          isSynced: false,
+          hasPolling: false,
+          hasFailed: false,
+          pollCount: 0,
+        },
+      ],
       RssFolderInitialSyncStatus.PENDING,
     ],
     [
-      [{ hasSucceeded: false, hasPolling: true, pollCount: 1 }],
+      [
+        {
+          isSynced: false,
+          hasPolling: true,
+          hasFailed: false,
+          pollCount: 1,
+        },
+      ],
       RssFolderInitialSyncStatus.POLLING,
     ],
     [
-      [{ hasSucceeded: false, hasPolling: false, pollCount: 1 }],
+      [
+        {
+          isSynced: false,
+          hasPolling: false,
+          hasFailed: true,
+          pollCount: 1,
+        },
+      ],
       RssFolderInitialSyncStatus.FAILED,
     ],
     [
-      [{ hasSucceeded: true, hasPolling: true, pollCount: 2 }],
+      [
+        {
+          isSynced: true,
+          hasPolling: true,
+          hasFailed: false,
+          pollCount: 2,
+        },
+      ],
       RssFolderInitialSyncStatus.SUCCEEDED,
     ],
   ])('resolves rows %# to %s', async (rows, expected) => {
@@ -42,10 +70,35 @@ describe('RssFoldersService initial sync status', () => {
     ).resolves.toBe(expected);
   });
 
+  it('keeps waiting when a successful poll did not mark the link', async () => {
+    query.mockResolvedValue([
+      {
+        isSynced: false,
+        hasPolling: false,
+        hasFailed: false,
+        pollCount: 1,
+      },
+    ]);
+
+    await expect(
+      service.getInitialSyncStatus('namespace-1', 'folder-1'),
+    ).resolves.toBe(RssFolderInitialSyncStatus.PENDING);
+  });
+
   it('waits when a multi-feed folder still has an unpolled link', async () => {
     query.mockResolvedValue([
-      { hasSucceeded: true, hasPolling: false, pollCount: 1 },
-      { hasSucceeded: false, hasPolling: false, pollCount: 0 },
+      {
+        isSynced: true,
+        hasPolling: false,
+        hasFailed: false,
+        pollCount: 1,
+      },
+      {
+        isSynced: false,
+        hasPolling: false,
+        hasFailed: false,
+        pollCount: 0,
+      },
     ]);
 
     await expect(

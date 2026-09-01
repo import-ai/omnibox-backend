@@ -166,12 +166,14 @@ export class RssFoldersService {
     resourceId: string,
   ): Promise<RssFolderInitialSyncStatus> {
     const rows: Array<{
-      hasSucceeded: boolean;
+      isSynced: boolean;
       hasPolling: boolean;
+      hasFailed: boolean;
       pollCount: number;
     }> = await this.rssPollRepository.query(
-      `SELECT COALESCE(BOOL_OR(poll.status = 'succeed'), FALSE) AS "hasSucceeded",
+      `SELECT MAX(link.initial_synced_at) IS NOT NULL AS "isSynced",
               COALESCE(BOOL_OR(poll.status = 'polling'), FALSE) AS "hasPolling",
+              COALESCE(BOOL_OR(poll.status = 'failed'), FALSE) AS "hasFailed",
               COUNT(poll.id)::int AS "pollCount"
          FROM rss_links link
          LEFT JOIN rss_polls poll
@@ -186,13 +188,14 @@ export class RssFoldersService {
       [namespaceId, resourceId],
     );
 
-    if (rows.length === 0 || rows.every((row) => row.hasSucceeded)) {
+    if (rows.length === 0 || rows.every((row) => row.isSynced)) {
       return RssFolderInitialSyncStatus.SUCCEEDED;
     }
-    if (rows.some((row) => !row.hasSucceeded && row.hasPolling)) {
+    const unsyncedRows = rows.filter((row) => !row.isSynced);
+    if (unsyncedRows.some((row) => row.hasPolling)) {
       return RssFolderInitialSyncStatus.POLLING;
     }
-    if (rows.some((row) => !row.hasSucceeded && row.pollCount === 0)) {
+    if (unsyncedRows.some((row) => row.pollCount === 0 || !row.hasFailed)) {
       return RssFolderInitialSyncStatus.PENDING;
     }
     return RssFolderInitialSyncStatus.FAILED;

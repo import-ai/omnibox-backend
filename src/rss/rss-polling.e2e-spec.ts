@@ -193,6 +193,51 @@ describe('RssPolling (e2e)', () => {
     expect(Number(first.contentSize)).toBe(first.content.length);
   });
 
+  it('marks an empty subscription added while its poll is fetching as synced', async () => {
+    const url = 'https://example.com/overlapping-empty-feed';
+    let releaseFetch = () => undefined;
+    let reportFetchStarted = () => undefined;
+    const fetchStarted = new Promise<void>((resolve) => {
+      reportFetchStarted = resolve;
+    });
+    const fetchReleased = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    fetchMock.mockImplementationOnce(async () => {
+      reportFetchStarted();
+      await fetchReleased;
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(buildRss([])),
+      };
+    });
+
+    const poll = pollingService.pollUrl(url);
+    await fetchStarted;
+    const created = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/rss-folders`)
+      .send({
+        name: 'Overlapping empty feed',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url }],
+      })
+      .expect(201);
+    releaseFetch();
+
+    await expect(poll).resolves.toBe('succeed');
+    const link = await linkRepo().findOneByOrFail({
+      resourceId: created.body.resource.id,
+    });
+    expect(link.initialSyncedAt).toBeInstanceOf(Date);
+    const configUrl = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.body.resource.id}/config`;
+    expect(
+      (await client.get(configUrl).expect(200)).body.initial_sync_status,
+    ).toBe('succeeded');
+  });
+
   it('skips a link already polled within the window', async () => {
     parseRssItemSpy.mockClear();
     const result = await pollingService.pollUrl(FEED_URL);

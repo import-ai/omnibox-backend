@@ -138,12 +138,19 @@ describe('RssFoldersController (e2e)', () => {
         error: null,
       }),
     );
+    await client.app
+      .get(DataSource)
+      .getRepository(RssLink)
+      .update(
+        { resourceId: created.resource.id },
+        { initialSyncedAt: new Date() },
+      );
     expect(
       (await client.get(configUrl).expect(200)).body.initial_sync_status,
     ).toBe('succeeded');
   });
 
-  it('counts a poll that starts before the subscription and finishes after it', async () => {
+  it('does not count a completed poll that never observed the subscription', async () => {
     const repository = client.app.get(DataSource).getRepository(RssPoll);
     const poll = await repository.save(
       repository.create({
@@ -178,7 +185,7 @@ describe('RssFoldersController (e2e)', () => {
     const configUrl = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}/config`;
     expect(
       (await client.get(configUrl).expect(200)).body.initial_sync_status,
-    ).toBe('succeeded');
+    ).toBe('pending');
   });
 
   it('ignores a poll that finished before the subscription was created', async () => {

@@ -143,6 +143,76 @@ describe('RssFoldersController (e2e)', () => {
     ).toBe('succeeded');
   });
 
+  it('counts a poll that starts before the subscription and finishes after it', async () => {
+    const repository = client.app.get(DataSource).getRepository(RssPoll);
+    const poll = await repository.save(
+      repository.create({
+        url: 'https://example.com/overlapping-sync',
+        status: RssPollStatus.POLLING,
+        contentIds: [],
+        error: null,
+      }),
+    );
+    await repository.query(
+      `UPDATE rss_polls
+          SET created_at = now() - interval '2 minutes',
+              updated_at = now() - interval '2 minutes'
+        WHERE id = $1`,
+      [poll.id],
+    );
+
+    const created = (
+      await createFolder({
+        name: 'Overlapping Sync',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/overlapping-sync' }],
+      }).expect(201)
+    ).body;
+    await repository.query(
+      `UPDATE rss_polls
+          SET status = 'succeed', updated_at = now()
+        WHERE id = $1`,
+      [poll.id],
+    );
+
+    const configUrl = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}/config`;
+    expect(
+      (await client.get(configUrl).expect(200)).body.initial_sync_status,
+    ).toBe('succeeded');
+  });
+
+  it('ignores a poll that finished before the subscription was created', async () => {
+    const repository = client.app.get(DataSource).getRepository(RssPoll);
+    const poll = await repository.save(
+      repository.create({
+        url: 'https://example.com/old-sync',
+        status: RssPollStatus.SUCCEED,
+        contentIds: [],
+        error: null,
+      }),
+    );
+    await repository.query(
+      `UPDATE rss_polls
+          SET created_at = now() - interval '2 minutes',
+              updated_at = now() - interval '1 minute'
+        WHERE id = $1`,
+      [poll.id],
+    );
+
+    const created = (
+      await createFolder({
+        name: 'New Subscription',
+        parent_id: client.namespace.root_resource_id,
+        links: [{ url: 'https://example.com/old-sync' }],
+      }).expect(201)
+    ).body;
+    const configUrl = `/api/v1/namespaces/${client.namespace.id}/rss-folders/${created.resource.id}/config`;
+
+    expect(
+      (await client.get(configUrl).expect(200)).body.initial_sync_status,
+    ).toBe('pending');
+  });
+
   it('keeps the user-provided link name', async () => {
     const response = await createFolder({
       name: 'Named Subscriptions',

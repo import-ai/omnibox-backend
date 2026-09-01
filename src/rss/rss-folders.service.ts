@@ -176,7 +176,8 @@ export class RssFoldersService {
          FROM rss_links link
          LEFT JOIN rss_polls poll
            ON poll.url = link.url
-          AND poll.created_at >= link.created_at
+          AND (poll.created_at >= link.created_at
+            OR poll.updated_at >= link.created_at)
           AND poll.deleted_at IS NULL
         WHERE link.namespace_id = $1
           AND link.resource_id = $2

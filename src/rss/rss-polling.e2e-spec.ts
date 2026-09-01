@@ -195,8 +195,8 @@ describe('RssPolling (e2e)', () => {
 
   it('marks an empty subscription added while its poll is fetching as synced', async () => {
     const url = 'https://example.com/overlapping-empty-feed';
-    let releaseFetch = () => undefined;
-    let reportFetchStarted = () => undefined;
+    let releaseFetch: () => void = () => undefined;
+    let reportFetchStarted: () => void = () => undefined;
     const fetchStarted = new Promise<void>((resolve) => {
       reportFetchStarted = resolve;
     });

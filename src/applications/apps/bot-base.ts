@@ -86,6 +86,14 @@ export abstract class BotBase extends BaseApp {
     };
   }
 
+  protected removeBindingCredentials(
+    attrs: Record<string, any>,
+  ): Record<string, any> {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { key: _, ...rest } = attrs;
+    return rest;
+  }
+
   async callback(data: BotCallbackRequestDto): Promise<BotCallbackResponseDto> {
     const { key, ...rest } = data;
 
@@ -135,10 +143,8 @@ export abstract class BotBase extends BaseApp {
 
     entity.apiKeyId = apiKeyResponse.id;
 
-    // Remove key from attrs after successful API key creation
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { key: _, ...attrsWithoutVerifyCode } = entity.attrs;
-    entity.attrs = attrsWithoutVerifyCode;
+    // Remove binding credentials after successful API key creation
+    entity.attrs = this.removeBindingCredentials(entity.attrs);
 
     await this.applicationsRepository.save(entity);
 

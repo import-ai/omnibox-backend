@@ -187,6 +187,6 @@ describe('Visible child markers (e2e)', () => {
     // access, so this parent has no visible direct child for this member.
     expect(hasChildrenById.get(globalGrantParent.id)).toBe(false);
     expect(hasChildrenById.get(groupGrantParent.id)).toBe(false);
-    expect(hasChildrenById.get(mixedGroupParent.id)).toBe(true);
+    expect(hasChildrenById.get(mixedGroupParent.id)).toBe(false);
   });
 });

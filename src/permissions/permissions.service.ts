@@ -201,6 +201,10 @@ export class PermissionsService {
       [userId],
       entityManager,
     );
+    const userPermission = userPermissionMap.get(userId);
+    if (userPermission === ResourcePermission.NO_ACCESS) {
+      return ResourcePermission.NO_ACCESS;
+    }
     const groupPermissionMap = await this.getGroupPermissions(
       namespaceId,
       resourceIds,
@@ -346,11 +350,14 @@ export class PermissionsService {
         calcGroupPermission(resource, groupId),
       );
       const globalPermission = calcGlobalPermission(resource);
-      const permission = maxPermissions([
-        globalPermission,
-        userPermission,
-        ...groupPermissions,
-      ]);
+      const permission =
+        userPermission === ResourcePermission.NO_ACCESS
+          ? ResourcePermission.NO_ACCESS
+          : maxPermissions([
+              globalPermission,
+              userPermission,
+              ...groupPermissions,
+            ]);
       permissions.set(resource.id, permission || ResourcePermission.NO_ACCESS);
     }
     return permissions;
@@ -818,6 +825,29 @@ export class PermissionsService {
   }
 
   /**
+   * Deny a user on this resource without changing permissions inherited from
+   * the namespace or an ancestor resource.
+   */
+  async denyUserPermissionWithChecks(
+    namespaceId: string,
+    resourceId: string,
+    curUserId: string,
+    targetUserId: string,
+  ): Promise<void> {
+    if (curUserId === targetUserId) {
+      const message = this.i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    await this.updateUserPermissionWithChecks(
+      namespaceId,
+      resourceId,
+      curUserId,
+      targetUserId,
+      ResourcePermission.NO_ACCESS,
+    );
+  }
+
+  /**
    * Check if a user exists (regardless of namespace membership)
    */
   async userExists(userId: string): Promise<boolean> {
@@ -873,6 +903,35 @@ export class PermissionsService {
     // Member (level 2) cannot modify anyone
     // Current user must have a strictly lower level (higher rank) than target
     return currentRoleLevel < targetRoleLevel;
+  }
+
+  /**
+   * Group permissions can only be managed by namespace owners/admins who have
+   * full access to the resource being changed.
+   */
+  async canManageGroupPermission(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const [hasPermission, member] = await Promise.all([
+      this.userHasPermission(
+        namespaceId,
+        resourceId,
+        userId,
+        ResourcePermission.FULL_ACCESS,
+      ),
+      this.namespaceMembersRepository.findOne({
+        where: { namespaceId, userId, deletedAt: IsNull() },
+      }),
+    ]);
+
+    return (
+      hasPermission &&
+      !!member &&
+      (member.role === NamespaceRole.OWNER ||
+        member.role === NamespaceRole.ADMIN)
+    );
   }
 }
 

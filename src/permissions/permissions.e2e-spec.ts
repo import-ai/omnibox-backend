@@ -228,22 +228,9 @@ describe('PermissionsController (e2e)', () => {
   });
 
   describe('DELETE /permissions/users/:userId', () => {
-    it('should delete user permission for a resource', async () => {
-      // Get initial permissions to see what the user's permission is before we set it
-      const initialResponse = await client
-        .get(
-          `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions`,
-        )
-        .expect(HttpStatus.OK);
-
-      const initialUserPermission = initialResponse.body.users.find(
-        (u: any) => u.user.id === client.user.id,
-      );
-      const initialPermission =
-        initialUserPermission?.permission || ResourcePermission.NO_ACCESS;
-
-      // Set FULL_ACCESS permission (must use FULL_ACCESS to maintain ability to delete)
-      // Setting a lower permission would lock out the user from deleting it
+    it('should reject removing the current user from a resource', async () => {
+      // Establish an explicit permission so the self-removal assertion is
+      // independent of inherited owner access.
       await client
         .patch(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions/users/${client.user.id}`,
@@ -272,9 +259,8 @@ describe('PermissionsController (e2e)', () => {
         .delete(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions/users/${client.user.id}`,
         )
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.FORBIDDEN);
 
-      // Verify the permission was removed/reset
       const afterDeleteResponse = await client
         .get(
           `/api/v1/namespaces/${client.namespace.id}/resources/${testResourceId}/permissions`,
@@ -284,13 +270,9 @@ describe('PermissionsController (e2e)', () => {
       const afterDeleteUserPermission = afterDeleteResponse.body.users.find(
         (u: any) => u.user.id === client.user.id,
       );
-
-      if (afterDeleteUserPermission) {
-        // If the user still appears, they should have their original permission (likely from ownership)
-        // The delete operation should have removed the explicit permission, reverting to the inherited permission
-        expect(afterDeleteUserPermission.permission).toBe(initialPermission);
-      }
-      // If the user doesn't appear, that means they have no explicit permissions (also acceptable)
+      expect(afterDeleteUserPermission.permission).toBe(
+        ResourcePermission.FULL_ACCESS,
+      );
     });
   });
 
@@ -368,6 +350,84 @@ describe('PermissionsController (e2e)', () => {
         (u: any) => u.user.id === client.user.id,
       );
       expect(userPermission.permission).toBe(ResourcePermission.FULL_ACCESS);
+    });
+  });
+
+  describe('Resource-level user denial', () => {
+    let memberResourceId: string;
+    let siblingResourceId: string;
+
+    beforeAll(async () => {
+      const invitation = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/invitations`)
+        .send({
+          namespaceRole: 'member',
+          rootPermission: ResourcePermission.CAN_VIEW,
+        })
+        .expect(HttpStatus.CREATED);
+
+      await secondUserClient
+        .post(
+          `/api/v1/namespaces/${client.namespace.id}/invitations/${invitation.body.id}/accept`,
+        )
+        .expect(HttpStatus.CREATED);
+
+      const createResource = async (name: string) =>
+        (
+          await client
+            .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+            .send({
+              name,
+              namespaceId: client.namespace.id,
+              resourceType: ResourceType.DOC,
+              parentId: testResourceId,
+              content: 'Test content',
+              tags: [],
+              attrs: {},
+            })
+            .expect(HttpStatus.CREATED)
+        ).body.id as string;
+
+      memberResourceId = await createResource('Member-only resource');
+      siblingResourceId = await createResource('Member sibling resource');
+    });
+
+    it('denies only the current resource while preserving teamspace membership', async () => {
+      await secondUserClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${memberResourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${memberResourceId}/permissions/users/${secondUserClient.user.id}`,
+        )
+        .expect(HttpStatus.OK);
+
+      await secondUserClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${memberResourceId}`,
+        )
+        .expect(HttpStatus.FORBIDDEN);
+
+      await secondUserClient
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${siblingResourceId}`,
+        )
+        .expect(HttpStatus.OK);
+
+      const permissions = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${memberResourceId}/permissions`,
+        )
+        .expect(HttpStatus.OK);
+      expect(
+        permissions.body.users.find(
+          (userPermission: any) =>
+            userPermission.user.id === secondUserClient.user.id,
+        ).permission,
+      ).toBe(ResourcePermission.NO_ACCESS);
     });
   });
 

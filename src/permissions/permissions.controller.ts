@@ -76,13 +76,12 @@ export class PermissionsController {
     @Body() permissionDto: PermissionDto,
     @I18n() i18n: I18nContext,
   ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
+    const canManage = await this.permissionsService.canManageGroupPermission(
       namespaceId,
       resourceId,
       req.user.id,
-      ResourcePermission.FULL_ACCESS,
     );
-    if (!hasPermission) {
+    if (!canManage) {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
@@ -110,13 +109,12 @@ export class PermissionsController {
     @Param('groupId') groupId: string,
     @I18n() i18n: I18nContext,
   ) {
-    const hasPermission = await this.permissionsService.userHasPermission(
+    const canManage = await this.permissionsService.canManageGroupPermission(
       namespaceId,
       resourceId,
       req.user.id,
-      ResourcePermission.FULL_ACCESS,
     );
-    if (!hasPermission) {
+    if (!canManage) {
       const message = i18n.t('auth.errors.notAuthorized');
       throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
     }
@@ -159,7 +157,7 @@ export class PermissionsController {
       namespaceId,
       resourceId,
     );
-    await this.permissionsService.deleteUserPermissionWithChecks(
+    await this.permissionsService.denyUserPermissionWithChecks(
       namespaceId,
       resourceId,
       req.user.id,

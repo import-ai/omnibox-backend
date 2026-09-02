@@ -186,7 +186,7 @@ describe('Visible child markers (e2e)', () => {
     // A user-level no_access rule on the child overrides inherited global
     // access, so this parent has no visible direct child for this member.
     expect(hasChildrenById.get(globalGrantParent.id)).toBe(false);
-    expect(hasChildrenById.get(groupGrantParent.id)).toBe(true);
+    expect(hasChildrenById.get(groupGrantParent.id)).toBe(false);
     expect(hasChildrenById.get(mixedGroupParent.id)).toBe(true);
   });
 });

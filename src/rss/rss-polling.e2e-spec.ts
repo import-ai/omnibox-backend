@@ -246,11 +246,15 @@ describe('RssPolling (e2e)', () => {
       releaseFetch();
       await poll;
       if (resourceId !== undefined) {
-        await client
-          .delete(
-            `/api/v1/namespaces/${client.namespace.id}/rss-folders/${resourceId}`,
-          )
-          .expect(200);
+        try {
+          await client
+            .delete(
+              `/api/v1/namespaces/${client.namespace.id}/rss-folders/${resourceId}`,
+            )
+            .expect(200);
+        } finally {
+          await linkRepo().softDelete({ resourceId });
+        }
       }
     }
   });

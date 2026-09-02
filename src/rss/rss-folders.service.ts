@@ -13,7 +13,10 @@ import {
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { CreateRssFolderRequestDto } from 'omniboxd/rss/dto/create-rss-folder-request.dto';
 import { RssFolderLimitsResponseDto } from 'omniboxd/rss/dto/rss-folder-limits-response.dto';
-import { RssFolderResponseDto } from 'omniboxd/rss/dto/rss-folder-response.dto';
+import {
+  RssFolderInitialSyncStatus,
+  RssFolderResponseDto,
+} from 'omniboxd/rss/dto/rss-folder-response.dto';
 import { RssItemDetailResponseDto } from 'omniboxd/rss/dto/rss-item-detail-response.dto';
 import {
   RssItemContentRef,
@@ -23,6 +26,7 @@ import { RssLinkRequestDto } from 'omniboxd/rss/dto/rss-link-request.dto';
 import { UpdateRssFolderRequestDto } from 'omniboxd/rss/dto/update-rss-folder-request.dto';
 import { RssItemContent } from 'omniboxd/rss/entities/rss-item-content.entity';
 import { RssLink } from 'omniboxd/rss/entities/rss-link.entity';
+import { RssPoll } from 'omniboxd/rss/entities/rss-poll.entity';
 import { RssFeedValidatorService } from 'omniboxd/rss/rss-feed-validator.service';
 import { RssFoldersQuotaService } from 'omniboxd/rss/rss-folders-quota.service';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
@@ -33,6 +37,8 @@ export class RssFoldersService {
   constructor(
     @InjectRepository(RssLink)
     private readonly rssLinkRepository: Repository<RssLink>,
+    @InjectRepository(RssPoll)
+    private readonly rssPollRepository: Repository<RssPoll>,
     @InjectRepository(RssItemContent)
     private readonly rssItemContentRepository: Repository<RssItemContent>,
     @InjectRepository(Resource)
@@ -136,16 +142,63 @@ export class RssFoldersService {
     resourceId: string,
   ): Promise<RssFolderResponseDto> {
     await this.getRssFolderOrFail(namespaceId, resourceId);
-    const resource = await this.namespaceResourcesService.getResource({
-      userId,
-      namespaceId,
-      resourceId,
+    const [resource, linkEntities, initialSyncStatus] = await Promise.all([
+      this.namespaceResourcesService.getResource({
+        userId,
+        namespaceId,
+        resourceId,
+      }),
+      this.rssLinkRepository.find({
+        where: { namespaceId, resourceId },
+        order: { index: 'ASC' },
+      }),
+      this.getInitialSyncStatus(namespaceId, resourceId),
+    ]);
+    return RssFolderResponseDto.fromData({
+      resource,
+      links: linkEntities,
+      initialSyncStatus,
     });
-    const linkEntities = await this.rssLinkRepository.find({
-      where: { namespaceId, resourceId },
-      order: { index: 'ASC' },
-    });
-    return RssFolderResponseDto.fromData({ resource, links: linkEntities });
+  }
+
+  private async getInitialSyncStatus(
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<RssFolderInitialSyncStatus> {
+    const rows: Array<{
+      isSynced: boolean;
+      hasPolling: boolean;
+      hasFailed: boolean;
+      pollCount: number;
+    }> = await this.rssPollRepository.query(
+      `SELECT MAX(link.initial_synced_at) IS NOT NULL AS "isSynced",
+              COALESCE(BOOL_OR(poll.status = 'polling'), FALSE) AS "hasPolling",
+              COALESCE(BOOL_OR(poll.status = 'failed'), FALSE) AS "hasFailed",
+              COUNT(poll.id)::int AS "pollCount"
+         FROM rss_links link
+         LEFT JOIN rss_polls poll
+           ON poll.url = link.url
+          AND (poll.created_at >= link.created_at
+            OR poll.updated_at >= link.created_at)
+          AND poll.deleted_at IS NULL
+        WHERE link.namespace_id = $1
+          AND link.resource_id = $2
+          AND link.deleted_at IS NULL
+        GROUP BY link.id`,
+      [namespaceId, resourceId],
+    );
+
+    if (rows.length === 0 || rows.every((row) => row.isSynced)) {
+      return RssFolderInitialSyncStatus.SUCCEEDED;
+    }
+    const unsyncedRows = rows.filter((row) => !row.isSynced);
+    if (unsyncedRows.some((row) => row.hasPolling)) {
+      return RssFolderInitialSyncStatus.POLLING;
+    }
+    if (unsyncedRows.some((row) => row.pollCount === 0 || !row.hasFailed)) {
+      return RssFolderInitialSyncStatus.PENDING;
+    }
+    return RssFolderInitialSyncStatus.FAILED;
   }
 
   // Lists the polled items of an rss folder, newest first. Enforces read

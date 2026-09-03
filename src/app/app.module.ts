@@ -106,6 +106,7 @@ import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { NotificationsModule } from 'omniboxd/notifications/notifications.module';
+import { OnboardingRecordingModule } from 'omniboxd/onboarding-recording/onboarding-recording.module';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { PhoneModule } from 'omniboxd/phone/phone.module';
@@ -219,6 +220,7 @@ export class AppModule implements NestModule {
         FeaturePreviewsModule,
         WizardUrlProviderModule,
         NotificationsModule,
+        OnboardingRecordingModule,
         SmartFoldersModule,
         RssModule,
         SharedResourceTagsModule,

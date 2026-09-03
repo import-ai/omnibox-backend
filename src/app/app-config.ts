@@ -5,6 +5,18 @@ import * as cookieParser from 'cookie-parser';
 import * as express from 'express';
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 
+function parseTrustProxy(
+  value: string | undefined,
+): boolean | number | string | undefined {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+
+  const hops = Number(normalized);
+  return Number.isInteger(hops) && hops >= 0 ? hops : normalized;
+}
+
 function setupOpenAPISwagger(app: INestApplication): INestApplication {
   const config = new DocumentBuilder()
     .setTitle('OmniBox Open API')
@@ -55,6 +67,12 @@ export function configureApp(app: INestApplication): INestApplication {
   app.use(cookieParser());
 
   const configService = app.get(ConfigService);
+  const trustProxy = parseTrustProxy(
+    configService.get<string>('OBB_TRUST_PROXY'),
+  );
+  if (trustProxy !== undefined) {
+    app.getHttpAdapter().getInstance().set('trust proxy', trustProxy);
+  }
   const logLevels: LogLevel[] = configService
     .get('OBB_LOG_LEVELS', 'error,warn,log')
     .split(',');

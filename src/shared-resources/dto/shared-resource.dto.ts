@@ -1,4 +1,5 @@
 import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
+import { ResourceCommentThreadResponseDto } from 'omniboxd/resource-comments/dto/resource-comment-response.dto';
 import {
   isReadOnlyResourceType,
   Resource,
@@ -19,6 +20,8 @@ export class SharedResourceDto {
   read_only: boolean;
   created_at: string;
   updated_at: string;
+  content_hash?: string;
+  comment_threads?: ResourceCommentThreadResponseDto[];
 
   static fromEntity(
     resource: Resource,

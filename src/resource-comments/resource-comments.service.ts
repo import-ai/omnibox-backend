@@ -147,13 +147,16 @@ export class ResourceCommentsService {
     resourceId: string,
     userId: string,
     query: ListResourceCommentThreadsRequestDto,
+    enforcePermission = true,
   ): Promise<ListResourceCommentThreadsResponseDto> {
-    await this.permissionsService.userHasPermissionOrFail(
-      namespaceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_VIEW,
-    );
+    if (enforcePermission) {
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        resourceId,
+        userId,
+        ResourcePermission.CAN_VIEW,
+      );
+    }
 
     const builder = this.threadRepository
       .createQueryBuilder('thread')
@@ -193,13 +196,16 @@ export class ResourceCommentsService {
     resourceId: string,
     userId: string,
     dto: CreateResourceCommentThreadRequestDto,
+    enforcePermission = true,
   ): Promise<CreateResourceCommentThreadResponseDto> {
-    await this.permissionsService.userHasPermissionOrFail(
-      namespaceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_COMMENT,
-    );
+    if (enforcePermission) {
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        resourceId,
+        userId,
+        ResourcePermission.CAN_COMMENT,
+      );
+    }
     this.assertValidRange(dto.anchorFrom, dto.anchorTo);
 
     return await this.dataSource.transaction(async (manager) => {
@@ -276,13 +282,16 @@ export class ResourceCommentsService {
     threadId: string,
     userId: string,
     dto: CreateResourceCommentRequestDto,
+    enforcePermission = true,
   ): Promise<ResourceCommentThreadResponseDto> {
-    await this.permissionsService.userHasPermissionOrFail(
-      namespaceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_COMMENT,
-    );
+    if (enforcePermission) {
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        resourceId,
+        userId,
+        ResourcePermission.CAN_COMMENT,
+      );
+    }
     return await this.dataSource.transaction(async (manager) => {
       await this.getThreadOrFail(
         namespaceId,
@@ -352,13 +361,16 @@ export class ResourceCommentsService {
     commentId: string,
     userId: string,
     dto: UpdateResourceCommentRequestDto,
+    enforcePermission = true,
   ): Promise<ResourceCommentThreadResponseDto> {
-    await this.permissionsService.userHasPermissionOrFail(
-      namespaceId,
-      resourceId,
-      userId,
-      ResourcePermission.CAN_COMMENT,
-    );
+    if (enforcePermission) {
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        resourceId,
+        userId,
+        ResourcePermission.CAN_COMMENT,
+      );
+    }
     return await this.dataSource.transaction(async (manager) => {
       await this.getThreadOrFail(
         namespaceId,

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ResourceCommentsModule } from 'omniboxd/resource-comments/resource-comments.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
@@ -11,7 +12,13 @@ import { SharedResourcesService } from './shared-resources.service';
 @Module({
   controllers: [SharedResourcesController, InternalSharedResourcesController],
   providers: [SharedResourcesService],
-  imports: [SharesModule, ResourcesModule, SmartFoldersModule, TagModule],
+  imports: [
+    SharesModule,
+    ResourcesModule,
+    SmartFoldersModule,
+    TagModule,
+    ResourceCommentsModule,
+  ],
   exports: [SharedResourcesService],
 })
 export class SharedResourcesModule {}

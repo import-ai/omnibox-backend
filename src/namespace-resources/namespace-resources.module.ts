@@ -16,6 +16,7 @@ import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.e
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourceAttachmentsModule } from 'omniboxd/resource-attachments/resource-attachments.module';
+import { ResourceCommentsModule } from 'omniboxd/resource-comments/resource-comments.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { S3Module } from 'omniboxd/s3/s3.module';
@@ -53,6 +54,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
     S3Module,
     TasksModule,
     ResourceAttachmentsModule,
+    ResourceCommentsModule,
     ResourcesModule,
     FilesModule,
     NamespacesQuotaModule,

@@ -10,10 +10,12 @@
     "isUUID": "{property} must be a valid UUID",
     "isDateString": "{property} must be a valid date string",
     "isInt": "{property} must be an integer",
+    "isIn": "{property} must be one of {constraints.0}",
     "isEnum": "{property} must be a valid value",
     "minLength": "{property} must be at least {constraints.0} characters",
     "maxLength": "{property} must not exceed {constraints.0} characters",
     "min": "{property} must not be less than {constraints.0}",
+    "max": "{property} must not be greater than {constraints.0}",
     "email": {
       "isString": "Email must be a string",
       "isNotEmpty": "Email is required",

@@ -1,0 +1,11 @@
+{
+  "errors": {
+    "unsupportedResourceType": "仅文档资源支持评论",
+    "contentConflict": "保存评论前文档已发生变化",
+    "invalidAnchor": "评论锚点无效",
+    "anchorOverlap": "所选文本与已有评论线程重叠",
+    "threadNotFound": "评论线程不存在",
+    "commentNotFound": "评论不存在",
+    "invalidSyncPayload": "必须同时提交 content、expected_content_hash 和 comment_anchors"
+  }
+}

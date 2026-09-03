@@ -14,6 +14,7 @@ import {
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
+import { ResourceCommentsService } from 'omniboxd/resource-comments/resource-comments.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   CONTENT_RESOURCE_TYPES,
@@ -86,6 +87,7 @@ export class NamespaceResourcesService {
     private readonly s3Service: S3Service,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
+    private readonly resourceCommentsService: ResourceCommentsService,
     private readonly resourcesService: ResourcesService,
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
@@ -1344,13 +1346,22 @@ export class NamespaceResourcesService {
     const path = [resourceMeta, ...parentResources]
       .reverse()
       .map((r) => ({ id: r.id, name: r.name }));
-    return ResourceDto.fromEntity(
+    const dto = ResourceDto.fromEntity(
       resource,
       curPermission,
       path,
       spaceType,
       tagsMap.get(resource.id) || [],
     );
+    const commentData =
+      await this.resourceCommentsService.getResourceCommentData(
+        namespaceId,
+        resourceId,
+        resource.content,
+      );
+    dto.content_hash = commentData.content_hash;
+    dto.comment_threads = commentData.comment_threads;
+    return dto;
   }
 
   async getResourceFileForUser(
@@ -1586,6 +1597,42 @@ export class NamespaceResourcesService {
     autoRenameOnConflict: boolean = false,
     tx?: Transaction,
   ) {
+    const syncingCommentAnchors =
+      data.expectedContentHash !== undefined ||
+      data.commentAnchors !== undefined ||
+      data.orphanedCommentThreadIds !== undefined;
+    if (syncingCommentAnchors && !tx) {
+      return await transaction(this.dataSource.manager, async (newTx) => {
+        return await this.update(
+          namespaceId,
+          userId,
+          resourceId,
+          data,
+          autoRenameOnConflict,
+          newTx,
+        );
+      });
+    }
+    if (syncingCommentAnchors) {
+      if (
+        data.content === undefined ||
+        data.expectedContentHash === undefined ||
+        data.commentAnchors === undefined ||
+        !tx
+      ) {
+        throw new AppException(
+          this.i18n.t('resourceComment.errors.invalidSyncPayload'),
+          'INVALID_COMMENT_SYNC_PAYLOAD',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      await this.resourceCommentsService.lockAndAssertContentHash(
+        tx.entityManager,
+        namespaceId,
+        resourceId,
+        data.expectedContentHash,
+      );
+    }
     if (data.parentId) {
       await this.resourcesService.getResourceOrFail(namespaceId, data.parentId);
       await this.permissionsService.userHasPermissionOrFail(
@@ -1609,6 +1656,21 @@ export class NamespaceResourcesService {
       tx,
       autoRenameOnConflict,
     );
+    if (
+      syncingCommentAnchors &&
+      data.content !== undefined &&
+      data.commentAnchors &&
+      tx
+    ) {
+      await this.resourceCommentsService.syncAnchors(
+        tx.entityManager,
+        namespaceId,
+        resourceId,
+        data.content,
+        data.commentAnchors,
+        data.orphanedCommentThreadIds ?? [],
+      );
+    }
   }
 
   async delete(userId: string, namespaceId: string, id: string) {

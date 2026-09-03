@@ -1,5 +1,6 @@
 import { Expose } from 'class-transformer';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceCommentThreadResponseDto } from 'omniboxd/resource-comments/dto/resource-comment-response.dto';
 import {
   isReadOnlyResourceType,
   Resource,
@@ -21,6 +22,8 @@ export class ResourceDto {
   name: string;
   resource_type: ResourceType;
   content: string;
+  content_hash: string;
+  comment_threads: ResourceCommentThreadResponseDto[];
   tags: TagDto[];
   attrs: Record<string, any>;
   global_permission: ResourcePermission | null;

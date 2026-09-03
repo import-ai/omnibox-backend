@@ -42,4 +42,7 @@ export class NamespaceUsageDto {
 
   @Expose({ name: 'rss_folder_team_limit' })
   rssFolderTeamLimit: number = 1;
+
+  @Expose({ name: 'agent_credits_total' })
+  agentCreditsTotal: number = 0;
 }

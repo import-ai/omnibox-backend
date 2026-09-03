@@ -20,6 +20,7 @@ import {
   I18nValidationPipe,
   QueryResolver,
 } from 'nestjs-i18n';
+import { AgentTurnSettlerModule } from 'omniboxd/agent-turn-settler/agent-turn-settler.module';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { AppController } from 'omniboxd/app/app.controller';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
@@ -218,6 +219,7 @@ export class AppModule implements NestModule {
         AppConfigModule,
         FeaturePreviewsModule,
         WizardUrlProviderModule,
+        AgentTurnSettlerModule,
         NotificationsModule,
         SmartFoldersModule,
         RssModule,

@@ -7,10 +7,15 @@ import {
   SmartFolderMatchMode,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { SmartFolderExpressionService } from 'omniboxd/smart-folders/smart-folder-expression.service';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
 
 describe('SmartFoldersMatcherService', () => {
-  const service = new SmartFoldersMatcherService();
+  const service = new SmartFoldersMatcherService(
+    new SmartFolderExpressionService({
+      t: jest.fn((key: string) => key),
+    } as any),
+  );
 
   function resource(values: Partial<Resource>): Resource {
     return {
@@ -187,5 +192,21 @@ describe('SmartFoldersMatcherService', () => {
     );
 
     expect(matched).toBe(true);
+  });
+
+  it('evaluates nested expression conditions', () => {
+    expect(
+      service.matches(
+        resource({ name: 'Quarterly Planning', content: 'baz' }),
+        [
+          {
+            field: SmartFolderField.EXPRESSION,
+            value:
+              "title = 'foo' or (title = 'quarterly planning' and content includes 'baz')",
+          },
+        ],
+        SmartFolderMatchMode.ALL,
+      ),
+    ).toBe(true);
   });
 });

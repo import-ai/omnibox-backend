@@ -2,13 +2,17 @@ import {
   SmartFolderField,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { SmartFolderExpressionService } from 'omniboxd/smart-folders/smart-folder-expression.service';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 
 describe('SmartFoldersRuleService', () => {
   const i18n = {
     t: jest.fn((key: string) => key),
   };
-  const service = new SmartFoldersRuleService(i18n as any);
+  const service = new SmartFoldersRuleService(
+    i18n as any,
+    new SmartFolderExpressionService(i18n as any),
+  );
 
   it('normalizes BETWEEN date ranges to ascending snake_case values', () => {
     const result = service.normalize([
@@ -88,5 +92,16 @@ describe('SmartFoldersRuleService', () => {
         },
       ]),
     ).toThrow('resource.errors.smartFolderConditionOperatorInvalid');
+  });
+
+  it('rejects invalid expression conditions', () => {
+    expect(() =>
+      service.normalize([
+        {
+          field: SmartFolderField.EXPRESSION,
+          value: "title = 'foo' and (tags includes 'bar'",
+        },
+      ]),
+    ).toThrow('resource.errors.smartFolderExpressionInvalid');
   });
 });

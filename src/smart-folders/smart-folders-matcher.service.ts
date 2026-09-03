@@ -9,9 +9,14 @@ import {
   SmartFolderMatchMode,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { SmartFolderExpressionService } from 'omniboxd/smart-folders/smart-folder-expression.service';
 
 @Injectable()
 export class SmartFoldersMatcherService {
+  constructor(
+    private readonly expressionService?: SmartFolderExpressionService,
+  ) {}
+
   matches(
     resource: Resource,
     conditions: SmartFolderCondition[],
@@ -31,6 +36,14 @@ export class SmartFoldersMatcherService {
     resource: Resource,
     condition: SmartFolderCondition,
   ): boolean {
+    if (condition.field === SmartFolderField.EXPRESSION) {
+      return (
+        (typeof condition.value === 'string' &&
+          this.expressionService?.matches(resource, condition.value)) ??
+        false
+      );
+    }
+
     const dateCandidate = this.getDateCandidate(resource, condition.field);
     if (dateCandidate) {
       return this.matchesDateCondition(dateCandidate, condition);

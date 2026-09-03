@@ -7,6 +7,8 @@ import {
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 
+import { SmartFolderExpressionService } from './smart-folder-expression.service';
+
 const TEXT_FIELDS = new Set<SmartFolderField>([
   SmartFolderField.TITLE,
   SmartFolderField.TAGS,
@@ -46,7 +48,10 @@ const VALUELESS_OPERATORS = new Set<SmartFolderOperator>([
 
 @Injectable()
 export class SmartFoldersRuleService {
-  constructor(private readonly i18n: I18nService) {}
+  constructor(
+    private readonly i18n: I18nService,
+    private readonly expressionService: SmartFolderExpressionService,
+  ) {}
 
   normalize(conditions: SmartFolderCondition[] = []): SmartFolderCondition[] {
     return conditions
@@ -57,11 +62,19 @@ export class SmartFoldersRuleService {
   private normalizeCondition(
     condition: SmartFolderCondition,
   ): SmartFolderCondition {
-    if (!condition.field || !condition.operator) {
+    if (!condition.field) {
       this.throwIncomplete();
     }
 
     const field = condition.field;
+    if (field === SmartFolderField.EXPRESSION) {
+      if (typeof condition.value !== 'string') this.throwIncomplete();
+      this.expressionService.parse(condition.value);
+      return { field, value: condition.value.trim() };
+    }
+    if (!condition.operator) {
+      this.throwIncomplete();
+    }
     const operator = condition.operator;
     const isTextField = TEXT_FIELDS.has(field);
     const isDateField = DATE_FIELDS.has(field);

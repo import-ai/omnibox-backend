@@ -18,6 +18,7 @@ export enum SmartFolderMatchMode {
 }
 
 export enum SmartFolderField {
+  EXPRESSION = 'expression',
   TITLE = 'title',
   TAGS = 'tags',
   URL = 'url',

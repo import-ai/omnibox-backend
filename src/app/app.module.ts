@@ -101,6 +101,7 @@ import { AddResourceSortPreferences1786156765110 } from 'omniboxd/migrations/178
 import { AddRetriedFromTaskIdToTasks1786412970105 } from 'omniboxd/migrations/1786412970105-add-retried-from-task-id-to-tasks';
 import { AddRssItemResources1786534451795 } from 'omniboxd/migrations/1786534451795-add-rss-item-resources';
 import { AddNamespaceParentIndexToResources1787654921509 } from 'omniboxd/migrations/1787654921509-add-namespace-parent-index-to-resources';
+import { AddResourceComments1788162671606 } from 'omniboxd/migrations/1788162671606-add-resource-comments';
 import { AddInitialSyncedAtToRssLinks1788255535304 } from 'omniboxd/migrations/1788255535304-add-initial-synced-at-to-rss-links';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
@@ -313,6 +314,7 @@ export class AppModule implements NestModule {
               AddRetriedFromTaskIdToTasks1786412970105,
               AddRssItemResources1786534451795,
               AddNamespaceParentIndexToResources1787654921509,
+              AddResourceComments1788162671606,
               AddInitialSyncedAtToRssLinks1788255535304,
               ...extraMigrations,
             ],

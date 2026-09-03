@@ -32,6 +32,7 @@ describe('NamespaceResourcesService', () => {
       {} as any,
       permissionsService as any,
       {} as any,
+      {} as any,
       resourcesService as any,
       {} as any,
       {} as any,

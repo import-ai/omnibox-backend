@@ -1,0 +1,11 @@
+{
+  "errors": {
+    "unsupportedResourceType": "Comments are only supported on document resources",
+    "contentConflict": "The document changed before the comment could be saved",
+    "invalidAnchor": "The comment anchor is invalid",
+    "anchorOverlap": "The selected text overlaps an existing comment thread",
+    "threadNotFound": "Comment thread not found",
+    "commentNotFound": "Comment not found",
+    "invalidSyncPayload": "Content, expected_content_hash, and comment_anchors must be submitted together"
+  }
+}

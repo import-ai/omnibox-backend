@@ -38,6 +38,7 @@ export enum AgentRequestChannel {
 export interface BaseAgentRequestDto {
   query: string;
   conversation_id: string;
+  current_resource_id?: string;
   enable_thinking: boolean;
   lang?: '简体中文' | 'English';
   tool_call?: {

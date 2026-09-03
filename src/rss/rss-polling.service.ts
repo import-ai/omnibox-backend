@@ -485,9 +485,6 @@ export class RssPollingService {
   // writes: a subscription can be dropped between them and the insert, so every
   // create re-checks it inside its transaction (see subscriptionIsLive).
   private async linkItems(url: string, stored: StoredItem[]): Promise<void> {
-    if (stored.length === 0) {
-      return;
-    }
     const links = await this.rssLinkRepository.find({ where: { url } });
     if (links.length === 0) {
       return;
@@ -511,24 +508,26 @@ export class RssPollingService {
     // Live copies only: a soft-deleted copy belongs to a subscription that is
     // gone, and the identity index no longer covers it, so it must not stand in
     // the way of a fresh copy.
-    const existing = new Set(
-      (
-        await this.resourceRepository
-          .createQueryBuilder('resource')
-          .select("resource.attrs->>'link_id'", 'linkId')
-          .addSelect("resource.attrs->>'guid'", 'guid')
-          .where('resource.resource_type = :resourceType', {
-            resourceType: ResourceType.RSS_ITEM,
-          })
-          .andWhere("resource.attrs->>'link_id' IN (:...linkIds)", {
-            linkIds: links.map((link) => link.id),
-          })
-          .andWhere("resource.attrs->>'guid' IN (:...guids)", {
-            guids: items.map((item) => item.guid),
-          })
-          .getRawMany<{ linkId: string; guid: string }>()
-      ).map((row) => `${row.linkId}:${row.guid}`),
-    );
+    const existing = new Set<string>();
+    if (items.length > 0) {
+      const rows = await this.resourceRepository
+        .createQueryBuilder('resource')
+        .select("resource.attrs->>'link_id'", 'linkId')
+        .addSelect("resource.attrs->>'guid'", 'guid')
+        .where('resource.resource_type = :resourceType', {
+          resourceType: ResourceType.RSS_ITEM,
+        })
+        .andWhere("resource.attrs->>'link_id' IN (:...linkIds)", {
+          linkIds: links.map((link) => link.id),
+        })
+        .andWhere("resource.attrs->>'guid' IN (:...guids)", {
+          guids: items.map((item) => item.guid),
+        })
+        .getRawMany<{ linkId: string; guid: string }>();
+      for (const row of rows) {
+        existing.add(`${row.linkId}:${row.guid}`);
+      }
+    }
 
     for (const link of links) {
       const folder = folderById.get(link.resourceId);
@@ -544,6 +543,15 @@ export class RssPollingService {
         }
         await this.createItemResource(link, folder, item);
       }
+      await this.rssLinkRepository
+        .createQueryBuilder()
+        .update(RssLink)
+        .set({
+          initialSyncedAt: () => 'COALESCE(initial_synced_at, NOW())',
+        })
+        .where('id = :id', { id: link.id })
+        .andWhere('deleted_at IS NULL')
+        .execute();
     }
   }
 

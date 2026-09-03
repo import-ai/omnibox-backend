@@ -663,6 +663,7 @@ export class StreamService implements OnModuleDestroy {
       user_id: userId,
       conversation_id: requestDto.conversation_id,
       query: requestDto.query,
+      current_resource_id: requestDto.current_resource_id,
       messages,
       tools,
       enable_thinking: requestDto.enable_thinking,

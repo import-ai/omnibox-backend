@@ -21,4 +21,7 @@ export class RssLink extends Base {
 
   @Column({ default: '' })
   name: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  initialSyncedAt: Date | null;
 }

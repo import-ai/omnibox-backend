@@ -1,3 +1,4 @@
+import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 
@@ -19,8 +20,8 @@ function createService(mocks: {
     mocks.smartFoldersService as any,
     {} as any,
     {
-      record: jest.fn().mockResolvedValue(undefined),
-      settle: jest.fn().mockResolvedValue(undefined),
+      onCallCompleted: jest.fn().mockResolvedValue(undefined),
+      onStreamClosed: jest.fn().mockResolvedValue(undefined),
     } as any,
   );
 }
@@ -605,13 +606,22 @@ describe('StreamService citations on a chat-only share', () => {
   });
 });
 
-describe('StreamService agent-credit metering', () => {
-  const streamKey = 'user:user-id:namespace-id:conversation-id';
+describe('StreamService agent stream hooks', () => {
+  const userStream = {
+    namespaceId: 'namespace-id',
+    streamId: 'user:user-id:namespace-id:conversation-id',
+    shareId: undefined,
+  };
+  const shareStream = {
+    namespaceId: 'namespace-id',
+    streamId: 'share:share-id:namespace-id:conversation-id',
+    shareId: 'share-id',
+  };
 
-  const createMeteredService = (message: Record<string, any>) => {
-    const settler = { record: jest.fn(), settle: jest.fn() };
-    settler.record.mockResolvedValue(undefined);
-    settler.settle.mockResolvedValue(undefined);
+  const createHookedService = (message: Record<string, any>) => {
+    const hooks = { onCallCompleted: jest.fn(), onStreamClosed: jest.fn() };
+    hooks.onCallCompleted.mockResolvedValue(undefined);
+    hooks.onStreamClosed.mockResolvedValue(undefined);
     const service = new StreamService(
       { get: jest.fn() } as any,
       {} as any,
@@ -625,14 +635,14 @@ describe('StreamService agent-credit metering', () => {
       {} as any,
       {} as any,
       {} as any,
-      settler as any,
+      hooks as any,
     );
-    return { service, settler };
+    return { service, hooks };
   };
 
   const eos = async (
     service: StreamService,
-    streamKeyArg: string | undefined,
+    agentStream: AgentStream | undefined,
   ) => {
     const handler = service.agentHandler(
       'namespace-id',
@@ -640,26 +650,25 @@ describe('StreamService agent-credit metering', () => {
       'user-id',
       jest.fn().mockResolvedValue(undefined),
       false,
-      streamKeyArg,
+      agentStream,
     );
     await handler(JSON.stringify({ response_type: 'eos', role: 'assistant' }), {
       messageId: 'message-id',
     } as any);
   };
 
-  it('charges the finished message tokens to the settler on eos', async () => {
-    const { service, settler } = createMeteredService({
+  it('reports the finished message tokens on eos', async () => {
+    const { service, hooks } = createHookedService({
       id: 'message-id',
       inputTokenCached: 12032,
       inputTokenUncached: 162,
       outputToken: 15,
     });
 
-    await eos(service, streamKey);
+    await eos(service, userStream);
 
-    expect(settler.record).toHaveBeenCalledWith(
-      'namespace-id',
-      streamKey,
+    expect(hooks.onCallCompleted).toHaveBeenCalledWith(
+      userStream,
       'message-id',
       {
         inputTokenCached: 12032,
@@ -669,21 +678,40 @@ describe('StreamService agent-credit metering', () => {
     );
   });
 
-  it('does not charge a message that burned no tokens', async () => {
-    const { service, settler } = createMeteredService({
+  it('hands the hook the share a stream was opened through', async () => {
+    // The share travels as its own field; nothing downstream has to parse it
+    // back out of the stream key.
+    const { service, hooks } = createHookedService({
+      id: 'message-id',
+      inputTokenCached: 0,
+      inputTokenUncached: 100,
+      outputToken: 5,
+    });
+
+    await eos(service, shareStream);
+
+    expect(hooks.onCallCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ shareId: 'share-id' }),
+      'message-id',
+      expect.anything(),
+    );
+  });
+
+  it('does not report a message that burned no tokens', async () => {
+    const { service, hooks } = createHookedService({
       id: 'message-id',
       inputTokenCached: 0,
       inputTokenUncached: 0,
       outputToken: 0,
     });
 
-    await eos(service, streamKey);
+    await eos(service, userStream);
 
-    expect(settler.record).not.toHaveBeenCalled();
+    expect(hooks.onCallCompleted).not.toHaveBeenCalled();
   });
 
-  it('does not record without a stream key', async () => {
-    const { service, settler } = createMeteredService({
+  it('does not report without a stream', async () => {
+    const { service, hooks } = createHookedService({
       id: 'message-id',
       inputTokenCached: 0,
       inputTokenUncached: 100,
@@ -692,6 +720,6 @@ describe('StreamService agent-credit metering', () => {
 
     await eos(service, undefined);
 
-    expect(settler.record).not.toHaveBeenCalled();
+    expect(hooks.onCallCompleted).not.toHaveBeenCalled();
   });
 });

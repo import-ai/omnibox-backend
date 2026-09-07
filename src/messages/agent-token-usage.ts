@@ -1,4 +1,4 @@
-import { AgentTokenUsage } from 'omniboxd/agent-turn-settler/agent-turn-settler.interface';
+import { AgentTokenUsage } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { MessageAttrs } from 'omniboxd/messages/entities/message.entity';
 
 const count = (value: unknown): number => {

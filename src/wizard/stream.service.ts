@@ -11,10 +11,11 @@ import { trace } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
 import { Span } from 'nestjs-otel';
 import {
-  AGENT_TURN_SETTLER,
+  AGENT_STREAM_HOOKS,
+  AgentStream,
   AgentTokenUsage,
-  IAgentTurnSettler,
-} from 'omniboxd/agent-turn-settler/agent-turn-settler.interface';
+  IAgentStreamHooks,
+} from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
@@ -68,10 +69,21 @@ interface StreamSession {
   namespaceId: string;
   conversationId: string;
   userId: string;
+  /** The share the stream arrived through, empty for a signed-in member. */
+  shareId: string;
   subscribers: Set<Subscriber<MessageEvent>>;
   controller: AbortController;
   handlerContext: HandlerContext;
   finished: boolean;
+}
+
+/** The hook-facing view of a live session. */
+function agentStreamOf(session: StreamSession): AgentStream {
+  return {
+    namespaceId: session.namespaceId,
+    streamId: session.key,
+    shareId: session.shareId || undefined,
+  };
 }
 
 @Injectable()
@@ -91,8 +103,8 @@ export class StreamService implements OnModuleDestroy {
     private readonly resourcesService: ResourcesService,
     private readonly smartFoldersService: SmartFoldersService,
     private readonly i18n: I18nService,
-    @Inject(AGENT_TURN_SETTLER)
-    private readonly agentTurnSettler: IAgentTurnSettler,
+    @Inject(AGENT_STREAM_HOOKS)
+    private readonly agentStreamHooks: IAgentStreamHooks,
   ) {}
 
   async onModuleDestroy() {
@@ -248,16 +260,12 @@ export class StreamService implements OnModuleDestroy {
   }
 
   /**
-   * Charge one finished LLM call to the agent-credit settler. A message is one
-   * call, and MessagesService accumulates its tokens as the deltas arrive, so
-   * the persisted row is what gets billed - no in-flight state to lose if the
-   * stream dies, and the settler can key the charge on the message id.
+   * Report one finished LLM call. A message is one call, and MessagesService
+   * accumulates its tokens as the deltas arrive, so the persisted row is what
+   * gets reported - no in-flight state to lose if the stream dies, and the
+   * hook can key its own bookkeeping on the message id.
    */
-  private recordAgentUsage(
-    message: Message,
-    namespaceId: string,
-    streamKey?: string,
-  ): void {
+  private reportCallCompleted(message: Message, stream?: AgentStream): void {
     const usage: AgentTokenUsage = {
       inputTokenCached: message.inputTokenCached,
       inputTokenUncached: message.inputTokenUncached,
@@ -265,12 +273,12 @@ export class StreamService implements OnModuleDestroy {
     };
     const total =
       usage.inputTokenCached + usage.inputTokenUncached + usage.outputToken;
-    if (!streamKey || total <= 0) {
+    if (!stream || total <= 0) {
       return;
     }
-    // Fire-and-forget: metering must never break the user's stream.
-    void this.agentTurnSettler
-      .record(namespaceId, streamKey, message.id, usage)
+    // Fire-and-forget: bookkeeping must never break the user's stream.
+    void this.agentStreamHooks
+      .onCallCompleted(stream, message.id, usage)
       .catch((error) => this.logger.error({ error }));
   }
 
@@ -280,7 +288,7 @@ export class StreamService implements OnModuleDestroy {
     userId: string,
     send: (data: string) => Promise<void>,
     chatOnly = false,
-    streamKey?: string,
+    stream?: AgentStream,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
@@ -336,7 +344,7 @@ export class StreamService implements OnModuleDestroy {
           true,
         );
 
-        this.recordAgentUsage(message, namespaceId, streamKey);
+        this.reportCallCompleted(message, stream);
         context.message = message.message;
         context.parentId = message.id;
         context.messageId = undefined;
@@ -663,6 +671,7 @@ export class StreamService implements OnModuleDestroy {
       namespaceId,
       conversationId: requestDto.conversation_id,
       userId,
+      shareId,
       subscribers: new Set(),
       controller: new AbortController(),
       handlerContext: { parentId },
@@ -676,7 +685,7 @@ export class StreamService implements OnModuleDestroy {
       userId,
       (data) => this.sendSessionData(session, data),
       chatOnly,
-      key,
+      agentStreamOf(session),
     );
     const tools = (requestDto.tools || []).map((tool) => {
       if (tool.name === 'private_search') {
@@ -868,10 +877,10 @@ export class StreamService implements OnModuleDestroy {
     void this.cleanupRedisSession(session.key).catch((error) =>
       this.logger.error({ error }),
     );
-    // Single funnel: errors, stops and aborts all end here, so the agent-credit
-    // reservation made when the stream was routed is always closed.
-    void this.agentTurnSettler
-      .settle(session.namespaceId, session.key)
+    // Single funnel: completion, errors, stops and aborts all end here, so
+    // whatever the stream was holding is always released.
+    void this.agentStreamHooks
+      .onStreamClosed(agentStreamOf(session))
       .catch((error) => this.logger.error({ error }));
   }
 

@@ -202,7 +202,7 @@ describe('SmartFoldersMatcherService', () => {
           {
             field: SmartFolderField.EXPRESSION,
             value:
-              "title = 'foo' or (title = 'quarterly planning' and content includes 'baz')",
+              "title == 'foo' or (title == 'quarterly planning' and 'baz' in content)",
           },
         ],
         SmartFolderMatchMode.ALL,

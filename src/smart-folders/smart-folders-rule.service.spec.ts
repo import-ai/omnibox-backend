@@ -102,6 +102,6 @@ describe('SmartFoldersRuleService', () => {
           value: "title = 'foo' and (tags includes 'bar'",
         },
       ]),
-    ).toThrow('resource.errors.smartFolderExpressionInvalid');
+    ).toThrow('Use == instead of =');
   });
 });

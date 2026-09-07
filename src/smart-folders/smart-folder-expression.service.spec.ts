@@ -1,0 +1,122 @@
+import { HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import {
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
+
+import { SmartFolderExpressionService } from './smart-folder-expression.service';
+
+describe('SmartFolderExpressionService', () => {
+  const service = new SmartFolderExpressionService({
+    t: jest.fn((_key: string, opts?: { args?: { reason?: string } }) =>
+      opts?.args?.reason
+        ? `Invalid smart folder condition expression: ${opts.args.reason}`
+        : _key,
+    ),
+  } as any);
+
+  function resource(values: Partial<Resource> = {}): Resource {
+    return {
+      id: 'resource-id',
+      name: 'Quarterly Planning',
+      resourceType: ResourceType.DOC,
+      attrs: {},
+      content: 'hello baz',
+      tagIds: ['finance'],
+      createdAt: new Date('2026-09-08T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-09T12:30:00.000Z'),
+      ...values,
+    } as Resource;
+  }
+
+  function parseError(expression: string): AppException {
+    try {
+      service.parse(expression);
+      throw new Error(`expected ${expression} to fail`);
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppException);
+      return error as AppException;
+    }
+  }
+
+  it('matches python-style text membership and equality', () => {
+    const item = resource();
+    expect(service.matches(item, "'plan' in title")).toBe(true);
+    expect(
+      service.matches(item, "title in ['quarterly planning', 'other']"),
+    ).toBe(true);
+    expect(service.matches(item, "title == 'quarterly planning'")).toBe(true);
+    expect(service.matches(item, "title != 'foo'")).toBe(true);
+    expect(service.matches(item, "'hello' in content")).toBe(true);
+  });
+
+  it('matches tags as membership and accepts the tag alias', () => {
+    const item = resource({
+      attrs: { tag_names: ['Roadmap'] },
+    });
+    expect(service.matches(item, "'roadmap' in tags")).toBe(true);
+    expect(service.matches(item, "'finance' in tag")).toBe(true);
+    expect(service.matches(item, "tags in ['finance', 'other']")).toBe(true);
+    expect(service.matches(item, "'missing' not in tags")).toBe(true);
+  });
+
+  it('matches datetime fields with UTC YYYY-MM-DD HH:MM:SS literals', () => {
+    const item = resource();
+    expect(service.matches(item, "created_at >= '2026-09-08 00:00:00'")).toBe(
+      true,
+    );
+    expect(service.matches(item, "created_at > '2026-09-08 00:00:00'")).toBe(
+      false,
+    );
+    expect(service.matches(item, "created_at == '2026-09-08 00:00:00'")).toBe(
+      true,
+    );
+    expect(service.matches(item, "'2026-09-09 12:30:00' <= updated_at")).toBe(
+      true,
+    );
+    expect(
+      service.matches(
+        item,
+        "created_at in ['2026-09-07 00:00:00', '2026-09-08 00:00:00']",
+      ),
+    ).toBe(true);
+  });
+
+  it('evaluates nested and / or groups', () => {
+    expect(
+      service.matches(
+        resource(),
+        "title == 'foo' or (title == 'quarterly planning' and 'baz' in content)",
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects the old operator spellings with a repair hint', () => {
+    expect(parseError("title = 'foo'").message).toContain(
+      'Use == instead of =',
+    );
+    expect(parseError("title includes 'foo'").message).toContain(
+      'Use in instead of includes',
+    );
+  });
+
+  it('rejects unknown fields, bad datetime format, and comparisons on text', () => {
+    const unknown = parseError("'foo' in name");
+    expect(unknown.message).toContain("Unknown field 'name'");
+    expect(unknown.getStatus()).toBe(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect((unknown.getResponse() as { hint?: string }).hint).toContain(
+      'created_at',
+    );
+
+    expect(parseError("created_at >= '2026-09-08'").message).toContain(
+      'YYYY-MM-DD HH:MM:SS',
+    );
+    expect(parseError("title >= 'foo'").message).toContain(
+      'only applies to created_at and updated_at',
+    );
+    expect(parseError("title in 'foo'").message).toContain(
+      'When the field is on the left, use a list',
+    );
+  });
+});

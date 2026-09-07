@@ -73,6 +73,7 @@ export class SmartFoldersController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
     @Headers('from') requestFrom?: string,
+    @Headers('x-timezone') timeZone?: string,
   ): Promise<ResourceSummaryDto[]> {
     return await this.smartFoldersService.listChildren(
       userId,
@@ -81,6 +82,7 @@ export class SmartFoldersController {
       {
         limit: this.parseChildrenLimit(limit, requestFrom),
         offset: this.parseChildrenOffset(offset, requestFrom),
+        timeZone,
       },
     );
   }

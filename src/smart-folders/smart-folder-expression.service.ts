@@ -66,8 +66,9 @@ const SYNTAX_HINT = [
   `Allowed fields: ${FIELD_LIST}. tag is an alias of tags.`,
   `Operators: ${OPERATOR_LIST}. Combine with and / or and parentheses.`,
   "Text examples: 'foo' in title; title in ['foo', 'bar']; title == 'foo'.",
-  `Datetime fields created_at and updated_at use UTC ${DATETIME_FORMAT}, e.g. created_at >= '2026-09-08 00:00:00'.`,
+  `Datetime fields created_at and updated_at use ${DATETIME_FORMAT} in the requester timezone, e.g. created_at >= '2026-09-08 00:00:00'.`,
 ].join(' ');
+const DEFAULT_TIME_ZONE = 'UTC';
 
 const MAX_LENGTH = 2000;
 const MAX_DEPTH = 20;
@@ -98,30 +99,39 @@ export class SmartFolderExpressionService {
     return result;
   }
 
-  matches(resource: Resource, expression: string): boolean {
-    return this.evaluate(resource, this.parse(expression));
+  matches(resource: Resource, expression: string, timeZone?: string): boolean {
+    return this.evaluate(
+      resource,
+      this.parse(expression),
+      this.resolveTimeZone(timeZone),
+    );
   }
 
-  private evaluate(resource: Resource, node: ExpressionNode): boolean {
+  private evaluate(
+    resource: Resource,
+    node: ExpressionNode,
+    timeZone: string,
+  ): boolean {
     if (node.type === 'and') {
       return (
-        this.evaluate(resource, node.left) &&
-        this.evaluate(resource, node.right)
+        this.evaluate(resource, node.left, timeZone) &&
+        this.evaluate(resource, node.right, timeZone)
       );
     }
     if (node.type === 'or') {
       return (
-        this.evaluate(resource, node.left) ||
-        this.evaluate(resource, node.right)
+        this.evaluate(resource, node.left, timeZone) ||
+        this.evaluate(resource, node.right, timeZone)
       );
     }
     if (node.type !== 'compare') return false;
-    return this.evaluateCompare(resource, node);
+    return this.evaluateCompare(resource, node, timeZone);
   }
 
   private evaluateCompare(
     resource: Resource,
     node: Extract<ExpressionNode, { type: 'compare' }>,
+    timeZone: string,
   ): boolean {
     const fieldAtom = this.fieldAtom(node.left, node.right);
     const valueAtom = fieldAtom === node.left ? node.right : node.left;
@@ -130,7 +140,7 @@ export class SmartFolderExpressionService {
     const op = swapped ? this.swapOp(node.op) : node.op;
 
     if (DATE_FIELDS.has(field)) {
-      return this.evaluateDate(resource, field, op, valueAtom);
+      return this.evaluateDate(resource, field, op, valueAtom, timeZone);
     }
     if (field === SmartFolderField.TAGS) {
       return this.evaluateTags(resource, op, valueAtom);
@@ -189,20 +199,21 @@ export class SmartFolderExpressionService {
     field: FieldName,
     op: CompareOp,
     value: Atom,
+    timeZone: string,
   ): boolean {
     const actual = this.dateCandidate(resource, field);
     if (!actual) return false;
     const actualSeconds = Math.floor(actual.getTime() / 1000);
     if (op === 'in' || op === 'not_in') {
       const expected = this.literalValues(value)
-        .map((item) => this.parseDatetime(item))
+        .map((item) => this.parseDatetime(item, timeZone))
         .map((date) => Math.floor(date.getTime() / 1000));
       const matched = expected.includes(actualSeconds);
       return op === 'in' ? matched : !matched;
     }
     if (value.type !== 'string') return false;
     const expectedSeconds = Math.floor(
-      this.parseDatetime(value.value).getTime() / 1000,
+      this.parseDatetime(value.value, timeZone).getTime() / 1000,
     );
     if (op === 'eq') return actualSeconds === expectedSeconds;
     if (op === 'ne') return actualSeconds !== expectedSeconds;
@@ -271,14 +282,24 @@ export class SmartFolderExpressionService {
     return null;
   }
 
-  private parseDatetime(value: string): Date {
-    const date = parseUtcDatetime(value);
-    if (!date) this.invalid(this.datetimeError(value));
+  private parseDatetime(value: string, timeZone: string): Date {
+    const date = parseZonedDatetime(value, timeZone);
+    if (!date) this.invalid(this.datetimeError(value, timeZone));
     return date;
   }
 
-  private datetimeError(value: string): string {
-    return `Invalid datetime '${value}'. Use UTC ${DATETIME_FORMAT}, e.g. created_at >= '2026-09-08 00:00:00'.`;
+  private resolveTimeZone(timeZone?: string): string {
+    const resolved = timeZone?.trim() || DEFAULT_TIME_ZONE;
+    if (!isValidTimeZone(resolved)) {
+      this.invalid(
+        `Unknown timezone '${resolved}'. Use an IANA name such as Asia/Shanghai.`,
+      );
+    }
+    return resolved;
+  }
+
+  private datetimeError(value: string, timeZone: string): string {
+    return `Invalid datetime '${value}'. Use ${DATETIME_FORMAT} in timezone ${timeZone}, e.g. created_at >= '2026-09-08 00:00:00'.`;
   }
 
   private literalValues(value: Atom): string[] {
@@ -523,12 +544,6 @@ class ExpressionParser {
     if (token.value === '<') return 'lt';
     if (token.value === '>=') return 'ge';
     if (token.value === '<=') return 'le';
-    if (token.value === '=') {
-      this.invalid("Use == instead of =. Example: title == 'foo'.");
-    }
-    if (token.value === 'includes') {
-      this.invalid("Use in instead of includes. Example: 'foo' in title.");
-    }
     this.invalid(
       `Unknown operator '${token.value || token.type}'. Allowed operators: ${OPERATOR_LIST}.`,
     );
@@ -619,9 +634,9 @@ class ExpressionParser {
   }
 
   private assertDatetime(value: string) {
-    if (!parseUtcDatetime(value)) {
+    if (!isDatetimeLiteral(value)) {
       this.invalid(
-        `Invalid datetime '${value}'. Use UTC ${DATETIME_FORMAT}, e.g. created_at >= '2026-09-08 00:00:00'.`,
+        `Invalid datetime '${value}'. Use ${DATETIME_FORMAT} in the requester timezone, e.g. created_at >= '2026-09-08 00:00:00'.`,
       );
     }
   }
@@ -651,31 +666,130 @@ class ExpressionParser {
   }
 }
 
-function parseUtcDatetime(value: string): Date | null {
+function isDatetimeLiteral(value: string): boolean {
+  const parts = datetimeParts(value);
+  if (!parts) return false;
+  const date = new Date(
+    Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+    ),
+  );
+  return (
+    date.getUTCFullYear() === parts.year &&
+    date.getUTCMonth() === parts.month - 1 &&
+    date.getUTCDate() === parts.day &&
+    date.getUTCHours() === parts.hour &&
+    date.getUTCMinutes() === parts.minute &&
+    date.getUTCSeconds() === parts.second
+  );
+}
+
+function datetimeParts(value: string) {
   const match = value.match(DATETIME_PATTERN);
   if (!match) return null;
   const [, year, month, day, hour, minute, second] = match;
-  const date = new Date(
-    Date.UTC(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-      Number(second),
-    ),
+  return {
+    year: Number(year),
+    month: Number(month),
+    day: Number(day),
+    hour: Number(hour),
+    minute: Number(minute),
+    second: Number(second),
+  };
+}
+
+function isValidTimeZone(timeZone: string): boolean {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseZonedDatetime(value: string, timeZone: string): Date | null {
+  const parts = datetimeParts(value);
+  if (!parts || !isDatetimeLiteral(value) || !isValidTimeZone(timeZone)) {
+    return null;
+  }
+  const utcGuess = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
   );
+  let offset = getTimeZoneOffsetMs(new Date(utcGuess), timeZone);
+  let instant = utcGuess - offset;
+  offset = getTimeZoneOffsetMs(new Date(instant), timeZone);
+  instant = utcGuess - offset;
+  const wall = wallClockParts(new Date(instant), timeZone);
   if (
-    date.getUTCFullYear() !== Number(year) ||
-    date.getUTCMonth() !== Number(month) - 1 ||
-    date.getUTCDate() !== Number(day) ||
-    date.getUTCHours() !== Number(hour) ||
-    date.getUTCMinutes() !== Number(minute) ||
-    date.getUTCSeconds() !== Number(second)
+    !wall ||
+    wall.year !== parts.year ||
+    wall.month !== parts.month ||
+    wall.day !== parts.day ||
+    wall.hour !== parts.hour ||
+    wall.minute !== parts.minute ||
+    wall.second !== parts.second
   ) {
     return null;
   }
-  return date;
+  return new Date(instant);
+}
+
+function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
+  const wall = wallClockParts(date, timeZone);
+  if (!wall) return 0;
+  return (
+    Date.UTC(
+      wall.year,
+      wall.month - 1,
+      wall.day,
+      wall.hour,
+      wall.minute,
+      wall.second,
+    ) - date.getTime()
+  );
+}
+
+function wallClockParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const hour = map.hour === '24' ? 0 : Number(map.hour);
+  if (
+    !map.year ||
+    !map.month ||
+    !map.day ||
+    Number.isNaN(hour) ||
+    !map.minute ||
+    !map.second
+  ) {
+    return null;
+  }
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour,
+    minute: Number(map.minute),
+    second: Number(map.second),
+  };
 }
 
 function opSymbol(op: CompareOp): string {

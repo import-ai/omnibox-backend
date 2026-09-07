@@ -21,6 +21,7 @@ export interface ISmartFoldersService {
     options?: {
       limit?: number;
       offset?: number;
+      timeZone?: string;
     },
   ): Promise<ResourceSummaryDto[]>;
 
@@ -31,6 +32,7 @@ export interface ISmartFoldersService {
     options?: {
       limit?: number;
       offset?: number;
+      timeZone?: string;
     },
   ): Promise<{ resources: ResourceSummaryDto[]; total: number }>;
 

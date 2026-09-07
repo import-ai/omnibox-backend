@@ -21,12 +21,13 @@ export class SmartFoldersMatcherService {
     resource: Resource,
     conditions: SmartFolderCondition[],
     matchMode: SmartFolderMatchMode,
+    timeZone?: string,
   ): boolean {
     if (conditions.length <= 0) {
       return false;
     }
     const matcher = (condition: SmartFolderCondition) =>
-      this.matchesCondition(resource, condition);
+      this.matchesCondition(resource, condition, timeZone);
     return matchMode === SmartFolderMatchMode.ANY
       ? conditions.some(matcher)
       : conditions.every(matcher);
@@ -35,11 +36,16 @@ export class SmartFoldersMatcherService {
   private matchesCondition(
     resource: Resource,
     condition: SmartFolderCondition,
+    timeZone?: string,
   ): boolean {
     if (condition.field === SmartFolderField.EXPRESSION) {
       return (
         (typeof condition.value === 'string' &&
-          this.expressionService?.matches(resource, condition.value)) ??
+          this.expressionService?.matches(
+            resource,
+            condition.value,
+            timeZone,
+          )) ??
         false
       );
     }

@@ -22,6 +22,7 @@ import { IndexedDocDto, IndexedResourceDto } from './dto/indexed-doc.dto';
 export interface SearchFilterOptions {
   conditions?: SmartFolderCondition[];
   matchMode?: SmartFolderMatchMode;
+  timeZone?: string;
 }
 
 export interface SearchFilterPagination {
@@ -80,6 +81,7 @@ export class SearchResourceFilterService {
             resource,
             conditions,
             matchMode,
+            options?.timeZone,
           ),
         )
         .map((resource) => resource.id),
@@ -128,7 +130,12 @@ export class SearchResourceFilterService {
     );
     const matchMode = options.matchMode ?? SmartFolderMatchMode.ALL;
     const matched = resourcesWithTagNames.filter((resource) =>
-      this.smartFoldersMatcherService.matches(resource, conditions, matchMode),
+      this.smartFoldersMatcherService.matches(
+        resource,
+        conditions,
+        matchMode,
+        options.timeZone,
+      ),
     );
 
     return this.toResult(matched, pagination);

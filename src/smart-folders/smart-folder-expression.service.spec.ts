@@ -61,7 +61,7 @@ describe('SmartFolderExpressionService', () => {
     expect(service.matches(item, "'missing' not in tags")).toBe(true);
   });
 
-  it('matches datetime fields with UTC YYYY-MM-DD HH:MM:SS literals', () => {
+  it('matches datetime fields as requester-timezone YYYY-MM-DD HH:MM:SS literals', () => {
     const item = resource();
     expect(service.matches(item, "created_at >= '2026-09-08 00:00:00'")).toBe(
       true,
@@ -81,6 +81,27 @@ describe('SmartFolderExpressionService', () => {
         "created_at in ['2026-09-07 00:00:00', '2026-09-08 00:00:00']",
       ),
     ).toBe(true);
+    expect(
+      service.matches(
+        item,
+        "created_at >= '2026-09-08 08:00:00'",
+        'Asia/Shanghai',
+      ),
+    ).toBe(true);
+    expect(
+      service.matches(
+        item,
+        "created_at > '2026-09-08 08:00:00'",
+        'Asia/Shanghai',
+      ),
+    ).toBe(false);
+    expect(
+      service.matches(
+        item,
+        "created_at == '2026-09-08 00:00:00'",
+        'Asia/Shanghai',
+      ),
+    ).toBe(false);
   });
 
   it('evaluates nested and / or groups', () => {
@@ -92,12 +113,12 @@ describe('SmartFolderExpressionService', () => {
     ).toBe(true);
   });
 
-  it('rejects the old operator spellings with a repair hint', () => {
+  it('rejects unknown operators without old-syntax aliases', () => {
     expect(parseError("title = 'foo'").message).toContain(
-      'Use == instead of =',
+      "Unknown operator '='",
     );
     expect(parseError("title includes 'foo'").message).toContain(
-      'Use in instead of includes',
+      "Unknown operator 'includes'",
     );
   });
 

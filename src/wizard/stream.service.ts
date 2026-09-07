@@ -19,7 +19,6 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
   Message,
-  MessageAttrs,
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
@@ -62,8 +61,6 @@ interface HandlerContext {
   parentId?: string;
   messageId?: string;
   message?: OpenAIMessage;
-  /** Tokens of the in-flight LLM call, flushed to the settler on its eos. */
-  pendingAgentUsage?: AgentTokenUsage;
 }
 
 interface StreamSession {
@@ -251,47 +248,29 @@ export class StreamService implements OnModuleDestroy {
   }
 
   /**
-   * Wizard usage deltas report one LLM call's tokens; they accumulate on the
-   * context and flush to the agent-turn settler when the call's eos arrives,
-   * so a stream that dies mid-turn has still charged its completed calls.
-   * `usage.context_compact` is wizard-injected config data, not tokens.
+   * Charge one finished LLM call to the agent-credit settler. A message is one
+   * call, and MessagesService accumulates its tokens as the deltas arrive, so
+   * the persisted row is what gets billed - no in-flight state to lose if the
+   * stream dies, and the settler can key the charge on the message id.
    */
-  private accumulateAgentUsage(
-    context: HandlerContext,
-    attrs?: MessageAttrs,
-  ): void {
-    const usage = attrs?.usage;
-    if (!usage || typeof usage.prompt_tokens !== 'number') {
-      return;
-    }
-    const prompt: number = usage.prompt_tokens;
-    const cached = Number(usage.prompt_tokens_details?.cached_tokens ?? 0);
-    const pending = (context.pendingAgentUsage ??= {
-      inputTokenCached: 0,
-      inputTokenUncached: 0,
-      outputToken: 0,
-    });
-    pending.inputTokenCached += cached;
-    pending.inputTokenUncached += Math.max(0, prompt - cached);
-    pending.outputToken += Number(usage.completion_tokens ?? 0);
-  }
-
-  private flushAgentUsage(
-    context: HandlerContext,
+  private recordAgentUsage(
+    message: Message,
     namespaceId: string,
     streamKey?: string,
   ): void {
-    const pending = context.pendingAgentUsage;
-    if (!pending) {
-      return;
-    }
-    context.pendingAgentUsage = undefined;
-    if (!streamKey) {
+    const usage: AgentTokenUsage = {
+      inputTokenCached: message.inputTokenCached,
+      inputTokenUncached: message.inputTokenUncached,
+      outputToken: message.outputToken,
+    };
+    const total =
+      usage.inputTokenCached + usage.inputTokenUncached + usage.outputToken;
+    if (!streamKey || total <= 0) {
       return;
     }
     // Fire-and-forget: metering must never break the user's stream.
     void this.agentTurnSettler
-      .record(namespaceId, streamKey, pending)
+      .record(namespaceId, streamKey, message.id, usage)
       .catch((error) => this.logger.error({ error }));
   }
 
@@ -342,12 +321,10 @@ export class StreamService implements OnModuleDestroy {
           chunk,
         );
 
-        this.accumulateAgentUsage(context, chunk.attrs);
         chunk.id = context.messageId;
         delete chunk.attrs?.context;
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
-        this.flushAgentUsage(context, namespaceId, streamKey);
         chunk.id = context.messageId;
         const message: Message = await this.messagesService.update(
           context.messageId!,
@@ -359,6 +336,7 @@ export class StreamService implements OnModuleDestroy {
           true,
         );
 
+        this.recordAgentUsage(message, namespaceId, streamKey);
         context.message = message.message;
         context.parentId = message.id;
         context.messageId = undefined;

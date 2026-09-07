@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
+import { agentTokenDeltaOf } from 'omniboxd/messages/agent-token-usage';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import {
   Message,
@@ -166,6 +167,14 @@ export class MessagesService {
     if (delta.attrs) {
       message.attrs = message.attrs || {};
       Object.assign(message.attrs, delta.attrs);
+    }
+    // attrs.usage is overwritten by the merge above, so the columns are what
+    // add up to the whole call. Agent credits are billed off them at eos.
+    const tokens = agentTokenDeltaOf(delta.attrs);
+    if (tokens) {
+      message.inputTokenCached += tokens.inputTokenCached;
+      message.inputTokenUncached += tokens.inputTokenUncached;
+      message.outputToken += tokens.outputToken;
     }
     return await this.messageRepository.save(message);
   }

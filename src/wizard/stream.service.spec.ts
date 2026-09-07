@@ -608,7 +608,7 @@ describe('StreamService citations on a chat-only share', () => {
 describe('StreamService agent-credit metering', () => {
   const streamKey = 'user:user-id:namespace-id:conversation-id';
 
-  const createMeteredService = () => {
+  const createMeteredService = (message: Record<string, any>) => {
     const settler = { record: jest.fn(), settle: jest.fn() };
     settler.record.mockResolvedValue(undefined);
     settler.settle.mockResolvedValue(undefined);
@@ -617,7 +617,7 @@ describe('StreamService agent-credit metering', () => {
       {} as any,
       {
         updateDelta: jest.fn().mockResolvedValue({ message: {} }),
-        update: jest.fn().mockResolvedValue({ id: 'message-id', message: {} }),
+        update: jest.fn().mockResolvedValue({ message: {}, ...message }),
       } as any,
       {} as any,
       {} as any,
@@ -630,101 +630,67 @@ describe('StreamService agent-credit metering', () => {
     return { service, settler };
   };
 
-  const usageDelta = (usage: Record<string, any>) =>
-    JSON.stringify({
-      response_type: 'delta',
-      message: {},
-      attrs: { usage },
-    });
-
-  it('flushes accumulated LLM-call tokens to the settler on eos', async () => {
-    const { service, settler } = createMeteredService();
+  const eos = async (
+    service: StreamService,
+    streamKeyArg: string | undefined,
+  ) => {
     const handler = service.agentHandler(
       'namespace-id',
       'conversation-id',
       'user-id',
       jest.fn().mockResolvedValue(undefined),
       false,
-      streamKey,
+      streamKeyArg,
     );
-    const context = { messageId: 'message-id' } as any;
+    await handler(JSON.stringify({ response_type: 'eos', role: 'assistant' }), {
+      messageId: 'message-id',
+    } as any);
+  };
 
-    await handler(
-      usageDelta({
-        prompt_tokens: 12194,
-        completion_tokens: 15,
-        total_tokens: 12209,
-        prompt_tokens_details: { cached_tokens: 12032 },
-        context_compact: { estimated_tokens: 83, trigger_tokens: 100000 },
-      }),
-      context,
-    );
-    expect(settler.record).not.toHaveBeenCalled();
-
-    await handler(
-      JSON.stringify({ response_type: 'eos', role: 'assistant' }),
-      context,
-    );
-
-    expect(settler.record).toHaveBeenCalledWith('namespace-id', streamKey, {
+  it('charges the finished message tokens to the settler on eos', async () => {
+    const { service, settler } = createMeteredService({
+      id: 'message-id',
       inputTokenCached: 12032,
       inputTokenUncached: 162,
       outputToken: 15,
     });
+
+    await eos(service, streamKey);
+
+    expect(settler.record).toHaveBeenCalledWith(
+      'namespace-id',
+      streamKey,
+      'message-id',
+      {
+        inputTokenCached: 12032,
+        inputTokenUncached: 162,
+        outputToken: 15,
+      },
+    );
   });
 
-  it('flushes each LLM call once, on its own eos', async () => {
-    const { service, settler } = createMeteredService();
-    const handler = service.agentHandler(
-      'namespace-id',
-      'conversation-id',
-      'user-id',
-      jest.fn().mockResolvedValue(undefined),
-      false,
-      streamKey,
-    );
-    const context = { messageId: 'message-id' } as any;
+  it('does not charge a message that burned no tokens', async () => {
+    const { service, settler } = createMeteredService({
+      id: 'message-id',
+      inputTokenCached: 0,
+      inputTokenUncached: 0,
+      outputToken: 0,
+    });
 
-    await handler(
-      usageDelta({ prompt_tokens: 100, completion_tokens: 5 }),
-      context,
-    );
-    await handler(
-      JSON.stringify({ response_type: 'eos', role: 'assistant' }),
-      context,
-    );
-    context.messageId = 'message-id-2';
-    await handler(
-      JSON.stringify({ response_type: 'eos', role: 'assistant' }),
-      context,
-    );
+    await eos(service, streamKey);
 
-    expect(settler.record).toHaveBeenCalledTimes(1);
-    expect(settler.record).toHaveBeenCalledWith('namespace-id', streamKey, {
+    expect(settler.record).not.toHaveBeenCalled();
+  });
+
+  it('does not record without a stream key', async () => {
+    const { service, settler } = createMeteredService({
+      id: 'message-id',
       inputTokenCached: 0,
       inputTokenUncached: 100,
       outputToken: 5,
     });
-  });
 
-  it('does not record without a stream key', async () => {
-    const { service, settler } = createMeteredService();
-    const handler = service.agentHandler(
-      'namespace-id',
-      'conversation-id',
-      'user-id',
-      jest.fn().mockResolvedValue(undefined),
-    );
-    const context = { messageId: 'message-id' } as any;
-
-    await handler(
-      usageDelta({ prompt_tokens: 100, completion_tokens: 5 }),
-      context,
-    );
-    await handler(
-      JSON.stringify({ response_type: 'eos', role: 'assistant' }),
-      context,
-    );
+    await eos(service, undefined);
 
     expect(settler.record).not.toHaveBeenCalled();
   });

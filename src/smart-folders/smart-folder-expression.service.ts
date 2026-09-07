@@ -58,14 +58,14 @@ const FIELDS = new Set<string>([
 ]);
 
 const FIELD_LIST =
-  'title, tags, url, file_name, content, created_at, updated_at';
+  'title, tag, url, file_name, content, created_at, updated_at';
 const OPERATOR_LIST = 'in, not in, ==, !=, >, <, >=, <=';
 const DATETIME_FORMAT = 'YYYY-MM-DD HH:MM:SS';
 const DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
 const SYNTAX_HINT = [
-  `Allowed fields: ${FIELD_LIST}. tag is an alias of tags.`,
+  `Allowed fields: ${FIELD_LIST}. tags is an alias of tag.`,
   `Operators: ${OPERATOR_LIST}. Combine with and / or and parentheses.`,
-  "Text examples: 'foo' in title; title in ['foo', 'bar']; title == 'foo'.",
+  "Text examples: 'foo' in title; title in ['foo', 'bar']; 'foo' in tag.",
   `Datetime fields created_at and updated_at use ${DATETIME_FORMAT} in the requester timezone, e.g. created_at >= '2026-09-08 00:00:00'.`,
 ].join(' ');
 const DEFAULT_TIME_ZONE = 'UTC';
@@ -490,7 +490,9 @@ class ExpressionParser {
     if (token.type === 'string') return { type: 'string', value: token.value };
     if (token.type === 'word') {
       const fieldName =
-        token.value === 'tag' ? SmartFolderField.TAGS : token.value;
+        token.value === 'tag' || token.value === 'tags'
+          ? SmartFolderField.TAGS
+          : token.value;
       if (!FIELDS.has(fieldName)) {
         this.invalid(
           `Unknown field '${token.value}'. Allowed fields: ${FIELD_LIST}.`,

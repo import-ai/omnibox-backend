@@ -43,6 +43,10 @@ type Token = {
   value: string;
 };
 
+type ExpressionErrorArgs = Record<string, string | number>;
+
+type InvalidExpression = (key: string, args?: ExpressionErrorArgs) => never;
+
 const DATE_FIELDS = new Set<FieldName>([
   SmartFolderField.CREATED_AT,
   SmartFolderField.UPDATED_AT,
@@ -64,12 +68,6 @@ const FIELD_LIST =
 const OPERATOR_LIST = 'in, not in, ==, !=, >, <, >=, <=';
 const DATETIME_FORMAT = 'YYYY-MM-DD HH:MM:SS';
 const DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
-const SYNTAX_HINT = [
-  `Allowed fields: ${FIELD_LIST}. tags is an alias of tag.`,
-  `Operators: ${OPERATOR_LIST}. Combine with and / or and parentheses.`,
-  "Text examples: 'foo' in title; 'foo' in tag; file_name_ext in ['jpg', 'png']. file_name_ext is the suffix after the last dot; '.jpg' and 'jpg' are the same. Do not use file_name in ['.jpg'].",
-  `Datetime fields created_at and updated_at use ${DATETIME_FORMAT} in the requester timezone, e.g. created_at >= '2026-09-08 00:00:00'.`,
-].join(' ');
 const DEFAULT_TIME_ZONE = 'UTC';
 
 const MAX_LENGTH = 2000;
@@ -81,22 +79,19 @@ export class SmartFolderExpressionService {
 
   parse(expression: string): ExpressionNode {
     if (!expression.trim()) {
-      this.invalid('Expression is empty. ' + SYNTAX_HINT);
+      this.invalid('empty');
     }
     if (expression.length > MAX_LENGTH) {
-      this.invalid(
-        `Expression exceeds ${MAX_LENGTH} characters. Shorten it and retry.`,
-      );
+      this.invalid('tooLong', { max: MAX_LENGTH });
     }
 
-    const parser = new ExpressionParser(this.tokenize(expression), (reason) =>
-      this.invalid(reason),
+    const parser = new ExpressionParser(
+      this.tokenize(expression),
+      (key, args) => this.invalid(key, args),
     );
     const result = parser.parse();
     if (parser.maxDepth > MAX_DEPTH) {
-      this.invalid(
-        `Expression is nested more than ${MAX_DEPTH} levels. Flatten and / or groups.`,
-      );
+      this.invalid('tooDeep', { max: MAX_DEPTH });
     }
     return result;
   }
@@ -309,22 +304,22 @@ export class SmartFolderExpressionService {
 
   private parseDatetime(value: string, timeZone: string): Date {
     const date = parseZonedDatetime(value, timeZone);
-    if (!date) this.invalid(this.datetimeError(value, timeZone));
+    if (!date) {
+      this.invalid('invalidDatetimeWithTimezone', {
+        value,
+        format: DATETIME_FORMAT,
+        timezone: timeZone,
+      });
+    }
     return date;
   }
 
   private resolveTimeZone(timeZone?: string): string {
     const resolved = timeZone?.trim() || DEFAULT_TIME_ZONE;
     if (!isValidTimeZone(resolved)) {
-      this.invalid(
-        `Unknown timezone '${resolved}'. Use an IANA name such as Asia/Shanghai.`,
-      );
+      this.invalid('unknownTimezone', { timezone: resolved });
     }
     return resolved;
-  }
-
-  private datetimeError(value: string, timeZone: string): string {
-    return `Invalid datetime '${value}'. Use ${DATETIME_FORMAT} in timezone ${timeZone}, e.g. created_at >= '2026-09-08 00:00:00'.`;
   }
 
   private literalValues(value: Atom): string[] {
@@ -336,7 +331,7 @@ export class SmartFolderExpressionService {
   private fieldAtom(left: Atom, right: Atom): Extract<Atom, { type: 'field' }> {
     if (left.type === 'field') return left;
     if (right.type === 'field') return right;
-    this.invalid('Compare exactly one field with a literal. ' + SYNTAX_HINT);
+    this.invalid('compareOneField');
   }
 
   private swapOp(op: CompareOp): CompareOp {
@@ -391,9 +386,7 @@ export class SmartFolderExpressionService {
             ? two
             : char;
         if (char === '!' && value !== '!=') {
-          this.invalid(
-            "Unknown operator '!'. Use != for inequality. " + SYNTAX_HINT,
-          );
+          this.invalid('unknownExclamation');
         }
         tokens.push({ type: 'operator', value });
         index += value.length;
@@ -409,9 +402,7 @@ export class SmartFolderExpressionService {
           end += 1;
         }
         if (input[end] !== quote) {
-          this.invalid(
-            `Unterminated string starting at index ${index}. Close it with ${quote}.`,
-          );
+          this.invalid('unterminatedString', { index, quote });
         }
         tokens.push({ type: 'string', value });
         index = end + 1;
@@ -419,9 +410,7 @@ export class SmartFolderExpressionService {
       }
       const match = input.slice(index).match(/^[A-Za-z_][A-Za-z0-9_]*/);
       if (!match) {
-        this.invalid(
-          `Unexpected character '${char}' at index ${index}. ${SYNTAX_HINT}`,
-        );
+        this.invalid('unexpectedCharacter', { char, index });
       }
       const value = match[0].toLowerCase();
       tokens.push({
@@ -437,21 +426,27 @@ export class SmartFolderExpressionService {
     return tokens;
   }
 
-  private invalid(reason: string): never {
-    const message = this.i18n.t(
-      'resource.errors.smartFolderExpressionInvalid',
-      {
-        args: { reason },
-      },
-    );
+  private invalid(key: string, args: ExpressionErrorArgs = {}): never {
+    const i18nKey = `resource.errors.smartFolderExpression.${key}`;
+    const hintArgs = {
+      fields: FIELD_LIST,
+      operators: OPERATOR_LIST,
+      format: DATETIME_FORMAT,
+    };
+    const message = this.i18n.t(i18nKey, { args });
+    const reason = this.i18n.t(i18nKey, { args, lang: 'en' });
+    const hint = this.i18n.t('resource.errors.smartFolderExpression.hint', {
+      args: hintArgs,
+    });
     throw new AppException(
-      message.includes('{reason}') ||
-        message === 'resource.errors.smartFolderExpressionInvalid'
-        ? reason
-        : message,
+      missingTranslation(message, i18nKey) ? String(reason) : String(message),
       'SMART_FOLDER_EXPRESSION_INVALID',
       HttpStatus.UNPROCESSABLE_ENTITY,
-      { reason, hint: SYNTAX_HINT },
+      {
+        reason: String(reason),
+        hint: String(hint),
+        error: errorCode(key),
+      },
     );
   }
 }
@@ -462,15 +457,15 @@ class ExpressionParser {
   maxDepth = 0;
   constructor(
     private readonly tokens: Token[],
-    private readonly invalid: (reason: string) => never,
+    private readonly invalid: InvalidExpression,
   ) {}
 
   parse(): ExpressionNode {
     const result = this.parseOr();
     if (this.peek().type !== 'eof') {
-      this.invalid(
-        `Unexpected token '${this.peek().value || this.peek().type}' after a complete expression. ${SYNTAX_HINT}`,
-      );
+      this.invalid('unexpectedToken', {
+        token: this.peek().value || this.peek().type,
+      });
     }
     return result;
   }
@@ -498,7 +493,7 @@ class ExpressionParser {
       const result = this.parseOr();
       this.depth -= 1;
       if (!this.acceptType('rparen')) {
-        this.invalid("Missing ')'. Close the grouped expression.");
+        this.invalid('missingRparen');
       }
       return result;
     }
@@ -519,15 +514,14 @@ class ExpressionParser {
           ? SmartFolderField.TAGS
           : token.value;
       if (!FIELDS.has(fieldName)) {
-        this.invalid(
-          `Unknown field '${token.value}'. Allowed fields: ${FIELD_LIST}.`,
-        );
+        this.invalid('unknownField', {
+          field: token.value,
+          fields: FIELD_LIST,
+        });
       }
       return { type: 'field', field: fieldName as FieldName };
     }
-    this.invalid(
-      `Expected a field, string, or list, got '${token.value || token.type}'. ${SYNTAX_HINT}`,
-    );
+    this.invalid('expectedAtom', { got: token.value || token.type });
   }
 
   private parseList(): Extract<Atom, { type: 'list' }> {
@@ -536,9 +530,7 @@ class ExpressionParser {
     while (true) {
       const token = this.next();
       if (token.type !== 'string') {
-        this.invalid(
-          "Lists may only contain quoted strings, e.g. title in ['foo', 'bar'].",
-        );
+        this.invalid('listOnlyStrings');
       }
       values.push(token.value);
       if (this.acceptType('comma')) {
@@ -549,7 +541,7 @@ class ExpressionParser {
         continue;
       }
       if (this.acceptType('rbracket')) break;
-      this.invalid("Expected ',' or ']' in list, e.g. ['foo', 'bar'].");
+      this.invalid('expectedListSeparator');
     }
     return { type: 'list', values };
   }
@@ -559,7 +551,7 @@ class ExpressionParser {
     if (token.value === 'not') {
       this.next();
       if (this.next().value !== 'in') {
-        this.invalid("Expected 'in' after 'not'. Use: 'foo' not in title.");
+        this.invalid('expectedInAfterNot');
       }
       return 'not_in';
     }
@@ -571,25 +563,24 @@ class ExpressionParser {
     if (token.value === '<') return 'lt';
     if (token.value === '>=') return 'ge';
     if (token.value === '<=') return 'le';
-    this.invalid(
-      `Unknown operator '${token.value || token.type}'. Allowed operators: ${OPERATOR_LIST}.`,
-    );
+    this.invalid('unknownOperator', {
+      operator: token.value || token.type,
+      operators: OPERATOR_LIST,
+    });
   }
 
   private validateComparison(left: Atom, op: CompareOp, right: Atom) {
     const fieldCount =
       Number(left.type === 'field') + Number(right.type === 'field');
     if (fieldCount !== 1) {
-      this.invalid('Compare exactly one field with a literal. ' + SYNTAX_HINT);
+      this.invalid('compareOneField');
     }
     const field =
       left.type === 'field'
         ? left.field
         : right.type === 'field'
           ? right.field
-          : this.invalid(
-              'Compare exactly one field with a literal. ' + SYNTAX_HINT,
-            );
+          : this.invalid('compareOneField');
     const value = left.type === 'field' ? right : left;
     const fieldOnLeft = left.type === 'field';
 
@@ -598,23 +589,23 @@ class ExpressionParser {
       return;
     }
     if (op === 'gt' || op === 'lt' || op === 'ge' || op === 'le') {
-      this.invalid(
-        `'${opSymbol(op)}' only applies to created_at and updated_at. Example: created_at >= '2026-09-08 00:00:00'.`,
-      );
+      this.invalid('compareOnlyDatetime', { operator: opSymbol(op) });
     }
     if (op === 'in' || op === 'not_in') {
       this.validateInComparison(field, op, value, fieldOnLeft);
       return;
     }
     if (value.type === 'list' && field !== SmartFolderField.TAGS) {
-      this.invalid(
-        `Use ${field} ${opSymbol(op)} 'value' for a single value, or ${field} in ['a', 'b'] for a list.`,
-      );
+      this.invalid('equalityNotList', {
+        field,
+        operator: opSymbol(op),
+      });
     }
     if (value.type !== 'string' && field !== SmartFolderField.TAGS) {
-      this.invalid(
-        `${field} ${opSymbol(op)} requires a quoted string, e.g. ${field} == 'foo'.`,
-      );
+      this.invalid('equalityNeedsString', {
+        field,
+        operator: opSymbol(op),
+      });
     }
   }
 
@@ -626,17 +617,20 @@ class ExpressionParser {
   ) {
     if (op === 'in' || op === 'not_in') {
       if (!fieldOnLeft || value.type !== 'list') {
-        this.invalid(
-          `Use ${field} in ['${DATETIME_FORMAT}', ...] to match one of several datetimes.`,
-        );
+        this.invalid('dateInNeedsList', {
+          field,
+          format: DATETIME_FORMAT,
+        });
       }
       value.values.forEach((item) => this.assertDatetime(item));
       return;
     }
     if (value.type !== 'string') {
-      this.invalid(
-        `${field} ${opSymbol(op)} requires a datetime string '${DATETIME_FORMAT}'.`,
-      );
+      this.invalid('dateNeedsString', {
+        field,
+        operator: opSymbol(op),
+        format: DATETIME_FORMAT,
+      });
     }
     this.assertDatetime(value.value);
   }
@@ -649,22 +643,19 @@ class ExpressionParser {
   ) {
     const keyword = op === 'in' ? 'in' : 'not in';
     if (fieldOnLeft && value.type !== 'list') {
-      this.invalid(
-        `When the field is on the left, use a list: ${field} ${keyword} ['foo', 'bar']. For substring match, use: 'foo' ${keyword} ${field}.`,
-      );
+      this.invalid('inFieldNeedsList', { field, keyword });
     }
     if (!fieldOnLeft && value.type !== 'string') {
-      this.invalid(
-        `When the value is on the left, use a quoted string: 'foo' ${keyword} ${field}.`,
-      );
+      this.invalid('inValueNeedsString', { field, keyword });
     }
   }
 
   private assertDatetime(value: string) {
     if (!isDatetimeLiteral(value)) {
-      this.invalid(
-        `Invalid datetime '${value}'. Use ${DATETIME_FORMAT} in the requester timezone, e.g. created_at >= '2026-09-08 00:00:00'.`,
-      );
+      this.invalid('invalidDatetime', {
+        value,
+        format: DATETIME_FORMAT,
+      });
     }
   }
 
@@ -828,4 +819,12 @@ function opSymbol(op: CompareOp): string {
   if (op === 'lt') return '<';
   if (op === 'ge') return '>=';
   return '<=';
+}
+
+function errorCode(key: string): string {
+  return key.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`);
+}
+
+function missingTranslation(message: unknown, key: string): boolean {
+  return typeof message !== 'string' || message === key;
 }

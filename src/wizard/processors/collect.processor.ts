@@ -11,6 +11,22 @@ import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { buildTaskErrorContent } from 'omniboxd/wizard/processors/task-error-content';
 import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 
+const FAILED_RESOURCE_NAME_PREFIXES = ['失败：', 'error:'];
+
+function prefixFailedResourceName(
+  name: string | undefined,
+  prefix: string,
+): string {
+  let base = name ?? '';
+  for (const existing of FAILED_RESOURCE_NAME_PREFIXES) {
+    if (base.toLowerCase().startsWith(existing.toLowerCase())) {
+      base = base.slice(existing.length).replace(/^\s+/, '');
+      break;
+    }
+  }
+  return `${prefix}${base}`;
+}
+
 export class CollectProcessor extends Processor {
   constructor(
     protected readonly namespaceResourcesService: NamespaceResourcesService,
@@ -33,12 +49,18 @@ export class CollectProcessor extends Processor {
     }
     if (task.exception && !isEmpty(task.exception)) {
       const content = buildTaskErrorContent(task);
+      const resource = await this.resourcesService.getResourceOrFail(
+        task.namespaceId,
+        resourceId,
+      );
+      const prefix = this.i18n.t('wizard.errors.failedResourceNamePrefix');
       await this.namespaceResourcesService.update(
         task.namespaceId,
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {
           namespaceId: task.namespaceId,
+          name: prefixFailedResourceName(resource.name, prefix),
           content,
         }),
         true, // autoRenameOnConflict for error content updates

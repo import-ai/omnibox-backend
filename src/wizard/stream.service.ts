@@ -1,5 +1,6 @@
 import {
   HttpStatus,
+  Inject,
   Injectable,
   Logger,
   MessageEvent,
@@ -9,6 +10,12 @@ import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
 import { Span } from 'nestjs-otel';
+import {
+  AGENT_STREAM_HOOKS,
+  AgentStream,
+  AgentTokenUsage,
+  IAgentStreamHooks,
+} from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
@@ -38,6 +45,7 @@ import {
   WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
+import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { createClient } from 'redis';
 import { Observable, Subscriber } from 'rxjs';
@@ -61,10 +69,21 @@ interface StreamSession {
   namespaceId: string;
   conversationId: string;
   userId: string;
+  /** The share the stream arrived through, empty for a signed-in member. */
+  shareId: string;
   subscribers: Set<Subscriber<MessageEvent>>;
   controller: AbortController;
   handlerContext: HandlerContext;
   finished: boolean;
+}
+
+/** The hook-facing view of a live session. */
+function agentStreamOf(session: StreamSession): AgentStream {
+  return {
+    namespaceId: session.namespaceId,
+    streamId: session.key,
+    shareId: session.shareId || undefined,
+  };
 }
 
 @Injectable()
@@ -84,6 +103,8 @@ export class StreamService implements OnModuleDestroy {
     private readonly resourcesService: ResourcesService,
     private readonly smartFoldersService: SmartFoldersService,
     private readonly i18n: I18nService,
+    @Inject(AGENT_STREAM_HOOKS)
+    private readonly agentStreamHooks: IAgentStreamHooks,
   ) {}
 
   async onModuleDestroy() {
@@ -238,12 +259,36 @@ export class StreamService implements OnModuleDestroy {
     return chunk;
   }
 
+  /**
+   * Report one finished LLM call. A message is one call, and MessagesService
+   * accumulates its tokens as the deltas arrive, so the persisted row is what
+   * gets reported - no in-flight state to lose if the stream dies, and the
+   * hook can key its own bookkeeping on the message id.
+   */
+  private reportCallCompleted(message: Message, stream?: AgentStream): void {
+    const usage: AgentTokenUsage = {
+      inputTokenCached: message.inputTokenCached,
+      inputTokenUncached: message.inputTokenUncached,
+      outputToken: message.outputToken,
+    };
+    const total =
+      usage.inputTokenCached + usage.inputTokenUncached + usage.outputToken;
+    if (!stream || total <= 0) {
+      return;
+    }
+    // Fire-and-forget: bookkeeping must never break the user's stream.
+    void this.agentStreamHooks
+      .onCallCompleted(stream, message.id, usage)
+      .catch((error) => this.logger.error({ error }));
+  }
+
   agentHandler(
     namespaceId: string,
     conversationId: string,
     userId: string,
     send: (data: string) => Promise<void>,
     chatOnly = false,
+    stream?: AgentStream,
   ): (data: string, context: HandlerContext) => Promise<void> {
     return async (data: string, context: HandlerContext): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
@@ -299,6 +344,7 @@ export class StreamService implements OnModuleDestroy {
           true,
         );
 
+        this.reportCallCompleted(message, stream);
         context.message = message.message;
         context.parentId = message.id;
         context.messageId = undefined;
@@ -582,7 +628,7 @@ export class StreamService implements OnModuleDestroy {
       messages = this.getMessages(allMessages, parentId);
     }
 
-    const key = this.getStreamKey(
+    const key = getStreamKey(
       namespaceId,
       requestDto.conversation_id,
       userId,
@@ -608,15 +654,6 @@ export class StreamService implements OnModuleDestroy {
     });
   }
 
-  private getStreamKey(
-    namespaceId: string,
-    conversationId: string,
-    userId: string,
-    shareId = '',
-  ): string {
-    return `${shareId ? `share:${shareId}` : `user:${userId}`}:${namespaceId}:${conversationId}`;
-  }
-
   private startAgentSession(
     key: string,
     namespaceId: string,
@@ -634,6 +671,7 @@ export class StreamService implements OnModuleDestroy {
       namespaceId,
       conversationId: requestDto.conversation_id,
       userId,
+      shareId,
       subscribers: new Set(),
       controller: new AbortController(),
       handlerContext: { parentId },
@@ -647,6 +685,7 @@ export class StreamService implements OnModuleDestroy {
       userId,
       (data) => this.sendSessionData(session, data),
       chatOnly,
+      agentStreamOf(session),
     );
     const tools = (requestDto.tools || []).map((tool) => {
       if (tool.name === 'private_search') {
@@ -838,6 +877,11 @@ export class StreamService implements OnModuleDestroy {
     void this.cleanupRedisSession(session.key).catch((error) =>
       this.logger.error({ error }),
     );
+    // Single funnel: completion, errors, stops and aborts all end here, so
+    // whatever the stream was holding is always released.
+    void this.agentStreamHooks
+      .onStreamClosed(agentStreamOf(session))
+      .catch((error) => this.logger.error({ error }));
   }
 
   private async cleanupRedisSession(key: string) {
@@ -910,7 +954,7 @@ export class StreamService implements OnModuleDestroy {
       namespaceId,
     );
     return this.resumeAgentStream(
-      this.getStreamKey(namespaceId, conversationId, userId),
+      getStreamKey(namespaceId, conversationId, userId),
       lastEventId,
     );
   }
@@ -921,7 +965,7 @@ export class StreamService implements OnModuleDestroy {
     lastEventId?: string,
   ): Observable<MessageEvent> {
     return this.resumeAgentStream(
-      this.getStreamKey(share.namespaceId, conversationId, '', share.id),
+      getStreamKey(share.namespaceId, conversationId, '', share.id),
       lastEventId,
     );
   }
@@ -1012,7 +1056,7 @@ export class StreamService implements OnModuleDestroy {
       namespaceId,
     );
     await this.cancelAgentStream(
-      this.getStreamKey(namespaceId, conversationId, userId),
+      getStreamKey(namespaceId, conversationId, userId),
       namespaceId,
       conversationId,
       userId,
@@ -1021,7 +1065,7 @@ export class StreamService implements OnModuleDestroy {
 
   async cancelShareAgentStream(share: Share, conversationId: string) {
     await this.cancelAgentStream(
-      this.getStreamKey(share.namespaceId, conversationId, '', share.id),
+      getStreamKey(share.namespaceId, conversationId, '', share.id),
       share.namespaceId,
       conversationId,
       '',

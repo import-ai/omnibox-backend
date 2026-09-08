@@ -152,6 +152,7 @@ export class SmartFoldersService implements ISmartFoldersService {
     options?: {
       limit?: number;
       offset?: number;
+      timeZone?: string;
     },
   ): Promise<ResourceSummaryDto[]> {
     const { resources } = await this.listChildrenWithTotal(
@@ -170,6 +171,7 @@ export class SmartFoldersService implements ISmartFoldersService {
     options?: {
       limit?: number;
       offset?: number;
+      timeZone?: string;
     },
   ): Promise<{ resources: ResourceSummaryDto[]; total: number }> {
     const config = await this.getConfigOrFail(namespaceId, resourceId);
@@ -225,6 +227,7 @@ export class SmartFoldersService implements ISmartFoldersService {
           resource,
           config.conditions,
           config.matchMode,
+          options?.timeZone,
         ),
       )
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
@@ -256,6 +259,7 @@ export class SmartFoldersService implements ISmartFoldersService {
     namespaceId: string,
     smartFolderId: string,
     resourceId: string,
+    timeZone?: string,
   ): Promise<boolean> {
     if (smartFolderId === resourceId) {
       return false;
@@ -296,6 +300,7 @@ export class SmartFoldersService implements ISmartFoldersService {
       resourceWithTagNames,
       config.conditions,
       config.matchMode,
+      timeZone,
     );
   }
 

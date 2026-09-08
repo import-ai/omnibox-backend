@@ -5,6 +5,7 @@ import {
   SmartFolderOperator,
   SmartFolderRootScope,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { SmartFolderExpressionService } from 'omniboxd/smart-folders/smart-folder-expression.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { SmartFoldersMatcherService } from 'omniboxd/smart-folders/smart-folders-matcher.service';
 
@@ -125,7 +126,11 @@ describe('SmartFoldersService.listChildren', () => {
       permissionsService as any,
       {} as any,
       scopeService as any,
-      new SmartFoldersMatcherService(),
+      new SmartFoldersMatcherService(
+        new SmartFolderExpressionService({
+          t: jest.fn((key: string) => key),
+        } as any),
+      ),
       {} as any,
       tagService as any,
       { t: jest.fn((key: string) => key) } as any,

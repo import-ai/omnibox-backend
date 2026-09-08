@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
@@ -16,8 +24,11 @@ export class SearchController {
     @Param('namespaceId') namespaceId: string,
     @Query('query') query: string,
     @Query('type') type?: DocType,
+    @Headers('x-timezone') timeZone?: string,
   ) {
-    return await this.searchService.search(userId, namespaceId, query, type);
+    return await this.searchService.search(userId, namespaceId, query, type, {
+      timeZone,
+    });
   }
 
   @Post()
@@ -25,6 +36,7 @@ export class SearchController {
     @UserId() userId,
     @Param('namespaceId') namespaceId: string,
     @Body() data: SearchRequestDto,
+    @Headers('x-timezone') timeZone?: string,
   ) {
     return await this.searchService.searchPaginated(
       userId,
@@ -34,6 +46,7 @@ export class SearchController {
       {
         conditions: data.conditions,
         matchMode: data.matchMode,
+        timeZone,
       },
       {
         offset: data.offset,

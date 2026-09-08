@@ -289,9 +289,7 @@ export class SmartFolderExpressionService {
             : '',
       )
       .filter((value) => value.length > 0);
-    return [...(resource.tagIds || []), ...names].map((value) =>
-      value.toLowerCase(),
-    );
+    return names.map((value) => value.toLowerCase());
   }
 
   private dateCandidate(resource: Resource, field: FieldName): Date | null {

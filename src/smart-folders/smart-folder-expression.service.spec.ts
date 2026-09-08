@@ -46,14 +46,18 @@ describe('SmartFolderExpressionService', () => {
     expect(service.matches(item, "'hello' in content")).toBe(true);
   });
 
-  it('matches tags membership and rejects the tag field', () => {
+  it('matches tags by name and ignores tag ids', () => {
     const item = resource({
+      tagIds: ['finance-uuid'],
       attrs: { tag_names: ['Roadmap'] },
     });
     expect(service.matches(item, "'roadmap' in tags")).toBe(true);
-    expect(service.matches(item, "'finance' in tags")).toBe(true);
-    expect(service.matches(item, "tags in ['finance', 'other']")).toBe(true);
+    expect(service.matches(item, "'finance-uuid' in tags")).toBe(false);
+    expect(service.matches(item, "tags in ['roadmap', 'other']")).toBe(true);
     expect(service.matches(item, "'missing' not in tags")).toBe(true);
+    expect(service.matches(item, "tags == 'roadmap'")).toBe(true);
+    expect(service.matches(item, "tags == 'finance-uuid'")).toBe(false);
+    expect(service.matches(item, "tags != 'roadmap'")).toBe(false);
     expect(parseError("'roadmap' in tag").message).toContain(
       "Unknown field 'tag'",
     );

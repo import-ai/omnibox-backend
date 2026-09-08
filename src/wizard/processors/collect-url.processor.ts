@@ -3,13 +3,16 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { prefixFailedResourceName } from 'omniboxd/wizard/processors/failed-resource-name';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 
 export class CollectUrlProcessor extends Processor {
   constructor(
     private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
   ) {
     super();
@@ -27,7 +30,21 @@ export class CollectUrlProcessor extends Processor {
     }
 
     if (task.exception && !isEmpty(task.exception)) {
-      // Handle task exceptions - could log error or update resource with error state
+      const resource = await this.resourcesService.getResourceOrFail(
+        task.namespaceId,
+        resourceId,
+      );
+      const prefix = this.i18n.t('wizard.errors.failedResourceNamePrefix');
+      await this.namespaceResourcesService.update(
+        task.namespaceId,
+        task.userId,
+        resourceId,
+        Object.assign(new UpdateResourceDto(), {
+          namespaceId: task.namespaceId,
+          name: prefixFailedResourceName(resource.name, prefix),
+        }),
+        true,
+      );
       return {};
     } else if (task.output && task.output.title) {
       // Process title from the scraped URL output

@@ -9,19 +9,25 @@ import {
   SmartFolderMatchMode,
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
+import { SmartFolderExpressionService } from 'omniboxd/smart-folders/smart-folder-expression.service';
 
 @Injectable()
 export class SmartFoldersMatcherService {
+  constructor(
+    private readonly expressionService?: SmartFolderExpressionService,
+  ) {}
+
   matches(
     resource: Resource,
     conditions: SmartFolderCondition[],
     matchMode: SmartFolderMatchMode,
+    timeZone?: string,
   ): boolean {
     if (conditions.length <= 0) {
       return false;
     }
     const matcher = (condition: SmartFolderCondition) =>
-      this.matchesCondition(resource, condition);
+      this.matchesCondition(resource, condition, timeZone);
     return matchMode === SmartFolderMatchMode.ANY
       ? conditions.some(matcher)
       : conditions.every(matcher);
@@ -30,7 +36,20 @@ export class SmartFoldersMatcherService {
   private matchesCondition(
     resource: Resource,
     condition: SmartFolderCondition,
+    timeZone?: string,
   ): boolean {
+    if (condition.field === SmartFolderField.EXPRESSION) {
+      return (
+        (typeof condition.value === 'string' &&
+          this.expressionService?.matches(
+            resource,
+            condition.value,
+            timeZone,
+          )) ??
+        false
+      );
+    }
+
     const dateCandidate = this.getDateCandidate(resource, condition.field);
     if (dateCandidate) {
       return this.matchesDateCondition(dateCandidate, condition);

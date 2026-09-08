@@ -18,10 +18,12 @@ export enum SmartFolderMatchMode {
 }
 
 export enum SmartFolderField {
+  EXPRESSION = 'expression',
   TITLE = 'title',
   TAGS = 'tags',
   URL = 'url',
   FILE_NAME = 'file_name',
+  FILE_NAME_EXT = 'file_name_ext',
   CREATED_AT = 'created_at',
   UPDATED_AT = 'updated_at',
   CONTENT = 'content',

@@ -3,12 +3,11 @@ import {
   SmartFolderOperator,
 } from 'omniboxd/smart-folders/entities/smart-folder-config.entity';
 import { SmartFolderExpressionService } from 'omniboxd/smart-folders/smart-folder-expression.service';
+import { testI18n } from 'omniboxd/smart-folders/smart-folder-i18n.test-util';
 import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-rule.service';
 
 describe('SmartFoldersRuleService', () => {
-  const i18n = {
-    t: jest.fn((key: string) => key),
-  };
+  const i18n = testI18n('en');
   const service = new SmartFoldersRuleService(
     i18n as any,
     new SmartFolderExpressionService(i18n as any),
@@ -91,7 +90,7 @@ describe('SmartFoldersRuleService', () => {
           },
         },
       ]),
-    ).toThrow('resource.errors.smartFolderConditionOperatorInvalid');
+    ).toThrow('Invalid smart folder condition operator');
   });
 
   it('rejects invalid expression conditions', () => {

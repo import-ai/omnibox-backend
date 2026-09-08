@@ -1,62 +1,15 @@
 import { HttpStatus } from '@nestjs/common';
-import { readFileSync } from 'fs';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
-import { join } from 'path';
 
 import { SmartFolderExpressionService } from './smart-folder-expression.service';
-
-const locales = {
-  en: JSON.parse(
-    readFileSync(join(__dirname, '../i18n/en/resource.json'), 'utf8'),
-  ),
-  zh: JSON.parse(
-    readFileSync(join(__dirname, '../i18n/zh/resource.json'), 'utf8'),
-  ),
-} as const;
-
-function lookup(lang: 'en' | 'zh', key: string): string | undefined {
-  const path = key.replace(/^resource\./, '').split('.');
-  let value: unknown = locales[lang];
-  for (const part of path) {
-    if (!value || typeof value !== 'object') return undefined;
-    value = (value as Record<string, unknown>)[part];
-  }
-  return typeof value === 'string' ? value : undefined;
-}
-
-function interpolate(
-  template: string,
-  args: Record<string, unknown> = {},
-): string {
-  return template.replace(/\{(\w+)\}/g, (_, name) => {
-    const value = args[name];
-    if (typeof value === 'string' || typeof value === 'number') {
-      return String(value);
-    }
-    return `{${name}}`;
-  });
-}
-
-function i18n(defaultLang: 'en' | 'zh' = 'en') {
-  return {
-    t: (
-      key: string,
-      opts?: { args?: Record<string, unknown>; lang?: string },
-    ) => {
-      const lang =
-        opts?.lang === 'zh' || opts?.lang === 'en' ? opts.lang : defaultLang;
-      const template = lookup(lang, key) ?? lookup('en', key) ?? key;
-      return interpolate(template, opts?.args);
-    },
-  };
-}
+import { testI18n } from './smart-folder-i18n.test-util';
 
 describe('SmartFolderExpressionService', () => {
-  const service = new SmartFolderExpressionService(i18n('en') as any);
+  const service = new SmartFolderExpressionService(testI18n('en') as any);
 
   function resource(values: Partial<Resource> = {}): Resource {
     return {
@@ -225,7 +178,7 @@ describe('SmartFolderExpressionService', () => {
   });
 
   it('translates message and hint while keeping an English reason', () => {
-    const zhService = new SmartFolderExpressionService(i18n('zh') as any);
+    const zhService = new SmartFolderExpressionService(testI18n('zh') as any);
     try {
       zhService.parse("'foo' in file_nasme_ext");
       throw new Error('expected parse to fail');

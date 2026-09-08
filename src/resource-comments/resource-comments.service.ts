@@ -2,12 +2,19 @@ import { createHash } from 'node:crypto';
 
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Response } from 'express';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
+import {
+  encodeFileName,
+  getOriginalFileName,
+} from 'omniboxd/utils/encode-filename';
+import { Readable } from 'stream';
+import { DataSource, EntityManager, In, IsNull, Repository } from 'typeorm';
 
 import {
   CreateResourceCommentRequestDto,
@@ -20,9 +27,11 @@ import {
 import {
   CreateResourceCommentThreadResponseDto,
   ListResourceCommentThreadsResponseDto,
+  ResourceCommentAttachmentUploadResponseDto,
   ResourceCommentThreadResponseDto,
 } from './dto/resource-comment-response.dto';
 import { ResourceComment } from './entities/resource-comment.entity';
+import { ResourceCommentAttachment } from './entities/resource-comment-attachment.entity';
 import {
   ResourceCommentAnchorStatus,
   ResourceCommentThread,
@@ -34,8 +43,11 @@ export class ResourceCommentsService {
   constructor(
     @InjectRepository(ResourceCommentThread)
     private readonly threadRepository: Repository<ResourceCommentThread>,
+    @InjectRepository(ResourceCommentAttachment)
+    private readonly attachmentRepository: Repository<ResourceCommentAttachment>,
     private readonly dataSource: DataSource,
     private readonly permissionsService: PermissionsService,
+    private readonly s3Service: S3Service,
     private readonly i18n: I18nService,
   ) {}
 
@@ -127,10 +139,12 @@ export class ResourceCommentsService {
       .leftJoinAndSelect('thread.creator', 'creator')
       .leftJoinAndSelect('thread.comments', 'comment')
       .leftJoinAndSelect('comment.author', 'author')
+      .leftJoinAndSelect('comment.attachments', 'attachment')
       .where('thread.namespace_id = :namespaceId', { namespaceId })
       .andWhere('thread.resource_id = :resourceId', { resourceId })
       .orderBy('thread.created_at', 'ASC')
       .addOrderBy('comment.created_at', 'ASC')
+      .addOrderBy('attachment.created_at', 'ASC')
       .getMany();
 
     return {
@@ -163,6 +177,7 @@ export class ResourceCommentsService {
       .leftJoinAndSelect('thread.creator', 'creator')
       .leftJoinAndSelect('thread.comments', 'comment')
       .leftJoinAndSelect('comment.author', 'author')
+      .leftJoinAndSelect('comment.attachments', 'attachment')
       .where('thread.namespace_id = :namespaceId', { namespaceId })
       .andWhere('thread.resource_id = :resourceId', { resourceId });
     if (query.resolved !== undefined) {
@@ -175,6 +190,7 @@ export class ResourceCommentsService {
     const [threads, total] = await builder
       .orderBy('thread.createdAt', 'DESC')
       .addOrderBy('comment.createdAt', 'ASC')
+      .addOrderBy('attachment.createdAt', 'ASC')
       .skip(query.offlet)
       .take(query.limits)
       .getManyAndCount();
@@ -242,7 +258,15 @@ export class ResourceCommentsService {
         ) {
           throw this.anchorOverlapException();
         }
-        await this.saveComment(manager, existing.id, userId, dto.content);
+        await this.saveComment(
+          manager,
+          namespaceId,
+          resourceId,
+          existing.id,
+          userId,
+          dto.content,
+          dto.attachmentIds,
+        );
         return {
           thread: await this.getThreadResponse(manager, existing.id),
           thread_created: false,
@@ -265,7 +289,15 @@ export class ResourceCommentsService {
         resolvedById: null,
       });
       const savedThread = await manager.save(thread);
-      await this.saveComment(manager, savedThread.id, userId, dto.content);
+      await this.saveComment(
+        manager,
+        namespaceId,
+        resourceId,
+        savedThread.id,
+        userId,
+        dto.content,
+        dto.attachmentIds,
+      );
 
       return {
         thread: await this.getThreadResponse(manager, savedThread.id),
@@ -300,7 +332,15 @@ export class ResourceCommentsService {
         manager,
         true,
       );
-      await this.saveComment(manager, threadId, userId, dto.content);
+      await this.saveComment(
+        manager,
+        namespaceId,
+        resourceId,
+        threadId,
+        userId,
+        dto.content,
+        dto.attachmentIds,
+      );
       return await this.getThreadResponse(manager, threadId);
     });
   }
@@ -353,7 +393,7 @@ export class ResourceCommentsService {
     });
   }
 
-  // Edits a comment when the requester is its author or a resource editor.
+  // Edits a comment only when the requester is its author.
   async updateComment(
     namespaceId: string,
     resourceId: string,
@@ -361,16 +401,7 @@ export class ResourceCommentsService {
     commentId: string,
     userId: string,
     dto: UpdateResourceCommentRequestDto,
-    enforcePermission = true,
   ): Promise<ResourceCommentThreadResponseDto> {
-    if (enforcePermission) {
-      await this.permissionsService.userHasPermissionOrFail(
-        namespaceId,
-        resourceId,
-        userId,
-        ResourcePermission.CAN_COMMENT,
-      );
-    }
     return await this.dataSource.transaction(async (manager) => {
       await this.getThreadOrFail(
         namespaceId,
@@ -381,13 +412,40 @@ export class ResourceCommentsService {
       );
       const comment = await manager.getRepository(ResourceComment).findOne({
         where: { id: commentId, threadId },
+        relations: ['attachments'],
         lock: { mode: 'pessimistic_write' },
       });
       if (!comment) throw this.commentNotFoundException();
-      await this.assertCanEditComment(namespaceId, resourceId, comment, userId);
+      if (comment.authorId !== userId) {
+        throw this.notAuthorizedException();
+      }
 
-      comment.content = dto.content;
+      const trimmedContent =
+        dto.content === undefined ? comment.content : dto.content.trim();
+      const currentAttachments = comment.attachments ?? [];
+      const uniqueAttachmentIds =
+        dto.attachmentIds === undefined
+          ? currentAttachments.map((attachment) => attachment.id)
+          : [...new Set(dto.attachmentIds)];
+      if (!trimmedContent && uniqueAttachmentIds.length === 0) {
+        throw new AppException(
+          this.i18n.t('resourceComment.errors.emptyComment'),
+          'EMPTY_COMMENT',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      comment.content = trimmedContent;
       await manager.save(comment);
+      await this.replaceAttachments(
+        manager,
+        namespaceId,
+        resourceId,
+        userId,
+        comment.id,
+        currentAttachments,
+        uniqueAttachmentIds,
+      );
       return await this.getThreadResponse(manager, threadId);
     });
   }
@@ -435,7 +493,12 @@ export class ResourceCommentsService {
       });
       if (!comment) throw this.commentNotFoundException();
 
-      await this.assertCanEditComment(namespaceId, resourceId, comment, userId);
+      await this.assertCanDeleteComment(
+        namespaceId,
+        resourceId,
+        comment,
+        userId,
+      );
 
       await manager.softDelete(ResourceComment, { id: commentId, threadId });
       const remaining = await manager.getRepository(ResourceComment).count({
@@ -449,20 +512,208 @@ export class ResourceCommentsService {
     });
   }
 
+  async uploadAttachment(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    file: Express.Multer.File,
+  ): Promise<ResourceCommentAttachmentUploadResponseDto> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_COMMENT,
+    );
+    if (!file?.mimetype?.startsWith('image/')) {
+      throw new AppException(
+        this.i18n.t('resourceComment.errors.invalidAttachment'),
+        'INVALID_COMMENT_ATTACHMENT',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const name = getOriginalFileName(file.originalname);
+    const { objectKey } = await this.s3Service.generateObjectKey(
+      'comment-attachments',
+      encodeFileName(file.originalname),
+    );
+    await this.s3Service.putObject(objectKey, file.buffer, file.mimetype, {
+      filename: encodeFileName(file.originalname),
+    });
+    const attachment = await this.attachmentRepository.save(
+      this.attachmentRepository.create({
+        namespaceId,
+        resourceId,
+        uploaderId: userId,
+        commentId: null,
+        objectKey,
+        name,
+        mimetype: file.mimetype,
+        size: file.size,
+      }),
+    );
+    return {
+      id: attachment.id,
+      url: `/api/v1/namespaces/${namespaceId}/resources/${resourceId}/comment-attachments/${attachment.id}`,
+      name: attachment.name,
+      mimetype: attachment.mimetype,
+      size: attachment.size,
+    };
+  }
+
+  async downloadAttachment(
+    namespaceId: string,
+    resourceId: string,
+    attachmentId: string,
+    userId: string,
+    httpResponse: Response,
+  ): Promise<void> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    const attachment = await this.attachmentRepository.findOne({
+      where: { id: attachmentId, namespaceId, resourceId },
+    });
+    if (!attachment) {
+      throw new AppException(
+        this.i18n.t('resourceComment.errors.attachmentNotFound'),
+        'COMMENT_ATTACHMENT_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    const { stream, meta } = await this.s3Service.getObject(
+      attachment.objectKey,
+    );
+    this.writeAttachmentResponse(stream, meta, attachment, httpResponse);
+  }
+
   // Persists a new comment inside the current transaction.
   private async saveComment(
     manager: EntityManager,
+    namespaceId: string,
+    resourceId: string,
     threadId: string,
     authorId: string,
-    content: string,
+    content: string | undefined,
+    attachmentIds?: string[],
   ): Promise<void> {
-    await manager.save(
+    const trimmedContent = content?.trim() ?? '';
+    const uniqueAttachmentIds = [...new Set(attachmentIds ?? [])];
+    if (!trimmedContent && uniqueAttachmentIds.length === 0) {
+      throw new AppException(
+        this.i18n.t('resourceComment.errors.emptyComment'),
+        'EMPTY_COMMENT',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const comment = await manager.save(
       manager.getRepository(ResourceComment).create({
         threadId,
         authorId,
-        content,
+        content: trimmedContent,
       }),
     );
+    await this.bindAttachments(
+      manager,
+      namespaceId,
+      resourceId,
+      authorId,
+      comment.id,
+      uniqueAttachmentIds,
+    );
+  }
+
+  private async replaceAttachments(
+    manager: EntityManager,
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    commentId: string,
+    currentAttachments: ResourceCommentAttachment[],
+    attachmentIds: string[],
+  ): Promise<void> {
+    const nextIds = new Set(attachmentIds);
+    const currentIds = new Set(
+      currentAttachments.map((attachment) => attachment.id),
+    );
+    const removed = currentAttachments.filter(
+      (attachment) => !nextIds.has(attachment.id),
+    );
+    for (const attachment of removed) {
+      attachment.commentId = null;
+    }
+    if (removed.length) {
+      await manager.save(removed);
+    }
+    await this.bindAttachments(
+      manager,
+      namespaceId,
+      resourceId,
+      userId,
+      commentId,
+      attachmentIds.filter((id) => !currentIds.has(id)),
+    );
+  }
+
+  private async bindAttachments(
+    manager: EntityManager,
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    commentId: string,
+    attachmentIds: string[],
+  ): Promise<void> {
+    if (attachmentIds.length === 0) {
+      return;
+    }
+    const attachments = await manager
+      .getRepository(ResourceCommentAttachment)
+      .find({
+        where: {
+          id: In(attachmentIds),
+          namespaceId,
+          resourceId,
+          uploaderId: userId,
+          commentId: IsNull(),
+        },
+      });
+    if (attachments.length !== attachmentIds.length) {
+      throw new AppException(
+        this.i18n.t('resourceComment.errors.invalidAttachment'),
+        'INVALID_COMMENT_ATTACHMENT',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    for (const attachment of attachments) {
+      attachment.commentId = commentId;
+    }
+    await manager.save(attachments);
+  }
+
+  private writeAttachmentResponse(
+    objectStream: Readable,
+    objectMeta: ObjectMeta,
+    attachment: ResourceCommentAttachment,
+    httpResponse: Response,
+  ) {
+    httpResponse.setHeader(
+      'Content-Disposition',
+      `inline; filename*=UTF-8''${encodeURIComponent(attachment.name)}`,
+    );
+    httpResponse.setHeader(
+      'Content-Type',
+      objectMeta.contentType || attachment.mimetype,
+    );
+    if (objectMeta.contentLength) {
+      httpResponse.setHeader(
+        'Content-Length',
+        objectMeta.contentLength.toString(),
+      );
+    }
+    httpResponse.setHeader('Cache-Control', 'private, max-age=31536000');
+    objectStream.pipe(httpResponse);
   }
 
   // Finds a thread in the requested resource and optionally locks its row.
@@ -492,8 +743,10 @@ export class ResourceCommentsService {
       .leftJoinAndSelect('thread.creator', 'creator')
       .leftJoinAndSelect('thread.comments', 'comment')
       .leftJoinAndSelect('comment.author', 'author')
+      .leftJoinAndSelect('comment.attachments', 'attachment')
       .where('thread.id = :threadId', { threadId })
       .orderBy('comment.created_at', 'ASC')
+      .addOrderBy('attachment.created_at', 'ASC')
       .getOne();
     if (!thread) throw this.threadNotFoundException();
     return ResourceCommentThreadResponseDto.fromEntity(thread);
@@ -534,8 +787,8 @@ export class ResourceCommentsService {
     if (!canEdit) throw this.notAuthorizedException();
   }
 
-  // Allows comment mutation by the author or a resource editor.
-  private async assertCanEditComment(
+  // Allows comment deletion by the author or a resource editor.
+  private async assertCanDeleteComment(
     namespaceId: string,
     resourceId: string,
     comment: ResourceComment,

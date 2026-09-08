@@ -9,11 +9,14 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { CookieAuth } from 'omniboxd/auth/decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import {
   ValidatedShare,
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
+import { ListResourceCommentThreadsRequestDto } from 'omniboxd/resource-comments/dto/resource-comment-request.dto';
+import { ResourceCommentsService } from 'omniboxd/resource-comments/resource-comments.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
 import { SharedResourceDto } from './dto/shared-resource.dto';
@@ -25,6 +28,7 @@ import { SharedResourcesService } from './shared-resources.service';
 export class SharedResourcesController {
   constructor(
     private readonly sharedResourcesService: SharedResourcesService,
+    private readonly resourceCommentsService: ResourceCommentsService,
   ) {}
 
   @CookieAuth({ onAuthFail: 'continue' })
@@ -37,6 +41,25 @@ export class SharedResourcesController {
     return await this.sharedResourcesService.getSharedResource(
       share,
       resourceId,
+    );
+  }
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare({ requireResources: true })
+  @Get(':resourceId/comment-threads')
+  async listComments(
+    @ValidatedShare() share: Share,
+    @Param('resourceId') resourceId: string,
+    @Query() query: ListResourceCommentThreadsRequestDto,
+    @UserId({ optional: true }) userId?: string,
+  ) {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    return await this.resourceCommentsService.listThreads(
+      share.namespaceId,
+      resourceId,
+      userId ?? '',
+      query,
+      false,
     );
   }
 

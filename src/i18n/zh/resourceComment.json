@@ -6,6 +6,9 @@
     "anchorOverlap": "所选文本与已有评论线程重叠",
     "threadNotFound": "评论线程不存在",
     "commentNotFound": "评论不存在",
+    "attachmentNotFound": "评论附件不存在",
+    "invalidAttachment": "评论附件无效",
+    "emptyComment": "评论内容或附件不能为空",
     "invalidSyncPayload": "必须同时提交 content、expected_content_hash 和 comment_anchors"
   }
 }

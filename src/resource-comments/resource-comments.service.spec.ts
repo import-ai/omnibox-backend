@@ -14,6 +14,8 @@ describe('ResourceCommentsService', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
+      {} as any,
       { t: (key: string) => key } as any,
     );
 

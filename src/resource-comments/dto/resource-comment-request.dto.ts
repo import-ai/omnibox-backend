@@ -1,5 +1,6 @@
 import { Expose, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsHash,
@@ -12,6 +13,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
@@ -82,24 +84,70 @@ export class CreateResourceCommentThreadRequestDto {
   @Expose({ name: 'expected_content_hash' })
   expectedContentHash: string;
 
+  @ValidateIf((dto: CreateResourceCommentThreadRequestDto) => {
+    return !dto.attachmentIds?.length;
+  })
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.isNotEmpty'),
   })
   @MaxLength(10000)
-  content: string;
+  content?: string;
+
+  @IsOptional()
+  @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
+  @ArrayMaxSize(9)
+  @IsUUID(undefined, {
+    each: true,
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
+  @Expose({ name: 'attachment_ids' })
+  attachmentIds?: string[];
 }
 
 export class CreateResourceCommentRequestDto {
+  @ValidateIf((dto: CreateResourceCommentRequestDto) => {
+    return !dto.attachmentIds?.length;
+  })
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.isNotEmpty'),
   })
   @MaxLength(10000)
-  content: string;
+  content?: string;
+
+  @IsOptional()
+  @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
+  @ArrayMaxSize(9)
+  @IsUUID(undefined, {
+    each: true,
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
+  @Expose({ name: 'attachment_ids' })
+  attachmentIds?: string[];
 }
 
-export class UpdateResourceCommentRequestDto extends CreateResourceCommentRequestDto {}
+export class UpdateResourceCommentRequestDto {
+  @ValidateIf((dto: UpdateResourceCommentRequestDto) => {
+    return !dto.attachmentIds?.length;
+  })
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  @MaxLength(10000)
+  content?: string;
+
+  @IsOptional()
+  @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
+  @ArrayMaxSize(9)
+  @IsUUID(undefined, {
+    each: true,
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
+  @Expose({ name: 'attachment_ids' })
+  attachmentIds?: string[];
+}
 
 export class ListResourceCommentThreadsRequestDto {
   @IsOptional()

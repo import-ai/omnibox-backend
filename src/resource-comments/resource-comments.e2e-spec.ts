@@ -139,6 +139,41 @@ describe('Resource comments (e2e)', () => {
     ).toBe('Edited first comment');
   });
 
+  it('binds a new image when an author edits a comment', async () => {
+    const threads = await owner.get(threadsUrl()).expect(HttpStatus.OK);
+    const thread = threads.body.items[0];
+    const comment = thread.comments.find(
+      (item: { content: string }) => item.content === 'Edited first comment',
+    );
+
+    const upload = await commenter
+      .post(`${resourceUrl()}/comment-attachments`)
+      .attach('file', Buffer.from('edited-image'), {
+        filename: 'edit.png',
+        contentType: 'image/png',
+      })
+      .expect(HttpStatus.CREATED);
+
+    const response = await commenter
+      .patch(`${threadsUrl()}/${thread.id}/comments/${comment.id}`)
+      .send({
+        content: 'Edited with image',
+        attachment_ids: [upload.body.id],
+      })
+      .expect(HttpStatus.OK);
+
+    const updated = response.body.comments.find(
+      (item: { id: string }) => item.id === comment.id,
+    );
+    expect(updated.content).toBe('Edited with image');
+    expect(updated.attachments).toHaveLength(1);
+    expect(updated.attachments[0]).toMatchObject({
+      id: upload.body.id,
+      name: 'edit.png',
+      mimetype: 'image/png',
+    });
+  });
+
   it('syncs anchors through the existing resource patch', async () => {
     const current = await owner.get(resourceUrl()).expect(HttpStatus.OK);
     const thread = current.body.comment_threads[0];
@@ -196,6 +231,48 @@ describe('Resource comments (e2e)', () => {
     expect(response.body.comment_threads[0].anchor.content_hash).toBe(
       previousAnchorHash,
     );
+  });
+
+  it('uploads and binds a comment image attachment', async () => {
+    const upload = await commenter
+      .post(`${resourceUrl()}/comment-attachments`)
+      .attach('file', Buffer.from('fake-image'), {
+        filename: 'reply.png',
+        contentType: 'image/png',
+      })
+      .expect(HttpStatus.CREATED);
+
+    expect(upload.body).toMatchObject({
+      name: 'reply.png',
+      mimetype: 'image/png',
+    });
+    expect(upload.body.id).toBeTruthy();
+    expect(upload.body.url).toContain(upload.body.id);
+
+    const threads = await owner.get(threadsUrl()).expect(HttpStatus.OK);
+    const threadId = threads.body.items[0].id;
+    const reply = await commenter
+      .post(`${threadsUrl()}/${threadId}/comments`)
+      .send({
+        content: 'Image reply',
+        attachment_ids: [upload.body.id],
+      })
+      .expect(HttpStatus.CREATED);
+
+    const comment = reply.body.comments.find(
+      (item: { content: string }) => item.content === 'Image reply',
+    );
+    expect(comment.attachments).toHaveLength(1);
+    expect(comment.attachments[0]).toMatchObject({
+      id: upload.body.id,
+      name: 'reply.png',
+      mimetype: 'image/png',
+    });
+
+    await commenter
+      .get(comment.attachments[0].url)
+      .expect(HttpStatus.OK)
+      .expect('Content-Type', /image\/png/);
   });
 
   it('allows commenting permission without granting document edits', async () => {

@@ -6,9 +6,11 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+import { ResourceCommentAttachment } from './resource-comment-attachment.entity';
 import { ResourceCommentThread } from './resource-comment-thread.entity';
 
 @Entity('resource_comments')
@@ -35,4 +37,10 @@ export class ResourceComment extends Base {
 
   @Column('text')
   content: string;
+
+  @OneToMany(
+    () => ResourceCommentAttachment,
+    (attachment) => attachment.comment,
+  )
+  attachments?: ResourceCommentAttachment[];
 }

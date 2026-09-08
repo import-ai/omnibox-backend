@@ -104,6 +104,41 @@ describe('SmartFolderExpressionService', () => {
     ).toBe(false);
   });
 
+  it('matches file_name_ext as the suffix after the last dot', () => {
+    const item = resource({
+      resourceType: ResourceType.FILE,
+      attrs: { original_name: 'Quarterly Planning.docx' },
+    });
+    expect(service.matches(item, "file_name_ext in ['jpg', 'docx']")).toBe(
+      true,
+    );
+    expect(service.matches(item, "file_name_ext in ['.jpg', '.docx']")).toBe(
+      true,
+    );
+    expect(service.matches(item, "'.docx' in file_name_ext")).toBe(true);
+    expect(service.matches(item, "file_name_ext == 'docx'")).toBe(true);
+    expect(service.matches(item, "file_name_ext in ['doc']")).toBe(false);
+    expect(service.matches(item, "file_name in ['.docx']")).toBe(false);
+    expect(
+      service.matches(
+        resource({ attrs: { original_name: 'notes' } }),
+        "file_name_ext == ''",
+      ),
+    ).toBe(true);
+    expect(
+      service.matches(
+        resource({ attrs: { original_name: '.gitignore' } }),
+        "file_name_ext == 'gitignore'",
+      ),
+    ).toBe(false);
+    expect(
+      service.matches(
+        resource({ attrs: { filename: 'archive.tar.gz' } }),
+        "file_name_ext == 'gz'",
+      ),
+    ).toBe(true);
+  });
+
   it('evaluates nested and / or groups', () => {
     expect(
       service.matches(

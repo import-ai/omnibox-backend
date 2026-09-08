@@ -13,6 +13,7 @@ type FieldName =
   | SmartFolderField.TAGS
   | SmartFolderField.URL
   | SmartFolderField.FILE_NAME
+  | SmartFolderField.FILE_NAME_EXT
   | SmartFolderField.CONTENT
   | SmartFolderField.CREATED_AT
   | SmartFolderField.UPDATED_AT;
@@ -52,20 +53,21 @@ const FIELDS = new Set<string>([
   SmartFolderField.TAGS,
   SmartFolderField.URL,
   SmartFolderField.FILE_NAME,
+  SmartFolderField.FILE_NAME_EXT,
   SmartFolderField.CONTENT,
   SmartFolderField.CREATED_AT,
   SmartFolderField.UPDATED_AT,
 ]);
 
 const FIELD_LIST =
-  'title, tag, url, file_name, content, created_at, updated_at';
+  'title, tag, url, file_name, file_name_ext, content, created_at, updated_at';
 const OPERATOR_LIST = 'in, not in, ==, !=, >, <, >=, <=';
 const DATETIME_FORMAT = 'YYYY-MM-DD HH:MM:SS';
 const DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
 const SYNTAX_HINT = [
   `Allowed fields: ${FIELD_LIST}. tags is an alias of tag.`,
   `Operators: ${OPERATOR_LIST}. Combine with and / or and parentheses.`,
-  "Text examples: 'foo' in title; title in ['foo', 'bar']; 'foo' in tag.",
+  "Text examples: 'foo' in title; 'foo' in tag; file_name_ext in ['jpg', 'png']. file_name_ext is the suffix after the last dot; '.jpg' and 'jpg' are the same. Do not use file_name in ['.jpg'].",
   `Datetime fields created_at and updated_at use ${DATETIME_FORMAT} in the requester timezone, e.g. created_at >= '2026-09-08 00:00:00'.`,
 ].join(' ');
 const DEFAULT_TIME_ZONE = 'UTC';
@@ -155,17 +157,21 @@ export class SmartFolderExpressionService {
     value: Atom,
   ): boolean {
     const candidate = this.textCandidate(resource, field);
+    const normalize =
+      field === SmartFolderField.FILE_NAME_EXT
+        ? (item: string) => this.normalizeFileNameExtLiteral(item)
+        : (item: string) => item.toLowerCase();
     if (op === 'in' || op === 'not_in') {
       const matched =
         value.type === 'string'
-          ? candidate.includes(value.value.toLowerCase())
+          ? candidate.includes(normalize(value.value))
           : this.literalValues(value).some(
-              (item) => candidate === item.toLowerCase(),
+              (item) => candidate === normalize(item),
             );
       return op === 'in' ? matched : !matched;
     }
     if (value.type !== 'string') return false;
-    const expected = value.value.toLowerCase();
+    const expected = normalize(value.value);
     if (op === 'eq') return candidate === expected;
     if (op === 'ne') return candidate !== expected;
     return false;
@@ -229,9 +235,10 @@ export class SmartFolderExpressionService {
       return (resource.name || '').toLowerCase();
     }
     if (field === SmartFolderField.FILE_NAME) {
-      return String(
-        resource.attrs?.original_name || resource.attrs?.filename || '',
-      ).toLowerCase();
+      return this.fileName(resource).toLowerCase();
+    }
+    if (field === SmartFolderField.FILE_NAME_EXT) {
+      return this.fileNameExt(this.fileName(resource));
     }
     if (field === SmartFolderField.CONTENT) {
       return [
@@ -256,6 +263,24 @@ export class SmartFolderExpressionService {
       return String(resource.attrs?.url || '').toLowerCase();
     }
     return '';
+  }
+
+  private fileName(resource: Resource): string {
+    return String(
+      resource.attrs?.original_name || resource.attrs?.filename || '',
+    );
+  }
+
+  private fileNameExt(fileName: string): string {
+    const base = fileName.trim().toLowerCase();
+    const lastDot = base.lastIndexOf('.');
+    if (lastDot <= 0 || lastDot === base.length - 1) return '';
+    return base.slice(lastDot + 1);
+  }
+
+  private normalizeFileNameExtLiteral(value: string): string {
+    const normalized = value.trim().toLowerCase();
+    return normalized.startsWith('.') ? normalized.slice(1) : normalized;
   }
 
   private tagValues(resource: Resource): string[] {

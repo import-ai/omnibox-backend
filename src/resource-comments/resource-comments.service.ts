@@ -412,7 +412,6 @@ export class ResourceCommentsService {
       );
       const comment = await manager.getRepository(ResourceComment).findOne({
         where: { id: commentId, threadId },
-        relations: ['attachments'],
         lock: { mode: 'pessimistic_write' },
       });
       if (!comment) throw this.commentNotFoundException();
@@ -422,7 +421,11 @@ export class ResourceCommentsService {
 
       const trimmedContent =
         dto.content === undefined ? comment.content : dto.content.trim();
-      const currentAttachments = comment.attachments ?? [];
+      const currentAttachments = await manager
+        .getRepository(ResourceCommentAttachment)
+        .find({
+          where: { commentId: comment.id },
+        });
       const uniqueAttachmentIds =
         dto.attachmentIds === undefined
           ? currentAttachments.map((attachment) => attachment.id)

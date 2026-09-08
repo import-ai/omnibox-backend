@@ -7,6 +7,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { prefixFailedResourceName } from 'omniboxd/wizard/processors/failed-resource-name';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { buildTaskErrorContent } from 'omniboxd/wizard/processors/task-error-content';
 import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
@@ -33,12 +34,18 @@ export class CollectProcessor extends Processor {
     }
     if (task.exception && !isEmpty(task.exception)) {
       const content = buildTaskErrorContent(task);
+      const resource = await this.resourcesService.getResourceOrFail(
+        task.namespaceId,
+        resourceId,
+      );
+      const prefix = this.i18n.t('wizard.errors.failedResourceNamePrefix');
       await this.namespaceResourcesService.update(
         task.namespaceId,
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {
           namespaceId: task.namespaceId,
+          name: prefixFailedResourceName(resource.name, prefix),
           content,
         }),
         true, // autoRenameOnConflict for error content updates

@@ -106,6 +106,12 @@ export class WizardService {
       ),
       collect_url: new CollectUrlProcessor(
         this.namespaceResourcesService,
+        this.resourcesService,
+        this.i18n,
+      ),
+      web_analysis: new CollectUrlProcessor(
+        this.namespaceResourcesService,
+        this.resourcesService,
         this.i18n,
       ),
     };

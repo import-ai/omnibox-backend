@@ -43,6 +43,7 @@ describe('ReaderProcessor', () => {
         // Return mock translations for test purposes
         const translations: Record<string, string> = {
           'wizard.errors.invalidTaskPayload': 'Invalid task payload',
+          'wizard.errors.failedResourceNamePrefix': 'error: ',
         };
         return translations[key] || key;
       }),
@@ -356,6 +357,9 @@ describe('ReaderProcessor', () => {
           exception: { error: 'Processing failed' },
         });
 
+        resourcesService.getResourceOrFail.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
@@ -369,7 +373,7 @@ describe('ReaderProcessor', () => {
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
-            name: undefined,
+            name: 'error: Test Resource',
             content: 'error',
             attrs: undefined,
             tag_ids: undefined,
@@ -391,6 +395,9 @@ describe('ReaderProcessor', () => {
           status: TaskStatus.ERROR,
         });
 
+        resourcesService.getResourceOrFail.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
@@ -401,6 +408,7 @@ describe('ReaderProcessor', () => {
           'test-resource-id',
           expect.objectContaining({
             namespaceId: 'test-namespace',
+            name: 'error: Test Resource',
             content: message,
           }),
           true,

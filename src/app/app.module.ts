@@ -20,6 +20,7 @@ import {
   I18nValidationPipe,
   QueryResolver,
 } from 'nestjs-i18n';
+import { AgentStreamHooksModule } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.module';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { AppController } from 'omniboxd/app/app.controller';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
@@ -102,6 +103,7 @@ import { AddRetriedFromTaskIdToTasks1786412970105 } from 'omniboxd/migrations/17
 import { AddRssItemResources1786534451795 } from 'omniboxd/migrations/1786534451795-add-rss-item-resources';
 import { AddNamespaceParentIndexToResources1787654921509 } from 'omniboxd/migrations/1787654921509-add-namespace-parent-index-to-resources';
 import { AddInitialSyncedAtToRssLinks1788255535304 } from 'omniboxd/migrations/1788255535304-add-initial-synced-at-to-rss-links';
+import { AddAgentTokenCountsToMessages1788782074419 } from 'omniboxd/migrations/1788782074419-add-agent-token-counts-to-messages';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -218,6 +220,7 @@ export class AppModule implements NestModule {
         AppConfigModule,
         FeaturePreviewsModule,
         WizardUrlProviderModule,
+        AgentStreamHooksModule,
         NotificationsModule,
         SmartFoldersModule,
         RssModule,
@@ -314,6 +317,7 @@ export class AppModule implements NestModule {
               AddRssItemResources1786534451795,
               AddNamespaceParentIndexToResources1787654921509,
               AddInitialSyncedAtToRssLinks1788255535304,
+              AddAgentTokenCountsToMessages1788782074419,
               ...extraMigrations,
             ],
             migrationsRun: true,

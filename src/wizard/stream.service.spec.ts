@@ -1,3 +1,4 @@
+import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 
@@ -18,6 +19,10 @@ function createService(mocks: {
     mocks.resourcesService as any,
     mocks.smartFoldersService as any,
     {} as any,
+    {
+      onCallCompleted: jest.fn().mockResolvedValue(undefined),
+      onStreamClosed: jest.fn().mockResolvedValue(undefined),
+    } as any,
   );
 }
 
@@ -598,5 +603,123 @@ describe('StreamService citations on a chat-only share', () => {
       'share-id',
       true,
     );
+  });
+});
+
+describe('StreamService agent stream hooks', () => {
+  const userStream = {
+    namespaceId: 'namespace-id',
+    streamId: 'user:user-id:namespace-id:conversation-id',
+    shareId: undefined,
+  };
+  const shareStream = {
+    namespaceId: 'namespace-id',
+    streamId: 'share:share-id:namespace-id:conversation-id',
+    shareId: 'share-id',
+  };
+
+  const createHookedService = (message: Record<string, any>) => {
+    const hooks = { onCallCompleted: jest.fn(), onStreamClosed: jest.fn() };
+    hooks.onCallCompleted.mockResolvedValue(undefined);
+    hooks.onStreamClosed.mockResolvedValue(undefined);
+    const service = new StreamService(
+      { get: jest.fn() } as any,
+      {} as any,
+      {
+        updateDelta: jest.fn().mockResolvedValue({ message: {} }),
+        update: jest.fn().mockResolvedValue({ message: {}, ...message }),
+      } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      hooks as any,
+    );
+    return { service, hooks };
+  };
+
+  const eos = async (
+    service: StreamService,
+    agentStream: AgentStream | undefined,
+  ) => {
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      jest.fn().mockResolvedValue(undefined),
+      false,
+      agentStream,
+    );
+    await handler(JSON.stringify({ response_type: 'eos', role: 'assistant' }), {
+      messageId: 'message-id',
+    } as any);
+  };
+
+  it('reports the finished message tokens on eos', async () => {
+    const { service, hooks } = createHookedService({
+      id: 'message-id',
+      inputTokenCached: 12032,
+      inputTokenUncached: 162,
+      outputToken: 15,
+    });
+
+    await eos(service, userStream);
+
+    expect(hooks.onCallCompleted).toHaveBeenCalledWith(
+      userStream,
+      'message-id',
+      {
+        inputTokenCached: 12032,
+        inputTokenUncached: 162,
+        outputToken: 15,
+      },
+    );
+  });
+
+  it('hands the hook the share a stream was opened through', async () => {
+    // The share travels as its own field; nothing downstream has to parse it
+    // back out of the stream key.
+    const { service, hooks } = createHookedService({
+      id: 'message-id',
+      inputTokenCached: 0,
+      inputTokenUncached: 100,
+      outputToken: 5,
+    });
+
+    await eos(service, shareStream);
+
+    expect(hooks.onCallCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ shareId: 'share-id' }),
+      'message-id',
+      expect.anything(),
+    );
+  });
+
+  it('does not report a message that burned no tokens', async () => {
+    const { service, hooks } = createHookedService({
+      id: 'message-id',
+      inputTokenCached: 0,
+      inputTokenUncached: 0,
+      outputToken: 0,
+    });
+
+    await eos(service, userStream);
+
+    expect(hooks.onCallCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not report without a stream', async () => {
+    const { service, hooks } = createHookedService({
+      id: 'message-id',
+      inputTokenCached: 0,
+      inputTokenUncached: 100,
+      outputToken: 5,
+    });
+
+    await eos(service, undefined);
+
+    expect(hooks.onCallCompleted).not.toHaveBeenCalled();
   });
 });

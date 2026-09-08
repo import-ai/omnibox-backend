@@ -1,5 +1,16 @@
 import { Base } from 'omniboxd/common/base.entity';
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  PrimaryGeneratedColumn,
+  ValueTransformer,
+} from 'typeorm';
+
+/** Token counts fit a JS number; TypeORM hands bigint back as a string. */
+const bigIntCount: ValueTransformer = {
+  to: (value: number) => value,
+  from: (value: string | null) => (value === null ? 0 : Number(value)),
+};
 
 /**
  * Every message has a `parentId` that points to its preceding message.
@@ -80,4 +91,19 @@ export class Message extends Base {
 
   @Column('jsonb', { nullable: true })
   attrs: MessageAttrs | null;
+
+  /**
+   * Tokens burned by the LLM call that produced this message, split the way
+   * agent credits are priced. Accumulated from the wizard's usage deltas as
+   * the message streams; `attrs.usage` keeps only the last block, since delta
+   * attrs are merged with an overwrite.
+   */
+  @Column('bigint', { default: 0, transformer: bigIntCount })
+  inputTokenUncached: number;
+
+  @Column('bigint', { default: 0, transformer: bigIntCount })
+  inputTokenCached: number;
+
+  @Column('bigint', { default: 0, transformer: bigIntCount })
+  outputToken: number;
 }

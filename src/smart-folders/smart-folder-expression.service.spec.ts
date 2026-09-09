@@ -46,14 +46,21 @@ describe('SmartFolderExpressionService', () => {
     expect(service.matches(item, "'hello' in content")).toBe(true);
   });
 
-  it('matches tag as membership and accepts the tags alias', () => {
+  it('matches tags by name and ignores tag ids', () => {
     const item = resource({
+      tagIds: ['finance-uuid'],
       attrs: { tag_names: ['Roadmap'] },
     });
-    expect(service.matches(item, "'roadmap' in tag")).toBe(true);
-    expect(service.matches(item, "'finance' in tags")).toBe(true);
-    expect(service.matches(item, "tag in ['finance', 'other']")).toBe(true);
-    expect(service.matches(item, "'missing' not in tag")).toBe(true);
+    expect(service.matches(item, "'roadmap' in tags")).toBe(true);
+    expect(service.matches(item, "'finance-uuid' in tags")).toBe(false);
+    expect(service.matches(item, "tags in ['roadmap', 'other']")).toBe(true);
+    expect(service.matches(item, "'missing' not in tags")).toBe(true);
+    expect(service.matches(item, "tags == 'roadmap'")).toBe(true);
+    expect(service.matches(item, "tags == 'finance-uuid'")).toBe(false);
+    expect(service.matches(item, "tags != 'roadmap'")).toBe(false);
+    expect(parseError("'roadmap' in tag").message).toContain(
+      "Unknown field 'tag'",
+    );
   });
 
   it('matches datetime fields as requester-timezone YYYY-MM-DD HH:MM:SS literals', () => {
@@ -159,8 +166,9 @@ describe('SmartFolderExpressionService', () => {
     expect((unknown.getResponse() as { hint?: string }).hint).toContain(
       'created_at',
     );
-    expect((unknown.getResponse() as { hint?: string }).hint).toContain(
-      'tags is an alias of tag',
+    expect((unknown.getResponse() as { hint?: string }).hint).toContain('tags');
+    expect((unknown.getResponse() as { hint?: string }).hint).not.toContain(
+      'alias',
     );
 
     expect(parseError("created_at >= '2026-09-08'").message).toContain(

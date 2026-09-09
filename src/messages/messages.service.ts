@@ -1,6 +1,8 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
+import { ConversationAttachment } from 'omniboxd/attachments/entities/conversation-attachment.entity';
+import { MessageAttachment } from 'omniboxd/attachments/entities/message-attachment.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import { agentTokenDeltaOf } from 'omniboxd/messages/agent-token-usage';
@@ -14,7 +16,7 @@ import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { transaction } from 'omniboxd/utils/transaction-utils';
-import { DataSource, In, IsNull, Repository } from 'typeorm';
+import { DataSource, In, IsNull, MoreThan, Repository } from 'typeorm';
 
 import {
   ChatCheckpointResponse,
@@ -68,6 +70,44 @@ export class MessagesService {
     return await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
       const savedMsg = await manager.save(message);
+      const images =
+        (dto.attrs as any)?.composer?.display_parts?.filter(
+          (part: any) => part.type === 'image' && part.attachment_id,
+        ) ?? [];
+      if (images.length > 0) {
+        const attachmentIds = images.map((part: any) => part.attachment_id);
+        const attachments = await manager
+          .getRepository(ConversationAttachment)
+          .findBy({
+            id: In(attachmentIds),
+            namespaceId,
+            conversationId,
+            userId: userId ?? '',
+            consumedAt: IsNull(),
+            expiresAt: MoreThan(new Date()),
+          });
+        if (attachments.length !== new Set(attachmentIds).size) {
+          throw new AppException(
+            'Attachment does not belong to this conversation',
+            'CONVERSATION_ATTACHMENT_ACCESS_DENIED',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+        await manager.save(
+          images.map((part: any, position: number) =>
+            manager.getRepository(MessageAttachment).create({
+              messageId: savedMsg.id,
+              attachmentId: part.attachment_id,
+              position,
+            }),
+          ),
+        );
+        const consumedAt = new Date();
+        for (const attachment of attachments) {
+          attachment.consumedAt = consumedAt;
+        }
+        await manager.save(attachments);
+      }
       if (index && userId) {
         await this.wizardTaskService.emitUpsertMessageIndexTask(
           TASK_PRIORITY,

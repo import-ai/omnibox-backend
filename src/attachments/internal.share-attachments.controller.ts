@@ -8,7 +8,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { CookieAuth } from 'omniboxd/auth/decorators';
+import { Public } from 'omniboxd/auth';
 import {
   ValidatedShare,
   ValidateShare,
@@ -18,13 +18,13 @@ import { Share } from 'omniboxd/shares/entities/share.entity';
 
 import { AttachmentsService } from './attachments.service';
 
-@Controller('api/v1/shares/:shareId/resources/:resourceId/attachments')
+@Public()
+@ValidateShare()
+@Controller('internal/api/v1/shares/:shareId/resources/:resourceId/attachments')
 @UseInterceptors(ValidateShareInterceptor)
-export class ShareAttachmentsController {
+export class InternalShareAttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
-  @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare({ requireResources: true })
   @Get()
   async listAttachments(
     @Param('shareId') shareId: string,
@@ -43,20 +43,46 @@ export class ShareAttachmentsController {
     );
   }
 
-  @CookieAuth({ onAuthFail: 'continue' })
-  @ValidateShare({ requireResources: true })
+  @Get(':attachmentId/llm-url')
+  async getAttachmentLlmUrl(
+    @Param('resourceId') resourceId: string,
+    @Param('attachmentId') attachmentId: string,
+    @ValidatedShare() share: Share,
+  ) {
+    return await this.attachmentsService.getResourceAttachmentLlmUrlViaShare(
+      share,
+      resourceId,
+      attachmentId,
+    );
+  }
+
+  @Get(':attachmentId/metadata')
+  async getAttachmentInfo(
+    @Param('shareId') shareId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('attachmentId') attachmentId: string,
+    @ValidatedShare() share: Share,
+  ) {
+    return await this.attachmentsService.getAttachmentInfoViaShare(
+      share,
+      resourceId,
+      attachmentId,
+      `/api/v1/shares/${shareId}/resources/${resourceId}/attachments/${attachmentId}`,
+    );
+  }
+
   @Get(':attachmentId')
   async downloadAttachment(
     @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
     @ValidatedShare() share: Share,
-    @Res() res: Response,
+    @Res() response: Response,
   ) {
     return await this.attachmentsService.downloadAttachmentViaShare(
       share,
       resourceId,
       attachmentId,
-      res,
+      response,
     );
   }
 }

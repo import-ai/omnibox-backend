@@ -709,6 +709,7 @@ export class StreamService implements OnModuleDestroy {
       lang: requestDto.lang,
       tool_call: requestDto.tool_call,
       channel: requestDto.channel,
+      images: requestDto.images,
       share_id: shareId,
     };
 

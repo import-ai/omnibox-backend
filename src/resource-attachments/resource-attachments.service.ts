@@ -196,6 +196,22 @@ export class ResourceAttachmentsService {
     });
   }
 
+  async listResourceAttachmentsWithTotal(
+    namespaceId: string,
+    resourceId: string,
+    offset: number,
+    limit: number,
+  ) {
+    const [attachments, total] =
+      await this.resourceAttachmentRepository.findAndCount({
+        where: { namespaceId, resourceId },
+        order: { id: 'ASC' },
+        skip: offset,
+        take: limit,
+      });
+    return { attachments, total };
+  }
+
   async getFirstAttachments(
     namespaceId: string,
     resourceIds: string[],

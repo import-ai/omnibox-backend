@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateTagRequestDto } from 'omniboxd/tag/dto/create-tag-request.dto';
 import { TagDto } from 'omniboxd/tag/dto/tag.dto';
+import { MAX_TAG_NAME_LENGTH } from 'omniboxd/tag/tag.constants';
 import { Tag } from 'omniboxd/tag/tag.entity';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { EntityManager, In, Like, Repository } from 'typeorm';
 
 @Injectable()
 export class TagService {
+  private readonly logger = new Logger(TagService.name);
+
   constructor(
     @InjectRepository(Tag)
     private tagRepository: Repository<Tag>,
@@ -111,8 +114,19 @@ export class TagService {
     }
 
     const validTagNames = tagNames.filter(
-      (name) => !isEmpty(name) && name.length <= 20,
+      (name) => !isEmpty(name) && name.length <= MAX_TAG_NAME_LENGTH,
     );
+    // Dropping happens on the automatic-tagging path too, where there is no
+    // request to fail; log it so an over-long tag is diagnosable instead of
+    // vanishing.
+    const droppedTagNames = tagNames.filter(
+      (name) => !isEmpty(name) && name.length > MAX_TAG_NAME_LENGTH,
+    );
+    if (droppedTagNames.length > 0) {
+      this.logger.warn(
+        `Dropped ${droppedTagNames.length} tag(s) longer than ${MAX_TAG_NAME_LENGTH} characters in namespace ${namespaceId}: ${droppedTagNames.join(', ')}`,
+      );
+    }
     if (validTagNames.length === 0) {
       return [];
     }

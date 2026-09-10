@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { MAX_TAG_NAME_LENGTH } from 'omniboxd/tag/tag.constants';
 import { Tag } from 'omniboxd/tag/tag.entity';
 import { TagService } from 'omniboxd/tag/tag.service';
 
@@ -51,9 +52,25 @@ describe('TagService', () => {
 
     it('filters too long tag names', async () => {
       await expect(
-        service.getOrCreateTagsByNames('namespace-id', ['x'.repeat(21)]),
+        service.getOrCreateTagsByNames('namespace-id', [
+          'x'.repeat(MAX_TAG_NAME_LENGTH + 1),
+        ]),
       ).resolves.toEqual([]);
       expect(repo.find).not.toHaveBeenCalled();
+    });
+
+    it('keeps hierarchical tag names produced by user TAGS.md rules', async () => {
+      // A user classification scheme like `Work/<area>` easily exceeds the old
+      // 20 character limit; such tags used to be dropped silently.
+      const hierarchicalTag = 'Work/Software Development-TEAMWIDE-2026';
+      expect(hierarchicalTag.length).toBeGreaterThan(20);
+      await expect(
+        service.getOrCreateTagsByNames('namespace-id', [hierarchicalTag]),
+      ).resolves.toEqual([`${hierarchicalTag}-id`]);
+      expect(repo.create).toHaveBeenCalledWith({
+        namespaceId: 'namespace-id',
+        name: hierarchicalTag,
+      });
     });
 
     it('creates only valid tag names', async () => {
@@ -61,7 +78,7 @@ describe('TagService', () => {
         service.getOrCreateTagsByNames('namespace-id', [
           '',
           'valid-tag',
-          'x'.repeat(21),
+          'x'.repeat(MAX_TAG_NAME_LENGTH + 1),
         ]),
       ).resolves.toEqual(['valid-tag-id']);
       expect(repo.create).toHaveBeenCalledTimes(1);

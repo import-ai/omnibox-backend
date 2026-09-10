@@ -9,6 +9,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+import { MAX_TAG_NAME_LENGTH } from 'omniboxd/tag/tag.constants';
 
 export class OpenUpdateResourceRequestDto {
   @ApiPropertyOptional({
@@ -44,7 +45,7 @@ export class OpenUpdateResourceRequestDto {
       'Array of non-empty tag names to associate with the resource. Replaces existing tags; send an empty array to clear tags. Missing tags are created automatically.',
     type: [String],
     example: ['project', 'meeting-notes'],
-    maxLength: 20,
+    maxLength: MAX_TAG_NAME_LENGTH,
   })
   @Expose({ name: 'tag_names' })
   @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })
@@ -57,7 +58,7 @@ export class OpenUpdateResourceRequestDto {
     each: true,
     message: i18nValidationMessage('validation.errors.isNotEmpty'),
   })
-  @MaxLength(20, {
+  @MaxLength(MAX_TAG_NAME_LENGTH, {
     each: true,
     message: i18nValidationMessage('validation.errors.name.maxLength'),
   })

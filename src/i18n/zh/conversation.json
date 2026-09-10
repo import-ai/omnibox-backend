@@ -1,4 +1,5 @@
 {
+  "imageUpgradeRequired": "[此消息包含图片，请升级 App 查看]",
   "errors": {
     "accessDenied": "您没有权限访问此对话"
   }

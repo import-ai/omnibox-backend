@@ -1,5 +1,7 @@
 {
   "errors": {
+    "fileRequired": "An attachment file is required.",
+    "conversationAttachmentUnavailable": "The attachment is unavailable or does not belong to this conversation.",
     "attachmentNotFound": "Attachment not found"
   }
 }

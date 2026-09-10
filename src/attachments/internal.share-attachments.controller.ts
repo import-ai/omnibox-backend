@@ -19,12 +19,12 @@ import { Share } from 'omniboxd/shares/entities/share.entity';
 import { AttachmentsService } from './attachments.service';
 
 @Public()
-@ValidateShare()
 @Controller('internal/api/v1/shares/:shareId/resources/:resourceId/attachments')
 @UseInterceptors(ValidateShareInterceptor)
 export class InternalShareAttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
+  @ValidateShare({ trustedInternal: true })
   @Get()
   async listAttachments(
     @Param('shareId') shareId: string,
@@ -43,6 +43,7 @@ export class InternalShareAttachmentsController {
     );
   }
 
+  @ValidateShare({ trustedInternal: true })
   @Get(':attachmentId/llm-url')
   async getAttachmentLlmUrl(
     @Param('resourceId') resourceId: string,
@@ -56,6 +57,7 @@ export class InternalShareAttachmentsController {
     );
   }
 
+  @ValidateShare({ trustedInternal: true })
   @Get(':attachmentId/metadata')
   async getAttachmentInfo(
     @Param('shareId') shareId: string,
@@ -71,6 +73,7 @@ export class InternalShareAttachmentsController {
     );
   }
 
+  @ValidateShare({ trustedInternal: true })
   @Get(':attachmentId')
   async downloadAttachment(
     @Param('resourceId') resourceId: string,

@@ -19,6 +19,7 @@ import { CookieAuth } from 'omniboxd/auth/decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
+import { ConversationAttachmentsService } from './conversation-attachments.service';
 import { UploadAttachmentsResponseDto } from './dto/upload-attachments-response.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
@@ -111,7 +112,9 @@ export class AttachmentsController {
   'api/v1/namespaces/:namespaceId/conversations/:conversationId/attachments',
 )
 export class ConversationAttachmentsController {
-  constructor(private readonly attachmentsService: AttachmentsService) {}
+  constructor(
+    private readonly attachmentsService: ConversationAttachmentsService,
+  ) {}
 
   @Post()
   @UseInterceptors(FilesInterceptor('file[]', 1))
@@ -125,7 +128,7 @@ export class ConversationAttachmentsController {
       namespaceId,
       conversationId,
       userId,
-      files[0],
+      files?.[0],
     );
   }
 

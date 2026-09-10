@@ -17,6 +17,7 @@ import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
 import { AttachmentsService } from './attachments.service';
+import { ConversationAttachmentsService } from './conversation-attachments.service';
 
 @Public()
 @Controller(
@@ -130,7 +131,9 @@ export class InternalAttachmentsController {
   'internal/api/v1/namespaces/:namespaceId/conversations/:conversationId/attachments',
 )
 export class InternalConversationAttachmentsController {
-  constructor(private readonly attachmentsService: AttachmentsService) {}
+  constructor(
+    private readonly attachmentsService: ConversationAttachmentsService,
+  ) {}
 
   @Get(':attachmentId/llm-url')
   async getAttachmentLlmUrl(
@@ -165,6 +168,7 @@ export class InternalConversationAttachmentsController {
   }
 
   @Post(':attachmentId/promote')
+  @CheckNamespaceReadonly()
   async promote(
     @HeaderUserId() userId: string,
     @Param('namespaceId') namespaceId: string,

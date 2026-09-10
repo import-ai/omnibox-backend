@@ -71,8 +71,9 @@ export class ResourceAttachmentsService {
     attachmentId: string,
     userId: string,
     size: number,
+    tx?: Transaction,
   ) {
-    return await transaction(this.dataSource.manager, async (tx) => {
+    const add = async (tx: Transaction) => {
       const repository = tx.entityManager.getRepository(ResourceAttachment);
 
       const resourceAttachment = repository.create({
@@ -91,7 +92,8 @@ export class ResourceAttachmentsService {
         size,
         tx,
       );
-    });
+    };
+    return tx ? await add(tx) : await transaction(this.dataSource.manager, add);
   }
 
   async removeAttachmentFromResource(

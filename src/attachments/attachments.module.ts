@@ -20,9 +20,11 @@ import { S3Module } from 'omniboxd/s3/s3.module';
 import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resources.module';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 
+import { ConversationAttachmentsService } from './conversation-attachments.service';
+
 @Module({
   exports: [AttachmentsService],
-  providers: [AttachmentsService],
+  providers: [AttachmentsService, ConversationAttachmentsService],
   controllers: [
     AttachmentsController,
     ConversationAttachmentsController,

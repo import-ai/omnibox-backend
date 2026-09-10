@@ -16,7 +16,7 @@ import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { transaction } from 'omniboxd/utils/transaction-utils';
-import { DataSource, In, IsNull, MoreThan, Repository } from 'typeorm';
+import { DataSource, In, IsNull, MoreThan, Not, Repository } from 'typeorm';
 
 import {
   ChatCheckpointResponse,
@@ -76,19 +76,29 @@ export class MessagesService {
         ) ?? [];
       if (images.length > 0) {
         const attachmentIds = images.map((part: any) => part.attachment_id);
+        const ownership = {
+          id: In(attachmentIds),
+          namespaceId,
+          conversationId,
+          userId: userId ?? '',
+        };
         const attachments = await manager
           .getRepository(ConversationAttachment)
-          .findBy({
-            id: In(attachmentIds),
-            namespaceId,
-            conversationId,
-            userId: userId ?? '',
-            consumedAt: IsNull(),
-            expiresAt: MoreThan(new Date()),
+          .find({
+            where: [
+              { ...ownership, consumedAt: Not(IsNull()) },
+              {
+                ...ownership,
+                consumedAt: IsNull(),
+                expiresAt: MoreThan(new Date()),
+              },
+            ],
+            order: { id: 'ASC' },
+            lock: { mode: 'pessimistic_write' },
           });
         if (attachments.length !== new Set(attachmentIds).size) {
           throw new AppException(
-            'Attachment does not belong to this conversation',
+            this.i18n.t('attachment.errors.conversationAttachmentUnavailable'),
             'CONVERSATION_ATTACHMENT_ACCESS_DENIED',
             HttpStatus.FORBIDDEN,
           );
@@ -104,7 +114,7 @@ export class MessagesService {
         );
         const consumedAt = new Date();
         for (const attachment of attachments) {
-          attachment.consumedAt = consumedAt;
+          attachment.consumedAt ??= consumedAt;
         }
         await manager.save(attachments);
       }

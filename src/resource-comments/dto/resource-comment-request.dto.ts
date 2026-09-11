@@ -13,7 +13,6 @@ import {
   Max,
   MaxLength,
   Min,
-  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
@@ -84,13 +83,8 @@ export class CreateResourceCommentThreadRequestDto {
   @Expose({ name: 'expected_content_hash' })
   expectedContentHash: string;
 
-  @ValidateIf((dto: CreateResourceCommentThreadRequestDto) => {
-    return !dto.attachmentIds?.length;
-  })
+  @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
-  @IsNotEmpty({
-    message: i18nValidationMessage('validation.errors.isNotEmpty'),
-  })
   @MaxLength(10000)
   content?: string;
 
@@ -106,13 +100,8 @@ export class CreateResourceCommentThreadRequestDto {
 }
 
 export class CreateResourceCommentRequestDto {
-  @ValidateIf((dto: CreateResourceCommentRequestDto) => {
-    return !dto.attachmentIds?.length;
-  })
+  @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
-  @IsNotEmpty({
-    message: i18nValidationMessage('validation.errors.isNotEmpty'),
-  })
   @MaxLength(10000)
   content?: string;
 
@@ -128,9 +117,7 @@ export class CreateResourceCommentRequestDto {
 }
 
 export class UpdateResourceCommentRequestDto {
-  @ValidateIf((dto: UpdateResourceCommentRequestDto) => {
-    return !dto.attachmentIds?.length;
-  })
+  @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.isNotEmpty'),

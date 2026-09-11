@@ -479,7 +479,10 @@ export class ResourceCommentsService {
       userId,
       ResourcePermission.CAN_COMMENT,
     );
-    if (!file?.mimetype?.startsWith('image/')) {
+    if (
+      !file?.mimetype?.startsWith('image/') ||
+      file.mimetype === 'image/svg+xml'
+    ) {
       throw new AppException(
         this.i18n.t('resourceComment.errors.invalidAttachment'),
         'INVALID_COMMENT_ATTACHMENT',
@@ -688,7 +691,9 @@ export class ResourceCommentsService {
   ) {
     httpResponse.setHeader(
       'Content-Disposition',
-      `inline; filename*=UTF-8''${encodeURIComponent(attachment.name)}`,
+      attachment.mimetype === 'image/svg+xml'
+        ? `attachment; filename*=UTF-8''${encodeURIComponent(attachment.name)}`
+        : `inline; filename*=UTF-8''${encodeURIComponent(attachment.name)}`,
     );
     httpResponse.setHeader(
       'Content-Type',

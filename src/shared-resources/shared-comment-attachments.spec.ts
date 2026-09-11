@@ -86,6 +86,7 @@ describe('shared comment images', () => {
   const getObject = jest.fn();
   const validateShare = jest.fn();
   const checkPermission = jest.fn();
+  const isResourceMatched = jest.fn();
 
   beforeAll(async () => {
     const resource = Object.assign(new Resource(), {
@@ -97,6 +98,12 @@ describe('shared comment images', () => {
       attrs: {},
       createdAt: new Date(),
       updatedAt: new Date(),
+    });
+    const smartFolder = Object.assign(new Resource(), {
+      id: 'smart-folder',
+      namespaceId: 'namespace',
+      name: 'Smart folder',
+      resourceType: ResourceType.SMART_FOLDER,
     });
     const module = await Test.createTestingModule({
       controllers: [SharedResourcesController],
@@ -119,14 +126,14 @@ describe('shared comment images', () => {
           useValue: {
             getResource: (namespaceId: string, resourceId: string) =>
               Promise.resolve(
-                namespaceId === resource.namespaceId &&
-                  resourceId === resource.id
-                  ? resource
-                  : null,
+                [resource, smartFolder].find(
+                  (item) =>
+                    item.namespaceId === namespaceId && item.id === resourceId,
+                ) ?? null,
               ),
           },
         },
-        { provide: SmartFoldersService, useValue: {} },
+        { provide: SmartFoldersService, useValue: { isResourceMatched } },
         { provide: TagService, useValue: {} },
         {
           provide: SharesService,
@@ -153,6 +160,7 @@ describe('shared comment images', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    isResourceMatched.mockResolvedValue(true);
     share = Object.assign(new Share(), {
       id: 'share',
       namespaceId: 'namespace',
@@ -189,6 +197,30 @@ describe('shared comment images', () => {
       sharedImageUrl,
     );
     expect(thread.comments[0].attachments[0].url).toBe(workspaceImageUrl);
+  });
+
+  it('preserves timezone-aware smart-folder paths and shared comment images', async () => {
+    share.resourceId = 'smart-folder';
+    share.userId = 'owner';
+    share.allResources = true;
+
+    const detail = await request(app.getHttpServer())
+      .get(sharedResourceUrl)
+      .set('X-Timezone', 'Asia/Shanghai')
+      .expect(200);
+
+    expect(isResourceMatched.mock.calls).toEqual([
+      ['owner', 'namespace', 'smart-folder', 'resource', 'Asia/Shanghai'],
+      ['owner', 'namespace', 'smart-folder', 'resource', 'Asia/Shanghai'],
+    ]);
+    expect(detail.body.path).toEqual([
+      { id: 'smart-folder', name: 'Smart folder' },
+      { id: 'resource', name: 'Document' },
+    ]);
+    expect(detail.body.content_hash).toBe('hash');
+    expect(detail.body.comment_threads[0].comments[0].attachments[0].url).toBe(
+      sharedImageUrl,
+    );
   });
 
   it('streams images anonymously through the validated share without workspace permissions', async () => {

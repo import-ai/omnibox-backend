@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -110,12 +111,13 @@ export class InternalResourcesController {
     @HeaderUserId() userId: string,
     @Query('offset') offset: number = 0,
     @Query('limit') limit: number = 20,
+    @Headers('x-timezone') timeZone?: string,
   ) {
     return await this.namespaceResourcesService.listChildrenWithTotal(
       namespaceId,
       resourceId,
       userId,
-      { offset, limit },
+      { offset, limit, timeZone },
     );
   }
 

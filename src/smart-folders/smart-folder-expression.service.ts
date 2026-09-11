@@ -64,7 +64,7 @@ const FIELDS = new Set<string>([
 ]);
 
 const FIELD_LIST =
-  'title, tag, url, file_name, file_name_ext, content, created_at, updated_at';
+  'title, tags, url, file_name, file_name_ext, content, created_at, updated_at';
 const OPERATOR_LIST = 'in, not in, ==, !=, >, <, >=, <=';
 const DATETIME_FORMAT = 'YYYY-MM-DD HH:MM:SS';
 const DATETIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/;
@@ -289,9 +289,7 @@ export class SmartFolderExpressionService {
             : '',
       )
       .filter((value) => value.length > 0);
-    return [...(resource.tagIds || []), ...names].map((value) =>
-      value.toLowerCase(),
-    );
+    return names.map((value) => value.toLowerCase());
   }
 
   private dateCandidate(resource: Resource, field: FieldName): Date | null {
@@ -509,10 +507,7 @@ class ExpressionParser {
     const token = this.next();
     if (token.type === 'string') return { type: 'string', value: token.value };
     if (token.type === 'word') {
-      const fieldName =
-        token.value === 'tag' || token.value === 'tags'
-          ? SmartFolderField.TAGS
-          : token.value;
+      const fieldName = token.value;
       if (!FIELDS.has(fieldName)) {
         this.invalid('unknownField', {
           field: token.value,

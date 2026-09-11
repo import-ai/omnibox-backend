@@ -29,6 +29,7 @@ import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 export interface PaginationOptions {
   limit?: number;
   offset?: number;
+  timeZone?: string;
 }
 
 export interface SharedChildrenPage {
@@ -75,10 +76,15 @@ export class SharedResourcesService {
   async getSharedResource(
     share: Share,
     resourceId: string,
+    timeZone?: string,
   ): Promise<SharedResourceDto> {
-    const resource = await this.getAndValidateResource(share, resourceId);
+    const resource = await this.getAndValidateResource(
+      share,
+      resourceId,
+      timeZone,
+    );
     const tags = await this.getTagsForResource(share.namespaceId, resource);
-    const path = await this.getResourcePath(share, resource);
+    const path = await this.getResourcePath(share, resource, timeZone);
     const dto = SharedResourceDto.fromEntity(resource, tags, path);
     if (this.resourceCommentsService) {
       const comments =
@@ -110,6 +116,7 @@ export class SharedResourcesService {
   private async getResourcePath(
     share: Share,
     resource: Resource,
+    timeZone?: string,
   ): Promise<BreadcrumbItemDto[]> {
     if (resource.id === share.resourceId) {
       return [];
@@ -126,6 +133,7 @@ export class SharedResourcesService {
         share.namespaceId,
         share.resourceId,
         resource.id,
+        timeZone,
       );
       if (resourceMatched) {
         return [
@@ -151,6 +159,7 @@ export class SharedResourcesService {
           share.namespaceId,
           share.resourceId,
           parent.id,
+          timeZone,
         );
         if (parentMatched) {
           firstMatchedFolderIndex = index;
@@ -197,6 +206,7 @@ export class SharedResourcesService {
   async batchGetResourcePath(
     share: Share,
     resourceIds: string[],
+    timeZone?: string,
   ): Promise<Map<string, ResourceMetaDto[]>> {
     const pathMap = new Map<string, ResourceMetaDto[]>();
     const shareRoot = await this.resourcesService.getResource(
@@ -231,6 +241,7 @@ export class SharedResourcesService {
             share,
             shareRoot,
             resource,
+            timeZone,
           ),
         );
         continue;
@@ -258,6 +269,7 @@ export class SharedResourcesService {
     share: Share,
     shareRoot: Resource,
     resource: ResourceMetaDto,
+    timeZone?: string,
   ): Promise<ResourceMetaDto[]> {
     const shareRootMeta = ResourceMetaDto.fromEntity(shareRoot);
     if (resource.id === share.resourceId) {
@@ -270,6 +282,7 @@ export class SharedResourcesService {
       share.namespaceId,
       share.resourceId,
       resource.id,
+      timeZone,
     );
     if (resourceMatched) {
       return [shareRootMeta, resource];
@@ -292,6 +305,7 @@ export class SharedResourcesService {
         share.namespaceId,
         share.resourceId,
         parent.id,
+        timeZone,
       );
       if (parentMatched) {
         firstMatchedFolderIndex = index;
@@ -324,7 +338,11 @@ export class SharedResourcesService {
         ownerUserId,
         share.namespaceId,
         share.resourceId,
-        { limit: options?.limit, offset: options?.offset },
+        {
+          limit: options?.limit,
+          offset: options?.offset,
+          ...(options?.timeZone ? { timeZone: options.timeZone } : {}),
+        },
       );
     return {
       resources: resources.map((child) => {
@@ -349,6 +367,7 @@ export class SharedResourcesService {
   private async isSharedSmartFolderMatchOrDescendant(
     share: Share,
     resource: Resource,
+    timeZone?: string,
   ): Promise<boolean> {
     const ownerUserId = this.getShareOwnerIdOrFail(share);
     const matched = await this.smartFoldersService.isResourceMatched(
@@ -356,6 +375,7 @@ export class SharedResourcesService {
       share.namespaceId,
       share.resourceId,
       resource.id,
+      timeZone,
     );
     if (matched) {
       return true;
@@ -374,6 +394,7 @@ export class SharedResourcesService {
         share.namespaceId,
         share.resourceId,
         parent.id,
+        timeZone,
       );
       if (parentMatched) {
         return true;
@@ -405,7 +426,11 @@ export class SharedResourcesService {
     resourceId: string,
     options?: PaginationOptions,
   ): Promise<SharedChildrenPage> {
-    const resource = await this.getAndValidateResource(share, resourceId);
+    const resource = await this.getAndValidateResource(
+      share,
+      resourceId,
+      options?.timeZone,
+    );
     const shareRoot = await this.resourcesService.getResource(
       share.namespaceId,
       share.resourceId,
@@ -425,7 +450,11 @@ export class SharedResourcesService {
     if (
       shareRoot?.resourceType === ResourceType.SMART_FOLDER &&
       resource.id !== share.resourceId &&
-      !(await this.isSharedSmartFolderMatchOrDescendant(share, resource))
+      !(await this.isSharedSmartFolderMatchOrDescendant(
+        share,
+        resource,
+        options?.timeZone,
+      ))
     ) {
       return { resources: [], total: 0 };
     }
@@ -484,6 +513,7 @@ export class SharedResourcesService {
   async getAndValidateResource(
     share: Share,
     resourceId: string,
+    timeZone?: string,
   ): Promise<Resource> {
     const resource = await this.resourcesService.getResource(
       share.namespaceId,
@@ -511,7 +541,13 @@ export class SharedResourcesService {
             HttpStatus.NOT_FOUND,
           );
         }
-        if (await this.isSharedSmartFolderMatchOrDescendant(share, resource)) {
+        if (
+          await this.isSharedSmartFolderMatchOrDescendant(
+            share,
+            resource,
+            timeZone,
+          )
+        ) {
           return resource;
         }
         const message = this.i18n.t('resource.errors.resourceNotFound');

@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Headers,
   Param,
   ParseIntPipe,
   Query,
@@ -38,10 +39,12 @@ export class SharedResourcesController {
   async getResource(
     @Param('resourceId') resourceId: string,
     @ValidatedShare() share: Share,
+    @Headers('x-timezone') timeZone?: string,
   ): Promise<SharedResourceDto> {
     return await this.sharedResourcesService.getSharedResource(
       share,
       resourceId,
+      timeZone,
     );
   }
 
@@ -99,12 +102,13 @@ export class SharedResourcesController {
     @Res({ passthrough: true }) response: Response,
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
+    @Headers('x-timezone') timeZone?: string,
   ): Promise<SharedResourceMetaDto[]> {
     const { resources, total } =
       await this.sharedResourcesService.getSharedResourceChildrenPage(
         share,
         resourceId,
-        { limit, offset },
+        { limit, offset, timeZone },
       );
     response.setHeader('X-Total-Count', total.toString());
     return resources;

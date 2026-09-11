@@ -36,7 +36,7 @@
     "smartFolderConditionOperatorInvalid": "智能文件夹条件操作符无效",
     "smartFolderConditionIncomplete": "请补全智能文件夹条件",
     "smartFolderExpression": {
-      "hint": "可用字段：{fields}。tags 是 tag 的别名。运算符：{operators}。使用 and / or 和括号组合。文本示例：'foo' in title；'foo' in tag；file_name_ext in ['jpg', 'png']。file_name_ext 是最后一个点后面的后缀；'.jpg' 和 'jpg' 相同。不要使用 file_name in ['.jpg']。时间字段 created_at 和 updated_at 使用请求方时区的 {format}，例如 created_at >= '2026-09-08 00:00:00'。",
+      "hint": "可用字段：{fields}。运算符：{operators}。使用 and / or 和括号组合。文本示例：'foo' in title；'foo' in tags；file_name_ext in ['jpg', 'png']。file_name_ext 是最后一个点后面的后缀；'.jpg' 和 'jpg' 相同。不要使用 file_name in ['.jpg']。时间字段 created_at 和 updated_at 使用请求方时区的 {format}，例如 created_at >= '2026-09-08 00:00:00'。",
       "empty": "表达式为空。",
       "tooLong": "表达式超过 {max} 个字符，请缩短后重试。",
       "tooDeep": "表达式嵌套超过 {max} 层，请打平 and / or 分组。",

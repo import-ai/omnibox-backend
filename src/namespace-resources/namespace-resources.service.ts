@@ -1145,6 +1145,7 @@ export class NamespaceResourcesService {
       summary?: boolean;
       limit?: number;
       offset?: number;
+      timeZone?: string;
     } & ResourceSortOptions,
     entityManager?: EntityManager,
   ): Promise<ResourceSummaryDto[]> {
@@ -1166,10 +1167,11 @@ export class NamespaceResourcesService {
       summary?: boolean;
       limit?: number;
       offset?: number;
+      timeZone?: string;
     } & ResourceSortOptions,
     entityManager?: EntityManager,
   ): Promise<{ resources: ResourceSummaryDto[]; total: number }> {
-    const { summary = false, limit, offset } = options || {};
+    const { summary = false, limit, offset, timeZone } = options || {};
 
     const parents = await this.resourcesService.getParentResourcesOrFail(
       namespaceId,
@@ -1188,6 +1190,7 @@ export class NamespaceResourcesService {
         {
           limit,
           offset,
+          ...(timeZone ? { timeZone } : {}),
         },
       );
     }

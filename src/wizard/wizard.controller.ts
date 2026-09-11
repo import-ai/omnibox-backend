@@ -19,6 +19,7 @@ import {
   ValidatedShare,
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
+import { ChatClientCompatibilityInterceptor } from 'omniboxd/interceptor/chat-client-compatibility.interceptor';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { Share } from 'omniboxd/shares/entities/share.entity';
@@ -55,6 +56,7 @@ export class CollectController {
 }
 
 @Controller('api/v1/namespaces/:namespaceId/wizard')
+@UseInterceptors(ChatClientCompatibilityInterceptor)
 export class WizardController {
   constructor(
     private readonly wizardService: WizardService,
@@ -168,7 +170,7 @@ export class WizardController {
 }
 
 @Controller('api/v1/shares/:shareId/wizard')
-@UseInterceptors(ValidateShareInterceptor)
+@UseInterceptors(ValidateShareInterceptor, ChatClientCompatibilityInterceptor)
 export class SharedWizardController {
   constructor(private readonly streamService: StreamService) {}
 

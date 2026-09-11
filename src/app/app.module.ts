@@ -103,6 +103,7 @@ import { AddRetriedFromTaskIdToTasks1786412970105 } from 'omniboxd/migrations/17
 import { AddRssItemResources1786534451795 } from 'omniboxd/migrations/1786534451795-add-rss-item-resources';
 import { AddNamespaceParentIndexToResources1787654921509 } from 'omniboxd/migrations/1787654921509-add-namespace-parent-index-to-resources';
 import { AddInitialSyncedAtToRssLinks1788255535304 } from 'omniboxd/migrations/1788255535304-add-initial-synced-at-to-rss-links';
+import { ConversationAttachments1788486051416 } from 'omniboxd/migrations/1788486051416-conversation-attachments';
 import { AddAgentTokenCountsToMessages1788782074419 } from 'omniboxd/migrations/1788782074419-add-agent-token-counts-to-messages';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
@@ -317,6 +318,7 @@ export class AppModule implements NestModule {
               AddRssItemResources1786534451795,
               AddNamespaceParentIndexToResources1787654921509,
               AddInitialSyncedAtToRssLinks1788255535304,
+              ConversationAttachments1788486051416,
               AddAgentTokenCountsToMessages1788782074419,
               ...extraMigrations,
             ],

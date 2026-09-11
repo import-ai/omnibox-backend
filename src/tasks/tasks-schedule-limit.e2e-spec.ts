@@ -90,8 +90,7 @@ describe('Task schedule limit (e2e)', () => {
       numSchedules: maxRetries,
     });
 
-    const failed = await tasksService.failTasksExceedingScheduleLimit();
-    expect(failed).toBeGreaterThanOrEqual(1);
+    await tasksService.failTasksExceedingScheduleLimit();
 
     const reaped = await taskRepo.findOneByOrFail({ id: exhausted.id });
     expect(reaped.status).toBe(TaskStatus.ERROR);

@@ -10,13 +10,17 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { CookieAuth } from 'omniboxd/auth/decorators';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import {
   ValidatedShare,
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
+import { ListResourceCommentThreadsRequestDto } from 'omniboxd/resource-comments/dto/resource-comment-request.dto';
+import { ResourceCommentsService } from 'omniboxd/resource-comments/resource-comments.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
+import { toSharedCommentThreads } from './dto/shared-comment-threads';
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 import { SharedResourcesService } from './shared-resources.service';
@@ -26,6 +30,7 @@ import { SharedResourcesService } from './shared-resources.service';
 export class SharedResourcesController {
   constructor(
     private readonly sharedResourcesService: SharedResourcesService,
+    private readonly resourceCommentsService: ResourceCommentsService,
   ) {}
 
   @CookieAuth({ onAuthFail: 'continue' })
@@ -40,6 +45,47 @@ export class SharedResourcesController {
       share,
       resourceId,
       timeZone,
+    );
+  }
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare({ requireResources: true })
+  @Get(':resourceId/comment-threads')
+  async listComments(
+    @ValidatedShare() share: Share,
+    @Param('resourceId') resourceId: string,
+    @Query() query: ListResourceCommentThreadsRequestDto,
+    @UserId({ optional: true }) userId?: string,
+  ) {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    const result = await this.resourceCommentsService.listThreads(
+      share.namespaceId,
+      resourceId,
+      userId ?? '',
+      query,
+      false,
+    );
+    return {
+      ...result,
+      items: toSharedCommentThreads(result.items, share.id, resourceId),
+    };
+  }
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare({ requireResources: true })
+  @Get(':resourceId/comment-attachments/:attachmentId')
+  async downloadCommentAttachment(
+    @ValidatedShare() share: Share,
+    @Param('resourceId') resourceId: string,
+    @Param('attachmentId') attachmentId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    await this.resourceCommentsService.downloadSharedAttachment(
+      share.namespaceId,
+      resourceId,
+      attachmentId,
+      response,
     );
   }
 

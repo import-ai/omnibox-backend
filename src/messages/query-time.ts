@@ -1,9 +1,10 @@
 /** Render a backend timestamp in the sender's zone; old clients use UTC. */
 export function queryTime(date: Date, timeZone?: string): string {
+  if (!timeZone || timeZone === 'UTC') return date.toISOString();
   let formatter: Intl.DateTimeFormat;
   try {
     formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: timeZone || 'UTC',
+      timeZone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',

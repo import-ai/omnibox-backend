@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
+import { isUUID } from 'class-validator';
 import { I18nService } from 'nestjs-i18n';
 import { Span } from 'nestjs-otel';
 import {
@@ -59,6 +60,7 @@ type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
 type RedisClient = ReturnType<typeof createClient>;
 
 interface HandlerContext {
+  queryId?: string;
   parentId?: string;
   messageId?: string;
   message?: OpenAIMessage;
@@ -72,6 +74,7 @@ interface StreamSession {
   /** The share the stream arrived through, empty for a signed-in member. */
   shareId: string;
   subscribers: Set<Subscriber<MessageEvent>>;
+  events: string[];
   controller: AbortController;
   handlerContext: HandlerContext;
   finished: boolean;
@@ -290,9 +293,25 @@ export class StreamService implements OnModuleDestroy {
     chatOnly = false,
     stream?: AgentStream,
   ): (data: string, context: HandlerContext) => Promise<void> {
-    return async (data: string, context: HandlerContext): Promise<void> => {
+    const handle = async (
+      data: string,
+      context: HandlerContext,
+    ): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
 
+      if (chunk.response_type === 'query_attrs') {
+        if (!context.queryId) throw new Error('Missing persisted query');
+        const query = await this.messagesService.findOne(context.queryId);
+        await this.messagesService.update(
+          context.queryId,
+          namespaceId,
+          conversationId,
+          {
+            attrs: { ...query.attrs, ...chunk.attrs },
+          },
+        );
+        return;
+      }
       if (chunk.response_type === 'bos') {
         const message: Message = await this.messagesService.create(
           namespaceId,
@@ -364,6 +383,15 @@ export class StreamService implements OnModuleDestroy {
         }
         await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
+        if (!context.messageId && context.queryId) {
+          await handle(
+            JSON.stringify({
+              response_type: 'bos',
+              role: OpenAIMessageRole.ASSISTANT,
+            }),
+            context,
+          );
+        }
         if (context.messageId) {
           chunk.id = context.messageId;
           await this.messagesService.updateDelta(context.messageId, {
@@ -401,6 +429,7 @@ export class StreamService implements OnModuleDestroy {
         await send(JSON.stringify(this.forVisitor(chunk, chatOnly)));
       }
     };
+    return handle;
   }
 
   findOneOrFail(messages: Message[], messageId: string): Message {
@@ -616,6 +645,7 @@ export class StreamService implements OnModuleDestroy {
     userId: string,
     shareId: string = '',
     chatOnly = false,
+    timeZone?: string,
   ): Promise<Observable<MessageEvent>> {
     let parentId: string | undefined = undefined;
     let messages: Message[] = [];
@@ -649,6 +679,7 @@ export class StreamService implements OnModuleDestroy {
           parentId,
           messages,
           chatOnly,
+          timeZone,
         );
       return this.attachSession(session, subscriber);
     });
@@ -665,6 +696,7 @@ export class StreamService implements OnModuleDestroy {
     parentId: string | undefined,
     messages: Message[],
     chatOnly = false,
+    timeZone?: string,
   ): StreamSession {
     const session: StreamSession = {
       key,
@@ -673,6 +705,7 @@ export class StreamService implements OnModuleDestroy {
       userId,
       shareId,
       subscribers: new Set(),
+      events: [],
       controller: new AbortController(),
       handlerContext: { parentId },
       finished: false,
@@ -715,6 +748,110 @@ export class StreamService implements OnModuleDestroy {
 
     void (async () => {
       await this.startRedisSession(session);
+      if (
+        requestDto.client_request_id !== undefined &&
+        !isUUID(requestDto.client_request_id)
+      ) {
+        throw new AppException(
+          this.i18n.t('system.errors.wizardRequestFailed'),
+          'INVALID_CLIENT_REQUEST_ID',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      if (
+        typeof requestDto.query !== 'string' ||
+        (!requestDto.query.trim() &&
+          !requestDto.tool_call?.decisions?.length &&
+          !requestDto.images?.length)
+      ) {
+        throw new AppException(
+          this.i18n.t('system.errors.wizardRequestFailed'),
+          'INVALID_QUERY',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      let query: (Message & { reused?: boolean }) | undefined = messages.at(-1);
+      if (query?.message.role !== OpenAIMessageRole.USER) {
+        const attrs: Record<string, unknown> = { ...wizardRequest };
+        delete attrs.messages;
+        query = await this.messagesService.create(
+          namespaceId,
+          requestDto.conversation_id,
+          userId || null,
+          {
+            message: {
+              role: OpenAIMessageRole.USER,
+              content: requestDto.query,
+            },
+            parentId,
+            status: MessageStatus.SUCCESS,
+            attrs: {
+              ...attrs,
+              user_context: { lang: requestDto.lang || '简体中文' },
+              ...(requestDto.images?.length
+                ? {
+                    composer: {
+                      display_parts: [
+                        { type: 'text', text: requestDto.query },
+                        ...requestDto.images.map((image) => ({
+                          type: 'image',
+                          attachment_id: image.attachment_id,
+                          name: image.name,
+                          preview_url: `/api/v1/namespaces/${namespaceId}/conversations/${requestDto.conversation_id}/attachments/${image.attachment_id}`,
+                        })),
+                      ],
+                    },
+                  }
+                : {}),
+            },
+          },
+          true,
+          { timeZone, clientRequestId: requestDto.client_request_id },
+        );
+        messages.push(query);
+        await this.sendSavedMessage(session, query, chatOnly);
+        if (query.reused) {
+          const all = await this.messagesService.findAll(
+            userId,
+            requestDto.conversation_id,
+          );
+          let next = all.findLast((message) => message.parentId === query!.id);
+          if (next) {
+            while (next) {
+              await this.sendSavedMessage(session, next, chatOnly);
+              const id = next.id;
+              next = all.findLast((message) => message.parentId === id);
+            }
+            await this.sendSessionData(
+              session,
+              JSON.stringify({ response_type: 'done' }),
+            );
+            return;
+          }
+        }
+      }
+      session.handlerContext = { parentId: query.id, queryId: query.id };
+      wizardRequest.query_persisted = true;
+      wizardRequest.messages = messages.map((message) => {
+        if (
+          message.message.role !== OpenAIMessageRole.USER ||
+          message.attrs?.tool_call?.decisions?.length ||
+          message.attrs?.user_context?.created_at ||
+          !message.createdAt
+        )
+          return message;
+        return {
+          ...message,
+          attrs: {
+            ...message.attrs,
+            user_context: {
+              ...message.attrs?.user_context,
+              created_at: message.createdAt.toISOString(),
+            },
+          },
+        };
+      });
+      if (session.finished || session.controller.signal.aborted) return;
       await this.stream(
         namespaceId,
         mode,
@@ -735,13 +872,55 @@ export class StreamService implements OnModuleDestroy {
       );
     })()
       .then(() => this.completeSession(session))
-      .catch((err: Error) => {
+      .catch(async (err: Error) => {
         if (!session.controller.signal.aborted) {
-          this.errorSession(session, err);
+          await this.errorSession(session, err);
         }
       });
 
     return session;
+  }
+
+  private async sendSavedMessage(
+    session: StreamSession,
+    message: Message,
+    chatOnly: boolean,
+  ) {
+    if (message.message.role === OpenAIMessageRole.SYSTEM) return;
+    for (const chunk of [
+      {
+        response_type: 'bos',
+        role: message.message.role,
+        id: message.id,
+        created_at: message.createdAt.toISOString(),
+        parentId: message.parentId || undefined,
+        userId: session.userId || undefined,
+        namespaceId: session.namespaceId,
+        attrs: message.attrs || undefined,
+      },
+      {
+        response_type: 'delta',
+        id: message.id,
+        message: message.message,
+        attrs: message.attrs || undefined,
+      },
+      { response_type: 'eos', id: message.id, role: message.message.role },
+    ] as ChatResponse[]) {
+      await this.sendSessionData(
+        session,
+        JSON.stringify(this.forVisitor(chunk, chatOnly)),
+      );
+    }
+    if (message.status === MessageStatus.FAILED) {
+      await this.sendSessionData(
+        session,
+        JSON.stringify({
+          response_type: 'error',
+          id: message.id,
+          message: message.attrs?.error_message || 'Response failed',
+        }),
+      );
+    }
   }
 
   private attachSession(
@@ -752,6 +931,7 @@ export class StreamService implements OnModuleDestroy {
       subscriber.complete();
       return;
     }
+    for (const data of session.events || []) subscriber.next({ data });
     session.subscribers.add(subscriber);
     return () => {
       session.subscribers.delete(subscriber);
@@ -858,6 +1038,9 @@ export class StreamService implements OnModuleDestroy {
     } catch (error) {
       this.logger.error({ error });
     }
+    session.events ??= [];
+    session.events.push(payload);
+    if (session.events.length > STREAM_MAXLEN) session.events.shift();
     for (const subscriber of session.subscribers) {
       if (!subscriber.closed) {
         subscriber.next({ data: payload });
@@ -894,18 +1077,50 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
-  private errorSession(session: StreamSession, error: Error) {
+  private async errorSession(session: StreamSession, error: Error) {
     this.logger.error({ error });
     const span = trace.getActiveSpan();
     if (span) {
       span.recordException(error);
     }
-    for (const subscriber of session.subscribers) {
-      if (!subscriber.closed) {
-        subscriber.error(error);
+    try {
+      if (session.handlerContext.queryId) {
+        const handler = this.agentHandler(
+          session.namespaceId,
+          session.conversationId,
+          session.userId,
+          (data) => this.sendSessionData(session, data),
+          false,
+          agentStreamOf(session),
+        );
+        if (!session.handlerContext.messageId) {
+          await handler(
+            JSON.stringify({
+              response_type: 'bos',
+              role: OpenAIMessageRole.ASSISTANT,
+            }),
+            session.handlerContext,
+          );
+        }
+        await handler(
+          JSON.stringify({ response_type: 'error', message: error.message }),
+          session.handlerContext,
+        );
+      } else {
+        await this.sendSessionData(
+          session,
+          JSON.stringify({ response_type: 'error', message: error.message }),
+        );
       }
+    } catch (persistenceError) {
+      this.logger.error({ error: persistenceError });
+      await this.sendSessionData(
+        session,
+        JSON.stringify({ response_type: 'error', message: error.message }),
+      );
+    } finally {
+      this.completeSession(session);
     }
-    this.completeSession(session);
   }
 
   private async stopSession(session: StreamSession) {
@@ -1098,6 +1313,7 @@ export class StreamService implements OnModuleDestroy {
     requestDto: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write',
+    timeZone?: string,
   ): Promise<Observable<MessageEvent>> {
     await this.conversationsService.findOneForUserInNamespace(
       requestDto.conversation_id,
@@ -1120,6 +1336,9 @@ export class StreamService implements OnModuleDestroy {
         requestId,
         mode,
         userId,
+        '',
+        false,
+        timeZone,
       );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>
@@ -1133,6 +1352,7 @@ export class StreamService implements OnModuleDestroy {
     requestDto: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write',
+    timeZone?: string,
   ): Promise<Observable<MessageEvent>> {
     try {
       for (const tool of requestDto.tools || []) {
@@ -1151,6 +1371,7 @@ export class StreamService implements OnModuleDestroy {
         '',
         share.id,
         share.shareType === ShareType.CHAT_ONLY,
+        timeZone,
       );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>

@@ -56,6 +56,12 @@ export class ConversationAttachmentsService {
         'ATTACHMENT_FILE_REQUIRED',
         HttpStatus.BAD_REQUEST,
       );
+    if (file.buffer.length === 0)
+      throw new AppException(
+        this.i18n.t('attachment.errors.fileEmpty'),
+        'ATTACHMENT_FILE_EMPTY',
+        HttpStatus.BAD_REQUEST,
+      );
     const filename = encodeFileName(getOriginalFileName(file.originalname));
     const { objectKey } = await this.s3Service.generateObjectKey(
       'conversation-tempfiles',

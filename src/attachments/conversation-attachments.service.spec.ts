@@ -84,7 +84,7 @@ describe('Conversation attachment lifecycle', () => {
       permissions as any,
       relations as any,
       repository as any,
-      {} as any,
+      { findOne: jest.fn().mockResolvedValue({ id: 'conv' }) } as any,
     );
     return {
       service,
@@ -112,6 +112,20 @@ describe('Conversation attachment lifecycle', () => {
     expect(relations.addAttachmentToResource.mock.calls[0][5]).toHaveProperty(
       'entityManager',
     );
+  });
+
+  it('rejects an empty upload before writing to object storage', async () => {
+    const { service, s3 } = setup();
+    await expect(
+      service.uploadConversationAttachment('ns', 'conv', 'user', {
+        originalname: 'empty.png',
+        mimetype: 'image/png',
+        size: 0,
+        buffer: Buffer.alloc(0),
+      } as Express.Multer.File),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(s3.generateObjectKey).not.toHaveBeenCalled();
+    expect(s3.putObject).not.toHaveBeenCalled();
   });
 
   it('recreates a previously deleted document attachment', async () => {

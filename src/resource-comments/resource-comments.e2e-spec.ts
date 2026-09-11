@@ -10,6 +10,10 @@ describe('Resource comments (e2e)', () => {
   let commenter: TestClient;
   let resourceId: string;
   let contentHash: string;
+  let firstThreadId: string;
+  let firstCommentId: string;
+  let secondThreadId: string;
+  let overlappingThreadId: string;
 
   const hash = (content: string) =>
     createHash('sha256').update(content).digest('hex');
@@ -83,7 +87,11 @@ describe('Resource comments (e2e)', () => {
     expect(first.body.thread_created).toBe(true);
     expect(second.body.thread_created).toBe(true);
     expect(second.body.thread.id).not.toBe(first.body.thread.id);
+    expect(first.body.thread.comments).toHaveLength(1);
     expect(second.body.thread.comments).toHaveLength(1);
+    firstThreadId = first.body.thread.id;
+    firstCommentId = first.body.thread.comments[0].id;
+    secondThreadId = second.body.thread.id;
 
     const resource = await owner.get(resourceUrl()).expect(HttpStatus.OK);
     expect(resource.body.comment_threads).toHaveLength(2);
@@ -103,49 +111,60 @@ describe('Resource comments (e2e)', () => {
       .expect(HttpStatus.CREATED);
 
     expect(response.body.thread_created).toBe(true);
+    overlappingThreadId = response.body.thread.id;
   });
 
   it('lists comment threads independently with pagination and filtering', async () => {
-    const response = await owner
-      .get(`${threadsUrl()}?offlet=0&limits=1&resolved=false`)
+    const expectedThreads = [
+      { id: overlappingThreadId, content: 'Overlapping comment' },
+      { id: secondThreadId, content: 'Second comment' },
+      { id: firstThreadId, content: 'First comment' },
+    ];
+
+    for (const [offlet, thread] of expectedThreads.entries()) {
+      const response = await owner
+        .get(`${threadsUrl()}?offlet=${offlet}&limits=1&resolved=false`)
+        .expect(HttpStatus.OK);
+
+      expect(response.body).toMatchObject({
+        total: 3,
+        offlet,
+        limits: 1,
+        has_more: offlet < 2,
+      });
+      expect(response.body.items).toHaveLength(1);
+      expect(response.body.items[0].id).toBe(thread.id);
+      expect(response.body.items[0].comments).toHaveLength(1);
+      expect(response.body.items[0].comments[0].content).toBe(thread.content);
+    }
+
+    const resolved = await owner
+      .get(`${threadsUrl()}?offlet=0&limits=1&resolved=true`)
       .expect(HttpStatus.OK);
 
-    expect(response.body).toMatchObject({
-      total: 1,
+    expect(resolved.body).toMatchObject({
+      total: 0,
       offlet: 0,
       limits: 1,
       has_more: false,
+      items: [],
     });
-    expect(response.body.items).toHaveLength(1);
-    expect(response.body.items[0].comments).toHaveLength(2);
   });
 
   it('allows an author to edit a comment', async () => {
-    const threads = await owner.get(threadsUrl()).expect(HttpStatus.OK);
-    const thread = threads.body.items[0];
-    const comment = thread.comments.find(
-      (item: { content: string }) => item.content === 'First comment',
-    );
-
     const response = await commenter
-      .patch(`${threadsUrl()}/${thread.id}/comments/${comment.id}`)
+      .patch(`${threadsUrl()}/${firstThreadId}/comments/${firstCommentId}`)
       .send({ content: 'Edited first comment' })
       .expect(HttpStatus.OK);
 
     expect(
       response.body.comments.find(
-        (item: { id: string }) => item.id === comment.id,
+        (item: { id: string }) => item.id === firstCommentId,
       ).content,
     ).toBe('Edited first comment');
   });
 
   it('binds a new image when an author edits a comment', async () => {
-    const threads = await owner.get(threadsUrl()).expect(HttpStatus.OK);
-    const thread = threads.body.items[0];
-    const comment = thread.comments.find(
-      (item: { content: string }) => item.content === 'Edited first comment',
-    );
-
     const upload = await commenter
       .post(`${resourceUrl()}/comment-attachments`)
       .attach('file', Buffer.from('edited-image'), {
@@ -155,7 +174,7 @@ describe('Resource comments (e2e)', () => {
       .expect(HttpStatus.CREATED);
 
     const response = await commenter
-      .patch(`${threadsUrl()}/${thread.id}/comments/${comment.id}`)
+      .patch(`${threadsUrl()}/${firstThreadId}/comments/${firstCommentId}`)
       .send({
         content: 'Edited with image',
         attachment_ids: [upload.body.id],
@@ -163,7 +182,7 @@ describe('Resource comments (e2e)', () => {
       .expect(HttpStatus.OK);
 
     const updated = response.body.comments.find(
-      (item: { id: string }) => item.id === comment.id,
+      (item: { id: string }) => item.id === firstCommentId,
     );
     expect(updated.content).toBe('Edited with image');
     expect(updated.attachments).toHaveLength(1);

@@ -19,6 +19,7 @@ import { ListResourceCommentThreadsRequestDto } from 'omniboxd/resource-comments
 import { ResourceCommentsService } from 'omniboxd/resource-comments/resource-comments.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
+import { toSharedCommentThreads } from './dto/shared-comment-threads';
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 import { SharedResourcesService } from './shared-resources.service';
@@ -54,12 +55,34 @@ export class SharedResourcesController {
     @UserId({ optional: true }) userId?: string,
   ) {
     await this.sharedResourcesService.getAndValidateResource(share, resourceId);
-    return await this.resourceCommentsService.listThreads(
+    const result = await this.resourceCommentsService.listThreads(
       share.namespaceId,
       resourceId,
       userId ?? '',
       query,
       false,
+    );
+    return {
+      ...result,
+      items: toSharedCommentThreads(result.items, share.id, resourceId),
+    };
+  }
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare({ requireResources: true })
+  @Get(':resourceId/comment-attachments/:attachmentId')
+  async downloadCommentAttachment(
+    @ValidatedShare() share: Share,
+    @Param('resourceId') resourceId: string,
+    @Param('attachmentId') attachmentId: string,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    await this.resourceCommentsService.downloadSharedAttachment(
+      share.namespaceId,
+      resourceId,
+      attachmentId,
+      response,
     );
   }
 

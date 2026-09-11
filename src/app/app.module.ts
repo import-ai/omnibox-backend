@@ -106,6 +106,7 @@ import { AddResourceComments1788162671606 } from 'omniboxd/migrations/1788162671
 import { AddInitialSyncedAtToRssLinks1788255535304 } from 'omniboxd/migrations/1788255535304-add-initial-synced-at-to-rss-links';
 import { AddResourceCommentAttachments1788345621847 } from 'omniboxd/migrations/1788345621847-add-resource-comment-attachments';
 import { AddAgentTokenCountsToMessages1788782074419 } from 'omniboxd/migrations/1788782074419-add-agent-token-counts-to-messages';
+import { AllowMultipleCommentThreadsAtAnchor1788941872300 } from 'omniboxd/migrations/1788941872300-allow-multiple-comment-threads-at-anchor';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -322,6 +323,7 @@ export class AppModule implements NestModule {
               AddInitialSyncedAtToRssLinks1788255535304,
               AddResourceCommentAttachments1788345621847,
               AddAgentTokenCountsToMessages1788782074419,
+              AllowMultipleCommentThreadsAtAnchor1788941872300,
               ...extraMigrations,
             ],
             migrationsRun: true,

@@ -106,4 +106,37 @@ describe('ResourceCommentsService', () => {
       ),
     ).rejects.toBeInstanceOf(AppException);
   });
+
+  it('allows different threads to share an anchor', async () => {
+    const service = createService();
+    const first = {
+      id: '4f7d71ab-f920-4f68-8c5f-247476d4a94f',
+      anchorStatus: ResourceCommentAnchorStatus.ACTIVE,
+    } as ResourceCommentThread;
+    const second = {
+      id: 'b366ba38-052e-47bc-a2c4-70d156eb5c9d',
+      anchorStatus: ResourceCommentAnchorStatus.ACTIVE,
+    } as ResourceCommentThread;
+    const repository = {
+      find: jest.fn().mockResolvedValue([first, second]),
+      save: jest.fn().mockResolvedValue([first, second]),
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(repository),
+    } as any;
+
+    await expect(
+      service.syncAnchors(
+        manager,
+        'namespace',
+        'resource',
+        'a',
+        [
+          { threadId: first.id, from: 1, to: 2, quotedText: 'a' },
+          { threadId: second.id, from: 1, to: 2, quotedText: 'a' },
+        ],
+        [],
+      ),
+    ).resolves.toBeUndefined();
+  });
 });

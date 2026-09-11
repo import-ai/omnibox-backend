@@ -22,6 +22,7 @@ import { TagDto } from 'omniboxd/tag/dto/tag.dto';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { last } from 'omniboxd/utils/arrays';
 
+import { toSharedCommentThreads } from './dto/shared-comment-threads';
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { SharedResourceMetaDto } from './dto/shared-resource-meta.dto';
 
@@ -87,7 +88,11 @@ export class SharedResourcesService {
           resource.content,
         );
       dto.content_hash = comments.content_hash;
-      dto.comment_threads = comments.comment_threads;
+      dto.comment_threads = toSharedCommentThreads(
+        comments.comment_threads,
+        share.id,
+        resource.id,
+      );
     }
     return dto;
   }

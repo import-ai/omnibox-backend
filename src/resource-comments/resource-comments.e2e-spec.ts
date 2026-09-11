@@ -61,7 +61,7 @@ describe('Resource comments (e2e)', () => {
     expect(response.body.comment_threads).toEqual([]);
   });
 
-  it('merges simultaneous-position comments into one thread', async () => {
+  it('creates separate threads for simultaneous-position comments', async () => {
     const request = {
       quoted_text: 'selected text',
       anchor_from: 7,
@@ -81,16 +81,16 @@ describe('Resource comments (e2e)', () => {
       .expect(HttpStatus.CREATED);
 
     expect(first.body.thread_created).toBe(true);
-    expect(second.body.thread_created).toBe(false);
-    expect(second.body.thread.id).toBe(first.body.thread.id);
-    expect(second.body.thread.comments).toHaveLength(2);
+    expect(second.body.thread_created).toBe(true);
+    expect(second.body.thread.id).not.toBe(first.body.thread.id);
+    expect(second.body.thread.comments).toHaveLength(1);
 
     const resource = await owner.get(resourceUrl()).expect(HttpStatus.OK);
-    expect(resource.body.comment_threads).toHaveLength(1);
-    expect(resource.body.comment_threads[0].comments).toHaveLength(2);
+    expect(resource.body.comment_threads).toHaveLength(2);
+    expect(resource.body.comment_threads[0].comments).toHaveLength(1);
   });
 
-  it('rejects a different overlapping anchor', async () => {
+  it('allows a different overlapping anchor as a separate thread', async () => {
     const response = await owner
       .post(threadsUrl())
       .send({
@@ -100,9 +100,9 @@ describe('Resource comments (e2e)', () => {
         expected_content_hash: contentHash,
         content: 'Overlapping comment',
       })
-      .expect(HttpStatus.CONFLICT);
+      .expect(HttpStatus.CREATED);
 
-    expect(response.body.code).toBe('comment_anchor_overlap');
+    expect(response.body.thread_created).toBe(true);
   });
 
   it('lists comment threads independently with pagination and filtering', async () => {

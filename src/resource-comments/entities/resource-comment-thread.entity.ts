@@ -18,14 +18,6 @@ export enum ResourceCommentAnchorStatus {
 }
 
 @Entity('resource_comment_threads')
-@Index(
-  'uq_resource_comment_threads_active_anchor',
-  ['resourceId', 'contentHash', 'anchorFrom', 'anchorTo'],
-  {
-    unique: true,
-    where: 'deleted_at IS NULL AND resolved_at IS NULL',
-  },
-)
 @Index('idx_resource_comment_threads_resource', ['namespaceId', 'resourceId'])
 export class ResourceCommentThread extends Base {
   @PrimaryGeneratedColumn('uuid')

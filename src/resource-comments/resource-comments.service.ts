@@ -111,14 +111,6 @@ export class ResourceCommentsService {
       if (!thread) throw this.invalidAnchorException();
       thread.anchorStatus = ResourceCommentAnchorStatus.ORPHANED;
     }
-    const activeThreads = threads
-      .filter((thread) => submittedIds.has(thread.id))
-      .sort((left, right) => left.anchorFrom - right.anchorFrom);
-    for (let index = 1; index < activeThreads.length; index++) {
-      if (activeThreads[index].anchorFrom < activeThreads[index - 1].anchorTo) {
-        throw this.anchorOverlapException();
-      }
-    }
     const changedThreads = threads.filter(
       (thread) => submittedIds.has(thread.id) || orphanedIds.has(thread.id),
     );
@@ -206,7 +198,7 @@ export class ResourceCommentsService {
     };
   }
 
-  // Creates an anchored thread or appends to an existing exact-match thread.
+  // Creates an anchored thread. Exact-match anchors are allowed to form separate threads.
   async createThread(
     namespaceId: string,
     resourceId: string,
@@ -231,48 +223,6 @@ export class ResourceCommentsService {
         resourceId,
       );
       this.assertContentHash(resource.content, dto.expectedContentHash);
-
-      const existing = await manager
-        .getRepository(ResourceCommentThread)
-        .createQueryBuilder('thread')
-        .where('thread.namespace_id = :namespaceId', { namespaceId })
-        .andWhere('thread.resource_id = :resourceId', { resourceId })
-        .andWhere('thread.content_hash = :contentHash', {
-          contentHash: dto.expectedContentHash,
-        })
-        .andWhere('thread.resolved_at IS NULL')
-        .andWhere('thread.deleted_at IS NULL')
-        .andWhere('thread.anchor_from < :anchorTo', {
-          anchorTo: dto.anchorTo,
-        })
-        .andWhere('thread.anchor_to > :anchorFrom', {
-          anchorFrom: dto.anchorFrom,
-        })
-        .getOne();
-
-      if (existing) {
-        if (
-          existing.anchorFrom !== dto.anchorFrom ||
-          existing.anchorTo !== dto.anchorTo ||
-          existing.quotedText !== dto.quotedText
-        ) {
-          throw this.anchorOverlapException();
-        }
-        await this.saveComment(
-          manager,
-          namespaceId,
-          resourceId,
-          existing.id,
-          userId,
-          dto.content,
-          dto.attachmentIds,
-        );
-        return {
-          thread: await this.getThreadResponse(manager, existing.id),
-          thread_created: false,
-          comment_created: true,
-        };
-      }
 
       const thread = manager.getRepository(ResourceCommentThread).create({
         namespaceId,
@@ -353,6 +303,12 @@ export class ResourceCommentsService {
     userId: string,
     dto: UpdateResourceCommentThreadRequestDto,
   ): Promise<ResourceCommentThreadResponseDto> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_COMMENT,
+    );
     return await this.dataSource.transaction(async (manager) => {
       await this.lockResource(manager, namespaceId, resourceId);
       const thread = await this.getThreadOrFail(
@@ -363,28 +319,6 @@ export class ResourceCommentsService {
         true,
       );
       await this.assertCanModerate(thread, userId);
-
-      if (!dto.resolved) {
-        const overlap = await manager
-          .getRepository(ResourceCommentThread)
-          .createQueryBuilder('candidate')
-          .where('candidate.namespace_id = :namespaceId', { namespaceId })
-          .andWhere('candidate.resource_id = :resourceId', { resourceId })
-          .andWhere('candidate.id != :threadId', { threadId })
-          .andWhere('candidate.content_hash = :contentHash', {
-            contentHash: thread.contentHash,
-          })
-          .andWhere('candidate.resolved_at IS NULL')
-          .andWhere('candidate.deleted_at IS NULL')
-          .andWhere('candidate.anchor_from < :anchorTo', {
-            anchorTo: thread.anchorTo,
-          })
-          .andWhere('candidate.anchor_to > :anchorFrom', {
-            anchorFrom: thread.anchorFrom,
-          })
-          .getOne();
-        if (overlap) throw this.anchorOverlapException();
-      }
 
       thread.resolvedAt = dto.resolved ? new Date() : null;
       thread.resolvedById = dto.resolved ? userId : null;
@@ -402,6 +336,12 @@ export class ResourceCommentsService {
     userId: string,
     dto: UpdateResourceCommentRequestDto,
   ): Promise<ResourceCommentThreadResponseDto> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_COMMENT,
+    );
     return await this.dataSource.transaction(async (manager) => {
       await this.getThreadOrFail(
         namespaceId,
@@ -460,6 +400,12 @@ export class ResourceCommentsService {
     threadId: string,
     userId: string,
   ): Promise<void> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_COMMENT,
+    );
     await this.dataSource.transaction(async (manager) => {
       await this.lockResource(manager, namespaceId, resourceId);
       const thread = await this.getThreadOrFail(
@@ -483,6 +429,12 @@ export class ResourceCommentsService {
     commentId: string,
     userId: string,
   ): Promise<ResourceCommentThreadResponseDto | null> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_COMMENT,
+    );
     return await this.dataSource.transaction(async (manager) => {
       const thread = await this.getThreadOrFail(
         namespaceId,
@@ -579,6 +531,32 @@ export class ResourceCommentsService {
     const attachment = await this.attachmentRepository.findOne({
       where: { id: attachmentId, namespaceId, resourceId },
     });
+    await this.streamAttachment(attachment, httpResponse);
+  }
+
+  // The caller validates the share and resource; only published attachments are visible.
+  async downloadSharedAttachment(
+    namespaceId: string,
+    resourceId: string,
+    attachmentId: string,
+    httpResponse: Response,
+  ): Promise<void> {
+    const attachment = await this.attachmentRepository.findOne({
+      where: {
+        id: attachmentId,
+        namespaceId,
+        resourceId,
+        comment: { thread: { namespaceId, resourceId } },
+      },
+    });
+    await this.streamAttachment(attachment, httpResponse, 'private, no-store');
+  }
+
+  private async streamAttachment(
+    attachment: ResourceCommentAttachment | null,
+    httpResponse: Response,
+    cacheControl = 'private, max-age=31536000',
+  ): Promise<void> {
     if (!attachment) {
       throw new AppException(
         this.i18n.t('resourceComment.errors.attachmentNotFound'),
@@ -589,7 +567,13 @@ export class ResourceCommentsService {
     const { stream, meta } = await this.s3Service.getObject(
       attachment.objectKey,
     );
-    this.writeAttachmentResponse(stream, meta, attachment, httpResponse);
+    this.writeAttachmentResponse(
+      stream,
+      meta,
+      attachment,
+      httpResponse,
+      cacheControl,
+    );
   }
 
   // Persists a new comment inside the current transaction.
@@ -700,6 +684,7 @@ export class ResourceCommentsService {
     objectMeta: ObjectMeta,
     attachment: ResourceCommentAttachment,
     httpResponse: Response,
+    cacheControl: string,
   ) {
     httpResponse.setHeader(
       'Content-Disposition',
@@ -715,7 +700,7 @@ export class ResourceCommentsService {
         objectMeta.contentLength.toString(),
       );
     }
-    httpResponse.setHeader('Cache-Control', 'private, max-age=31536000');
+    httpResponse.setHeader('Cache-Control', cacheControl);
     objectStream.pipe(httpResponse);
   }
 
@@ -831,15 +816,6 @@ export class ResourceCommentsService {
       this.i18n.t('resourceComment.errors.invalidAnchor'),
       'INVALID_COMMENT_ANCHOR',
       HttpStatus.BAD_REQUEST,
-    );
-  }
-
-  // Builds the conflict raised for overlapping active anchors.
-  private anchorOverlapException(): AppException {
-    return new AppException(
-      this.i18n.t('resourceComment.errors.anchorOverlap'),
-      'COMMENT_ANCHOR_OVERLAP',
-      HttpStatus.CONFLICT,
     );
   }
 

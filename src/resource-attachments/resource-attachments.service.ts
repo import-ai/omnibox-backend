@@ -71,8 +71,9 @@ export class ResourceAttachmentsService {
     attachmentId: string,
     userId: string,
     size: number,
+    tx?: Transaction,
   ) {
-    return await transaction(this.dataSource.manager, async (tx) => {
+    const add = async (tx: Transaction) => {
       const repository = tx.entityManager.getRepository(ResourceAttachment);
 
       const resourceAttachment = repository.create({
@@ -91,7 +92,8 @@ export class ResourceAttachmentsService {
         size,
         tx,
       );
-    });
+    };
+    return tx ? await add(tx) : await transaction(this.dataSource.manager, add);
   }
 
   async removeAttachmentFromResource(
@@ -194,6 +196,22 @@ export class ResourceAttachmentsService {
         resourceId,
       },
     });
+  }
+
+  async listResourceAttachmentsWithTotal(
+    namespaceId: string,
+    resourceId: string,
+    offset: number,
+    limit: number,
+  ) {
+    const [attachments, total] =
+      await this.resourceAttachmentRepository.findAndCount({
+        where: { namespaceId, resourceId },
+        order: { id: 'ASC' },
+        skip: offset,
+        take: limit,
+      });
+    return { attachments, total };
   }
 
   async getFirstAttachments(

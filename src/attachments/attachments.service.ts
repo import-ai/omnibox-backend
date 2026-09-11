@@ -6,12 +6,18 @@ import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resour
 import { ObjectMeta, S3Service } from 'omniboxd/s3/s3.service';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
+import { nullableBigintStringToNumber } from 'omniboxd/utils/bigint-utils';
 import {
   encodeFileName,
   getOriginalFileName,
 } from 'omniboxd/utils/encode-filename';
 import { Readable } from 'stream';
 
+import {
+  AttachmentLlmUrlResponseDto,
+  AttachmentResponseDto,
+  ListAttachmentsResponseDto,
+} from './dto/attachment-response.dto';
 import {
   UploadAttachmentsResponseDto,
   UploadedAttachmentDto,
@@ -27,6 +33,51 @@ export class AttachmentsService {
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
     private readonly sharedResourcesService: SharedResourcesService,
   ) {}
+
+  private async signObjectUrlForLlm(objectKey: string): Promise<string | null> {
+    if (!this.s3Service.hasDistinctPublicEndpoint()) return null;
+    return this.s3Service.generateDownloadUrl(objectKey, true);
+  }
+
+  async getResourceAttachmentLlmUrl(
+    namespaceId: string,
+    resourceId: string,
+    attachmentId: string,
+    userId: string,
+  ): Promise<AttachmentLlmUrlResponseDto> {
+    const info = await this.getAttachmentInfo(
+      namespaceId,
+      resourceId,
+      attachmentId,
+      userId,
+      '',
+    );
+    return {
+      id: info.id,
+      name: info.name,
+      content_type: info.content_type,
+      url: await this.signObjectUrlForLlm(this.s3Path(attachmentId)),
+    };
+  }
+
+  async getResourceAttachmentLlmUrlViaShare(
+    share: Share,
+    resourceId: string,
+    attachmentId: string,
+  ): Promise<AttachmentLlmUrlResponseDto> {
+    const info = await this.getAttachmentInfoViaShare(
+      share,
+      resourceId,
+      attachmentId,
+      '',
+    );
+    return {
+      id: info.id,
+      name: info.name,
+      content_type: info.content_type,
+      url: await this.signObjectUrlForLlm(this.s3Path(attachmentId)),
+    };
+  }
 
   private s3Path(attachmentId: string): string {
     return `attachments/${attachmentId}`;
@@ -153,6 +204,145 @@ export class AttachmentsService {
       uploaded,
       failed,
     };
+  }
+
+  private async listAttachmentMetadata(
+    namespaceId: string,
+    resourceId: string,
+    downloadUrl: (attachmentId: string) => string,
+    offset: number,
+    limit: number,
+  ): Promise<ListAttachmentsResponseDto> {
+    const result =
+      await this.resourceAttachmentsService.listResourceAttachmentsWithTotal(
+        namespaceId,
+        resourceId,
+        Math.max(0, offset),
+        Math.min(100, Math.max(1, limit)),
+      );
+    const attachments = await Promise.all(
+      result.attachments.map(
+        async (relation): Promise<AttachmentResponseDto> => {
+          const meta = await this.s3Service.headObject(
+            this.s3Path(relation.attachmentId),
+          );
+          return {
+            id: relation.attachmentId,
+            name:
+              getOriginalFileName(meta?.metadata?.filename) ||
+              relation.attachmentId,
+            content_type: meta?.contentType ?? null,
+            size:
+              meta?.contentLength ??
+              nullableBigintStringToNumber(relation.attachmentSize) ??
+              0,
+            download_url: downloadUrl(relation.attachmentId),
+          };
+        },
+      ),
+    );
+    return { attachments, total: result.total };
+  }
+
+  async listAttachments(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+    downloadUrl: (attachmentId: string) => string,
+    offset: number = 0,
+    limit: number = 20,
+  ): Promise<ListAttachmentsResponseDto> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    return await this.listAttachmentMetadata(
+      namespaceId,
+      resourceId,
+      downloadUrl,
+      offset,
+      limit,
+    );
+  }
+
+  async listAttachmentsViaShare(
+    share: Share,
+    resourceId: string,
+    downloadUrl: (attachmentId: string) => string,
+    offset: number = 0,
+    limit: number = 20,
+  ): Promise<ListAttachmentsResponseDto> {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    return await this.listAttachmentMetadata(
+      share.namespaceId,
+      resourceId,
+      downloadUrl,
+      offset,
+      limit,
+    );
+  }
+
+  private async getAttachmentMetadata(
+    namespaceId: string,
+    resourceId: string,
+    attachmentId: string,
+    downloadUrl: string,
+  ): Promise<AttachmentResponseDto> {
+    const relation =
+      await this.resourceAttachmentsService.getResourceAttachmentOrFail(
+        namespaceId,
+        resourceId,
+        attachmentId,
+      );
+    const meta = await this.s3Service.headObject(this.s3Path(attachmentId));
+    return {
+      id: attachmentId,
+      name: getOriginalFileName(meta?.metadata?.filename) || attachmentId,
+      content_type: meta?.contentType ?? null,
+      size:
+        meta?.contentLength ??
+        nullableBigintStringToNumber(relation.attachmentSize) ??
+        0,
+      download_url: downloadUrl,
+    };
+  }
+
+  async getAttachmentInfo(
+    namespaceId: string,
+    resourceId: string,
+    attachmentId: string,
+    userId: string,
+    downloadUrl: string,
+  ): Promise<AttachmentResponseDto> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    return await this.getAttachmentMetadata(
+      namespaceId,
+      resourceId,
+      attachmentId,
+      downloadUrl,
+    );
+  }
+
+  async getAttachmentInfoViaShare(
+    share: Share,
+    resourceId: string,
+    attachmentId: string,
+    downloadUrl: string,
+  ): Promise<AttachmentResponseDto> {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    return await this.getAttachmentMetadata(
+      share.namespaceId,
+      resourceId,
+      attachmentId,
+      downloadUrl,
+    );
   }
 
   async downloadAttachment(

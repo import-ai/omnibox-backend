@@ -2,33 +2,33 @@ import {
   Controller,
   Delete,
   Get,
-  HttpStatus,
   Param,
   ParseIntPipe,
   Post,
   Query,
-  Req,
   Res,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { Request, Response } from 'express';
-import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
-import { CookieAuth } from 'omniboxd/auth/decorators';
-import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { Response } from 'express';
+import { Public } from 'omniboxd/auth';
+import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
+import { AttachmentsService } from './attachments.service';
 import { ConversationAttachmentsService } from './conversation-attachments.service';
-import { UploadAttachmentsResponseDto } from './dto/upload-attachments-response.dto';
 
-@Controller('api/v1/namespaces/:namespaceId/resources/:resourceId/attachments')
-export class AttachmentsController {
+@Public()
+@Controller(
+  'internal/api/v1/namespaces/:namespaceId/resources/:resourceId/attachments',
+)
+export class InternalAttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Get()
   async listAttachments(
-    @UserId() userId: string,
+    @HeaderUserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
@@ -49,11 +49,11 @@ export class AttachmentsController {
   @CheckNamespaceReadonly()
   @UseInterceptors(FilesInterceptor('file[]'))
   async uploadAttachments(
-    @UserId() userId: string,
+    @HeaderUserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @UploadedFiles() files: Express.Multer.File[],
-  ): Promise<UploadAttachmentsResponseDto> {
+  ) {
     return await this.attachmentsService.uploadAttachments(
       namespaceId,
       resourceId,
@@ -63,38 +63,56 @@ export class AttachmentsController {
   }
 
   @Get(':attachmentId')
-  @CookieAuth({ onAuthFail: 'continue' })
   async downloadAttachment(
-    @Req() req: Request,
-    @UserId({ optional: true }) userId: string | undefined,
+    @HeaderUserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
-    @Res() res: Response,
+    @Res() response: Response,
   ) {
-    if (!userId) {
-      this.setRedirect(req, res);
-      return;
-    }
     return await this.attachmentsService.downloadAttachment(
       namespaceId,
       resourceId,
       attachmentId,
       userId,
-      res,
+      response,
     );
   }
 
-  setRedirect(req: Request, res: Response) {
-    res
-      .setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-      .status(HttpStatus.FOUND)
-      .redirect(`/user/login?redirect=${encodeURIComponent(req.url)}`);
+  @Get(':attachmentId/llm-url')
+  async getAttachmentLlmUrl(
+    @HeaderUserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    return await this.attachmentsService.getResourceAttachmentLlmUrl(
+      namespaceId,
+      resourceId,
+      attachmentId,
+      userId,
+    );
+  }
+
+  @Get(':attachmentId/metadata')
+  async getAttachmentInfo(
+    @HeaderUserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    return await this.attachmentsService.getAttachmentInfo(
+      namespaceId,
+      resourceId,
+      attachmentId,
+      userId,
+      `/api/v1/namespaces/${namespaceId}/resources/${resourceId}/attachments/${attachmentId}`,
+    );
   }
 
   @Delete(':attachmentId')
   async deleteAttachment(
-    @UserId() userId: string,
+    @HeaderUserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @Param('attachmentId') attachmentId: string,
@@ -108,33 +126,33 @@ export class AttachmentsController {
   }
 }
 
+@Public()
 @Controller(
-  'api/v1/namespaces/:namespaceId/conversations/:conversationId/attachments',
+  'internal/api/v1/namespaces/:namespaceId/conversations/:conversationId/attachments',
 )
-export class ConversationAttachmentsController {
+export class InternalConversationAttachmentsController {
   constructor(
     private readonly attachmentsService: ConversationAttachmentsService,
   ) {}
 
-  @Post()
-  @UseInterceptors(FilesInterceptor('file[]', 1))
-  async upload(
-    @UserId() userId: string,
+  @Get(':attachmentId/llm-url')
+  async getAttachmentLlmUrl(
+    @HeaderUserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('conversationId') conversationId: string,
-    @UploadedFiles() files: Express.Multer.File[],
+    @Param('attachmentId') attachmentId: string,
   ) {
-    return await this.attachmentsService.uploadConversationAttachment(
+    return await this.attachmentsService.getConversationAttachmentLlmUrl(
       namespaceId,
       conversationId,
+      attachmentId,
       userId,
-      files?.[0],
     );
   }
 
   @Get(':attachmentId')
-  async download(
-    @UserId() userId: string,
+  async downloadAttachment(
+    @HeaderUserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('conversationId') conversationId: string,
     @Param('attachmentId') attachmentId: string,
@@ -146,6 +164,24 @@ export class ConversationAttachmentsController {
       attachmentId,
       userId,
       response,
+    );
+  }
+
+  @Post(':attachmentId/promote')
+  @CheckNamespaceReadonly()
+  async promote(
+    @HeaderUserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('conversationId') conversationId: string,
+    @Param('attachmentId') attachmentId: string,
+    @Query('resource_id') resourceId: string,
+  ) {
+    return await this.attachmentsService.promoteConversationAttachment(
+      namespaceId,
+      conversationId,
+      attachmentId,
+      resourceId,
+      userId,
     );
   }
 }

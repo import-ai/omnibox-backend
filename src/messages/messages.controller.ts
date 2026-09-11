@@ -1,5 +1,14 @@
-import { Body, Controller, Delete, Param, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Param,
+  Post,
+  Req,
+  UseInterceptors,
+} from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { ChatClientCompatibilityInterceptor } from 'omniboxd/interceptor/chat-client-compatibility.interceptor';
 
 import { CreateMessageDto } from './dto/create-message.dto';
 import { MessagesService } from './messages.service';
@@ -7,6 +16,7 @@ import { MessagesService } from './messages.service';
 @Controller(
   'api/v1/namespaces/:namespaceId/conversations/:conversationId/messages',
 )
+@UseInterceptors(ChatClientCompatibilityInterceptor)
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 

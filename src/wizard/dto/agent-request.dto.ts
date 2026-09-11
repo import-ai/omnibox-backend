@@ -45,6 +45,11 @@ export interface BaseAgentRequestDto {
     decisions?: Record<string, any>[];
   };
   channel: AgentRequestChannel;
+  images?: {
+    attachment_id: string;
+    url: string;
+    name: string;
+  }[];
 }
 
 // AgentRequestDto: web -> backend

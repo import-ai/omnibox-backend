@@ -1,5 +1,8 @@
 {
   "errors": {
+    "fileRequired": "请选择附件文件。",
+    "fileEmpty": "附件文件为空，请选择其他文件。",
+    "conversationAttachmentUnavailable": "附件不可用或不属于此对话。",
     "attachmentNotFound": "附件未找到"
   }
 }

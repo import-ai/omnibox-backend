@@ -113,18 +113,24 @@ export class TagService {
       return [];
     }
 
-    const validTagNames = tagNames.filter(
-      (name) => !isEmpty(name) && name.length <= MAX_TAG_NAME_LENGTH,
-    );
-    // Dropping happens on the automatic-tagging path too, where there is no
-    // request to fail; log it so an over-long tag is diagnosable instead of
-    // vanishing.
-    const droppedTagNames = tagNames.filter(
-      (name) => !isEmpty(name) && name.length > MAX_TAG_NAME_LENGTH,
-    );
-    if (droppedTagNames.length > 0) {
+    const validTagNames: string[] = [];
+    const droppedLengths: number[] = [];
+    for (const name of tagNames) {
+      if (isEmpty(name)) {
+        continue;
+      }
+      if (name.length <= MAX_TAG_NAME_LENGTH) {
+        validTagNames.push(name);
+      } else {
+        droppedLengths.push(name.length);
+      }
+    }
+    // Dropping also happens on the automatic-tagging path, where there is no
+    // request to fail, so record it. Lengths only: a tag name is user content
+    // and does not belong in the logs.
+    if (droppedLengths.length > 0) {
       this.logger.warn(
-        `Dropped ${droppedTagNames.length} tag(s) longer than ${MAX_TAG_NAME_LENGTH} characters in namespace ${namespaceId}: ${droppedTagNames.join(', ')}`,
+        `Dropped ${droppedLengths.length} tag(s) over ${MAX_TAG_NAME_LENGTH} characters in namespace ${namespaceId} (lengths: ${droppedLengths.join(', ')})`,
       );
     }
     if (validTagNames.length === 0) {

@@ -47,6 +47,7 @@ export interface OpenAIMessage {
 }
 
 export interface MessageAttrs {
+  client_request_id?: string;
   citations?: Record<string, any>[];
   error_message?: string;
   context?: Record<string, any>;

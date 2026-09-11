@@ -11,6 +11,7 @@ export type ChatResponseType =
   | 'done'
   | 'error'
   | 'checkpoint'
+  | 'query_attrs'
   | 'metrics'
   | 'stopped';
 
@@ -68,6 +69,7 @@ export interface ChatCheckpointResponse extends ChatBaseResponse {
 }
 
 export type ChatResponse =
+  | { response_type: 'query_attrs'; attrs: MessageAttrs }
   | ChatBOSResponse
   | ChatDeltaResponse
   | ChatEOSResponse

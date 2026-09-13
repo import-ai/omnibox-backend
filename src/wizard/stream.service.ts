@@ -706,6 +706,8 @@ export class StreamService implements OnModuleDestroy {
       messages,
       tools,
       enable_thinking: requestDto.enable_thinking,
+      edition: requestDto.edition,
+      level: requestDto.level,
       lang: requestDto.lang,
       tool_call: requestDto.tool_call,
       channel: requestDto.channel,

@@ -19,7 +19,14 @@ export interface AgentTokenUsage {
  * the key: the key is an opaque identifier to everything but the function that
  * builds it.
  */
+export interface AgentCreditPrice {
+  input: number;
+  input_cached: number;
+  output: number;
+}
+
 export interface AgentStream {
+  billing?: { edition: 'basic' | 'pro'; price?: AgentCreditPrice };
   namespaceId: string;
   streamId: string;
   /** Set when the stream was opened through a share link, not by a member. */
@@ -36,6 +43,8 @@ export interface AgentStream {
  * than surfaced to the user whose stream triggered them.
  */
 export interface IAgentStreamHooks {
+  /** Read trusted upstream billing metadata before consuming any events. */
+  onStreamStarted?(stream: AgentStream, response: Response): Promise<void>;
   /**
    * One LLM call finished, producing the message `messageId` and consuming
    * `usage`. Called once per completed call, and the message id is stable, so

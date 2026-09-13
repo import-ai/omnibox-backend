@@ -174,6 +174,7 @@ export class StreamService implements OnModuleDestroy {
     requestId: string,
     callback: (data: string) => Promise<void>,
     signal?: AbortSignal,
+    agentStream?: AgentStream,
   ): Promise<void> {
     const span = trace.getActiveSpan();
     if (span) {
@@ -194,6 +195,14 @@ export class StreamService implements OnModuleDestroy {
         'WIZARD_REQUEST_FAILED',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
+    }
+    if (agentStream) {
+      try {
+        await this.agentStreamHooks.onStreamStarted?.(agentStream, response);
+      } catch (error) {
+        await response.body?.cancel();
+        throw error;
+      }
     }
     const reader = response.body?.getReader();
     if (!reader) {
@@ -679,13 +688,14 @@ export class StreamService implements OnModuleDestroy {
     };
     this.streamSessions.set(key, session);
 
+    const agentStream = agentStreamOf(session);
     const handler = this.agentHandler(
       namespaceId,
       requestDto.conversation_id,
       userId,
       (data) => this.sendSessionData(session, data),
       chatOnly,
-      agentStreamOf(session),
+      agentStream,
     );
     const tools = (requestDto.tools || []).map((tool) => {
       if (tool.name === 'private_search') {
@@ -734,6 +744,7 @@ export class StreamService implements OnModuleDestroy {
           );
         },
         session.controller.signal,
+        agentStream,
       );
     })()
       .then(() => this.completeSession(session))

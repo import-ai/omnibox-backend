@@ -44,7 +44,10 @@ export interface AgentStream {
  */
 export interface IAgentStreamHooks {
   /** Read trusted upstream billing metadata before consuming any events. */
-  onStreamStarted?(stream: AgentStream, response: Response): Promise<void>;
+  onStreamStarted?(
+    stream: AgentStream,
+    response: Response,
+  ): void | Promise<void>;
   /**
    * One LLM call finished, producing the message `messageId` and consuming
    * `usage`. Called once per completed call, and the message id is stable, so

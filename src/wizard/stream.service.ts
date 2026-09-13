@@ -915,7 +915,14 @@ export class StreamService implements OnModuleDestroy {
     }
     for (const subscriber of session.subscribers) {
       if (!subscriber.closed) {
-        subscriber.error(error);
+        subscriber.next({
+          data: JSON.stringify({
+            response_type: 'error',
+            message: error.message,
+            ...(error instanceof AppException ? { code: error.code } : {}),
+          }),
+        });
+        subscriber.complete();
       }
     }
     this.completeSession(session);

@@ -20,7 +20,7 @@ describe('AttributionReporter', () => {
       'http://pro/internal/api/v1/attribution/user-events',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ userId: 'user-1', eventName: 'activity' }),
+        body: JSON.stringify({ userId: 'user-1' }),
       }),
     );
     fetchSpy.mockRestore();

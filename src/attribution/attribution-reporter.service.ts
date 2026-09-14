@@ -20,33 +20,21 @@ export class AttributionReporter {
     }
     if (this.seenActivity.has(userId)) return;
     this.seenActivity.add(userId);
-    void this.postEvent(userId, 'activity');
+    void this.postEvent(userId);
   }
 
-  reportKeyAction(userId: string, actionCode: string): void {
-    void this.postEvent(userId, 'key_action', actionCode);
-  }
-
-  private async postEvent(
-    userId: string,
-    eventName: 'activity' | 'key_action',
-    actionCode?: string,
-  ): Promise<void> {
+  private async postEvent(userId: string): Promise<void> {
     if (!this.proUrl || !userId) return;
     try {
       await fetch(`${this.proUrl}/internal/api/v1/attribution/user-events`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          eventName,
-          ...(actionCode ? { actionCode } : {}),
-        }),
+        body: JSON.stringify({ userId }),
         signal: AbortSignal.timeout(2_000),
       });
     } catch (error) {
       this.logger.warn(
-        `Failed to report attribution ${eventName} for ${userId}: ${
+        `Failed to report attribution activity for ${userId}: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );

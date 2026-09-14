@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { trace } from '@opentelemetry/api';
 
 import { AttributionReporter } from './attribution-reporter.service';
 
@@ -45,6 +46,31 @@ describe('AttributionReporter', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('records a span event when the activity post fails', async () => {
+    const addEvent = jest.fn();
+    const recordException = jest.fn();
+    jest.spyOn(trace, 'getActiveSpan').mockReturnValue({
+      addEvent,
+      recordException,
+    } as never);
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 500,
+    } as Response);
+    const reporter = new AttributionReporter({
+      get: () => 'http://pro',
+    } as unknown as ConfigService);
+
+    reporter.reportActivity('user-1');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(recordException).toHaveBeenCalled();
+    expect(addEvent).toHaveBeenCalledWith(
+      'attribution.activity.failed',
+      expect.objectContaining({ 'user.id': 'user-1' }),
+    );
   });
 
   it('does nothing when OBB_PRO_URL is empty', async () => {

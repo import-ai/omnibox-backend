@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { trace } from '@opentelemetry/api';
 
 @Injectable()
 export class AttributionReporter {
-  private readonly logger = new Logger(AttributionReporter.name);
   private readonly proUrl: string | undefined;
   private readonly seenActivity = new Set<string>();
   private seenDay = '';
@@ -44,11 +44,15 @@ export class AttributionReporter {
       }
       this.seenActivity.add(userId);
     } catch (error) {
-      this.logger.warn(
-        `Failed to report attribution activity for ${userId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      const span = trace.getActiveSpan();
+      if (error instanceof Error) {
+        span?.recordException(error);
+      }
+      span?.addEvent('attribution.activity.failed', {
+        'user.id': userId,
+        'error.message':
+          error instanceof Error ? error.message : String(error),
+      });
     }
   }
 }

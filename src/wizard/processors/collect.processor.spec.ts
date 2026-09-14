@@ -168,17 +168,24 @@ describe('CollectProcessor', () => {
           exception: { error: 'Processing failed' },
         });
 
+        resourcesService.getResourceOrFail.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
 
+        expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
+          'test-namespace',
+          'test-resource-id',
+        );
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-namespace',
           'test-user',
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
-            name: undefined,
+            name: '❌ Test Resource',
             content: 'error',
             attrs: undefined,
             tag_ids: undefined,
@@ -202,6 +209,9 @@ describe('CollectProcessor', () => {
           status: TaskStatus.ERROR,
         });
 
+        resourcesService.getResourceOrFail.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
@@ -212,12 +222,16 @@ describe('CollectProcessor', () => {
           'test-resource-id',
           expect.objectContaining({
             namespaceId: 'test-namespace',
+            name: '❌ Test Resource',
             content: message,
           }),
           true,
         );
         expect(result).toEqual({});
-        expect(resourcesService.getResourceOrFail).not.toHaveBeenCalled();
+        expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
+          'test-namespace',
+          'test-resource-id',
+        );
       });
 
       it('should update resource with ASR no valid fragment message when audio has no speech', async () => {
@@ -232,6 +246,9 @@ describe('CollectProcessor', () => {
           status: TaskStatus.ERROR,
         });
 
+        resourcesService.getResourceOrFail.mockResolvedValue(
+          mockResource as Resource,
+        );
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         const result = await processor.process(task);
@@ -242,25 +259,41 @@ describe('CollectProcessor', () => {
           'test-resource-id',
           expect.objectContaining({
             namespaceId: 'test-namespace',
+            name: '❌ Test Resource',
             content: message,
           }),
           true,
         );
         expect(result).toEqual({});
-        expect(resourcesService.getResourceOrFail).not.toHaveBeenCalled();
+        expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
+          'test-namespace',
+          'test-resource-id',
+        );
       });
 
-      it('should not call resourcesService.getResourceOrFail when task has exception', async () => {
+      it('should not double-prefix resource name when it already has a failed prefix', async () => {
         const task = createMockTask({
           payload: { resource_id: 'test-resource-id' },
           exception: { error: 'Processing failed' },
         });
 
+        resourcesService.getResourceOrFail.mockResolvedValue({
+          ...mockResource,
+          name: '❌ Test Resource',
+        } as Resource);
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
         await processor.process(task);
 
-        expect(resourcesService.getResourceOrFail).not.toHaveBeenCalled();
+        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
+          'test-namespace',
+          'test-user',
+          'test-resource-id',
+          expect.objectContaining({
+            name: '❌ Test Resource',
+          }),
+          true,
+        );
       });
     });
 

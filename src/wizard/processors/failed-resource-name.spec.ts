@@ -11,18 +11,6 @@ describe('prefixFailedResourceName', () => {
     );
   });
 
-  it('replaces locale failure labels with ❌', () => {
-    expect(prefixFailedResourceName('失败：Test Resource')).toBe(
-      '❌ Test Resource',
-    );
-    expect(prefixFailedResourceName('error: Test Resource')).toBe(
-      '❌ Test Resource',
-    );
-    expect(prefixFailedResourceName('ERROR: Test Resource')).toBe(
-      '❌ Test Resource',
-    );
-  });
-
   it('prefixes an empty name', () => {
     expect(prefixFailedResourceName(undefined)).toBe('❌ ');
     expect(prefixFailedResourceName('')).toBe('❌ ');

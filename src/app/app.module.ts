@@ -21,6 +21,7 @@ import {
   QueryResolver,
 } from 'nestjs-i18n';
 import { AgentStreamHooksModule } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.module';
+import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { AppController } from 'omniboxd/app/app.controller';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
@@ -186,6 +187,7 @@ export class AppModule implements NestModule {
             AcceptLanguageResolver,
           ],
         }),
+        AttributionReporterModule,
         TelemetryModule,
         KafkaModule,
         TagModule,

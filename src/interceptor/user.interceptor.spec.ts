@@ -24,7 +24,9 @@ describe('UserInterceptor', () => {
 
   it.each([
     ['GET', '/api/v1/wechat/callback'],
+    ['GET', '/api/v1/wechat/callback?code=abc'],
     ['POST', '/api/v1/google/callback'],
+    ['POST', '/api/v1/auth/verify-otp'],
   ])('sets user.id for successful %s %s responses', (method, url) => {
     const interceptor = new UserInterceptor();
     const context = createHttpContext({ method, url });

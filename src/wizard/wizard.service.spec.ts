@@ -132,6 +132,9 @@ describe('WizardService', () => {
         update: jest.fn().mockResolvedValue(undefined),
       };
       const i18n = { t: jest.fn((key: string) => key) };
+      const resourcesService = {
+        getResourceOrFail: jest.fn().mockResolvedValue({ name: 'doc.pdf' }),
+      };
       const service = new WizardService(
         wizardTaskService as any,
         tasksService as any,
@@ -139,7 +142,7 @@ describe('WizardService', () => {
         { getOrCreateTagsByNames: jest.fn() } as any,
         {} as any,
         {} as any,
-        { getResourceOrFail: jest.fn() } as any,
+        resourcesService as any,
         i18n as any,
         { get: jest.fn().mockReturnValue('https://www.omnibox.pro') } as any,
       );
@@ -170,7 +173,7 @@ describe('WizardService', () => {
         'namespace-id',
         'user-id',
         'resource-id',
-        expect.objectContaining({ content: message }),
+        expect.objectContaining({ content: message, name: '❌ doc.pdf' }),
         true,
       );
       expect(tasksService.emitTask).not.toHaveBeenCalled();

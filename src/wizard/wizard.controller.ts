@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Headers,
   HttpStatus,
   Param,
   Post,
@@ -88,6 +89,7 @@ export class WizardController {
     @Param('namespaceId') namespaceId: string,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
+    @Headers('x-timezone') timeZone?: string,
   ) {
     return await this.streamService.createUserAgentStream(
       userId,
@@ -95,6 +97,7 @@ export class WizardController {
       body,
       requestId,
       'ask',
+      timeZone,
     );
   }
 
@@ -105,6 +108,7 @@ export class WizardController {
     @Param('namespaceId') namespaceId: string,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
+    @Headers('x-timezone') timeZone?: string,
   ) {
     return await this.streamService.createUserAgentStream(
       userId,
@@ -112,6 +116,7 @@ export class WizardController {
       body,
       requestId,
       'write',
+      timeZone,
     );
   }
 
@@ -182,12 +187,14 @@ export class SharedWizardController {
     @ValidatedShare() share: Share,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
+    @Headers('x-timezone') timeZone?: string,
   ) {
     return await this.streamService.createShareAgentStream(
       share,
       body,
       requestId,
       'ask',
+      timeZone,
     );
   }
 
@@ -199,12 +206,14 @@ export class SharedWizardController {
     @ValidatedShare() share: Share,
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
+    @Headers('x-timezone') timeZone?: string,
   ) {
     return await this.streamService.createShareAgentStream(
       share,
       body,
       requestId,
       'write',
+      timeZone,
     );
   }
 

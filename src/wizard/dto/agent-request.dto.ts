@@ -56,6 +56,7 @@ export interface BaseAgentRequestDto {
 
 // AgentRequestDto: web -> backend
 export interface AgentRequestDto extends BaseAgentRequestDto {
+  client_request_id?: string;
   tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
   parent_message_id?: string;
 }
@@ -66,6 +67,7 @@ export interface WizardPrivateSearchToolDto extends PrivateSearchToolDto {
 
 // WizardAgentRequestDto: backend -> wizard
 export interface WizardAgentRequestDto extends BaseAgentRequestDto {
+  query_persisted?: boolean;
   namespace_id: string;
   user_id: string;
   share_id: string;

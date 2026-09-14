@@ -75,7 +75,12 @@ export class UserInterceptor implements NestInterceptor {
           finalize(() => {
             if (userId) {
               span.setAttribute('user.id', userId);
-              this.attributionReporter?.reportActivity(userId);
+              if (ctxType === 'http') {
+                const httpReq = executionContext.switchToHttp().getRequest();
+                if (isLoginRoute(httpReq.method, httpReq.url)) {
+                  this.attributionReporter?.reportActivity(userId);
+                }
+              }
             }
             span.end();
           }),

@@ -43,7 +43,6 @@ describe('CollectProcessor', () => {
         // Return mock translations for test purposes
         const translations: Record<string, string> = {
           'wizard.errors.invalidTaskPayload': 'Invalid task payload',
-          'wizard.errors.failedResourceNamePrefix': 'error: ',
         };
         return translations[key] || key;
       }),
@@ -186,7 +185,7 @@ describe('CollectProcessor', () => {
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
-            name: 'error: Test Resource',
+            name: '❌ Test Resource',
             content: 'error',
             attrs: undefined,
             tag_ids: undefined,
@@ -223,7 +222,7 @@ describe('CollectProcessor', () => {
           'test-resource-id',
           expect.objectContaining({
             namespaceId: 'test-namespace',
-            name: 'error: Test Resource',
+            name: '❌ Test Resource',
             content: message,
           }),
           true,
@@ -260,7 +259,7 @@ describe('CollectProcessor', () => {
           'test-resource-id',
           expect.objectContaining({
             namespaceId: 'test-namespace',
-            name: 'error: Test Resource',
+            name: '❌ Test Resource',
             content: message,
           }),
           true,
@@ -280,7 +279,7 @@ describe('CollectProcessor', () => {
 
         resourcesService.getResourceOrFail.mockResolvedValue({
           ...mockResource,
-          name: '失败：Test Resource',
+          name: '❌ Test Resource',
         } as Resource);
         namespaceResourcesService.update.mockResolvedValue(undefined);
 
@@ -291,7 +290,7 @@ describe('CollectProcessor', () => {
           'test-user',
           'test-resource-id',
           expect.objectContaining({
-            name: 'error: Test Resource',
+            name: '❌ Test Resource',
           }),
           true,
         );

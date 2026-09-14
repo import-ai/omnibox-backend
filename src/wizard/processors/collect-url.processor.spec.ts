@@ -34,7 +34,6 @@ describe('CollectUrlProcessor', () => {
       t: jest.fn((key: string) => {
         const translations: Record<string, string> = {
           'wizard.errors.invalidTaskPayload': 'Invalid task payload',
-          'wizard.errors.failedResourceNamePrefix': 'error: ',
         };
         return translations[key] || key;
       }),
@@ -122,7 +121,7 @@ describe('CollectUrlProcessor', () => {
         'test-resource-id',
         expect.objectContaining({
           namespaceId: 'test-namespace',
-          name: 'error: https://example.com',
+          name: '❌ https://example.com',
         }),
         true,
       );
@@ -147,7 +146,7 @@ describe('CollectUrlProcessor', () => {
         'test-user',
         'test-resource-id',
         expect.objectContaining({
-          name: 'error: Example Title',
+          name: '❌ Example Title',
         }),
         true,
       );
@@ -159,7 +158,7 @@ describe('CollectUrlProcessor', () => {
       });
       resourcesService.getResourceOrFail.mockResolvedValue({
         ...mockResource,
-        name: '失败：https://example.com',
+        name: '❌ https://example.com',
       } as Resource);
       namespaceResourcesService.update.mockResolvedValue(undefined);
 
@@ -170,7 +169,7 @@ describe('CollectUrlProcessor', () => {
         'test-user',
         'test-resource-id',
         expect.objectContaining({
-          name: 'error: https://example.com',
+          name: '❌ https://example.com',
         }),
         true,
       );

@@ -34,14 +34,13 @@ export class CollectUrlProcessor extends Processor {
         task.namespaceId,
         resourceId,
       );
-      const prefix = this.i18n.t('wizard.errors.failedResourceNamePrefix');
       await this.namespaceResourcesService.update(
         task.namespaceId,
         task.userId,
         resourceId,
         Object.assign(new UpdateResourceDto(), {
           namespaceId: task.namespaceId,
-          name: prefixFailedResourceName(resource.name, prefix),
+          name: prefixFailedResourceName(resource.name),
         }),
         true,
       );

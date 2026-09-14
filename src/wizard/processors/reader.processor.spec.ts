@@ -43,7 +43,6 @@ describe('ReaderProcessor', () => {
         // Return mock translations for test purposes
         const translations: Record<string, string> = {
           'wizard.errors.invalidTaskPayload': 'Invalid task payload',
-          'wizard.errors.failedResourceNamePrefix': 'error: ',
         };
         return translations[key] || key;
       }),
@@ -373,7 +372,7 @@ describe('ReaderProcessor', () => {
           'test-resource-id',
           {
             namespaceId: 'test-namespace',
-            name: 'error: Test Resource',
+            name: '❌ Test Resource',
             content: 'error',
             attrs: undefined,
             tag_ids: undefined,
@@ -408,7 +407,7 @@ describe('ReaderProcessor', () => {
           'test-resource-id',
           expect.objectContaining({
             namespaceId: 'test-namespace',
-            name: 'error: Test Resource',
+            name: '❌ Test Resource',
             content: message,
           }),
           true,

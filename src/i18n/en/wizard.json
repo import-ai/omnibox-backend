@@ -4,7 +4,6 @@
     "missingRequiredFields": "Missing required fields",
     "cannotCollectOmniBoxUrl": "OmniBox links cannot be collected back into OmniBox. Open or read the resource directly instead.",
     "invalidTaskPayload": "Invalid task payload",
-    "taskNotStarted": "Task {taskId} has not been started yet",
-    "failedResourceNamePrefix": "error: "
+    "taskNotStarted": "Task {taskId} has not been started yet"
   }
 }

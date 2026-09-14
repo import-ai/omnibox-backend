@@ -13,7 +13,12 @@ export class AttributionReporter {
   }
 
   reportActivity(userId: string): void {
-    const day = new Date().toISOString().slice(0, 10);
+    const day = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
     if (this.seenDay !== day) {
       this.seenDay = day;
       this.seenActivity.clear();

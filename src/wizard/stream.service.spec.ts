@@ -602,6 +602,7 @@ describe('StreamService citations on a chat-only share', () => {
       '',
       'share-id',
       true,
+      undefined,
     );
   });
 });
@@ -721,5 +722,114 @@ describe('StreamService agent stream hooks', () => {
     await eos(service, undefined);
 
     expect(hooks.onCallCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('persisted query receipts', () => {
+  it('sends a complete user receipt before contacting Wizard and persists enrichment on that same row', async () => {
+    const service = createService({});
+    const saved = {
+      id: 'query-id',
+      createdAt: new Date('2026-09-12T02:30:00Z'),
+      parentId: null,
+      message: { role: 'user', content: 'hello' },
+      attrs: { user_context: { created_at: '2026-09-12T10:30:00+08:00' } },
+    };
+    const create = jest.fn().mockResolvedValue(saved);
+    const update = jest.fn().mockResolvedValue(saved);
+    (service as any).messagesService = {
+      create,
+      update,
+      findOne: jest.fn().mockResolvedValue(saved),
+    };
+    const events: any[] = [];
+    jest
+      .spyOn(service, 'stream')
+      .mockImplementation(async (_ns, _mode, body, _req, callback) => {
+        expect(events.map((e) => e.response_type)).toEqual([
+          'bos',
+          'delta',
+          'eos',
+        ]);
+        expect(events[1].message.content).toBe('hello');
+        expect(body.query_persisted).toBe(true);
+        expect(body.messages).toEqual([saved]);
+        await callback(
+          JSON.stringify({
+            response_type: 'query_attrs',
+            attrs: {
+              user_context: saved.attrs.user_context,
+              context: { resources: [] },
+            },
+          }),
+        );
+        await callback(JSON.stringify({ response_type: 'done' }));
+      });
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      { query: 'hello', conversation_id: 'conv', tools: [] },
+      'req',
+      'ask',
+      'user',
+    );
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({
+        next: (event: any) => events.push(JSON.parse(event.data)),
+        complete: resolve,
+        error: reject,
+      }),
+    );
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(
+      'query-id',
+      'ns',
+      'conv',
+      expect.objectContaining({
+        attrs: expect.objectContaining({ context: { resources: [] } }),
+      }),
+    );
+    expect(events.map((e) => e.response_type)).toEqual([
+      'bos',
+      'delta',
+      'eos',
+      'done',
+    ]);
+  });
+
+  it('reuses a historical user query for regeneration and supplies its original UTC time', async () => {
+    const service = createService({});
+    const query = {
+      id: 'query-id',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+      parentId: null,
+      message: { role: 'user', content: 'hello' },
+    };
+    const create = jest.fn();
+    (service as any).messagesService = {
+      findAll: jest.fn().mockResolvedValue([query]),
+      create,
+    };
+    jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {
+      expect(body.messages[0].attrs?.user_context?.created_at).toBe(
+        '2025-01-01T00:00:00.000Z',
+      );
+      return Promise.resolve();
+    });
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      {
+        query: 'hello',
+        parent_message_id: 'query-id',
+        conversation_id: 'conv',
+        tools: [],
+      },
+      'req',
+      'ask',
+      'user',
+    );
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({ complete: resolve, error: reject }),
+    );
+    expect(create).not.toHaveBeenCalled();
   });
 });

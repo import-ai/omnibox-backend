@@ -50,8 +50,7 @@ export class AttributionReporter {
       }
       span?.addEvent('attribution.activity.failed', {
         'user.id': userId,
-        'error.message':
-          error instanceof Error ? error.message : String(error),
+        'error.message': error instanceof Error ? error.message : String(error),
       });
     }
   }

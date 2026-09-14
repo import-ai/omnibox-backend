@@ -21,12 +21,12 @@ import {
   QueryResolver,
 } from 'nestjs-i18n';
 import { AgentStreamHooksModule } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.module';
-import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { AppController } from 'omniboxd/app/app.controller';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
 import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
+import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';

@@ -12,6 +12,9 @@ import {
   ResourceCommentAnchorStatus,
   ResourceCommentThread,
 } from 'omniboxd/resource-comments/entities/resource-comment-thread.entity';
+import { ResourceCommentAnchorsService } from 'omniboxd/resource-comments/resource-comment-anchors.service';
+import { ResourceCommentAttachmentsService } from 'omniboxd/resource-comments/resource-comment-attachments.service';
+import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resource-comment-queries.service';
 import { ResourceCommentsService } from 'omniboxd/resource-comments/resource-comments.service';
 import {
   Resource,
@@ -22,9 +25,11 @@ import { S3Service } from 'omniboxd/s3/s3.service';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
+import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import * as request from 'supertest';
 import type { App } from 'supertest/types';
+import { commentPng } from 'test/comment-image-fixture';
 import { DataSource } from 'typeorm';
 
 import { SharedResourcesController } from './shared-resources.controller';
@@ -39,6 +44,7 @@ const attachment = Object.assign(new ResourceCommentAttachment(), {
   name: 'image.png',
   mimetype: 'image/png',
   size: 5,
+  uploadedAt: new Date(),
 });
 const workspaceImageUrl =
   '/api/v1/namespaces/namespace/resources/resource/comment-attachments/image-id';
@@ -110,6 +116,10 @@ describe('shared comment images', () => {
       providers: [
         SharedResourcesService,
         ResourceCommentsService,
+        ResourceCommentQueriesService,
+        ResourceCommentAnchorsService,
+        ResourceCommentAttachmentsService,
+        { provide: StorageUsagesService, useValue: {} },
         { provide: getRepositoryToken(ResourceCommentThread), useValue: {} },
         {
           provide: getRepositoryToken(ResourceCommentAttachment),
@@ -142,15 +152,15 @@ describe('shared comment images', () => {
         { provide: I18nService, useValue: { t: (key: string) => key } },
       ],
     }).compile();
-    const commentsService = module.get(ResourceCommentsService);
+    const commentsService = module.get(ResourceCommentQueriesService);
     jest
       .spyOn(commentsService, 'getResourceCommentData')
       .mockResolvedValue({ content_hash: 'hash', comment_threads: [thread] });
     jest.spyOn(commentsService, 'listThreads').mockResolvedValue({
       items: [thread],
       total: 1,
-      offlet: 0,
-      limits: 20,
+      offset: 0,
+      limit: 20,
       has_more: false,
     });
     app = module.createNestApplication();
@@ -228,6 +238,7 @@ describe('shared comment images', () => {
       .get(sharedImageUrl)
       .expect(200)
       .expect('Content-Type', /image\/png/)
+      .expect('X-Content-Type-Options', 'nosniff')
       .expect('Cache-Control', 'private, no-store');
     expect(response.body).toEqual(Buffer.from('image'));
     expect(validateShare).toHaveBeenCalledWith('share', undefined, undefined);
@@ -254,6 +265,43 @@ describe('shared comment images', () => {
       'test-password',
       undefined,
     );
+  });
+
+  it('does not trust S3 metadata to choose an executable response type', async () => {
+    getObject.mockResolvedValueOnce({
+      stream: Readable.from(Buffer.from('image')),
+      meta: { contentType: 'text/html', contentLength: 5 },
+    });
+    await request(app.getHttpServer())
+      .get(sharedImageUrl)
+      .expect(200)
+      .expect('Content-Type', /image\/png/)
+      .expect('X-Content-Type-Options', 'nosniff')
+      .expect('Content-Security-Policy', "sandbox; default-src 'none'");
+  });
+
+  it('forces unverified historical objects to download as binary content', async () => {
+    findAttachment.mockResolvedValueOnce({ ...attachment, uploadedAt: null });
+    await request(app.getHttpServer())
+      .get(sharedImageUrl)
+      .expect(200)
+      .expect('Content-Type', /application\/octet-stream/)
+      .expect('Content-Disposition', /^attachment;/)
+      .expect('X-Content-Type-Options', 'nosniff');
+  });
+
+  it('keeps valid historical images visible after verifying their bytes', async () => {
+    findAttachment.mockResolvedValueOnce({ ...attachment, uploadedAt: null });
+    getObject.mockResolvedValueOnce({
+      stream: Readable.from(commentPng),
+      meta: { contentType: 'text/html', contentLength: commentPng.length },
+    });
+    await request(app.getHttpServer())
+      .get(sharedImageUrl)
+      .expect(200)
+      .expect('Content-Type', /image\/png/)
+      .expect('Content-Disposition', /^inline;/)
+      .expect('X-Content-Type-Options', 'nosniff');
   });
 
   it('rejects downloads when share validation fails', async () => {

@@ -14,7 +14,8 @@ import {
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceAttachmentsService } from 'omniboxd/resource-attachments/resource-attachments.service';
-import { ResourceCommentsService } from 'omniboxd/resource-comments/resource-comments.service';
+import { ResourceCommentAnchorsService } from 'omniboxd/resource-comments/resource-comment-anchors.service';
+import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resource-comment-queries.service';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   CONTENT_RESOURCE_TYPES,
@@ -87,7 +88,8 @@ export class NamespaceResourcesService {
     private readonly s3Service: S3Service,
     private readonly permissionsService: PermissionsService,
     private readonly resourceAttachmentsService: ResourceAttachmentsService,
-    private readonly resourceCommentsService: ResourceCommentsService,
+    private readonly resourceCommentQueriesService: ResourceCommentQueriesService,
+    private readonly resourceCommentAnchorsService: ResourceCommentAnchorsService,
     private readonly resourcesService: ResourcesService,
     private readonly filesService: FilesService,
     private readonly i18n: I18nService,
@@ -1357,7 +1359,7 @@ export class NamespaceResourcesService {
       tagsMap.get(resource.id) || [],
     );
     const commentData =
-      await this.resourceCommentsService.getResourceCommentData(
+      await this.resourceCommentQueriesService.getResourceCommentData(
         namespaceId,
         resourceId,
         resource.content,
@@ -1629,7 +1631,7 @@ export class NamespaceResourcesService {
           HttpStatus.BAD_REQUEST,
         );
       }
-      await this.resourceCommentsService.lockAndAssertContentHash(
+      await this.resourceCommentAnchorsService.lockAndAssertContentHash(
         tx.entityManager,
         namespaceId,
         resourceId,
@@ -1665,7 +1667,7 @@ export class NamespaceResourcesService {
       data.commentAnchors &&
       tx
     ) {
-      await this.resourceCommentsService.syncAnchors(
+      await this.resourceCommentAnchorsService.syncAnchors(
         tx.entityManager,
         namespaceId,
         resourceId,

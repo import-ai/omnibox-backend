@@ -7,18 +7,23 @@ import {
   comparePermission,
   ResourcePermission,
 } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceCommentAnchorsService } from 'omniboxd/resource-comments/resource-comment-anchors.service';
+import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resource-comment-queries.service';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { S3Service } from 'omniboxd/s3/s3.service';
+import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
 import { Readable } from 'stream';
 import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
 
 import { ResourceComment } from './entities/resource-comment.entity';
 import { ResourceCommentAttachment } from './entities/resource-comment-attachment.entity';
 import { ResourceCommentThread } from './entities/resource-comment-thread.entity';
+import { ResourceCommentAttachmentsService } from './resource-comment-attachments.service';
 import { ResourceCommentsService } from './resource-comments.service';
 
 describe('Resource comment write permissions', () => {
   let service: ResourceCommentsService;
+  let attachmentsService: ResourceCommentAttachmentsService;
   let permission: ResourcePermission;
   let thread: ResourceCommentThread;
   let comment: ResourceComment;
@@ -108,7 +113,7 @@ describe('Resource comment write permissions', () => {
     {
       name: 'upload image',
       run: () =>
-        service.uploadAttachment('namespace', 'resource', 'author', {
+        attachmentsService.uploadAttachment('namespace', 'resource', 'author', {
           fieldname: 'file',
           originalname: 'image.png',
           encoding: '7bit',
@@ -167,6 +172,10 @@ describe('Resource comment write permissions', () => {
     const module = await Test.createTestingModule({
       providers: [
         ResourceCommentsService,
+        ResourceCommentQueriesService,
+        ResourceCommentAnchorsService,
+        ResourceCommentAttachmentsService,
+        { provide: StorageUsagesService, useValue: {} },
         {
           provide: getRepositoryToken(ResourceCommentThread),
           useValue: threadRepository,
@@ -191,6 +200,7 @@ describe('Resource comment write permissions', () => {
       ],
     }).compile();
     service = module.get(ResourceCommentsService);
+    attachmentsService = module.get(ResourceCommentAttachmentsService);
   });
 
   afterEach(() => {

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { HttpStatus } from '@nestjs/common';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { commentPng } from 'test/comment-image-fixture';
 import { TestClient } from 'test/test-client';
 
 describe('Resource comments (e2e)', () => {
@@ -121,16 +122,16 @@ describe('Resource comments (e2e)', () => {
       { id: firstThreadId, content: 'First comment' },
     ];
 
-    for (const [offlet, thread] of expectedThreads.entries()) {
+    for (const [offset, thread] of expectedThreads.entries()) {
       const response = await owner
-        .get(`${threadsUrl()}?offlet=${offlet}&limits=1&resolved=false`)
+        .get(`${threadsUrl()}?offset=${offset}&limit=1&resolved=false`)
         .expect(HttpStatus.OK);
 
       expect(response.body).toMatchObject({
         total: 3,
-        offlet,
-        limits: 1,
-        has_more: offlet < 2,
+        offset,
+        limit: 1,
+        has_more: offset < 2,
       });
       expect(response.body.items).toHaveLength(1);
       expect(response.body.items[0].id).toBe(thread.id);
@@ -139,13 +140,13 @@ describe('Resource comments (e2e)', () => {
     }
 
     const resolved = await owner
-      .get(`${threadsUrl()}?offlet=0&limits=1&resolved=true`)
+      .get(`${threadsUrl()}?offset=0&limit=1&resolved=true`)
       .expect(HttpStatus.OK);
 
     expect(resolved.body).toMatchObject({
       total: 0,
-      offlet: 0,
-      limits: 1,
+      offset: 0,
+      limit: 1,
       has_more: false,
       items: [],
     });
@@ -167,7 +168,7 @@ describe('Resource comments (e2e)', () => {
   it('binds a new image when an author edits a comment', async () => {
     const upload = await commenter
       .post(`${resourceUrl()}/comment-attachments`)
-      .attach('file', Buffer.from('edited-image'), {
+      .attach('file', commentPng, {
         filename: 'edit.png',
         contentType: 'image/png',
       })
@@ -255,7 +256,7 @@ describe('Resource comments (e2e)', () => {
   it('uploads and binds a comment image attachment', async () => {
     const upload = await commenter
       .post(`${resourceUrl()}/comment-attachments`)
-      .attach('file', Buffer.from('fake-image'), {
+      .attach('file', commentPng, {
         filename: 'reply.png',
         contentType: 'image/png',
       })

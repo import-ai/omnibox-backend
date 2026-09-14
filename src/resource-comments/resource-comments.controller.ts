@@ -9,6 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resource-comment-queries.service';
 
 import {
   CreateResourceCommentRequestDto,
@@ -25,6 +26,7 @@ import { ResourceCommentsService } from './resource-comments.service';
 export class ResourceCommentsController {
   constructor(
     private readonly resourceCommentsService: ResourceCommentsService,
+    private readonly resourceCommentQueriesService: ResourceCommentQueriesService,
   ) {}
 
   @Get()
@@ -34,7 +36,7 @@ export class ResourceCommentsController {
     @Param('resourceId') resourceId: string,
     @Query() query: ListResourceCommentThreadsRequestDto,
   ) {
-    return await this.resourceCommentsService.listThreads(
+    return await this.resourceCommentQueriesService.listThreads(
       namespaceId,
       resourceId,
       userId,

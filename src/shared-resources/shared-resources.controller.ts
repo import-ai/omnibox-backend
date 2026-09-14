@@ -17,7 +17,8 @@ import {
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { ListResourceCommentThreadsRequestDto } from 'omniboxd/resource-comments/dto/resource-comment-request.dto';
-import { ResourceCommentsService } from 'omniboxd/resource-comments/resource-comments.service';
+import { ResourceCommentAttachmentsService } from 'omniboxd/resource-comments/resource-comment-attachments.service';
+import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resource-comment-queries.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
 import { toSharedCommentThreads } from './dto/shared-comment-threads';
@@ -30,7 +31,8 @@ import { SharedResourcesService } from './shared-resources.service';
 export class SharedResourcesController {
   constructor(
     private readonly sharedResourcesService: SharedResourcesService,
-    private readonly resourceCommentsService: ResourceCommentsService,
+    private readonly resourceCommentQueriesService: ResourceCommentQueriesService,
+    private readonly attachmentsService: ResourceCommentAttachmentsService,
   ) {}
 
   @CookieAuth({ onAuthFail: 'continue' })
@@ -58,7 +60,7 @@ export class SharedResourcesController {
     @UserId({ optional: true }) userId?: string,
   ) {
     await this.sharedResourcesService.getAndValidateResource(share, resourceId);
-    const result = await this.resourceCommentsService.listThreads(
+    const result = await this.resourceCommentQueriesService.listThreads(
       share.namespaceId,
       resourceId,
       userId ?? '',
@@ -81,7 +83,7 @@ export class SharedResourcesController {
     @Res() response: Response,
   ): Promise<void> {
     await this.sharedResourcesService.getAndValidateResource(share, resourceId);
-    await this.resourceCommentsService.downloadSharedAttachment(
+    await this.attachmentsService.downloadSharedAttachment(
       share.namespaceId,
       resourceId,
       attachmentId,

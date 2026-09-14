@@ -6,18 +6,11 @@ import {
   ResourceCommentThread,
 } from 'omniboxd/resource-comments/entities/resource-comment-thread.entity';
 
-import { ResourceCommentsService } from './resource-comments.service';
+import { ResourceCommentAnchorsService } from './resource-comment-anchors.service';
 
-describe('ResourceCommentsService', () => {
+describe('ResourceCommentAnchorsService', () => {
   const createService = () =>
-    new ResourceCommentsService(
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      {} as any,
-      { t: (key: string) => key } as any,
-    );
+    new ResourceCommentAnchorsService({ t: (key: string) => key } as any);
 
   it('hashes the canonical markdown content', () => {
     const service = createService();

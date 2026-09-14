@@ -2,7 +2,7 @@ import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
-import { ResourceCommentsService } from 'omniboxd/resource-comments/resource-comments.service';
+import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resource-comment-queries.service';
 import { ResourceFilterOptionsDto } from 'omniboxd/resources/dto/resource-filter.request.dto';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
@@ -56,7 +56,7 @@ export class SharedResourcesService {
     private readonly tagService: TagService,
     private readonly i18n: I18nService,
     @Optional()
-    private readonly resourceCommentsService?: ResourceCommentsService,
+    private readonly resourceCommentQueriesService?: ResourceCommentQueriesService,
   ) {}
 
   private getShareOwnerIdOrFail(share: Share): string {
@@ -86,9 +86,9 @@ export class SharedResourcesService {
     const tags = await this.getTagsForResource(share.namespaceId, resource);
     const path = await this.getResourcePath(share, resource, timeZone);
     const dto = SharedResourceDto.fromEntity(resource, tags, path);
-    if (this.resourceCommentsService) {
+    if (this.resourceCommentQueriesService) {
       const comments =
-        await this.resourceCommentsService.getResourceCommentData(
+        await this.resourceCommentQueriesService.getResourceCommentData(
           share.namespaceId,
           resource.id,
           resource.content,

@@ -12,26 +12,29 @@ import { Response } from 'express';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 
-import { ResourceCommentsService } from './resource-comments.service';
+import { COMMENT_IMAGE_MAX_SIZE } from './comment-image';
+import { ResourceCommentAttachmentsService } from './resource-comment-attachments.service';
 
 @Controller(
   'api/v1/namespaces/:namespaceId/resources/:resourceId/comment-attachments',
 )
 export class ResourceCommentAttachmentsController {
   constructor(
-    private readonly resourceCommentsService: ResourceCommentsService,
+    private readonly attachmentsService: ResourceCommentAttachmentsService,
   ) {}
 
   @Post()
   @CheckNamespaceReadonly()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: COMMENT_IMAGE_MAX_SIZE } }),
+  )
   async uploadAttachment(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Param('resourceId') resourceId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return await this.resourceCommentsService.uploadAttachment(
+    return await this.attachmentsService.uploadAttachment(
       namespaceId,
       resourceId,
       userId,
@@ -47,7 +50,7 @@ export class ResourceCommentAttachmentsController {
     @Param('attachmentId') attachmentId: string,
     @Res() res: Response,
   ) {
-    return await this.resourceCommentsService.downloadAttachment(
+    return await this.attachmentsService.downloadAttachment(
       namespaceId,
       resourceId,
       attachmentId,

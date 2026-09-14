@@ -1,6 +1,7 @@
 import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
 
 import { BaseColumns } from './base-columns';
+import { assertEmptyCommentAttachments } from './comment-rollback-guards';
 
 export class AddResourceCommentAttachments1788345621847 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -72,7 +73,8 @@ export class AddResourceCommentAttachments1788345621847 implements MigrationInte
     );
   }
 
-  public down(): Promise<void> {
-    throw new Error('Not supported.');
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await assertEmptyCommentAttachments(queryRunner);
+    await queryRunner.dropTable('resource_comment_attachments');
   }
 }

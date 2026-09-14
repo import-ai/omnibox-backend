@@ -30,6 +30,13 @@ export class ResourceCommentAttachment extends Base {
   @Column('uuid', { nullable: true })
   uploaderId: string | null;
 
+  // Retain the ledger owner even if the uploader relation is later cleared.
+  @Column('uuid', { nullable: true })
+  storageUserId: string | null;
+
+  @Column('timestamptz', { nullable: true })
+  uploadedAt: Date | null;
+
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'uploader_id' })
   uploader?: User | null;

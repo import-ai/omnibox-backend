@@ -131,7 +131,7 @@ export class ResourceCommentAttachmentUploadResponseDto {
 export class ListResourceCommentThreadsResponseDto {
   items: ResourceCommentThreadResponseDto[];
   total: number;
-  offlet: number;
-  limits: number;
+  offset: number;
+  limit: number;
   has_more: boolean;
 }

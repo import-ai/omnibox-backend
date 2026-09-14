@@ -1,4 +1,4 @@
-import { Expose, Type } from 'class-transformer';
+import { Expose, Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -136,19 +136,30 @@ export class UpdateResourceCommentRequestDto {
   attachmentIds?: string[];
 }
 
+// Remove legacy query aliases after all pre-2184 web clients have been retired.
+function parseCommentPageValue(value: unknown): number {
+  return typeof value === 'string' || typeof value === 'number'
+    ? Number(value)
+    : NaN;
+}
+
 export class ListResourceCommentThreadsRequestDto {
-  @IsOptional()
-  @Type(() => Number)
+  @Expose()
+  @Transform(({ obj }: { obj: Record<string, unknown> }) =>
+    parseCommentPageValue(obj.offset ?? obj.offlet ?? 0),
+  )
   @IsInt({ message: i18nValidationMessage('validation.errors.isInt') })
   @Min(0, { message: i18nValidationMessage('validation.errors.min') })
-  offlet: number = 0;
+  offset: number = 0;
 
-  @IsOptional()
-  @Type(() => Number)
+  @Expose()
+  @Transform(({ obj }: { obj: Record<string, unknown> }) =>
+    parseCommentPageValue(obj.limit ?? obj.limits ?? 20),
+  )
   @IsInt({ message: i18nValidationMessage('validation.errors.isInt') })
   @Min(1, { message: i18nValidationMessage('validation.errors.min') })
   @Max(100, { message: i18nValidationMessage('validation.errors.max') })
-  limits: number = 20;
+  limit: number = 20;
 
   @IsOptional()
   @IsIn(['true', 'false'], {

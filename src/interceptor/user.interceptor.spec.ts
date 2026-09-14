@@ -37,6 +37,39 @@ describe('UserInterceptor', () => {
     expect(setAttribute).toHaveBeenCalledWith('user.id', 'user-1');
     expect(end).toHaveBeenCalled();
   });
+
+  it('reports attribution activity on login routes', () => {
+    const reportActivity = jest.fn();
+    const interceptor = new UserInterceptor({
+      reportActivity,
+    } as any);
+    const context = createHttpContext({
+      method: 'POST',
+      url: '/api/v1/login',
+    });
+    const next = { handle: () => of({ id: 'user-1' }) };
+
+    interceptor.intercept(context, next).subscribe();
+
+    expect(reportActivity).toHaveBeenCalledWith('user-1');
+  });
+
+  it('does not report attribution activity on ordinary authenticated requests', () => {
+    const reportActivity = jest.fn();
+    const interceptor = new UserInterceptor({
+      reportActivity,
+    } as any);
+    const context = createHttpContext({
+      method: 'GET',
+      url: '/api/v1/users/me',
+      user: { id: 'user-1' },
+    });
+    const next = { handle: () => of({ id: 'user-1' }) };
+
+    interceptor.intercept(context, next).subscribe();
+
+    expect(reportActivity).not.toHaveBeenCalled();
+  });
 });
 
 function createHttpContext(request: {

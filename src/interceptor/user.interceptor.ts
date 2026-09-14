@@ -53,8 +53,28 @@ export class UserInterceptor implements NestInterceptor {
         let userId: string | null = null;
         if (ctxType === 'http') {
           const httpReq = executionContext.switchToHttp().getRequest();
+          const httpRes = executionContext.switchToHttp().getResponse();
           if (httpReq.user?.id) {
             userId = httpReq.user.id;
+          }
+          if (
+            isLoginRoute(httpReq.method, httpReq.url) &&
+            httpRes &&
+            typeof httpRes.json === 'function'
+          ) {
+            const originalJson = httpRes.json.bind(httpRes);
+            httpRes.json = (body: unknown) => {
+              if (
+                !userId &&
+                body &&
+                typeof body === 'object' &&
+                'id' in body &&
+                typeof (body as { id: unknown }).id === 'string'
+              ) {
+                userId = (body as { id: string }).id;
+              }
+              return originalJson(body);
+            };
           }
         } else if (ctxType === 'ws') {
           const client = executionContext.switchToWs().getClient<Socket>();

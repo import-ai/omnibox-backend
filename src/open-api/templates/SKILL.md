@@ -228,6 +228,41 @@ parsed_content=<optional-text-content>
 
 Requires `resources:create`.
 
+### Operate resource attachments
+
+List attachments and retrieve their metadata and authenticated download URLs:
+
+```http
+GET /resources/<resourceId>/attachments
+```
+
+Download an attachment:
+
+```http
+GET /resources/<resourceId>/attachments/<attachmentId>
+```
+
+These read operations require `resources:read`.
+
+Upload one or more attachments to an existing resource:
+
+```http
+POST /resources/<resourceId>/attachments
+Content-Type: multipart/form-data
+
+file[]=<binary-file>
+```
+
+Delete an attachment:
+
+```http
+DELETE /resources/<resourceId>/attachments/<attachmentId>
+```
+
+Upload and delete require `resources:update`. The resource must be within the
+API key root scope. Attachment download URLs require the same API key and must
+not be treated as public URLs.
+
 ### Add a tag to a resource
 
 ```http

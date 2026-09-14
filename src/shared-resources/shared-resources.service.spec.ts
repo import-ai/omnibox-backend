@@ -83,6 +83,38 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
     ]);
   });
 
+  it('forwards X-Timezone to shared smart folder matching', async () => {
+    const { resourcesService, service, smartFoldersService } = createService();
+    resourcesService.getResource.mockResolvedValue({
+      id: 'smart-folder-id',
+      namespaceId: 'namespace-id',
+      resourceType: ResourceType.SMART_FOLDER,
+    });
+
+    await service.getSharedResourceChildren(
+      {
+        id: 'share-id',
+        namespaceId: 'namespace-id',
+        resourceId: 'smart-folder-id',
+        userId: 'owner-user-id',
+        allResources: true,
+      } as any,
+      'smart-folder-id',
+      { timeZone: 'Asia/Shanghai' },
+    );
+
+    expect(smartFoldersService.listChildrenWithTotal).toHaveBeenCalledWith(
+      'owner-user-id',
+      'namespace-id',
+      'smart-folder-id',
+      {
+        limit: undefined,
+        offset: undefined,
+        timeZone: 'Asia/Shanghai',
+      },
+    );
+  });
+
   it('includes matched resources when listing all resources for a shared smart folder root', async () => {
     const { resourcesService, service, smartFoldersService } = createService();
     resourcesService.getResource.mockResolvedValue({
@@ -248,6 +280,7 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
       'namespace-id',
       'smart-folder-id',
       'matched-doc-id',
+      undefined,
     );
     expect(result.get('matched-doc-id')).toEqual([
       expect.objectContaining({
@@ -370,12 +403,14 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
       'namespace-id',
       'smart-folder-id',
       'nested-doc-id',
+      undefined,
     );
     expect(smartFoldersService.isResourceMatched).toHaveBeenCalledWith(
       'owner-user-id',
       'namespace-id',
       'smart-folder-id',
       'matched-folder-id',
+      undefined,
     );
     expect(result.get('nested-doc-id')).toEqual([
       expect.objectContaining({

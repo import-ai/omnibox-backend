@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { APIKeyModule } from 'omniboxd/api-key/api-key.module';
 import { OpenAPIKeyController } from 'omniboxd/api-key/open.api-key.controller';
+import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
+import { OpenAttachmentsController } from 'omniboxd/attachments/open.attachments.controller';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { OpenResourcesController } from 'omniboxd/namespace-resources/open.resource.controller';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
@@ -17,6 +19,7 @@ import { WizardModule } from 'omniboxd/wizard/wizard.module';
   providers: [],
   controllers: [
     OpenAPIKeyController,
+    OpenAttachmentsController,
     OpenResourcesController,
     OpenWizardController,
     OpenTagController,
@@ -26,6 +29,7 @@ import { WizardModule } from 'omniboxd/wizard/wizard.module';
   exports: [],
   imports: [
     APIKeyModule,
+    AttachmentsModule,
     WizardModule,
     TasksModule,
     TagModule,

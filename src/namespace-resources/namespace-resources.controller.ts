@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpStatus,
   Param,
   ParseIntPipe,
@@ -156,12 +157,19 @@ export class NamespaceResourcesController {
     @Query('offset', new ParseIntPipe({ optional: true })) offset?: number,
     @Query('summary') summary?: string,
     @Query() sortRequest?: ResourceSortRequestDto,
+    @Headers('x-timezone') timeZone?: string,
   ): Promise<ResourceSummaryDto[]> {
     return this.namespaceResourcesService.listChildren(
       namespaceId,
       resourceId,
       userId,
-      { summary: summary === 'true', limit, offset, ...sortRequest },
+      {
+        summary: summary === 'true',
+        limit,
+        offset,
+        timeZone,
+        ...sortRequest,
+      },
     );
   }
 

@@ -89,6 +89,33 @@ describe('NamespaceResourcesService', () => {
     expect(result).toBe(children);
   });
 
+  it('forwards X-Timezone to smart folder matching', async () => {
+    const { resourcesService, service, smartFoldersService } = createService();
+    resourcesService.getParentResourcesOrFail.mockResolvedValue([
+      {
+        id: resourceId,
+        resourceType: ResourceType.SMART_FOLDER,
+      },
+    ]);
+    smartFoldersService.listChildrenWithTotal.mockResolvedValue({
+      resources: [],
+      total: 0,
+    });
+
+    await service.listChildren(namespaceId, resourceId, userId, {
+      limit: 10,
+      offset: 0,
+      timeZone: 'Asia/Shanghai',
+    });
+
+    expect(smartFoldersService.listChildrenWithTotal).toHaveBeenCalledWith(
+      userId,
+      namespaceId,
+      resourceId,
+      { limit: 10, offset: 0, timeZone: 'Asia/Shanghai' },
+    );
+  });
+
   it('returns an empty filter result when no resources are accessible', async () => {
     const { resourcesService, service } = createService();
 

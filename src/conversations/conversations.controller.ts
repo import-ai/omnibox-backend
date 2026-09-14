@@ -7,8 +7,10 @@ import {
   Patch,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { ChatClientCompatibilityInterceptor } from 'omniboxd/interceptor/chat-client-compatibility.interceptor';
 
 import { ConversationsService } from './conversations.service';
 import { ConversationDetailDto } from './dto/conversation-detail.dto';
@@ -16,6 +18,7 @@ import { ConversationSummaryDto } from './dto/conversation-summary.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/conversations')
+@UseInterceptors(ChatClientCompatibilityInterceptor)
 export class ConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 

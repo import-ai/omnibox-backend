@@ -43,6 +43,7 @@ export class S3Service implements OnModuleInit {
   private readonly s3Client: S3Client;
   private readonly s3PublicClient: S3Client;
   private readonly bucket: string;
+  private readonly distinctPublicEndpoint: boolean;
 
   constructor(configService: ConfigService) {
     const accessKeyId = configService.get<string>('OBB_S3_ACCESS_KEY_ID');
@@ -80,6 +81,7 @@ export class S3Service implements OnModuleInit {
       forcePathStyle,
     });
     if (s3PublicEndpoint && s3PublicEndpoint != s3Endpoint) {
+      this.distinctPublicEndpoint = true;
       this.s3PublicClient = new S3Client({
         region: s3Region,
         credentials: {
@@ -90,9 +92,14 @@ export class S3Service implements OnModuleInit {
         forcePathStyle,
       });
     } else {
+      this.distinctPublicEndpoint = false;
       this.s3PublicClient = this.s3Client;
     }
     this.bucket = s3Bucket;
+  }
+
+  hasDistinctPublicEndpoint(): boolean {
+    return this.distinctPublicEndpoint;
   }
 
   async onModuleInit(): Promise<void> {

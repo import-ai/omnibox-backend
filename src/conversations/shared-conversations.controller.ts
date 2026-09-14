@@ -4,13 +4,14 @@ import {
   ValidatedShare,
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
+import { ChatClientCompatibilityInterceptor } from 'omniboxd/interceptor/chat-client-compatibility.interceptor';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
 import { ConversationsService } from './conversations.service';
 
 @Controller('api/v1/shares/:shareId/conversations')
-@UseInterceptors(ValidateShareInterceptor)
+@UseInterceptors(ValidateShareInterceptor, ChatClientCompatibilityInterceptor)
 export class SharedConversationsController {
   constructor(private readonly conversationsService: ConversationsService) {}
 

@@ -241,7 +241,6 @@ export class SmartFoldersMatcherService {
   }
 
   private getTagsCandidate(resource: Resource): string {
-    const values = [...(resource.tagIds || [])];
     const tagNames = [resource.attrs?.tags, resource.attrs?.tag_names]
       .flatMap((value) => (Array.isArray(value) ? value : []))
       .map((value) =>
@@ -253,7 +252,7 @@ export class SmartFoldersMatcherService {
       )
       .filter((value) => value.length > 0);
 
-    return [...values, ...tagNames].join(' ').toLowerCase();
+    return tagNames.join(' ').toLowerCase();
   }
 
   private getContentCandidate(resource: Resource): string {

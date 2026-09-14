@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Patch,
   UseInterceptors,
@@ -54,7 +55,10 @@ export class PublicSharesController {
   @CookieAuth({ onAuthFail: 'continue' })
   @ValidateShare()
   @Get()
-  async getShareInfo(@ValidatedShare() share: Share) {
-    return await this.sharesService.getPublicShareInfo(share);
+  async getShareInfo(
+    @ValidatedShare() share: Share,
+    @Headers('x-timezone') timeZone?: string,
+  ) {
+    return await this.sharesService.getPublicShareInfo(share, timeZone);
   }
 }

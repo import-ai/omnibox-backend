@@ -122,7 +122,10 @@ export class SharesService {
     throw new AppException(message, 'SHARE_NOT_FOUND', HttpStatus.NOT_FOUND);
   }
 
-  async getPublicShareInfo(share: Share): Promise<PublicShareInfoDto> {
+  async getPublicShareInfo(
+    share: Share,
+    timeZone?: string,
+  ): Promise<PublicShareInfoDto> {
     const ownerUserId = this.getShareOwnerIdOrFail(share);
     const resource = await this.resourcesService.getResourceMeta(
       share.namespaceId,
@@ -152,7 +155,7 @@ export class SharesService {
         ownerUserId,
         share.namespaceId,
         share.resourceId,
-        { limit: 1 },
+        { limit: 1, ...(timeZone ? { timeZone } : {}) },
       );
       hasChildren = children.length > 0;
     } else {

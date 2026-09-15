@@ -24,6 +24,104 @@ export class WizardAPIService {
     private readonly i18n: I18nService,
   ) {}
 
+  async getModelsConfig(baseUrl?: string) {
+    try {
+      baseUrl ??= await this.wizardUrlProvider.getBaseUrl();
+      const response = await fetch(`${baseUrl}/api/v1/wizard/models`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.status === 404) return {};
+      if (!response.ok)
+        throw new AppException(
+          this.i18n.t('system.errors.requestFailed', {
+            args: { status: response.status },
+          }),
+          'THINKING_CONFIG_UNAVAILABLE',
+          HttpStatus.BAD_GATEWAY,
+        );
+      const config = await response.json();
+      if (!config || typeof config !== 'object' || Array.isArray(config)) {
+        throw new AppException(
+          this.i18n.t('system.errors.wizardRequestFailed'),
+          'INVALID_THINKING_CONFIG',
+          HttpStatus.BAD_GATEWAY,
+        );
+      }
+      // Project the public fields explicitly; never forward private Wizard config.
+      const selection = (item: { edition: string; level: string }) => {
+        if (
+          !item ||
+          !['basic', 'pro'].includes(item.edition) ||
+          typeof item.level !== 'string' ||
+          !/^[a-z][a-z0-9_-]*$/.test(item.level)
+        ) {
+          throw new AppException(
+            this.i18n.t('system.errors.wizardRequestFailed'),
+            'INVALID_THINKING_CONFIG',
+            HttpStatus.BAD_GATEWAY,
+          );
+        }
+        return { edition: item.edition, level: item.level };
+      };
+      const result: Record<
+        string,
+        {
+          default: { edition: string; level: string };
+          levels: { edition: string; level: string }[];
+        }
+      > = {};
+      for (const edition of ['basic', 'pro', 'default']) {
+        const group = config[edition];
+        if (!group) continue;
+        const levels = Array.isArray(group.levels)
+          ? group.levels.map(selection)
+          : [];
+        const defaultSelection = selection(group.default);
+        if (
+          !levels.length ||
+          !levels.some(
+            (item) =>
+              item.edition === defaultSelection.edition &&
+              item.level === defaultSelection.level,
+          ) ||
+          new Set(levels.map((item) => `${item.edition}.${item.level}`))
+            .size !== levels.length ||
+          (edition !== 'default' &&
+            levels.some((item) => item.edition !== edition))
+        ) {
+          throw new AppException(
+            this.i18n.t('system.errors.wizardRequestFailed'),
+            'INVALID_THINKING_CONFIG',
+            HttpStatus.BAD_GATEWAY,
+          );
+        }
+        result[edition] = { default: defaultSelection, levels };
+      }
+      if (
+        result.default?.levels.some(
+          (item) =>
+            !result[item.edition]?.levels.some(
+              (level) => level.level === item.level,
+            ),
+        )
+      ) {
+        throw new AppException(
+          this.i18n.t('system.errors.wizardRequestFailed'),
+          'INVALID_THINKING_CONFIG',
+          HttpStatus.BAD_GATEWAY,
+        );
+      }
+      return result;
+    } catch (error) {
+      if (error instanceof AppException) throw error;
+      throw new AppException(
+        this.i18n.t('system.errors.wizardRequestFailed'),
+        'THINKING_CONFIG_UNAVAILABLE',
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+  }
+
   getTraceHeaders(): Record<string, string> {
     const traceHeaders: Record<string, string> = {};
     propagation.inject(context.active(), traceHeaders);

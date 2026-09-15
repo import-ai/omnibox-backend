@@ -1,4 +1,5 @@
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import { ResourceCommentAnchorsService } from 'omniboxd/resource-comments/resource-comment-anchors.service';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 
 import { NamespaceResourcesService } from './namespace-resources.service';
@@ -32,6 +33,8 @@ describe('NamespaceResourcesService', () => {
       {} as any,
       permissionsService as any,
       {} as any,
+      {} as any,
+      {} as ResourceCommentAnchorsService,
       resourcesService as any,
       {} as any,
       {} as any,

@@ -725,6 +725,83 @@ describe('StreamService agent stream hooks', () => {
   });
 });
 
+describe('trusted upstream billing metadata', () => {
+  it('initializes billing before SSE callbacks and never forwards headers', async () => {
+    const stream: AgentStream = { namespaceId: 'n', streamId: 's' };
+    const payload = 'data: {"response_type":"done"}\n\n';
+    const response = new Response(payload, {
+      headers: { 'X-Omnibox-Billing': 'private-price' },
+    });
+    const started = jest.fn((context: AgentStream, upstream: Response) => {
+      expect(upstream.headers.get('X-Omnibox-Billing')).toBe('private-price');
+      context.billing = { edition: 'basic' };
+    });
+    const service = new StreamService(
+      { get: jest.fn() } as never,
+      { createAgentStream: jest.fn().mockResolvedValue(response) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {
+        onStreamStarted: started,
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+      },
+    );
+    const callback = jest.fn((data: string) => {
+      expect(stream.billing).toEqual({ edition: 'basic' });
+      expect(data).not.toContain('private-price');
+      return Promise.resolve();
+    });
+    await service.stream(
+      'n',
+      'ask',
+      {} as never,
+      'r',
+      callback,
+      undefined,
+      stream,
+    );
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels an upstream response when billing validation fails', async () => {
+    const response = new Response('data: {}\n\n');
+    const cancel = jest.spyOn(response.body!, 'cancel');
+    const failure = new Error('invalid pricing');
+    const service = new StreamService(
+      { get: jest.fn() } as never,
+      { createAgentStream: jest.fn().mockResolvedValue(response) } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {
+        onStreamStarted: jest.fn().mockRejectedValue(failure),
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+      },
+    );
+    const callback = jest.fn();
+    await expect(
+      service.stream('n', 'ask', {} as never, 'r', callback, undefined, {
+        namespaceId: 'n',
+        streamId: 's',
+      }),
+    ).rejects.toBe(failure);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(callback).not.toHaveBeenCalled();
+  });
+});
+
 describe('persisted query receipts', () => {
   it('sends a complete user receipt before contacting Wizard and persists enrichment on that same row', async () => {
     const service = createService({});

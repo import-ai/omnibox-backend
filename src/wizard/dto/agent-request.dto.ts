@@ -39,7 +39,9 @@ export interface BaseAgentRequestDto {
   query: string;
   conversation_id: string;
   current_resource_id?: string;
-  enable_thinking: boolean;
+  enable_thinking?: boolean;
+  edition?: 'basic' | 'pro';
+  level?: string;
   lang?: '简体中文' | 'English';
   tool_call?: {
     decisions?: Record<string, any>[];

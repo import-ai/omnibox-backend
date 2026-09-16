@@ -27,9 +27,9 @@ describe('sanitizeResourceName', () => {
 });
 
 describe('randomResourceNameSuffix', () => {
-  it('matches _\\w{4}', () => {
+  it('matches _[A-Za-z0-9]{4}', () => {
     for (let i = 0; i < 20; i++) {
-      expect(randomResourceNameSuffix()).toMatch(/^_\w{4}$/);
+      expect(randomResourceNameSuffix()).toMatch(/^_[A-Za-z0-9]{4}$/);
     }
   });
 });
@@ -47,13 +47,13 @@ describe('generateUniqueResourceName', () => {
     );
   });
 
-  it('appends _\\w{4} to the original name on conflict', () => {
-    mockedGenerateId.mockReturnValueOnce('aB3_');
+  it('appends _[A-Za-z0-9]{4} to the original name on conflict', () => {
+    mockedGenerateId.mockReturnValueOnce('aB3x');
     const taken = new Set(['得到听书']);
     const name = generateUniqueResourceName('得到听书', (candidate) =>
       taken.has(candidate),
     );
-    expect(name).toBe('得到听书_aB3_');
+    expect(name).toBe('得到听书_aB3x');
   });
 
   it('retries from the original name instead of chaining suffixes', () => {

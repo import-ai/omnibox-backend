@@ -890,7 +890,7 @@ export class NamespaceResourcesService {
       .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
         parentId,
       })
-      .andWhere('resource.name = :name', { name })
+      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
       .andWhere('resource.deleted_at IS NULL')
       .getCount();
     if (count > 0) {
@@ -1784,7 +1784,7 @@ export class NamespaceResourcesService {
         .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
           parentId: targetParentId,
         })
-        .andWhere('resource.name = :name', {
+        .andWhere('LOWER(resource.name) = LOWER(:name)', {
           name: resource.name,
         })
         .andWhere('resource.deleted_at IS NULL')

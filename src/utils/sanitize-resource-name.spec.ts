@@ -14,6 +14,7 @@ jest.mock('./generate-id', () => {
 });
 
 const mockedGenerateId = generateId as jest.MockedFunction<typeof generateId>;
+const LOWERCASE_ALPHANUMERIC_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 describe('sanitizeResourceName', () => {
   it('replaces slashes with underscores', () => {
@@ -27,10 +28,19 @@ describe('sanitizeResourceName', () => {
 });
 
 describe('randomResourceNameSuffix', () => {
-  it('matches _[A-Za-z0-9]{4}', () => {
+  it('matches _[a-z0-9]{4}', () => {
     for (let i = 0; i < 20; i++) {
-      expect(randomResourceNameSuffix()).toMatch(/^_[A-Za-z0-9]{4}$/);
+      expect(randomResourceNameSuffix()).toMatch(/^_[a-z0-9]{4}$/);
     }
+  });
+
+  it('asks generateId for 4 lowercase alphanumeric chars', () => {
+    mockedGenerateId.mockReturnValueOnce('a3x9');
+    expect(randomResourceNameSuffix()).toBe('_a3x9');
+    expect(mockedGenerateId).toHaveBeenCalledWith(
+      4,
+      LOWERCASE_ALPHANUMERIC_ALPHABET,
+    );
   });
 });
 
@@ -47,13 +57,13 @@ describe('generateUniqueResourceName', () => {
     );
   });
 
-  it('appends _[A-Za-z0-9]{4} to the original name on conflict', () => {
-    mockedGenerateId.mockReturnValueOnce('aB3x');
+  it('appends _[a-z0-9]{4} to the original name on conflict', () => {
+    mockedGenerateId.mockReturnValueOnce('ab3x');
     const taken = new Set(['得到听书']);
     const name = generateUniqueResourceName('得到听书', (candidate) =>
       taken.has(candidate),
     );
-    expect(name).toBe('得到听书_aB3x');
+    expect(name).toBe('得到听书_ab3x');
   });
 
   it('retries from the original name instead of chaining suffixes', () => {
@@ -72,12 +82,12 @@ describe('generateUniqueResourceName', () => {
   });
 
   it('supports async uniqueness checks', async () => {
-    mockedGenerateId.mockReturnValueOnce('xy9Z');
+    mockedGenerateId.mockReturnValueOnce('xy9z');
     const taken = new Set(['doc']);
     await expect(
       generateUniqueResourceName('doc', (candidate) =>
         Promise.resolve(taken.has(candidate)),
       ),
-    ).resolves.toBe('doc_xy9Z');
+    ).resolves.toBe('doc_xy9z');
   });
 });

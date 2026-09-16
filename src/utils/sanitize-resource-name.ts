@@ -1,7 +1,6 @@
 import generateId from './generate-id';
 
-const ALPHANUMERIC_ALPHABET =
-  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const LOWERCASE_ALPHANUMERIC_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 /**
  * Sanitize resource name by replacing '/' with '_'
@@ -16,11 +15,11 @@ export function sanitizeResourceName(
 }
 
 export function randomResourceNameSuffix(): string {
-  return `_${generateId(4, ALPHANUMERIC_ALPHABET)}`;
+  return `_${generateId(4, LOWERCASE_ALPHANUMERIC_ALPHABET)}`;
 }
 
 /**
- * Generate a unique resource name by appending _[A-Za-z0-9]{4} on conflict.
+ * Generate a unique resource name by appending _[a-z0-9]{4} on conflict.
  */
 export function generateUniqueResourceName(
   baseName: string,

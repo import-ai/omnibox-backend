@@ -96,7 +96,7 @@ export class ResourcesService {
       .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
         parentId,
       })
-      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
+      .andWhere('resource.name = :name', { name })
       .andWhere('resource.deleted_at IS NULL');
     if (excludeId) {
       qb.andWhere('resource.id != :excludeId', { excludeId });
@@ -207,7 +207,7 @@ export class ResourcesService {
       .andWhere('resource.parent_id IS NOT DISTINCT FROM :parentId', {
         parentId,
       })
-      .andWhere('LOWER(resource.name) = LOWER(:name)', { name })
+      .andWhere('resource.name = :name', { name })
       .andWhere('resource.deleted_at IS NULL');
     if (excludeId) {
       qb.andWhere('resource.id != :excludeId', { excludeId });
@@ -1447,7 +1447,7 @@ export class ResourcesService {
     const occupiedNames = new Set(
       targetChildren
         .filter((child) => !movingIds.has(child.id))
-        .map((child) => child.name.toLowerCase()),
+        .map((child) => child.name),
     );
     const selectedNameCounts = new Map<string, number>();
     for (const id of candidates) {
@@ -1455,7 +1455,7 @@ export class ResourcesService {
       if (!resource) {
         continue;
       }
-      const key = resource.name.toLowerCase();
+      const key = resource.name;
       selectedNameCounts.set(key, (selectedNameCounts.get(key) ?? 0) + 1);
     }
     const moveIds: string[] = [];
@@ -1465,7 +1465,7 @@ export class ResourcesService {
       if (!resource) {
         continue;
       }
-      const key = resource.name.toLowerCase();
+      const key = resource.name;
       const hasNameConflict =
         occupiedNames.has(key) || selectedNameCounts.get(key) !== 1;
       if (hasNameConflict) {

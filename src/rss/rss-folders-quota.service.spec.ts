@@ -16,22 +16,43 @@ describe('RssFoldersQuotaService', () => {
     });
   }
 
+  function parentsFor(resourceId: string, rootId: string) {
+    if (resourceId === rootId) {
+      return [{ id: rootId, parentId: null }];
+    }
+    return [
+      { id: resourceId, parentId: rootId },
+      { id: rootId, parentId: null },
+    ];
+  }
+
   function createService(values?: {
     privateLimit?: number;
     teamLimit?: number;
     activeFolderCount?: number;
+    activeFolderRootId?: string;
     parentDeleted?: boolean;
     restoreResource?: Record<string, any> | null;
+    extraFolders?: Array<{ id: string }>;
     movedResources?: Array<{ id: string; resourceType: ResourceType }>;
   }) {
     const activeFolderCount = values?.activeFolderCount ?? 0;
-    const subResources = [
-      { id: 'doc-id', resourceType: ResourceType.DOC },
-      ...Array.from({ length: activeFolderCount }, (_, index) => ({
-        id: `rss-folder-${index}`,
-        resourceType: ResourceType.RSS_FOLDER,
-      })),
-    ];
+    const activeFolderRootId = values?.activeFolderRootId ?? PRIVATE_ROOT_ID;
+    const extraFolders = values?.extraFolders ?? [];
+    const movedRssFolders = (values?.movedResources ?? []).filter(
+      (resource) => resource.resourceType === ResourceType.RSS_FOLDER,
+    );
+    const folderIds = new Map<string, { id: string }>();
+    for (let index = 0; index < activeFolderCount; index += 1) {
+      folderIds.set(`rss-folder-${index}`, { id: `rss-folder-${index}` });
+    }
+    for (const folder of extraFolders) {
+      folderIds.set(folder.id, folder);
+    }
+    for (const folder of movedRssFolders) {
+      folderIds.set(folder.id, { id: folder.id });
+    }
+    const activeFolders = [...folderIds.values()];
     const resourceRepository = {
       findOne: jest.fn().mockResolvedValue(
         values?.restoreResource === undefined
@@ -43,6 +64,7 @@ describe('RssFoldersQuotaService', () => {
             }
           : values.restoreResource,
       ),
+      find: jest.fn().mockResolvedValue(activeFolders),
     };
     const namespaceRepository = {
       findOne: jest
@@ -55,22 +77,48 @@ describe('RssFoldersQuotaService', () => {
         rootResourceId: PRIVATE_ROOT_ID,
       }),
     };
+    const resolveParents = (resourceId: string) => {
+      if (resourceId === 'nested-rss-id') {
+        return [
+          { id: 'nested-rss-id', parentId: 'ordinary-folder-id' },
+          { id: 'ordinary-folder-id', parentId: TEAM_ROOT_ID },
+          { id: TEAM_ROOT_ID, parentId: null },
+        ];
+      }
+      if (resourceId === 'team-parent-id' || resourceId === 'team-rss-id') {
+        return parentsFor(resourceId, TEAM_ROOT_ID);
+      }
+      if (resourceId.startsWith('rss-folder-')) {
+        return parentsFor(resourceId, activeFolderRootId);
+      }
+      return parentsFor(resourceId, PRIVATE_ROOT_ID);
+    };
     const resourcesService = {
+      getParentResources: jest
+        .fn()
+        .mockImplementation((_namespaceId: string, resourceId: string) =>
+          Promise.resolve(resolveParents(resourceId)),
+        ),
       getParentResourcesOrFail: jest
         .fn()
-        .mockImplementation((_namespaceId: string, resourceId: string) => {
-          if (resourceId === 'team-parent-id' || resourceId === 'team-rss-id') {
-            return Promise.resolve([
-              { id: resourceId, parentId: TEAM_ROOT_ID },
-              { id: TEAM_ROOT_ID, parentId: null },
-            ]);
+        .mockImplementation((_namespaceId: string, resourceId: string) =>
+          Promise.resolve(resolveParents(resourceId)),
+        ),
+      batchGetParentResources: jest
+        .fn()
+        .mockImplementation((_namespaceId: string, resourceIds: string[]) => {
+          const resourceMap = new Map<
+            string,
+            { id: string; parentId: string | null }
+          >();
+          for (const resourceId of resourceIds) {
+            for (const parent of resolveParents(resourceId)) {
+              resourceMap.set(parent.id, parent);
+            }
           }
-          return Promise.resolve([
-            { id: resourceId, parentId: PRIVATE_ROOT_ID },
-            { id: PRIVATE_ROOT_ID, parentId: null },
-          ]);
+          return Promise.resolve(resourceMap);
         }),
-      getAllSubResources: jest.fn().mockResolvedValue(subResources),
+      getAllSubResources: jest.fn(),
       isParentDeleted: jest
         .fn()
         .mockResolvedValue(values?.parentDeleted ?? false),
@@ -87,14 +135,7 @@ describe('RssFoldersQuotaService', () => {
     const entityManager = {
       query: jest.fn().mockResolvedValue([]),
       getRepository: jest.fn().mockReturnValue({
-        find: jest.fn().mockResolvedValue(
-          values?.movedResources ?? [
-            {
-              id: 'resource-id',
-              resourceType: ResourceType.RSS_FOLDER,
-            },
-          ],
-        ),
+        find: jest.fn().mockResolvedValue(activeFolders),
       }),
     };
     const service = new RssFoldersQuotaService(
@@ -109,6 +150,7 @@ describe('RssFoldersQuotaService', () => {
     return {
       entityManager,
       i18n,
+      resourceRepository,
       resourcesService,
       namespacesQuotaService,
       service,
@@ -145,10 +187,11 @@ describe('RssFoldersQuotaService', () => {
   });
 
   it('skips counting entirely when the limit is unlimited', async () => {
-    const { entityManager, resourcesService, service } = createService({
-      privateLimit: -1,
-      activeFolderCount: 5,
-    });
+    const { entityManager, resourceRepository, resourcesService, service } =
+      createService({
+        privateLimit: -1,
+        activeFolderCount: 5,
+      });
 
     await expect(
       service.assertCreateQuota(
@@ -157,7 +200,10 @@ describe('RssFoldersQuotaService', () => {
         entityManager as any,
       ),
     ).resolves.toBeUndefined();
+    expect(resourceRepository.find).not.toHaveBeenCalled();
     expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
+    expect(resourcesService.getParentResources).not.toHaveBeenCalled();
+    expect(resourcesService.batchGetParentResources).not.toHaveBeenCalled();
     expect(entityManager.query).not.toHaveBeenCalled();
   });
 
@@ -166,6 +212,7 @@ describe('RssFoldersQuotaService', () => {
       privateLimit: -1,
       teamLimit: 1,
       activeFolderCount: 1,
+      activeFolderRootId: TEAM_ROOT_ID,
     });
     resourcesService.getParentResourcesOrFail.mockResolvedValue([
       { id: 'parent-id', parentId: TEAM_ROOT_ID },
@@ -254,13 +301,14 @@ describe('RssFoldersQuotaService', () => {
   });
 
   it('skips move quota checks when the target limit is unlimited', async () => {
-    const { entityManager, resourcesService, service } = createService({
-      privateLimit: -1,
-      activeFolderCount: 5,
-      movedResources: [
-        { id: 'team-rss-id', resourceType: ResourceType.RSS_FOLDER },
-      ],
-    });
+    const { entityManager, resourceRepository, resourcesService, service } =
+      createService({
+        privateLimit: -1,
+        activeFolderCount: 5,
+        movedResources: [
+          { id: 'team-rss-id', resourceType: ResourceType.RSS_FOLDER },
+        ],
+      });
 
     await expect(
       service.assertMoveQuota(
@@ -270,7 +318,66 @@ describe('RssFoldersQuotaService', () => {
         entityManager as any,
       ),
     ).resolves.toBeUndefined();
+    expect(resourceRepository.find).not.toHaveBeenCalled();
+    expect(entityManager.getRepository).not.toHaveBeenCalled();
     expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
+    expect(resourcesService.batchGetParentResources).not.toHaveBeenCalled();
     expect(entityManager.query).not.toHaveBeenCalled();
+  });
+
+  it('counts only rss folders under the root', async () => {
+    const { resourceRepository, resourcesService, service } = createService({
+      activeFolderCount: 2,
+    });
+
+    await expect(
+      service.countActive(NAMESPACE_ID, PRIVATE_ROOT_ID),
+    ).resolves.toBe(2);
+    expect(resourceRepository.find).toHaveBeenCalledWith({
+      select: ['id'],
+      where: {
+        namespaceId: NAMESPACE_ID,
+        resourceType: ResourceType.RSS_FOLDER,
+      },
+    });
+    expect(resourcesService.batchGetParentResources).toHaveBeenCalledWith(
+      NAMESPACE_ID,
+      ['rss-folder-0', 'rss-folder-1'],
+      undefined,
+    );
+    expect(resourcesService.getParentResources).not.toHaveBeenCalled();
+    expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
+  });
+
+  it('does not count rss folders under a different root', async () => {
+    const { service } = createService({
+      activeFolderCount: 2,
+      activeFolderRootId: TEAM_ROOT_ID,
+    });
+
+    await expect(
+      service.countActive(NAMESPACE_ID, PRIVATE_ROOT_ID),
+    ).resolves.toBe(0);
+  });
+
+  it('rejects moving an ordinary folder when nested rss folders would exceed quota', async () => {
+    const { entityManager, resourcesService, service } = createService({
+      activeFolderCount: 1,
+      extraFolders: [{ id: 'nested-rss-id' }],
+      movedResources: [
+        { id: 'ordinary-folder-id', resourceType: ResourceType.FOLDER },
+      ],
+    });
+
+    await expectAppException(
+      service.assertMoveQuota(
+        NAMESPACE_ID,
+        ['ordinary-folder-id'],
+        'parent-id',
+        entityManager as any,
+      ),
+      'RSS_FOLDER_QUOTA_EXCEEDED',
+    );
+    expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
   });
 });

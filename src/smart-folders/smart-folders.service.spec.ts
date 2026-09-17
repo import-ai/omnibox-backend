@@ -135,6 +135,23 @@ describe('SmartFoldersService.listChildren', () => {
         .mockImplementation((_userId, _namespaceId, resources) =>
           Promise.resolve(resources),
         ),
+      batchGetHasChildren: jest
+        .fn()
+        .mockImplementation(
+          (
+            _namespaceId: string,
+            _userId: string,
+            parents: Array<{ id: string }>,
+          ) =>
+            Promise.resolve(
+              new Map(
+                parents.map((parent) => [
+                  parent.id,
+                  parent.id === 'rss-folder-child-id',
+                ]),
+              ),
+            ),
+        ),
     };
     const resourcesService = {
       batchGetParentResources: jest.fn().mockResolvedValue(parentById),
@@ -171,6 +188,7 @@ describe('SmartFoldersService.listChildren', () => {
       queryBuilder,
       resourceRepository,
       resourcesService,
+      permissionsService,
       smartFolderResourcesService,
       scopeService,
       service,
@@ -230,5 +248,36 @@ describe('SmartFoldersService.listChildren', () => {
     expect(ids).toContain('rss-item-resource-id');
     expect(ids).not.toContain('smart-folder-child-id');
     expect(ids).not.toContain('out-of-scope-doc-id');
+  });
+
+  it('marks has_children from visible children, not undeleted rows', async () => {
+    const { queryBuilder, permissionsService, service } = createService();
+
+    const result = await service.listChildren(
+      'user-id',
+      'namespace-id',
+      'smart-folder-id',
+    );
+
+    expect(permissionsService.batchGetHasChildren).toHaveBeenCalledWith(
+      'namespace-id',
+      'user-id',
+      [
+        expect.objectContaining({ id: 'matched-doc-id' }),
+        expect.objectContaining({ id: 'rss-folder-child-id' }),
+        expect.objectContaining({ id: 'rss-item-resource-id' }),
+      ],
+      [expect.objectContaining({ id: 'private-root' })],
+    );
+    expect(queryBuilder.getRawMany).not.toHaveBeenCalled();
+    expect(
+      Object.fromEntries(
+        result.map((resource) => [resource.id, resource.hasChildren]),
+      ),
+    ).toEqual({
+      'matched-doc-id': false,
+      'rss-folder-child-id': true,
+      'rss-item-resource-id': false,
+    });
   });
 });

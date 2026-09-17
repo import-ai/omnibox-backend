@@ -206,7 +206,7 @@ export class SmartFoldersService implements ISmartFoldersService {
         ),
       )
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-    const visible = await this.filterMatchedByPermissionAndScope(
+    const { visible, parentMap } = await this.filterMatchedByPermissionAndScope(
       userId,
       namespaceId,
       config.rootScope,
@@ -223,9 +223,16 @@ export class SmartFoldersService implements ISmartFoldersService {
         ? visible.slice(offset)
         : visible.slice(offset, offset + limit);
     await this.attachContentSnippets(namespaceId, paged);
-    const hasChildrenMap = await this.batchHasUndeletedChildren(
+    const pagedParents = paged
+      .map((resource) => parentMap.get(resource.id))
+      .filter(
+        (resource): resource is ResourceMetaDto => resource !== undefined,
+      );
+    const hasChildrenMap = await this.permissionsService.batchGetHasChildren(
       namespaceId,
-      paged.map((resource) => resource.id),
+      userId,
+      pagedParents,
+      this.ancestorsOf(pagedParents, parentMap),
     );
 
     return {
@@ -512,9 +519,12 @@ export class SmartFoldersService implements ISmartFoldersService {
     namespaceId: string,
     rootScope: SmartFolderRootScope,
     matched: Resource[],
-  ): Promise<Resource[]> {
+  ): Promise<{
+    visible: Resource[];
+    parentMap: Map<string, ResourceMetaDto>;
+  }> {
     if (matched.length <= 0) {
-      return [];
+      return { visible: [], parentMap: new Map() };
     }
     const rootIds = await this.getScopeRootIds(userId, namespaceId, rootScope);
     const parentMap = await this.resourcesService.batchGetParentResources(
@@ -527,11 +537,14 @@ export class SmartFoldersService implements ISmartFoldersService {
       [...parentMap.values()],
     );
     const visibleIds = new Set(visible.map((resource) => resource.id));
-    return matched.filter(
-      (resource) =>
-        visibleIds.has(resource.id) &&
-        this.reachesScopeRoot(resource, parentMap, rootIds),
-    );
+    return {
+      visible: matched.filter(
+        (resource) =>
+          visibleIds.has(resource.id) &&
+          this.reachesScopeRoot(resource, parentMap, rootIds),
+      ),
+      parentMap,
+    };
   }
 
   private async getScopeRootIds(
@@ -576,30 +589,28 @@ export class SmartFoldersService implements ISmartFoldersService {
     return false;
   }
 
-  private async batchHasUndeletedChildren(
-    namespaceId: string,
-    parentIds: string[],
-  ): Promise<Map<string, boolean>> {
-    const result = new Map(parentIds.map((id) => [id, false]));
-    if (parentIds.length <= 0) {
-      return result;
-    }
-    const rows: Array<{ parentId?: string; parent_id?: string }> =
-      await this.resourceRepository
-        .createQueryBuilder('child')
-        .select('child.parent_id', 'parentId')
-        .where('child.namespace_id = :namespaceId', { namespaceId })
-        .andWhere('child.parent_id IN (:...parentIds)', { parentIds })
-        .andWhere('child.deleted_at IS NULL')
-        .distinct(true)
-        .getRawMany();
-    for (const row of rows) {
-      const parentId = row.parentId || row.parent_id;
-      if (parentId) {
-        result.set(parentId, true);
+  private ancestorsOf(
+    resources: ResourceMetaDto[],
+    parentMap: Map<string, ResourceMetaDto>,
+  ): ResourceMetaDto[] {
+    const resourceIds = new Set(resources.map((resource) => resource.id));
+    const ancestors = new Map<string, ResourceMetaDto>();
+    for (const resource of resources) {
+      let current = resource.parentId
+        ? parentMap.get(resource.parentId)
+        : undefined;
+      const seen = new Set<string>();
+      while (current && !seen.has(current.id)) {
+        seen.add(current.id);
+        if (!resourceIds.has(current.id)) {
+          ancestors.set(current.id, current);
+        }
+        current = current.parentId
+          ? parentMap.get(current.parentId)
+          : undefined;
       }
     }
-    return result;
+    return [...ancestors.values()];
   }
 
   private async attachContentSnippets(

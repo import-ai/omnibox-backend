@@ -11,7 +11,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { IRssFoldersQuotaService } from 'omniboxd/rss/rss-folders-quota.interface';
-import { EntityManager, In, IsNull, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 
 @Injectable()
 export class RssFoldersQuotaService implements IRssFoldersQuotaService {
@@ -131,12 +131,14 @@ export class RssFoldersQuotaService implements IRssFoldersQuotaService {
   }
 
   async countActive(namespaceId: string, rootId: string): Promise<number> {
-    const resources = await this.resourcesService.getAllSubResources(
-      namespaceId,
-      [rootId],
+    const folders = await this.listActiveRssFolders(namespaceId);
+    const parentChains = await Promise.all(
+      folders.map((folder) =>
+        this.resourcesService.getParentResources(namespaceId, folder.id),
+      ),
     );
-    return resources.filter(
-      (resource) => resource.resourceType === ResourceType.RSS_FOLDER,
+    return parentChains.filter((parents) =>
+      this.isDescendantOfRoot(parents, rootId),
     ).length;
   }
 
@@ -188,38 +190,54 @@ export class RssFoldersQuotaService implements IRssFoldersQuotaService {
     targetRootId: string,
     entityManager: EntityManager,
   ): Promise<number> {
-    const resourceRepository = entityManager.getRepository(Resource);
-    const movedRoots = await resourceRepository.find({
-      where: { namespaceId, id: In(resourceIds) },
-    });
-    const descendants = await this.resourcesService.getAllSubResources(
-      namespaceId,
-      resourceIds,
+    const movedIds = new Set(resourceIds);
+    const folders = await this.listActiveRssFolders(namespaceId, entityManager);
+    const parentChains = await Promise.all(
+      folders.map((folder) =>
+        this.resourcesService.getParentResources(
+          namespaceId,
+          folder.id,
+          entityManager,
+        ),
+      ),
     );
-    const candidates = new Map<string, { id: string; resourceType: string }>();
-    for (const resource of movedRoots) {
-      candidates.set(resource.id, resource);
-    }
-    for (const resource of descendants) {
-      candidates.set(resource.id, resource);
-    }
 
     let incoming = 0;
-    for (const resource of candidates.values()) {
-      if (resource.resourceType !== (ResourceType.RSS_FOLDER as string)) {
+    for (const parents of parentChains) {
+      if (
+        parents.length === 0 ||
+        !parents.some((parent) => movedIds.has(parent.id))
+      ) {
         continue;
       }
-      const parents = await this.resourcesService.getParentResourcesOrFail(
-        namespaceId,
-        resource.id,
-        entityManager,
-      );
       const sourceRootId = parents[parents.length - 1].id;
       if (sourceRootId !== targetRootId) {
         incoming += 1;
       }
     }
     return incoming;
+  }
+
+  private async listActiveRssFolders(
+    namespaceId: string,
+    entityManager?: EntityManager,
+  ): Promise<Array<Pick<Resource, 'id'>>> {
+    const repository =
+      entityManager?.getRepository(Resource) ?? this.resourceRepository;
+    return await repository.find({
+      select: ['id'],
+      where: {
+        namespaceId,
+        resourceType: ResourceType.RSS_FOLDER,
+      },
+    });
+  }
+
+  private isDescendantOfRoot(
+    parents: Array<{ id: string }>,
+    rootId: string,
+  ): boolean {
+    return parents.length > 1 && parents[parents.length - 1].id === rootId;
   }
 
   // Resolves the root the folder would land under when restored, mirroring the

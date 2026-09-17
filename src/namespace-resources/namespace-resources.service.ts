@@ -19,7 +19,6 @@ import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resour
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   CONTENT_RESOURCE_TYPES,
-  isContentResourceType,
   isReadOnlyResourceType,
   isServiceOwnedResourceType,
   READ_ONLY_RESOURCE_TYPES,
@@ -957,47 +956,32 @@ export class NamespaceResourcesService {
     options?: { summary?: boolean },
   ): Promise<ResourceSummaryDto[]> {
     const { summary = false } = options || {};
-    const allVisible = await this.getUserVisibleResources(userId, namespaceId);
-    const sorted = allVisible
-      .filter((r) => r.parentId !== null)
-      // Same selection as getRecentResources: containers of every kind are not
-      // "recent work", and a busy feed would otherwise flood the list with
-      // polled items.
-      .filter((r) => isContentResourceType(r.resourceType))
-      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const take = Math.max(1, Math.min(100, limit));
     const skip = Math.max(0, offset);
-    const paged = sorted.slice(skip, skip + take);
+    const paged = (
+      await this.getRecentResources(namespaceId, userId, skip + take)
+    ).slice(skip, skip + take);
 
-    // Fetch resources with or without content based on summary flag
-    const resources = await this.resourcesService.getChildren(
-      namespaceId,
-      paged.map((r) => r.parentId!),
-      { summary },
-    );
-    const resourceMap = new Map(resources.map((r) => [r.id, r]));
-
-    // Get the final list of resources
-    const finalResources = paged
-      .map((r) => resourceMap.get(r.id))
-      .filter((r): r is Resource => !!r);
-
-    if (summary) {
-      // Fetch first attachments only when summary is true
-      const firstAttachments =
-        await this.resourceAttachmentsService.getFirstAttachments(
-          namespaceId,
-          finalResources.map((r) => r.id),
+    if (summary && paged.length > 0) {
+      const ids = paged.map((r) => r.id);
+      const [contents, firstAttachments] = await Promise.all([
+        this.resourcesService.getContents(namespaceId, ids),
+        this.resourceAttachmentsService.getFirstAttachments(namespaceId, ids),
+      ]);
+      return paged.map((r) => {
+        const content = contents.get(r.id);
+        if (content !== undefined) {
+          r.content = content;
+        }
+        return ResourceSummaryDto.fromEntity(
+          r,
+          false,
+          firstAttachments.get(r.id),
         );
-
-      // For recent api, hasChildren is always false
-      return finalResources.map((r) =>
-        ResourceSummaryDto.fromEntity(r, false, firstAttachments.get(r.id)),
-      );
+      });
     }
 
-    // For non-summary, return lightweight ResourceSummaryDto
-    return finalResources.map((r) => ResourceSummaryDto.fromEntity(r, false));
+    return paged.map((r) => ResourceSummaryDto.fromEntity(r, false));
   }
 
   async getRecentResources(
@@ -1009,6 +993,15 @@ export class NamespaceResourcesService {
     const batchSize = 100;
     for (let skip = 0; ; skip += batchSize) {
       const batch = await this.resourceRepository.find({
+        select: [
+          'id',
+          'name',
+          'parentId',
+          'resourceType',
+          'attrs',
+          'createdAt',
+          'updatedAt',
+        ],
         where: {
           namespaceId,
           parentId: Not(IsNull()),
@@ -1036,7 +1029,10 @@ export class NamespaceResourcesService {
       const visibleIds = new Set(visible.map((r) => r.id));
 
       for (const resource of batch) {
-        if (visibleIds.has(resource.id)) {
+        if (
+          visibleIds.has(resource.id) &&
+          this.reachesRoot(resource, withParents)
+        ) {
           result.push(resource);
           if (result.length >= count) {
             return result;
@@ -1048,6 +1044,25 @@ export class NamespaceResourcesService {
         return result;
       }
     }
+  }
+
+  private reachesRoot(
+    resource: { id: string; parentId: string | null },
+    resourceMap: Map<string, { id: string; parentId: string | null }>,
+  ): boolean {
+    let current: { id: string; parentId: string | null } | undefined = resource;
+    const seen = new Set<string>();
+    while (current) {
+      if (seen.has(current.id)) {
+        return false;
+      }
+      seen.add(current.id);
+      if (!current.parentId) {
+        return true;
+      }
+      current = resourceMap.get(current.parentId);
+    }
+    return false;
   }
 
   // Staleness signal only — intentionally not permission-filtered.

@@ -89,58 +89,102 @@ describe('SmartFoldersService.listChildren', () => {
         updatedAt: new Date('2026-05-18T00:00:00.000Z'),
       },
     ];
-    const resourceRepository = {
-      find: jest.fn(({ where }) => {
-        const ids = new Set<string>(where.id.value);
-        return Promise.resolve(
-          resources.filter((resource) => ids.has(resource.id)),
-        );
-      }),
+    const candidates = resources.filter(
+      (resource) => resource.resourceType !== ResourceType.SMART_FOLDER,
+    );
+    const parentById = new Map([
+      ['matched-doc-id', { id: 'matched-doc-id', parentId: 'private-root' }],
+      ['private-root', { id: 'private-root', parentId: null }],
+      [
+        'out-of-scope-doc-id',
+        { id: 'out-of-scope-doc-id', parentId: 'team-root' },
+      ],
+      ['team-root', { id: 'team-root', parentId: null }],
+      [
+        'rss-folder-child-id',
+        { id: 'rss-folder-child-id', parentId: 'private-root' },
+      ],
+      [
+        'rss-item-resource-id',
+        { id: 'rss-item-resource-id', parentId: 'rss-folder-child-id' },
+      ],
+    ]);
+    const queryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(candidates),
+      getRawMany: jest.fn().mockResolvedValue([]),
     };
-    const namespaceResourcesService = {
-      getUserVisibleResources: jest.fn().mockResolvedValue(resources),
+    const resourceRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+      find: jest
+        .fn()
+        .mockResolvedValue(
+          candidates.map((resource) => ({ id: resource.id, content: '' })),
+        ),
+    };
+    const smartFolderResourcesService = {
+      getUserVisibleResources: jest.fn(),
     };
     const permissionsService = {
       userHasPermission: jest.fn().mockResolvedValue(true),
+      filterResourcesByPermission: jest
+        .fn()
+        .mockImplementation((_userId, _namespaceId, resources) =>
+          Promise.resolve(resources),
+        ),
+    };
+    const resourcesService = {
+      batchGetParentResources: jest.fn().mockResolvedValue(parentById),
+      getAllResources: jest.fn(),
+      getAllSubResources: jest.fn(),
     };
     const scopeService = {
-      getScopedVisibleResourceIds: jest
-        .fn()
-        .mockResolvedValue(
-          new Set([
-            'matched-doc-id',
-            'smart-folder-child-id',
-            'rss-folder-child-id',
-            'rss-item-resource-id',
-          ]),
-        ),
+      getOwnerRootId: jest.fn().mockResolvedValue('private-root'),
+      getScopedVisibleResourceIds: jest.fn(),
     };
     const tagService = {
       getTagsByIds: jest.fn(),
     };
+    const expressionService = new SmartFolderExpressionService({
+      t: jest.fn((key: string) => key),
+    } as any);
     const service = new SmartFoldersService(
       smartFolderConfigRepository as any,
       resourceRepository as any,
       {} as any,
-      namespaceResourcesService as any,
+      smartFolderResourcesService as any,
       permissionsService as any,
+      resourcesService as any,
       {} as any,
       scopeService as any,
-      new SmartFoldersMatcherService(
-        new SmartFolderExpressionService({
-          t: jest.fn((key: string) => key),
-        } as any),
-      ),
+      new SmartFoldersMatcherService(expressionService),
+      expressionService,
       {} as any,
       tagService as any,
       { t: jest.fn((key: string) => key) } as any,
     );
 
-    return { resourceRepository, scopeService, service };
+    return {
+      queryBuilder,
+      resourceRepository,
+      resourcesService,
+      smartFolderResourcesService,
+      scopeService,
+      service,
+    };
   }
 
   it('returns matched visible non-smart-folder resources inside the configured scope', async () => {
-    const { resourceRepository, scopeService, service } = createService();
+    const {
+      queryBuilder,
+      resourcesService,
+      smartFolderResourcesService,
+      scopeService,
+      service,
+    } = createService();
 
     const result = await service.listChildren(
       'user-id',
@@ -148,18 +192,21 @@ describe('SmartFoldersService.listChildren', () => {
       'smart-folder-id',
     );
 
-    expect(scopeService.getScopedVisibleResourceIds).toHaveBeenCalledWith(
+    expect(
+      smartFolderResourcesService.getUserVisibleResources,
+    ).not.toHaveBeenCalled();
+    expect(scopeService.getScopedVisibleResourceIds).not.toHaveBeenCalled();
+    expect(resourcesService.getAllResources).not.toHaveBeenCalled();
+    expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
+    expect(scopeService.getOwnerRootId).toHaveBeenCalledWith(
       'user-id',
       'namespace-id',
       SmartFolderRootScope.PRIVATE,
-      expect.any(Array),
     );
-    expect(resourceRepository.find).toHaveBeenCalledWith({
-      where: {
-        namespaceId: 'namespace-id',
-        id: expect.any(Object),
-      },
-    });
+    expect(resourcesService.batchGetParentResources).toHaveBeenCalled();
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      expect.not.arrayContaining(['resource.content']),
+    );
     expect(result.map((resource) => resource.id)).toEqual([
       'matched-doc-id',
       'rss-folder-child-id',
@@ -182,5 +229,6 @@ describe('SmartFoldersService.listChildren', () => {
     expect(ids).toContain('rss-folder-child-id');
     expect(ids).toContain('rss-item-resource-id');
     expect(ids).not.toContain('smart-folder-child-id');
+    expect(ids).not.toContain('out-of-scope-doc-id');
   });
 });

@@ -25,7 +25,7 @@ type Atom =
   | { type: 'string'; value: string }
   | { type: 'list'; values: string[] };
 
-type ExpressionNode =
+export type ExpressionNode =
   | { type: 'and' | 'or'; left: ExpressionNode; right: ExpressionNode }
   | { type: 'compare'; op: CompareOp; left: Atom; right: Atom };
 
@@ -725,7 +725,10 @@ function isValidTimeZone(timeZone: string): boolean {
   }
 }
 
-function parseZonedDatetime(value: string, timeZone: string): Date | null {
+export function parseZonedDatetime(
+  value: string,
+  timeZone: string,
+): Date | null {
   const parts = datetimeParts(value);
   if (!parts || !isDatetimeLiteral(value) || !isValidTimeZone(timeZone)) {
     return null;

@@ -10,10 +10,12 @@
     "isUUID": "{property} 必须是有效的 UUID",
     "isDateString": "{property} 必须是有效的日期字符串",
     "isInt": "{property} 必须是整数",
+    "isIn": "{property} 必须是 {constraints.0} 中的一个值",
     "isEnum": "{property} 必须是有效的值",
     "minLength": "{property} 长度至少为 {constraints.0} 个字符",
     "maxLength": "{property} 长度不能超过 {constraints.0} 个字符",
     "min": "{property} 不能小于 {constraints.0}",
+    "max": "{property} 不能大于 {constraints.0}",
     "email": {
       "isString": "邮箱必须是字符串",
       "isNotEmpty": "邮箱不能为空",

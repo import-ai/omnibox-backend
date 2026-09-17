@@ -104,6 +104,20 @@ describe('RssFoldersQuotaService', () => {
         .mockImplementation((_namespaceId: string, resourceId: string) =>
           Promise.resolve(resolveParents(resourceId)),
         ),
+      batchGetParentResources: jest
+        .fn()
+        .mockImplementation((_namespaceId: string, resourceIds: string[]) => {
+          const resourceMap = new Map<
+            string,
+            { id: string; parentId: string | null }
+          >();
+          for (const resourceId of resourceIds) {
+            for (const parent of resolveParents(resourceId)) {
+              resourceMap.set(parent.id, parent);
+            }
+          }
+          return Promise.resolve(resourceMap);
+        }),
       getAllSubResources: jest.fn(),
       isParentDeleted: jest
         .fn()
@@ -189,6 +203,7 @@ describe('RssFoldersQuotaService', () => {
     expect(resourceRepository.find).not.toHaveBeenCalled();
     expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
     expect(resourcesService.getParentResources).not.toHaveBeenCalled();
+    expect(resourcesService.batchGetParentResources).not.toHaveBeenCalled();
     expect(entityManager.query).not.toHaveBeenCalled();
   });
 
@@ -306,6 +321,7 @@ describe('RssFoldersQuotaService', () => {
     expect(resourceRepository.find).not.toHaveBeenCalled();
     expect(entityManager.getRepository).not.toHaveBeenCalled();
     expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
+    expect(resourcesService.batchGetParentResources).not.toHaveBeenCalled();
     expect(entityManager.query).not.toHaveBeenCalled();
   });
 
@@ -324,6 +340,12 @@ describe('RssFoldersQuotaService', () => {
         resourceType: ResourceType.RSS_FOLDER,
       },
     });
+    expect(resourcesService.batchGetParentResources).toHaveBeenCalledWith(
+      NAMESPACE_ID,
+      ['rss-folder-0', 'rss-folder-1'],
+      undefined,
+    );
+    expect(resourcesService.getParentResources).not.toHaveBeenCalled();
     expect(resourcesService.getAllSubResources).not.toHaveBeenCalled();
   });
 

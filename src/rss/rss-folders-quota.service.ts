@@ -132,10 +132,9 @@ export class RssFoldersQuotaService implements IRssFoldersQuotaService {
 
   async countActive(namespaceId: string, rootId: string): Promise<number> {
     const folders = await this.listActiveRssFolders(namespaceId);
-    const parentChains = await Promise.all(
-      folders.map((folder) =>
-        this.resourcesService.getParentResources(namespaceId, folder.id),
-      ),
+    const parentChains = await this.getParentChains(
+      namespaceId,
+      folders.map((folder) => folder.id),
     );
     return parentChains.filter((parents) =>
       this.isDescendantOfRoot(parents, rootId),
@@ -192,14 +191,10 @@ export class RssFoldersQuotaService implements IRssFoldersQuotaService {
   ): Promise<number> {
     const movedIds = new Set(resourceIds);
     const folders = await this.listActiveRssFolders(namespaceId, entityManager);
-    const parentChains = await Promise.all(
-      folders.map((folder) =>
-        this.resourcesService.getParentResources(
-          namespaceId,
-          folder.id,
-          entityManager,
-        ),
-      ),
+    const parentChains = await this.getParentChains(
+      namespaceId,
+      folders.map((folder) => folder.id),
+      entityManager,
     );
 
     let incoming = 0;
@@ -216,6 +211,46 @@ export class RssFoldersQuotaService implements IRssFoldersQuotaService {
       }
     }
     return incoming;
+  }
+
+  private async getParentChains(
+    namespaceId: string,
+    resourceIds: string[],
+    entityManager?: EntityManager,
+  ): Promise<Array<Array<{ id: string }>>> {
+    if (resourceIds.length === 0) {
+      return [];
+    }
+    const resourceMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      resourceIds,
+      entityManager,
+    );
+    return resourceIds.map((resourceId) =>
+      this.ancestorChain(resourceMap, resourceId),
+    );
+  }
+
+  private ancestorChain(
+    resourceMap: Map<string, { id: string; parentId: string | null }>,
+    resourceId: string,
+  ): Array<{ id: string }> {
+    const chain: Array<{ id: string }> = [];
+    const seen = new Set<string>();
+    let currentId: string | null = resourceId;
+    while (currentId) {
+      if (seen.has(currentId)) {
+        return [];
+      }
+      seen.add(currentId);
+      const resource = resourceMap.get(currentId);
+      if (!resource) {
+        return [];
+      }
+      chain.push({ id: resource.id });
+      currentId = resource.parentId;
+    }
+    return chain;
   }
 
   private async listActiveRssFolders(

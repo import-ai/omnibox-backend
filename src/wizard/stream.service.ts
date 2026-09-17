@@ -485,12 +485,7 @@ export class StreamService implements OnModuleDestroy {
   ): Promise<PrivateSearchResourceDto[]> {
     // for private_search, pass the resource with permission
     if (resources.length === 0) {
-      const resources =
-        await this.namespaceResourcesService.getAllResourcesByUser(
-          userId,
-          namespaceId,
-        );
-      return resources.map((r) => this.toPrivateSearchResource(r));
+      return [];
     }
     const visibleResources: PrivateSearchResourceDto[] =
       await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(

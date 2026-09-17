@@ -125,15 +125,10 @@ describe('StreamService agent handler', () => {
 });
 
 describe('StreamService private_search visible resources', () => {
-  it('treats smart folders as folders when all visible resources are exposed', async () => {
+  it('does not scan the namespace when private_search resources are empty', async () => {
     const namespaceResourcesService = {
-      getAllResourcesByUser: jest.fn().mockResolvedValue([
-        {
-          id: 'smart-folder-id',
-          name: 'Smart folder',
-          resourceType: ResourceType.SMART_FOLDER,
-        },
-      ]),
+      getAllResourcesByUser: jest.fn(),
+      permissionFilter: jest.fn(),
     };
     const service = createService({
       namespaceResourcesService,
@@ -146,13 +141,11 @@ describe('StreamService private_search visible resources', () => {
       [],
     );
 
-    expect(result).toEqual([
-      {
-        id: 'smart-folder-id',
-        name: 'Smart folder',
-        type: 'folder',
-      },
-    ]);
+    expect(result).toEqual([]);
+    expect(
+      namespaceResourcesService.getAllResourcesByUser,
+    ).not.toHaveBeenCalled();
+    expect(namespaceResourcesService.permissionFilter).not.toHaveBeenCalled();
   });
 
   it('expands selected smart folders through the virtual smart-folder children list', async () => {

@@ -26,6 +26,7 @@ import { AppController } from 'omniboxd/app/app.controller';
 import { AppConfigModule } from 'omniboxd/app-config/app-config.module';
 import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
+import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
@@ -190,6 +191,7 @@ export class AppModule implements NestModule {
             AcceptLanguageResolver,
           ],
         }),
+        AttributionReporterModule,
         TelemetryModule,
         KafkaModule,
         TagModule,

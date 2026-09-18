@@ -17,6 +17,7 @@ import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
+import { VisibleResourcesRequestDto } from 'omniboxd/namespace-resources/dto/visible-resources.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourceRetryService } from 'omniboxd/namespace-resources/resource-retry.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
@@ -87,6 +88,22 @@ export class InternalResourcesController {
       resourceIds,
       requestDto.options,
     );
+  }
+
+  @Public()
+  @Post('namespaces/:namespaceId/resources/visible')
+  async filterVisibleResources(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Body() requestDto: VisibleResourcesRequestDto,
+  ) {
+    const resourceIds = [...new Set(requestDto.resourceIds)];
+    const visibleIds = await this.namespaceResourcesService.permissionFilter(
+      namespaceId,
+      userId,
+      resourceIds,
+    );
+    return { resourceIds: visibleIds };
   }
 
   @Public()

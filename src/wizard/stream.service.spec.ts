@@ -3,6 +3,7 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 
 function createService(mocks: {
+  configService?: { get: jest.Mock };
   conversationsService?: Record<string, jest.Mock>;
   namespaceResourcesService?: Record<string, jest.Mock>;
   sharedResourcesService?: Record<string, jest.Mock>;
@@ -10,7 +11,7 @@ function createService(mocks: {
   smartFoldersService?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
-    { get: jest.fn() } as any,
+    (mocks.configService ?? { get: jest.fn() }) as any,
     {} as any,
     {} as any,
     mocks.conversationsService as any,
@@ -125,12 +126,54 @@ describe('StreamService agent handler', () => {
 });
 
 describe('StreamService private_search visible resources', () => {
-  it('does not scan the namespace when private_search resources are empty', async () => {
+  it('expands empty private_search resources when the flag is unset', async () => {
+    const namespaceResourcesService = {
+      getAllResourcesByUser: jest.fn().mockResolvedValue([
+        {
+          id: 'smart-folder-id',
+          name: 'Smart folder',
+          resourceType: ResourceType.SMART_FOLDER,
+        },
+      ]),
+      permissionFilter: jest.fn(),
+    };
+    const service = createService({
+      namespaceResourcesService,
+      resourcesService: {},
+    });
+
+    const result = await (service as any).getUserVisibleResources(
+      'namespace-id',
+      'user-id',
+      [],
+    );
+
+    expect(result).toEqual([
+      {
+        id: 'smart-folder-id',
+        name: 'Smart folder',
+        type: 'folder',
+      },
+    ]);
+    expect(
+      namespaceResourcesService.getAllResourcesByUser,
+    ).toHaveBeenCalledWith('user-id', 'namespace-id');
+    expect(namespaceResourcesService.permissionFilter).not.toHaveBeenCalled();
+  });
+
+  it('does not scan the namespace when expanding empty resources is disabled', async () => {
     const namespaceResourcesService = {
       getAllResourcesByUser: jest.fn(),
       permissionFilter: jest.fn(),
     };
     const service = createService({
+      configService: {
+        get: jest.fn((key: string) =>
+          key === 'OBB_ASK_EXPAND_EMPTY_VISIBLE_RESOURCES'
+            ? 'false'
+            : undefined,
+        ),
+      },
       namespaceResourcesService,
       resourcesService: {},
     });

@@ -70,7 +70,7 @@ describe('NamespacesSingleController', () => {
         controller.listMembers('namespace-1', 'user-1'),
       ).resolves.toBe(members);
       expect(getMe).toHaveBeenCalledWith('namespace-1', 'user-1');
-      expect(listMembers).toHaveBeenCalledWith('namespace-1');
+      expect(listMembers).toHaveBeenCalledWith('namespace-1', 'user-1');
     });
 
     it('does not return members when membership validation fails', async () => {

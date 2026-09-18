@@ -9,10 +9,10 @@ export class NamespaceMemberNote extends Base {
   @Column()
   namespaceId: string;
 
-  @Column()
+  @Column('uuid')
   authorUserId: string;
 
-  @Column()
+  @Column('uuid')
   targetUserId: string;
 
   @Column('varchar', { length: 128 })

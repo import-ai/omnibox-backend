@@ -36,6 +36,7 @@ import {
   NamespaceRole,
   ROLE_LEVEL,
 } from './entities/namespace-member.entity';
+import { NamespaceMemberNote } from './entities/namespace-member-note.entity';
 import { WELCOME_CONTENT } from './welcome-content';
 
 @Injectable()
@@ -48,6 +49,9 @@ export class NamespacesService {
 
     @InjectRepository(NamespaceMember)
     private namespaceMemberRepository: Repository<NamespaceMember>,
+
+    @InjectRepository(NamespaceMemberNote)
+    private namespaceMemberNoteRepository: Repository<NamespaceMemberNote>,
 
     private readonly dataSource: DataSource,
     private readonly userService: UserService,
@@ -645,7 +649,10 @@ export class NamespacesService {
     return members.map((member) => member.userId);
   }
 
-  async listMembers(namespaceId: string): Promise<NamespaceMemberDto[]> {
+  async listMembers(
+    namespaceId: string,
+    viewerUserId?: string,
+  ): Promise<NamespaceMemberDto[]> {
     const members = await this.namespaceMemberRepository.find({
       where: { namespaceId },
     });
@@ -660,6 +667,20 @@ export class NamespacesService {
       userIds,
     );
 
+    const noteMap = new Map<string, string>();
+    if (viewerUserId) {
+      const notes = await this.namespaceMemberNoteRepository.find({
+        where: {
+          namespaceId,
+          authorUserId: viewerUserId,
+          deletedAt: IsNull(),
+        },
+      });
+      for (const note of notes) {
+        noteMap.set(note.targetUserId, note.note);
+      }
+    }
+
     const memberDtos: NamespaceMemberDto[] = [];
     for (const member of members) {
       const user = userMap.get(member.userId);
@@ -672,11 +693,129 @@ export class NamespacesService {
         userId: user.id,
         email: user.email,
         username: user.username,
+        nickname: member.nickname ?? null,
+        note: noteMap.get(member.userId) ?? null,
         role: member.role,
         permission: permission,
       });
     }
     return memberDtos;
+  }
+
+  private normalizeProfileText(
+    value: string | null | undefined,
+    maxLength: number,
+  ): string | null | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null) {
+      return null;
+    }
+    const normalized = filterEmoji(value).slice(0, maxLength).trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  async updateMemberProfile(
+    namespaceId: string,
+    targetUserId: string,
+    currentUserId: string,
+    dto: { nickname?: string | null; note?: string | null },
+  ): Promise<NamespaceMemberDto> {
+    if (dto.nickname === undefined && dto.note === undefined) {
+      throw new AppException(
+        this.i18n.t('validation.errors.name.isNotEmpty'),
+        'INVALID_PROFILE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const nickname = this.normalizeProfileText(dto.nickname, 64);
+    const note = this.normalizeProfileText(dto.note, 128);
+
+    await transaction(this.dataSource.manager, async (tx) => {
+      const entityManager = tx.entityManager;
+      const currentUserMember = await entityManager.findOne(NamespaceMember, {
+        where: { namespaceId, userId: currentUserId, deletedAt: IsNull() },
+      });
+      if (!currentUserMember) {
+        throw new AppException(
+          this.i18n.t('namespace.errors.notAMember'),
+          'NOT_A_MEMBER',
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      const targetMember = await entityManager.findOne(NamespaceMember, {
+        where: { namespaceId, userId: targetUserId, deletedAt: IsNull() },
+      });
+      if (!targetMember) {
+        throw new AppException(
+          this.i18n.t('namespace.errors.memberNotFound'),
+          'MEMBER_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      if (nickname !== undefined) {
+        if (targetUserId !== currentUserId) {
+          throw new AppException(
+            this.i18n.t('namespace.errors.insufficientPermission'),
+            'INSUFFICIENT_PERMISSION',
+            HttpStatus.FORBIDDEN,
+          );
+        }
+        await entityManager.update(
+          NamespaceMember,
+          { id: targetMember.id },
+          { nickname },
+        );
+      }
+
+      if (note !== undefined) {
+        const existing = await entityManager.findOne(NamespaceMemberNote, {
+          where: {
+            namespaceId,
+            authorUserId: currentUserId,
+            targetUserId,
+            deletedAt: IsNull(),
+          },
+        });
+        if (note === null) {
+          if (existing) {
+            await entityManager.softDelete(NamespaceMemberNote, {
+              id: existing.id,
+            });
+          }
+        } else if (existing) {
+          await entityManager.update(
+            NamespaceMemberNote,
+            { id: existing.id },
+            { note },
+          );
+        } else {
+          await entityManager.save(
+            entityManager.create(NamespaceMemberNote, {
+              namespaceId,
+              authorUserId: currentUserId,
+              targetUserId,
+              note,
+            }),
+          );
+        }
+      }
+    });
+
+    const members = await this.listMembers(namespaceId, currentUserId);
+    const updated = members.find((member) => member.userId === targetUserId);
+    if (!updated) {
+      throw new AppException(
+        this.i18n.t('namespace.errors.memberNotFound'),
+        'MEMBER_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return updated;
   }
 
   async updateUserPermission(
@@ -869,6 +1008,14 @@ export class NamespacesService {
       await entityManager.softDelete(GroupUser, {
         namespaceId,
         userId,
+      });
+      await entityManager.softDelete(NamespaceMemberNote, {
+        namespaceId,
+        authorUserId: userId,
+      });
+      await entityManager.softDelete(NamespaceMemberNote, {
+        namespaceId,
+        targetUserId: userId,
       });
       await entityManager.softDelete(NamespaceMember, { id: member.id });
 

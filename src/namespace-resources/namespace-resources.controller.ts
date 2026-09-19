@@ -380,6 +380,66 @@ export class NamespaceResourcesController {
     });
   }
 
+  @Get(':resourceId/revisions')
+  async listRevisions(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return await this.namespaceResourcesService.listRevisions(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+  }
+
+  @Get(':resourceId/revisions/:revisionId')
+  async getRevision(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('revisionId') revisionId: string,
+  ) {
+    return await this.namespaceResourcesService.getRevision(
+      namespaceId,
+      resourceId,
+      revisionId,
+      userId,
+    );
+  }
+
+  @Post(':resourceId/revisions/:revisionId/restore')
+  @CheckNamespaceReadonly()
+  async restoreRevision(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('revisionId') revisionId: string,
+    @I18n() i18n: I18nContext,
+  ) {
+    const hasPermission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    if (!hasPermission) {
+      const message = i18n.t('auth.errors.notAuthorized');
+      throw new AppException(message, 'NOT_AUTHORIZED', HttpStatus.FORBIDDEN);
+    }
+    await this.namespaceResourcesService.restoreRevision(
+      namespaceId,
+      resourceId,
+      revisionId,
+      userId,
+    );
+    return await this.namespaceResourcesService.getResource({
+      namespaceId,
+      resourceId,
+      userId,
+    });
+  }
+
   @Get(':resourceId/file')
   async getResourceFile(
     @UserId() userId: string,

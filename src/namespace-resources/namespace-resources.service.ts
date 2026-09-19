@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -26,6 +26,11 @@ import {
   ResourceType,
   SERVICE_OWNED_RESOURCE_TYPES,
 } from 'omniboxd/resources/entities/resource.entity';
+import {
+  ResourceRevisionDetail,
+  ResourceRevisionService,
+  ResourceRevisionSummary,
+} from 'omniboxd/resources/resource-revision.service';
 import {
   hasExplicitSortOptions,
   ResourceSortBy,
@@ -98,6 +103,8 @@ export class NamespaceResourcesService {
     private readonly smartFoldersService: ISmartFoldersService,
     @Inject(RSS_FOLDERS_QUOTA_SERVICE)
     private readonly rssFoldersQuotaService: IRssFoldersQuotaService,
+    @Optional()
+    private readonly resourceRevisionService: ResourceRevisionService = {} as ResourceRevisionService,
   ) {}
 
   private async getTagsByIds(
@@ -1382,6 +1389,104 @@ export class NamespaceResourcesService {
     dto.content_hash = commentData.content_hash;
     dto.comment_threads = commentData.comment_threads;
     return dto;
+  }
+
+  async listRevisions(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<ResourceRevisionSummary[]> {
+    const resource = await this.getRevisionResource(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    return await this.resourceRevisionService.list(resource);
+  }
+
+  async getRevision(
+    namespaceId: string,
+    resourceId: string,
+    revisionId: string,
+    userId: string,
+  ): Promise<ResourceRevisionDetail> {
+    const resource = await this.getRevisionResource(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    const revision = await this.resourceRevisionService.get(
+      resource,
+      revisionId,
+    );
+    if (!revision) {
+      throw new AppException(
+        this.i18n.t('resource.errors.resourceNotFound'),
+        'RESOURCE_REVISION_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return revision;
+  }
+
+  async restoreRevision(
+    namespaceId: string,
+    resourceId: string,
+    revisionId: string,
+    userId: string,
+  ): Promise<void> {
+    const resource = await this.getRevisionResource(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    if (resource.resourceType !== ResourceType.DOC) {
+      throw new AppException(
+        this.i18n.t('resource.errors.invalidResourceType'),
+        'RESOURCE_REVISION_NOT_SUPPORTED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+    const revision = await this.resourceRevisionService.get(
+      resource,
+      revisionId,
+    );
+    if (!revision || revision.isCurrent) {
+      throw new AppException(
+        this.i18n.t('resource.errors.resourceNotFound'),
+        'RESOURCE_REVISION_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    await this.update(namespaceId, userId, resourceId, {
+      name: revision.name,
+      content: revision.content,
+    });
+  }
+
+  private async getRevisionResource(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<Resource> {
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
+    const permission = await this.permissionsService.userHasPermission(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    if (!permission) {
+      throw new AppException(
+        this.i18n.t('auth.errors.notAuthorized'),
+        'NOT_AUTHORIZED',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    return resource;
   }
 
   async getResourceFileForUser(

@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
 
 import { BaseColumns } from './base-columns';
 
-export class AddResourceRevisions1789460000000 implements MigrationInterface {
+export class AddResourceRevisions1789901333475 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.createTable(
       new Table({

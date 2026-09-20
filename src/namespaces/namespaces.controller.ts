@@ -16,6 +16,7 @@ import { NamespaceAdmin } from './decorators/namespace-admin.decorator';
 import { NamespaceOwner } from './decorators/namespace-owner.decorator';
 import { CreateNamespaceDto } from './dto/create-namespace.dto';
 import { RootResourceSortRequestDto } from './dto/root-resource-sort-request.dto';
+import { UpdateMemberProfileDto } from './dto/update-member-profile.dto';
 import { UpdateNamespaceDto } from './dto/update-namespace.dto';
 import { NamespaceRole } from './entities/namespace-member.entity';
 
@@ -63,7 +64,7 @@ export class NamespacesSingleController {
     @UserId() userId: string,
   ) {
     await this.namespacesService.getMe(namespaceId, userId);
-    return await this.namespacesService.listMembers(namespaceId);
+    return await this.namespacesService.listMembers(namespaceId, userId);
   }
 
   @Get('members/count')
@@ -79,6 +80,21 @@ export class NamespacesSingleController {
     @Param('userId') userId: string,
   ) {
     return await this.namespacesService.getMemberByUserId(namespaceId, userId);
+  }
+
+  @Patch('members/:userId/profile')
+  async updateMemberProfile(
+    @Param('namespaceId') namespaceId: string,
+    @Param('userId') userId: string,
+    @Body() dto: UpdateMemberProfileDto,
+    @UserId() currentUserId: string,
+  ) {
+    return await this.namespacesService.updateMemberProfile(
+      namespaceId,
+      userId,
+      currentUserId,
+      dto,
+    );
   }
 
   @NamespaceAdmin()

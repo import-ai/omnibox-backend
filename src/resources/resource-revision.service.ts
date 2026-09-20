@@ -65,17 +65,8 @@ export class ResourceRevisionService {
       order: { createdAt: 'DESC' },
       take: 100,
     });
-    const currentAuthor = resource.userId
-      ? await this.userRepository.findOne({ where: { id: resource.userId } })
-      : null;
     return [
-      {
-        id: 'current',
-        name: resource.name,
-        createdAt: resource.updatedAt,
-        author: currentAuthor ? this.author(currentAuthor) : null,
-        isCurrent: true,
-      },
+      await this.current(resource),
       ...revisions.map((revision) => this.toSummary(revision)),
     ];
   }
@@ -85,19 +76,7 @@ export class ResourceRevisionService {
     revisionId: string,
   ): Promise<ResourceRevisionDetail | null> {
     if (revisionId === 'current') {
-      const currentAuthor = resource.userId
-        ? await this.userRepository.findOne({ where: { id: resource.userId } })
-        : null;
-      return {
-        id: 'current',
-        resourceId: resource.id,
-        name: resource.name,
-        content: resource.content,
-        contentHash: this.contentHash(resource.content),
-        createdAt: resource.updatedAt,
-        author: currentAuthor ? this.author(currentAuthor) : null,
-        isCurrent: true,
-      };
+      return this.current(resource);
     }
     const revision = await this.revisionRepository.findOne({
       where: {
@@ -112,6 +91,22 @@ export class ResourceRevisionService {
 
   private contentHash(content: string): string {
     return createHash('sha256').update(content).digest('hex');
+  }
+
+  private async current(resource: Resource): Promise<ResourceRevisionDetail> {
+    const currentAuthor = resource.userId
+      ? await this.userRepository.findOne({ where: { id: resource.userId } })
+      : null;
+    return {
+      id: 'current',
+      resourceId: resource.id,
+      name: resource.name,
+      content: resource.content,
+      contentHash: this.contentHash(resource.content),
+      createdAt: resource.updatedAt,
+      author: currentAuthor ? this.author(currentAuthor) : null,
+      isCurrent: true,
+    };
   }
 
   private toSummary(revision: ResourceRevision): ResourceRevisionSummary {

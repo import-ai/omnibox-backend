@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -103,8 +103,7 @@ export class NamespaceResourcesService {
     private readonly smartFoldersService: ISmartFoldersService,
     @Inject(RSS_FOLDERS_QUOTA_SERVICE)
     private readonly rssFoldersQuotaService: IRssFoldersQuotaService,
-    @Optional()
-    private readonly resourceRevisionService: ResourceRevisionService = {} as ResourceRevisionService,
+    private readonly resourceRevisionService: ResourceRevisionService,
   ) {}
 
   private async getTagsByIds(

@@ -110,7 +110,7 @@ export class ResourceRevisionService {
     return revision ? this.toDetail(revision) : null;
   }
 
-  contentHash(content: string): string {
+  private contentHash(content: string): string {
     return createHash('sha256').update(content).digest('hex');
   }
 

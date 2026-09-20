@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -54,8 +54,7 @@ export class ResourcesService {
     private readonly filesService: FilesService,
     private readonly storageUsagesService: StorageUsagesService,
     private readonly tagService: TagService,
-    @Optional()
-    private readonly resourceRevisionService?: ResourceRevisionService,
+    private readonly resourceRevisionService: ResourceRevisionService,
   ) {}
 
   private validateResourceName(
@@ -895,7 +894,7 @@ export class ResourcesService {
     const nameChanged =
       props.name !== undefined && props.name !== oldResource.name;
     if (contentChanged || nameChanged) {
-      await this.resourceRevisionService?.createFromResource(
+      await this.resourceRevisionService.createFromResource(
         oldResource,
         userId,
         tx.entityManager,

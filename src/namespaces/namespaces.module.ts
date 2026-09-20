@@ -19,6 +19,7 @@ import { UserModule } from 'omniboxd/user/user.module';
 import { CurrentInfoService } from './current-info.service';
 import { Namespace } from './entities/namespace.entity';
 import { NamespaceMember } from './entities/namespace-member.entity';
+import { NamespaceMemberNote } from './entities/namespace-member-note.entity';
 import { NamespaceAdminInterceptor } from './interceptors/namespace-admin.interceptor';
 import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interceptor';
 
@@ -47,6 +48,7 @@ import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interc
     TypeOrmModule.forFeature([Resource]),
     TypeOrmModule.forFeature([Namespace]),
     TypeOrmModule.forFeature([NamespaceMember]),
+    TypeOrmModule.forFeature([NamespaceMemberNote]),
   ],
 })
 export class NamespacesModule {}

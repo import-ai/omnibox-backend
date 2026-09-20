@@ -193,6 +193,114 @@ describe('NamespacesController (e2e)', () => {
     });
   });
 
+  describe('PATCH /api/v1/namespaces/:namespaceId/members/:userId/profile', () => {
+    it('should let a member set nickname and a private note', async () => {
+      await client
+        .patch(
+          `/api/v1/namespaces/${testNamespaceId}/members/${client.user.id}/profile`,
+        )
+        .send({ nickname: '荔枝', note: '财务对接' })
+        .expect(HttpStatus.OK);
+
+      const response = await client
+        .get(`/api/v1/namespaces/${testNamespaceId}/members`)
+        .expect(HttpStatus.OK);
+
+      const owner = response.body[0];
+      expect(owner.nickname).toBe('荔枝');
+      expect(owner.note).toBe('财务对接');
+    });
+
+    it('should clear nickname and note when empty values are sent', async () => {
+      await client
+        .patch(
+          `/api/v1/namespaces/${testNamespaceId}/members/${client.user.id}/profile`,
+        )
+        .send({ nickname: '临时', note: '说明' })
+        .expect(HttpStatus.OK);
+
+      await client
+        .patch(
+          `/api/v1/namespaces/${testNamespaceId}/members/${client.user.id}/profile`,
+        )
+        .send({ nickname: '', note: '' })
+        .expect(HttpStatus.OK);
+
+      const response = await client
+        .get(`/api/v1/namespaces/${testNamespaceId}/members`)
+        .expect(HttpStatus.OK);
+      const owner = response.body[0];
+      expect(owner.nickname).toBeNull();
+      expect(owner.note).toBeNull();
+    });
+
+    it('should show nickname to other members but keep notes private', async () => {
+      const created = await client
+        .post('/api/v1/namespaces')
+        .send({ name: uniqueNs('Nickname Share') })
+        .expect(HttpStatus.CREATED);
+      const namespaceId = created.body.id as string;
+
+      await addMemberViaInvitation(
+        client,
+        secondClient,
+        namespaceId,
+        NamespaceRole.MEMBER,
+      );
+
+      await client
+        .patch(
+          `/api/v1/namespaces/${namespaceId}/members/${client.user.id}/profile`,
+        )
+        .send({ nickname: '荔枝', note: '只有我能看' })
+        .expect(HttpStatus.OK);
+
+      const ownerView = await client
+        .get(`/api/v1/namespaces/${namespaceId}/members`)
+        .expect(HttpStatus.OK);
+      const ownerSelf = ownerView.body.find(
+        (member: { userId?: string; user_id?: string }) =>
+          (member.userId || member.user_id) === client.user.id,
+      );
+      expect(ownerSelf.nickname).toBe('荔枝');
+      expect(ownerSelf.note).toBe('只有我能看');
+
+      const memberView = await secondClient
+        .get(`/api/v1/namespaces/${namespaceId}/members`)
+        .expect(HttpStatus.OK);
+      const ownerFromMember = memberView.body.find(
+        (member: { userId?: string; user_id?: string }) =>
+          (member.userId || member.user_id) === client.user.id,
+      );
+      expect(ownerFromMember.nickname).toBe('荔枝');
+      expect(ownerFromMember.note).toBeNull();
+
+      await secondClient
+        .patch(
+          `/api/v1/namespaces/${namespaceId}/members/${client.user.id}/profile`,
+        )
+        .send({ nickname: '不该成功' })
+        .expect(HttpStatus.FORBIDDEN);
+
+      await secondClient
+        .patch(
+          `/api/v1/namespaces/${namespaceId}/members/${client.user.id}/profile`,
+        )
+        .send({ note: '别人写的备注' })
+        .expect(HttpStatus.OK);
+
+      const ownerAfterForbidden = await client
+        .get(`/api/v1/namespaces/${namespaceId}/members`)
+        .expect(HttpStatus.OK);
+      const ownerStill = ownerAfterForbidden.body.find(
+        (member: { userId?: string; user_id?: string }) =>
+          (member.userId || member.user_id) === client.user.id,
+      );
+      expect(ownerStill.nickname).toBe('荔枝');
+      expect(ownerStill.note).toBe('只有我能看');
+    });
+  });
+
   describe('GET /api/v1/namespaces/:namespaceId/members/:userId', () => {
     it('should get member details by userId', async () => {
       const response = await client

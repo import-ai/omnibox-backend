@@ -6,6 +6,7 @@
     "isNumber": "{property} must be a number",
     "isBoolean": "{property} must be a boolean value",
     "isArray": "{property} must be an array",
+    "arrayMaxSize": "{property} must contain no more than {constraints.0} elements",
     "isObject": "{property} must be an object",
     "isUUID": "{property} must be a valid UUID",
     "isDateString": "{property} must be a valid date string",

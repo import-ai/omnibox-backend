@@ -3,6 +3,7 @@ import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 
 function createService(mocks: {
+  configService?: { get: jest.Mock };
   conversationsService?: Record<string, jest.Mock>;
   namespaceResourcesService?: Record<string, jest.Mock>;
   sharedResourcesService?: Record<string, jest.Mock>;
@@ -10,7 +11,7 @@ function createService(mocks: {
   smartFoldersService?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
-    { get: jest.fn() } as any,
+    (mocks.configService ?? { get: jest.fn() }) as any,
     {} as any,
     {} as any,
     mocks.conversationsService as any,
@@ -125,7 +126,7 @@ describe('StreamService agent handler', () => {
 });
 
 describe('StreamService private_search visible resources', () => {
-  it('treats smart folders as folders when all visible resources are exposed', async () => {
+  it('expands empty private_search resources when the flag is unset', async () => {
     const namespaceResourcesService = {
       getAllResourcesByUser: jest.fn().mockResolvedValue([
         {
@@ -134,6 +135,7 @@ describe('StreamService private_search visible resources', () => {
           resourceType: ResourceType.SMART_FOLDER,
         },
       ]),
+      permissionFilter: jest.fn(),
     };
     const service = createService({
       namespaceResourcesService,
@@ -153,6 +155,40 @@ describe('StreamService private_search visible resources', () => {
         type: 'folder',
       },
     ]);
+    expect(
+      namespaceResourcesService.getAllResourcesByUser,
+    ).toHaveBeenCalledWith('user-id', 'namespace-id');
+    expect(namespaceResourcesService.permissionFilter).not.toHaveBeenCalled();
+  });
+
+  it('does not scan the namespace when expanding empty resources is disabled', async () => {
+    const namespaceResourcesService = {
+      getAllResourcesByUser: jest.fn(),
+      permissionFilter: jest.fn(),
+    };
+    const service = createService({
+      configService: {
+        get: jest.fn((key: string) =>
+          key === 'OBB_ASK_EXPAND_EMPTY_VISIBLE_RESOURCES'
+            ? 'false'
+            : undefined,
+        ),
+      },
+      namespaceResourcesService,
+      resourcesService: {},
+    });
+
+    const result = await (service as any).getUserVisibleResources(
+      'namespace-id',
+      'user-id',
+      [],
+    );
+
+    expect(result).toEqual([]);
+    expect(
+      namespaceResourcesService.getAllResourcesByUser,
+    ).not.toHaveBeenCalled();
+    expect(namespaceResourcesService.permissionFilter).not.toHaveBeenCalled();
   });
 
   it('expands selected smart folders through the virtual smart-folder children list', async () => {

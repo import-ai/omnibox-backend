@@ -6,6 +6,7 @@
     "isNumber": "{property} 必须是数字",
     "isBoolean": "{property} 必须是布尔值",
     "isArray": "{property} 必须是数组",
+    "arrayMaxSize": "{property} 最多包含 {constraints.0} 个元素",
     "isObject": "{property} 必须是对象",
     "isUUID": "{property} 必须是有效的 UUID",
     "isDateString": "{property} 必须是有效的日期字符串",

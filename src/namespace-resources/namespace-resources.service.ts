@@ -19,6 +19,7 @@ import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resour
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   CONTENT_RESOURCE_TYPES,
+  isContentResourceType,
   isReadOnlyResourceType,
   isServiceOwnedResourceType,
   READ_ONLY_RESOURCE_TYPES,
@@ -1439,7 +1440,7 @@ export class NamespaceResourcesService {
       resourceId,
       userId,
     );
-    if (resource.resourceType !== ResourceType.DOC) {
+    if (!isContentResourceType(resource.resourceType)) {
       throw new AppException(
         this.i18n.t('resource.errors.invalidResourceType'),
         'RESOURCE_REVISION_NOT_SUPPORTED',

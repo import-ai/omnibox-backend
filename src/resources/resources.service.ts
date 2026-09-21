@@ -32,6 +32,7 @@ import {
 
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import {
+  isContentResourceType,
   isReadOnlyResourceType,
   isStorageExemptResourceType,
   READ_ONLY_RESOURCE_TYPES,
@@ -56,10 +57,6 @@ export class ResourcesService {
     private readonly tagService: TagService,
     private readonly resourceRevisionService: ResourceRevisionService,
   ) {}
-
-  private shouldTrackRevisions(resourceType: ResourceType): boolean {
-    return resourceType === ResourceType.DOC;
-  }
 
   private validateResourceName(
     name: string | undefined,
@@ -898,7 +895,7 @@ export class ResourcesService {
     const nameChanged =
       resolvedName !== undefined && resolvedName !== oldResource.name;
     const trackRevision =
-      this.shouldTrackRevisions(oldResource.resourceType) &&
+      isContentResourceType(oldResource.resourceType) &&
       (contentChanged || nameChanged || options?.forceRevision);
     if (
       trackRevision &&
@@ -911,7 +908,7 @@ export class ResourcesService {
         oldResource,
         oldResource.userId,
         tx.entityManager,
-        oldResource.createdAt,
+        oldResource.updatedAt,
       );
     }
 
@@ -1083,7 +1080,7 @@ export class ResourcesService {
       }),
     );
 
-    if (this.shouldTrackRevisions(resource.resourceType)) {
+    if (isContentResourceType(resource.resourceType)) {
       await this.resourceRevisionService.createFromResource(
         resource,
         resource.userId,

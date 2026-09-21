@@ -42,6 +42,47 @@ describe('Resource revisions (e2e)', () => {
       `/api/v1/namespaces/${client.namespace.id}/resources/${resourceId}/revisions`,
     );
 
+  it.each([ResourceType.FILE, ResourceType.LINK])(
+    'tracks and restores existing %s content',
+    async (resourceType) => {
+      const resource = await client.app.get(ResourcesService).createResource({
+        namespaceId: client.namespace.id,
+        parentId: client.namespace.root_resource_id,
+        userId: client.user.id,
+        resourceType,
+        name: uniqueName('Existing resource'),
+        content: 'Original content',
+        attrs: { url: 'https://example.com/source' },
+      });
+      const repo = client.app.get(DataSource).getRepository(ResourceRevision);
+      expect(await repo.countBy({ resourceId: resource.id })).toBe(1);
+      // Simulate a resource created before history supported this type.
+      await repo.delete({ resourceId: resource.id });
+      const path = `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`;
+      await client
+        .patch(path)
+        .send({ content: 'Edited content' })
+        .expect(HttpStatus.OK);
+      const revisions = await listRevisions(resource.id).expect(HttpStatus.OK);
+      expect(revisions.body).toHaveLength(2);
+      const previousId = revisions.body[1].id;
+      const previous = await client
+        .get(`${path}/revisions/${previousId}`)
+        .expect(HttpStatus.OK);
+      expect(previous.body.content).toBe('Original content');
+      await client
+        .post(`${path}/revisions/${previousId}/restore`)
+        .expect(HttpStatus.CREATED);
+      const restored = await client.get(path).expect(HttpStatus.OK);
+      expect(restored.body).toMatchObject({
+        content: 'Original content',
+        resource_type: resourceType,
+        attrs: { url: 'https://example.com/source' },
+      });
+      expect((await listRevisions(resource.id)).body).toHaveLength(3);
+    },
+  );
+
   it('lists only the current version for a newly created document', async () => {
     const resource = await createDoc(
       uniqueName('Revision create'),

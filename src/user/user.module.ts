@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CaptchaModule } from 'omniboxd/captcha/captcha.module';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { MailModule } from 'omniboxd/mail/mail.module';
 import { SmsModule } from 'omniboxd/sms/sms.module';
@@ -17,6 +18,7 @@ import { UserService } from 'omniboxd/user/user.service';
     TypeOrmModule.forFeature([User, UserOption, UserBinding]),
     MailModule,
     SmsModule,
+    CaptchaModule,
   ],
 })
 export class UserModule {}

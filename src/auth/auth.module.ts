@@ -24,6 +24,7 @@ import { WechatController } from 'omniboxd/auth/wechat/wechat.controller';
 import { WechatService } from 'omniboxd/auth/wechat/wechat.service';
 import { WechatJsSdkController } from 'omniboxd/auth/wechat/wechat-js-sdk.controller';
 import { WechatJsSdkService } from 'omniboxd/auth/wechat/wechat-js-sdk.service';
+import { CaptchaModule } from 'omniboxd/captcha/captcha.module';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { GroupsModule } from 'omniboxd/groups/groups.module';
 import { MailModule } from 'omniboxd/mail/mail.module';
@@ -86,6 +87,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     UserModule,
     MailModule,
     SmsModule,
+    CaptchaModule,
     PassportModule,
     NamespacesModule,
     OpenAPIQuotaModule,

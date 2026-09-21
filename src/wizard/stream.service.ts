@@ -485,12 +485,23 @@ export class StreamService implements OnModuleDestroy {
   ): Promise<PrivateSearchResourceDto[]> {
     // for private_search, pass the resource with permission
     if (resources.length === 0) {
-      const resources =
+      // Default true keeps old wizard ACL-safe. Set false after wizard
+      // post-filters hits through POST /resources/visible.
+      const expandEmpty =
+        (
+          this.configService.get<string>(
+            'OBB_ASK_EXPAND_EMPTY_VISIBLE_RESOURCES',
+          ) ?? 'true'
+        ).toLowerCase() !== 'false';
+      if (!expandEmpty) {
+        return [];
+      }
+      const allResources =
         await this.namespaceResourcesService.getAllResourcesByUser(
           userId,
           namespaceId,
         );
-      return resources.map((r) => this.toPrivateSearchResource(r));
+      return allResources.map((r) => this.toPrivateSearchResource(r));
     }
     const visibleResources: PrivateSearchResourceDto[] =
       await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(

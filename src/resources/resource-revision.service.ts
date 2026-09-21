@@ -38,24 +38,43 @@ export class ResourceRevisionService {
 
   async createFromResource(
     resource: Resource,
-    authorId: string,
+    authorId: string | null,
     manager?: EntityManager,
-  ): Promise<ResourceRevision> {
+    createdAt: Date = resource.updatedAt,
+  ): Promise<void> {
     const repository = manager
       ? manager.getRepository(ResourceRevision)
       : this.revisionRepository;
-    const revision = repository.create({
+    await repository.insert({
       namespaceId: resource.namespaceId,
       resourceId: resource.id,
       authorId,
       name: resource.name,
-      content: resource.content,
-      contentHash: this.contentHash(resource.content),
+      content: resource.content ?? '',
+      contentHash: this.contentHash(resource.content ?? ''),
+      createdAt,
+      updatedAt: createdAt,
     });
-    return await repository.save(revision);
+  }
+
+  async hasRevisions(
+    resource: Resource,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    const repository = manager
+      ? manager.getRepository(ResourceRevision)
+      : this.revisionRepository;
+    const count = await repository.count({
+      where: {
+        namespaceId: resource.namespaceId,
+        resourceId: resource.id,
+      },
+    });
+    return count > 0;
   }
 
   async list(resource: Resource): Promise<ResourceRevisionSummary[]> {
+    const current = await this.current(resource);
     const revisions = await this.revisionRepository.find({
       where: {
         namespaceId: resource.namespaceId,
@@ -65,10 +84,17 @@ export class ResourceRevisionService {
       order: { createdAt: 'DESC' },
       take: 100,
     });
-    return [
-      await this.current(resource),
-      ...revisions.map((revision) => this.toSummary(revision)),
-    ];
+    const historical = revisions.filter((revision, index) => {
+      if (index !== 0) {
+        return true;
+      }
+      const sameContent = revision.contentHash === current.contentHash;
+      const sameTime =
+        Math.abs(revision.createdAt.getTime() - current.createdAt.getTime()) <
+        1000;
+      return !(sameContent && sameTime);
+    });
+    return [current, ...historical.map((revision) => this.toSummary(revision))];
   }
 
   async get(
@@ -102,7 +128,7 @@ export class ResourceRevisionService {
       resourceId: resource.id,
       name: resource.name,
       content: resource.content,
-      contentHash: this.contentHash(resource.content),
+      contentHash: this.contentHash(resource.content ?? ''),
       createdAt: resource.updatedAt,
       author: currentAuthor ? this.author(currentAuthor) : null,
       isCurrent: true,

@@ -54,6 +54,31 @@ export class AddResourceRevisions1789901333475 implements MigrationInterface {
         columnNames: ['namespace_id', 'resource_id', 'created_at'],
       }),
     );
+    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+    await queryRunner.query(`
+      INSERT INTO resource_revisions (
+        namespace_id,
+        resource_id,
+        author_id,
+        name,
+        content,
+        content_hash,
+        created_at,
+        updated_at
+      )
+      SELECT
+        r.namespace_id,
+        r.id,
+        r.user_id,
+        r.name,
+        COALESCE(r.content, ''),
+        encode(digest(convert_to(COALESCE(r.content, ''), 'UTF8'), 'sha256'), 'hex'),
+        r.created_at,
+        r.created_at
+      FROM resources r
+      WHERE r.deleted_at IS NULL
+        AND r.resource_type = 'doc'
+    `);
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {

@@ -57,6 +57,10 @@ export class ResourcesService {
     private readonly resourceRevisionService: ResourceRevisionService,
   ) {}
 
+  private shouldTrackRevisions(resourceType: ResourceType): boolean {
+    return resourceType === ResourceType.DOC;
+  }
+
   private validateResourceName(
     name: string | undefined,
     autoRenameOnConflict?: boolean,
@@ -893,11 +897,21 @@ export class ResourcesService {
       props.content !== undefined && props.content !== oldResource.content;
     const nameChanged =
       props.name !== undefined && props.name !== oldResource.name;
-    if (contentChanged || nameChanged) {
+    const trackRevision =
+      this.shouldTrackRevisions(oldResource.resourceType) &&
+      (contentChanged || nameChanged);
+    if (
+      trackRevision &&
+      !(await this.resourceRevisionService.hasRevisions(
+        oldResource,
+        tx.entityManager,
+      ))
+    ) {
       await this.resourceRevisionService.createFromResource(
         oldResource,
-        userId,
+        oldResource.userId,
         tx.entityManager,
+        oldResource.createdAt,
       );
     }
 
@@ -922,6 +936,14 @@ export class ResourcesService {
         id: resourceId,
       },
     });
+
+    if (trackRevision) {
+      await this.resourceRevisionService.createFromResource(
+        resource,
+        userId,
+        tx.entityManager,
+      );
+    }
 
     // Update storage usage if content changed and userId is present. A
     // storage-exempt type keeps its content_size up to date above but is never
@@ -1060,6 +1082,14 @@ export class ResourcesService {
         contentSize: numberToBigintString(contentSize),
       }),
     );
+
+    if (this.shouldTrackRevisions(resource.resourceType)) {
+      await this.resourceRevisionService.createFromResource(
+        resource,
+        resource.userId,
+        tx.entityManager,
+      );
+    }
 
     // content_size is stored for every type; only the quota charge is skipped
     // for a storage-exempt one (the poller's internal create path lands here

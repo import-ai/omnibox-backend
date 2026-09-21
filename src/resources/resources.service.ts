@@ -770,7 +770,7 @@ export class ResourcesService {
     },
     tx?: Transaction,
     autoRenameOnConflict: boolean = false,
-    options?: { internal?: boolean },
+    options?: { internal?: boolean; forceRevision?: boolean },
   ): Promise<void> {
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
@@ -896,10 +896,10 @@ export class ResourcesService {
     const contentChanged =
       props.content !== undefined && props.content !== oldResource.content;
     const nameChanged =
-      props.name !== undefined && props.name !== oldResource.name;
+      resolvedName !== undefined && resolvedName !== oldResource.name;
     const trackRevision =
       this.shouldTrackRevisions(oldResource.resourceType) &&
-      (contentChanged || nameChanged);
+      (contentChanged || nameChanged || options?.forceRevision);
     if (
       trackRevision &&
       !(await this.resourceRevisionService.hasRevisions(

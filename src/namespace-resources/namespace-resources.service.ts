@@ -1457,10 +1457,15 @@ export class NamespaceResourcesService {
         HttpStatus.NOT_FOUND,
       );
     }
-    await this.update(namespaceId, userId, resourceId, {
-      name: revision.name,
-      content: revision.content,
-    });
+    await this.resourcesService.updateResource(
+      namespaceId,
+      resourceId,
+      userId,
+      { name: revision.name, content: revision.content },
+      undefined,
+      false,
+      { forceRevision: true },
+    );
   }
 
   private async getRevisionResource(

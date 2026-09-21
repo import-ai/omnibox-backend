@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { FilesModule } from 'omniboxd/files/files.module';
+import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { StorageUsagesModule } from 'omniboxd/storage-usages/storage-usages.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
@@ -14,6 +15,7 @@ import { ResourcesService } from './resources.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Resource, ResourceRevision, User]),
+    NamespacesQuotaModule,
     TasksModule,
     FilesModule,
     StorageUsagesModule,

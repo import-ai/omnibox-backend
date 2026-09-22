@@ -1501,19 +1501,12 @@ export class NamespaceResourcesService {
       namespaceId,
       resourceId,
     );
-    const permission = await this.permissionsService.userHasPermission(
+    await this.permissionsService.userHasPermissionOrFail(
       namespaceId,
       resourceId,
       userId,
       ResourcePermission.CAN_VIEW,
     );
-    if (!permission) {
-      throw new AppException(
-        this.i18n.t('auth.errors.notAuthorized'),
-        'NOT_AUTHORIZED',
-        HttpStatus.FORBIDDEN,
-      );
-    }
     this.assertRevisionSupported(resource);
     return resource;
   }

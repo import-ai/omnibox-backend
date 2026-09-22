@@ -1435,11 +1435,54 @@ export class NamespaceResourcesService {
     revisionId: string,
     userId: string,
   ): Promise<void> {
-    const resource = await this.getRevisionResource(
+    await this.permissionsService.userHasPermissionOrFail(
       namespaceId,
       resourceId,
       userId,
+      ResourcePermission.CAN_EDIT,
     );
+    const historyLimit =
+      await this.resourceRevisionService.historyLimit(namespaceId);
+    await transaction(this.dataSource.manager, async (tx) => {
+      const resource = await this.resourceCommentAnchorsService.lockResource(
+        tx.entityManager,
+        namespaceId,
+        resourceId,
+      );
+      this.assertRevisionSupported(resource);
+      const revision = await this.resourceRevisionService.get(
+        resource,
+        revisionId,
+        tx.entityManager,
+        historyLimit,
+      );
+      if (!revision || revision.isCurrent) {
+        throw new AppException(
+          this.i18n.t('resource.errors.resourceNotFound'),
+          'RESOURCE_REVISION_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      await this.resourcesService.updateResource(
+        namespaceId,
+        resourceId,
+        userId,
+        { name: revision.name, content: revision.content },
+        tx,
+        false,
+        { forceRevision: true, historyLimit },
+      );
+      if (resource.content !== revision.content) {
+        await this.resourceCommentAnchorsService.orphanAnchors(
+          tx.entityManager,
+          namespaceId,
+          resourceId,
+        );
+      }
+    });
+  }
+
+  private assertRevisionSupported(resource: Resource): void {
     if (!isContentResourceType(resource.resourceType)) {
       throw new AppException(
         this.i18n.t('resource.errors.invalidResourceType'),
@@ -1447,26 +1490,6 @@ export class NamespaceResourcesService {
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
-    const revision = await this.resourceRevisionService.get(
-      resource,
-      revisionId,
-    );
-    if (!revision || revision.isCurrent) {
-      throw new AppException(
-        this.i18n.t('resource.errors.resourceNotFound'),
-        'RESOURCE_REVISION_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-    await this.resourcesService.updateResource(
-      namespaceId,
-      resourceId,
-      userId,
-      { name: revision.name, content: revision.content },
-      undefined,
-      false,
-      { forceRevision: true },
-    );
   }
 
   private async getRevisionResource(
@@ -1491,6 +1514,7 @@ export class NamespaceResourcesService {
         HttpStatus.FORBIDDEN,
       );
     }
+    this.assertRevisionSupported(resource);
     return resource;
   }
 
@@ -1726,7 +1750,19 @@ export class NamespaceResourcesService {
     data: UpdateResourceDto,
     autoRenameOnConflict: boolean = false,
     tx?: Transaction,
+    historyLimit?: number,
   ) {
+    if (
+      historyLimit === undefined &&
+      (data.name !== undefined ||
+        data.content !== undefined ||
+        data.parentId !== undefined)
+    ) {
+      historyLimit = await this.resourceRevisionService.historyLimit(
+        namespaceId,
+        resourceId,
+      );
+    }
     const syncingCommentAnchors =
       data.expectedContentHash !== undefined ||
       data.commentAnchors !== undefined ||
@@ -1740,6 +1776,7 @@ export class NamespaceResourcesService {
           data,
           autoRenameOnConflict,
           newTx,
+          historyLimit,
         );
       });
     }
@@ -1785,6 +1822,7 @@ export class NamespaceResourcesService {
       },
       tx,
       autoRenameOnConflict,
+      { historyLimit },
     );
     if (
       syncingCommentAnchors &&

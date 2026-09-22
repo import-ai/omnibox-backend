@@ -1,9 +1,15 @@
 import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
 
-import { BaseColumns } from './base-columns';
-
-export class AddResourceRevisions1789901333475 implements MigrationInterface {
+export class AddResourceRevisions1790094055950 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`
+      ALTER TABLE resources
+        ADD COLUMN version integer NOT NULL DEFAULT 1 CHECK (version > 0),
+        ADD COLUMN revision_created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        ADD COLUMN revision_author_id uuid REFERENCES users(id) ON DELETE SET NULL;
+      UPDATE resources SET revision_created_at = updated_at;
+    `);
+
     await queryRunner.createTable(
       new Table({
         name: 'resource_revisions',
@@ -16,11 +22,11 @@ export class AddResourceRevisions1789901333475 implements MigrationInterface {
           },
           { name: 'namespace_id', type: 'character varying' },
           { name: 'resource_id', type: 'character varying' },
+          { name: 'version', type: 'integer' },
           { name: 'author_id', type: 'uuid', isNullable: true },
           { name: 'name', type: 'character varying' },
           { name: 'content', type: 'text' },
-          { name: 'content_hash', type: 'character varying', length: '64' },
-          ...BaseColumns(),
+          { name: 'created_at', type: 'timestamptz' },
         ],
         foreignKeys: [
           {
@@ -50,38 +56,20 @@ export class AddResourceRevisions1789901333475 implements MigrationInterface {
     await queryRunner.createIndex(
       'resource_revisions',
       new TableIndex({
-        name: 'idx_resource_revisions_resource_created',
-        columnNames: ['namespace_id', 'resource_id', 'created_at'],
+        name: 'idx_resource_revisions_resource_version',
+        columnNames: ['namespace_id', 'resource_id', 'version'],
+        isUnique: true,
       }),
     );
-    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
-    await queryRunner.query(`
-      INSERT INTO resource_revisions (
-        namespace_id,
-        resource_id,
-        author_id,
-        name,
-        content,
-        content_hash,
-        created_at,
-        updated_at
-      )
-      SELECT
-        r.namespace_id,
-        r.id,
-        r.user_id,
-        r.name,
-        COALESCE(r.content, ''),
-        encode(digest(convert_to(COALESCE(r.content, ''), 'UTF8'), 'sha256'), 'hex'),
-        r.created_at,
-        r.created_at
-      FROM resources r
-      WHERE r.deleted_at IS NULL
-        AND r.resource_type = 'doc'
-    `);
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.dropTable('resource_revisions');
+    await queryRunner.query(`
+      ALTER TABLE resources
+        DROP COLUMN revision_author_id,
+        DROP COLUMN revision_created_at,
+        DROP COLUMN version;
+    `);
   }
 }

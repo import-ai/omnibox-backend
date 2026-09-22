@@ -18,7 +18,7 @@ describe('ResourcesService', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
+      { historyLimit: jest.fn().mockResolvedValue(3) } as any,
     );
 
     await expect(

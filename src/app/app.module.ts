@@ -111,7 +111,7 @@ import { AddAgentTokenCountsToMessages1788782074419 } from 'omniboxd/migrations/
 import { AllowMultipleCommentThreadsAtAnchor1788941872300 } from 'omniboxd/migrations/1788941872300-allow-multiple-comment-threads-at-anchor';
 import { AccountCommentAttachments1789383186349 } from 'omniboxd/migrations/1789383186349-account-comment-attachments';
 import { AddNamespaceMemberNicknameAndNotes1789704000000 } from 'omniboxd/migrations/1789704000000-add-namespace-member-nickname-and-notes';
-import { AddResourceRevisions1789901333475 } from 'omniboxd/migrations/1789901333475-add-resource-revisions';
+import { AddResourceRevisions1790094055950 } from 'omniboxd/migrations/1790094055950-add-resource-revisions';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -333,7 +333,7 @@ export class AppModule implements NestModule {
               AllowMultipleCommentThreadsAtAnchor1788941872300,
               AccountCommentAttachments1789383186349,
               AddNamespaceMemberNicknameAndNotes1789704000000,
-              AddResourceRevisions1789901333475,
+              AddResourceRevisions1790094055950,
               ...extraMigrations,
             ],
             migrationsRun: true,

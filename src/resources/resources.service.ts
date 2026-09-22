@@ -767,8 +767,27 @@ export class ResourcesService {
     },
     tx?: Transaction,
     autoRenameOnConflict: boolean = false,
-    options?: { internal?: boolean; forceRevision?: boolean },
+    options?: {
+      internal?: boolean;
+      forceRevision?: boolean;
+      historyLimit?: number;
+    },
   ): Promise<void> {
+    if (
+      (props.name !== undefined ||
+        props.content !== undefined ||
+        props.parentId !== undefined ||
+        options?.forceRevision) &&
+      options?.historyLimit === undefined
+    ) {
+      options = {
+        ...options,
+        historyLimit: await this.resourceRevisionService.historyLimit(
+          namespaceId,
+          resourceId,
+        ),
+      };
+    }
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
         this.updateResource(
@@ -897,18 +916,11 @@ export class ResourcesService {
     const trackRevision =
       isContentResourceType(oldResource.resourceType) &&
       (contentChanged || nameChanged || options?.forceRevision);
-    if (
-      trackRevision &&
-      !(await this.resourceRevisionService.hasRevisions(
+    if (trackRevision) {
+      await this.resourceRevisionService.archive(
         oldResource,
-        tx.entityManager,
-      ))
-    ) {
-      await this.resourceRevisionService.createFromResource(
-        oldResource,
-        oldResource.userId,
-        tx.entityManager,
-        oldResource.updatedAt,
+        options!.historyLimit!,
+        entityManager,
       );
     }
 
@@ -921,6 +933,11 @@ export class ResourcesService {
       { namespaceId, id: resourceId },
       {
         ...updatedProps,
+        ...(trackRevision && {
+          version: oldResource.version + 1,
+          revisionCreatedAt: () => 'clock_timestamp()',
+          revisionAuthorId: userId,
+        }),
         ...(contentSize !== undefined && {
           contentSize: numberToBigintString(contentSize),
         }),
@@ -933,14 +950,6 @@ export class ResourcesService {
         id: resourceId,
       },
     });
-
-    if (trackRevision) {
-      await this.resourceRevisionService.createFromResource(
-        resource,
-        userId,
-        tx.entityManager,
-      );
-    }
 
     // Update storage usage if content changed and userId is present. A
     // storage-exempt type keeps its content_size up to date above but is never
@@ -1076,17 +1085,10 @@ export class ResourcesService {
     const resource = await repo.save(
       repo.create({
         ...createProps,
+        revisionAuthorId: props.userId,
         contentSize: numberToBigintString(contentSize),
       }),
     );
-
-    if (isContentResourceType(resource.resourceType)) {
-      await this.resourceRevisionService.createFromResource(
-        resource,
-        resource.userId,
-        tx.entityManager,
-      );
-    }
 
     // content_size is stored for every type; only the quota charge is skipped
     // for a storage-exempt one (the poller's internal create path lands here

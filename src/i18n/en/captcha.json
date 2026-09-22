@@ -1,6 +1,7 @@
 {
   "errors": {
     "required": "Captcha verification is required",
-    "failed": "Captcha verification failed, please try again"
+    "failed": "Captcha verification failed, please try again",
+    "upgradeRequired": "Please update the app to continue"
   }
 }

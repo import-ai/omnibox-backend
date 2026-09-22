@@ -1,6 +1,7 @@
 {
   "errors": {
     "required": "请先完成人机验证",
-    "failed": "人机验证未通过，请重试"
+    "failed": "人机验证未通过，请重试",
+    "upgradeRequired": "请更新 App 后继续"
   }
 }

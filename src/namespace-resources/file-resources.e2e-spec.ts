@@ -24,6 +24,20 @@ describe('FileResourcesController (e2e)', () => {
     await client.close();
   });
 
+  test.each(['wps', 'wpt', 'rtf', 'odt', 'dps', 'dpt', 'odp'])(
+    'accepts %s uploads',
+    async (extension) => {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources/files`)
+        .send({
+          name: `example.${extension}`,
+          mimetype: 'application/octet-stream',
+          size: 1,
+        });
+      expect(response.status).toBe(201);
+    },
+  );
+
   test.each(uploadLanguageDatasets)(
     'upload and download file: $filename',
     async ({ filename, content }) => {

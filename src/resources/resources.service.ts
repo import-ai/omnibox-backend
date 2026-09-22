@@ -1036,7 +1036,7 @@ export class ResourcesService {
     // Create props with resolved name
     const createProps = {
       ...props,
-      name: resolvedName,
+      name: resolvedName ?? '',
       manualSortUnspecifiedAt: new Date(),
     };
 

@@ -83,6 +83,32 @@ describe('Resource revisions (e2e)', () => {
     },
   );
 
+  it('creates an untitled document from the sidebar and preserves its empty initial revision', async () => {
+    const created = await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+      .send({
+        resourceType: ResourceType.DOC,
+        parentId: client.namespace.root_resource_id,
+      })
+      .expect(HttpStatus.CREATED);
+    const path = `/api/v1/namespaces/${client.namespace.id}/resources/${created.body.id}`;
+    expect(created.body.name).toBe('');
+    const current = await client
+      .get(`${path}/revisions/current`)
+      .expect(HttpStatus.OK);
+    expect(current.body).toMatchObject({ name: '', content: '' });
+    await client
+      .patch(path)
+      .send({ name: uniqueName('Named document'), content: 'First edit' })
+      .expect(HttpStatus.OK);
+    const history = await listRevisions(created.body.id).expect(HttpStatus.OK);
+    expect(history.body).toHaveLength(2);
+    const original = await client
+      .get(`${path}/revisions/${history.body[1].id}`)
+      .expect(HttpStatus.OK);
+    expect(original.body).toMatchObject({ name: '', content: '' });
+  });
+
   it('lists only the current version for a newly created document', async () => {
     const resource = await createDoc(
       uniqueName('Revision create'),

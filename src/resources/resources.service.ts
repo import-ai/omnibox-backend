@@ -32,12 +32,14 @@ import {
 
 import { ResourceMetaDto } from './dto/resource-meta.dto';
 import {
+  isContentResourceType,
   isReadOnlyResourceType,
   isStorageExemptResourceType,
   READ_ONLY_RESOURCE_TYPES,
   Resource,
   ResourceType,
 } from './entities/resource.entity';
+import { ResourceRevisionService } from './resource-revision.service';
 
 const TASK_PRIORITY = 5;
 
@@ -53,6 +55,7 @@ export class ResourcesService {
     private readonly filesService: FilesService,
     private readonly storageUsagesService: StorageUsagesService,
     private readonly tagService: TagService,
+    private readonly resourceRevisionService: ResourceRevisionService,
   ) {}
 
   private validateResourceName(
@@ -764,8 +767,27 @@ export class ResourcesService {
     },
     tx?: Transaction,
     autoRenameOnConflict: boolean = false,
-    options?: { internal?: boolean },
+    options?: {
+      internal?: boolean;
+      forceRevision?: boolean;
+      historyLimit?: number;
+    },
   ): Promise<void> {
+    if (
+      (props.name !== undefined ||
+        props.content !== undefined ||
+        props.parentId !== undefined ||
+        options?.forceRevision) &&
+      options?.historyLimit === undefined
+    ) {
+      options = {
+        ...options,
+        historyLimit: await this.resourceRevisionService.historyLimit(
+          namespaceId,
+          resourceId,
+        ),
+      };
+    }
     if (!tx) {
       return await transaction(this.dataSource.manager, (tx) =>
         this.updateResource(
@@ -887,6 +909,21 @@ export class ResourcesService {
         }),
     };
 
+    const contentChanged =
+      props.content !== undefined && props.content !== oldResource.content;
+    const nameChanged =
+      resolvedName !== undefined && resolvedName !== oldResource.name;
+    const trackRevision =
+      isContentResourceType(oldResource.resourceType) &&
+      (contentChanged || nameChanged || options?.forceRevision);
+    if (trackRevision) {
+      await this.resourceRevisionService.archive(
+        oldResource,
+        options!.historyLimit!,
+        entityManager,
+      );
+    }
+
     const contentSize =
       updatedProps.content !== undefined
         ? Buffer.byteLength(updatedProps.content, 'utf8')
@@ -896,6 +933,11 @@ export class ResourcesService {
       { namespaceId, id: resourceId },
       {
         ...updatedProps,
+        ...(trackRevision && {
+          version: oldResource.version + 1,
+          revisionCreatedAt: () => 'clock_timestamp()',
+          revisionAuthorId: userId,
+        }),
         ...(contentSize !== undefined && {
           contentSize: numberToBigintString(contentSize),
         }),
@@ -1003,7 +1045,7 @@ export class ResourcesService {
     // Create props with resolved name
     const createProps = {
       ...props,
-      name: resolvedName,
+      name: resolvedName ?? '',
       manualSortUnspecifiedAt: new Date(),
     };
 
@@ -1043,6 +1085,7 @@ export class ResourcesService {
     const resource = await repo.save(
       repo.create({
         ...createProps,
+        revisionAuthorId: props.userId,
         contentSize: numberToBigintString(contentSize),
       }),
     );

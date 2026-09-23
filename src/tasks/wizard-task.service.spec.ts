@@ -66,6 +66,26 @@ describe('WizardTaskService', () => {
   });
 
   describe('emitFileReaderTask', () => {
+    it.each([
+      ['wps', 'file_reader_word'],
+      ['WPT', 'file_reader_word'],
+      ['rtf', 'file_reader_word'],
+      ['odt', 'file_reader_word'],
+      ['dps', 'file_reader_ppt'],
+      ['DPT', 'file_reader_ppt'],
+      ['odp', 'file_reader_ppt'],
+    ])('routes %s files to %s', async (extension, functionName) => {
+      userService.listOption.mockResolvedValue([]);
+      await service.emitFileReaderTask('user-1', {
+        ...mockResource,
+        attrs: { ...mockResource.attrs, original_name: `example.${extension}` },
+      } as Resource);
+      expect(tasksService.emitTask).toHaveBeenCalledWith(
+        expect.objectContaining({ function: functionName }),
+        undefined,
+      );
+    });
+
     it('passes the user language option in task input', async () => {
       userService.listOption.mockResolvedValue([
         { name: 'language', value: 'en-US' },

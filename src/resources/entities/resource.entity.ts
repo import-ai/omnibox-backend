@@ -108,6 +108,15 @@ export class Resource extends Base {
   @Column('enum', { enum: ResourceType })
   resourceType: ResourceType;
 
+  @Column('integer', { default: 1 })
+  version: number;
+
+  @Column('timestamptz', { default: () => 'CURRENT_TIMESTAMP' })
+  revisionCreatedAt: Date;
+
+  @Column('uuid', { nullable: true })
+  revisionAuthorId: string | null;
+
   @Column()
   content: string;
 

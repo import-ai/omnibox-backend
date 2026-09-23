@@ -19,6 +19,7 @@ import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resour
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import {
   CONTENT_RESOURCE_TYPES,
+  isContentResourceType,
   isReadOnlyResourceType,
   isServiceOwnedResourceType,
   READ_ONLY_RESOURCE_TYPES,
@@ -26,6 +27,11 @@ import {
   ResourceType,
   SERVICE_OWNED_RESOURCE_TYPES,
 } from 'omniboxd/resources/entities/resource.entity';
+import {
+  ResourceRevisionDetail,
+  ResourceRevisionService,
+  ResourceRevisionSummary,
+} from 'omniboxd/resources/resource-revision.service';
 import {
   hasExplicitSortOptions,
   ResourceSortBy,
@@ -98,6 +104,7 @@ export class NamespaceResourcesService {
     private readonly smartFoldersService: ISmartFoldersService,
     @Inject(RSS_FOLDERS_QUOTA_SERVICE)
     private readonly rssFoldersQuotaService: IRssFoldersQuotaService,
+    private readonly resourceRevisionService: ResourceRevisionService,
   ) {}
 
   private async getTagsByIds(
@@ -1384,6 +1391,126 @@ export class NamespaceResourcesService {
     return dto;
   }
 
+  async listRevisions(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<ResourceRevisionSummary[]> {
+    const resource = await this.getRevisionResource(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    return await this.resourceRevisionService.list(resource);
+  }
+
+  async getRevision(
+    namespaceId: string,
+    resourceId: string,
+    revisionId: string,
+    userId: string,
+  ): Promise<ResourceRevisionDetail> {
+    const resource = await this.getRevisionResource(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+    const revision = await this.resourceRevisionService.get(
+      resource,
+      revisionId,
+    );
+    if (!revision) {
+      throw new AppException(
+        this.i18n.t('resource.errors.resourceNotFound'),
+        'RESOURCE_REVISION_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    return revision;
+  }
+
+  async restoreRevision(
+    namespaceId: string,
+    resourceId: string,
+    revisionId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
+    const historyLimit =
+      await this.resourceRevisionService.historyLimit(namespaceId);
+    await transaction(this.dataSource.manager, async (tx) => {
+      const resource = await this.resourceCommentAnchorsService.lockResource(
+        tx.entityManager,
+        namespaceId,
+        resourceId,
+      );
+      this.assertRevisionSupported(resource);
+      const revision = await this.resourceRevisionService.get(
+        resource,
+        revisionId,
+        tx.entityManager,
+        historyLimit,
+      );
+      if (!revision || revision.isCurrent) {
+        throw new AppException(
+          this.i18n.t('resource.errors.resourceNotFound'),
+          'RESOURCE_REVISION_NOT_FOUND',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+      await this.resourcesService.updateResource(
+        namespaceId,
+        resourceId,
+        userId,
+        { name: revision.name, content: revision.content },
+        tx,
+        false,
+        { forceRevision: true, historyLimit },
+      );
+      if (resource.content !== revision.content) {
+        await this.resourceCommentAnchorsService.orphanAnchors(
+          tx.entityManager,
+          namespaceId,
+          resourceId,
+        );
+      }
+    });
+  }
+
+  private assertRevisionSupported(resource: Resource): void {
+    if (!isContentResourceType(resource.resourceType)) {
+      throw new AppException(
+        this.i18n.t('resource.errors.invalidResourceType'),
+        'RESOURCE_REVISION_NOT_SUPPORTED',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+  }
+
+  private async getRevisionResource(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ): Promise<Resource> {
+    const resource = await this.resourcesService.getResourceOrFail(
+      namespaceId,
+      resourceId,
+    );
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    this.assertRevisionSupported(resource);
+    return resource;
+  }
+
   async getResourceFileForUser(
     userId: string,
     namespaceId: string,
@@ -1616,7 +1743,19 @@ export class NamespaceResourcesService {
     data: UpdateResourceDto,
     autoRenameOnConflict: boolean = false,
     tx?: Transaction,
+    historyLimit?: number,
   ) {
+    if (
+      historyLimit === undefined &&
+      (data.name !== undefined ||
+        data.content !== undefined ||
+        data.parentId !== undefined)
+    ) {
+      historyLimit = await this.resourceRevisionService.historyLimit(
+        namespaceId,
+        resourceId,
+      );
+    }
     const syncingCommentAnchors =
       data.expectedContentHash !== undefined ||
       data.commentAnchors !== undefined ||
@@ -1630,6 +1769,7 @@ export class NamespaceResourcesService {
           data,
           autoRenameOnConflict,
           newTx,
+          historyLimit,
         );
       });
     }
@@ -1675,6 +1815,7 @@ export class NamespaceResourcesService {
       },
       tx,
       autoRenameOnConflict,
+      { historyLimit },
     );
     if (
       syncingCommentAnchors &&

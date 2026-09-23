@@ -6,6 +6,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   HttpException,
+  Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -87,6 +88,34 @@ describe('CaptchaGuard', () => {
     await expect(
       guard.canActivate(createContext({ captcha_verify_param: 'forged' })),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('rejects with the generic 403 when the service failed closed', async () => {
+    // A credential/permission misconfiguration must not leak to the user: they
+    // get the ordinary "verification failed" message, the operator gets the
+    // detail in CaptchaService's error log. The code still lands in the warn.
+    const warn = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    captchaService.verify.mockResolvedValue({
+      passed: false,
+      code: 'CREDENTIAL_ERROR',
+    });
+
+    const error = await guard
+      .canActivate(createContext({ captcha_verify_param: 'ok' }))
+      .then(
+        () => undefined,
+        (thrown: unknown) => thrown,
+      );
+
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect((error as ForbiddenException).getStatus()).toBe(403);
+    expect((error as ForbiddenException).message).toBe('captcha.errors.failed');
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('code=CREDENTIAL_ERROR'),
+    );
+    warn.mockRestore();
   });
 
   it('allows the request when verification passes', async () => {

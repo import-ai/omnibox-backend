@@ -32,6 +32,7 @@ import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { OpenAPIQuotaGuard } from 'omniboxd/open-api/open-api-quota.guard';
 import { OpenAPIQuotaModule } from 'omniboxd/open-api/open-api-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
+import { RateLimitModule } from 'omniboxd/rate-limit/rate-limit.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { SmsModule } from 'omniboxd/sms/sms.module';
 import { User } from 'omniboxd/user/entities/user.entity';
@@ -88,6 +89,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     MailModule,
     SmsModule,
     CaptchaModule,
+    RateLimitModule,
     PassportModule,
     NamespacesModule,
     OpenAPIQuotaModule,

@@ -29,6 +29,35 @@ const FULL_CONFIG: Record<string, string> = {
   OBB_CAPTCHA_SCENE_ID_APP: 'scene-app',
 };
 
+/**
+ * Mirrors what @alicloud/captcha20230305 actually throws: an
+ * openapi-core ClientError/ServerError, i.e. a $dara.ResponseError subclass
+ * whose message is `${code}: ${message}` and which carries a string `code` and
+ * a numeric `statusCode`.
+ */
+class FakeAlibabaCloudError extends Error {
+  readonly code: string;
+  readonly statusCode?: number;
+  readonly data: Record<string, unknown>;
+
+  constructor(code: string, message: string, statusCode?: number) {
+    super(`${code}: ${message}`);
+    this.name = 'ClientError';
+    this.code = code;
+    this.statusCode = statusCode;
+    this.data = { Code: code, Message: message, statusCode };
+  }
+}
+
+function sdkError(code: string, message: string, statusCode?: number): Error {
+  return new FakeAlibabaCloudError(code, message, statusCode);
+}
+
+/** Node-level network errors also expose `code`, but never a credential one. */
+function nodeError(code: string): Error {
+  return Object.assign(new Error(code), { code, syscall: 'connect' });
+}
+
 async function createService(
   config: Record<string, string>,
 ): Promise<CaptchaService> {
@@ -153,6 +182,67 @@ describe('CaptchaService', () => {
       expect(await service.verify('param', 'web')).toEqual({
         passed: true,
         code: 'ERROR',
+      });
+    });
+
+    it.each([
+      ['a connect timeout', sdkError('SDK.HttpError', 'ETIMEDOUT')],
+      ['a connection reset', nodeError('ECONNRESET')],
+      ['a DNS failure', nodeError('ENOTFOUND')],
+      ['an Aliyun 5xx', sdkError('InternalError', 'boom', 500)],
+      ['a 404 without a credential code', sdkError('NotFound', 'gone', 404)],
+      ['a plain string rejection', 'nope'],
+    ])('keeps failing open on %s', async (_label, error) => {
+      verifyIntelligentCaptcha.mockRejectedValue(error);
+      const service = await createService(FULL_CONFIG);
+
+      expect(await service.verify('param', 'web')).toEqual({
+        passed: true,
+        code: 'ERROR',
+      });
+    });
+
+    it.each([
+      // Both of these were observed for real against Aliyun.
+      [
+        'InvalidAccessKeyId.NotFound',
+        sdkError(
+          'InvalidAccessKeyId.NotFound',
+          'Specified access key is not found',
+          404,
+        ),
+      ],
+      [
+        'Forbidden.NoPermission',
+        sdkError(
+          'Forbidden.NoPermission',
+          'You are not authorized to perform this action',
+          403,
+        ),
+      ],
+      [
+        'Forbidden.RAMUserAccessDenied',
+        sdkError('Forbidden.RAMUserAccessDenied', 'denied', 403),
+      ],
+      [
+        'SignatureDoesNotMatch',
+        sdkError('SignatureDoesNotMatch', 'bad signature', 400),
+      ],
+      [
+        'an unknown code with a 403 status',
+        sdkError('Something.Unknown', 'denied', 403),
+      ],
+      [
+        'an unknown code with a 401 status',
+        sdkError('Something.Unknown', 'denied', 401),
+      ],
+    ])('fails closed on %s', async (_label, error) => {
+      verifyIntelligentCaptcha.mockRejectedValue(error);
+      const service = await createService(FULL_CONFIG);
+
+      expect(await service.verify('param', 'web')).toEqual({
+        passed: false,
+        code: 'CREDENTIAL_ERROR',
       });
     });
 

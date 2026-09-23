@@ -22,6 +22,7 @@ export class ResourceDto {
   name: string;
   resource_type: ResourceType;
   content: string;
+  version: number;
   content_hash: string;
   comment_threads: ResourceCommentThreadResponseDto[];
   tags: TagDto[];
@@ -52,6 +53,7 @@ export class ResourceDto {
     dto.name = resource.name;
     dto.resource_type = resource.resourceType;
     dto.content = resource.content;
+    dto.version = resource.version;
     dto.tags = tags;
     dto.attrs = resource.attrs;
     dto.global_permission = resource.globalPermission;

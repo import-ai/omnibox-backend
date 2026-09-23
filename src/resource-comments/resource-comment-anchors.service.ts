@@ -87,6 +87,21 @@ export class ResourceCommentAnchorsService {
     }
   }
 
+  async orphanAnchors(
+    manager: EntityManager,
+    namespaceId: string,
+    resourceId: string,
+  ): Promise<void> {
+    await manager.getRepository(ResourceCommentThread).update(
+      {
+        namespaceId,
+        resourceId,
+        anchorStatus: ResourceCommentAnchorStatus.ACTIVE,
+      },
+      { anchorStatus: ResourceCommentAnchorStatus.ORPHANED },
+    );
+  }
+
   // Finds and pessimistically locks a resource for a serialized write.
   async lockResource(
     manager: EntityManager,

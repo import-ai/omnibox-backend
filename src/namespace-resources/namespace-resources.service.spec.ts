@@ -42,6 +42,7 @@ describe('NamespaceResourcesService', () => {
       resourceSortPreferenceService as any,
       smartFoldersService as any,
       {} as any,
+      {} as any,
     );
 
     return {
@@ -255,6 +256,7 @@ describe('NamespaceResourcesService', () => {
         {} as any,
         {} as any,
         { getSortOptions: jest.fn().mockResolvedValue({}) } as any,
+        {} as any,
         {} as any,
         {} as any,
       );

@@ -7,6 +7,8 @@ import { RateLimitCounter } from './rate-limit-counter.service';
 @Module({
   imports: [ConfigModule],
   providers: [RateLimitCounter, IpRateLimitGuard],
-  exports: [IpRateLimitGuard],
+  // The guard is instantiated in the injector of whichever module declares the
+  // controller using it, so its dependencies must be exported alongside it.
+  exports: [IpRateLimitGuard, RateLimitCounter],
 })
 export class RateLimitModule {}

@@ -255,9 +255,19 @@ export class AppModule implements NestModule {
             const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
             // ioredis keeps reconnecting on its own; without a listener every
             // failed attempt is dumped to stderr as an unhandled error event.
-            redis.on('error', (error: Error) => {
-              logger.error(`Redis error: ${error.message}`);
-            });
+            // A refused connection arrives as an AggregateError with an empty
+            // message, so fall back to its code and inner errors.
+            redis.on(
+              'error',
+              (error: Error & { code?: string; errors?: Error[] }) => {
+                const reason =
+                  error.message ||
+                  error.code ||
+                  error.errors?.[0]?.message ||
+                  String(error);
+                logger.error(`Redis error: ${reason}`);
+              },
+            );
 
             return {
               throttlers: [otpThrottlerOptions(config)],

@@ -3,6 +3,7 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 import { CacheModule } from '@nestjs/cache-manager';
 import {
   DynamicModule,
+  Logger,
   MiddlewareConsumer,
   Module,
   NestModule,
@@ -245,15 +246,22 @@ export class AppModule implements NestModule {
           inject: [ConfigService],
           useFactory: (config: ConfigService) => {
             const redisUrl = config.get<string>('OBB_REDIS_URL', '');
+            if (isEmpty(redisUrl)) {
+              // Like the cache below, no Redis URL means in-process counting.
+              return { throttlers: [otpThrottlerOptions(config)] };
+            }
+
+            const logger = new Logger('ThrottlerRedis');
+            const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
+            // ioredis keeps reconnecting on its own; without a listener every
+            // failed attempt is dumped to stderr as an unhandled error event.
+            redis.on('error', (error: Error) => {
+              logger.error(`Redis error: ${error.message}`);
+            });
 
             return {
               throttlers: [otpThrottlerOptions(config)],
-              // Like the cache below, no Redis URL means in-process counting.
-              storage: isEmpty(redisUrl)
-                ? undefined
-                : new ThrottlerStorageRedisService(
-                    new Redis(redisUrl, { maxRetriesPerRequest: 1 }),
-                  ),
+              storage: new ThrottlerStorageRedisService(redis),
             };
           },
         }),

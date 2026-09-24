@@ -17,6 +17,7 @@ import {
   NamespaceMember,
   NamespaceRole,
 } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { ContactRateLimiter } from 'omniboxd/rate-limit/contact-rate-limiter.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SmsService } from 'omniboxd/sms/sms.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -80,6 +81,7 @@ export class UserService {
     private readonly i18n: I18nService,
     private readonly cacheService: CacheService,
     private readonly dataSource: DataSource,
+    private readonly contactRateLimiter: ContactRateLimiter,
   ) {}
 
   async verify(identifier: string, password: string, type?: 'email' | 'phone') {
@@ -505,6 +507,8 @@ export class UserService {
       );
     }
 
+    await this.contactRateLimiter.consume(email);
+
     const code = generateId(6, '0123456789');
     const expiresIn = 5 * 60 * 1000;
 
@@ -555,6 +559,8 @@ export class UserService {
         HttpStatus.BAD_REQUEST,
       );
     }
+
+    await this.contactRateLimiter.consume(phone);
 
     const code = generateId(6, '0123456789');
     const expiresIn = 5 * 60 * 1000; // 5 minutes

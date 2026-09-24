@@ -1,4 +1,5 @@
 import KeyvRedis from '@keyv/redis';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { CacheModule } from '@nestjs/cache-manager';
 import {
   DynamicModule,
@@ -9,8 +10,10 @@ import {
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheableMemory } from 'cacheable';
+import Redis from 'ioredis';
 import { Keyv } from 'keyv';
 import {
   AcceptLanguageResolver,
@@ -120,6 +123,7 @@ import { NotificationsModule } from 'omniboxd/notifications/notifications.module
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { PhoneModule } from 'omniboxd/phone/phone.module';
+import { otpThrottlerOptions } from 'omniboxd/rate-limit/rate-limit.config';
 import { ResourceTagsModule } from 'omniboxd/resource-tags/resource-tags.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { RssModule } from 'omniboxd/rss/rss.module';
@@ -236,6 +240,23 @@ export class AppModule implements NestModule {
         SmartFoldersModule,
         RssModule,
         SharedResourceTagsModule,
+        ThrottlerModule.forRootAsync({
+          imports: [ConfigModule],
+          inject: [ConfigService],
+          useFactory: (config: ConfigService) => {
+            const redisUrl = config.get<string>('OBB_REDIS_URL', '');
+
+            return {
+              throttlers: [otpThrottlerOptions(config)],
+              // Like the cache below, no Redis URL means in-process counting.
+              storage: isEmpty(redisUrl)
+                ? undefined
+                : new ThrottlerStorageRedisService(
+                    new Redis(redisUrl, { maxRetriesPerRequest: 1 }),
+                  ),
+            };
+          },
+        }),
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

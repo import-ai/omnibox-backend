@@ -3,7 +3,7 @@ import { AuthController } from 'omniboxd/auth/auth.controller';
 import { CaptchaGuard } from 'omniboxd/captcha/captcha.guard';
 import { UserController } from 'omniboxd/user/user.controller';
 
-import { IpRateLimitGuard } from './ip-rate-limit.guard';
+import { OtpThrottlerGuard } from './otp-throttler.guard';
 
 const guardsOf = (proto: object, method: string): string[] => {
   const handler = (proto as Record<string, object>)[method];
@@ -16,7 +16,7 @@ const guardsOf = (proto: object, method: string): string[] => {
 describe('OTP send endpoint guard order', () => {
   // The IP limit must be evaluated before the captcha guard so that a flood is
   // rejected without spending a paid Aliyun verification. Nest executes handler
-  // guards in registration order, so IpRateLimitGuard has to come first in the
+  // guards in registration order, so OtpThrottlerGuard has to come first in the
   // handler's guard metadata.
   it.each([
     ['auth/send-otp', AuthController.prototype, 'sendEmailOtp'],
@@ -33,7 +33,7 @@ describe('OTP send endpoint guard order', () => {
     'registers the IP guard before the captcha guard on %s',
     (_route, proto, method) => {
       expect(guardsOf(proto, method)).toEqual([
-        IpRateLimitGuard.name,
+        OtpThrottlerGuard.name,
         CaptchaGuard.name,
       ]);
     },

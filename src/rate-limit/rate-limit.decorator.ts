@@ -1,7 +1,6 @@
-import { applyDecorators, SetMetadata, UseGuards } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
 
-import { IpRateLimitGuard } from './ip-rate-limit.guard';
-import { RATE_LIMIT_BY_IP_KEY } from './rate-limit.constants';
+import { OtpThrottlerGuard } from './otp-throttler.guard';
 
 /**
  * Throttle a handler per client IP (fixed window, Redis-backed).
@@ -12,8 +11,4 @@ import { RATE_LIMIT_BY_IP_KEY } from './rate-limit.constants';
  * which registers it first and makes it run before the paid Aliyun
  * verification.
  */
-export const RateLimitByIp = () =>
-  applyDecorators(
-    SetMetadata(RATE_LIMIT_BY_IP_KEY, true),
-    UseGuards(IpRateLimitGuard),
-  );
+export const RateLimitByIp = () => UseGuards(OtpThrottlerGuard);

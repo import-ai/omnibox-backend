@@ -56,7 +56,8 @@ it('requires bearer confirmation, S256 proof, expiry and atomic one-time exchang
   }).compile();
   const app = module.createNestApplication();
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
-  await app.init();
+  // Keep the server open until all concurrent exchanges finish.
+  await app.listen(0, '127.0.0.1');
   const redis = createClient({ url });
   await redis.connect();
   const api = request(app.getHttpServer());

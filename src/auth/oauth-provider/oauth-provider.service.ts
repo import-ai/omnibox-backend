@@ -9,7 +9,7 @@ import { AuthService } from '../auth.service';
 import { AuthorizeRequestDto } from './dto/authorize-request.dto';
 import { TokenRequestDto, TokenResponseDto } from './dto/token-request.dto';
 import { UserinfoResponseDto } from './dto/userinfo-response.dto';
-import { OAuthClientService } from './oauth-client.service';
+import { DESKTOP_CLIENT_ID, OAuthClientService } from './oauth-client.service';
 import { OAuthTokenStoreService } from './oauth-token-store.service';
 import { PairwiseSubjectService } from './pairwise-subject.service';
 
@@ -74,9 +74,8 @@ export class OAuthProviderService {
     }
 
     if (
-      client.isFirstParty &&
-      (client.clientId !== 'omnibox-desktop' ||
-        dto.redirect_uri !== 'omnibox://oauth/callback' ||
+      client.clientId === DESKTOP_CLIENT_ID &&
+      (dto.redirect_uri !== 'omnibox://oauth/callback' ||
         dto.code_challenge_method !== 'S256' ||
         !/^[A-Za-z0-9_-]{43}$/.test(dto.code_challenge || '') ||
         !/^[A-Za-z0-9_-]{43,128}$/.test(dto.state || ''))
@@ -96,7 +95,10 @@ export class OAuthProviderService {
     const user = await this.userService.find(userId);
     if (!user) this.invalidRequest();
     return {
-      client: { name: client.name, first_party: client.isFirstParty },
+      client: {
+        name: client.name,
+        first_party: client.clientId === DESKTOP_CLIENT_ID,
+      },
       account: { id: user.id, username: user.username, email: user.email },
     };
   }
@@ -120,10 +122,12 @@ export class OAuthProviderService {
     confirmedUserId?: string,
   ): Promise<{ redirectUrl: string }> {
     const { client, validScopes } = await this.validateAuthorization(dto);
-    if (client.isFirstParty && confirmedUserId !== userId)
+    if (client.clientId === DESKTOP_CLIENT_ID && confirmedUserId !== userId)
       this.invalidRequest();
     const code = this.generateAuthorizationCode();
-    const ttlMs = (client.isFirstParty ? 60 : this.codeExpireSeconds) * 1000;
+    const ttlMs =
+      (client.clientId === DESKTOP_CLIENT_ID ? 60 : this.codeExpireSeconds) *
+      1000;
 
     await this.tokenStore.saveAuthorizationCode(
       {
@@ -188,9 +192,8 @@ export class OAuthProviderService {
     )
       this.invalidRequest();
     if (
-      client.isFirstParty &&
-      (client.clientId !== 'omnibox-desktop' ||
-        dto.redirect_uri !== 'omnibox://oauth/callback' ||
+      client.clientId === DESKTOP_CLIENT_ID &&
+      (dto.redirect_uri !== 'omnibox://oauth/callback' ||
         authCode.codeChallengeMethod !== 'S256' ||
         !authCode.codeChallenge ||
         !/^[A-Za-z0-9._~-]{43,128}$/.test(dto.code_verifier || ''))
@@ -232,7 +235,7 @@ export class OAuthProviderService {
 
     if (!(await this.tokenStore.consumeAuthorizationCode(dto.code)))
       this.invalidRequest();
-    if (client.isFirstParty) {
+    if (client.clientId === DESKTOP_CLIENT_ID) {
       const user = await this.userService.find(authCode.userId);
       if (!user) this.invalidRequest();
       const credential = this.authService.login(user);

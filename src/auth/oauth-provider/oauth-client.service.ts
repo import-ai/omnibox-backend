@@ -12,6 +12,13 @@ import {
 } from './dto/create-client-request.dto';
 import { OAuthClient } from './entities/oauth-client.entity';
 
+export const DESKTOP_CLIENT_ID = 'omnibox-desktop';
+
+type RegisteredClient = Pick<
+  OAuthClient,
+  'clientId' | 'clientSecret' | 'name' | 'redirectUris' | 'scopes'
+>;
+
 @Injectable()
 export class OAuthClientService {
   private readonly logger = new Logger(OAuthClientService.name);
@@ -27,7 +34,7 @@ export class OAuthClientService {
       where: { clientId: dto.clientId },
     });
 
-    if (existingClient || dto.clientId === 'omnibox-desktop') {
+    if (existingClient || dto.clientId === DESKTOP_CLIENT_ID) {
       throw new AppException(
         this.i18n.t('auth.oauth.errors.clientAlreadyExists'),
         'OAUTH_CLIENT_ALREADY_EXISTS',
@@ -45,7 +52,6 @@ export class OAuthClientService {
       redirectUris: dto.redirectUris,
       scopes: dto.scopes || ['openid', 'profile', 'email'],
       isActive: true,
-      isFirstParty: false,
     });
 
     await this.clientRepository.save(client);
@@ -61,7 +67,16 @@ export class OAuthClientService {
     };
   }
 
-  async findByClientId(clientId: string): Promise<OAuthClient | null> {
+  async findByClientId(clientId: string): Promise<RegisteredClient | null> {
+    if (clientId === DESKTOP_CLIENT_ID) {
+      return {
+        clientId: DESKTOP_CLIENT_ID,
+        clientSecret: '',
+        name: 'OmniBox Desktop',
+        redirectUris: ['omnibox://oauth/callback'],
+        scopes: ['openid', 'profile', 'email'],
+      };
+    }
     return this.clientRepository.findOne({
       where: { clientId, isActive: true },
     });
@@ -70,7 +85,7 @@ export class OAuthClientService {
   async validateClient(
     clientId: string,
     clientSecret: string,
-  ): Promise<OAuthClient> {
+  ): Promise<RegisteredClient> {
     const client = await this.findByClientId(clientId);
 
     if (!client) {
@@ -96,11 +111,14 @@ export class OAuthClientService {
     return client;
   }
 
-  validateRedirectUri(client: OAuthClient, redirectUri: string): boolean {
+  validateRedirectUri(client: RegisteredClient, redirectUri: string): boolean {
     return client.redirectUris.includes(redirectUri);
   }
 
-  validateScopes(client: OAuthClient, requestedScopes: string[]): string[] {
+  validateScopes(
+    client: RegisteredClient,
+    requestedScopes: string[],
+  ): string[] {
     return requestedScopes.filter((scope) => client.scopes.includes(scope));
   }
 

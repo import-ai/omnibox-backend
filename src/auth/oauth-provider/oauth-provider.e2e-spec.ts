@@ -1,10 +1,14 @@
 import { createHash } from 'node:crypto';
 
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from 'omniboxd/auth/auth.service';
+import { CacheService } from 'omniboxd/common/cache.service';
 import { TestClient } from 'test/test-client';
+import { GenericContainer, StartedTestContainer } from 'testcontainers';
 import { DataSource } from 'typeorm';
 
 import { OAuthClientService } from './oauth-client.service';
+import { OAuthTokenStoreService } from './oauth-token-store.service';
 
 const verifier = 'a'.repeat(43);
 const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -19,12 +23,28 @@ const authorize = {
 
 describe('Shared OAuth first-party and third-party authorization', () => {
   let client: TestClient;
+  let redis: StartedTestContainer;
+  let secondStore: OAuthTokenStoreService;
+  const previousRedisUrl = process.env.OBB_REDIS_URL;
   beforeAll(async () => {
+    redis = await new GenericContainer('redis:7-alpine')
+      .withExposedPorts(6379)
+      .start();
+    process.env.OBB_REDIS_URL = `redis://${redis.getHost()}:${redis.getMappedPort(6379)}`;
     client = await TestClient.create();
+    secondStore = new OAuthTokenStoreService(
+      client.app.get(CacheService),
+      client.app.get(ConfigService),
+    );
+    secondStore.onModuleInit();
     await client.app.listen(0, '127.0.0.1');
   });
   afterAll(async () => {
+    await secondStore?.onModuleDestroy();
     await client?.close();
+    await redis?.stop();
+    if (previousRedisUrl === undefined) delete process.env.OBB_REDIS_URL;
+    else process.env.OBB_REDIS_URL = previousRedisUrl;
   });
   const issue = async (params = authorize) => {
     const res = await client
@@ -44,7 +64,7 @@ describe('Shared OAuth first-party and third-party authorization', () => {
     code_verifier: verifier,
   });
 
-  it('requires a registered first-party client, explicit bearer confirmation and S256', async () => {
+  it('requires the built-in desktop client, explicit bearer confirmation and S256', async () => {
     const context = await client
       .get('/api/v1/oauth/authorize/context')
       .query(authorize)
@@ -117,32 +137,35 @@ describe('Shared OAuth first-party and third-party authorization', () => {
       .expect(200);
   });
 
-  it('rejects expired codes and disabled clients', async () => {
+  it('shares codes across Redis connections, expires them and fails closed without Redis', async () => {
     const code = await issue();
-    const db = client.app.get(DataSource);
-    await db.query(
-      "UPDATE oauth_authorization_codes SET expires_at = now() - interval '1 second'",
+    const payload = await secondStore.getAuthorizationCode(code);
+    expect(payload?.clientId).toBe('omnibox-desktop');
+    const store = client.app.get(OAuthTokenStoreService);
+    const consumed = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        (i % 2 ? store : secondStore).consumeAuthorizationCode(code),
+      ),
     );
-    await client
-      .request()
-      .post('/api/v1/oauth/token')
-      .send(exchange(code))
-      .expect(400);
-    const disabledCode = await issue();
-    await db.query(
-      "UPDATE oauth_clients SET is_active = false WHERE client_id = 'omnibox-desktop'",
+    expect(consumed.filter(Boolean)).toHaveLength(1);
+    await store.saveAuthorizationCode({ ...payload!, code: 'expired-code' }, 1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await secondStore.getAuthorizationCode('expired-code')).toBeNull();
+    const unavailable = new OAuthTokenStoreService(
+      client.app.get(CacheService),
+      new ConfigService({ OBB_REDIS_URL: '' }),
     );
-    try {
-      await client
-        .request()
-        .post('/api/v1/oauth/token')
-        .send(exchange(disabledCode))
-        .expect(400);
-    } finally {
-      await db.query(
-        "UPDATE oauth_clients SET is_active = true WHERE client_id = 'omnibox-desktop'",
-      );
-    }
+    unavailable.onModuleInit();
+    await expect(unavailable.getAuthorizationCode('any')).rejects.toThrow(
+      'requires Redis',
+    );
+    expect(
+      await client.app
+        .get(DataSource)
+        .query(
+          "SELECT 1 FROM oauth_clients WHERE client_id = 'omnibox-desktop'",
+        ),
+    ).toHaveLength(0);
   });
 
   it('preserves third-party secret and PKCE flows without granting a product JWT', async () => {

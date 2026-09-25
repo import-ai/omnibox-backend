@@ -106,19 +106,22 @@ serves the namespace/share wizard SSE routes.
 
 The official public client `omnibox-desktop` uses the shared OAuth authorization-code
 flow with mandatory S256 PKCE and the exact redirect URI `omnibox://oauth/callback`.
-A migration registers this first-party client; ordinary registration cannot set
-first-party status or claim the reserved client ID. No client secret is shipped.
+The server defines this built-in client directly; ordinary registration cannot
+claim its reserved client ID. No database migration or desktop client row is needed. No client secret is shipped.
 The browser reads `/api/v1/oauth/authorize/context`, explicitly confirms the account
 through `POST /api/v1/oauth/authorize` with a Bearer token and matching user ID, then
 opens the callback. `POST /api/v1/oauth/token` returns the existing product login JWT
 for this client only. Third-party clients retain opaque scoped OAuth tokens and the
 existing GET authorization flow. There is no device/session management in this change.
 
-Shared authorization codes are hashed in PostgreSQL, expire after 60 seconds for
-the desktop client, and are consumed atomically after proof validation. Existing
-OAuth access-token storage is unchanged. In-flight authorization codes from the
-old cache need a new authorization after deployment; already-issued tokens remain
-valid. The dedicated desktop-auth endpoints and scheme configuration are removed.
+Shared authorization codes use SHA-256 keys in Redis with native TTL (60 seconds
+for Desktop) and atomic deletion after proof validation. All Backend instances
+must share OBB_REDIS_URL; missing or unavailable Redis fails authorization closed,
+without an in-memory fallback. OAuth access-token storage is unchanged.
+The desktop flow introduces no PostgreSQL schema or data migrations.
+Client IDs and PKCE do not attest application authenticity: another application
+can copy the public ID. User authentication, explicit confirmation and resource
+authorization remain required; the built-in client has no administrative privilege.
 The public Website gateway rate-limits OAuth requests per peer IP (one request
 per second with a burst of 60); standalone deployments should apply equivalent
 ingress limits.

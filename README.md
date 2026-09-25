@@ -101,3 +101,14 @@ serves the namespace/share wizard SSE routes.
 - **Authentication**: JWT + Passport
 - **Email Service**: Nodemailer
 - **Search**: Meilisearch
+
+## Desktop browser authentication
+
+Desktop clients use `/api/v1/desktop-auth/start`, `/authorize`, and `/exchange`.
+Set `OBB_DESKTOP_AUTH_SCHEME` to `omnibox-auth-test`, `omnibox-auth-pre`, or
+`omnibox-auth-prod` for the deployment. `OBB_REDIS_URL` is required: this flow
+fails closed without Redis and never falls back to process-local memory.
+Pending transactions expire after five minutes; confirmed codes expire after
+one minute and are atomically consumed with S256 PKCE verification. The browser
+confirmation endpoint requires an explicit user Bearer token, not cookie-only
+authentication. Keep the public gateway's desktop-auth route on this backend.

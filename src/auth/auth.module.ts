@@ -36,6 +36,9 @@ import { SmsModule } from 'omniboxd/sms/sms.module';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { UserModule } from 'omniboxd/user/user.module';
 
+import { DesktopAuthController } from './desktop/desktop-auth.controller';
+import { DesktopAuthService } from './desktop/desktop-auth.service';
+
 @Module({
   exports: [
     AuthService,
@@ -46,6 +49,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     OAuthProviderModule,
   ],
   controllers: [
+    DesktopAuthController,
     AuthController,
     InternalAuthController,
     WechatController,
@@ -54,6 +58,7 @@ import { UserModule } from 'omniboxd/user/user.module';
     AppleController,
   ],
   providers: [
+    DesktopAuthService,
     AuthService,
     SocialService,
     OtpService,

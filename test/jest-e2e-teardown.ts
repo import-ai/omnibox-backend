@@ -6,8 +6,8 @@ export default async () => {
 
   const postgresContainer = (global as any)
     .__POSTGRES_CONTAINER__ as StartedTestContainer;
-  const minioContainer = (global as any)
-    .__MINIO_CONTAINER__ as StartedTestContainer;
+  const rustfsContainer = (global as any)
+    .__RUSTFS_CONTAINER__ as StartedTestContainer;
   const mailhogContainer = (global as any)
     .__MAILHOG_CONTAINER__ as StartedTestContainer;
   const kafkaContainer = (global as any)
@@ -18,9 +18,9 @@ export default async () => {
     console.log('PostgreSQL container stopped');
   }
 
-  if (minioContainer) {
-    await minioContainer.stop();
-    console.log('MinIO container stopped');
+  if (rustfsContainer) {
+    await rustfsContainer.stop();
+    console.log('RustFS container stopped');
   }
 
   if (mailhogContainer) {

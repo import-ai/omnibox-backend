@@ -1,7 +1,7 @@
 import { GenericContainer, StartedTestContainer, Wait } from 'testcontainers';
 
 let postgresContainer: StartedTestContainer;
-let minioContainer: StartedTestContainer;
+let rustfsContainer: StartedTestContainer;
 let mailhogContainer: StartedTestContainer;
 let kafkaContainer: StartedTestContainer;
 
@@ -26,24 +26,18 @@ export default async () => {
     .start();
   console.log('PostgreSQL container started');
 
-  minioContainer = await new GenericContainer(
-    'quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z',
+  rustfsContainer = await new GenericContainer(
+    'rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff',
   )
     .withExposedPorts(9000)
     .withEnvironment({
-      MINIO_ROOT_USER: 'minioadmin',
-      MINIO_ROOT_PASSWORD: 'minioadmin',
+      RUSTFS_ACCESS_KEY: 'rustfsadmin',
+      RUSTFS_SECRET_KEY: 'rustfsadmin',
     })
-    .withCommand(['server', '/data'])
-    .withHealthCheck({
-      test: ['CMD', 'curl', '-I', 'http://127.0.0.1:9000/minio/health/live'],
-      interval: 5000,
-      timeout: 3000,
-      retries: 5,
-    })
-    .withWaitStrategy(Wait.forHealthCheck())
+    .withCommand(['/data'])
+    .withWaitStrategy(Wait.forHttp('/health/ready', 9000).forStatusCode(200))
     .start();
-  console.log('MinIO container started');
+  console.log('RustFS container started');
 
   mailhogContainer = await new GenericContainer('mailhog/mailhog:latest')
     .withExposedPorts(1025, 8025)
@@ -81,9 +75,9 @@ export default async () => {
   process.env.OBB_POSTGRES_URL = postgresUrl;
   process.env.OBB_DB_SYNC = 'false';
   process.env.OBB_DB_LOGGING = 'false';
-  process.env.OBB_S3_ACCESS_KEY_ID = 'minioadmin';
-  process.env.OBB_S3_SECRET_ACCESS_KEY = 'minioadmin';
-  process.env.OBB_S3_ENDPOINT = `http://${minioContainer.getHost()}:${minioContainer.getMappedPort(9000)}`;
+  process.env.OBB_S3_ACCESS_KEY_ID = 'rustfsadmin';
+  process.env.OBB_S3_SECRET_ACCESS_KEY = 'rustfsadmin';
+  process.env.OBB_S3_ENDPOINT = `http://${rustfsContainer.getHost()}:${rustfsContainer.getMappedPort(9000)}`;
   process.env.OBB_S3_BUCKET = 'omnibox-test';
   process.env.OBB_S3_FORCE_PATH_STYLE = 'true';
   process.env.OBB_MAIL_TRANSPORT = mailTransport;
@@ -94,7 +88,7 @@ export default async () => {
   process.env.MAILHOG_API_URL = mailhogApiUrl;
 
   (global as any).__POSTGRES_CONTAINER__ = postgresContainer;
-  (global as any).__MINIO_CONTAINER__ = minioContainer;
+  (global as any).__RUSTFS_CONTAINER__ = rustfsContainer;
   (global as any).__MAILHOG_CONTAINER__ = mailhogContainer;
   (global as any).__KAFKA_CONTAINER__ = kafkaContainer;
 };

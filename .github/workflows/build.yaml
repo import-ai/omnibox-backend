@@ -10,7 +10,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  branch-name:
+    name: Validate requirement branch suffix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a positive requirement ID suffix
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          PR_SOURCE_BRANCH: ${{ github.head_ref }}
+        run: |
+          if [[ ! "$PR_SOURCE_BRANCH" =~ -[1-9][0-9]*$ ]]; then
+            echo '::error::PR source branch must end with a positive requirement ID, for example feat/desktop-login-alignment-2600.'
+            exit 1
+          fi
+
   build:
+    needs: [branch-name]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

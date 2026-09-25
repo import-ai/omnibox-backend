@@ -34,7 +34,7 @@ export class AccessLogMiddleware implements NestMiddleware {
 
       const logMessage: Record<string, any> = {
         method: req.method,
-        url: req.originalUrl,
+        url: req.path.startsWith('/api/v1/oauth/') ? req.path : req.originalUrl,
         status: res.statusCode,
         duration: duration,
         requestId: requestId,

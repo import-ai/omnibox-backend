@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { UserModule } from 'omniboxd/user/user.module';
 
+import { AuthModule } from '../auth.module';
 import { OAuthClient } from './entities/oauth-client.entity';
 import { OAuthPairwiseSubject } from './entities/oauth-pairwise-subject.entity';
 import { OAuthClientService } from './oauth-client.service';
@@ -18,6 +19,7 @@ import { PairwiseSubjectService } from './pairwise-subject.service';
 
 @Module({
   imports: [
+    forwardRef(() => AuthModule),
     TypeOrmModule.forFeature([OAuthClient, OAuthPairwiseSubject]),
     UserModule,
     JwtModule.registerAsync({

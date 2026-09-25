@@ -27,7 +27,7 @@ export class OAuthClientService {
       where: { clientId: dto.clientId },
     });
 
-    if (existingClient) {
+    if (existingClient || dto.clientId === 'omnibox-desktop') {
       throw new AppException(
         this.i18n.t('auth.oauth.errors.clientAlreadyExists'),
         'OAUTH_CLIENT_ALREADY_EXISTS',
@@ -45,6 +45,7 @@ export class OAuthClientService {
       redirectUris: dto.redirectUris,
       scopes: dto.scopes || ['openid', 'profile', 'email'],
       isActive: true,
+      isFirstParty: false,
     });
 
     await this.clientRepository.save(client);

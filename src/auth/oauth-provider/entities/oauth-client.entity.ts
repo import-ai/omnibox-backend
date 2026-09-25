@@ -21,6 +21,9 @@ export class OAuthClient extends Base {
   @Column('jsonb', { default: ['openid', 'profile', 'email'] })
   scopes: string[];
 
+  @Column({ name: 'is_first_party', default: false })
+  isFirstParty: boolean;
+
   @Column({ name: 'is_active', default: true })
   isActive: boolean;
 }

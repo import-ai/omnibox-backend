@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto';
+
 import { Injectable } from '@nestjs/common';
 import { CacheService } from 'omniboxd/common/cache.service';
+import { DataSource } from 'typeorm';
 
 export interface OAuthCodeData {
   code: string;
@@ -23,25 +26,46 @@ export interface OAuthTokenData {
 
 @Injectable()
 export class OAuthTokenStoreService {
-  private readonly codeNamespace = '/oauth/codes';
   private readonly tokenNamespace = '/oauth/tokens';
   private readonly userTokensNamespace = '/oauth/user-tokens';
 
-  constructor(private readonly cacheService: CacheService) {}
+  constructor(
+    private readonly cacheService: CacheService,
+    private readonly dataSource: DataSource,
+  ) {}
+
+  private codeHash(code: string) {
+    return createHash('sha256').update(code).digest('hex');
+  }
 
   async saveAuthorizationCode(
     data: OAuthCodeData,
     ttlMs: number,
   ): Promise<void> {
-    await this.cacheService.set(this.codeNamespace, data.code, data, ttlMs);
+    const { code, ...payload } = data;
+    await this.dataSource.query(
+      'DELETE FROM oauth_authorization_codes WHERE expires_at <= now()',
+    );
+    await this.dataSource.query(
+      "INSERT INTO oauth_authorization_codes (code_hash, data, expires_at) VALUES ($1, $2, now() + $3 * interval '1 millisecond')",
+      [this.codeHash(code), payload, ttlMs],
+    );
   }
-
   async getAuthorizationCode(code: string): Promise<OAuthCodeData | null> {
-    return this.cacheService.get<OAuthCodeData>(this.codeNamespace, code);
+    const rows = await this.dataSource.query(
+      'SELECT data FROM oauth_authorization_codes WHERE code_hash = $1 AND expires_at > now()',
+      [this.codeHash(code)],
+    );
+    return rows[0] ? { ...rows[0].data, code } : null;
   }
-
-  async deleteAuthorizationCode(code: string): Promise<void> {
-    await this.cacheService.delete(this.codeNamespace, code);
+  async consumeAuthorizationCode(code: string): Promise<boolean> {
+    const rows = await this.dataSource.query(
+      `WITH consumed AS (
+        DELETE FROM oauth_authorization_codes WHERE code_hash = $1 AND expires_at > now() RETURNING code_hash
+      ) SELECT count(*)::int AS count FROM consumed`,
+      [this.codeHash(code)],
+    );
+    return rows[0].count === 1;
   }
 
   async saveAccessToken(data: OAuthTokenData, ttlMs: number): Promise<void> {

@@ -104,11 +104,25 @@ serves the namespace/share wizard SSE routes.
 
 ## Desktop browser authentication
 
-Desktop clients use `/api/v1/desktop-auth/start`, `/authorize`, and `/exchange`.
-Set `OBB_DESKTOP_AUTH_SCHEME` to `omnibox-auth-test`, `omnibox-auth-pre`, or
-`omnibox-auth-prod` for the deployment. `OBB_REDIS_URL` is required: this flow
-fails closed without Redis and never falls back to process-local memory.
-Pending transactions expire after five minutes; confirmed codes expire after
-one minute and are atomically consumed with S256 PKCE verification. The browser
-confirmation endpoint requires an explicit user Bearer token, not cookie-only
-authentication. Keep the public gateway's desktop-auth route on this backend.
+The official public client `omnibox-desktop` uses the shared OAuth authorization-code
+flow with mandatory S256 PKCE and the exact redirect URI `omnibox://oauth/callback`.
+A migration registers this first-party client; ordinary registration cannot set
+first-party status or claim the reserved client ID. No client secret is shipped.
+The browser reads `/api/v1/oauth/authorize/context`, explicitly confirms the account
+through `POST /api/v1/oauth/authorize` with a Bearer token and matching user ID, then
+opens the callback. `POST /api/v1/oauth/token` returns the existing product login JWT
+for this client only. Third-party clients retain opaque scoped OAuth tokens and the
+existing GET authorization flow. There is no device/session management in this change.
+
+Shared authorization codes are hashed in PostgreSQL, expire after 60 seconds for
+the desktop client, and are consumed atomically after proof validation. Existing
+OAuth access-token storage is unchanged. In-flight authorization codes from the
+old cache need a new authorization after deployment; already-issued tokens remain
+valid. The dedicated desktop-auth endpoints and scheme configuration are removed.
+The public Website gateway rate-limits OAuth requests per peer IP (one request
+per second with a burst of 60); standalone deployments should apply equivalent
+ingress limits.
+
+All environments register the same callback scheme. When multiple builds coexist,
+the operating system chooses which application receives a callback; state/PKCE
+prevent a different login attempt from accepting it but cannot choose the application.

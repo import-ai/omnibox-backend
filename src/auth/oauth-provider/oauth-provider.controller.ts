@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Headers,
   HttpStatus,
   Post,
@@ -11,7 +12,10 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CookieAuth, Public } from 'omniboxd/auth/decorators';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
-import { AuthorizeRequestDto } from './dto/authorize-request.dto';
+import {
+  AuthorizeRequestDto,
+  ConfirmAuthorizeRequestDto,
+} from './dto/authorize-request.dto';
 import {
   CreateClientRequestDto,
   CreateClientResponseDto,
@@ -26,7 +30,28 @@ import { OAuthProviderService } from './oauth-provider.service';
 export class OAuthProviderController {
   constructor(private readonly oauthService: OAuthProviderService) {}
 
+  @Get('authorize/context')
+  @Header('Cache-Control', 'no-store')
+  context(@Query() dto: AuthorizeRequestDto, @UserId() userId: string) {
+    return this.oauthService.context(dto, userId);
+  }
+  @Post('authorize')
+  @Header('Cache-Control', 'no-store')
+  async confirm(
+    @Body() dto: ConfirmAuthorizeRequestDto,
+    @UserId() userId: string,
+    @Headers('authorization') authorization: string,
+  ) {
+    const { redirectUrl } = await this.oauthService.confirm(
+      dto,
+      userId,
+      dto.user_id,
+      authorization,
+    );
+    return { redirect_url: redirectUrl };
+  }
   @Get('authorize')
+  @Header('Cache-Control', 'no-store')
   @CookieAuth()
   @ApiOperation({
     summary: 'OAuth Authorization Endpoint',
@@ -54,6 +79,7 @@ export class OAuthProviderController {
   }
 
   @Post('token')
+  @Header('Cache-Control', 'no-store')
   @Public()
   @ApiOperation({
     summary: 'OAuth Token Endpoint',

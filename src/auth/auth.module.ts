@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
@@ -36,9 +36,6 @@ import { SmsModule } from 'omniboxd/sms/sms.module';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { UserModule } from 'omniboxd/user/user.module';
 
-import { DesktopAuthController } from './desktop/desktop-auth.controller';
-import { DesktopAuthService } from './desktop/desktop-auth.service';
-
 @Module({
   exports: [
     AuthService,
@@ -49,7 +46,6 @@ import { DesktopAuthService } from './desktop/desktop-auth.service';
     OAuthProviderModule,
   ],
   controllers: [
-    DesktopAuthController,
     AuthController,
     InternalAuthController,
     WechatController,
@@ -58,7 +54,6 @@ import { DesktopAuthService } from './desktop/desktop-auth.service';
     AppleController,
   ],
   providers: [
-    DesktopAuthService,
     AuthService,
     SocialService,
     OtpService,
@@ -97,7 +92,7 @@ import { DesktopAuthService } from './desktop/desktop-auth.service';
     GroupsModule,
     PermissionsModule,
     APIKeyModule,
-    OAuthProviderModule,
+    forwardRef(() => OAuthProviderModule),
     ResourcesModule,
 
     JwtModule.registerAsync({

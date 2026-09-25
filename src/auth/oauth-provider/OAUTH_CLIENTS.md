@@ -225,3 +225,21 @@ SELECT client_id, name, redirect_uris, scopes, is_active
 FROM oauth_clients
 WHERE client_id = 'flarum-forum';
 ```
+
+## Official desktop client
+
+The first-party OAuth migration reserves `omnibox-desktop` and the exact callback
+`omnibox://oauth/callback` in every environment. Its `is_first_party` flag is
+server-managed, never writable through client registration. Do not mark third-party
+clients as first-party. Desktop authorization requires S256 PKCE, nonempty random
+state, and explicit account confirmation through the Bearer-authenticated POST
+endpoint. Cookie-only GET authorization cannot issue first-party codes.
+
+`GET /api/v1/oauth/authorize/context` returns validated client metadata and the
+current account. `POST /api/v1/oauth/authorize` accepts the authorization parameters
+plus `user_id`. `/token` issues product JWT credentials only for the registered
+first-party desktop client; third-party tokens and userinfo behavior stay unchanged.
+Shared authorization codes now live in `oauth_authorization_codes` as SHA-256 keys
+with JSON payloads and expiration timestamps. Expired rows are removed when a new
+code is issued. Consumption is an atomic database deletion; invalid proofs do not
+consume a code. Access tokens continue to use the existing cache store.

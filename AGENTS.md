@@ -30,7 +30,7 @@ pnpm run test:e2e:remote
 
 Unit and e2e tests are colocated under `src/**/*.spec.ts` and
 `src/**/*.e2e-spec.ts`. E2E tests use `testcontainers` for PostgreSQL and
-MinIO; keep Docker available. Prefer the narrowest relevant test, then run
+RustFS; keep Docker available. Prefer the narrowest relevant test, then run
 `pnpm run lint` for code changes. CI runs `pnpm run lint` and
 `pnpm run test:e2e --coverage --bail`.
 

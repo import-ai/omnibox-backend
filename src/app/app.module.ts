@@ -28,6 +28,7 @@ import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
+import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
 import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { FeaturePreviewsModule } from 'omniboxd/feature-previews/feature-previews.module';
@@ -200,6 +201,7 @@ export class AppModule implements NestModule {
         ResourceTagsModule,
         MailModule,
         AuthModule,
+        OAuthProviderModule,
         UserModule,
         APIKeyModule,
         NamespacesModule,

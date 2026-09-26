@@ -91,14 +91,10 @@ export class OAuthProviderService {
     );
   }
   async context(dto: AuthorizeRequestDto, userId: string) {
-    const { client } = await this.validateAuthorization(dto);
+    await this.validateAuthorization(dto);
     const user = await this.userService.find(userId);
     if (!user) this.invalidRequest();
     return {
-      client: {
-        name: client.name,
-        first_party: client.clientId === DESKTOP_CLIENT_ID,
-      },
       account: { id: user.id, username: user.username, email: user.email },
     };
   }
@@ -234,8 +230,13 @@ export class OAuthProviderService {
       await this.clientService.validateClient(dto.client_id, dto.client_secret);
     }
 
-    // Delete code immediately after use (one-time use)
-    await this.tokenStore.deleteAuthorizationCode(dto.code);
+    if (!(await this.tokenStore.consumeAuthorizationCode(dto.code))) {
+      throw new AppException(
+        this.i18n.t('auth.oauth.errors.invalidCode'),
+        'OAUTH_INVALID_CODE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     if (client.clientId === DESKTOP_CLIENT_ID) {
       const user = await this.userService.find(authCode.userId);
       if (!user) this.invalidRequest();

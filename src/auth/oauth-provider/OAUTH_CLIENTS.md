@@ -188,7 +188,7 @@ is required. Ordinary client registration cannot claim this reserved ID.
 Desktop requires S256 PKCE, random state and explicit account confirmation via
 the Bearer-authenticated POST endpoint. Cookie-only GET cannot issue desktop codes.
 
-`GET /api/v1/oauth/authorize/context` returns validated metadata and the current
+`GET /api/v1/oauth/authorize/context` validates the request and returns the current
 account. `POST /api/v1/oauth/authorize` accepts authorization parameters and
 `user_id`. `/token` issues the existing product JWT for Desktop; third-party clients
 retain scoped opaque tokens. The client ID is public, not proof of an official
@@ -196,5 +196,6 @@ binary. PKCE prevents intercepted-code redemption, not client impersonation.
 
 Authorization codes use CacheService (Redis when `OBB_REDIS_URL` is set, memory
 otherwise) with a TTL; Desktop codes expire after 60 seconds. Invalid proofs leave
-the code intact; a successful exchange deletes it. Multi-instance deployments must
-set `OBB_REDIS_URL`. Access-token storage is unchanged.
+the code intact; only the request that atomically consumes the code may issue a
+token. Multi-instance deployments must set `OBB_REDIS_URL`. Access-token storage
+is unchanged.

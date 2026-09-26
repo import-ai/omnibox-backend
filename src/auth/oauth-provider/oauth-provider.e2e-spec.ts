@@ -4,6 +4,7 @@ import { AuthService } from 'omniboxd/auth/auth.service';
 import { TestClient } from 'test/test-client';
 
 import { OAuthClientService } from './oauth-client.service';
+import { OAuthProviderService } from './oauth-provider.service';
 
 const verifier = 'a'.repeat(43);
 const challenge = createHash('sha256').update(verifier).digest('base64url');
@@ -47,7 +48,6 @@ describe('Shared OAuth first-party and third-party authorization', () => {
       .get('/api/v1/oauth/authorize/context')
       .query(authorize)
       .expect(200);
-    expect(context.body.client.first_party).toBe(true);
     expect(context.body.account.id).toBe(client.user.id);
     await client.get('/api/v1/oauth/authorize').query(authorize).expect(400);
     await client
@@ -115,6 +115,17 @@ describe('Shared OAuth first-party and third-party authorization', () => {
       .get(`/api/v1/user/${client.user.id}`)
       .set('Authorization', `Bearer ${credential.access_token}`)
       .expect(200);
+  });
+
+  it('allows exactly one concurrent exchange for an authorization code', async () => {
+    const code = await issue();
+    const service = client.app.get(OAuthProviderService);
+    const results = await Promise.allSettled(
+      Array.from({ length: 8 }, () => service.exchangeToken(exchange(code))),
+    );
+    expect(
+      results.filter((result) => result.status === 'fulfilled'),
+    ).toHaveLength(1);
   });
 
   it('preserves third-party secret and PKCE flows without granting a product JWT', async () => {

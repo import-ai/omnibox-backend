@@ -10,7 +10,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CacheableMemory } from 'cacheable';
 import { Keyv } from 'keyv';
 import {
   AcceptLanguageResolver,
@@ -28,6 +27,8 @@ import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
+import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
+import { AtomicMemoryCache } from 'omniboxd/common/cache.service';
 import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { FeaturePreviewsModule } from 'omniboxd/feature-previews/feature-previews.module';
@@ -200,6 +201,7 @@ export class AppModule implements NestModule {
         ResourceTagsModule,
         MailModule,
         AuthModule,
+        OAuthProviderModule,
         UserModule,
         APIKeyModule,
         NamespacesModule,
@@ -245,7 +247,7 @@ export class AppModule implements NestModule {
               stores: [
                 new Keyv({
                   store: isEmpty(redisUrl)
-                    ? new CacheableMemory({ ttl: 60000, lruSize: 5000 })
+                    ? new AtomicMemoryCache({ ttl: 60000, lruSize: 5000 })
                     : new KeyvRedis(redisUrl),
                 }),
               ],

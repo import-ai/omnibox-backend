@@ -100,6 +100,24 @@ Global auth guards are registered in `AuthModule` in this order:
 Use `@Public()` only for truly unauthenticated routes. API keys use
 `Authorization: Bearer sk-...`; cookie auth uses the `token` cookie.
 
+## OAuth Provider
+
+`src/auth/oauth-provider/` implements the OAuth authorization-code flow for
+third-party clients and the built-in desktop client `omnibox-desktop`; see
+`src/auth/oauth-provider/OAUTH_CLIENTS.md` for endpoints and client rules.
+
+- `OAuthProviderModule` is registered in `AppModule` and depends on
+  `AuthModule` one way (to reuse `AuthService` for the product JWT). Do not make
+  `AuthModule` import it back.
+- Desktop requires S256 PKCE, the exact callback `omnibox://oauth/callback`, and
+  Bearer-authenticated account confirmation; its token exchange returns the
+  product JWT. Third-party clients keep scoped opaque tokens.
+- Authorization codes live in CacheService with a TTL and are deleted after a
+  successful exchange; multi-instance deployments must set `OBB_REDIS_URL`.
+- The client ID and PKCE do not prove the official binary.
+- All environments share the `omnibox` callback scheme; with several desktop
+  builds installed, the OS picks which one receives the callback.
+
 ## Database
 
 Migrations run automatically on app startup (`migrationsRun: true`).

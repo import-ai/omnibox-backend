@@ -17,7 +17,6 @@ import { InternalAuthController } from 'omniboxd/auth/internal.auth.controller';
 import { JwtStrategy } from 'omniboxd/auth/jwt.strategy';
 import { JwtAuthGuard } from 'omniboxd/auth/jwt-auth.guard';
 import { LocalStrategy } from 'omniboxd/auth/local.strategy';
-import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
 import { OtpService } from 'omniboxd/auth/otp.service';
 import { SocialService } from 'omniboxd/auth/social.service';
 import { WechatController } from 'omniboxd/auth/wechat/wechat.controller';
@@ -43,7 +42,6 @@ import { UserModule } from 'omniboxd/user/user.module';
     GoogleService,
     AppleService,
     SocialService,
-    OAuthProviderModule,
   ],
   controllers: [
     AuthController,
@@ -92,7 +90,6 @@ import { UserModule } from 'omniboxd/user/user.module';
     GroupsModule,
     PermissionsModule,
     APIKeyModule,
-    OAuthProviderModule,
     ResourcesModule,
 
     JwtModule.registerAsync({

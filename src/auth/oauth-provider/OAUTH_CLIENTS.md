@@ -131,59 +131,13 @@ WHERE client_id = 'my-app';
 ### Delete Client (Hard Delete)
 
 ```sql
--- First delete related tokens and codes
-DELETE FROM oauth_access_tokens WHERE client_id = 'my-app';
-DELETE FROM oauth_authorization_codes WHERE client_id = 'my-app';
 DELETE FROM oauth_clients WHERE client_id = 'my-app';
 ```
 
-## Monitoring
-
-### View Active Access Tokens
-
-```sql
-SELECT t.id, t.client_id, t.user_id, u.username, t.scope, t.expires_at, t.created_at
-FROM oauth_access_tokens t
-JOIN users u ON t.user_id = u.id
-WHERE t.revoked_at IS NULL AND t.expires_at > NOW()
-ORDER BY t.created_at DESC;
-```
-
-### View Recent Authorization Codes
-
-```sql
-SELECT c.id, c.client_id, c.user_id, u.username, c.scope, c.expires_at, c.used_at
-FROM oauth_authorization_codes c
-JOIN users u ON c.user_id = u.id
-ORDER BY c.created_at DESC
-LIMIT 20;
-```
-
-### Revoke All Tokens for a Client
-
-```sql
-UPDATE oauth_access_tokens
-SET revoked_at = NOW()
-WHERE client_id = 'my-app' AND revoked_at IS NULL;
-```
-
-### Revoke All Tokens for a User
-
-```sql
-UPDATE oauth_access_tokens
-SET revoked_at = NOW()
-WHERE user_id = 'USER_UUID_HERE' AND revoked_at IS NULL;
-```
-
-### Cleanup Expired Records
-
-```sql
--- Delete expired authorization codes
-DELETE FROM oauth_authorization_codes WHERE expires_at < NOW();
-
--- Delete expired access tokens
-DELETE FROM oauth_access_tokens WHERE expires_at < NOW();
-```
+Authorization codes live in CacheService and expire automatically. Access tokens use
+CacheService; use the token revocation API rather than SQL to revoke them.
+Deleting or disabling a client prevents outstanding codes from being exchanged;
+it does not revoke already-issued access tokens.
 
 ## OAuth Endpoints
 
@@ -225,3 +179,23 @@ SELECT client_id, name, redirect_uris, scopes, is_active
 FROM oauth_clients
 WHERE client_id = 'flarum-forum';
 ```
+
+## Official desktop client
+
+The server defines the public client `omnibox-desktop` and exact callback
+`omnibox://oauth/callback` directly. No database row, first-party column or migration
+is required. Ordinary client registration cannot claim this reserved ID.
+Desktop requires S256 PKCE, random state and explicit account confirmation via
+the Bearer-authenticated POST endpoint. Cookie-only GET cannot issue desktop codes.
+
+`GET /api/v1/oauth/authorize/context` validates the request and returns the current
+account. `POST /api/v1/oauth/authorize` accepts authorization parameters and
+`user_id`. `/token` issues the existing product JWT for Desktop; third-party clients
+retain scoped opaque tokens. The client ID is public, not proof of an official
+binary. PKCE prevents intercepted-code redemption, not client impersonation.
+
+Authorization codes use CacheService (Redis when `OBB_REDIS_URL` is set, memory
+otherwise) with a TTL; Desktop codes expire after 60 seconds. Invalid proofs leave
+the code intact; only the request that atomically consumes the code may issue a
+token. Multi-instance deployments must set `OBB_REDIS_URL`. Access-token storage
+is unchanged.

@@ -64,6 +64,9 @@ export class TokenRequestDto {
 }
 
 export class TokenResponseDto {
+  @ApiPropertyOptional({ description: 'User ID for first-party login only' })
+  id?: string;
+
   @ApiProperty({
     description: 'Access token',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',

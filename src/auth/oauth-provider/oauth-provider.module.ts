@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from 'omniboxd/auth/auth.module';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { UserModule } from 'omniboxd/user/user.module';
 
@@ -18,15 +17,9 @@ import { PairwiseSubjectService } from './pairwise-subject.service';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([OAuthClient, OAuthPairwiseSubject]),
     UserModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get('OBB_JWT_SECRET'),
-      }),
-    }),
   ],
   controllers: [OAuthProviderController, OAuthClientController],
   providers: [

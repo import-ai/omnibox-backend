@@ -5,10 +5,11 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserService } from 'omniboxd/user/user.service';
 
+import { AuthService } from '../auth.service';
 import { AuthorizeRequestDto } from './dto/authorize-request.dto';
 import { TokenRequestDto, TokenResponseDto } from './dto/token-request.dto';
 import { UserinfoResponseDto } from './dto/userinfo-response.dto';
-import { OAuthClientService } from './oauth-client.service';
+import { DESKTOP_CLIENT_ID, OAuthClientService } from './oauth-client.service';
 import { OAuthTokenStoreService } from './oauth-token-store.service';
 import { PairwiseSubjectService } from './pairwise-subject.service';
 
@@ -19,6 +20,7 @@ export class OAuthProviderService {
   private readonly tokenExpireSeconds: number;
 
   constructor(
+    private readonly authService: AuthService,
     private readonly tokenStore: OAuthTokenStoreService,
     private readonly clientService: OAuthClientService,
     private readonly pairwiseSubjectService: PairwiseSubjectService,
@@ -36,10 +38,7 @@ export class OAuthProviderService {
     );
   }
 
-  async authorize(
-    dto: AuthorizeRequestDto,
-    userId: string,
-  ): Promise<{ redirectUrl: string }> {
+  private async validateAuthorization(dto: AuthorizeRequestDto) {
     const client = await this.clientService.findByClientId(dto.client_id);
 
     if (!client) {
@@ -74,8 +73,57 @@ export class OAuthProviderService {
       );
     }
 
+    if (
+      client.clientId === DESKTOP_CLIENT_ID &&
+      (dto.redirect_uri !== 'omnibox://oauth/callback' ||
+        dto.code_challenge_method !== 'S256' ||
+        !/^[A-Za-z0-9_-]{43}$/.test(dto.code_challenge || '') ||
+        !/^[A-Za-z0-9_-]{43,128}$/.test(dto.state || ''))
+    )
+      this.invalidRequest();
+    return { client, validScopes };
+  }
+  private invalidRequest(): never {
+    throw new AppException(
+      this.i18n.t('auth.oauth.errors.invalidCode'),
+      'OAUTH_INVALID_REQUEST',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+  async context(dto: AuthorizeRequestDto, userId: string) {
+    await this.validateAuthorization(dto);
+    const user = await this.userService.find(userId);
+    if (!user) this.invalidRequest();
+    return {
+      account: { id: user.id, username: user.username, email: user.email },
+    };
+  }
+  async confirm(
+    dto: AuthorizeRequestDto,
+    userId: string,
+    expectedUserId: string,
+    authorization: string,
+  ) {
+    if (
+      !/^Bearer \S+$/.test(authorization || '') ||
+      this.authService.jwtVerify(authorization.slice(7)).sub !== userId
+    )
+      this.invalidRequest();
+    return this.authorize(dto, userId, expectedUserId);
+  }
+
+  async authorize(
+    dto: AuthorizeRequestDto,
+    userId: string,
+    confirmedUserId?: string,
+  ): Promise<{ redirectUrl: string }> {
+    const { client, validScopes } = await this.validateAuthorization(dto);
+    if (client.clientId === DESKTOP_CLIENT_ID && confirmedUserId !== userId)
+      this.invalidRequest();
     const code = this.generateAuthorizationCode();
-    const ttlMs = this.codeExpireSeconds * 1000;
+    const ttlMs =
+      (client.clientId === DESKTOP_CLIENT_ID ? 60 : this.codeExpireSeconds) *
+      1000;
 
     await this.tokenStore.saveAuthorizationCode(
       {
@@ -134,6 +182,20 @@ export class OAuthProviderService {
       );
     }
 
+    const client = await this.clientService.findByClientId(dto.client_id);
+    if (
+      !client ||
+      !this.clientService.validateRedirectUri(client, dto.redirect_uri)
+    )
+      this.invalidRequest();
+    if (
+      client.clientId === DESKTOP_CLIENT_ID &&
+      (dto.redirect_uri !== 'omnibox://oauth/callback' ||
+        authCode.codeChallengeMethod !== 'S256' ||
+        !authCode.codeChallenge ||
+        !/^[A-Za-z0-9._~-]{43,128}$/.test(dto.code_verifier || ''))
+    )
+      this.invalidRequest();
     if (authCode.codeChallenge) {
       if (!dto.code_verifier) {
         throw new AppException(
@@ -168,8 +230,25 @@ export class OAuthProviderService {
       await this.clientService.validateClient(dto.client_id, dto.client_secret);
     }
 
-    // Delete code immediately after use (one-time use)
-    await this.tokenStore.deleteAuthorizationCode(dto.code);
+    if (!(await this.tokenStore.consumeAuthorizationCode(dto.code))) {
+      throw new AppException(
+        this.i18n.t('auth.oauth.errors.invalidCode'),
+        'OAUTH_INVALID_CODE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (client.clientId === DESKTOP_CLIENT_ID) {
+      const user = await this.userService.find(authCode.userId);
+      if (!user) this.invalidRequest();
+      const credential = this.authService.login(user);
+      const payload = this.authService.jwtVerify(credential.access_token);
+      return {
+        ...credential,
+        token_type: 'Bearer',
+        expires_in: Math.max(0, payload.exp - Math.floor(Date.now() / 1000)),
+        scope: authCode.scope,
+      };
+    }
 
     const token = this.generateAccessToken();
     const ttlMs = this.tokenExpireSeconds * 1000;

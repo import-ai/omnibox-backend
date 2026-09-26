@@ -114,10 +114,10 @@ opens the callback. `POST /api/v1/oauth/token` returns the existing product logi
 for this client only. Third-party clients retain opaque scoped OAuth tokens and the
 existing GET authorization flow. There is no device/session management in this change.
 
-Shared authorization codes use SHA-256 keys in Redis with native TTL (60 seconds
-for Desktop) and atomic deletion after proof validation. All Backend instances
-must share OBB_REDIS_URL; missing or unavailable Redis fails authorization closed,
-without an in-memory fallback. OAuth access-token storage is unchanged.
+Authorization codes use the shared cache with a TTL (60 seconds for Desktop) and
+are deleted after a successful exchange. The cache uses Redis when OBB_REDIS_URL is
+set and memory otherwise; multi-instance deployments must set OBB_REDIS_URL.
+OAuth access-token storage is unchanged.
 The desktop flow introduces no PostgreSQL schema or data migrations.
 Client IDs and PKCE do not attest application authenticity: another application
 can copy the public ID. User authentication, explicit confirmation and resource

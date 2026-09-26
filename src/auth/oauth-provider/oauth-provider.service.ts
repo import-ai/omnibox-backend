@@ -167,7 +167,8 @@ export class OAuthProviderService {
       );
     }
 
-    // Only an unexpired, unconsumed authorization code can be exchanged.
+    // Code existence in Redis means it hasn't been used yet (deleted after use)
+    // TTL handles expiration automatically, but the code existing means it's valid
 
     if (authCode.clientId !== dto.client_id) {
       throw new AppException(
@@ -233,8 +234,8 @@ export class OAuthProviderService {
       await this.clientService.validateClient(dto.client_id, dto.client_secret);
     }
 
-    if (!(await this.tokenStore.consumeAuthorizationCode(dto.code)))
-      this.invalidRequest();
+    // Delete code immediately after use (one-time use)
+    await this.tokenStore.deleteAuthorizationCode(dto.code);
     if (client.clientId === DESKTOP_CLIENT_ID) {
       const user = await this.userService.find(authCode.userId);
       if (!user) this.invalidRequest();

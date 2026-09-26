@@ -1,15 +1,5 @@
-import { createHash } from 'node:crypto';
-
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-  ServiceUnavailableException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import { CacheService } from 'omniboxd/common/cache.service';
-import { createClient } from 'redis';
 
 export interface OAuthCodeData {
   code: string;
@@ -32,79 +22,26 @@ export interface OAuthTokenData {
 }
 
 @Injectable()
-export class OAuthTokenStoreService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(OAuthTokenStoreService.name);
-  private redis?: ReturnType<typeof createClient>;
-  private connecting?: Promise<unknown>;
+export class OAuthTokenStoreService {
+  private readonly codeNamespace = '/oauth/codes';
   private readonly tokenNamespace = '/oauth/tokens';
   private readonly userTokensNamespace = '/oauth/user-tokens';
 
-  constructor(
-    private readonly cacheService: CacheService,
-    private readonly config: ConfigService,
-  ) {}
-
-  onModuleInit() {
-    const url = this.config.get<string>('OBB_REDIS_URL');
-    if (!url) return;
-    this.redis = createClient({
-      url,
-      socket: { reconnectStrategy: false, connectTimeout: 5000 },
-    });
-    this.redis.on('error', () =>
-      this.logger.error('OAuth Redis connection failed'),
-    );
-  }
-
-  async onModuleDestroy() {
-    if (this.redis?.isOpen) await this.redis.quit();
-  }
-
-  private async codeStore() {
-    if (this.redis && !this.redis.isOpen) {
-      this.connecting ??= this.redis.connect().finally(() => {
-        this.connecting = undefined;
-      });
-    }
-    try {
-      await this.connecting;
-    } catch {
-      throw new ServiceUnavailableException(
-        'OAuth authorization requires Redis',
-      );
-    }
-    if (!this.redis?.isReady)
-      throw new ServiceUnavailableException(
-        'OAuth authorization requires Redis',
-      );
-    return this.redis;
-  }
-
-  private codeKey(code: string) {
-    const hash = createHash('sha256').update(code).digest('hex');
-    return `/${this.config.get<string>('ENV', 'unknown')}/oauth/codes/${hash}`;
-  }
+  constructor(private readonly cacheService: CacheService) {}
 
   async saveAuthorizationCode(
     data: OAuthCodeData,
     ttlMs: number,
   ): Promise<void> {
-    const { code, ...payload } = data;
-    const saved = await (
-      await this.codeStore()
-    ).set(this.codeKey(code), JSON.stringify(payload), { PX: ttlMs, NX: true });
-    if (!saved)
-      throw new ServiceUnavailableException('Authorization code collision');
+    await this.cacheService.set(this.codeNamespace, data.code, data, ttlMs);
   }
 
   async getAuthorizationCode(code: string): Promise<OAuthCodeData | null> {
-    const payload = await (await this.codeStore()).get(this.codeKey(code));
-    return payload ? { ...JSON.parse(payload), code } : null;
+    return this.cacheService.get<OAuthCodeData>(this.codeNamespace, code);
   }
 
-  async consumeAuthorizationCode(code: string): Promise<boolean> {
-    // Codes are immutable and never reused. Only one validated exchange can delete the key.
-    return (await (await this.codeStore()).del(this.codeKey(code))) === 1;
+  async deleteAuthorizationCode(code: string): Promise<void> {
+    await this.cacheService.delete(this.codeNamespace, code);
   }
 
   async saveAccessToken(data: OAuthTokenData, ttlMs: number): Promise<void> {

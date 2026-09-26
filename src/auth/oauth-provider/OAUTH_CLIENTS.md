@@ -134,7 +134,7 @@ WHERE client_id = 'my-app';
 DELETE FROM oauth_clients WHERE client_id = 'my-app';
 ```
 
-Authorization codes live in Redis and expire automatically. Access tokens use
+Authorization codes live in CacheService and expire automatically. Access tokens use
 CacheService; use the token revocation API rather than SQL to revoke them.
 Deleting or disabling a client prevents outstanding codes from being exchanged;
 it does not revoke already-issued access tokens.
@@ -194,8 +194,7 @@ account. `POST /api/v1/oauth/authorize` accepts authorization parameters and
 retain scoped opaque tokens. The client ID is public, not proof of an official
 binary. PKCE prevents intercepted-code redemption, not client impersonation.
 
-Authorization codes use SHA-256 Redis keys with JSON payloads and native TTL.
-Desktop codes expire after 60 seconds. All Backend instances must share
-`OBB_REDIS_URL`; there is no in-memory authorization-code fallback. Codes are
-immutable. After proof validation, atomic DEL allows exactly one exchange to win;
-invalid proofs leave the code intact. Access-token storage is unchanged.
+Authorization codes use CacheService (Redis when `OBB_REDIS_URL` is set, memory
+otherwise) with a TTL; Desktop codes expire after 60 seconds. Invalid proofs leave
+the code intact; a successful exchange deletes it. Multi-instance deployments must
+set `OBB_REDIS_URL`. Access-token storage is unchanged.

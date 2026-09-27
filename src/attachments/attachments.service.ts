@@ -56,7 +56,7 @@ export class AttachmentsService {
       id: info.id,
       name: info.name,
       content_type: info.content_type,
-      url: await this.signObjectUrlForLlm(this.s3Path(attachmentId)),
+      url: await this.signObjectUrlForLlm(this.s3Path(info.id)),
     };
   }
 
@@ -75,7 +75,7 @@ export class AttachmentsService {
       id: info.id,
       name: info.name,
       content_type: info.content_type,
-      url: await this.signObjectUrlForLlm(this.s3Path(attachmentId)),
+      url: await this.signObjectUrlForLlm(this.s3Path(info.id)),
     };
   }
 
@@ -296,10 +296,11 @@ export class AttachmentsService {
         resourceId,
         attachmentId,
       );
-    const meta = await this.s3Service.headObject(this.s3Path(attachmentId));
+    const resolvedId = relation.attachmentId;
+    const meta = await this.s3Service.headObject(this.s3Path(resolvedId));
     return {
-      id: attachmentId,
-      name: getOriginalFileName(meta?.metadata?.filename) || attachmentId,
+      id: resolvedId,
+      name: getOriginalFileName(meta?.metadata?.filename) || resolvedId,
       content_type: meta?.contentType ?? null,
       size:
         meta?.contentLength ??
@@ -359,14 +360,15 @@ export class AttachmentsService {
       ResourcePermission.CAN_VIEW,
     );
 
-    await this.resourceAttachmentsService.getResourceAttachmentOrFail(
-      namespaceId,
-      resourceId,
-      attachmentId,
-    );
+    const relation =
+      await this.resourceAttachmentsService.getResourceAttachmentOrFail(
+        namespaceId,
+        resourceId,
+        attachmentId,
+      );
 
     const { stream, meta } = await this.s3Service.getObject(
-      this.s3Path(attachmentId),
+      this.s3Path(relation.attachmentId),
     );
     const forceDownload = !this.isMedia(meta.contentType);
     this.objectStreamResponse(stream, meta, httpResponse, true, forceDownload);
@@ -405,13 +407,14 @@ export class AttachmentsService {
     httpResponse: Response,
   ) {
     await this.sharedResourcesService.getAndValidateResource(share, resourceId);
-    await this.resourceAttachmentsService.getResourceAttachmentOrFail(
-      share.namespaceId,
-      resourceId,
-      attachmentId,
-    );
+    const relation =
+      await this.resourceAttachmentsService.getResourceAttachmentOrFail(
+        share.namespaceId,
+        resourceId,
+        attachmentId,
+      );
     const { stream, meta } = await this.s3Service.getObject(
-      this.s3Path(attachmentId),
+      this.s3Path(relation.attachmentId),
     );
     const forceDownload = !this.isMedia(meta.contentType);
     this.objectStreamResponse(stream, meta, httpResponse, true, forceDownload);

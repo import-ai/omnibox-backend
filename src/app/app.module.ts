@@ -39,6 +39,7 @@ import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
 import { UserInterceptor } from 'omniboxd/interceptor/user.interceptor';
 import { InvitationsModule } from 'omniboxd/invitations/invitations.module';
 import { KafkaModule } from 'omniboxd/kafka/kafka.module';
+import { LocalRuntimeModule } from 'omniboxd/local-runtime/local-runtime.module';
 import { MailModule } from 'omniboxd/mail/mail.module';
 import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { AccessLogMiddleware } from 'omniboxd/middlewares/access-log.middleware';
@@ -113,6 +114,7 @@ import { AllowMultipleCommentThreadsAtAnchor1788941872300 } from 'omniboxd/migra
 import { AccountCommentAttachments1789383186349 } from 'omniboxd/migrations/1789383186349-account-comment-attachments';
 import { AddNamespaceMemberNicknameAndNotes1789704000000 } from 'omniboxd/migrations/1789704000000-add-namespace-member-nickname-and-notes';
 import { AddResourceRevisions1790094055950 } from 'omniboxd/migrations/1790094055950-add-resource-revisions';
+import { LocalRuntime1790517163547 } from 'omniboxd/migrations/1790517163547-local-runtime';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -207,6 +209,7 @@ export class AppModule implements NestModule {
         NamespacesModule,
         NamespaceResourcesModule,
         NamespaceTasksModule,
+        LocalRuntimeModule,
         ResourcesModule,
         TasksModule,
         WizardModule,
@@ -336,6 +339,7 @@ export class AppModule implements NestModule {
               AccountCommentAttachments1789383186349,
               AddNamespaceMemberNicknameAndNotes1789704000000,
               AddResourceRevisions1790094055950,
+              LocalRuntime1790517163547,
               ...extraMigrations,
             ],
             migrationsRun: true,

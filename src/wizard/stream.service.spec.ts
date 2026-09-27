@@ -12,6 +12,7 @@ function createService(mocks: {
 }) {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
+    { cancelConversation: jest.fn().mockResolvedValue(undefined) } as any,
     {} as any,
     {} as any,
     mocks.conversationsService as any,
@@ -661,6 +662,7 @@ describe('StreamService agent stream hooks', () => {
     hooks.onStreamClosed.mockResolvedValue(undefined);
     const service = new StreamService(
       { get: jest.fn() } as any,
+      { cancelConversation: jest.fn().mockResolvedValue(undefined) } as any,
       {} as any,
       {
         updateDelta: jest.fn().mockResolvedValue({ message: {} }),
@@ -774,6 +776,7 @@ describe('trusted upstream billing metadata', () => {
     });
     const service = new StreamService(
       { get: jest.fn() } as never,
+      { cancelConversation: jest.fn().mockResolvedValue(undefined) } as any,
       { createAgentStream: jest.fn().mockResolvedValue(response) } as never,
       {} as never,
       {} as never,
@@ -812,6 +815,7 @@ describe('trusted upstream billing metadata', () => {
     const failure = new Error('invalid pricing');
     const service = new StreamService(
       { get: jest.fn() } as never,
+      { cancelConversation: jest.fn().mockResolvedValue(undefined) } as any,
       { createAgentStream: jest.fn().mockResolvedValue(response) } as never,
       {} as never,
       {} as never,

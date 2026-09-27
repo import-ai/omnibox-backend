@@ -19,6 +19,7 @@ import {
 } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
+import { LocalRuntimeService } from 'omniboxd/local-runtime/local-runtime.service';
 import {
   Message,
   MessageStatus,
@@ -98,6 +99,7 @@ export class StreamService implements OnModuleDestroy {
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly localRuntimeService: LocalRuntimeService,
     private readonly wizardApiService: WizardAPIService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
@@ -1161,6 +1163,11 @@ export class StreamService implements OnModuleDestroy {
 
   private async stopSession(session: StreamSession) {
     if (session.finished || session.controller.signal.aborted) return;
+    if (session.userId)
+      await this.localRuntimeService.cancelConversation(
+        session.userId,
+        session.conversationId,
+      );
     session.controller.abort();
     try {
       await this.markSessionCanceled(session.key);
@@ -1330,6 +1337,8 @@ export class StreamService implements OnModuleDestroy {
     conversationId: string,
     userId: string,
   ) {
+    if (userId)
+      await this.localRuntimeService.cancelConversation(userId, conversationId);
     await this.markSessionCanceled(key);
     const session = this.streamSessions.get(key);
     if (session) {

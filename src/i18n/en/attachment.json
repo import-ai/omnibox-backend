@@ -3,6 +3,7 @@
     "fileRequired": "An attachment file is required.",
     "fileEmpty": "The attachment file is empty. Please choose another file.",
     "conversationAttachmentUnavailable": "The attachment is unavailable or does not belong to this conversation.",
-    "attachmentNotFound": "Attachment not found"
+    "attachmentNotFound": "Attachment not found",
+    "attachmentIdAmbiguous": "Attachment ID is ambiguous. Provide the full ID including its extension."
   }
 }

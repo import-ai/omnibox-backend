@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
-import { LocalRuntimeModule } from 'omniboxd/local-runtime/local-runtime.module';
 import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -37,7 +36,6 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     OpenWizardService,
   ],
   imports: [
-    LocalRuntimeModule,
     WizardAPIModule,
     UserModule,
     SharesModule,

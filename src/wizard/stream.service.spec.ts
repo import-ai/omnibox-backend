@@ -12,7 +12,6 @@ function createService(mocks: {
 }) {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
-    { cancelConversation: jest.fn().mockResolvedValue(undefined) } as any,
     {} as any,
     {} as any,
     mocks.conversationsService as any,
@@ -662,7 +661,6 @@ describe('StreamService agent stream hooks', () => {
     hooks.onStreamClosed.mockResolvedValue(undefined);
     const service = new StreamService(
       { get: jest.fn() } as any,
-      { cancelConversation: jest.fn().mockResolvedValue(undefined) } as any,
       {} as any,
       {
         updateDelta: jest.fn().mockResolvedValue({ message: {} }),
@@ -776,7 +774,6 @@ describe('trusted upstream billing metadata', () => {
     });
     const service = new StreamService(
       { get: jest.fn() } as never,
-      { cancelConversation: jest.fn().mockResolvedValue(undefined) } as any,
       { createAgentStream: jest.fn().mockResolvedValue(response) } as never,
       {} as never,
       {} as never,
@@ -815,7 +812,6 @@ describe('trusted upstream billing metadata', () => {
     const failure = new Error('invalid pricing');
     const service = new StreamService(
       { get: jest.fn() } as never,
-      { cancelConversation: jest.fn().mockResolvedValue(undefined) } as any,
       { createAgentStream: jest.fn().mockResolvedValue(response) } as never,
       {} as never,
       {} as never,
@@ -949,4 +945,53 @@ describe('persisted query receipts', () => {
     );
     expect(create).not.toHaveBeenCalled();
   });
+});
+
+describe('StreamService cancellation extensions', () => {
+  it.each(['local', 'remote'])(
+    'awaits deployment cancellation for a %s stream',
+    async (location) => {
+      const service = createService({}) as any;
+      let finish!: () => void;
+      const extension = jest.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      service.agentStreamHooks.onCancellationRequested = extension;
+      service.messagesService = {
+        stopRunning: jest.fn().mockResolvedValue(undefined),
+      };
+      jest.spyOn(service, 'markSessionCanceled').mockResolvedValue(undefined);
+      jest.spyOn(service, 'getRedisClient').mockResolvedValue(null);
+      jest.spyOn(service, 'sendSessionData').mockResolvedValue(undefined);
+      jest
+        .spyOn(service, 'completeSession')
+        .mockImplementation(() => undefined);
+      const controller = new AbortController();
+      const result =
+        location === 'local'
+          ? service.stopSession({
+              key: 'key',
+              namespaceId: 'space',
+              conversationId: 'conversation',
+              userId: 'user',
+              controller,
+              handlerContext: {},
+            })
+          : service.cancelAgentStream('key', 'space', 'conversation', 'user');
+      expect(extension).toHaveBeenCalledWith('user', 'conversation');
+      expect(service.messagesService.stopRunning).not.toHaveBeenCalled();
+      expect(controller.signal.aborted).toBe(false);
+      finish();
+      await result;
+      expect(service.messagesService.stopRunning).toHaveBeenCalledWith(
+        'space',
+        'conversation',
+        'user',
+      );
+      expect(controller.signal.aborted).toBe(location === 'local');
+    },
+  );
 });

@@ -7,6 +7,7 @@ import { DataSource } from 'typeorm';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 
 import { LocalRuntime1790517163547 } from '../migrations/1790517163547-local-runtime';
+import { LocalDeviceHostname1790614309120 } from '../migrations/1790614309120-local-device-hostname';
 import { LocalDevice } from './entities/local-device.entity';
 import {
   LocalExecution,
@@ -52,6 +53,7 @@ describe('Local runtime durable delivery', () => {
     await db.query('INSERT INTO users VALUES($1),($2)', [user, stranger]);
     const runner = db.createQueryRunner();
     await new LocalRuntime1790517163547().up(runner);
+    await new LocalDeviceHostname1790614309120().up(runner);
     await runner.release();
     const conversations = {
       findOneForUserInNamespace: jest.fn((_id: string, owner: string) => {
@@ -105,6 +107,42 @@ describe('Local runtime durable delivery', () => {
       }),
     ).rejects.toThrow();
     expect(await service.list(stranger)).toEqual([]);
+  });
+  it('keeps the chosen name across registration and hostname updates and rejects offline renames', async () => {
+    await service.rename(user, device, 'Office Mac');
+    const registered = await service.register(user, {
+      id: device,
+      secret,
+      name: 'System Mac',
+      platform: 'darwin',
+      shell: '/bin/sh',
+    });
+    expect(registered.name).toBe('Office Mac');
+    const abort = new AbortController();
+    abort.abort();
+    await service.poll(
+      user,
+      device,
+      secret,
+      {
+        command_policy: 'ask',
+        paused: false,
+        hostname: 'System Mac',
+      },
+      abort.signal,
+    );
+    expect(await service.device(user, device, secret)).toMatchObject({
+      name: 'Office Mac',
+      hostname: 'System Mac',
+    });
+    await expect(service.rename(stranger, device, 'Hijack')).rejects.toThrow();
+    await db
+      .getRepository(LocalDevice)
+      .update(device, { lastSeenAt: new Date(0) });
+    await expect(service.rename(user, device, 'Offline')).rejects.toThrow();
+    await db
+      .getRepository(LocalDevice)
+      .update(device, { lastSeenAt: new Date() });
   });
   it('redelivers a lost response without creating or concurrently delivering another execution', async () => {
     const key = randomUUID();

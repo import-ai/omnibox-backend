@@ -115,6 +115,7 @@ import { AccountCommentAttachments1789383186349 } from 'omniboxd/migrations/1789
 import { AddNamespaceMemberNicknameAndNotes1789704000000 } from 'omniboxd/migrations/1789704000000-add-namespace-member-nickname-and-notes';
 import { AddResourceRevisions1790094055950 } from 'omniboxd/migrations/1790094055950-add-resource-revisions';
 import { LocalRuntime1790517163547 } from 'omniboxd/migrations/1790517163547-local-runtime';
+import { LocalDeviceHostname1790614309120 } from 'omniboxd/migrations/1790614309120-local-device-hostname';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -340,6 +341,7 @@ export class AppModule implements NestModule {
               AddNamespaceMemberNicknameAndNotes1789704000000,
               AddResourceRevisions1790094055950,
               LocalRuntime1790517163547,
+              LocalDeviceHostname1790614309120,
               ...extraMigrations,
             ],
             migrationsRun: true,

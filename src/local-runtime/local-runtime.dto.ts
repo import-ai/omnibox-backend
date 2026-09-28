@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -26,11 +26,16 @@ export class RegisterLocalDeviceRequestDto {
   @IsString() @IsNotEmpty() @MaxLength(512) shell: string;
 }
 export class RenameLocalDeviceRequestDto {
-  @IsString() @IsNotEmpty() @MaxLength(120) name: string;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  name: string;
 }
 export class PollLocalDeviceRequestDto {
   @IsIn(['allow', 'deny', 'ask']) command_policy: 'allow' | 'deny' | 'ask';
   @IsBoolean() paused: boolean;
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(255) hostname?: string;
 }
 export class CreateLocalExecutionRequestDto {
   @IsUUID() device_id: string;

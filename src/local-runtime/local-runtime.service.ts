@@ -107,7 +107,12 @@ export class LocalRuntimeService implements OnModuleDestroy {
     }));
   }
   async rename(userId: string, id: string, name: string) {
-    await this.device(userId, id);
+    const device = await this.device(userId, id);
+    if (
+      !device.lastSeenAt ||
+      Date.now() - device.lastSeenAt.getTime() >= 60_000
+    )
+      this.fail('offline');
     await this.db.getRepository(LocalDevice).update({ id, userId }, { name });
   }
   async revoke(userId: string, id: string) {
@@ -283,6 +288,7 @@ export class LocalRuntimeService implements OnModuleDestroy {
         lastSeenAt: new Date(),
         commandPolicy: dto.command_policy,
         paused: dto.paused,
+        ...(dto.hostname ? { hostname: dto.hostname } : {}),
       },
     );
     const deadline = Date.now() + 25_000;

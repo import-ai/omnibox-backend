@@ -6,6 +6,7 @@ export class LocalDevice extends Base {
   @PrimaryColumn('uuid') id: string;
   @Index() @Column('uuid') userId: string;
   @Column() name: string;
+  @Column({ type: 'varchar', nullable: true }) hostname: string | null;
   @Column() platform: string;
   @Column() shell: string;
   @Column({ select: false }) secretHash: string;

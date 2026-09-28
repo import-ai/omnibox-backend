@@ -73,6 +73,7 @@ export class LocalRuntimeController {
           dto,
           abort.signal,
         ),
+        device: await this.service.device(userId, id, secret ?? ''),
       };
     } finally {
       res.off('close', close);

@@ -38,11 +38,15 @@ export interface AgentStream {
  * without belonging to it — usage accounting, auditing, quota bookkeeping.
  *
  * Nothing is bound by default; a deployment that needs these events provides
- * its own implementation. Hooks are invoked fire-and-forget, so they must not
- * assume their result is awaited, and anything they throw is logged rather
- * than surfaced to the user whose stream triggered them.
+ * its own implementation. Completion hooks run fire-and-forget and log errors;
+ * startup and explicit cancellation hooks are awaited and may reject.
  */
 export interface IAgentStreamHooks {
+  /** Complete deployment-specific cancellation before stopping the stream, including on another instance. */
+  onCancellationRequested?(
+    userId: string,
+    conversationId: string,
+  ): Promise<void>;
   /** Read trusted upstream billing metadata before consuming any events. */
   onStreamStarted?(
     stream: AgentStream,

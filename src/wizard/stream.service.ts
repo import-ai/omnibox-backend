@@ -1161,6 +1161,11 @@ export class StreamService implements OnModuleDestroy {
 
   private async stopSession(session: StreamSession) {
     if (session.finished || session.controller.signal.aborted) return;
+    if (session.userId)
+      await this.agentStreamHooks.onCancellationRequested?.(
+        session.userId,
+        session.conversationId,
+      );
     session.controller.abort();
     try {
       await this.markSessionCanceled(session.key);
@@ -1330,6 +1335,11 @@ export class StreamService implements OnModuleDestroy {
     conversationId: string,
     userId: string,
   ) {
+    if (userId)
+      await this.agentStreamHooks.onCancellationRequested?.(
+        userId,
+        conversationId,
+      );
     await this.markSessionCanceled(key);
     const session = this.streamSessions.get(key);
     if (session) {

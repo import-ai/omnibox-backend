@@ -75,7 +75,6 @@ describe('OpenWizardService', () => {
       }),
     ).resolves.toEqual({
       message_id: 'system-message-1',
-      conversation_id: 'conversation-new',
     });
 
     expect(messagesService.create).toHaveBeenCalledWith(

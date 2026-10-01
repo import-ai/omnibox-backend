@@ -60,7 +60,6 @@ export class OpenWizardService {
     data: InternalSystemMessageRequestDto,
   ): Promise<{
     message_id: string;
-    conversation_id: string;
   }> {
     const conversationId = await this.resolveConversationId(
       userId,
@@ -82,7 +81,6 @@ export class OpenWizardService {
     );
     return {
       message_id: message.id,
-      conversation_id: conversationId,
     };
   }
 

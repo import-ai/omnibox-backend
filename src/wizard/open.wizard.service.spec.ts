@@ -65,7 +65,6 @@ describe('OpenWizardService', () => {
     conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
     messagesService.create.mockResolvedValue({
       id: 'system-message-1',
-      reused: false,
     });
 
     await expect(

@@ -1,8 +1,13 @@
 import { Body, Controller, Param, Post } from '@nestjs/common';
+import { APIKey as APIKeyEntity } from 'omniboxd/api-key/api-key.entity';
+import { APIKey, APIKeyAuth } from 'omniboxd/auth/decorators';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
+import { InternalSystemMessageRequestDto } from 'omniboxd/wizard/dto/internal-system-message-request.dto';
 import { TaskCallbackDto } from 'omniboxd/wizard/dto/task-callback.dto';
+import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 
 import { CreateTempfileReqDto } from './dto/create-tempfile-req.dto';
@@ -13,6 +18,7 @@ import { PollTaskRequestDto, PollTaskResponseDto } from './dto/poll-task.dto';
 export class InternalWizardController {
   constructor(
     private readonly wizardService: WizardService,
+    private readonly openWizardService: OpenWizardService,
     private readonly chunkManagerService: ChunkManagerService,
   ) {}
 
@@ -22,6 +28,20 @@ export class InternalWizardController {
     @Body() taskCallback: TaskCallbackDto,
   ): Promise<Record<string, any>> {
     return await this.wizardService.taskDoneCallback(taskCallback);
+  }
+
+  @APIKeyAuth()
+  @Post('system-message')
+  async appendSystemMessage(
+    @APIKey() apiKey: APIKeyEntity,
+    @UserId() userId: string,
+    @Body() body: InternalSystemMessageRequestDto,
+  ) {
+    return await this.openWizardService.appendSystemMessage(
+      userId,
+      apiKey.namespaceId,
+      body,
+    );
   }
 
   @Public()

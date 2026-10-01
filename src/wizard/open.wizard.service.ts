@@ -8,6 +8,7 @@ import {
   AgentRequestDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
+import { InternalSystemMessageRequestDto } from 'omniboxd/wizard/dto/internal-system-message-request.dto';
 import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
@@ -51,6 +52,43 @@ export class OpenWizardService {
     );
 
     return this.mergeChunks(chunks);
+  }
+
+  async appendSystemMessage(
+    userId: string,
+    namespaceId: string,
+    data: InternalSystemMessageRequestDto,
+  ): Promise<{
+    message_id: string;
+    conversation_id: string;
+    replayed: boolean;
+  }> {
+    const conversationId = await this.resolveConversationId(
+      userId,
+      namespaceId,
+      data.parent_message_id,
+    );
+    const message = await this.messagesService.create(
+      namespaceId,
+      conversationId,
+      userId,
+      {
+        message: { role: 'system', content: data.content },
+        parentId: data.parent_message_id,
+        attrs: data.client_request_id
+          ? { client_request_id: data.client_request_id }
+          : undefined,
+      },
+      false,
+      data.client_request_id
+        ? { clientRequestId: data.client_request_id }
+        : undefined,
+    );
+    return {
+      message_id: message.id,
+      conversation_id: conversationId,
+      replayed: Boolean(message.reused),
+    };
   }
 
   private async resolveConversationId(

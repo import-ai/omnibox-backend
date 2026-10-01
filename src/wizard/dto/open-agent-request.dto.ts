@@ -51,4 +51,11 @@ export class OpenAgentRequestDto {
   @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   parent_message_id?: string;
+
+  @ApiPropertyOptional({
+    description: 'Idempotency key for retried requests.',
+  })
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  client_request_id?: string;
 }

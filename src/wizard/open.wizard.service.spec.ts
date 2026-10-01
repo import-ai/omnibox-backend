@@ -7,7 +7,7 @@ import { EntityNotFoundError } from 'typeorm';
 describe('OpenWizardService', () => {
   let service: OpenWizardService;
   let streamService: { chat: jest.Mock };
-  let messagesService: { findOneForUser: jest.Mock };
+  let messagesService: { findOneForUser: jest.Mock; create: jest.Mock };
   let conversationsService: {
     create: jest.Mock;
     findOneForUserInNamespace: jest.Mock;
@@ -19,6 +19,7 @@ describe('OpenWizardService', () => {
     };
     messagesService = {
       findOneForUser: jest.fn(),
+      create: jest.fn(),
     };
     conversationsService = {
       create: jest.fn(),
@@ -57,6 +58,38 @@ describe('OpenWizardService', () => {
       }),
       'request-1',
       'ask',
+    );
+  });
+
+  it('appends an internal system message to a new conversation', async () => {
+    conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
+    messagesService.create.mockResolvedValue({
+      id: 'system-message-1',
+      reused: false,
+    });
+
+    await expect(
+      service.appendSystemMessage('user-1', 'namespace-1', {
+        content: '<saved_resource_event />',
+        client_request_id: 'request-1',
+      }),
+    ).resolves.toEqual({
+      message_id: 'system-message-1',
+      conversation_id: 'conversation-new',
+      replayed: false,
+    });
+
+    expect(messagesService.create).toHaveBeenCalledWith(
+      'namespace-1',
+      'conversation-new',
+      'user-1',
+      {
+        message: { role: 'system', content: '<saved_resource_event />' },
+        parentId: undefined,
+        attrs: { client_request_id: 'request-1' },
+      },
+      false,
+      { clientRequestId: 'request-1' },
     );
   });
 

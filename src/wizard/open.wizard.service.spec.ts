@@ -76,7 +76,6 @@ describe('OpenWizardService', () => {
     ).resolves.toEqual({
       message_id: 'system-message-1',
       conversation_id: 'conversation-new',
-      replayed: false,
     });
 
     expect(messagesService.create).toHaveBeenCalledWith(
@@ -86,7 +85,6 @@ describe('OpenWizardService', () => {
       {
         message: { role: 'system', content: '<saved_resource_event />' },
         parentId: undefined,
-        attrs: { client_request_id: 'request-1' },
       },
       false,
       { clientRequestId: 'request-1' },

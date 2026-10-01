@@ -61,7 +61,6 @@ export class OpenWizardService {
   ): Promise<{
     message_id: string;
     conversation_id: string;
-    replayed: boolean;
   }> {
     const conversationId = await this.resolveConversationId(
       userId,
@@ -75,9 +74,6 @@ export class OpenWizardService {
       {
         message: { role: 'system', content: data.content },
         parentId: data.parent_message_id,
-        attrs: data.client_request_id
-          ? { client_request_id: data.client_request_id }
-          : undefined,
       },
       false,
       data.client_request_id
@@ -87,7 +83,6 @@ export class OpenWizardService {
     return {
       message_id: message.id,
       conversation_id: conversationId,
-      replayed: Boolean(message.reused),
     };
   }
 

@@ -42,9 +42,6 @@ export interface AgentStream {
  * startup and explicit cancellation hooks are awaited and may reject.
  */
 export interface IAgentStreamHooks {
-  /** Return false when a deployment wants to index only after the whole turn. */
-  shouldIndexCall?(stream: AgentStream): boolean;
-
   /** Complete deployment-specific cancellation before stopping the stream, including on another instance. */
   onCancellationRequested?(
     userId: string,

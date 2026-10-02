@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   Message,
+  MessageStatus,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import {
@@ -408,6 +409,12 @@ export class WizardTaskService {
       [OpenAIMessageRole.TOOL, OpenAIMessageRole.SYSTEM].includes(
         message.message.role,
       )
+    ) {
+      return;
+    }
+    if (
+      message.message.role === OpenAIMessageRole.ASSISTANT &&
+      message.status !== MessageStatus.SUCCESS
     ) {
       return;
     }

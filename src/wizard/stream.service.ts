@@ -362,9 +362,6 @@ export class StreamService implements OnModuleDestroy {
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
         chunk.id = context.messageId;
-        const indexCall = stream
-          ? (this.agentStreamHooks.shouldIndexCall?.(stream) ?? true)
-          : true;
         const message: Message = await this.messagesService.update(
           context.messageId!,
           namespaceId,
@@ -372,7 +369,7 @@ export class StreamService implements OnModuleDestroy {
           {
             status: MessageStatus.SUCCESS,
           },
-          indexCall,
+          false,
         );
 
         this.reportCallCompleted(message, stream);
@@ -380,6 +377,17 @@ export class StreamService implements OnModuleDestroy {
         context.parentId = message.id;
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
+        if (context.parentId) {
+          try {
+            await this.messagesService.indexFinalAssistant(
+              context.parentId,
+              namespaceId,
+              conversationId,
+            );
+          } catch (error) {
+            this.logger.error({ error, messageId: context.parentId });
+          }
+        }
         if (
           this.agentStreamHooks.onStreamCompleted &&
           stream &&

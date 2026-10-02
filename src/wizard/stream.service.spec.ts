@@ -5,6 +5,7 @@ import { StreamService } from 'omniboxd/wizard/stream.service';
 
 function createService(mocks: {
   configService?: { get: jest.Mock };
+  messagesService?: Record<string, jest.Mock>;
   conversationsService?: Record<string, jest.Mock>;
   namespaceResourcesService?: Record<string, jest.Mock>;
   sharedResourcesService?: Record<string, jest.Mock>;
@@ -14,7 +15,9 @@ function createService(mocks: {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
     {} as any,
-    {} as any,
+    (mocks.messagesService ?? {
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+    }) as any,
     mocks.conversationsService as any,
     mocks.namespaceResourcesService as any,
     mocks.sharedResourcesService as any,
@@ -658,7 +661,6 @@ describe('StreamService agent stream hooks', () => {
 
   const createHookedService = (message: Record<string, any>) => {
     const hooks = {
-      shouldIndexCall: jest.fn().mockReturnValue(true),
       onCallCompleted: jest.fn(),
       onStreamClosed: jest.fn(),
       onStreamCompleted: jest.fn(),
@@ -671,6 +673,7 @@ describe('StreamService agent stream hooks', () => {
       {
         updateDelta: jest.fn().mockResolvedValue({ message: {} }),
         update: jest.fn().mockResolvedValue({ message: {}, ...message }),
+        indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
       } as any,
       {} as any,
       {} as any,
@@ -766,14 +769,13 @@ describe('StreamService agent stream hooks', () => {
     expect(hooks.onCallCompleted).not.toHaveBeenCalled();
   });
 
-  it('can defer per-call indexing and index the final message at done', async () => {
+  it('indexes only the final assistant after done', async () => {
     const { service, hooks } = createHookedService({
       id: 'message-id',
       inputTokenCached: 0,
       inputTokenUncached: 100,
       outputToken: 5,
     });
-    hooks.shouldIndexCall = jest.fn().mockReturnValue(false);
     hooks.onStreamCompleted = jest.fn().mockResolvedValue(undefined);
     const handler = service.agentHandler(
       'namespace-id',
@@ -791,7 +793,6 @@ describe('StreamService agent stream hooks', () => {
       parentId: 'message-id',
     } as any);
 
-    expect(hooks.shouldIndexCall).toHaveBeenCalledWith(userStream);
     expect((service as any).messagesService.update).toHaveBeenCalledWith(
       'message-id',
       'namespace-id',
@@ -799,6 +800,9 @@ describe('StreamService agent stream hooks', () => {
       { status: MessageStatus.SUCCESS },
       false,
     );
+    expect(
+      (service as any).messagesService.indexFinalAssistant,
+    ).toHaveBeenCalledWith('message-id', 'namespace-id', 'conversation-id');
     expect(hooks.onStreamCompleted).toHaveBeenCalledWith(
       userStream,
       'conversation-id',
@@ -900,6 +904,7 @@ describe('persisted query receipts', () => {
       create,
       update,
       findOne: jest.fn().mockResolvedValue(saved),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
     };
     const events: any[] = [];
     jest

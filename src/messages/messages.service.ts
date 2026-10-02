@@ -13,6 +13,7 @@ import {
   Message,
   MessageStatus,
   OpenAIMessage,
+  OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { queryTime } from 'omniboxd/messages/query-time';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
@@ -211,6 +212,34 @@ export class MessagesService {
         );
       }
       return updatedMsg;
+    });
+  }
+
+  async indexFinalAssistant(
+    id: string,
+    namespaceId: string,
+    conversationId: string,
+  ): Promise<void> {
+    const message = await this.findOne(id);
+    if (
+      message.conversationId !== conversationId ||
+      !message.userId ||
+      message.status !== MessageStatus.SUCCESS ||
+      message.message.role !== OpenAIMessageRole.ASSISTANT ||
+      !message.message.content?.trim()
+    ) {
+      return;
+    }
+
+    await transaction(this.dataSource.manager, async (tx) => {
+      await this.wizardTaskService.emitUpsertMessageIndexTask(
+        TASK_PRIORITY,
+        message.userId!,
+        namespaceId,
+        conversationId,
+        message,
+        tx,
+      );
     });
   }
 

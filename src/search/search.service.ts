@@ -4,8 +4,11 @@ import { createHash } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
-import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
-import { Message } from 'omniboxd/messages/entities/message.entity';
+import {
+  Message,
+  MessageStatus,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -338,24 +341,37 @@ export class SearchService {
     const result = await this.wizardApiService.search(searchRequest);
     const items: IndexedMessageDto[] = [];
     const conversationTitles = new Map<string, string | null>();
+    const seenMessageIds = new Set<string>();
 
     for (const record of result?.records || []) {
       if (record.type !== IndexRecordType.MESSAGE || !record.message) {
         continue;
       }
 
-      const { content, role } = record.message.message;
-      if (role !== 'user' && role !== 'assistant') {
+      const { conversationId, messageId } = record.message;
+      if (!messageId || seenMessageIds.has(messageId)) {
         continue;
       }
+
+      let message: Message;
+      try {
+        message = await this.messagesService.findOne(messageId);
+      } catch {
+        continue;
+      }
+      if (
+        message.conversationId !== conversationId ||
+        message.userId !== userId ||
+        (message.message.role !== OpenAIMessageRole.USER &&
+          message.message.role !== OpenAIMessageRole.ASSISTANT)
+      ) {
+        continue;
+      }
+      const content = message.message.content || '';
       if (!this.matchesMessageQuery(content, normalizedQuery)) {
         continue;
       }
 
-      const { conversationId, messageId } = record.message;
-      if (!messageId) {
-        continue;
-      }
       let title = conversationTitles.get(conversationId);
       if (title === undefined) {
         const conversation =
@@ -374,6 +390,7 @@ export class SearchService {
       if (title === null) {
         continue;
       }
+      seenMessageIds.add(messageId);
 
       items.push({
         type: DocType.MESSAGE,
@@ -381,7 +398,7 @@ export class SearchService {
         messageId,
         conversationId,
         title,
-        role,
+        role: message.message.role,
         content,
       });
     }
@@ -698,9 +715,11 @@ export class SearchService {
         if (!conversation.userId) {
           continue;
         }
-        const messages = await this.messagesService.findAll(
-          conversation.userId,
-          conversation.id,
+        const messages = this.selectMessagesForIndex(
+          await this.messagesService.findAll(
+            conversation.userId,
+            conversation.id,
+          ),
         );
         for (const message of messages) {
           await this.wizardTaskService.emitUpsertMessageIndexTask(
@@ -812,9 +831,11 @@ export class SearchService {
         if (!conversation.userId) {
           continue;
         }
-        const messages = await this.messagesService.findAll(
-          conversation.userId,
-          conversation.id,
+        const messages = this.selectMessagesForIndex(
+          await this.messagesService.findAll(
+            conversation.userId,
+            conversation.id,
+          ),
         );
         for (const message of messages) {
           stats.scanned += 1;
@@ -895,13 +916,41 @@ export class SearchService {
       return false;
     }
     if (
-      [OpenAIMessageRole.TOOL, OpenAIMessageRole.SYSTEM].includes(
+      ![OpenAIMessageRole.USER, OpenAIMessageRole.ASSISTANT].includes(
         message.message.role,
       )
     ) {
       return false;
     }
+    if (
+      message.message.role === OpenAIMessageRole.ASSISTANT &&
+      message.status !== MessageStatus.SUCCESS
+    ) {
+      return false;
+    }
     return true;
+  }
+
+  private selectMessagesForIndex(messages: Message[]): Message[] {
+    const childRoles = new Map<string, OpenAIMessageRole[]>();
+    for (const message of messages) {
+      if (!message.parentId) continue;
+      const roles = childRoles.get(message.parentId) || [];
+      roles.push(message.message.role);
+      childRoles.set(message.parentId, roles);
+    }
+    return messages.filter((message) => {
+      if (message.message.role === OpenAIMessageRole.USER) return true;
+      if (
+        message.message.role !== OpenAIMessageRole.ASSISTANT ||
+        message.status !== MessageStatus.SUCCESS
+      ) {
+        return false;
+      }
+      return !(childRoles.get(message.id) || []).some((role) =>
+        [OpenAIMessageRole.ASSISTANT, OpenAIMessageRole.TOOL].includes(role),
+      );
+    });
   }
 
   private async runWithConcurrency(

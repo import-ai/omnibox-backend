@@ -4,6 +4,7 @@ import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversat
 import { ConversationsController } from 'omniboxd/conversations/conversations.controller';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
+import { InternalConversationsController } from 'omniboxd/conversations/internal.conversations.controller';
 import { SharedConversationsController } from 'omniboxd/conversations/shared-conversations.controller';
 import { SharesModule } from 'omniboxd/shares/shares.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
@@ -25,7 +26,11 @@ import { UserModule } from '../user/user.module';
     TypeOrmModule.forFeature([Conversation]),
   ],
   providers: [ConversationsService],
-  controllers: [ConversationsController, SharedConversationsController],
+  controllers: [
+    ConversationsController,
+    SharedConversationsController,
+    InternalConversationsController,
+  ],
   exports: [ConversationsService],
 })
 export class ConversationsModule {}

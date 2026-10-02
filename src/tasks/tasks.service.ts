@@ -25,6 +25,7 @@ const PRO_ONLY_FUNCTIONS = new Set<string>([
   'file_reader_image',
   'generate_video_note',
   'generate_audio_note',
+  'update_memory',
 ]);
 
 // Functions that turn a raw resource (an uploaded file or a link) into the

@@ -8,6 +8,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 import { DocType } from './doc-type.enum';
@@ -80,5 +81,28 @@ export class InternalSearchController {
       concurrency,
       updatedAfterDate,
     );
+  }
+}
+
+@Controller('internal/api/v1/namespaces/:namespaceId/search')
+export class InternalNamespaceSearchController {
+  constructor(private readonly searchService: SearchService) {}
+
+  @Public()
+  @Post()
+  async searchMessages(
+    @HeaderUserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() data: SearchRequestDto,
+  ) {
+    const result = await this.searchService.searchPaginated(
+      userId,
+      namespaceId,
+      data.query || '',
+      DocType.MESSAGE,
+      undefined,
+      { offset: data.offset, limit: data.limit },
+    );
+    return result.items;
   }
 }

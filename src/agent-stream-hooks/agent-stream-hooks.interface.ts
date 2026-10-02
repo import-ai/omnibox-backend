@@ -42,6 +42,9 @@ export interface AgentStream {
  * startup and explicit cancellation hooks are awaited and may reject.
  */
 export interface IAgentStreamHooks {
+  /** Return false when a deployment wants to index only after the whole turn. */
+  shouldIndexCall?(stream: AgentStream): boolean;
+
   /** Complete deployment-specific cancellation before stopping the stream, including on another instance. */
   onCancellationRequested?(
     userId: string,
@@ -61,6 +64,13 @@ export interface IAgentStreamHooks {
     stream: AgentStream,
     messageId: string,
     usage: AgentTokenUsage,
+  ): Promise<void>;
+
+  /** Successful end of a whole agent turn, after the final assistant message. */
+  onStreamCompleted?(
+    stream: AgentStream,
+    conversationId: string,
+    messageId: string,
   ): Promise<void>;
 
   /**

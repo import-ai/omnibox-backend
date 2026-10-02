@@ -6,6 +6,7 @@ import {
 
 /** No stream bookkeeping by default; deployments that need it bind their own. */
 const noopAgentStreamHooks: IAgentStreamHooks = {
+  shouldIndexCall: () => true,
   onCallCompleted: () => Promise.resolve(),
   onStreamClosed: () => Promise.resolve(),
 };

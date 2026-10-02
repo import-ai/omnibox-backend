@@ -325,7 +325,7 @@ export class MessagesService {
       namespaceId,
       conversationId,
       { status: MessageStatus.STOPPED },
-      true,
+      false,
     );
   }
 

@@ -429,7 +429,7 @@ export class StreamService implements OnModuleDestroy {
             {
               status: MessageStatus.FAILED,
             },
-            true,
+            false,
           );
         }
       } else {

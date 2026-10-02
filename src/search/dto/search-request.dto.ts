@@ -16,6 +16,11 @@ import {
 import { DocType } from '../doc-type.enum';
 
 export class SearchRequestDto {
+  @Expose({ name: 'exclude_conversation_id' })
+  @IsString()
+  @IsOptional()
+  excludeConversationId?: string;
+
   @IsString()
   @IsOptional()
   query?: string;

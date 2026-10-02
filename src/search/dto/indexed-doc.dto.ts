@@ -40,6 +40,10 @@ export class IndexedResourceDto {
 }
 
 export class IndexedMessageDto {
+  chunkIndex?: number;
+  startIndex?: number;
+  endIndex?: number;
+  createdAt?: string;
   type: DocType.MESSAGE;
   id: string;
   messageId: string;

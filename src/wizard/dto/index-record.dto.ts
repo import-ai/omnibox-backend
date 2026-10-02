@@ -53,6 +53,13 @@ export class OpenAIMessageDto {
 }
 
 export class MessageDto {
+  @Expose({ name: 'chunk_index' })
+  chunkIndex?: number;
+  @Expose({ name: 'start_index' })
+  startIndex?: number;
+  @Expose({ name: 'end_index' })
+  endIndex?: number;
+
   @Expose({ name: 'conversation_id' })
   conversationId: string;
 

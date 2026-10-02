@@ -19,7 +19,7 @@ import { queryTime } from 'omniboxd/messages/query-time';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { User } from 'omniboxd/user/entities/user.entity';
-import { transaction } from 'omniboxd/utils/transaction-utils';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { DataSource, In, IsNull, MoreThan, Not, Repository } from 'typeorm';
 
 import {
@@ -70,7 +70,9 @@ export class MessagesService {
       conversationId,
       userId,
       parentId: dto.parentId,
-      attrs: dto.attrs,
+      attrs: dto.attrs
+        ? { ...dto.attrs, turn_completed: undefined }
+        : dto.attrs,
       status: dto.status,
     });
     return await transaction(this.dataSource.manager, async (tx) => {
@@ -219,27 +221,54 @@ export class MessagesService {
     id: string,
     namespaceId: string,
     conversationId: string,
+    onCompleted?: (tx: Transaction) => Promise<void>,
   ): Promise<void> {
-    const message = await this.findOne(id);
-    if (
-      message.conversationId !== conversationId ||
-      !message.userId ||
-      message.status !== MessageStatus.SUCCESS ||
-      message.message.role !== OpenAIMessageRole.ASSISTANT ||
-      !message.message.content?.trim()
-    ) {
-      return;
-    }
-
     await transaction(this.dataSource.manager, async (tx) => {
+      const repo = tx.entityManager.getRepository(Message);
+      const message = await repo.findOneOrFail({
+        where: { id, conversationId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        !message.userId ||
+        message.status !== MessageStatus.SUCCESS ||
+        message.message.role !== OpenAIMessageRole.ASSISTANT ||
+        message.attrs?.turn_completed ||
+        message.attrs?.tool_call?.interrupts?.length ||
+        message.message.tool_calls?.length
+      )
+        return;
+      let query: Message | null = message;
+      const visited = new Set<string>();
+      while (
+        query &&
+        !(
+          query.message.role === OpenAIMessageRole.USER &&
+          !query.attrs?.tool_call?.decisions?.length
+        )
+      ) {
+        if (!query.parentId || visited.has(query.id)) return;
+        visited.add(query.id);
+        query = await repo.findOneBy({ id: query.parentId, conversationId });
+      }
+      if (!query) return;
+      message.attrs = {
+        ...message.attrs,
+        turn_completed: {
+          query_id: query.id,
+          completed_at: new Date().toISOString(),
+        },
+      };
+      await repo.save(message);
       await this.wizardTaskService.emitUpsertMessageIndexTask(
         TASK_PRIORITY,
-        message.userId!,
+        message.userId,
         namespaceId,
         conversationId,
         message,
         tx,
       );
+      await onCompleted?.(tx);
     });
   }
 

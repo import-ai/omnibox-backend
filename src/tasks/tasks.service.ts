@@ -339,6 +339,15 @@ export class TasksService {
     return TaskDto.fromEntity(newTask);
   }
 
+  canRetry(task: Task, exception?: Record<string, any>): boolean {
+    return (
+      ['update_memory', 'upsert_message_index'].includes(task.function) &&
+      exception?.retryable === true &&
+      !task.canceledAt &&
+      task.numSchedules <= this.maxRetries
+    );
+  }
+
   async getNextTaskV2(
     functions: string[],
     heartbeatCutoff: Date,

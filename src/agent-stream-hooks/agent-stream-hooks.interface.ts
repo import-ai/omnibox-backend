@@ -1,3 +1,5 @@
+import { Transaction } from 'omniboxd/utils/transaction-utils';
+
 export const AGENT_STREAM_HOOKS = Symbol('AGENT_STREAM_HOOKS');
 
 /**
@@ -68,6 +70,7 @@ export interface IAgentStreamHooks {
     stream: AgentStream,
     conversationId: string,
     messageId: string,
+    tx?: Transaction,
   ): Promise<void>;
 
   /**

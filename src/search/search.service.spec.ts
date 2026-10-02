@@ -140,6 +140,10 @@ describe('SearchService', () => {
             id,
             conversationId,
             userId,
+            status: 'success',
+            attrs: {
+              turn_completed: { query_id: 'query', completed_at: 'now' },
+            },
             message: { role: 'assistant', content: 'Another matched message' },
           },
           'message-pagination-one': {

@@ -7,6 +7,14 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Expose } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
@@ -57,9 +65,34 @@ export class SearchController {
   }
 }
 
+class RebuildMessageIndexRequestDto {
+  @IsString()
+  @IsNotEmpty()
+  @Expose({ name: 'namespace_id' })
+  namespaceId: string;
+  @IsBoolean()
+  @IsOptional()
+  apply?: boolean;
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  @Expose({ name: 'message_ids' })
+  messageIds?: string[];
+}
+
 @Controller('internal/api/v1')
 export class InternalSearchController {
   constructor(private readonly searchService: SearchService) {}
+
+  @Public()
+  @Post('rebuild_message_index')
+  async rebuildMessages(@Body() data: RebuildMessageIndexRequestDto) {
+    return this.searchService.rebuildMessageIndex(
+      data.namespaceId,
+      data.apply === true,
+      data.messageIds,
+    );
+  }
 
   @Public()
   @Post('refresh_index')
@@ -95,14 +128,15 @@ export class InternalNamespaceSearchController {
     @Param('namespaceId') namespaceId: string,
     @Body() data: SearchRequestDto,
   ) {
-    const result = await this.searchService.searchPaginated(
+    return this.searchService.searchMessages(
       userId,
       namespaceId,
       data.query || '',
-      DocType.MESSAGE,
-      undefined,
-      { offset: data.offset, limit: data.limit },
+      {
+        offset: data.offset,
+        limit: data.limit,
+        excludeConversationId: data.excludeConversationId,
+      },
     );
-    return result.items;
   }
 }

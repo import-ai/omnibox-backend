@@ -802,11 +802,20 @@ describe('StreamService agent stream hooks', () => {
     );
     expect(
       (service as any).messagesService.indexFinalAssistant,
-    ).toHaveBeenCalledWith('message-id', 'namespace-id', 'conversation-id');
+    ).toHaveBeenCalledWith(
+      'message-id',
+      'namespace-id',
+      'conversation-id',
+      expect.any(Function),
+    );
+    const callback = (service as any).messagesService.indexFinalAssistant.mock
+      .calls[0][3];
+    await callback(undefined);
     expect(hooks.onStreamCompleted).toHaveBeenCalledWith(
       userStream,
       'conversation-id',
       'message-id',
+      undefined,
     );
   });
 });

@@ -60,6 +60,8 @@ type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
 type RedisClient = ReturnType<typeof createClient>;
 
 interface HandlerContext {
+  failed?: boolean;
+  interrupted?: boolean;
   queryId?: string;
   parentId?: string;
   messageId?: string;
@@ -344,6 +346,8 @@ export class StreamService implements OnModuleDestroy {
         context.messageId = message.id;
         context.message = message.message;
       } else if (chunk.response_type === 'delta') {
+        if (chunk.attrs?.tool_call?.interrupts?.length)
+          context.interrupted = true;
         if (!context.messageId) {
           const message = this.i18n.t('system.errors.messageIdNotSet');
           throw new AppException(
@@ -377,25 +381,27 @@ export class StreamService implements OnModuleDestroy {
         context.parentId = message.id;
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
-        if (context.parentId) {
-          try {
-            await this.messagesService.indexFinalAssistant(
-              context.parentId,
-              namespaceId,
-              conversationId,
-            );
-          } catch (error) {
-            this.logger.error({ error, messageId: context.parentId });
-          }
-        }
         if (
-          this.agentStreamHooks.onStreamCompleted &&
-          stream &&
+          !context.failed &&
+          !context.interrupted &&
+          !context.messageId &&
           context.parentId
         ) {
-          void this.agentStreamHooks
-            .onStreamCompleted(stream, conversationId, context.parentId)
-            .catch((error) => this.logger.error({ error }));
+          await this.messagesService.indexFinalAssistant(
+            context.parentId,
+            namespaceId,
+            conversationId,
+            stream
+              ? async (tx) => {
+                  await this.agentStreamHooks.onStreamCompleted?.(
+                    stream,
+                    conversationId,
+                    context.parentId!,
+                    tx,
+                  );
+                }
+              : undefined,
+          );
         }
       } else if (chunk.response_type === 'metrics') {
         // Do nothing, frontend only
@@ -411,6 +417,7 @@ export class StreamService implements OnModuleDestroy {
         }
         await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
+        context.failed = true;
         if (!context.messageId && context.queryId) {
           await handle(
             JSON.stringify({
@@ -1185,6 +1192,7 @@ export class StreamService implements OnModuleDestroy {
         session.userId,
         session.conversationId,
       );
+    session.handlerContext.failed = true;
     session.controller.abort();
     try {
       await this.markSessionCanceled(session.key);

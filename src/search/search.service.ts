@@ -5,8 +5,8 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
+  isMessageIndexable,
   Message,
-  MessageStatus,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
@@ -23,7 +23,7 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
@@ -322,11 +322,21 @@ export class SearchService {
     };
   }
 
-  private async searchMessages(
+  async searchMessages(
     userId: string,
     namespaceId: string,
     normalizedQuery: string,
+    history?: {
+      limit?: number;
+      offset?: number;
+      excludeConversationId?: string;
+    },
   ): Promise<IndexedMessageDto[]> {
+    if (
+      history &&
+      !(await this.permissionsService.userInNamespace(userId, namespaceId))
+    )
+      return [];
     if (!normalizedQuery) {
       return [];
     }
@@ -349,7 +359,14 @@ export class SearchService {
       }
 
       const { conversationId, messageId } = record.message;
-      if (!messageId || seenMessageIds.has(messageId)) {
+      const identity = history
+        ? `${messageId}:${record.message.chunkIndex}`
+        : messageId;
+      if (
+        !messageId ||
+        seenMessageIds.has(identity) ||
+        conversationId === history?.excludeConversationId
+      ) {
         continue;
       }
 
@@ -362,13 +379,14 @@ export class SearchService {
       if (
         message.conversationId !== conversationId ||
         message.userId !== userId ||
+        !isMessageIndexable(message) ||
         (message.message.role !== OpenAIMessageRole.USER &&
           message.message.role !== OpenAIMessageRole.ASSISTANT)
       ) {
         continue;
       }
       const content = message.message.content || '';
-      if (!this.matchesMessageQuery(content, normalizedQuery)) {
+      if (!history && !this.matchesMessageQuery(content, normalizedQuery)) {
         continue;
       }
 
@@ -390,7 +408,7 @@ export class SearchService {
       if (title === null) {
         continue;
       }
-      seenMessageIds.add(messageId);
+      seenMessageIds.add(identity);
 
       items.push({
         type: DocType.MESSAGE,
@@ -399,11 +417,24 @@ export class SearchService {
         conversationId,
         title,
         role: message.message.role,
-        content,
+        content: history ? record.message.message.content : content,
+        ...(history
+          ? {
+              chunkIndex: record.message.chunkIndex,
+              startIndex: record.message.startIndex,
+              endIndex: record.message.endIndex,
+              createdAt: message.createdAt?.toISOString(),
+            }
+          : {}),
       });
     }
 
-    return items;
+    return history
+      ? items.slice(
+          history.offset ?? 0,
+          (history.offset ?? 0) + (history.limit ?? 10),
+        )
+      : items;
   }
 
   private matchesMessageQuery(content: unknown, normalizedQuery: string) {
@@ -804,6 +835,89 @@ export class SearchService {
     return stats;
   }
 
+  async rebuildMessageIndex(
+    namespaceId: string,
+    apply: boolean,
+    messageIds?: string[],
+  ) {
+    const report: {
+      namespace_id: string;
+      scanned: number;
+      deleted: number;
+      synced: string[];
+      skipped: string[];
+      failed: string[];
+    } = {
+      namespace_id: namespaceId,
+      scanned: 0,
+      deleted: 0,
+      synced: [],
+      skipped: [],
+      failed: [],
+    };
+    if (apply) {
+      const running = await this.wizardTaskService.taskRepository.countBy({
+        namespaceId,
+        function: 'upsert_message_index',
+        status: TaskStatus.RUNNING,
+      });
+      if (running)
+        throw new AppException(
+          'Message index tasks are still running',
+          'INDEX_TASKS_RUNNING',
+          HttpStatus.CONFLICT,
+        );
+      if (!messageIds)
+        report.deleted = (
+          await this.wizardApiService.clearMessageIndex(namespaceId)
+        ).deleted;
+    }
+    for (let offset = 0; ; offset += BACKFILL_PAGE_SIZE) {
+      const conversations = await this.conversationsService.listAll(
+        offset,
+        BACKFILL_PAGE_SIZE,
+      );
+      if (!conversations.length) break;
+      for (const conversation of conversations) {
+        if (conversation.namespaceId !== namespaceId || !conversation.userId)
+          continue;
+        for (const message of await this.messagesService.findAll(
+          conversation.userId,
+          conversation.id,
+        )) {
+          if (messageIds && !messageIds.includes(message.id)) continue;
+          report.scanned++;
+          if (!isMessageIndexable(message)) {
+            report.skipped.push(message.id);
+            continue;
+          }
+          if (!apply) {
+            report.synced.push(message.id);
+            continue;
+          }
+          try {
+            const result = await this.wizardApiService.upsertWeaviateMessage({
+              namespaceId,
+              userId: conversation.userId,
+              message: {
+                conversationId: conversation.id,
+                messageId: message.id,
+                message: {
+                  role: message.message.role,
+                  content: message.message.content || '',
+                },
+              },
+            });
+            (result.success ? report.synced : report.failed).push(message.id);
+          } catch {
+            report.failed.push(message.id);
+          }
+        }
+      }
+    }
+    return report;
+  }
+
   async syncMessagesToWeaviate(
     concurrency: number,
     updatedAfter?: Date,
@@ -911,46 +1025,11 @@ export class SearchService {
     if (updatedAfter && message.updatedAt <= updatedAfter) {
       return false;
     }
-    const content = message.message.content || '';
-    if (!content.trim()) {
-      return false;
-    }
-    if (
-      ![OpenAIMessageRole.USER, OpenAIMessageRole.ASSISTANT].includes(
-        message.message.role,
-      )
-    ) {
-      return false;
-    }
-    if (
-      message.message.role === OpenAIMessageRole.ASSISTANT &&
-      message.status !== MessageStatus.SUCCESS
-    ) {
-      return false;
-    }
-    return true;
+    return isMessageIndexable(message);
   }
 
   private selectMessagesForIndex(messages: Message[]): Message[] {
-    const childRoles = new Map<string, OpenAIMessageRole[]>();
-    for (const message of messages) {
-      if (!message.parentId) continue;
-      const roles = childRoles.get(message.parentId) || [];
-      roles.push(message.message.role);
-      childRoles.set(message.parentId, roles);
-    }
-    return messages.filter((message) => {
-      if (message.message.role === OpenAIMessageRole.USER) return true;
-      if (
-        message.message.role !== OpenAIMessageRole.ASSISTANT ||
-        message.status !== MessageStatus.SUCCESS
-      ) {
-        return false;
-      }
-      return !(childRoles.get(message.id) || []).some((role) =>
-        [OpenAIMessageRole.ASSISTANT, OpenAIMessageRole.TOOL].includes(role),
-      );
-    });
+    return messages.filter(isMessageIndexable);
   }
 
   private async runWithConcurrency(

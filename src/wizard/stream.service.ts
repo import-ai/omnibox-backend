@@ -1187,12 +1187,12 @@ export class StreamService implements OnModuleDestroy {
 
   private async stopSession(session: StreamSession) {
     if (session.finished || session.controller.signal.aborted) return;
+    session.handlerContext.failed = true;
     if (session.userId)
       await this.agentStreamHooks.onCancellationRequested?.(
         session.userId,
         session.conversationId,
       );
-    session.handlerContext.failed = true;
     session.controller.abort();
     try {
       await this.markSessionCanceled(session.key);

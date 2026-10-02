@@ -40,8 +40,8 @@ export interface AgentStream {
  * without belonging to it — usage accounting, auditing, quota bookkeeping.
  *
  * Nothing is bound by default; a deployment that needs these events provides
- * its own implementation. Completion hooks run fire-and-forget and log errors;
- * startup and explicit cancellation hooks are awaited and may reject.
+ * its own implementation. Per-call accounting runs fire-and-forget. Turn completion is awaited inside
+ * the message transaction; its hook must only enqueue transactional work.
  */
 export interface IAgentStreamHooks {
   /** Complete deployment-specific cancellation before stopping the stream, including on another instance. */

@@ -35,8 +35,12 @@ export class InternalConversationsController {
       userId,
       namespaceId,
     );
-    const message = await this.messagesService.findOne(messageId);
-    if (message.conversationId !== conversationId || message.userId !== userId)
+    const message = await this.messagesService.findNullable(messageId);
+    if (
+      !message ||
+      message.conversationId !== conversationId ||
+      message.userId !== userId
+    )
       throw new NotFoundException();
     if (forIndex === 'true')
       return {

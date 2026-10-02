@@ -348,6 +348,10 @@ export class MessagesService {
     });
   }
 
+  async findNullable(id: string) {
+    return this.messageRepository.findOneBy({ id });
+  }
+
   async findOne(id: string) {
     return await this.messageRepository.findOneOrFail({
       where: { id },

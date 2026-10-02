@@ -24,7 +24,7 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, MoreThan, Repository } from 'typeorm';
 
 const TASK_PRIORITY = 5;
 
@@ -393,6 +393,18 @@ export class ConversationsService {
   async has(id: string) {
     return await this.conversationRepository.exists({
       where: { id },
+    });
+  }
+
+  async listForMessageIndex(
+    namespaceId: string,
+    afterId: string | undefined,
+    limit: number,
+  ) {
+    return this.conversationRepository.find({
+      where: { namespaceId, ...(afterId ? { id: MoreThan(afterId) } : {}) },
+      order: { id: 'ASC' },
+      take: limit,
     });
   }
 

@@ -427,6 +427,11 @@ export class SearchService {
             }
           : {}),
       });
+      if (
+        history &&
+        items.length >= (history.offset ?? 0) + (history.limit ?? 10)
+      )
+        break;
     }
 
     return history
@@ -872,12 +877,15 @@ export class SearchService {
           await this.wizardApiService.clearMessageIndex(namespaceId)
         ).deleted;
     }
-    for (let offset = 0; ; offset += BACKFILL_PAGE_SIZE) {
-      const conversations = await this.conversationsService.listAll(
-        offset,
+    let afterId: string | undefined;
+    while (true) {
+      const conversations = await this.conversationsService.listForMessageIndex(
+        namespaceId,
+        afterId,
         BACKFILL_PAGE_SIZE,
       );
       if (!conversations.length) break;
+      afterId = conversations[conversations.length - 1].id;
       for (const conversation of conversations) {
         if (conversation.namespaceId !== namespaceId || !conversation.userId)
           continue;

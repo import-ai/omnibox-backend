@@ -11,10 +11,10 @@ describe('Message index migration', () => {
       upsertWeaviateMessage: jest.fn().mockResolvedValue({ success: true }),
     };
     service.conversationsService = {
-      listAll: jest
+      listForMessageIndex: jest
         .fn()
-        .mockImplementation((offset) =>
-          offset ? [] : [{ id: 'c', userId: 'u', namespaceId: 'n' }],
+        .mockImplementation((_namespaceId, afterId) =>
+          afterId ? [] : [{ id: 'c', userId: 'u', namespaceId: 'n' }],
         ),
     };
     service.messagesService = {

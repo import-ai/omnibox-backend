@@ -2,6 +2,7 @@ import {
   ArrayNotEmpty,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsOptional,
   IsString,
@@ -23,6 +24,20 @@ export class CreateConversationShareDto {
   @ArrayUnique()
   @IsString({ each: true })
   answer_ids?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  select_all?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  branch_leaf_id?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  excluded_answer_ids?: string[];
 
   /** Legacy question IDs used by released mobile clients. */
   @IsOptional()

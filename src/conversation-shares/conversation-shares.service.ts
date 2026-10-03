@@ -2,6 +2,10 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import {
+  conversationBranch,
+  shareableAnswerIds,
+} from 'omniboxd/conversations/conversation-branch';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import {
   Message,
@@ -176,6 +180,55 @@ export class ConversationSharesService {
     messages: Message[],
     request: CreateConversationShareDto,
   ) {
+    if (request.select_all === true) {
+      if (
+        request.answer_ids !== undefined ||
+        request.group_ids !== undefined ||
+        !request.branch_leaf_id
+      ) {
+        throw this.invalidRequest(
+          'Provide a branch and exactly one selection mode.',
+        );
+      }
+      let answerIds: string[];
+      try {
+        answerIds = shareableAnswerIds(
+          conversationBranch(
+            messages.map((message) => ({
+              id: message.id,
+              parent_id: message.parentId,
+              role: message.message.role,
+              status: message.status,
+              has_content: Boolean(message.message.content?.trim()),
+              has_tool_calls: Boolean(message.message.tool_calls?.length),
+              is_decision: Boolean(
+                (message.attrs?.tool_call?.decisions as unknown[] | undefined)
+                  ?.length,
+              ),
+            })),
+            request.branch_leaf_id,
+          ),
+        );
+      } catch {
+        throw this.invalidRequest('Invalid conversation branch.');
+      }
+      const excluded = new Set(request.excluded_answer_ids ?? []);
+      if ([...excluded].some((id) => !answerIds.includes(id))) {
+        throw this.invalidRequest(
+          'Excluded answers must belong to the selected branch.',
+        );
+      }
+      return this.resolveSelectedAnswers(
+        messages,
+        answerIds.filter((id) => !excluded.has(id)),
+      );
+    }
+    if (
+      request.branch_leaf_id !== undefined ||
+      request.excluded_answer_ids !== undefined
+    ) {
+      throw this.invalidRequest('Branch and exclusions require select_all.');
+    }
     const hasAnswerIds = request.answer_ids !== undefined;
     const hasLegacyGroupIds = request.group_ids !== undefined;
     if (hasAnswerIds === hasLegacyGroupIds) {

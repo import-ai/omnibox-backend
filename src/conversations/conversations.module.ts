@@ -12,6 +12,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 import { MessagesModule } from '../messages/messages.module';
 import { NamespacesModule } from '../namespaces/namespaces.module';
 import { UserModule } from '../user/user.module';
+import { ConversationHistoryService } from './conversation-history.service';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { UserModule } from '../user/user.module';
     ConversationSharesModule,
     TypeOrmModule.forFeature([Conversation]),
   ],
-  providers: [ConversationsService],
+  providers: [ConversationsService, ConversationHistoryService],
   controllers: [ConversationsController, SharedConversationsController],
   exports: [ConversationsService],
 })

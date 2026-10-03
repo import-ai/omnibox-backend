@@ -1,6 +1,7 @@
 {
   "imageUpgradeRequired": "[This message contains an image. Upgrade the app to view it.]",
   "errors": {
-    "accessDenied": "You do not have permission to access this conversation"
+    "accessDenied": "You do not have permission to access this conversation",
+    "invalidHistory": "Invalid conversation history request"
   }
 }

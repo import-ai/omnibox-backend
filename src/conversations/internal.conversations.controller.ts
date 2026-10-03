@@ -77,6 +77,7 @@ export class InternalConversationsController {
       namespaceId,
       conversationId,
       userId,
+      true,
     );
   }
 }

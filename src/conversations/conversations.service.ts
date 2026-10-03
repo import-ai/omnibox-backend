@@ -226,6 +226,7 @@ export class ConversationsService {
     conversation: Conversation,
     messages: Message[],
     chatOnly = false,
+    includeMemoryWriteAttempt = false,
   ): ConversationDetailDto {
     const detail: ConversationDetailDto = {
       id: conversation.id,
@@ -254,7 +255,14 @@ export class ConversationsService {
       if (msg.message.role === OpenAIMessageRole.SYSTEM) {
         continue;
       }
-      delete msg.attrs?.context;
+      const attrs = { ...msg.attrs };
+      delete attrs.context;
+      if (
+        includeMemoryWriteAttempt &&
+        msg.attrs?.context?.memory_write_attempt
+      ) {
+        attrs.context = { memory_write_attempt: true };
+      }
       // Citations and tool-call args name the shared resources; a chat-only
       // share keeps them for the assistant and withholds them from the
       // visitor's history.
@@ -265,7 +273,7 @@ export class ConversationsService {
         children: childrenMap[msg.id] || [],
         created_at: msg.createdAt.toISOString(),
         status: msg.status,
-        attrs: chatOnly ? attrsForVisitor(msg.attrs) : msg.attrs,
+        attrs: chatOnly ? attrsForVisitor(attrs) : attrs,
       } as ConversationMessageMappingDto;
     }
     if (messages.length > 0) {
@@ -278,6 +286,7 @@ export class ConversationsService {
     namespaceId: string,
     conversationId: string,
     userId: string,
+    includeMemoryWriteAttempt = false,
   ): Promise<ConversationDetailDto> {
     const conversation = await this.findOneForUserInNamespace(
       conversationId,
@@ -288,7 +297,12 @@ export class ConversationsService {
       userId,
       conversation.id,
     );
-    return this.convertToConversationDetail(conversation, messages);
+    return this.convertToConversationDetail(
+      conversation,
+      messages,
+      false,
+      includeMemoryWriteAttempt,
+    );
   }
 
   async getConversationForShare(

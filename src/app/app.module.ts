@@ -113,6 +113,7 @@ import { AllowMultipleCommentThreadsAtAnchor1788941872300 } from 'omniboxd/migra
 import { AccountCommentAttachments1789383186349 } from 'omniboxd/migrations/1789383186349-account-comment-attachments';
 import { AddNamespaceMemberNicknameAndNotes1789704000000 } from 'omniboxd/migrations/1789704000000-add-namespace-member-nickname-and-notes';
 import { AddResourceRevisions1790094055950 } from 'omniboxd/migrations/1790094055950-add-resource-revisions';
+import { AddConversationHistoryIndex1790966111694 } from 'omniboxd/migrations/1790966111694-add-conversation-history-index';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -265,6 +266,7 @@ export class AppModule implements NestModule {
             autoLoadEntities: true,
             maxQueryExecutionTime: config.get('OBB_DB_EXEC_TIME', 0),
             migrations: [
+              AddConversationHistoryIndex1790966111694,
               Init1751900000000,
               Tags1751905414493,
               UserOptions1751904560034,

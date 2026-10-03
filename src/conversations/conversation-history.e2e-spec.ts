@@ -174,4 +174,46 @@ describe('Paginated conversation history', () => {
     const page = (await client.get(`${url}/messages`).expect(200)).body;
     expect(page.mapping[ids[23]].message.content).toBe('Explain [[1]](C%)');
   });
+  it('keeps approval payloads when a checkpoint has persisted success status', async () => {
+    const repository = database.getRepository(Message);
+    const message = await repository.findOneByOrFail({ id: ids[23] });
+    const originalMessage = message.message;
+    const originalAttrs = message.attrs;
+    const toolCalls = [
+      {
+        id: 'pending-edit',
+        type: 'function',
+        function: { name: 'edit_resource', arguments: '{}' },
+      },
+    ];
+    const interrupts = [
+      {
+        id: 'approval',
+        value: {
+          action_requests: [
+            { name: 'edit_resource', args: { resource_id: 'memory' } },
+          ],
+        },
+      },
+    ];
+    await repository.save({
+      ...message,
+      message: { ...originalMessage, tool_calls: toolCalls },
+      attrs: { ...originalAttrs, tool_call: { interrupts } },
+    });
+    try {
+      const page = (await client.get(`${url}/messages`).expect(200)).body;
+      expect(page.mapping[message.id].message.tool_calls).toEqual(toolCalls);
+      expect(page.mapping[message.id].attrs.tool_call.interrupts).toEqual(
+        interrupts,
+      );
+      expect(page.mapping[message.id].attrs.context).toBeUndefined();
+    } finally {
+      await repository.save({
+        ...message,
+        message: originalMessage,
+        attrs: originalAttrs,
+      });
+    }
+  });
 });

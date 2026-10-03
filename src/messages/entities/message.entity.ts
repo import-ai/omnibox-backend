@@ -47,6 +47,7 @@ export interface OpenAIMessage {
 }
 
 export interface MessageAttrs {
+  turn_completed?: { query_id: string; completed_at: string };
   client_request_id?: string;
   citations?: Record<string, any>[];
   error_message?: string;
@@ -107,4 +108,16 @@ export class Message extends Base {
 
   @Column('bigint', { default: 0, transformer: bigIntCount })
   outputToken: number;
+}
+
+/** Assistant eligibility requires durable evidence of a completed turn. */
+export function isMessageIndexable(message: Message): boolean {
+  return (
+    !!message.userId &&
+    !!message.message.content?.trim() &&
+    (message.message.role === OpenAIMessageRole.USER ||
+      (message.message.role === OpenAIMessageRole.ASSISTANT &&
+        message.status === MessageStatus.SUCCESS &&
+        !!message.attrs?.turn_completed))
+  );
 }

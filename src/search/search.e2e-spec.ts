@@ -10,6 +10,10 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
+import {
+  MessageStatus,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
@@ -231,6 +235,19 @@ describe('SearchController (e2e)', () => {
         {
           provide: MessagesService,
           useValue: {
+            findOne: jest.fn().mockImplementation((id: string) =>
+              Promise.resolve({
+                id,
+                conversationId: '550e8400-e29b-41d4-a716-446655440001',
+                userId: mockUser.id,
+                status: MessageStatus.SUCCESS,
+                message: {
+                  role: OpenAIMessageRole.USER,
+                  content: 'This is a test message content',
+                },
+                attrs: null,
+              }),
+            ),
             findAll: jest.fn().mockResolvedValue([]),
           },
         },
@@ -411,6 +428,41 @@ describe('SearchController (e2e)', () => {
           content: 'This is a test message content',
         }),
       ]);
+    });
+
+    it('excludes deleted messages even when their vectors still exist', async () => {
+      jest
+        .spyOn(app.get(MessagesService), 'findOne')
+        .mockRejectedValueOnce(new Error('Message not found'));
+
+      const response = await request(app.getHttpServer())
+        .get(
+          `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
+        )
+        .set('user', JSON.stringify(mockUser))
+        .expect(HttpStatus.OK);
+
+      expect(response.body).toEqual([]);
+    });
+
+    it('excludes assistant messages without completed-turn evidence', async () => {
+      const messages = app.get(MessagesService);
+      const message = await messages.findOne(
+        '550e8400-e29b-41d4-a716-446655440002',
+      );
+      jest.spyOn(messages, 'findOne').mockResolvedValueOnce({
+        ...message,
+        message: { ...message.message, role: OpenAIMessageRole.ASSISTANT },
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(
+          `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
+        )
+        .set('user', JSON.stringify(mockUser))
+        .expect(HttpStatus.OK);
+
+      expect(response.body).toEqual([]);
     });
 
     it('should handle missing query parameter', async () => {

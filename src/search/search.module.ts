@@ -13,6 +13,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
 import {
+  InternalNamespaceSearchController,
   InternalSearchController,
   SearchController,
 } from './search.controller';
@@ -28,7 +29,11 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
     SearchCandidateService,
     OpenSearchService,
   ],
-  controllers: [SearchController, InternalSearchController],
+  controllers: [
+    SearchController,
+    InternalSearchController,
+    InternalNamespaceSearchController,
+  ],
   imports: [
     WizardAPIModule,
     PermissionsModule,

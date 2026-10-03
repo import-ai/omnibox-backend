@@ -2,8 +2,8 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
+  isMessageIndexable,
   Message,
-  OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import {
   Resource,
@@ -401,16 +401,7 @@ export class WizardTaskService {
     message: Message,
     tx?: Transaction,
   ) {
-    if (!message.message.content?.trim()) {
-      return;
-    }
-    if (
-      [OpenAIMessageRole.TOOL, OpenAIMessageRole.SYSTEM].includes(
-        message.message.role,
-      )
-    ) {
-      return;
-    }
+    if (!isMessageIndexable(message)) return;
     return this.tasksService.emitTask(
       {
         function: 'upsert_message_index',

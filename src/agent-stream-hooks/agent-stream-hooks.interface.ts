@@ -1,3 +1,5 @@
+import { Transaction } from 'omniboxd/utils/transaction-utils';
+
 export const AGENT_STREAM_HOOKS = Symbol('AGENT_STREAM_HOOKS');
 
 /**
@@ -38,8 +40,8 @@ export interface AgentStream {
  * without belonging to it — usage accounting, auditing, quota bookkeeping.
  *
  * Nothing is bound by default; a deployment that needs these events provides
- * its own implementation. Completion hooks run fire-and-forget and log errors;
- * startup and explicit cancellation hooks are awaited and may reject.
+ * its own implementation. Per-call accounting runs fire-and-forget. Turn completion is awaited inside
+ * the message transaction; its hook must only enqueue transactional work.
  */
 export interface IAgentStreamHooks {
   /** Complete deployment-specific cancellation before stopping the stream, including on another instance. */
@@ -61,6 +63,14 @@ export interface IAgentStreamHooks {
     stream: AgentStream,
     messageId: string,
     usage: AgentTokenUsage,
+  ): Promise<void>;
+
+  /** Successful end of a whole agent turn, after the final assistant message. */
+  onStreamCompleted?(
+    stream: AgentStream,
+    conversationId: string,
+    messageId: string,
+    tx?: Transaction,
   ): Promise<void>;
 
   /**

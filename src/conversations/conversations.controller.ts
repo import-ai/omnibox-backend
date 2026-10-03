@@ -12,15 +12,23 @@ import {
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { ChatClientCompatibilityInterceptor } from 'omniboxd/interceptor/chat-client-compatibility.interceptor';
 
+import { ConversationHistoryService } from './conversation-history.service';
 import { ConversationsService } from './conversations.service';
 import { ConversationDetailDto } from './dto/conversation-detail.dto';
+import {
+  ConversationPageQueryDto,
+  MessageDetailsQueryDto,
+} from './dto/conversation-page.dto';
 import { ConversationSummaryDto } from './dto/conversation-summary.dto';
 import { UpdateConversationDto } from './dto/update-conversation.dto';
 
 @Controller('api/v1/namespaces/:namespaceId/conversations')
 @UseInterceptors(ChatClientCompatibilityInterceptor)
 export class ConversationsController {
-  constructor(private readonly conversationsService: ConversationsService) {}
+  constructor(
+    private readonly conversationsService: ConversationsService,
+    private readonly history: ConversationHistoryService,
+  ) {}
 
   @Get()
   async list(
@@ -61,6 +69,26 @@ export class ConversationsController {
       userId,
       updateConversationDto.title,
     );
+  }
+
+  @Get(':id/messages')
+  page(
+    @Param('namespaceId') namespaceId: string,
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @Query() query: ConversationPageQueryDto,
+  ) {
+    return this.history.page(namespaceId, id, userId, query);
+  }
+
+  @Get(':id/messages/details')
+  details(
+    @Param('namespaceId') namespaceId: string,
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @Query() query: MessageDetailsQueryDto,
+  ) {
+    return this.history.details(namespaceId, id, userId, query.ids);
   }
 
   @Get(':id')

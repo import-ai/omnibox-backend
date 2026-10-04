@@ -17,6 +17,7 @@ import {
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
@@ -275,6 +276,12 @@ describe('SearchController (e2e)', () => {
           useValue: {
             find: jest.fn().mockResolvedValue([]),
             save: jest.fn().mockResolvedValue({}),
+          },
+        },
+        {
+          provide: getRepositoryToken(Namespace),
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
           },
         },
         {

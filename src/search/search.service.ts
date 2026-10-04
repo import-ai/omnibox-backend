@@ -11,6 +11,7 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import {
   comparePermission,
@@ -28,7 +29,7 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { getArticleIdentity } from './article-dedupe.util';
 import { DocType } from './doc-type.enum';
@@ -94,6 +95,8 @@ export class SearchService {
     private readonly conversationsService: ConversationsService,
     @InjectRepository(Task)
     private readonly taskRepository: Repository<Task>,
+    @InjectRepository(Namespace)
+    private readonly namespaceRepository: Repository<Namespace>,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
     private readonly tagService: TagService,
@@ -924,6 +927,69 @@ export class SearchService {
       }
     }
     return report;
+  }
+
+  async rebuildAllMessageIndexes(apply: boolean, namespaceIds?: string[]) {
+    if (namespaceIds && namespaceIds.length === 0) {
+      throw new AppException(
+        'Namespace filter must not be empty',
+        'EMPTY_NAMESPACE_FILTER',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const namespaces = namespaceIds?.length
+      ? await this.namespaceRepository.find({
+          select: ['id'],
+          where: namespaceIds.map((id) => ({ id })),
+          order: { id: 'ASC' },
+        })
+      : await this.namespaceRepository.find({
+          select: ['id'],
+          order: { id: 'ASC' },
+        });
+    const selectedIds = namespaces.map(({ id }) => id);
+    if (namespaceIds?.some((id) => !selectedIds.includes(id))) {
+      throw new AppException(
+        'One or more namespaces were not found',
+        'NAMESPACE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    if (apply && selectedIds.length) {
+      const running = await this.taskRepository.countBy({
+        namespaceId: In(selectedIds),
+        function: 'upsert_message_index',
+        status: TaskStatus.RUNNING,
+      });
+      if (running) {
+        throw new AppException(
+          'Message index tasks are still running',
+          'INDEX_TASKS_RUNNING',
+          HttpStatus.CONFLICT,
+        );
+      }
+    }
+
+    const reports: Awaited<ReturnType<SearchService['rebuildMessageIndex']>>[] =
+      [];
+    const errors: { namespace_id: string; error: string }[] = [];
+    for (const namespaceId of selectedIds) {
+      try {
+        reports.push(await this.rebuildMessageIndex(namespaceId, apply));
+      } catch (error) {
+        errors.push({
+          namespace_id: namespaceId,
+          error: error instanceof Error ? error.message : 'Migration failed',
+        });
+      }
+    }
+    return {
+      apply,
+      namespace_count: selectedIds.length,
+      namespaces: reports,
+      errors,
+    };
   }
 
   async syncMessagesToWeaviate(

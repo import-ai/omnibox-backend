@@ -330,6 +330,7 @@ describe('SearchService', () => {
       conversationsService as any,
       {} as any,
       {} as any,
+      {} as any,
       {
         t: jest.fn().mockReturnValue('Not authorized'),
       } as any,

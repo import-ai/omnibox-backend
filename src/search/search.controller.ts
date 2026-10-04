@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Expose } from 'class-transformer';
 import {
+  ArrayNotEmpty,
   IsArray,
   IsBoolean,
   IsNotEmpty,
@@ -80,6 +81,20 @@ class RebuildMessageIndexRequestDto {
   messageIds?: string[];
 }
 
+class RebuildAllMessageIndexesRequestDto {
+  @IsBoolean()
+  @IsOptional()
+  apply?: boolean;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  @ArrayNotEmpty()
+  @IsNotEmpty({ each: true })
+  @Expose({ name: 'namespace_ids' })
+  namespaceIds?: string[];
+}
+
 @Controller('internal/api/v1')
 export class InternalSearchController {
   constructor(private readonly searchService: SearchService) {}
@@ -91,6 +106,15 @@ export class InternalSearchController {
       data.namespaceId,
       data.apply === true,
       data.messageIds,
+    );
+  }
+
+  @Public()
+  @Post('rebuild_all_message_indexes')
+  async rebuildAllMessages(@Body() data: RebuildAllMessageIndexesRequestDto) {
+    return this.searchService.rebuildAllMessageIndexes(
+      data.apply === true,
+      data.namespaceIds,
     );
   }
 

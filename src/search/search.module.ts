@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { OpenSearchService } from 'omniboxd/search/open.search.service';
@@ -44,7 +45,7 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
     TasksModule,
     TagModule,
     SmartFoldersModule,
-    TypeOrmModule.forFeature([Task]),
+    TypeOrmModule.forFeature([Task, Namespace]),
   ],
 })
 export class SearchModule {}

@@ -47,7 +47,6 @@ export interface OpenAIMessage {
 }
 
 export interface MessageAttrs {
-  turn_completed?: { query_id: string; completed_at: string };
   client_request_id?: string;
   citations?: Record<string, any>[];
   error_message?: string;
@@ -110,14 +109,45 @@ export class Message extends Base {
   outputToken: number;
 }
 
-/** Assistant eligibility requires durable evidence of a completed turn. */
-export function isMessageIndexable(message: Message): boolean {
-  return (
-    !!message.userId &&
-    !!message.message.content?.trim() &&
-    (message.message.role === OpenAIMessageRole.USER ||
-      (message.message.role === OpenAIMessageRole.ASSISTANT &&
-        message.status === MessageStatus.SUCCESS &&
-        !!message.attrs?.turn_completed))
+/** Only successful answers at a user-turn boundary belong in the index. */
+export function isMessageIndexable(
+  message: Message,
+  children: Message[],
+): boolean {
+  if (!message.userId || message.deletedAt || !message.message.content?.trim())
+    return false;
+  if (message.message.role === OpenAIMessageRole.USER) return true;
+  if (
+    message.message.role !== OpenAIMessageRole.ASSISTANT ||
+    message.status !== MessageStatus.SUCCESS ||
+    message.message.tool_calls?.length ||
+    message.attrs?.tool_call?.interrupts?.length
+  )
+    return false;
+  const activeChildren = children.filter(
+    (child) =>
+      !child.deletedAt &&
+      child.conversationId === message.conversationId &&
+      child.parentId === message.id,
   );
+  return (
+    !activeChildren.length ||
+    activeChildren.some(
+      (child) =>
+        child.message.role === OpenAIMessageRole.USER &&
+        !child.attrs?.tool_call?.decisions?.length,
+    )
+  );
+}
+
+export function childrenByMessage(messages: Message[]): Map<string, Message[]> {
+  const children = new Map<string, Message[]>();
+  for (const message of messages) {
+    if (!message.deletedAt && message.parentId) {
+      const siblings = children.get(message.parentId) || [];
+      siblings.push(message);
+      children.set(message.parentId, siblings);
+    }
+  }
+  return children;
 }

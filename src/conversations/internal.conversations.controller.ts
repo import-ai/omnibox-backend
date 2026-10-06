@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
-import { isMessageIndexable } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 
 import { ConversationsService } from './conversations.service';
@@ -44,10 +43,11 @@ export class InternalConversationsController {
       throw new NotFoundException();
     if (forIndex === 'true')
       return {
-        indexable: isMessageIndexable(message),
+        indexable: await this.messagesService.isIndexable(message),
         message: message.message,
       };
-    if (!isMessageIndexable(message)) throw new NotFoundException();
+    if (!(await this.messagesService.isIndexable(message)))
+      throw new NotFoundException();
     const offset = Math.max(0, Number.parseInt(rawOffset || '0', 10) || 0);
     const limit = Math.max(
       1,

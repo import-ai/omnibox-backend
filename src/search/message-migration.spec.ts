@@ -1,7 +1,7 @@
 import { SearchService } from './search.service';
 
 describe('Message index migration', () => {
-  it('previews without clearing, skips uncertain assistants and retries only failed IDs', async () => {
+  it('previews without clearing, skips intermediate assistants and retries only failed IDs', async () => {
     const service = Object.create(SearchService.prototype);
     service.wizardTaskService = {
       taskRepository: { countBy: jest.fn().mockResolvedValue(0) },
@@ -28,9 +28,10 @@ describe('Message index migration', () => {
         },
         {
           id: 'final',
+          parentId: 'middle',
           userId: 'u',
           status: 'success',
-          attrs: { turn_completed: { query_id: 'q' } },
+          attrs: {},
           message: { role: 'assistant', content: 'answer' },
         },
       ]),

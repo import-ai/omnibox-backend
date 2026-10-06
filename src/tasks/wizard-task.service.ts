@@ -4,6 +4,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   isMessageIndexable,
   Message,
+  OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import {
   Resource,
@@ -400,8 +401,17 @@ export class WizardTaskService {
     conversationId: string,
     message: Message,
     tx?: Transaction,
+    children?: Message[],
   ) {
-    if (!isMessageIndexable(message)) return;
+    if (children === undefined) {
+      children =
+        message.message.role === OpenAIMessageRole.ASSISTANT
+          ? await (tx?.entityManager || this.taskRepository.manager)
+              .getRepository(Message)
+              .findBy({ parentId: message.id, conversationId })
+          : [];
+    }
+    if (!isMessageIndexable(message, children)) return;
     return this.tasksService.emitTask(
       {
         function: 'upsert_message_index',

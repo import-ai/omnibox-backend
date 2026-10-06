@@ -5,6 +5,7 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
+  childrenByMessage,
   isMessageIndexable,
   Message,
   OpenAIMessageRole,
@@ -352,6 +353,7 @@ export class SearchService {
     searchRequest.offset = 0;
     searchRequest.limit = MAX_SEARCH_LIMIT;
     const result = await this.wizardApiService.search(searchRequest);
+    const conversationChildren = new Map<string, Map<string, Message[]>>();
     const items: IndexedMessageDto[] = [];
     const conversationTitles = new Map<string, string | null>();
     const seenMessageIds = new Set<string>();
@@ -379,10 +381,21 @@ export class SearchService {
       } catch {
         continue;
       }
+      if (!conversationChildren.has(conversationId)) {
+        conversationChildren.set(
+          conversationId,
+          childrenByMessage(
+            await this.messagesService.findAll(userId, conversationId),
+          ),
+        );
+      }
       if (
         message.conversationId !== conversationId ||
         message.userId !== userId ||
-        !isMessageIndexable(message) ||
+        !isMessageIndexable(
+          message,
+          conversationChildren.get(conversationId)!.get(message.id) || [],
+        ) ||
         (message.message.role !== OpenAIMessageRole.USER &&
           message.message.role !== OpenAIMessageRole.ASSISTANT)
       ) {
@@ -754,12 +767,12 @@ export class SearchService {
         if (!conversation.userId) {
           continue;
         }
-        const messages = this.selectMessagesForIndex(
-          await this.messagesService.findAll(
-            conversation.userId,
-            conversation.id,
-          ),
+        const allMessages = await this.messagesService.findAll(
+          conversation.userId,
+          conversation.id,
         );
+        const children = childrenByMessage(allMessages);
+        const messages = this.selectMessagesForIndex(allMessages);
         for (const message of messages) {
           await this.wizardTaskService.emitUpsertMessageIndexTask(
             TASK_PRIORITY,
@@ -767,6 +780,8 @@ export class SearchService {
             conversation.namespaceId,
             conversation.id,
             message,
+            undefined,
+            children.get(message.id) || [],
           );
         }
       }
@@ -892,13 +907,15 @@ export class SearchService {
       for (const conversation of conversations) {
         if (conversation.namespaceId !== namespaceId || !conversation.userId)
           continue;
-        for (const message of await this.messagesService.findAll(
+        const messages = await this.messagesService.findAll(
           conversation.userId,
           conversation.id,
-        )) {
+        );
+        const children = childrenByMessage(messages);
+        for (const message of messages) {
           if (messageIds && !messageIds.includes(message.id)) continue;
           report.scanned++;
-          if (!isMessageIndexable(message)) {
+          if (!isMessageIndexable(message, children.get(message.id) || [])) {
             report.skipped.push(message.id);
             continue;
           }
@@ -1032,7 +1049,7 @@ export class SearchService {
               `Weaviate message sync: scanned=${stats.scanned} (synced=${stats.synced}, failed=${stats.failed}, skipped=${stats.skipped})`,
             );
           }
-          if (!this.shouldSyncMessage(message, updatedAfter)) {
+          if (updatedAfter && message.updatedAt <= updatedAfter) {
             stats.skipped += 1;
             continue;
           }
@@ -1095,15 +1112,11 @@ export class SearchService {
     return true;
   }
 
-  private shouldSyncMessage(message: Message, updatedAfter?: Date): boolean {
-    if (updatedAfter && message.updatedAt <= updatedAfter) {
-      return false;
-    }
-    return isMessageIndexable(message);
-  }
-
   private selectMessagesForIndex(messages: Message[]): Message[] {
-    return messages.filter(isMessageIndexable);
+    const children = childrenByMessage(messages);
+    return messages.filter((message) =>
+      isMessageIndexable(message, children.get(message.id) || []),
+    );
   }
 
   private async runWithConcurrency(

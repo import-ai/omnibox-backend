@@ -65,15 +65,16 @@ describe('Memory completion and retry boundaries', () => {
     },
   );
 
-  it('requires completion evidence and limits retryable task types', () => {
+  it('checks successful answers and limits retryable task types', () => {
     const message = {
       userId: 'u',
       status: 'success',
       message: { role: 'assistant', content: 'middle' },
     } as Message;
-    expect(isMessageIndexable(message)).toBe(false);
-    message.attrs = { turn_completed: { query_id: 'q', completed_at: 'now' } };
-    expect(isMessageIndexable(message)).toBe(true);
+    message.status = 'failed' as any;
+    expect(isMessageIndexable(message, [])).toBe(false);
+    message.status = 'success' as any;
+    expect(isMessageIndexable(message, [])).toBe(true);
     const canRetry = (task: any, error: any) =>
       TasksService.prototype.canRetry.call(config, task, error);
     const config = { maxRetries: 3 } as any;

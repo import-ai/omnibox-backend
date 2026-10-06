@@ -128,6 +128,7 @@ describe('SearchService', () => {
       }),
     };
     const messagesService = {
+      findAll: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockImplementation((id: string) => {
         const messages: Record<string, any> = {
           'message-one': {
@@ -141,9 +142,7 @@ describe('SearchService', () => {
             conversationId,
             userId,
             status: 'success',
-            attrs: {
-              turn_completed: { query_id: 'query', completed_at: 'now' },
-            },
+            attrs: {},
             message: { role: 'assistant', content: 'Another matched message' },
           },
           'message-pagination-one': {

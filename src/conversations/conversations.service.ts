@@ -10,6 +10,7 @@ import {
 import { ConversationSummaryDto } from 'omniboxd/conversations/dto/conversation-summary.dto';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import {
+  childrenByMessage,
   Message,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
@@ -375,6 +376,7 @@ export class ConversationsService {
   async restore(namespaceId: string, userId: string, conversationId: string) {
     await this.findOneForUserInNamespace(conversationId, userId, namespaceId);
     const messages = await this.messagesService.findAll(userId, conversationId);
+    const children = childrenByMessage(messages);
     return await transaction(this.dataSource.manager, async (tx) => {
       for (const message of messages) {
         await this.wizardTaskService.emitUpsertMessageIndexTask(
@@ -384,6 +386,7 @@ export class ConversationsService {
           conversationId,
           message,
           tx,
+          children.get(message.id) || [],
         );
       }
       const manager = tx.entityManager;

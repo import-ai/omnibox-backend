@@ -25,11 +25,12 @@ describe('History retrieval contract', () => {
       }),
     };
     service.messagesService = {
+      findAll: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue({
         conversationId: 'c',
         userId: 'u',
         status: 'success',
-        attrs: { turn_completed: { query_id: 'q' } },
+        attrs: {},
         message: { role: 'assistant', content: full },
       }),
     };

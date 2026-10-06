@@ -1,7 +1,12 @@
 # Message index migration
 
 This is a manual, namespace-scoped operation. It never changes messages or resource chunks.
-Old assistants without `attrs.turn_completed` are skipped; EOS success is not completion evidence.
+Both old and new assistants qualify when they have a user, non-empty content, success status,
+no tool calls or approval interrupts, and either no active children or an ordinary user child.
+Approval decisions do not count as a new user query. Relations are scoped to the same conversation;
+soft-deleted messages are ignored. Each branch is evaluated independently. Live indexing still waits
+for a successful `done`; migration accepts successful historical answer boundaries without that event.
+No completion attribute or schema migration is required.
 
 1. Deploy the new Backend, Backend Pro core, Wizard and shared types. Drain old instances.
 2. Disable `upsert_message_index` on **every** worker using the existing `OBW_TASK_FUNCTIONS` setting,
@@ -26,3 +31,11 @@ python3 scripts/rebuild-message-index.py --backend "$BACKEND_URL" --namespace-id
 During rebuilding, search may be incomplete. Automatic recall must degrade without blocking chat.
 For rollback, disable memory/recall and retain the new finality guard and eligibility-aware consumers;
 do not restore old per-assistant writers against the rebuilt index. No startup migration is installed.
+
+For all active namespaces, POST `/internal/api/v1/rebuild_all_message_indexes` with
+`{"apply":false}` to preview and `{"apply":true}` to rebuild. An optional `namespace_ids`
+array restricts the operation. Save `namespaces` and `errors` from the response.
+
+Deploy Wizard Pro's parent-chain memory reader before Backend Pro stops writing the old completion
+attribute. Then deploy Backend and Backend Pro with matching core references, drain old instances,
+and rebuild with the regular Wizard worker stopped. Historical rebuilding never creates memory tasks.

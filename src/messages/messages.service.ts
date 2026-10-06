@@ -10,6 +10,7 @@ import { Conversation } from 'omniboxd/conversations/entities/conversation.entit
 import { agentTokenDeltaOf } from 'omniboxd/messages/agent-token-usage';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import {
+  isMessageIndexable,
   Message,
   MessageStatus,
   OpenAIMessage,
@@ -17,6 +18,7 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { queryTime } from 'omniboxd/messages/query-time';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
@@ -70,9 +72,7 @@ export class MessagesService {
       conversationId,
       userId,
       parentId: dto.parentId,
-      attrs: dto.attrs
-        ? { ...dto.attrs, turn_completed: undefined }
-        : dto.attrs,
+      attrs: dto.attrs,
       status: dto.status,
     });
     return await transaction(this.dataSource.manager, async (tx) => {
@@ -217,6 +217,19 @@ export class MessagesService {
     });
   }
 
+  async isIndexable(message: Message, tx?: Transaction): Promise<boolean> {
+    const repo =
+      tx?.entityManager.getRepository(Message) || this.messageRepository;
+    const children =
+      message.message.role === OpenAIMessageRole.ASSISTANT
+        ? await repo.findBy({
+            parentId: message.id,
+            conversationId: message.conversationId,
+          })
+        : [];
+    return isMessageIndexable(message, children);
+  }
+
   async indexFinalAssistant(
     id: string,
     namespaceId: string,
@@ -230,44 +243,32 @@ export class MessagesService {
         lock: { mode: 'pessimistic_write' },
       });
       if (
-        !message.userId ||
-        message.status !== MessageStatus.SUCCESS ||
         message.message.role !== OpenAIMessageRole.ASSISTANT ||
-        message.attrs?.turn_completed ||
-        message.attrs?.tool_call?.interrupts?.length ||
-        message.message.tool_calls?.length
+        !(await this.isIndexable(message, tx))
       )
         return;
-      let query: Message | null = message;
-      const visited = new Set<string>();
-      while (
-        query &&
-        !(
-          query.message.role === OpenAIMessageRole.USER &&
-          !query.attrs?.tool_call?.decisions?.length
-        )
-      ) {
-        if (!query.parentId || visited.has(query.id)) return;
-        visited.add(query.id);
-        query = await repo.findOneBy({ id: query.parentId, conversationId });
+      const taskRepo = tx.entityManager.getRepository(Task);
+      const alreadyEnqueued = await taskRepo
+        .createQueryBuilder('task')
+        .withDeleted()
+        .where('task.function = :function', {
+          function: 'upsert_message_index',
+        })
+        .andWhere("task.input ->> 'conversation_id' = :conversationId", {
+          conversationId,
+        })
+        .andWhere("task.input ->> 'message_id' = :id", { id })
+        .getExists();
+      if (!alreadyEnqueued) {
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
+          TASK_PRIORITY,
+          message.userId!,
+          namespaceId,
+          conversationId,
+          message,
+          tx,
+        );
       }
-      if (!query) return;
-      message.attrs = {
-        ...message.attrs,
-        turn_completed: {
-          query_id: query.id,
-          completed_at: new Date().toISOString(),
-        },
-      };
-      await repo.save(message);
-      await this.wizardTaskService.emitUpsertMessageIndexTask(
-        TASK_PRIORITY,
-        message.userId,
-        namespaceId,
-        conversationId,
-        message,
-        tx,
-      );
       await onCompleted?.(tx);
     });
   }

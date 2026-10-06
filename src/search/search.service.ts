@@ -772,8 +772,7 @@ export class SearchService {
           conversation.id,
         );
         const children = childrenByMessage(allMessages);
-        const messages = this.selectMessagesForIndex(allMessages);
-        for (const message of messages) {
+        for (const message of allMessages) {
           await this.wizardTaskService.emitUpsertMessageIndexTask(
             TASK_PRIORITY,
             conversation.userId,

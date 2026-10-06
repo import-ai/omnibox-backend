@@ -452,25 +452,55 @@ describe('SearchController (e2e)', () => {
       expect(response.body).toEqual([]);
     });
 
-    it('excludes assistant messages without completed-turn evidence', async () => {
-      const messages = app.get(MessagesService);
-      const message = await messages.findOne(
-        '550e8400-e29b-41d4-a716-446655440002',
-      );
-      jest.spyOn(messages, 'findOne').mockResolvedValueOnce({
-        ...message,
-        message: { ...message.message, role: OpenAIMessageRole.ASSISTANT },
-      });
+    it.each([false, true])(
+      'returns historical final answers and excludes intermediate assistants (has assistant child: %s)',
+      async (hasAssistantChild) => {
+        const messages = app.get(MessagesService);
+        const message = await messages.findOne(
+          '550e8400-e29b-41d4-a716-446655440002',
+        );
+        jest.spyOn(messages, 'findOne').mockResolvedValueOnce({
+          ...message,
+          message: { ...message.message, role: OpenAIMessageRole.ASSISTANT },
+        });
 
-      const response = await request(app.getHttpServer())
-        .get(
-          `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
-        )
-        .set('user', JSON.stringify(mockUser))
-        .expect(HttpStatus.OK);
+        jest.spyOn(messages, 'findAll').mockResolvedValueOnce(
+          hasAssistantChild
+            ? [
+                {
+                  ...message,
+                  id: '550e8400-e29b-41d4-a716-446655440003',
+                  parentId: message.id,
+                  message: {
+                    ...message.message,
+                    role: OpenAIMessageRole.ASSISTANT,
+                  },
+                },
+              ]
+            : [],
+        );
 
-      expect(response.body).toEqual([]);
-    });
+        const response = await request(app.getHttpServer())
+          .get(
+            `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
+          )
+          .set('user', JSON.stringify(mockUser))
+          .expect(HttpStatus.OK);
+
+        expect(response.body).toEqual(
+          hasAssistantChild
+            ? []
+            : [
+                expect.objectContaining({
+                  message_id: message.id,
+                  conversation_id: message.conversationId,
+                  role: 'assistant',
+                  content: message.message.content,
+                }),
+              ],
+        );
+      },
+    );
 
     it('should handle missing query parameter', async () => {
       const response = await request(app.getHttpServer())

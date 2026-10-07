@@ -15,18 +15,42 @@ No completion attribute or schema migration is required.
    disabled functions are still polled and their tasks fail instead of remaining pending.
    Keep workers stopped throughout rebuild and retries; new chat tasks remain pending.
    Also stop legacy direct backfills.
-3. Preview each namespace (use the internal Backend address, not the gateway):
+3. Preview a namespace through the internal Backend address, not the gateway. These commands
+   use `curl` and `jq`; set `BACKEND_URL` and `NAMESPACE_ID` first.
 
 ```sh
-python3 scripts/rebuild-message-index.py --backend "$BACKEND_URL" --namespace-id "$NAMESPACE_ID" --report preview.json
+jq -n --arg namespace_id "$NAMESPACE_ID" '{namespace_id: $namespace_id, apply: false}' |
+  curl --fail-with-body --silent --show-error --max-time 3600 \
+    -H 'Content-Type: application/json' --data-binary @- \
+    "$BACKEND_URL/internal/api/v1/rebuild_message_index" --output preview.json
 ```
 
-4. Apply with `--apply --report applied.json`. The service rejects running tasks, clears only
-   `type=message` in that namespace, verifies deletion completion and rebuilds eligible messages.
-   Preview `synced` IDs mean eligible, not already written. Reports contain IDs only.
-5. Retry failures with `--apply --retry-failed applied.json --report retried.json`.
-   This mode does not clear the namespace. Preserve each report. A transport interruption requires
-   keeping consumption paused and rerunning the full apply (idempotent); do not assume success.
+4. Apply the rebuild. The service rejects running tasks, clears only `type=message` in that
+   namespace, verifies deletion completion and rebuilds eligible messages. Preview `synced`
+   IDs mean eligible, not already written. Reports contain IDs only.
+
+```sh
+jq -n --arg namespace_id "$NAMESPACE_ID" '{namespace_id: $namespace_id, apply: true}' |
+  curl --fail-with-body --silent --show-error --max-time 3600 \
+    -H 'Content-Type: application/json' --data-binary @- \
+    "$BACKEND_URL/internal/api/v1/rebuild_message_index" --output applied.json
+jq -e '.failed | length == 0' applied.json
+```
+
+5. Retry only failed messages using the namespace recorded in the saved report:
+
+```sh
+jq -e 'select((.namespace_id | type) == "string" and (.failed | type) == "array") |
+  {namespace_id, apply: true, message_ids: .failed}' applied.json |
+  curl --fail-with-body --silent --show-error --max-time 3600 \
+    -H 'Content-Type: application/json' --data-binary @- \
+    "$BACKEND_URL/internal/api/v1/rebuild_message_index" --output retried.json
+jq -e '.failed | length == 0' retried.json
+```
+
+   This mode does not clear the namespace. Preserve each report; for another retry, use the
+   latest report as input and a new output filename. A transport interruption requires keeping
+   consumption paused and rerunning the full apply (idempotent); do not assume success.
 6. Check successful/failed/skipped counts and sample searches; verify resource chunks are unchanged.
    Restore the saved worker replica count only after failures are resolved. Pending tasks revalidate eligibility
    against Backend before writing, so legacy intermediate-message tasks cannot repopulate the index.

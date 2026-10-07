@@ -230,6 +230,50 @@ export class MessagesService {
     return isMessageIndexable(message, children);
   }
 
+  async completedTurn(message: Message, tx?: Transaction) {
+    if (
+      message.message.role !== OpenAIMessageRole.ASSISTANT ||
+      !(await this.isIndexable(message, tx))
+    )
+      return null;
+    const repo =
+      tx?.entityManager.getRepository(Message) || this.messageRepository;
+    let current: Message | null = message;
+    let memoryWriteAttempt = false;
+    const visited = new Set<string>();
+    while (current) {
+      if (
+        visited.has(current.id) ||
+        current.conversationId !== message.conversationId ||
+        current.userId !== message.userId
+      )
+        return null;
+      visited.add(current.id);
+      if (
+        current.message.role === OpenAIMessageRole.USER &&
+        !current.attrs?.tool_call?.decisions?.length
+      ) {
+        const serialize = (row: Message) => ({
+          id: row.id,
+          content: row.message.content || '',
+          created_at: row.createdAt,
+        });
+        return {
+          query: serialize(current),
+          assistant: serialize(message),
+          memory_write_attempt: memoryWriteAttempt,
+        };
+      }
+      memoryWriteAttempt ||= !!current.attrs?.context?.memory_write_attempt;
+      if (!current.parentId) return null;
+      current = await repo.findOneBy({
+        id: current.parentId,
+        conversationId: message.conversationId,
+      });
+    }
+    return null;
+  }
+
   async indexFinalAssistant(
     id: string,
     namespaceId: string,

@@ -16,6 +16,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 import { MessageIndexMigrationController } from './message-index-migration.controller';
 import { MessageIndexMigrationService } from './message-index-migration.service';
 import {
+  InternalConversationMessageSearchController,
   InternalNamespaceSearchController,
   InternalSearchController,
   SearchController,
@@ -37,6 +38,7 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
     SearchController,
     MessageIndexMigrationController,
     InternalSearchController,
+    InternalConversationMessageSearchController,
     InternalNamespaceSearchController,
   ],
   imports: [

@@ -329,7 +329,9 @@ export class SearchService {
     },
   ) {
     const items = await this.searchMessages(userId, namespaceId, query, {
-      excludeConversationId: options.excludeConversationId,
+      excludeConversationIds: options.excludeConversationId
+        ? [options.excludeConversationId]
+        : undefined,
       limit: MAX_SEARCH_LIMIT,
     });
     const offset = options.offset ?? 0;
@@ -345,6 +347,8 @@ export class SearchService {
       limit?: number;
       offset?: number;
       excludeConversationId?: string;
+      conversationIds?: string[];
+      excludeConversationIds?: string[];
     },
   ): Promise<IndexedMessageDto[]> {
     if (
@@ -362,7 +366,18 @@ export class SearchService {
     searchRequest.userId = userId;
     searchRequest.type = IndexRecordType.MESSAGE;
     searchRequest.offset = 0;
-    searchRequest.limit = MAX_SEARCH_LIMIT;
+    searchRequest.limit = history
+      ? (history.offset ?? 0) + (history.limit ?? 10)
+      : MAX_SEARCH_LIMIT;
+    const excluded =
+      history?.excludeConversationIds ??
+      (history?.excludeConversationId ? [history.excludeConversationId] : []);
+    const included = history?.conversationIds?.length
+      ? history.conversationIds.filter((id) => !excluded.includes(id))
+      : undefined;
+    if (included && !included.length) return [];
+    searchRequest.conversationIds = included;
+    searchRequest.excludeConversationIds = excluded;
     const result = await this.wizardApiService.search(searchRequest);
     const conversationChildren = new Map<string, Map<string, Message[]>>();
     const items: IndexedMessageDto[] = [];
@@ -381,7 +396,8 @@ export class SearchService {
       if (
         !messageId ||
         seenMessageIds.has(identity) ||
-        conversationId === history?.excludeConversationId
+        excluded.includes(conversationId) ||
+        (included !== undefined && !included.includes(conversationId))
       ) {
         continue;
       }

@@ -54,6 +54,26 @@ describe('History retrieval contract', () => {
         excludeConversationId: 'c',
       }),
     ).toEqual([]);
+    await service.searchMessages('u', 'n', '饮食偏好', {
+      conversationIds: ['c', 'other'],
+      excludeConversationIds: ['other'],
+      limit: 3,
+    });
+    expect(service.wizardApiService.search).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        conversationIds: ['c'],
+        excludeConversationIds: ['other'],
+        limit: 3,
+      }),
+    );
+    service.wizardApiService.search.mockClear();
+    expect(
+      await service.searchMessages('u', 'n', 'q', {
+        conversationIds: ['c'],
+        excludeConversationIds: ['c'],
+      }),
+    ).toEqual([]);
+    expect(service.wizardApiService.search).not.toHaveBeenCalled();
     const record = (await service.wizardApiService.search()).records[0];
     service.wizardApiService.search.mockResolvedValue({
       records: [

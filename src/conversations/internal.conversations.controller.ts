@@ -46,7 +46,7 @@ export class InternalConversationsController {
         indexable: await this.messagesService.isIndexable(message),
         message: message.message,
       };
-    if (!(await this.messagesService.isIndexable(message)))
+    if (!['user', 'assistant', 'tool'].includes(message.message.role))
       throw new NotFoundException();
     const offset = Math.max(0, Number.parseInt(rawOffset || '0', 10) || 0);
     const limit = Math.max(
@@ -64,6 +64,29 @@ export class InternalConversationsController {
       total: content.length,
       created_at: message.createdAt,
     };
+  }
+
+  @Public()
+  @Get(':id/messages/:messageId/completed-turn')
+  async completedTurn(
+    @Param('namespaceId') namespaceId: string,
+    @Param('id') conversationId: string,
+    @Param('messageId') messageId: string,
+    @HeaderUserId() userId: string,
+  ) {
+    await this.conversationsService.findOneForUserInNamespace(
+      conversationId,
+      userId,
+      namespaceId,
+    );
+    const message = await this.messagesService.findNullable(messageId);
+    if (
+      !message ||
+      message.conversationId !== conversationId ||
+      message.userId !== userId
+    )
+      throw new NotFoundException();
+    return { turn: await this.messagesService.completedTurn(message) };
   }
 
   @Public()

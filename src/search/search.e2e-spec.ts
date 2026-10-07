@@ -42,6 +42,7 @@ import { DocType } from './doc-type.enum';
 import { MessageIndexMigrationController } from './message-index-migration.controller';
 import { MessageIndexMigrationService } from './message-index-migration.service';
 import {
+  InternalConversationMessageSearchController,
   InternalNamespaceSearchController,
   InternalSearchController,
   SearchController,
@@ -124,6 +125,7 @@ describe('SearchController (e2e)', () => {
         OpenSearchController,
         InternalSearchController,
         InternalNamespaceSearchController,
+        InternalConversationMessageSearchController,
         MessageIndexMigrationController,
       ],
       providers: [
@@ -530,6 +532,32 @@ describe('SearchController (e2e)', () => {
           message_id: '550e8400-e29b-41d4-a716-446655440002',
         }),
       ]);
+    });
+
+    it('applies conversation scope on the new top-k endpoint without a total', async () => {
+      const conversationId = '550e8400-e29b-41d4-a716-446655440001';
+      const response = await request(app.getHttpServer())
+        .post(
+          `/internal/api/v1/namespaces/${mockNamespaceId}/conversations/messages/search`,
+        )
+        .set('x-user-id', mockUser.id)
+        .send({ query: 'test', conversation_ids: [conversationId], limit: 1 })
+        .expect(HttpStatus.CREATED);
+      expect(response.body).toEqual({
+        items: [expect.objectContaining({ conversation_id: conversationId })],
+      });
+      const excluded = await request(app.getHttpServer())
+        .post(
+          `/internal/api/v1/namespaces/${mockNamespaceId}/conversations/messages/search`,
+        )
+        .set('x-user-id', mockUser.id)
+        .send({
+          query: 'test',
+          conversation_ids: [conversationId],
+          exclude_conversation_ids: [conversationId],
+        })
+        .expect(HttpStatus.CREATED);
+      expect(excluded.body).toEqual({ items: [] });
     });
 
     it('should handle missing query parameter', async () => {

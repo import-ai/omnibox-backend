@@ -1,11 +1,9 @@
-import { SearchService } from './search.service';
+import { MessageIndexMigrationService } from './message-index-migration.service';
 
 describe('Message index migration', () => {
   it('previews without clearing, skips intermediate assistants and retries only failed IDs', async () => {
-    const service = Object.create(SearchService.prototype);
-    service.wizardTaskService = {
-      taskRepository: { countBy: jest.fn().mockResolvedValue(0) },
-    };
+    const service = Object.create(MessageIndexMigrationService.prototype);
+    service.taskRepository = { countBy: jest.fn().mockResolvedValue(0) };
     service.wizardApiService = {
       clearMessageIndex: jest.fn().mockResolvedValue({ deleted: 3 }),
       upsertWeaviateMessage: jest.fn().mockResolvedValue({ success: true }),
@@ -48,12 +46,12 @@ describe('Message index migration', () => {
     expect(
       service.wizardApiService.upsertWeaviateMessage,
     ).toHaveBeenCalledTimes(1);
-    service.wizardTaskService.taskRepository.countBy.mockResolvedValue(1);
+    service.taskRepository.countBy.mockResolvedValue(1);
     await expect(service.rebuildMessageIndex('n', true)).rejects.toThrow();
   });
 
   it('runs the same migration once per selected namespace', async () => {
-    const service = Object.create(SearchService.prototype);
+    const service = Object.create(MessageIndexMigrationService.prototype);
     service.namespaceRepository = {
       find: jest.fn().mockResolvedValue([{ id: 'a' }, { id: 'b' }]),
     };
@@ -77,7 +75,7 @@ describe('Message index migration', () => {
   });
 
   it('rejects unknown namespace filters before applying any migration', async () => {
-    const service = Object.create(SearchService.prototype);
+    const service = Object.create(MessageIndexMigrationService.prototype);
     service.namespaceRepository = {
       find: jest.fn().mockResolvedValue([{ id: 'a' }]),
     };

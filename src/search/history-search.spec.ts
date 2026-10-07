@@ -54,6 +54,23 @@ describe('History retrieval contract', () => {
         excludeConversationId: 'c',
       }),
     ).toEqual([]);
+    const record = (await service.wizardApiService.search()).records[0];
+    service.wizardApiService.search.mockResolvedValue({
+      records: [
+        record,
+        { ...record, message: { ...record.message, chunkIndex: 21 } },
+      ],
+    });
+    const page = await service.searchHistory('u', 'n', '饮食偏好', {
+      offset: 1,
+      limit: 1,
+    });
+    expect(page.total).toBe(2);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].chunkIndex).toBe(21);
+    expect(
+      await service.searchHistory('u', 'n', '饮食偏好', { offset: 2 }),
+    ).toEqual({ items: [], total: 2 });
     service.messagesService.findOne.mockResolvedValue({
       conversationId: 'c',
       userId: 'other',

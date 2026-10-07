@@ -39,7 +39,10 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import * as request from 'supertest';
 
 import { DocType } from './doc-type.enum';
+import { MessageIndexMigrationController } from './message-index-migration.controller';
+import { MessageIndexMigrationService } from './message-index-migration.service';
 import {
+  InternalNamespaceSearchController,
   InternalSearchController,
   SearchController,
 } from './search.controller';
@@ -120,9 +123,22 @@ describe('SearchController (e2e)', () => {
         SearchController,
         OpenSearchController,
         InternalSearchController,
+        InternalNamespaceSearchController,
+        MessageIndexMigrationController,
       ],
       providers: [
         SearchService,
+        {
+          provide: MessageIndexMigrationService,
+          useValue: {
+            rebuildMessageIndex: jest
+              .fn()
+              .mockResolvedValue({ namespace_id: 'n' }),
+            rebuildAllMessageIndexes: jest
+              .fn()
+              .mockResolvedValue({ namespace_count: 1 }),
+          },
+        },
         SearchResourceFilterService,
         SearchCandidateService,
         OpenSearchService,
@@ -502,6 +518,20 @@ describe('SearchController (e2e)', () => {
       },
     );
 
+    it('returns an internal history page with a total and preserves the public response', async () => {
+      const response = await request(app.getHttpServer())
+        .post(`/internal/api/v1/namespaces/${mockNamespaceId}/search`)
+        .set('x-user-id', mockUser.id)
+        .send({ query: 'test', offset: 0, limit: 1 })
+        .expect(HttpStatus.CREATED);
+      expect(response.body.total).toBe(1);
+      expect(response.body.items).toEqual([
+        expect.objectContaining({
+          message_id: '550e8400-e29b-41d4-a716-446655440002',
+        }),
+      ]);
+    });
+
     it('should handle missing query parameter', async () => {
       const response = await request(app.getHttpServer())
         .get(`/api/v1/namespaces/${mockNamespaceId}/search`)
@@ -664,6 +694,27 @@ describe('SearchController (e2e)', () => {
       });
       expect((result[0] as any).conversationId).toBeUndefined();
     });
+  });
+
+  it('preserves migration routes and snake_case request fields after extraction', async () => {
+    const one = jest.spyOn(
+      app.get(MessageIndexMigrationService),
+      'rebuildMessageIndex',
+    );
+    const all = jest.spyOn(
+      app.get(MessageIndexMigrationService),
+      'rebuildAllMessageIndexes',
+    );
+    await request(app.getHttpServer())
+      .post('/internal/api/v1/rebuild_message_index')
+      .send({ namespace_id: 'n', apply: true, message_ids: ['m'] })
+      .expect(HttpStatus.CREATED);
+    expect(one).toHaveBeenCalledWith('n', true, ['m']);
+    await request(app.getHttpServer())
+      .post('/internal/api/v1/rebuild_all_message_indexes')
+      .send({ apply: false, namespace_ids: ['n'] })
+      .expect(HttpStatus.CREATED);
+    expect(all).toHaveBeenCalledWith(false, ['n']);
   });
 
   describe('POST /internal/api/v1/refresh_index', () => {

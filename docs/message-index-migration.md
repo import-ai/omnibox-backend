@@ -9,9 +9,12 @@ for a successful `done`; migration accepts successful historical answer boundari
 No completion attribute or schema migration is required.
 
 1. Deploy the new Backend, Backend Pro core, Wizard and shared types. Drain old instances.
-2. Disable `upsert_message_index` on **every** worker using the existing `OBW_TASK_FUNCTIONS` setting,
-   restart those workers and wait until no running message index tasks remain. Keep it disabled
-   throughout rebuild and retries. Chat persists new tasks normally. Also stop legacy direct backfills.
+2. Record the replica count and stop **every regular Wizard worker** (`omnibox-wizard-worker`).
+   Wait for the workers to exit and confirm no running message index tasks remain. Keep the Wizard
+   API available for vector operations. Do not disable the function through `OBW_TASK_FUNCTIONS`:
+   disabled functions are still polled and their tasks fail instead of remaining pending.
+   Keep workers stopped throughout rebuild and retries; new chat tasks remain pending.
+   Also stop legacy direct backfills.
 3. Preview each namespace (use the internal Backend address, not the gateway):
 
 ```sh
@@ -25,7 +28,7 @@ python3 scripts/rebuild-message-index.py --backend "$BACKEND_URL" --namespace-id
    This mode does not clear the namespace. Preserve each report. A transport interruption requires
    keeping consumption paused and rerunning the full apply (idempotent); do not assume success.
 6. Check successful/failed/skipped counts and sample searches; verify resource chunks are unchanged.
-   Restore worker functions only after failures are resolved. Pending tasks revalidate eligibility
+   Restore the saved worker replica count only after failures are resolved. Pending tasks revalidate eligibility
    against Backend before writing, so legacy intermediate-message tasks cannot repopulate the index.
 
 During rebuilding, search may be incomplete. Automatic recall must degrade without blocking chat.
@@ -39,3 +42,8 @@ array restricts the operation. Save `namespaces` and `errors` from the response.
 Deploy Wizard Pro's parent-chain memory reader before Backend Pro stops writing the old completion
 attribute. Then deploy Backend and Backend Pro with matching core references, drain old instances,
 and rebuild with the regular Wizard worker stopped. Historical rebuilding never creates memory tasks.
+
+For the internal history-search response upgrade, deploy Wizard Pro first (it accepts both
+legacy arrays and the new `{items, total}` response), then Backend and Backend Pro core.
+The public message-search response is unchanged. `total` counts eligible hits in the bounded
+search candidate set, not every matching vector in the database.

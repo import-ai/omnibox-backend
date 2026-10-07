@@ -1780,7 +1780,7 @@ export class NamespaceResourcesService {
         !tx
       ) {
         throw new AppException(
-          'content and expected_content_hash must be submitted together',
+          this.i18n.t('resource.errors.invalidContentHashUpdate'),
           'INVALID_CONTENT_HASH_UPDATE',
           HttpStatus.BAD_REQUEST,
         );

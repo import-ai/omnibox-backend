@@ -13,6 +13,8 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
+import { MessageIndexMigrationController } from './message-index-migration.controller';
+import { MessageIndexMigrationService } from './message-index-migration.service';
 import {
   InternalNamespaceSearchController,
   InternalSearchController,
@@ -26,12 +28,14 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
   exports: [SearchService, OpenSearchService],
   providers: [
     SearchService,
+    MessageIndexMigrationService,
     SearchResourceFilterService,
     SearchCandidateService,
     OpenSearchService,
   ],
   controllers: [
     SearchController,
+    MessageIndexMigrationController,
     InternalSearchController,
     InternalNamespaceSearchController,
   ],

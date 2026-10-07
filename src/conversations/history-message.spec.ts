@@ -60,3 +60,30 @@ it('does not expose system messages through history reads', async () => {
     controller.readMessage('n', 'c', 'm', 'u'),
   ).rejects.toMatchObject({ status: 404 });
 });
+
+it('pages long answers using character offsets without returning the full answer', async () => {
+  const content = '🙂'.repeat(9000);
+  const controller = new InternalConversationsController(
+    { findOneForUserInNamespace: jest.fn().mockResolvedValue({}) } as any,
+    {
+      findNullable: jest.fn().mockResolvedValue({
+        conversationId: 'c',
+        userId: 'u',
+        message: { role: 'assistant', content },
+      }),
+    } as any,
+  );
+  const first = await controller.readMessage('n', 'c', 'm', 'u');
+  const second = await controller.readMessage('n', 'c', 'm', 'u', '4000');
+  const last = await controller.readMessage('n', 'c', 'm', 'u', '8000');
+  expect(first).toMatchObject({
+    content: '🙂'.repeat(4000),
+    next_offset: 4000,
+    total: 9000,
+  });
+  expect(second).toMatchObject({
+    content: '🙂'.repeat(4000),
+    next_offset: 8000,
+  });
+  expect(last).toMatchObject({ content: '🙂'.repeat(1000), next_offset: null });
+});

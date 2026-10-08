@@ -14,9 +14,11 @@ import { Response } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
+import { RequireCaptcha } from 'omniboxd/captcha/captcha.decorator';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { RateLimitByIp } from 'omniboxd/rate-limit/rate-limit.decorator';
 
 import {
   SendEmailOtpDto,
@@ -61,6 +63,8 @@ export class AuthController {
   }
 
   @Public()
+  @RequireCaptcha()
+  @RateLimitByIp()
   @Post('auth/send-otp')
   @HttpCode(200)
   async sendEmailOtp(
@@ -71,6 +75,8 @@ export class AuthController {
   }
 
   @Public()
+  @RequireCaptcha()
+  @RateLimitByIp()
   @Post('auth/send-signup-otp')
   @HttpCode(200)
   async sendSignupOtp(
@@ -135,6 +141,8 @@ export class AuthController {
   }
 
   @Public()
+  @RequireCaptcha()
+  @RateLimitByIp()
   @Post('auth/send-phone-otp')
   @HttpCode(200)
   async sendPhoneOtp(
@@ -144,6 +152,8 @@ export class AuthController {
   }
 
   @Public()
+  @RequireCaptcha()
+  @RateLimitByIp()
   @Post('auth/send-signup-phone-otp')
   @HttpCode(200)
   async sendSignupPhoneOtp(

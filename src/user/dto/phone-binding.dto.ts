@@ -1,5 +1,6 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsString, Length } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, Length } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import { IsValidPhone } from 'omniboxd/common/validators';
 
@@ -22,6 +23,15 @@ export class SendPhoneCodeRequestDto {
     message: i18nValidationMessage('validation.errors.phone.invalid'),
   })
   phone: string;
+
+  @ApiProperty({
+    description:
+      'Aliyun Captcha 2.0 verify param produced by the client SDK (required when captcha is enabled)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  captcha_verify_param?: string;
 }
 
 export class BindPhoneRequestDto extends SendPhoneCodeRequestDto {

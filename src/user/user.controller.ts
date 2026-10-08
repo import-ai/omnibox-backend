@@ -13,8 +13,10 @@ import {
 } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { RequireCaptcha } from 'omniboxd/captcha/captcha.decorator';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { RateLimitByIp } from 'omniboxd/rate-limit/rate-limit.decorator';
 import { CreateUserOptionDto } from 'omniboxd/user/dto/create-user-option.dto';
 import {
   ConfirmAccountDeletionDto,
@@ -57,6 +59,8 @@ export class UserController {
   async wxProfile(@UserId() userId: string) {
     return await this.userService.find(userId);
   }
+  @RequireCaptcha()
+  @RateLimitByIp()
   @Post('email/validate')
   async validateEmail(@UserId() userId: string, @Body() dto: ValidateEmailDto) {
     const result = await this.userService.validateEmail(userId, dto.email);
@@ -67,6 +71,8 @@ export class UserController {
     };
   }
 
+  @RequireCaptcha()
+  @RateLimitByIp()
   @Post('phone/send-code')
   @HttpCode(200)
   async sendPhoneCode(

@@ -3,6 +3,7 @@ import { JsonWebTokenError, JwtService, TokenExpiredError } from '@nestjs/jwt';
 import { I18nService } from 'nestjs-i18n';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { ContactRateLimiter } from 'omniboxd/rate-limit/contact-rate-limiter.service';
 
 type DeliveryChannel = 'email' | 'sms';
 
@@ -14,28 +15,21 @@ interface OtpRecord {
   attempts: number;
 }
 
-interface RateLimitRecord {
-  count: number;
-  resetAt: number;
-}
-
 @Injectable()
 export class OtpService {
   // Namespaces for cache keys
   private readonly otpNamespace = '/otp/codes';
-  private readonly rateLimitNamespace = '/otp/rate-limits';
 
   // Configuration
   private readonly OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
   private readonly MAX_ATTEMPTS = 5;
-  private readonly RATE_LIMIT_MAX = 3; // max sends per window
-  private readonly RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
   private readonly MAGIC_LINK_EXPIRY = '5m'; // JWT expiry
 
   constructor(
     private jwtService: JwtService,
     private cacheService: CacheService,
     private i18n: I18nService,
+    private contactRateLimiter: ContactRateLimiter,
   ) {}
 
   /**
@@ -46,46 +40,6 @@ export class OtpService {
   }
 
   /**
-   * Check rate limiting for contact (email or phone)
-   */
-  private async checkRateLimit(contact: string): Promise<void> {
-    const now = Date.now();
-    const record = await this.cacheService.get<RateLimitRecord>(
-      this.rateLimitNamespace,
-      contact,
-    );
-
-    if (!record || now > record.resetAt) {
-      // Create new rate limit window
-      const newRecord: RateLimitRecord = {
-        count: 1,
-        resetAt: now + this.RATE_LIMIT_WINDOW_MS,
-      };
-      await this.cacheService.set(
-        this.rateLimitNamespace,
-        contact,
-        newRecord,
-        this.RATE_LIMIT_WINDOW_MS,
-      );
-      return;
-    }
-
-    if (record.count >= this.RATE_LIMIT_MAX) {
-      const remainingMinutes = Math.ceil((record.resetAt - now) / 60000);
-      throw new BadRequestException(
-        this.i18n.t('auth.errors.tooManyOtpRequests', {
-          args: { minutes: remainingMinutes },
-        }),
-      );
-    }
-
-    // Increment count
-    record.count++;
-    const ttl = record.resetAt - now;
-    await this.cacheService.set(this.rateLimitNamespace, contact, record, ttl);
-  }
-
-  /**
    * Generate and store OTP for contact (email or phone)
    * Returns the OTP code and magic link token
    */
@@ -93,7 +47,7 @@ export class OtpService {
     contact: string,
     channel: DeliveryChannel = 'email',
   ): Promise<{ code: string; magicToken: string }> {
-    await this.checkRateLimit(contact);
+    await this.contactRateLimiter.consume(contact);
 
     const code = this.generateCode();
     const now = Date.now();

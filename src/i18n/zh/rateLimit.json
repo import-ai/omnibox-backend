@@ -1,0 +1,5 @@
+{
+  "errors": {
+    "tooManyRequests": "当前网络的验证码请求过多，请在 {minutes} 分钟后重试。"
+  }
+}

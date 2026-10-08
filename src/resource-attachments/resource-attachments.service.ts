@@ -13,7 +13,7 @@ import {
   numberToBigintString,
 } from 'omniboxd/utils/bigint-utils';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
-import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
+import { DataSource, In, IsNull, Not, Raw, Repository } from 'typeorm';
 
 @Injectable()
 export class ResourceAttachmentsService {
@@ -49,11 +49,32 @@ export class ResourceAttachmentsService {
     resourceId: string,
     attachmentId: string,
   ) {
-    const relation = await this.getResourceAttachment(
+    let relation = await this.getResourceAttachment(
       namespaceId,
       resourceId,
       attachmentId,
     );
+    if (!relation && attachmentId && !attachmentId.includes('.')) {
+      const matches = await this.resourceAttachmentRepository.find({
+        where: {
+          namespaceId,
+          resourceId,
+          attachmentId: Raw(
+            (column) => `split_part(${column}, '.', 1) = :attachmentStem`,
+            { attachmentStem: attachmentId },
+          ),
+        },
+        take: 2,
+      });
+      if (matches.length > 1) {
+        throw new AppException(
+          this.i18n.t('attachment.errors.attachmentIdAmbiguous'),
+          'ATTACHMENT_ID_AMBIGUOUS',
+          HttpStatus.CONFLICT,
+        );
+      }
+      relation = matches[0] ?? null;
+    }
     if (!relation) {
       const message = this.i18n.t('attachment.errors.attachmentNotFound');
       throw new AppException(

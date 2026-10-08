@@ -13,7 +13,6 @@ import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CacheableMemory } from 'cacheable';
 import Redis from 'ioredis';
 import { Keyv } from 'keyv';
 import {
@@ -32,7 +31,9 @@ import { ApplicationsModule } from 'omniboxd/applications/applications.module';
 import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
+import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
 import { CaptchaModule } from 'omniboxd/captcha/captcha.module';
+import { AtomicMemoryCache } from 'omniboxd/common/cache.service';
 import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { FeaturePreviewsModule } from 'omniboxd/feature-previews/feature-previews.module';
@@ -117,6 +118,7 @@ import { AllowMultipleCommentThreadsAtAnchor1788941872300 } from 'omniboxd/migra
 import { AccountCommentAttachments1789383186349 } from 'omniboxd/migrations/1789383186349-account-comment-attachments';
 import { AddNamespaceMemberNicknameAndNotes1789704000000 } from 'omniboxd/migrations/1789704000000-add-namespace-member-nickname-and-notes';
 import { AddResourceRevisions1790094055950 } from 'omniboxd/migrations/1790094055950-add-resource-revisions';
+import { AddConversationHistoryIndex1790966111694 } from 'omniboxd/migrations/1790966111694-add-conversation-history-index';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -206,6 +208,7 @@ export class AppModule implements NestModule {
         ResourceTagsModule,
         MailModule,
         AuthModule,
+        OAuthProviderModule,
         UserModule,
         APIKeyModule,
         NamespacesModule,
@@ -286,7 +289,7 @@ export class AppModule implements NestModule {
               stores: [
                 new Keyv({
                   store: isEmpty(redisUrl)
-                    ? new CacheableMemory({ ttl: 60000, lruSize: 5000 })
+                    ? new AtomicMemoryCache({ ttl: 60000, lruSize: 5000 })
                     : new KeyvRedis(redisUrl),
                 }),
               ],
@@ -304,6 +307,7 @@ export class AppModule implements NestModule {
             autoLoadEntities: true,
             maxQueryExecutionTime: config.get('OBB_DB_EXEC_TIME', 0),
             migrations: [
+              AddConversationHistoryIndex1790966111694,
               Init1751900000000,
               Tags1751905414493,
               UserOptions1751904560034,

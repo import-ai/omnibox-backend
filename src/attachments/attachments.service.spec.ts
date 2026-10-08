@@ -7,6 +7,7 @@ describe('AttachmentsService metadata', () => {
   function createService() {
     const s3Service = {
       headObject: jest.fn(),
+      getObject: jest.fn(),
       generateDownloadUrl: jest.fn(),
       hasDistinctPublicEndpoint: jest.fn().mockReturnValue(true),
     };
@@ -259,4 +260,100 @@ describe('AttachmentsService metadata', () => {
       true,
     );
   });
+  it.each([false, true])(
+    'uses the resolved ID for metadata, LLM URLs and downloads (share=%s)',
+    async (shared) => {
+      const {
+        service,
+        s3Service,
+        resourceAttachmentsService,
+        permissionsService,
+        sharedResourcesService,
+      } = createService();
+      const share = { namespaceId: 'namespace-id' } as any;
+      resourceAttachmentsService.getResourceAttachmentOrFail.mockResolvedValue({
+        attachmentId: 'image.png',
+        attachmentSize: '12',
+      });
+      s3Service.headObject.mockResolvedValue({ contentType: 'image/png' });
+      s3Service.generateDownloadUrl.mockResolvedValue(
+        'https://s3.example/image.png',
+      );
+      const info = shared
+        ? await service.getAttachmentInfoViaShare(
+            share,
+            'resource-id',
+            'image',
+            '/attachments/image',
+          )
+        : await service.getAttachmentInfo(
+            'namespace-id',
+            'resource-id',
+            'image',
+            'user-id',
+            '/attachments/image',
+          );
+      expect(info).toMatchObject({
+        id: 'image.png',
+        name: 'image.png',
+        download_url: '/attachments/image',
+      });
+      const llm = shared
+        ? await service.getResourceAttachmentLlmUrlViaShare(
+            share,
+            'resource-id',
+            'image',
+          )
+        : await service.getResourceAttachmentLlmUrl(
+            'namespace-id',
+            'resource-id',
+            'image',
+            'user-id',
+          );
+      expect(llm).toMatchObject({
+        id: 'image.png',
+        url: 'https://s3.example/image.png',
+      });
+      expect(s3Service.headObject).toHaveBeenCalledWith(
+        'attachments/image.png',
+      );
+      expect(s3Service.generateDownloadUrl).toHaveBeenCalledWith(
+        'attachments/image.png',
+        true,
+      );
+      const stream = { pipe: jest.fn() };
+      s3Service.getObject.mockResolvedValue({
+        stream,
+        meta: { contentType: 'image/png', metadata: {} },
+      });
+      const response = { setHeader: jest.fn() } as any;
+      if (shared) {
+        await service.downloadAttachmentViaShare(
+          share,
+          'resource-id',
+          'image',
+          response,
+        );
+        expect(
+          sharedResourcesService.getAndValidateResource,
+        ).toHaveBeenCalledWith(share, 'resource-id');
+      } else {
+        await service.downloadAttachment(
+          'namespace-id',
+          'resource-id',
+          'image',
+          'user-id',
+          response,
+        );
+        expect(permissionsService.userHasPermissionOrFail).toHaveBeenCalledWith(
+          'namespace-id',
+          'resource-id',
+          'user-id',
+          ResourcePermission.CAN_VIEW,
+        );
+      }
+      expect(s3Service.getObject).toHaveBeenCalledWith('attachments/image.png');
+      expect(stream.pipe).toHaveBeenCalledWith(response);
+    },
+  );
 });

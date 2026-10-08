@@ -946,3 +946,52 @@ describe('persisted query receipts', () => {
     expect(create).not.toHaveBeenCalled();
   });
 });
+
+describe('StreamService cancellation extensions', () => {
+  it.each(['local', 'remote'])(
+    'awaits deployment cancellation for a %s stream',
+    async (location) => {
+      const service = createService({}) as any;
+      let finish!: () => void;
+      const extension = jest.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      service.agentStreamHooks.onCancellationRequested = extension;
+      service.messagesService = {
+        stopRunning: jest.fn().mockResolvedValue(undefined),
+      };
+      jest.spyOn(service, 'markSessionCanceled').mockResolvedValue(undefined);
+      jest.spyOn(service, 'getRedisClient').mockResolvedValue(null);
+      jest.spyOn(service, 'sendSessionData').mockResolvedValue(undefined);
+      jest
+        .spyOn(service, 'completeSession')
+        .mockImplementation(() => undefined);
+      const controller = new AbortController();
+      const result =
+        location === 'local'
+          ? service.stopSession({
+              key: 'key',
+              namespaceId: 'space',
+              conversationId: 'conversation',
+              userId: 'user',
+              controller,
+              handlerContext: {},
+            })
+          : service.cancelAgentStream('key', 'space', 'conversation', 'user');
+      expect(extension).toHaveBeenCalledWith('user', 'conversation');
+      expect(service.messagesService.stopRunning).not.toHaveBeenCalled();
+      expect(controller.signal.aborted).toBe(false);
+      finish();
+      await result;
+      expect(service.messagesService.stopRunning).toHaveBeenCalledWith(
+        'space',
+        'conversation',
+        'user',
+      );
+      expect(controller.signal.aborted).toBe(location === 'local');
+    },
+  );
+});

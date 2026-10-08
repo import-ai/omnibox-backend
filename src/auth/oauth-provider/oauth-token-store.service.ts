@@ -40,8 +40,8 @@ export class OAuthTokenStoreService {
     return this.cacheService.get<OAuthCodeData>(this.codeNamespace, code);
   }
 
-  async deleteAuthorizationCode(code: string): Promise<void> {
-    await this.cacheService.delete(this.codeNamespace, code);
+  async consumeAuthorizationCode(code: string): Promise<boolean> {
+    return this.cacheService.consume(this.codeNamespace, code);
   }
 
   async saveAccessToken(data: OAuthTokenData, ttlMs: number): Promise<void> {

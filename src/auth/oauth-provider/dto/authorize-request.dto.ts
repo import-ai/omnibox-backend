@@ -69,3 +69,11 @@ export class AuthorizeRequestDto {
   })
   code_challenge_method?: string;
 }
+
+export class ConfirmAuthorizeRequestDto extends AuthorizeRequestDto {
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsNotEmpty({
+    message: i18nValidationMessage('validation.errors.isNotEmpty'),
+  })
+  user_id: string;
+}

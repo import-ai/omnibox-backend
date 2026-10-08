@@ -11,6 +11,7 @@ import { CommentAttachmentCleanupService } from './comment-attachment-cleanup.se
 import { ResourceComment } from './entities/resource-comment.entity';
 import { ResourceCommentAttachment } from './entities/resource-comment-attachment.entity';
 import { ResourceCommentThread } from './entities/resource-comment-thread.entity';
+import { InternalResourceCommentsController } from './internal.resource-comments.controller';
 import { ResourceCommentAnchorsService } from './resource-comment-anchors.service';
 import { ResourceCommentAttachmentsController } from './resource-comment-attachments.controller';
 import { ResourceCommentAttachmentsService } from './resource-comment-attachments.service';
@@ -35,6 +36,7 @@ import { ResourceCommentsService } from './resource-comments.service';
   controllers: [
     ResourceCommentsController,
     ResourceCommentAttachmentsController,
+    InternalResourceCommentsController,
   ],
   providers: [
     ResourceCommentsService,

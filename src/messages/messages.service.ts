@@ -230,6 +230,21 @@ export class MessagesService {
     return isMessageIndexable(message, children);
   }
 
+  /**
+   * Provides the conversation data needed to update the user's personal memory:
+   * the user's query, the final assistant answer, and when each was created.
+   *
+   * Called before queuing an automatic memory task, and again whenever that task
+   * runs or retries, so it checks the latest messages without loading the whole chat.
+   *
+   * Reports whether this round already attempted to edit memory. Callers skip
+   * automatic memory updates in that case, whether the user accepted or rejected
+   * the edit, to avoid repeating or overriding that interaction.
+   *
+   * Returns null if the answer is not eligible as a final answer or its user query
+   * cannot be found. Only reads data; does not mark the round complete, queue tasks,
+   * or write memory.
+   */
   async completedTurn(message: Message, tx?: Transaction) {
     if (
       message.message.role !== OpenAIMessageRole.ASSISTANT ||

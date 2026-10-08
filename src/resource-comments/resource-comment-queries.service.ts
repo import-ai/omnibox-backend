@@ -84,6 +84,7 @@ export class ResourceCommentQueriesService {
     }
     const [page, total] = await pageBuilder
       .orderBy('thread.created_at', 'DESC')
+      .addOrderBy('thread.id', 'DESC')
       .skip(query.offset)
       .take(query.limit)
       .getManyAndCount();
@@ -101,6 +102,7 @@ export class ResourceCommentQueriesService {
               threadIds: page.map((thread) => thread.id),
             })
             .orderBy('thread.created_at', 'DESC')
+            .addOrderBy('thread.id', 'DESC')
             .addOrderBy('comment.created_at', 'ASC')
             .addOrderBy('attachment.created_at', 'ASC')
             .getMany();

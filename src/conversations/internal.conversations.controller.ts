@@ -88,19 +88,4 @@ export class InternalConversationsController {
       throw new NotFoundException();
     return { turn: await this.messagesService.completedTurn(message) };
   }
-
-  @Public()
-  @Get(':id')
-  async get(
-    @Param('namespaceId') namespaceId: string,
-    @Param('id') conversationId: string,
-    @HeaderUserId() userId: string,
-  ) {
-    return await this.conversationsService.getConversationForUser(
-      namespaceId,
-      conversationId,
-      userId,
-      true,
-    );
-  }
 }

@@ -7,7 +7,6 @@ import { MessagesService } from 'omniboxd/messages/messages.service';
 
 import { ConversationsService } from './conversations.service';
 import { Conversation } from './entities/conversation.entity';
-import { InternalConversationsController } from './internal.conversations.controller';
 
 describe('ConversationsService', () => {
   const messagesService = {
@@ -88,7 +87,7 @@ describe('ConversationsService', () => {
       }),
     );
   });
-  it('exposes only the memory attempt marker internally and preserves stored context', async () => {
+  it('hides internal context without mutating stored attributes', async () => {
     jest
       .spyOn(service, 'findOneForUserInNamespace')
       .mockResolvedValue(conversation);
@@ -100,14 +99,6 @@ describe('ConversationsService', () => {
       },
     };
     messagesService.findAll.mockResolvedValue([row]);
-    const controller = new InternalConversationsController(
-      service,
-      messagesService as unknown as MessagesService,
-    );
-    const internal = await controller.get('n', conversation.id, 'u');
-    expect(internal.mapping.attempt.attrs?.context).toEqual({
-      memory_write_attempt: true,
-    });
     const publicDetail = await service.getConversationForUser(
       'n',
       conversation.id,

@@ -345,8 +345,6 @@ export class SearchService {
     normalizedQuery: string,
     history?: {
       limit?: number;
-      offset?: number;
-      excludeConversationId?: string;
       conversationIds?: string[];
       excludeConversationIds?: string[];
     },
@@ -366,12 +364,8 @@ export class SearchService {
     searchRequest.userId = userId;
     searchRequest.type = IndexRecordType.MESSAGE;
     searchRequest.offset = 0;
-    searchRequest.limit = history
-      ? (history.offset ?? 0) + (history.limit ?? 10)
-      : MAX_SEARCH_LIMIT;
-    const excluded =
-      history?.excludeConversationIds ??
-      (history?.excludeConversationId ? [history.excludeConversationId] : []);
+    searchRequest.limit = history ? (history.limit ?? 10) : MAX_SEARCH_LIMIT;
+    const excluded = history?.excludeConversationIds ?? [];
     const included = history?.conversationIds?.length
       ? history.conversationIds.filter((id) => !excluded.includes(id))
       : undefined;
@@ -470,19 +464,10 @@ export class SearchService {
             }
           : {}),
       });
-      if (
-        history &&
-        items.length >= (history.offset ?? 0) + (history.limit ?? 10)
-      )
-        break;
+      if (history && items.length >= (history.limit ?? 10)) break;
     }
 
-    return history
-      ? items.slice(
-          history.offset ?? 0,
-          (history.offset ?? 0) + (history.limit ?? 10),
-        )
-      : items;
+    return items;
   }
 
   private matchesMessageQuery(content: unknown, normalizedQuery: string) {

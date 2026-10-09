@@ -51,7 +51,7 @@ describe('History retrieval contract', () => {
     expect(await service.searchMessages('u', 'n', '饮食偏好')).toEqual([]);
     expect(
       await service.searchMessages('u', 'n', '饮食偏好', {
-        excludeConversationId: 'c',
+        excludeConversationIds: ['c'],
       }),
     ).toEqual([]);
     await service.searchMessages('u', 'n', '饮食偏好', {

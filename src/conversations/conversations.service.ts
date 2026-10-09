@@ -227,7 +227,6 @@ export class ConversationsService {
     conversation: Conversation,
     messages: Message[],
     chatOnly = false,
-    includeMemoryWriteAttempt = false,
   ): ConversationDetailDto {
     const detail: ConversationDetailDto = {
       id: conversation.id,
@@ -258,12 +257,6 @@ export class ConversationsService {
       }
       const attrs = { ...msg.attrs };
       delete attrs.context;
-      if (
-        includeMemoryWriteAttempt &&
-        msg.attrs?.context?.memory_write_attempt
-      ) {
-        attrs.context = { memory_write_attempt: true };
-      }
       // Citations and tool-call args name the shared resources; a chat-only
       // share keeps them for the assistant and withholds them from the
       // visitor's history.
@@ -287,7 +280,6 @@ export class ConversationsService {
     namespaceId: string,
     conversationId: string,
     userId: string,
-    includeMemoryWriteAttempt = false,
   ): Promise<ConversationDetailDto> {
     const conversation = await this.findOneForUserInNamespace(
       conversationId,
@@ -298,12 +290,7 @@ export class ConversationsService {
       userId,
       conversation.id,
     );
-    return this.convertToConversationDetail(
-      conversation,
-      messages,
-      false,
-      includeMemoryWriteAttempt,
-    );
+    return this.convertToConversationDetail(conversation, messages);
   }
 
   async getConversationForShare(

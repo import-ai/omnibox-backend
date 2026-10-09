@@ -43,7 +43,6 @@ import { MessageIndexMigrationController } from './message-index-migration.contr
 import { MessageIndexMigrationService } from './message-index-migration.service';
 import {
   InternalConversationMessageSearchController,
-  InternalNamespaceSearchController,
   InternalSearchController,
   SearchController,
 } from './search.controller';
@@ -124,7 +123,6 @@ describe('SearchController (e2e)', () => {
         SearchController,
         OpenSearchController,
         InternalSearchController,
-        InternalNamespaceSearchController,
         InternalConversationMessageSearchController,
         MessageIndexMigrationController,
       ],
@@ -520,21 +518,7 @@ describe('SearchController (e2e)', () => {
       },
     );
 
-    it('returns an internal history page with a total and preserves the public response', async () => {
-      const response = await request(app.getHttpServer())
-        .post(`/internal/api/v1/namespaces/${mockNamespaceId}/search`)
-        .set('x-user-id', mockUser.id)
-        .send({ query: 'test', offset: 0, limit: 1 })
-        .expect(HttpStatus.CREATED);
-      expect(response.body.total).toBe(1);
-      expect(response.body.items).toEqual([
-        expect.objectContaining({
-          message_id: '550e8400-e29b-41d4-a716-446655440002',
-        }),
-      ]);
-    });
-
-    it('applies conversation scope on the new top-k endpoint without a total', async () => {
+    it('applies conversation scope on the top-k endpoint without a total', async () => {
       const conversationId = '550e8400-e29b-41d4-a716-446655440001';
       const response = await request(app.getHttpServer())
         .post(

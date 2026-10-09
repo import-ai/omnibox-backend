@@ -17,7 +17,6 @@ import { MessageIndexMigrationController } from './message-index-migration.contr
 import { MessageIndexMigrationService } from './message-index-migration.service';
 import {
   InternalConversationMessageSearchController,
-  InternalNamespaceSearchController,
   InternalSearchController,
   SearchController,
 } from './search.controller';
@@ -39,7 +38,6 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
     MessageIndexMigrationController,
     InternalSearchController,
     InternalConversationMessageSearchController,
-    InternalNamespaceSearchController,
   ],
   imports: [
     WizardAPIModule,

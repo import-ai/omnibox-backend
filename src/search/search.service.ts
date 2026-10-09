@@ -318,27 +318,6 @@ export class SearchService {
     };
   }
 
-  async searchHistory(
-    userId: string,
-    namespaceId: string,
-    query: string,
-    options: {
-      offset?: number;
-      limit?: number;
-      excludeConversationId?: string;
-    },
-  ) {
-    const items = await this.searchMessages(userId, namespaceId, query, {
-      excludeConversationIds: options.excludeConversationId
-        ? [options.excludeConversationId]
-        : undefined,
-      limit: MAX_SEARCH_LIMIT,
-    });
-    const offset = options.offset ?? 0;
-    const limit = options.limit ?? 10;
-    return { items: items.slice(offset, offset + limit), total: items.length };
-  }
-
   async searchMessages(
     userId: string,
     namespaceId: string,

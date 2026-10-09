@@ -87,30 +87,6 @@ export class InternalSearchController {
   }
 }
 
-@Controller('internal/api/v1/namespaces/:namespaceId/search')
-export class InternalNamespaceSearchController {
-  constructor(private readonly searchService: SearchService) {}
-
-  @Public()
-  @Post()
-  async searchMessages(
-    @HeaderUserId() userId: string,
-    @Param('namespaceId') namespaceId: string,
-    @Body() data: SearchRequestDto,
-  ) {
-    return this.searchService.searchHistory(
-      userId,
-      namespaceId,
-      data.query || '',
-      {
-        offset: data.offset,
-        limit: data.limit,
-        excludeConversationId: data.excludeConversationId,
-      },
-    );
-  }
-}
-
 @Controller(
   'internal/api/v1/namespaces/:namespaceId/conversations/messages/search',
 )

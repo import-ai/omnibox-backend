@@ -250,6 +250,12 @@ describe('Internal resource comments (e2e)', () => {
         .request()
         .get(internalShareThreadsUrl())
         .expect(HttpStatus.OK);
+      // The owner's own agent keeps access to the owner's share.
+      await owner
+        .request()
+        .get(internalShareThreadsUrl())
+        .set('x-user-id', owner.user.id)
+        .expect(HttpStatus.OK);
     } finally {
       await owner
         .patch(`${resourceUrl}/share`)
@@ -261,6 +267,31 @@ describe('Internal resource comments (e2e)', () => {
       .get(internalShareThreadsUrl())
       .set('x-user-id', outsider.user.id)
       .expect(HttpStatus.OK);
+  });
+
+  it('lets the assistant acting for a user read a login-only share', async () => {
+    const resourceUrl = `/api/v1/namespaces/${owner.namespace.id}/resources/${resourceId}`;
+    await owner
+      .patch(`${resourceUrl}/share`)
+      .send({ require_login: true })
+      .expect(HttpStatus.OK);
+    try {
+      // The acting user id satisfies require_login, as a logged-in visitor would.
+      await owner
+        .request()
+        .get(internalShareThreadsUrl())
+        .set('x-user-id', outsider.user.id)
+        .expect(HttpStatus.OK);
+      await owner
+        .request()
+        .get(internalShareThreadsUrl())
+        .expect(HttpStatus.OK);
+    } finally {
+      await owner
+        .patch(`${resourceUrl}/share`)
+        .send({ require_login: false })
+        .expect(HttpStatus.OK);
+    }
   });
 
   it('refuses a resource outside the share', async () => {

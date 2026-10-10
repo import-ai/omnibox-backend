@@ -13,7 +13,7 @@ import {
   VALIDATE_SHARE_KEY,
   ValidateShareOptions,
 } from 'omniboxd/decorators/validate-share.decorator';
-import { ShareType } from 'omniboxd/shares/entities/share.entity';
+import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { Observable } from 'rxjs';
 
@@ -64,24 +64,14 @@ export class ValidateShareInterceptor implements NestInterceptor {
       );
     }
 
-    // A trusted internal call that carries x-user-id is the assistant acting
-    // for a workspace user who never went through the share's visitor checks,
-    // so it is validated as that user: a password-protected share is refused.
     const actingUserId = headerValue(request.headers['x-user-id']);
-    const validatedShare =
-      validateOptions.trustedInternal && !actingUserId
-        ? await this.sharesService.getAvailableShareOrFail(shareId)
-        : validateOptions.trustedInternal
-          ? await this.sharesService.getAndValidateShare(
-              shareId,
-              undefined,
-              actingUserId,
-            )
-          : await this.sharesService.getAndValidateShare(
-              shareId,
-              request.cookies?.['share-password'],
-              request.user?.id,
-            );
+    const validatedShare = validateOptions.trustedInternal
+      ? await this.validateTrustedInternal(shareId, actingUserId)
+      : await this.sharesService.getAndValidateShare(
+          shareId,
+          request.cookies?.['share-password'],
+          request.user?.id,
+        );
 
     // Additional chat validation if required
     if (validateOptions.requireChat) {
@@ -114,5 +104,24 @@ export class ValidateShareInterceptor implements NestInterceptor {
     (request as any).validatedShare = validatedShare;
 
     return next.handle();
+  }
+
+  // A trusted internal call that carries x-user-id is the assistant acting for
+  // a workspace user who never went through the share's visitor checks, so it
+  // is validated as that user: a password-protected share is refused unless
+  // the user owns the share.
+  private async validateTrustedInternal(
+    shareId: string,
+    actingUserId: string | undefined,
+  ): Promise<Share> {
+    const share = await this.sharesService.getAvailableShareOrFail(shareId);
+    if (!actingUserId || share.userId === actingUserId) {
+      return share;
+    }
+    return await this.sharesService.getAndValidateShare(
+      shareId,
+      undefined,
+      actingUserId,
+    );
   }
 }

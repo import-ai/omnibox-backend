@@ -17,6 +17,10 @@ import { ShareType } from 'omniboxd/shares/entities/share.entity';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { Observable } from 'rxjs';
 
+function headerValue(raw: string | string[] | undefined): string | undefined {
+  return Array.isArray(raw) ? raw[0] : raw || undefined;
+}
+
 @Injectable()
 export class ValidateShareInterceptor implements NestInterceptor {
   constructor(
@@ -60,13 +64,24 @@ export class ValidateShareInterceptor implements NestInterceptor {
       );
     }
 
-    const validatedShare = validateOptions.trustedInternal
-      ? await this.sharesService.getAvailableShareOrFail(shareId)
-      : await this.sharesService.getAndValidateShare(
-          shareId,
-          request.cookies?.['share-password'],
-          request.user?.id,
-        );
+    // A trusted internal call that carries x-user-id is the assistant acting
+    // for a workspace user who never went through the share's visitor checks,
+    // so it is validated as that user: a password-protected share is refused.
+    const actingUserId = headerValue(request.headers['x-user-id']);
+    const validatedShare =
+      validateOptions.trustedInternal && !actingUserId
+        ? await this.sharesService.getAvailableShareOrFail(shareId)
+        : validateOptions.trustedInternal
+          ? await this.sharesService.getAndValidateShare(
+              shareId,
+              undefined,
+              actingUserId,
+            )
+          : await this.sharesService.getAndValidateShare(
+              shareId,
+              request.cookies?.['share-password'],
+              request.user?.id,
+            );
 
     // Additional chat validation if required
     if (validateOptions.requireChat) {

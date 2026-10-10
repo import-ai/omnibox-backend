@@ -12,7 +12,12 @@ export interface ValidateShareOptions {
   requireChat?: boolean;
   /** Rejects chat-only shares, which expose no resources to visitors. */
   requireResources?: boolean;
-  /** Only for network-isolated internal endpoints called after visitor access is validated. */
+  /**
+   * Only for network-isolated internal endpoints called after visitor access is
+   * validated. A request carrying x-user-id (the assistant acting for a workspace
+   * user) is validated as that user instead, so password-protected shares are
+   * refused.
+   */
   trustedInternal?: boolean;
 }
 

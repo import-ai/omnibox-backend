@@ -8,7 +8,8 @@ import { TestClient } from 'test/test-client';
 
 // The internal comment-thread routes serve the assistant: the workspace route
 // checks the x-user-id header's view permission, the share route trusts the
-// share the way the other internal share routes do.
+// share the way the other internal share routes do, unless x-user-id marks the
+// assistant acting for a workspace user, who must pass the share's own checks.
 describe('Internal resource comments (e2e)', () => {
   let owner: TestClient;
   let commenter: TestClient;
@@ -228,6 +229,38 @@ describe('Internal resource comments (e2e)', () => {
     expect(response.body.items[0].comments[1].attachments[0].url).toBe(
       `/api/v1/shares/${shareId}/resources/${resourceId}/comment-attachments/${attachmentId}`,
     );
+  });
+
+  it('refuses a password-protected share to the assistant acting for a user', async () => {
+    const resourceUrl = `/api/v1/namespaces/${owner.namespace.id}/resources/${resourceId}`;
+    await owner
+      .patch(`${resourceUrl}/share`)
+      .send({ password: 'test-password' })
+      .expect(HttpStatus.OK);
+    try {
+      // The workspace agent switching to the share id never passed the
+      // visitor password check, so it is refused like a visitor would be.
+      await owner
+        .request()
+        .get(internalShareThreadsUrl())
+        .set('x-user-id', outsider.user.id)
+        .expect(HttpStatus.FORBIDDEN);
+      // The share chat itself validated the visitor before reaching here.
+      await owner
+        .request()
+        .get(internalShareThreadsUrl())
+        .expect(HttpStatus.OK);
+    } finally {
+      await owner
+        .patch(`${resourceUrl}/share`)
+        .send({ password: null })
+        .expect(HttpStatus.OK);
+    }
+    await owner
+      .request()
+      .get(internalShareThreadsUrl())
+      .set('x-user-id', outsider.user.id)
+      .expect(HttpStatus.OK);
   });
 
   it('refuses a resource outside the share', async () => {

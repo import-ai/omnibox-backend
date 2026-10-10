@@ -250,12 +250,13 @@ describe('Internal resource comments (e2e)', () => {
         .request()
         .get(internalShareThreadsUrl())
         .expect(HttpStatus.OK);
-      // The owner's own agent keeps access to the owner's share.
+      // The owner's own agent is refused too: the public share link asks the
+      // owner for the password as well, and the owner has direct access anyway.
       await owner
         .request()
         .get(internalShareThreadsUrl())
         .set('x-user-id', owner.user.id)
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.FORBIDDEN);
     } finally {
       await owner
         .patch(`${resourceUrl}/share`)

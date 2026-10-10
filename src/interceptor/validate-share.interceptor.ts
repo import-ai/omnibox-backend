@@ -108,15 +108,14 @@ export class ValidateShareInterceptor implements NestInterceptor {
 
   // A trusted internal call that carries x-user-id is the assistant acting for
   // a workspace user who never went through the share's visitor checks, so it
-  // is validated as that user: a password-protected share is refused unless
-  // the user owns the share.
+  // is validated as that user: a password-protected share is refused, for the
+  // share's owner too, exactly as the public share link behaves.
   private async validateTrustedInternal(
     shareId: string,
     actingUserId: string | undefined,
   ): Promise<Share> {
-    const share = await this.sharesService.getAvailableShareOrFail(shareId);
-    if (!actingUserId || share.userId === actingUserId) {
-      return share;
+    if (!actingUserId) {
+      return await this.sharesService.getAvailableShareOrFail(shareId);
     }
     return await this.sharesService.getAndValidateShare(
       shareId,

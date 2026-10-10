@@ -1757,10 +1757,10 @@ export class NamespaceResourcesService {
       );
     }
     const syncingCommentAnchors =
-      data.expectedContentHash !== undefined ||
       data.commentAnchors !== undefined ||
       data.orphanedCommentThreadIds !== undefined;
-    if (syncingCommentAnchors && !tx) {
+    const assertingContentHash = data.expectedContentHash !== undefined;
+    if ((syncingCommentAnchors || assertingContentHash) && !tx) {
       return await transaction(this.dataSource.manager, async (newTx) => {
         return await this.update(
           namespaceId,
@@ -1773,16 +1773,15 @@ export class NamespaceResourcesService {
         );
       });
     }
-    if (syncingCommentAnchors) {
+    if (assertingContentHash) {
       if (
         data.content === undefined ||
         data.expectedContentHash === undefined ||
-        data.commentAnchors === undefined ||
         !tx
       ) {
         throw new AppException(
-          this.i18n.t('resourceComment.errors.invalidSyncPayload'),
-          'INVALID_COMMENT_SYNC_PAYLOAD',
+          this.i18n.t('resource.errors.invalidContentHashUpdate'),
+          'INVALID_CONTENT_HASH_UPDATE',
           HttpStatus.BAD_REQUEST,
         );
       }
@@ -1791,6 +1790,19 @@ export class NamespaceResourcesService {
         namespaceId,
         resourceId,
         data.expectedContentHash,
+      );
+    }
+    if (
+      syncingCommentAnchors &&
+      (data.content === undefined ||
+        data.expectedContentHash === undefined ||
+        !data.commentAnchors ||
+        !tx)
+    ) {
+      throw new AppException(
+        this.i18n.t('resourceComment.errors.invalidSyncPayload'),
+        'INVALID_COMMENT_SYNC_PAYLOAD',
+        HttpStatus.BAD_REQUEST,
       );
     }
     if (data.parentId) {

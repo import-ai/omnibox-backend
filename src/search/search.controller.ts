@@ -8,10 +8,14 @@ import {
   Query,
 } from '@nestjs/common';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 import { DocType } from './doc-type.enum';
-import { SearchRequestDto } from './dto/search-request.dto';
+import {
+  ConversationMessageSearchRequestDto,
+  SearchRequestDto,
+} from './dto/search-request.dto';
 import { SearchService } from './search.service';
 
 @Controller('api/v1/namespaces/:namespaceId/search')
@@ -80,5 +84,29 @@ export class InternalSearchController {
       concurrency,
       updatedAfterDate,
     );
+  }
+}
+
+@Controller(
+  'internal/api/v1/namespaces/:namespaceId/conversations/messages/search',
+)
+export class InternalConversationMessageSearchController {
+  constructor(private readonly searchService: SearchService) {}
+
+  @Public()
+  @Post()
+  async search(
+    @HeaderUserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Body() data: ConversationMessageSearchRequestDto,
+  ) {
+    return {
+      items: await this.searchService.searchMessages(
+        userId,
+        namespaceId,
+        data.query,
+        data,
+      ),
+    };
   }
 }

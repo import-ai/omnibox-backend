@@ -46,3 +46,26 @@ export class SearchRequestDto {
   @IsOptional()
   limit?: number;
 }
+
+export class ConversationMessageSearchRequestDto {
+  @IsString()
+  query: string;
+
+  @Expose({ name: 'conversation_ids' })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  conversationIds?: string[];
+
+  @Expose({ name: 'exclude_conversation_ids' })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  excludeConversationIds?: string[];
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  @IsOptional()
+  limit?: number;
+}

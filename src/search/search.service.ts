@@ -1,11 +1,14 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { createHash } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
-import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
-import { Message } from 'omniboxd/messages/entities/message.entity';
+import {
+  childrenByMessage,
+  isMessageIndexable,
+  Message,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
@@ -20,12 +23,10 @@ import {
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { Repository } from 'typeorm';
 
 import { getArticleIdentity } from './article-dedupe.util';
 import { DocType } from './doc-type.enum';
@@ -89,8 +90,6 @@ export class SearchService {
     private readonly resourcesService: ResourcesService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
-    @InjectRepository(Task)
-    private readonly taskRepository: Repository<Task>,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
     private readonly tagService: TagService,
@@ -319,11 +318,21 @@ export class SearchService {
     };
   }
 
-  private async searchMessages(
+  async searchMessages(
     userId: string,
     namespaceId: string,
     normalizedQuery: string,
+    history?: {
+      limit?: number;
+      conversationIds?: string[];
+      excludeConversationIds?: string[];
+    },
   ): Promise<IndexedMessageDto[]> {
+    if (
+      history &&
+      !(await this.permissionsService.userInNamespace(userId, namespaceId))
+    )
+      return [];
     if (!normalizedQuery) {
       return [];
     }
@@ -334,28 +343,69 @@ export class SearchService {
     searchRequest.userId = userId;
     searchRequest.type = IndexRecordType.MESSAGE;
     searchRequest.offset = 0;
-    searchRequest.limit = MAX_SEARCH_LIMIT;
+    searchRequest.limit = history ? (history.limit ?? 10) : MAX_SEARCH_LIMIT;
+    const excluded = history?.excludeConversationIds ?? [];
+    const included = history?.conversationIds?.length
+      ? history.conversationIds.filter((id) => !excluded.includes(id))
+      : undefined;
+    if (included && !included.length) return [];
+    searchRequest.conversationIds = included;
+    searchRequest.excludeConversationIds = excluded;
     const result = await this.wizardApiService.search(searchRequest);
+    const conversationChildren = new Map<string, Map<string, Message[]>>();
     const items: IndexedMessageDto[] = [];
     const conversationTitles = new Map<string, string | null>();
+    const seenMessageIds = new Set<string>();
 
     for (const record of result?.records || []) {
       if (record.type !== IndexRecordType.MESSAGE || !record.message) {
         continue;
       }
 
-      const { content, role } = record.message.message;
-      if (role !== 'user' && role !== 'assistant') {
-        continue;
-      }
-      if (!this.matchesMessageQuery(content, normalizedQuery)) {
+      const { conversationId, messageId } = record.message;
+      const identity = history
+        ? `${messageId}:${record.message.chunkIndex}`
+        : messageId;
+      if (
+        !messageId ||
+        seenMessageIds.has(identity) ||
+        excluded.includes(conversationId) ||
+        (included !== undefined && !included.includes(conversationId))
+      ) {
         continue;
       }
 
-      const { conversationId, messageId } = record.message;
-      if (!messageId) {
+      let message: Message;
+      try {
+        message = await this.messagesService.findOne(messageId);
+      } catch {
         continue;
       }
+      if (!conversationChildren.has(conversationId)) {
+        conversationChildren.set(
+          conversationId,
+          childrenByMessage(
+            await this.messagesService.findAll(userId, conversationId),
+          ),
+        );
+      }
+      if (
+        message.conversationId !== conversationId ||
+        message.userId !== userId ||
+        !isMessageIndexable(
+          message,
+          conversationChildren.get(conversationId)!.get(message.id) || [],
+        ) ||
+        (message.message.role !== OpenAIMessageRole.USER &&
+          message.message.role !== OpenAIMessageRole.ASSISTANT)
+      ) {
+        continue;
+      }
+      const content = message.message.content || '';
+      if (!history && !this.matchesMessageQuery(content, normalizedQuery)) {
+        continue;
+      }
+
       let title = conversationTitles.get(conversationId);
       if (title === undefined) {
         const conversation =
@@ -374,6 +424,7 @@ export class SearchService {
       if (title === null) {
         continue;
       }
+      seenMessageIds.add(identity);
 
       items.push({
         type: DocType.MESSAGE,
@@ -381,9 +432,18 @@ export class SearchService {
         messageId,
         conversationId,
         title,
-        role,
-        content,
+        role: message.message.role,
+        content: history ? record.message.message.content : content,
+        ...(history
+          ? {
+              chunkIndex: record.message.chunkIndex,
+              startIndex: record.message.startIndex,
+              endIndex: record.message.endIndex,
+              createdAt: message.createdAt?.toISOString(),
+            }
+          : {}),
       });
+      if (history && items.length >= (history.limit ?? 10)) break;
     }
 
     return items;
@@ -698,17 +758,20 @@ export class SearchService {
         if (!conversation.userId) {
           continue;
         }
-        const messages = await this.messagesService.findAll(
+        const allMessages = await this.messagesService.findAll(
           conversation.userId,
           conversation.id,
         );
-        for (const message of messages) {
+        const children = childrenByMessage(allMessages);
+        for (const message of allMessages) {
           await this.wizardTaskService.emitUpsertMessageIndexTask(
             TASK_PRIORITY,
             conversation.userId,
             conversation.namespaceId,
             conversation.id,
             message,
+            undefined,
+            children.get(message.id) || [],
           );
         }
       }
@@ -812,9 +875,11 @@ export class SearchService {
         if (!conversation.userId) {
           continue;
         }
-        const messages = await this.messagesService.findAll(
-          conversation.userId,
-          conversation.id,
+        const messages = this.selectMessagesForIndex(
+          await this.messagesService.findAll(
+            conversation.userId,
+            conversation.id,
+          ),
         );
         for (const message of messages) {
           stats.scanned += 1;
@@ -823,7 +888,7 @@ export class SearchService {
               `Weaviate message sync: scanned=${stats.scanned} (synced=${stats.synced}, failed=${stats.failed}, skipped=${stats.skipped})`,
             );
           }
-          if (!this.shouldSyncMessage(message, updatedAfter)) {
+          if (updatedAfter && message.updatedAt <= updatedAfter) {
             stats.skipped += 1;
             continue;
           }
@@ -886,22 +951,11 @@ export class SearchService {
     return true;
   }
 
-  private shouldSyncMessage(message: Message, updatedAfter?: Date): boolean {
-    if (updatedAfter && message.updatedAt <= updatedAfter) {
-      return false;
-    }
-    const content = message.message.content || '';
-    if (!content.trim()) {
-      return false;
-    }
-    if (
-      [OpenAIMessageRole.TOOL, OpenAIMessageRole.SYSTEM].includes(
-        message.message.role,
-      )
-    ) {
-      return false;
-    }
-    return true;
+  private selectMessagesForIndex(messages: Message[]): Message[] {
+    const children = childrenByMessage(messages);
+    return messages.filter((message) =>
+      isMessageIndexable(message, children.get(message.id) || []),
+    );
   }
 
   private async runWithConcurrency(

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
 import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { OpenSearchService } from 'omniboxd/search/open.search.service';
@@ -12,7 +13,10 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
 
+import { MessageIndexMigrationController } from './message-index-migration.controller';
+import { MessageIndexMigrationService } from './message-index-migration.service';
 import {
+  InternalConversationMessageSearchController,
   InternalSearchController,
   SearchController,
 } from './search.controller';
@@ -24,11 +28,17 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
   exports: [SearchService, OpenSearchService],
   providers: [
     SearchService,
+    MessageIndexMigrationService,
     SearchResourceFilterService,
     SearchCandidateService,
     OpenSearchService,
   ],
-  controllers: [SearchController, InternalSearchController],
+  controllers: [
+    SearchController,
+    MessageIndexMigrationController,
+    InternalSearchController,
+    InternalConversationMessageSearchController,
+  ],
   imports: [
     WizardAPIModule,
     PermissionsModule,
@@ -39,7 +49,7 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
     TasksModule,
     TagModule,
     SmartFoldersModule,
-    TypeOrmModule.forFeature([Task]),
+    TypeOrmModule.forFeature([Task, Namespace]),
   ],
 })
 export class SearchModule {}

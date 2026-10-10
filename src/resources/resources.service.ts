@@ -1031,6 +1031,12 @@ export class ResourcesService {
         props.name,
         autoRenameOnConflict,
       );
+      // Serialize sibling creation so concurrent asset initializers cannot both
+      // pass the name check. The transaction releases the lock after insertion.
+      await entityManager.query(
+        'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [JSON.stringify([props.namespaceId, props.parentId ?? null])],
+      );
       // Resolve unique name (handles auto-rename on conflict)
       resolvedName = await this.resolveUniqueName(
         props.namespaceId,

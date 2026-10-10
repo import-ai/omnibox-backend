@@ -87,4 +87,25 @@ describe('ConversationsService', () => {
       }),
     );
   });
+  it('hides internal context without mutating stored attributes', async () => {
+    jest
+      .spyOn(service, 'findOneForUserInNamespace')
+      .mockResolvedValue(conversation);
+    const row = {
+      ...message('attempt', OpenAIMessageRole.ASSISTANT, 'Editing memory'),
+      createdAt: new Date(),
+      attrs: {
+        context: { memory_write_attempt: true, checkpoint: 'private-state' },
+      },
+    };
+    messagesService.findAll.mockResolvedValue([row]);
+    const publicDetail = await service.getConversationForUser(
+      'n',
+      conversation.id,
+      'u',
+    );
+    expect(publicDetail.mapping.attempt.attrs?.context).toBeUndefined();
+    expect(row.attrs.context.checkpoint).toBe('private-state');
+    expect(row.attrs.context.memory_write_attempt).toBe(true);
+  });
 });

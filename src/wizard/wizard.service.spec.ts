@@ -125,6 +125,7 @@ describe('WizardService', () => {
       };
       const wizardTaskService = { taskRepository };
       const tasksService = {
+        canRetry: jest.fn().mockReturnValue(false),
         callTaskHook: jest.fn().mockResolvedValue(undefined),
         emitTask: jest.fn(),
       };

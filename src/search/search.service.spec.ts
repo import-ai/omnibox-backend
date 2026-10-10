@@ -127,6 +127,57 @@ describe('SearchService', () => {
         title: 'Conversation title',
       }),
     };
+    const messagesService = {
+      findAll: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockImplementation((id: string) => {
+        const messages: Record<string, any> = {
+          'message-one': {
+            id,
+            conversationId,
+            userId,
+            message: { role: 'user', content: 'Matched message' },
+          },
+          'message-two': {
+            id,
+            conversationId,
+            userId,
+            status: 'success',
+            attrs: {},
+            message: { role: 'assistant', content: 'Another matched message' },
+          },
+          'message-pagination-one': {
+            id,
+            conversationId: 'conversation-one',
+            userId,
+            message: { role: 'user', content: 'Matched one' },
+          },
+          'message-pagination-two': {
+            id,
+            conversationId: 'conversation-two',
+            userId,
+            message: { role: 'user', content: 'Matched two' },
+          },
+          'semantic-only-result': {
+            id,
+            conversationId,
+            userId,
+            message: {
+              role: 'assistant',
+              content: 'Related but not an exact match',
+            },
+          },
+          'tool-message': {
+            id,
+            conversationId,
+            userId,
+            message: { role: 'tool', content: 'Matched tool output' },
+          },
+        };
+        const message = messages[id];
+        if (!message) throw new Error('message not found');
+        return message;
+      }),
+    };
     const ruleService = {
       normalize: jest.fn((conditions) => conditions),
     };
@@ -274,9 +325,8 @@ describe('SearchService', () => {
       permissionsService as any,
       namespaceResourcesService as any,
       resourcesService as any,
-      {} as any,
+      messagesService as any,
       conversationsService as any,
-      {} as any,
       {} as any,
       {
         t: jest.fn().mockReturnValue('Not authorized'),
@@ -288,6 +338,7 @@ describe('SearchService', () => {
 
     return {
       conversationsService,
+      messagesService,
       matcherService,
       namespaceResourcesService,
       permissionsService,
@@ -408,11 +459,11 @@ describe('SearchService', () => {
     const { conversationsService, service, wizardApiService } = createService();
     wizardApiService.search.mockResolvedValue({
       records: ['one', 'two'].map((suffix) => ({
-        id: `message-${suffix}`,
+        id: `message-pagination-${suffix}`,
         type: IndexRecordType.MESSAGE,
         message: {
           conversationId: `conversation-${suffix}`,
-          messageId: `message-${suffix}`,
+          messageId: `message-pagination-${suffix}`,
           message: { role: 'user', content: `Matched ${suffix}` },
         },
       })),

@@ -71,6 +71,8 @@ export interface WizardAgentRequestDto extends BaseAgentRequestDto {
   namespace_id: string;
   user_id: string;
   share_id: string;
+  // Proves to the internal share routes that this share's visitor was validated.
+  share_access_token?: string;
   tools: Array<WizardPrivateSearchToolDto | WebSearchToolDto>;
   messages: Message[];
 }

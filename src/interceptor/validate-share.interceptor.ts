@@ -14,6 +14,8 @@ import {
   ValidateShareOptions,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
+import { SHARE_ACCESS_HEADER } from 'omniboxd/shares/share-access-token';
+import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { Observable } from 'rxjs';
 
@@ -26,6 +28,7 @@ export class ValidateShareInterceptor implements NestInterceptor {
   constructor(
     private readonly reflector: Reflector,
     private readonly sharesService: SharesService,
+    private readonly shareAccessTokenService: ShareAccessTokenService,
     private readonly i18n: I18nService,
   ) {}
 
@@ -64,9 +67,12 @@ export class ValidateShareInterceptor implements NestInterceptor {
       );
     }
 
-    const actingUserId = headerValue(request.headers['x-user-id']);
     const validatedShare = validateOptions.trustedInternal
-      ? await this.validateTrustedInternal(shareId, actingUserId)
+      ? await this.validateTrustedInternal(
+          shareId,
+          headerValue(request.headers[SHARE_ACCESS_HEADER]),
+          headerValue(request.headers['x-user-id']),
+        )
       : await this.sharesService.getAndValidateShare(
           shareId,
           request.cookies?.['share-password'],
@@ -106,15 +112,18 @@ export class ValidateShareInterceptor implements NestInterceptor {
     return next.handle();
   }
 
-  // A trusted internal call that carries x-user-id is the assistant acting for
-  // a workspace user who never went through the share's visitor checks, so it
-  // is validated as that user: a password-protected share is refused, for the
-  // share's owner too, exactly as the public share link behaves.
+  // Internal share routes are only trusted when the caller proves the visitor
+  // already passed the share's own checks: the share chat gets a share-access
+  // token minted by the backend that validated the visitor. Any other caller
+  // (a workspace agent reading a share for its user, or anything that forgot
+  // the token) is validated as that user, so a password-protected share is
+  // refused, the owner included, exactly as the public share link behaves.
   private async validateTrustedInternal(
     shareId: string,
+    accessToken: string | undefined,
     actingUserId: string | undefined,
   ): Promise<Share> {
-    if (!actingUserId) {
+    if (this.shareAccessTokenService.verify(accessToken, shareId)) {
       return await this.sharesService.getAvailableShareOrFail(shareId);
     }
     return await this.sharesService.getAndValidateShare(

@@ -6,6 +6,7 @@ import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module'
 import { UserModule } from 'omniboxd/user/user.module';
 
 import { Share } from './entities/share.entity';
+import { ShareAccessTokenService } from './share-access-token.service';
 import {
   PublicSharesController,
   ResourceSharesController,
@@ -20,8 +21,8 @@ import { SharesService } from './shares.service';
     SmartFoldersModule,
     UserModule,
   ],
-  providers: [SharesService],
-  exports: [SharesService],
+  providers: [SharesService, ShareAccessTokenService],
+  exports: [SharesService, ShareAccessTokenService],
   controllers: [ResourceSharesController, PublicSharesController],
 })
 export class SharesModule {}

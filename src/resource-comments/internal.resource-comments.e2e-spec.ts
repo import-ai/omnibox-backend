@@ -3,13 +3,14 @@ import { createHash } from 'node:crypto';
 import { HttpStatus } from '@nestjs/common';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
 import { commentPng } from 'test/comment-image-fixture';
 import { TestClient } from 'test/test-client';
 
 // The internal comment-thread routes serve the assistant: the workspace route
-// checks the x-user-id header's view permission, the share route trusts the
-// share the way the other internal share routes do, unless x-user-id marks the
-// assistant acting for a workspace user, who must pass the share's own checks.
+// checks the x-user-id header's view permission; the share route trusts the
+// share only with the share-access token the share chat carries, and otherwise
+// validates it as the user in x-user-id (if any), like the public share link.
 describe('Internal resource comments (e2e)', () => {
   let owner: TestClient;
   let commenter: TestClient;
@@ -24,6 +25,10 @@ describe('Internal resource comments (e2e)', () => {
     `/internal/api/v1/namespaces/${owner.namespace.id}/resources/${resourceId}/comment-threads`;
   const internalShareThreadsUrl = () =>
     `/internal/api/v1/shares/${shareId}/resources/${resourceId}/comment-threads`;
+  // What the share chat's own client sends: the token minted after its visitor
+  // passed the share's checks.
+  const shareAccessToken = () =>
+    owner.app.get(ShareAccessTokenService).mint(shareId);
 
   beforeAll(async () => {
     owner = await TestClient.create();
@@ -217,6 +222,7 @@ describe('Internal resource comments (e2e)', () => {
     const response = await owner
       .request()
       .get(`${internalShareThreadsUrl()}?resolved=false`)
+      .set('x-share-access', shareAccessToken())
       .expect(HttpStatus.OK);
 
     expect(response.body).toMatchObject({
@@ -245,11 +251,18 @@ describe('Internal resource comments (e2e)', () => {
         .get(internalShareThreadsUrl())
         .set('x-user-id', outsider.user.id)
         .expect(HttpStatus.FORBIDDEN);
-      // The share chat itself validated the visitor before reaching here.
+      // The share chat itself validated the visitor before reaching here and
+      // proves it with the share-access token.
       await owner
         .request()
         .get(internalShareThreadsUrl())
+        .set('x-share-access', shareAccessToken())
         .expect(HttpStatus.OK);
+      // Without the token nothing is trusted, whoever forgot it.
+      await owner
+        .request()
+        .get(internalShareThreadsUrl())
+        .expect(HttpStatus.FORBIDDEN);
       // The owner's own agent is refused too: the public share link asks the
       // owner for the password as well, and the owner has direct access anyway.
       await owner
@@ -286,7 +299,12 @@ describe('Internal resource comments (e2e)', () => {
       await owner
         .request()
         .get(internalShareThreadsUrl())
+        .set('x-share-access', shareAccessToken())
         .expect(HttpStatus.OK);
+      await owner
+        .request()
+        .get(internalShareThreadsUrl())
+        .expect(HttpStatus.UNAUTHORIZED);
     } finally {
       await owner
         .patch(`${resourceUrl}/share`)

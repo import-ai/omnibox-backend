@@ -1,0 +1,5 @@
+{
+  "errors": {
+    "tooManyRequests": "Too many verification code requests from your network. Please try again in {minutes} minutes."
+  }
+}

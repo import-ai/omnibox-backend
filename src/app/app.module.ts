@@ -1,7 +1,9 @@
 import KeyvRedis from '@keyv/redis';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { CacheModule } from '@nestjs/cache-manager';
 import {
   DynamicModule,
+  Logger,
   MiddlewareConsumer,
   Module,
   NestModule,
@@ -9,7 +11,9 @@ import {
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import Redis from 'ioredis';
 import { Keyv } from 'keyv';
 import {
   AcceptLanguageResolver,
@@ -28,6 +32,7 @@ import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
+import { CaptchaModule } from 'omniboxd/captcha/captcha.module';
 import { AtomicMemoryCache } from 'omniboxd/common/cache.service';
 import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
 import { ConversationsModule } from 'omniboxd/conversations/conversations.module';
@@ -121,6 +126,7 @@ import { NotificationsModule } from 'omniboxd/notifications/notifications.module
 import { OpenAPIModule } from 'omniboxd/open-api/open-api.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { PhoneModule } from 'omniboxd/phone/phone.module';
+import { otpThrottlerOptions } from 'omniboxd/rate-limit/rate-limit.config';
 import { ResourceTagsModule } from 'omniboxd/resource-tags/resource-tags.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { RssModule } from 'omniboxd/rss/rss.module';
@@ -223,6 +229,7 @@ export class AppModule implements NestModule {
         SharedResourcesModule,
         SeoModule,
         PhoneModule,
+        CaptchaModule,
         TraceModule,
         ApplicationsModule,
         WebSocketModule,
@@ -237,6 +244,40 @@ export class AppModule implements NestModule {
         SmartFoldersModule,
         RssModule,
         SharedResourceTagsModule,
+        ThrottlerModule.forRootAsync({
+          imports: [ConfigModule],
+          inject: [ConfigService],
+          useFactory: (config: ConfigService) => {
+            const redisUrl = config.get<string>('OBB_REDIS_URL', '');
+            if (isEmpty(redisUrl)) {
+              // Like the cache below, no Redis URL means in-process counting.
+              return { throttlers: [otpThrottlerOptions(config)] };
+            }
+
+            const logger = new Logger('ThrottlerRedis');
+            const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
+            // ioredis keeps reconnecting on its own; without a listener every
+            // failed attempt is dumped to stderr as an unhandled error event.
+            // A refused connection arrives as an AggregateError with an empty
+            // message, so fall back to its code and inner errors.
+            redis.on(
+              'error',
+              (error: Error & { code?: string; errors?: Error[] }) => {
+                const reason =
+                  error.message ||
+                  error.code ||
+                  error.errors?.[0]?.message ||
+                  String(error);
+                logger.error(`Redis error: ${reason}`);
+              },
+            );
+
+            return {
+              throttlers: [otpThrottlerOptions(config)],
+              storage: new ThrottlerStorageRedisService(redis),
+            };
+          },
+        }),
         CacheModule.registerAsync({
           isGlobal: true,
           imports: [ConfigModule],

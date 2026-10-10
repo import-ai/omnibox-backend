@@ -3,6 +3,7 @@ import type { IncomingHttpHeaders } from 'node:http';
 // Add feature thresholds here; never use client versions as authorization.
 export const MINIMUM_APP_VERSIONS = {
   conversationImages: { android: '0.1.50', ios: '0.1.50' },
+  captcha: { android: '0.1.52', ios: '0.1.52' },
 } as const;
 
 export function supportsClientFeature(

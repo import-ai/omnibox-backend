@@ -52,15 +52,19 @@ export function verifyShareAccessToken(
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
     return false;
   }
-  let payload: ShareAccessPayload;
+  let payload: unknown;
   try {
     payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
   } catch {
     return false;
   }
+  if (typeof payload !== 'object' || payload === null) {
+    return false;
+  }
+  const { share_id, exp } = payload as Partial<ShareAccessPayload>;
   return (
-    payload.share_id === shareId &&
-    typeof payload.exp === 'number' &&
-    payload.exp > Math.floor(now / 1000)
+    share_id === shareId &&
+    typeof exp === 'number' &&
+    exp > Math.floor(now / 1000)
   );
 }

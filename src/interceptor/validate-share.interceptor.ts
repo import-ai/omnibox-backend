@@ -70,8 +70,8 @@ export class ValidateShareInterceptor implements NestInterceptor {
     const validatedShare = validateOptions.trustedInternal
       ? await this.validateTrustedInternal(
           shareId,
-          headerValue(request.headers[SHARE_ACCESS_HEADER]),
-          headerValue(request.headers['x-user-id']),
+          headerValue(request.headers?.[SHARE_ACCESS_HEADER]),
+          headerValue(request.headers?.['x-user-id']),
         )
       : await this.sharesService.getAndValidateShare(
           shareId,

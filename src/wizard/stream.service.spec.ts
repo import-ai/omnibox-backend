@@ -20,6 +20,7 @@ function createService(mocks: {
     mocks.resourcesService as any,
     mocks.smartFoldersService as any,
     {} as any,
+    { mint: jest.fn(() => 'share-access-token') } as any,
     {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
@@ -672,6 +673,7 @@ describe('StreamService agent stream hooks', () => {
       {} as any,
       {} as any,
       {} as any,
+      { mint: jest.fn(() => 'share-access-token') } as any,
       hooks as any,
     );
     return { service, hooks };
@@ -782,6 +784,7 @@ describe('trusted upstream billing metadata', () => {
       {} as never,
       {} as never,
       {} as never,
+      { mint: jest.fn(() => 'share-access-token') } as never,
       {
         onStreamStarted: started,
         onCallCompleted: jest.fn(),
@@ -820,6 +823,7 @@ describe('trusted upstream billing metadata', () => {
       {} as never,
       {} as never,
       {} as never,
+      { mint: jest.fn(() => 'share-access-token') } as never,
       {
         onStreamStarted: jest.fn().mockRejectedValue(failure),
         onCallCompleted: jest.fn(),

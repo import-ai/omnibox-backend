@@ -183,7 +183,10 @@ export class StreamService implements OnModuleDestroy {
   ): Promise<void> {
     const span = trace.getActiveSpan();
     if (span) {
-      span.setAttribute('agent_request', JSON.stringify(body));
+      span.setAttribute(
+        'agent_request',
+        JSON.stringify({ ...body, share_access_token: undefined }),
+      );
     }
 
     const response = await this.wizardApiService.createAgentStream(
@@ -802,6 +805,8 @@ export class StreamService implements OnModuleDestroy {
       if (query?.message.role !== OpenAIMessageRole.USER) {
         const attrs: Record<string, unknown> = { ...wizardRequest };
         delete attrs.messages;
+        // A live credential: never persisted or echoed back to clients.
+        delete attrs.share_access_token;
         query = await this.messagesService.create(
           namespaceId,
           requestDto.conversation_id,

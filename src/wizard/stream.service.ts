@@ -38,6 +38,7 @@ import {
   messageForVisitor,
 } from 'omniboxd/shares/chat-only-payload';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
+import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import {
   AgentRequestDto,
@@ -106,6 +107,7 @@ export class StreamService implements OnModuleDestroy {
     private readonly resourcesService: ResourcesService,
     private readonly smartFoldersService: SmartFoldersService,
     private readonly i18n: I18nService,
+    private readonly shareAccessTokenService: ShareAccessTokenService,
     @Inject(AGENT_STREAM_HOOKS)
     private readonly agentStreamHooks: IAgentStreamHooks,
   ) {}
@@ -181,7 +183,10 @@ export class StreamService implements OnModuleDestroy {
   ): Promise<void> {
     const span = trace.getActiveSpan();
     if (span) {
-      span.setAttribute('agent_request', JSON.stringify(body));
+      span.setAttribute(
+        'agent_request',
+        JSON.stringify({ ...body, share_access_token: undefined }),
+      );
     }
 
     const response = await this.wizardApiService.createAgentStream(
@@ -767,6 +772,9 @@ export class StreamService implements OnModuleDestroy {
       channel: requestDto.channel,
       images: requestDto.images,
       share_id: shareId,
+      share_access_token: shareId
+        ? this.shareAccessTokenService.mint(shareId)
+        : undefined,
     };
 
     void (async () => {
@@ -797,6 +805,8 @@ export class StreamService implements OnModuleDestroy {
       if (query?.message.role !== OpenAIMessageRole.USER) {
         const attrs: Record<string, unknown> = { ...wizardRequest };
         delete attrs.messages;
+        // A live credential: never persisted or echoed back to clients.
+        delete attrs.share_access_token;
         query = await this.messagesService.create(
           namespaceId,
           requestDto.conversation_id,

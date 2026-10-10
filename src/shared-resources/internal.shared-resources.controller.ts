@@ -12,9 +12,12 @@ import {
   ValidateShare,
 } from 'omniboxd/decorators/validate-share.decorator';
 import { ValidateShareInterceptor } from 'omniboxd/interceptor/validate-share.interceptor';
+import { ListResourceCommentThreadsRequestDto } from 'omniboxd/resource-comments/dto/resource-comment-request.dto';
+import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resource-comment-queries.service';
 import { ResourceFilterRequestDto } from 'omniboxd/resources/dto/resource-filter.request.dto';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 
+import { toSharedCommentThreads } from './dto/shared-comment-threads';
 import { SharedResourceDto } from './dto/shared-resource.dto';
 import { SharedResourcesService } from './shared-resources.service';
 
@@ -23,6 +26,7 @@ import { SharedResourcesService } from './shared-resources.service';
 export class InternalSharedResourcesController {
   constructor(
     private readonly sharedResourcesService: SharedResourcesService,
+    private readonly resourceCommentQueriesService: ResourceCommentQueriesService,
   ) {}
 
   @Public()
@@ -71,6 +75,28 @@ export class InternalSharedResourcesController {
       resourceId,
       { limit, offset },
     );
+  }
+
+  @Public()
+  @ValidateShare({ trustedInternal: true })
+  @Get(':resourceId/comment-threads')
+  async listComments(
+    @ValidatedShare() share: Share,
+    @Param('resourceId') resourceId: string,
+    @Query() query: ListResourceCommentThreadsRequestDto,
+  ) {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    const result = await this.resourceCommentQueriesService.listThreads(
+      share.namespaceId,
+      resourceId,
+      '',
+      query,
+      false,
+    );
+    return {
+      ...result,
+      items: toSharedCommentThreads(result.items, share.id, resourceId),
+    };
   }
 
   @Public()

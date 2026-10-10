@@ -21,9 +21,11 @@ describe('Internal share attachment validation', () => {
       getHandler: () => InternalShareAttachmentsController.prototype[method],
       switchToHttp: () => ({ getRequest: () => request }),
     };
+    const shareAccessTokens = { verify: jest.fn(() => true) };
     const interceptor = new ValidateShareInterceptor(
       new Reflector(),
       shares as any,
+      shareAccessTokens as any,
       {} as any,
     );
     const next = { handle: jest.fn(() => of(null)) };
@@ -32,12 +34,22 @@ describe('Internal share attachment validation', () => {
     expect(shares.getAndValidateShare).not.toHaveBeenCalled();
     expect(request.validatedShare).toBe(share);
     expect(next.handle).toHaveBeenCalledTimes(1);
+    // Without a valid share-access token the share is validated as the
+    // (absent) user instead of being trusted.
+    shareAccessTokens.verify.mockReturnValueOnce(false);
+    await interceptor.intercept(context, next);
+    expect(shares.getAndValidateShare).toHaveBeenCalledWith(
+      share.id,
+      undefined,
+      undefined,
+    );
+    expect(next.handle).toHaveBeenCalledTimes(2);
     shares.getAvailableShareOrFail.mockRejectedValue(
       new Error('Share disabled'),
     );
     await expect(interceptor.intercept(context, next)).rejects.toThrow(
       'Share disabled',
     );
-    expect(next.handle).toHaveBeenCalledTimes(1);
+    expect(next.handle).toHaveBeenCalledTimes(2);
   });
 });

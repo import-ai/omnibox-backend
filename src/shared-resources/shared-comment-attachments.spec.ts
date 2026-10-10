@@ -23,6 +23,7 @@ import {
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
+import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
 import { SharesService } from 'omniboxd/shares/shares.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
@@ -120,6 +121,9 @@ describe('shared comment images', () => {
         ResourceCommentAnchorsService,
         ResourceCommentAttachmentsService,
         { provide: StorageUsagesService, useValue: {} },
+        // These routes are public share routes; the interceptor never consults
+        // the token service for them, it only needs to be injectable.
+        { provide: ShareAccessTokenService, useValue: { verify: () => false } },
         { provide: getRepositoryToken(ResourceCommentThread), useValue: {} },
         {
           provide: getRepositoryToken(ResourceCommentAttachment),

@@ -73,6 +73,21 @@ describe('withSseHeartbeat', () => {
     expect(events).toEqual([PING, PING, PING]);
   });
 
+  it('emits a fresh copy of the frozen constant on every tick', () => {
+    expect(Object.isFrozen(PING)).toBe(true);
+    const source = new Subject<MessageEvent>();
+    const { events } = collect(source, 1_000);
+    jest.advanceTimersByTime(1_000);
+    events[0].id = 'assigned-by-sse-stream';
+    jest.advanceTimersByTime(1_000);
+    expect(events).toHaveLength(2);
+    expect(events[0]).not.toBe(events[1]);
+    expect(events[0]).not.toBe(PING);
+    expect(events[1]).toEqual(PING);
+    expect(events[1].id).toBeUndefined();
+    expect(PING.id).toBeUndefined();
+  });
+
   it('forwards complete and stops pinging afterwards', () => {
     const source = new Subject<MessageEvent>();
     const { events, terminal } = collect(source, 1_000);

@@ -1040,7 +1040,9 @@ describe('StreamService heartbeat', () => {
       observable.subscribe({
         next: (event: any) =>
           events.push(
-            event.data ? JSON.parse(event.data).response_type : event,
+            event.type
+              ? { type: event.type, ...JSON.parse(event.data) }
+              : JSON.parse(event.data).response_type,
           ),
         complete: resolve,
         error: reject,
@@ -1052,8 +1054,8 @@ describe('StreamService heartbeat', () => {
       'bos',
       'delta',
       'eos',
-      { type: 'ping' },
-      { type: 'ping' },
+      { type: 'ping', response_type: 'ping' },
+      { type: 'ping', response_type: 'ping' },
       'done',
     ]);
   });

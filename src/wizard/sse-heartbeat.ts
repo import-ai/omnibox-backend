@@ -3,20 +3,23 @@ import { MonoTypeOperatorFunction, Observable } from 'rxjs';
 
 export const SSE_HEARTBEAT_INTERVAL_MS = 15_000;
 
-// Nest's interface declares `data` as required, but its SseStream only writes
-// a `data:` line when `data` is present, so a type-only event is valid here.
-export const SSE_HEARTBEAT_EVENT = { type: 'ping' } as MessageEvent;
+export const SSE_HEARTBEAT_EVENT: MessageEvent = {
+  type: 'ping',
+  data: JSON.stringify({ response_type: 'ping' }),
+};
 
 /**
- * Emits `{ type: 'ping' }` whenever the source has been silent for
- * `intervalMs`, so proxies between the client and this server never see an
- * idle SSE connection during a long tool call.
+ * Emits a `ping` event whenever the source has been silent for `intervalMs`,
+ * so proxies between the client and this server never see an idle SSE
+ * connection during a long tool call.
  *
- * The ping deliberately carries only `type`: Nest's SseStream writes it as
- * `event: ping\n\n`, a valid SSE event with no `data:` line, so the web and
- * mobile clients (which only act on `data:` lines) ignore it, and because it
- * is appended here rather than through the session it never enters the replay
- * buffer or the Redis stream.
+ * Nest's SseStream writes it as `event: ping` plus a `data:` line. The event
+ * type lets clients filter it out (React Native's EventSource only dispatches
+ * `message` events to the app; the web transport drops the data of non-default
+ * events), and the JSON `data` payload keeps it visible in browser dev tools,
+ * which discard events with an empty data buffer. Because it is appended here
+ * rather than through the session it never enters the replay buffer or the
+ * Redis stream.
  */
 export function withSseHeartbeat<T extends MessageEvent>(
   intervalMs = SSE_HEARTBEAT_INTERVAL_MS,

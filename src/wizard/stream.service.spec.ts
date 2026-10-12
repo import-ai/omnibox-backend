@@ -999,3 +999,62 @@ describe('StreamService cancellation extensions', () => {
     },
   );
 });
+
+describe('StreamService heartbeat', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('pings the client while the wizard body is silent', async () => {
+    const service = createService({});
+    const saved = {
+      id: 'query-id',
+      createdAt: new Date('2026-09-12T02:30:00Z'),
+      parentId: null,
+      message: { role: 'user', content: 'hello' },
+    };
+    (service as any).messagesService = {
+      create: jest.fn().mockResolvedValue(saved),
+      update: jest.fn().mockResolvedValue(saved),
+      findOne: jest.fn().mockResolvedValue(saved),
+    };
+    jest
+      .spyOn(service, 'stream')
+      .mockImplementation(async (_ns, _mode, _body, _req, callback) => {
+        await new Promise((resolve) => setTimeout(resolve, 40_000));
+        await callback(JSON.stringify({ response_type: 'done' }));
+      });
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      { query: 'hello', conversation_id: 'conv', tools: [] },
+      'req',
+      'ask',
+      'user',
+    );
+    const events: any[] = [];
+    const completed = new Promise<void>((resolve, reject) =>
+      observable.subscribe({
+        next: (event: any) =>
+          events.push(
+            event.data ? JSON.parse(event.data).response_type : event,
+          ),
+        complete: resolve,
+        error: reject,
+      }),
+    );
+    await jest.advanceTimersByTimeAsync(40_000);
+    await completed;
+    expect(events).toEqual([
+      'bos',
+      'delta',
+      'eos',
+      { type: 'ping' },
+      { type: 'ping' },
+      'done',
+    ]);
+  });
+});

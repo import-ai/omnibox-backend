@@ -47,6 +47,7 @@ import {
   WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
+import { withSseHeartbeat } from 'omniboxd/wizard/sse-heartbeat';
 import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { createClient } from 'redis';
@@ -707,7 +708,7 @@ export class StreamService implements OnModuleDestroy {
           timeZone,
         );
       return this.attachSession(session, subscriber);
-    });
+    }).pipe(withSseHeartbeat());
   }
 
   private startAgentSession(
@@ -1243,7 +1244,7 @@ export class StreamService implements OnModuleDestroy {
   ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
       void this.resumeRedisStream(key, lastEventId, subscriber);
-    });
+    }).pipe(withSseHeartbeat());
   }
 
   private async resumeRedisStream(

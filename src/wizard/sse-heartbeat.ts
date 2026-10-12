@@ -25,11 +25,11 @@ export const SSE_HEARTBEAT_EVENT: Readonly<MessageEvent> = Object.freeze({
  * than through the session it never enters the replay buffer or the Redis
  * stream.
  */
-export function withSseHeartbeat<T extends MessageEvent>(
+export function withSseHeartbeat(
   intervalMs = SSE_HEARTBEAT_INTERVAL_MS,
-): MonoTypeOperatorFunction<T> {
+): MonoTypeOperatorFunction<MessageEvent> {
   return (source) =>
-    new Observable<T>((subscriber) => {
+    new Observable<MessageEvent>((subscriber) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
 
       const clearTimer = () => {
@@ -42,8 +42,14 @@ export function withSseHeartbeat<T extends MessageEvent>(
         clearTimer();
         timer = setTimeout(() => {
           timer = undefined;
-          subscriber.next({ ...SSE_HEARTBEAT_EVENT } as T);
+          if (subscriber.closed) {
+            return;
+          }
+          // Re-arm before emitting: a downstream that unsubscribes
+          // synchronously inside next() (take, takeUntil) runs the teardown,
+          // which must find this timer to clear it.
           scheduleTimer();
+          subscriber.next({ ...SSE_HEARTBEAT_EVENT });
         }, intervalMs);
       };
 

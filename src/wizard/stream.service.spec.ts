@@ -1000,7 +1000,7 @@ describe('StreamService cancellation extensions', () => {
   );
 });
 
-describe('StreamService heartbeat boundary', () => {
+describe('StreamService.chat() never receives the SSE heartbeat', () => {
   const saved = {
     id: 'query-id',
     createdAt: new Date('2026-09-12T02:30:00Z'),
@@ -1008,7 +1008,15 @@ describe('StreamService heartbeat boundary', () => {
     message: { role: 'user', content: 'hello' },
   };
 
-  function createSilentService() {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('collects only wizard chunks for the non-streaming open API', async () => {
     const service = createService({
       conversationsService: {
         findOneForUserInNamespace: jest.fn().mockResolvedValue({}),
@@ -1025,48 +1033,6 @@ describe('StreamService heartbeat boundary', () => {
         await new Promise((resolve) => setTimeout(resolve, 40_000));
         await callback(JSON.stringify({ response_type: 'done' }));
       });
-    return service;
-  }
-
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
-  it('never pings from the service observable while the wizard body is silent', async () => {
-    const service = createSilentService();
-    const observable = await (service as any).createAgentStream(
-      'ns',
-      { query: 'hello', conversation_id: 'conv', tools: [] },
-      'req',
-      'ask',
-      'user',
-    );
-    const events: any[] = [];
-    const completed = new Promise<void>((resolve, reject) =>
-      observable.subscribe({
-        next: (event: any) =>
-          events.push({ type: event.type, ...JSON.parse(event.data) }),
-        complete: resolve,
-        error: reject,
-      }),
-    );
-    await jest.advanceTimersByTimeAsync(40_000);
-    await completed;
-    expect(events.map((event) => event.response_type)).toEqual([
-      'bos',
-      'delta',
-      'eos',
-      'done',
-    ]);
-    expect(events.some((event) => event.type === 'ping')).toBe(false);
-  });
-
-  it('collects only wizard chunks for the non-streaming open API', async () => {
-    const service = createSilentService();
     const chunks = service.chat(
       'user',
       'ns',

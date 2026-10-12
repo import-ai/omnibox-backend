@@ -4,7 +4,7 @@ import {
   SSE_HEARTBEAT_INTERVAL_MS,
   withSseHeartbeat,
 } from 'omniboxd/wizard/sse-heartbeat';
-import { Subject } from 'rxjs';
+import { Subject, take } from 'rxjs';
 
 const PING = SSE_HEARTBEAT_EVENT;
 
@@ -118,5 +118,42 @@ describe('withSseHeartbeat', () => {
     expect(source.observed).toBe(false);
     jest.advanceTimersByTime(10_000);
     expect(events).toEqual([]);
+  });
+
+  it('does not re-arm the timer when take() unsubscribes on the ping', () => {
+    const source = new Subject<MessageEvent>();
+    const events: MessageEvent[] = [];
+    const terminal: string[] = [];
+    source.pipe(withSseHeartbeat(1_000), take(1)).subscribe({
+      next: (event) => events.push(event),
+      complete: () => terminal.push('complete'),
+    });
+    jest.advanceTimersByTime(1_000);
+    expect(events).toEqual([PING]);
+    expect(terminal).toEqual(['complete']);
+    expect(source.observed).toBe(false);
+    expect(jest.getTimerCount()).toBe(0);
+    jest.advanceTimersByTime(5_000);
+    expect(jest.getTimerCount()).toBe(0);
+    expect(events).toEqual([PING]);
+  });
+
+  it('does not re-arm the timer when the client unsubscribes inside next', () => {
+    const source = new Subject<MessageEvent>();
+    const events: MessageEvent[] = [];
+    const subscription = source.pipe(withSseHeartbeat(1_000)).subscribe({
+      next: (event) => {
+        events.push(event);
+        subscription.unsubscribe();
+      },
+    });
+    jest.advanceTimersByTime(1_000);
+    expect(events).toEqual([PING]);
+    expect(subscription.closed).toBe(true);
+    expect(source.observed).toBe(false);
+    expect(jest.getTimerCount()).toBe(0);
+    jest.advanceTimersByTime(5_000);
+    expect(jest.getTimerCount()).toBe(0);
+    expect(events).toEqual([PING]);
   });
 });

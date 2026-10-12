@@ -1000,23 +1000,20 @@ describe('StreamService cancellation extensions', () => {
   );
 });
 
-describe('StreamService heartbeat', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
+describe('StreamService heartbeat boundary', () => {
+  const saved = {
+    id: 'query-id',
+    createdAt: new Date('2026-09-12T02:30:00Z'),
+    parentId: null,
+    message: { role: 'user', content: 'hello' },
+  };
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
-  it('pings the client while the wizard body is silent', async () => {
-    const service = createService({});
-    const saved = {
-      id: 'query-id',
-      createdAt: new Date('2026-09-12T02:30:00Z'),
-      parentId: null,
-      message: { role: 'user', content: 'hello' },
-    };
+  function createSilentService() {
+    const service = createService({
+      conversationsService: {
+        findOneForUserInNamespace: jest.fn().mockResolvedValue({}),
+      },
+    });
     (service as any).messagesService = {
       create: jest.fn().mockResolvedValue(saved),
       update: jest.fn().mockResolvedValue(saved),
@@ -1028,6 +1025,19 @@ describe('StreamService heartbeat', () => {
         await new Promise((resolve) => setTimeout(resolve, 40_000));
         await callback(JSON.stringify({ response_type: 'done' }));
       });
+    return service;
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('never pings from the service observable while the wizard body is silent', async () => {
+    const service = createSilentService();
     const observable = await (service as any).createAgentStream(
       'ns',
       { query: 'hello', conversation_id: 'conv', tools: [] },
@@ -1039,23 +1049,35 @@ describe('StreamService heartbeat', () => {
     const completed = new Promise<void>((resolve, reject) =>
       observable.subscribe({
         next: (event: any) =>
-          events.push(
-            event.type
-              ? { type: event.type, ...JSON.parse(event.data) }
-              : JSON.parse(event.data).response_type,
-          ),
+          events.push({ type: event.type, ...JSON.parse(event.data) }),
         complete: resolve,
         error: reject,
       }),
     );
     await jest.advanceTimersByTimeAsync(40_000);
     await completed;
-    expect(events).toEqual([
+    expect(events.map((event) => event.response_type)).toEqual([
       'bos',
       'delta',
       'eos',
-      { type: 'ping', response_type: 'ping' },
-      { type: 'ping', response_type: 'ping' },
+      'done',
+    ]);
+    expect(events.some((event) => event.type === 'ping')).toBe(false);
+  });
+
+  it('collects only wizard chunks for the non-streaming open API', async () => {
+    const service = createSilentService();
+    const chunks = service.chat(
+      'user',
+      'ns',
+      { query: 'hello', conversation_id: 'conv', tools: [] } as any,
+      'req',
+    );
+    await jest.advanceTimersByTimeAsync(40_000);
+    expect((await chunks).map((chunk: any) => chunk.response_type)).toEqual([
+      'bos',
+      'delta',
+      'eos',
       'done',
     ]);
   });

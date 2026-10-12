@@ -31,6 +31,7 @@ import {
   CollectUrlRequestDto,
   CollectUrlResponseDto,
 } from 'omniboxd/wizard/dto/collect-url-request.dto';
+import { withSseHeartbeat } from 'omniboxd/wizard/sse-heartbeat';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 
@@ -91,7 +92,7 @@ export class WizardController {
     @Body() body: AgentRequestDto,
     @Headers('x-timezone') timeZone?: string,
   ) {
-    return await this.streamService.createUserAgentStream(
+    const stream = await this.streamService.createUserAgentStream(
       userId,
       namespaceId,
       body,
@@ -99,6 +100,7 @@ export class WizardController {
       'ask',
       timeZone,
     );
+    return stream.pipe(withSseHeartbeat());
   }
 
   @Post('write')
@@ -110,7 +112,7 @@ export class WizardController {
     @Body() body: AgentRequestDto,
     @Headers('x-timezone') timeZone?: string,
   ) {
-    return await this.streamService.createUserAgentStream(
+    const stream = await this.streamService.createUserAgentStream(
       userId,
       namespaceId,
       body,
@@ -118,22 +120,24 @@ export class WizardController {
       'write',
       timeZone,
     );
+    return stream.pipe(withSseHeartbeat());
   }
 
   @Post('stream/resume')
   @Sse()
-  resume(
+  async resume(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
     @Body('conversation_id', new ValidationPipe()) conversationId: string,
     @Body('last_event_id') lastEventId?: string,
   ) {
-    return this.streamService.resumeUserAgentStream(
+    const stream = await this.streamService.resumeUserAgentStream(
       userId,
       namespaceId,
       conversationId,
       lastEventId,
     );
+    return stream.pipe(withSseHeartbeat());
   }
 
   @Post('stream/cancel')
@@ -189,13 +193,14 @@ export class SharedWizardController {
     @Body() body: AgentRequestDto,
     @Headers('x-timezone') timeZone?: string,
   ) {
-    return await this.streamService.createShareAgentStream(
+    const stream = await this.streamService.createShareAgentStream(
       share,
       body,
       requestId,
       'ask',
       timeZone,
     );
+    return stream.pipe(withSseHeartbeat());
   }
 
   @Post('write')
@@ -208,13 +213,14 @@ export class SharedWizardController {
     @Body() body: AgentRequestDto,
     @Headers('x-timezone') timeZone?: string,
   ) {
-    return await this.streamService.createShareAgentStream(
+    const stream = await this.streamService.createShareAgentStream(
       share,
       body,
       requestId,
       'write',
       timeZone,
     );
+    return stream.pipe(withSseHeartbeat());
   }
 
   @Post('stream/resume')
@@ -226,11 +232,9 @@ export class SharedWizardController {
     @Body('conversation_id', new ValidationPipe()) conversationId: string,
     @Body('last_event_id') lastEventId?: string,
   ) {
-    return this.streamService.resumeShareAgentStream(
-      share,
-      conversationId,
-      lastEventId,
-    );
+    return this.streamService
+      .resumeShareAgentStream(share, conversationId, lastEventId)
+      .pipe(withSseHeartbeat());
   }
 
   @Post('stream/cancel')

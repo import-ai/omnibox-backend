@@ -28,10 +28,10 @@ describe('withSseHeartbeat', () => {
     jest.useRealTimers();
   });
 
-  it('defaults to a 15 second ping event carrying a JSON payload', () => {
+  it('defaults to a 15 second type-only ping event', () => {
     expect(SSE_HEARTBEAT_INTERVAL_MS).toBe(15_000);
-    expect(PING.type).toBe('ping');
-    expect(JSON.parse(PING.data as string)).toEqual({ response_type: 'ping' });
+    expect(PING).toStrictEqual({ type: 'ping' });
+    expect(PING.data).toBeUndefined();
     const source = new Subject<MessageEvent>();
     const { events } = collect(source);
     jest.advanceTimersByTime(14_999);

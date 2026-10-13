@@ -34,6 +34,8 @@ async function collect(
   expect(events).toEqual([{ data: 'first' }]);
   jest.advanceTimersByTime(1);
   expect(events).toEqual([{ data: 'first' }, PING]);
+  expect(events[1]).toStrictEqual({ type: 'ping' });
+  expect(events[1].data).toBeUndefined();
   return events;
 }
 

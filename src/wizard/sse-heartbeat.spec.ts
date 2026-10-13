@@ -28,9 +28,9 @@ describe('withSseHeartbeat', () => {
     jest.useRealTimers();
   });
 
-  it('defaults to a 15 second ping event carrying a JSON payload', () => {
+  it('defaults to a 15 second plain message event carrying a JSON ping', () => {
     expect(SSE_HEARTBEAT_INTERVAL_MS).toBe(15_000);
-    expect(PING.type).toBe('ping');
+    expect(PING.type).toBeUndefined();
     expect(JSON.parse(PING.data as string)).toEqual({ response_type: 'ping' });
     const source = new Subject<MessageEvent>();
     const { events } = collect(source);

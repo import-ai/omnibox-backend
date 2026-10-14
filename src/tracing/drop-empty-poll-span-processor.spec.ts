@@ -85,6 +85,23 @@ describe('DropEmptyPollSpanProcessor', () => {
     expect(exported).toEqual([]);
   });
 
+  test('drops a poll trace when the HTTP span is an empty 201', () => {
+    const { processor, exported } = setup();
+    const http = fakeSpan({
+      spanId: 'http',
+      attributes: {
+        'http.target': POLL_PATH,
+        'http.status_code': 201,
+        [EMPTY_POLL_TRACE_ATTR]: true,
+      },
+    });
+
+    processor.onStart(http as never, {} as never);
+    processor.onEnd(http);
+
+    expect(exported).toEqual([]);
+  });
+
   test('exports a poll trace that returned a task', () => {
     const { processor, exported } = setup();
     const child = fakeSpan({

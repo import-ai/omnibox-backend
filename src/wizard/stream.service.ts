@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
 import { isUUID } from 'class-validator';
+import { randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { Span } from 'nestjs-otel';
 import {
@@ -169,6 +170,17 @@ export class StreamService implements OnModuleDestroy {
 
   private streamControlChannel(key: string): string {
     return `wizard:stream:${key}:control`;
+  }
+
+  private conversationLockKey(
+    namespaceId: string,
+    conversationId: string,
+  ): string {
+    return `wizard:lock:conversation:${namespaceId}:${conversationId}`;
+  }
+
+  private async sleep(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   @Span('stream')
@@ -671,11 +683,17 @@ export class StreamService implements OnModuleDestroy {
     shareId: string = '',
     chatOnly = false,
     timeZone?: string,
+    parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<Observable<MessageEvent>> {
-    let parentId: string | undefined = undefined;
+    const parentId = await this.resolveStreamParent(
+      namespaceId,
+      requestDto,
+      userId,
+      shareId,
+      parentMode,
+    );
     let messages: Message[] = [];
-    if (requestDto.parent_message_id) {
-      parentId = requestDto.parent_message_id;
+    if (parentId) {
       const allMessages = await this.messagesService.findAll(
         userId,
         requestDto.conversation_id,
@@ -689,25 +707,159 @@ export class StreamService implements OnModuleDestroy {
       userId,
       shareId,
     );
+    if (this.streamSessions.has(key)) {
+      throw new AppException(
+        this.i18n.t('system.errors.conversationBusy'),
+        'CONVERSATION_BUSY',
+        HttpStatus.CONFLICT,
+      );
+    }
 
     return new Observable<MessageEvent>((subscriber) => {
-      const session =
-        this.streamSessions.get(key) ||
-        this.startAgentSession(
-          key,
-          namespaceId,
-          requestDto,
-          requestId,
-          mode,
-          userId,
-          shareId,
-          parentId,
-          messages,
-          chatOnly,
-          timeZone,
-        );
+      const session = this.startAgentSession(
+        key,
+        namespaceId,
+        requestDto,
+        requestId,
+        mode,
+        userId,
+        shareId,
+        parentId,
+        messages,
+        chatOnly,
+        timeZone,
+      );
       return this.attachSession(session, subscriber);
     });
+  }
+
+  private async resolveStreamParent(
+    namespaceId: string,
+    requestDto: AgentRequestDto,
+    userId: string,
+    shareId: string,
+    parentMode: 'latest' | 'explicit',
+  ): Promise<string | undefined> {
+    const release = await this.acquireConversationLock(
+      namespaceId,
+      requestDto.conversation_id,
+      userId,
+      shareId,
+    );
+    try {
+      const parent =
+        parentMode === 'latest'
+          ? await this.messagesService.findLatest(
+              userId,
+              requestDto.conversation_id,
+            )
+          : requestDto.parent_message_id && release
+            ? await this.messagesService.findOneForUser(
+                requestDto.parent_message_id,
+                userId,
+              )
+            : null;
+      if (!release && parentMode === 'explicit') {
+        await this.claimStreamActive(
+          namespaceId,
+          requestDto.conversation_id,
+          userId,
+          shareId,
+        );
+        return requestDto.parent_message_id;
+      }
+      if (
+        parent &&
+        requestDto.parent_message_id &&
+        parent.conversationId !== requestDto.conversation_id
+      ) {
+        throw new AppException(
+          this.i18n.t('system.errors.parentConversationMismatch'),
+          'PARENT_CONVERSATION_MISMATCH',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      if (
+        parent?.message.role === OpenAIMessageRole.ASSISTANT &&
+        parent.attrs?.tool_call?.interrupts?.length &&
+        !requestDto.tool_call?.decisions?.length
+      ) {
+        throw new AppException(
+          this.i18n.t('system.errors.pendingInterrupt'),
+          'PENDING_INTERRUPT',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await this.claimStreamActive(
+        namespaceId,
+        requestDto.conversation_id,
+        userId,
+        shareId,
+      );
+      return parent?.id;
+    } finally {
+      await release?.();
+    }
+  }
+
+  private async acquireConversationLock(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId: string,
+  ): Promise<(() => Promise<void>) | null> {
+    const client = await this.getRedisClient();
+    if (!client) {
+      return null;
+    }
+    const streamKey = getStreamKey(
+      namespaceId,
+      conversationId,
+      userId,
+      shareId,
+    );
+    const activeKey = this.streamActiveKey(streamKey);
+    const deadline = Date.now() + 290_000;
+    while (await client.exists(activeKey)) {
+      if (Date.now() > deadline) {
+        throw new AppException(
+          this.i18n.t('system.errors.conversationBusy'),
+          'CONVERSATION_BUSY',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await this.sleep(250);
+    }
+    const lockKey = this.conversationLockKey(namespaceId, conversationId);
+    const token = randomUUID();
+    while (!(await client.set(lockKey, token, { NX: true, EX: 30 }))) {
+      if (Date.now() > deadline) {
+        throw new AppException(
+          this.i18n.t('system.errors.conversationBusy'),
+          'CONVERSATION_BUSY',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await this.sleep(250);
+    }
+    if (await client.exists(activeKey)) {
+      await client.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        { keys: [lockKey], arguments: [token] },
+      );
+      return this.acquireConversationLock(
+        namespaceId,
+        conversationId,
+        userId,
+        shareId,
+      );
+    }
+    return async () => {
+      await client.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        { keys: [lockKey], arguments: [token] },
+      );
+    };
   }
 
   private startAgentSession(
@@ -972,20 +1124,41 @@ export class StreamService implements OnModuleDestroy {
     };
   }
 
+  private async claimStreamActive(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId: string,
+  ) {
+    const client = await this.getRedisClient();
+    if (!client) return;
+    const key = getStreamKey(namespaceId, conversationId, userId, shareId);
+    await client.del([
+      this.streamEventsKey(key),
+      this.streamSequenceKey(key),
+      this.streamCancelKey(key),
+    ]);
+    await client.set(this.streamActiveKey(key), '1', {
+      EX: STREAM_TTL_SECONDS,
+    });
+  }
+
   private async startRedisSession(session: StreamSession) {
     try {
       const client = await this.getRedisClient();
       if (client) {
-        if (!(await client.exists(this.streamActiveKey(session.key)))) {
+        const claimed = await client.set(
+          this.streamActiveKey(session.key),
+          '1',
+          { NX: true, EX: STREAM_TTL_SECONDS },
+        );
+        if (claimed) {
           await client.del([
             this.streamEventsKey(session.key),
             this.streamSequenceKey(session.key),
+            this.streamCancelKey(session.key),
           ]);
         }
-        await client.del(this.streamCancelKey(session.key));
-        await client.set(this.streamActiveKey(session.key), '1', {
-          EX: STREAM_TTL_SECONDS,
-        });
       }
 
       const subscriber = await this.getRedisSubscriber();
@@ -1370,6 +1543,7 @@ export class StreamService implements OnModuleDestroy {
     requestId: string,
     mode: 'ask' | 'write',
     timeZone?: string,
+    parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<Observable<MessageEvent>> {
     await this.conversationsService.findOneForUserInNamespace(
       requestDto.conversation_id,
@@ -1395,6 +1569,7 @@ export class StreamService implements OnModuleDestroy {
         '',
         false,
         timeZone,
+        parentMode,
       );
     } catch (e) {
       return new Observable<MessageEvent>((subscriber) =>
@@ -1442,6 +1617,7 @@ export class StreamService implements OnModuleDestroy {
     body: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write' = 'ask',
+    parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<any> {
     const observable = await this.createUserAgentStream(
       userId,
@@ -1449,6 +1625,8 @@ export class StreamService implements OnModuleDestroy {
       body,
       requestId,
       mode,
+      undefined,
+      parentMode,
     );
 
     const chunks: ChatResponse[] = [];

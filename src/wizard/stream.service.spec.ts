@@ -4,6 +4,7 @@ import { StreamService } from 'omniboxd/wizard/stream.service';
 
 function createService(mocks: {
   configService?: { get: jest.Mock };
+  messagesService?: Record<string, jest.Mock>;
   conversationsService?: Record<string, jest.Mock>;
   namespaceResourcesService?: Record<string, jest.Mock>;
   sharedResourcesService?: Record<string, jest.Mock>;
@@ -13,13 +14,13 @@ function createService(mocks: {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
     {} as any,
-    {} as any,
+    (mocks.messagesService ?? {}) as any,
     mocks.conversationsService as any,
     mocks.namespaceResourcesService as any,
     mocks.sharedResourcesService as any,
     mocks.resourcesService as any,
     mocks.smartFoldersService as any,
-    {} as any,
+    { t: jest.fn((key: string) => key) } as any,
     { mint: jest.fn(() => 'share-access-token') } as any,
     {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
@@ -357,6 +358,140 @@ describe('StreamService private_search visible resources', () => {
   });
 });
 
+describe('StreamService parent resolution', () => {
+  const request = {
+    conversation_id: 'conversation-id',
+    query: 'hello',
+    tools: [],
+  };
+
+  function serviceWith(messagesService: Record<string, jest.Mock>) {
+    const service = createService({ messagesService });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    return service;
+  }
+
+  it('follows the latest message inside the conversation lock', async () => {
+    const messagesService = {
+      findLatest: jest.fn().mockResolvedValue({
+        id: 'latest-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+      }),
+      findOneForUser: jest.fn(),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        request,
+        'user-id',
+        '',
+        'latest',
+      ),
+    ).resolves.toBe('latest-id');
+
+    expect(messagesService.findLatest).toHaveBeenCalledWith(
+      'user-id',
+      'conversation-id',
+    );
+    expect(messagesService.findOneForUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps an explicit parent instead of replacing it with the latest message', async () => {
+    const messagesService = {
+      findLatest: jest.fn(),
+      findOneForUser: jest.fn().mockResolvedValue({
+        id: 'parent-id',
+        conversationId: 'conversation-id',
+        message: { role: 'user' },
+      }),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        { ...request, parent_message_id: 'parent-id' },
+        'user-id',
+        '',
+        'explicit',
+      ),
+    ).resolves.toBe('parent-id');
+
+    expect(messagesService.findLatest).not.toHaveBeenCalled();
+  });
+
+  it('rejects a normal reply while the latest message waits for a decision', async () => {
+    const messagesService = {
+      findLatest: jest.fn().mockResolvedValue({
+        id: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+        attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
+      }),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        request,
+        'user-id',
+        '',
+        'latest',
+      ),
+    ).rejects.toMatchObject({ code: 'PENDING_INTERRUPT' });
+  });
+
+  it('allows a decision to resume a pending interrupt', async () => {
+    const messagesService = {
+      findOneForUser: jest.fn().mockResolvedValue({
+        id: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+        attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
+      }),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        {
+          ...request,
+          parent_message_id: 'interrupt-id',
+          tool_call: { decisions: [{ type: 'approve' }] },
+        },
+        'user-id',
+        '',
+        'explicit',
+      ),
+    ).resolves.toBe('interrupt-id');
+  });
+
+  it('does not join an in-memory session that is already streaming', async () => {
+    const service = serviceWith({});
+    (service as any).streamSessions.set(
+      'user:user-id:namespace-id:conversation-id',
+      {
+        finished: false,
+      },
+    );
+
+    await expect(
+      (service as any).createAgentStream(
+        'namespace-id',
+        request,
+        'request-id',
+        'ask',
+        'user-id',
+      ),
+    ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
+  });
+});
+
 describe('StreamService redis stream replay', () => {
   it('sends stopped data when abort rejects the active stream', async () => {
     const service = createService({});
@@ -414,7 +549,7 @@ describe('StreamService redis stream replay', () => {
     const client = {
       del: jest.fn(),
       exists: jest.fn().mockResolvedValue(0),
-      set: jest.fn(),
+      set: jest.fn().mockResolvedValue('OK'),
     };
     const subscriber = {
       subscribe: jest.fn(),
@@ -428,16 +563,16 @@ describe('StreamService redis stream replay', () => {
 
     await (service as any).startRedisSession({ key: 'stream-key' });
 
-    expect(client.del).toHaveBeenCalledWith([
-      'wizard:stream:stream-key:events',
-      'wizard:stream:stream-key:seq',
-    ]);
-    expect(client.del).toHaveBeenCalledWith('wizard:stream:stream-key:cancel');
     expect(client.set).toHaveBeenCalledWith(
       'wizard:stream:stream-key:active',
       '1',
-      { EX: 3600 },
+      { NX: true, EX: 3600 },
     );
+    expect(client.del).toHaveBeenCalledWith([
+      'wizard:stream:stream-key:events',
+      'wizard:stream:stream-key:seq',
+      'wizard:stream:stream-key:cancel',
+    ]);
     expect(subscriber.subscribe).toHaveBeenCalledWith(
       'wizard:stream:stream-key:control',
       expect.any(Function),

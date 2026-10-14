@@ -290,6 +290,13 @@ export class MessagesService {
     });
   }
 
+  async findLatest(userId: string, conversationId: string) {
+    return await this.messageRepository.findOne({
+      where: { conversationId, userId },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+  }
+
   async findOne(id: string) {
     return await this.messageRepository.findOneOrFail({
       where: { id },

@@ -11,6 +11,10 @@
     "responseBodyNotReadable": "响应体不可读",
     "messageIdNotSet": "上下文中未设置消息 ID",
     "messageNotFound": "消息未找到",
+    "conversationNotFound": "对话未找到",
+    "parentConversationMismatch": "父消息不属于这个对话",
+    "pendingInterrupt": "这个对话正在等待工具确认",
+    "conversationBusy": "这个对话还在生成回复",
     "requestFailed": "请求失败，状态码 {status}"
   }
 }

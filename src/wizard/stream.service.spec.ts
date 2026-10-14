@@ -22,6 +22,7 @@ function createService(mocks: {
     mocks.smartFoldersService as any,
     { t: jest.fn((key: string) => key) } as any,
     { mint: jest.fn(() => 'share-access-token') } as any,
+    { manager: {} } as any,
     {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
@@ -809,6 +810,7 @@ describe('StreamService agent stream hooks', () => {
       {} as any,
       {} as any,
       { mint: jest.fn(() => 'share-access-token') } as any,
+      { manager: {} } as any,
       hooks as any,
     );
     return { service, hooks };
@@ -920,6 +922,7 @@ describe('trusted upstream billing metadata', () => {
       {} as never,
       {} as never,
       { mint: jest.fn(() => 'share-access-token') } as never,
+      { manager: {} } as never,
       {
         onStreamStarted: started,
         onCallCompleted: jest.fn(),
@@ -959,6 +962,7 @@ describe('trusted upstream billing metadata', () => {
       {} as never,
       {} as never,
       { mint: jest.fn(() => 'share-access-token') } as never,
+      { manager: {} } as never,
       {
         onStreamStarted: jest.fn().mockRejectedValue(failure),
         onCallCompleted: jest.fn(),
@@ -1032,6 +1036,9 @@ describe('persisted query receipts', () => {
       }),
     );
     expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][3].attrs.user_context).toEqual({
+      lang: '简体中文',
+    });
     expect(update).toHaveBeenCalledWith(
       'query-id',
       'ns',
@@ -1083,6 +1090,86 @@ describe('persisted query receipts', () => {
       observable.subscribe({ complete: resolve, error: reject }),
     );
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('records the messaging channel on the user message', async () => {
+    const service = createService({});
+    const create = jest.fn().mockResolvedValue({
+      id: 'query-id',
+      parentId: null,
+      message: { role: 'user', content: 'hello' },
+      attrs: {},
+    });
+    (service as any).messagesService = { create, findOne: jest.fn() };
+    jest.spyOn(service, 'stream').mockResolvedValue(undefined);
+
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      {
+        query: 'hello',
+        conversation_id: 'conv',
+        tools: [],
+        source_channel: 'qq',
+      },
+      'req',
+      'ask',
+      'user',
+    );
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({ complete: resolve, error: reject }),
+    );
+
+    expect(create.mock.calls[0][3].attrs.user_context).toEqual({
+      lang: '简体中文',
+      channel: 'qq',
+    });
+  });
+
+  it('keeps a decision reply as its own message ahead of the decision', async () => {
+    const service = createService({});
+    const spoken = {
+      id: 'spoken-id',
+      createdAt: new Date('2026-09-12T02:30:00Z'),
+      parentId: 'interrupt-id',
+      message: { role: 'user', content: '先别改' },
+      attrs: { user_context: { lang: '简体中文', channel: 'qq' } },
+    };
+    const decision = {
+      id: 'decision-id',
+      parentId: 'spoken-id',
+      message: { role: 'user', content: '' },
+      attrs: {},
+    };
+    const create = jest.fn().mockResolvedValue(decision);
+    (service as any).messagesService = { create, findOne: jest.fn() };
+    jest.spyOn(service as any, 'saveSpokenMessage').mockResolvedValue(spoken);
+    jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {
+      expect(body.messages.map((message) => message.id)).toEqual([
+        'spoken-id',
+        'decision-id',
+      ]);
+      return Promise.resolve();
+    });
+
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      {
+        query: '先别改',
+        conversation_id: 'conv',
+        tools: [],
+        source_channel: 'qq',
+        tool_call: { decisions: [{ type: 'reject' }] },
+      },
+      'req',
+      'ask',
+      'user',
+    );
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({ complete: resolve, error: reject }),
+    );
+
+    expect(create.mock.calls[0][3].parentId).toBe('spoken-id');
+    expect(create.mock.calls[0][3].message.content).toBe('');
   });
 });
 

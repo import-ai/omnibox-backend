@@ -94,6 +94,31 @@ describe('OpenWizardService', () => {
     expect(response).toMatchObject({ conversation_id: 'conversation-1' });
   });
 
+  it('forwards the messaging channel without changing the API surface', async () => {
+    conversationsService.findOneForUserInNamespace.mockResolvedValue({
+      id: 'conversation-1',
+    });
+
+    await service.ask('user-1', 'namespace-1', 'request-1', {
+      query: 'hello',
+      tools: [],
+      conversation_id: 'conversation-1',
+      source_channel: 'qq',
+    });
+
+    expect(streamService.chat).toHaveBeenCalledWith(
+      'user-1',
+      'namespace-1',
+      expect.objectContaining({
+        channel: AgentRequestChannel.OPEN_API,
+        source_channel: 'qq',
+      }),
+      'request-1',
+      'ask',
+      'latest',
+    );
+  });
+
   it('keeps an explicit parent when conversation_id is also set', async () => {
     messagesService.findOneForUser.mockResolvedValue({
       id: 'message-1',

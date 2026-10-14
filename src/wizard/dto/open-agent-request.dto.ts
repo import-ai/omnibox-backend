@@ -60,4 +60,13 @@ export class OpenAgentRequestDto {
   @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   parent_message_id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Messaging channel the user sent from, such as qq, wechat, or telegram. Stored on the user message so clients can show where it came from.',
+    example: 'qq',
+  })
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  source_channel?: string;
 }

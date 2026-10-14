@@ -47,6 +47,9 @@ export interface BaseAgentRequestDto {
     decisions?: Record<string, any>[];
   };
   channel: AgentRequestChannel;
+  // Messaging channel the user actually sent from, e.g. "qq" or "telegram".
+  // Distinct from `channel`, which records the API surface (web, open_api).
+  source_channel?: string;
   images?: {
     attachment_id: string;
     url: string;

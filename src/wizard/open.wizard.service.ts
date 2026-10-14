@@ -23,6 +23,10 @@ export class OpenWizardService {
     private readonly i18n: I18nService,
   ) {}
 
+  protected translate(key: string): string {
+    return this.i18n.t(key);
+  }
+
   async ask(
     userId: string,
     namespaceId: string,

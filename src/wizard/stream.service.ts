@@ -802,7 +802,7 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
-  private async acquireConversationLock(
+  async acquireConversationLock(
     namespaceId: string,
     conversationId: string,
     userId: string,

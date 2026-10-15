@@ -44,12 +44,12 @@ export function isEmptyPollSpan(span: ReadableSpan): boolean {
   const statusCode =
     span.attributes['http.status_code'] ??
     span.attributes['http.response.status_code'];
-  return statusCode === undefined || statusCode === 200;
+  return statusCode === undefined || statusCode === 200 || statusCode === 201;
 }
 
 /**
  * Holds every span of a tasks/poll trace until the HTTP server span ends.
- * A 200 response with no task is not exported. Failures and claimed tasks are.
+ * A 200 or 201 response with no task is not exported. Failures and claimed tasks are.
  */
 export class DropEmptyPollSpanProcessor implements SpanProcessor {
   private readonly pollTraces = new Set<string>();

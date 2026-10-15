@@ -4,6 +4,8 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 
 import { ConversationsService } from './conversations.service';
 import { Conversation } from './entities/conversation.entity';
@@ -86,5 +88,119 @@ describe('ConversationsService', () => {
         },
       }),
     );
+  });
+
+  it('keeps a title renamed while generation is in flight', async () => {
+    const stored = {
+      id: 'conversation-id',
+      namespaceId: 'namespace-id',
+      userId: 'user-id',
+      title: '',
+      createdAt: new Date('2026-10-14T01:40:00.000Z'),
+      updatedAt: new Date('2026-10-14T01:40:00.000Z'),
+    };
+    const repository = {
+      findOne: jest.fn(() => ({ ...stored })),
+      update: jest.fn(
+        (criteria: { title?: string }, partial: { title: string }) => {
+          if (criteria.title === '' && stored.title === '') {
+            stored.title = partial.title;
+            return { affected: 1 };
+          }
+          return { affected: 0 };
+        },
+      ),
+      save: jest.fn((entity: { title: string }) => {
+        stored.title = entity.title;
+        return entity;
+      }),
+    };
+    const wizardApiService = {
+      createTitle: jest.fn(() => {
+        stored.title = '用户改名';
+        return { title: '简短问候' };
+      }),
+    };
+    const titleService = new ConversationsService(
+      repository as never,
+      {} as never,
+      {
+        findAll: jest
+          .fn()
+          .mockResolvedValue([
+            message('user-1', OpenAIMessageRole.USER, '你好'),
+          ]),
+      } as unknown as MessagesService,
+      { getMe: jest.fn() } as unknown as NamespacesService,
+      {} as never,
+      wizardApiService as unknown as WizardAPIService,
+      {} as never,
+      {} as never,
+      { t: (key: string) => key } as unknown as I18nService,
+    );
+
+    await expect(
+      titleService.createTitle('namespace-id', 'conversation-id', 'user-id'),
+    ).resolves.toEqual({ title: '用户改名' });
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(stored.title).toBe('用户改名');
+  });
+
+  it('saves a generated title while the conversation title is still empty', async () => {
+    const stored = {
+      id: 'conversation-id',
+      namespaceId: 'namespace-id',
+      userId: 'user-id',
+      title: '',
+      createdAt: new Date('2026-10-14T01:40:00.000Z'),
+      updatedAt: new Date('2026-10-14T01:40:00.000Z'),
+    };
+    const repository = {
+      findOne: jest.fn(() => ({ ...stored })),
+      update: jest.fn(
+        (criteria: { title?: string }, partial: { title: string }) => {
+          if (criteria.title === '' && stored.title === '') {
+            stored.title = partial.title;
+            return { affected: 1 };
+          }
+          return { affected: 0 };
+        },
+      ),
+      save: jest.fn(),
+    };
+    const titleService = new ConversationsService(
+      repository as never,
+      {} as never,
+      {
+        findAll: jest
+          .fn()
+          .mockResolvedValue([
+            message('user-1', OpenAIMessageRole.USER, '你好'),
+          ]),
+      } as unknown as MessagesService,
+      { getMe: jest.fn() } as unknown as NamespacesService,
+      {} as never,
+      {
+        createTitle: jest.fn().mockResolvedValue({ title: '简短问候' }),
+      } as unknown as WizardAPIService,
+      {} as never,
+      {} as never,
+      { t: (key: string) => key } as unknown as I18nService,
+    );
+
+    await expect(
+      titleService.createTitle('namespace-id', 'conversation-id', 'user-id'),
+    ).resolves.toEqual({ title: '简短问候' });
+    expect(repository.save).not.toHaveBeenCalled();
+    expect(repository.update).toHaveBeenCalledWith(
+      {
+        id: 'conversation-id',
+        userId: 'user-id',
+        namespaceId: 'namespace-id',
+        title: '',
+      },
+      { title: '简短问候' },
+    );
+    expect(stored.title).toBe('简短问候');
   });
 });

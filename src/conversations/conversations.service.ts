@@ -155,9 +155,23 @@ export class ConversationsService {
             lang,
           },
         );
-        conversation.title = titleCreateResponse.title!;
-        await this.conversationRepository.save(conversation);
-        return titleCreateResponse as { title: string };
+        const generatedTitle = titleCreateResponse.title;
+        if (!generatedTitle) {
+          return { title: conversation.title };
+        }
+        const updated = await this.conversationRepository.update(
+          { id, userId, namespaceId, title: '' },
+          { title: generatedTitle },
+        );
+        if (updated.affected) {
+          return { title: generatedTitle };
+        }
+        const current = await this.findOneForUserInNamespace(
+          id,
+          userId,
+          namespaceId,
+        );
+        return { title: current.title || generatedTitle };
       }
     }
     const message = this.i18n.t('system.errors.noQueryContent');

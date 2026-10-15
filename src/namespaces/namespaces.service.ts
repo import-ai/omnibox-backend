@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import { Applications } from 'omniboxd/applications/applications.entity';
+import { getClientContext } from 'omniboxd/common/client-context';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { GroupUser } from 'omniboxd/groups/entities/group-user.entity';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
@@ -269,11 +270,18 @@ export class NamespacesService {
       tx,
     );
     if (this.proUrl && !skipHook) {
+      // Captured here because the hook runs after commit, possibly outside the request's async context.
+      const { installationId } = getClientContext();
+      const creationHookContext = {
+        user_id: ownerId,
+        installation_id: installationId,
+      };
       tx.afterCommitHooks.push(async () => {
         const url = `${this.proUrl}/internal/api/v1/pro-namespaces/${namespace.id}/creation-hook`;
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(creationHookContext),
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));

@@ -41,6 +41,7 @@ import {
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
+import { transaction } from 'omniboxd/utils/transaction-utils';
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
@@ -52,6 +53,7 @@ import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { createClient } from 'redis';
 import { Observable, Subscriber } from 'rxjs';
+import { DataSource } from 'typeorm';
 
 const STREAM_TTL_SECONDS = 60 * 60;
 const STREAM_BLOCK_MS = 15000;
@@ -109,9 +111,41 @@ export class StreamService implements OnModuleDestroy {
     private readonly smartFoldersService: SmartFoldersService,
     private readonly i18n: I18nService,
     private readonly shareAccessTokenService: ShareAccessTokenService,
+    private readonly dataSource: DataSource,
     @Inject(AGENT_STREAM_HOOKS)
     private readonly agentStreamHooks: IAgentStreamHooks,
   ) {}
+
+  // The user's own words on a turn that also decides a paused tool call.
+  // The decision message itself is removed from the model context, so the text
+  // has to live on a message of its own to stay visible and reach the model.
+  private async saveSpokenMessage(
+    namespaceId: string,
+    requestDto: AgentRequestDto,
+    userId: string,
+    parentId: string | undefined,
+  ): Promise<Message> {
+    return await transaction(this.dataSource.manager, async (tx) => {
+      const repository = tx.entityManager.getRepository(Message);
+      return await repository.save(
+        repository.create({
+          conversationId: requestDto.conversation_id,
+          userId: userId || null,
+          message: { role: OpenAIMessageRole.USER, content: requestDto.query },
+          parentId: parentId ?? null,
+          status: MessageStatus.SUCCESS,
+          attrs: {
+            user_context: {
+              lang: requestDto.lang || '简体中文',
+              ...(requestDto.source_channel
+                ? { channel: requestDto.source_channel }
+                : {}),
+            },
+          },
+        }),
+      );
+    });
+  }
 
   async onModuleDestroy() {
     await Promise.all([
@@ -959,6 +993,24 @@ export class StreamService implements OnModuleDestroy {
         delete attrs.messages;
         // A live credential: never persisted or echoed back to clients.
         delete attrs.share_access_token;
+        // A decision resumes a paused tool call, and that message is dropped
+        // from the model context. Keep what the user actually sent as its own
+        // message so it stays visible and reaches the model.
+        if (
+          requestDto.tool_call?.decisions?.length &&
+          requestDto.query.trim()
+        ) {
+          const spoken = await this.saveSpokenMessage(
+            namespaceId,
+            requestDto,
+            userId,
+            parentId,
+          );
+          messages.push(spoken);
+          parentId = spoken.id;
+          session.handlerContext = { parentId };
+          await this.sendSavedMessage(session, spoken, chatOnly);
+        }
         query = await this.messagesService.create(
           namespaceId,
           requestDto.conversation_id,
@@ -966,13 +1018,20 @@ export class StreamService implements OnModuleDestroy {
           {
             message: {
               role: OpenAIMessageRole.USER,
-              content: requestDto.query,
+              content: requestDto.tool_call?.decisions?.length
+                ? ''
+                : requestDto.query,
             },
             parentId,
             status: MessageStatus.SUCCESS,
             attrs: {
               ...attrs,
-              user_context: { lang: requestDto.lang || '简体中文' },
+              user_context: {
+                lang: requestDto.lang || '简体中文',
+                ...(requestDto.source_channel
+                  ? { channel: requestDto.source_channel }
+                  : {}),
+              },
               ...(requestDto.images?.length
                 ? {
                     composer: {

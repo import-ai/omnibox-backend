@@ -45,6 +45,7 @@ export class OpenWizardService {
       conversation_id: resolved.conversationId,
       enable_thinking: data.enable_thinking ?? false,
       channel: AgentRequestChannel.OPEN_API,
+      source_channel: data.source_channel,
     };
 
     const chunks: ChatResponse[] = await this.streamService.chat(

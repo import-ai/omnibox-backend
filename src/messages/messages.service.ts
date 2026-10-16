@@ -10,15 +10,18 @@ import { Conversation } from 'omniboxd/conversations/entities/conversation.entit
 import { agentTokenDeltaOf } from 'omniboxd/messages/agent-token-usage';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import {
+  isMessageIndexable,
   Message,
   MessageStatus,
   OpenAIMessage,
+  OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { queryTime } from 'omniboxd/messages/query-time';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { Task } from 'omniboxd/tasks/tasks.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { User } from 'omniboxd/user/entities/user.entity';
-import { transaction } from 'omniboxd/utils/transaction-utils';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { DataSource, In, IsNull, MoreThan, Not, Repository } from 'typeorm';
 
 import {
@@ -214,6 +217,121 @@ export class MessagesService {
     });
   }
 
+  async isIndexable(message: Message, tx?: Transaction): Promise<boolean> {
+    const repo =
+      tx?.entityManager.getRepository(Message) || this.messageRepository;
+    const children =
+      message.message.role === OpenAIMessageRole.ASSISTANT
+        ? await repo.findBy({
+            parentId: message.id,
+            conversationId: message.conversationId,
+          })
+        : [];
+    return isMessageIndexable(message, children);
+  }
+
+  /**
+   * Provides the conversation data needed to update the user's personal memory:
+   * the user's query, the final assistant answer, and when each was created.
+   *
+   * Called before queuing an automatic memory task, and again whenever that task
+   * runs or retries, so it checks the latest messages without loading the whole chat.
+   *
+   * Reports whether this round already attempted to edit memory. Callers skip
+   * automatic memory updates in that case, whether the user accepted or rejected
+   * the edit, to avoid repeating or overriding that interaction.
+   *
+   * Returns null if the answer is not eligible as a final answer or its user query
+   * cannot be found. Only reads data; does not mark the round complete, queue tasks,
+   * or write memory.
+   */
+  async completedTurn(message: Message, tx?: Transaction) {
+    if (
+      message.message.role !== OpenAIMessageRole.ASSISTANT ||
+      !(await this.isIndexable(message, tx))
+    )
+      return null;
+    const repo =
+      tx?.entityManager.getRepository(Message) || this.messageRepository;
+    let current: Message | null = message;
+    let memoryWriteAttempt = false;
+    const visited = new Set<string>();
+    while (current) {
+      if (
+        visited.has(current.id) ||
+        current.conversationId !== message.conversationId ||
+        current.userId !== message.userId
+      )
+        return null;
+      visited.add(current.id);
+      if (
+        current.message.role === OpenAIMessageRole.USER &&
+        !current.attrs?.tool_call?.decisions?.length
+      ) {
+        const serialize = (row: Message) => ({
+          id: row.id,
+          content: row.message.content || '',
+          created_at: row.createdAt,
+        });
+        return {
+          query: serialize(current),
+          assistant: serialize(message),
+          memory_write_attempt: memoryWriteAttempt,
+        };
+      }
+      memoryWriteAttempt ||= !!current.attrs?.context?.memory_write_attempt;
+      if (!current.parentId) return null;
+      current = await repo.findOneBy({
+        id: current.parentId,
+        conversationId: message.conversationId,
+      });
+    }
+    return null;
+  }
+
+  async indexFinalAssistant(
+    id: string,
+    namespaceId: string,
+    conversationId: string,
+    onCompleted?: (tx: Transaction) => Promise<void>,
+  ): Promise<void> {
+    await transaction(this.dataSource.manager, async (tx) => {
+      const repo = tx.entityManager.getRepository(Message);
+      const message = await repo.findOneOrFail({
+        where: { id, conversationId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (
+        message.message.role !== OpenAIMessageRole.ASSISTANT ||
+        !(await this.isIndexable(message, tx))
+      )
+        return;
+      const taskRepo = tx.entityManager.getRepository(Task);
+      const alreadyEnqueued = await taskRepo
+        .createQueryBuilder('task')
+        .withDeleted()
+        .where('task.function = :function', {
+          function: 'upsert_message_index',
+        })
+        .andWhere("task.input ->> 'conversation_id' = :conversationId", {
+          conversationId,
+        })
+        .andWhere("task.input ->> 'message_id' = :id", { id })
+        .getExists();
+      if (!alreadyEnqueued) {
+        await this.wizardTaskService.emitUpsertMessageIndexTask(
+          TASK_PRIORITY,
+          message.userId!,
+          namespaceId,
+          conversationId,
+          message,
+          tx,
+        );
+      }
+      await onCompleted?.(tx);
+    });
+  }
+
   add(source?: string, delta?: string): string | undefined {
     return delta ? (source || '') + delta : source;
   }
@@ -290,6 +408,10 @@ export class MessagesService {
     });
   }
 
+  async findNullable(id: string) {
+    return this.messageRepository.findOneBy({ id });
+  }
+
   async findOne(id: string) {
     return await this.messageRepository.findOneOrFail({
       where: { id },
@@ -325,7 +447,7 @@ export class MessagesService {
       namespaceId,
       conversationId,
       { status: MessageStatus.STOPPED },
-      true,
+      false,
     );
   }
 

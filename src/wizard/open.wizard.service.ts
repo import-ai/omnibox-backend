@@ -67,7 +67,11 @@ export class OpenWizardService {
     parentMessageId?: string,
   ): Promise<{ conversationId: string; parentMode: 'latest' | 'explicit' }> {
     if (conversationId && !parentMessageId) {
-      await this.findConversation(conversationId, userId, namespaceId);
+      await this.conversationsService.findOneForUserInNamespace(
+        conversationId,
+        userId,
+        namespaceId,
+      );
       return { conversationId, parentMode: 'latest' };
     }
 
@@ -109,29 +113,6 @@ export class OpenWizardService {
       userId,
     );
     return { conversationId: conversation.id, parentMode: 'explicit' };
-  }
-
-  private async findConversation(
-    conversationId: string,
-    userId: string,
-    namespaceId: string,
-  ) {
-    try {
-      return await this.conversationsService.findOneForUserInNamespace(
-        conversationId,
-        userId,
-        namespaceId,
-      );
-    } catch (error) {
-      if (!(error instanceof EntityNotFoundError)) {
-        throw error;
-      }
-      throw new AppException(
-        this.i18n.t('system.errors.conversationNotFound'),
-        'CONVERSATION_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-      );
-    }
   }
 
   private async findParentMessage(parentMessageId: string, userId: string) {

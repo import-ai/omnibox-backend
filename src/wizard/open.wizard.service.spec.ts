@@ -168,9 +168,13 @@ describe('OpenWizardService', () => {
     expect(streamService.chat).not.toHaveBeenCalled();
   });
 
-  it('rejects an unknown conversation_id', async () => {
+  it('denies a conversation_id the user cannot access', async () => {
     conversationsService.findOneForUserInNamespace.mockRejectedValue(
-      new EntityNotFoundError('Conversation', { id: 'conversation-1' }),
+      new AppException(
+        'denied',
+        'CONVERSATION_ACCESS_DENIED',
+        HttpStatus.FORBIDDEN,
+      ),
     );
 
     await expect(
@@ -179,7 +183,7 @@ describe('OpenWizardService', () => {
         tools: [],
         conversation_id: 'conversation-1',
       }),
-    ).rejects.toMatchObject({ code: 'CONVERSATION_NOT_FOUND' });
+    ).rejects.toMatchObject({ code: 'CONVERSATION_ACCESS_DENIED' });
     expect(streamService.chat).not.toHaveBeenCalled();
   });
 

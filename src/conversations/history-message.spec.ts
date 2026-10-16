@@ -1,9 +1,13 @@
+import { HttpStatus } from '@nestjs/common';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+
+import { ConversationsService } from './conversations.service';
 import { InternalConversationsController } from './internal.conversations.controller';
 
 describe('History message reads', () => {
   it('returns 404 for deleted messages, matching the index consumer contract', async () => {
     const conversations = {
-      findOneForUserInNamespace: jest.fn().mockResolvedValue({}),
+      findLiveForUserInNamespace: jest.fn().mockResolvedValue({}),
     };
     const messages = { findNullable: jest.fn().mockResolvedValue(null) };
     const controller = new InternalConversationsController(
@@ -26,7 +30,7 @@ describe('History message reads', () => {
 
 it('reads authorized intermediate text without exposing internal attributes', async () => {
   const controller = new InternalConversationsController(
-    { findOneForUserInNamespace: jest.fn().mockResolvedValue({}) } as any,
+    { findLiveForUserInNamespace: jest.fn().mockResolvedValue({}) } as any,
     {
       findNullable: jest.fn().mockResolvedValue({
         conversationId: 'c',
@@ -47,7 +51,7 @@ it('reads authorized intermediate text without exposing internal attributes', as
 
 it('does not expose system messages through history reads', async () => {
   const controller = new InternalConversationsController(
-    { findOneForUserInNamespace: jest.fn().mockResolvedValue({}) } as any,
+    { findLiveForUserInNamespace: jest.fn().mockResolvedValue({}) } as any,
     {
       findNullable: jest.fn().mockResolvedValue({
         conversationId: 'c',
@@ -64,7 +68,7 @@ it('does not expose system messages through history reads', async () => {
 it('pages long answers using character offsets without returning the full answer', async () => {
   const content = '🙂'.repeat(9000);
   const controller = new InternalConversationsController(
-    { findOneForUserInNamespace: jest.fn().mockResolvedValue({}) } as any,
+    { findLiveForUserInNamespace: jest.fn().mockResolvedValue({}) } as any,
     {
       findNullable: jest.fn().mockResolvedValue({
         conversationId: 'c',
@@ -86,4 +90,73 @@ it('pages long answers using character offsets without returning the full answer
     next_offset: 8000,
   });
   expect(last).toMatchObject({ content: '🙂'.repeat(1000), next_offset: null });
+});
+
+describe('Worker reads of a deleted conversation', () => {
+  function controllerFor(namespaces: { getMe: jest.Mock }) {
+    const conversations = new ConversationsService(
+      { findOne: jest.fn().mockResolvedValue(null) } as any,
+      {} as any,
+      {} as any,
+      namespaces as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { t: (key: string) => key } as any,
+    );
+    const messages = {
+      findNullable: jest.fn(),
+      completedTurn: jest.fn(),
+    };
+    return {
+      controller: new InternalConversationsController(
+        conversations,
+        messages as any,
+      ),
+      messages,
+    };
+  }
+
+  const reads: [
+    string,
+    (c: InternalConversationsController) => Promise<any>,
+  ][] = [
+    [
+      'index read',
+      (c) => c.readMessage('n', 'c', 'm', 'u', undefined, undefined, 'true'),
+    ],
+    ['ranged read', (c) => c.readMessage('n', 'c', 'm', 'u', '0', '4000')],
+    ['completed turn', (c) => c.completedTurn('n', 'c', 'm', 'u')],
+  ];
+
+  it.each(reads)(
+    'answers 404 for the %s so the task treats the source as gone',
+    async (_, read) => {
+      const { controller, messages } = controllerFor({
+        getMe: jest.fn().mockResolvedValue({}),
+      });
+      await expect(read(controller)).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+        code: 'CONVERSATION_NOT_FOUND',
+      });
+      expect(messages.findNullable).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(reads)(
+    'keeps 403 for the %s when the user left the namespace',
+    async (_, read) => {
+      const { controller } = controllerFor({
+        getMe: jest
+          .fn()
+          .mockRejectedValue(
+            new AppException('no', 'NOT_A_MEMBER', HttpStatus.FORBIDDEN),
+          ),
+      });
+      await expect(read(controller)).rejects.toMatchObject({
+        status: HttpStatus.FORBIDDEN,
+      });
+    },
+  );
 });

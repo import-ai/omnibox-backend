@@ -331,20 +331,56 @@ export class ConversationsService {
     });
   }
 
-  async findOneForUserInNamespace(
+  private async findLiveConversation(
     conversationId: string,
     userId: string,
     namespaceId: string,
   ) {
     await this.namespacesService.getMe(namespaceId, userId);
-    const conversation = await this.conversationRepository.findOne({
+    return this.conversationRepository.findOne({
       where: { id: conversationId, userId, namespaceId },
     });
+  }
+
+  async findOneForUserInNamespace(
+    conversationId: string,
+    userId: string,
+    namespaceId: string,
+  ) {
+    const conversation = await this.findLiveConversation(
+      conversationId,
+      userId,
+      namespaceId,
+    );
     if (!conversation) {
       throw new AppException(
         this.i18n.t('conversation.errors.accessDenied'),
         'CONVERSATION_ACCESS_DENIED',
         HttpStatus.FORBIDDEN,
+      );
+    }
+    return conversation;
+  }
+
+  /**
+   * Like findOneForUserInNamespace, but a missing or soft-deleted conversation
+   * is 404: background workers treat only 404 as "source gone" and skip.
+   */
+  async findLiveForUserInNamespace(
+    conversationId: string,
+    userId: string,
+    namespaceId: string,
+  ) {
+    const conversation = await this.findLiveConversation(
+      conversationId,
+      userId,
+      namespaceId,
+    );
+    if (!conversation) {
+      throw new AppException(
+        this.i18n.t('conversation.errors.notFound'),
+        'CONVERSATION_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
       );
     }
     return conversation;

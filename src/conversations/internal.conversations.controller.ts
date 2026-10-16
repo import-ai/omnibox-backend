@@ -29,7 +29,7 @@ export class InternalConversationsController {
     @Query('limit') rawLimit?: string,
     @Query('for_index') forIndex?: string,
   ) {
-    await this.conversationsService.findOneForUserInNamespace(
+    await this.conversationsService.findLiveForUserInNamespace(
       conversationId,
       userId,
       namespaceId,
@@ -74,7 +74,7 @@ export class InternalConversationsController {
     @Param('messageId') messageId: string,
     @HeaderUserId() userId: string,
   ) {
-    await this.conversationsService.findOneForUserInNamespace(
+    await this.conversationsService.findLiveForUserInNamespace(
       conversationId,
       userId,
       namespaceId,

@@ -780,17 +780,10 @@ export class StreamService implements OnModuleDestroy {
           HttpStatus.BAD_REQUEST,
         );
       }
-      if (
-        parent?.message.role === OpenAIMessageRole.ASSISTANT &&
-        parent.attrs?.tool_call?.interrupts?.length &&
-        !requestDto.tool_call?.decisions?.length
-      ) {
-        throw new AppException(
-          this.i18n.t('system.errors.pendingInterrupt'),
-          'PENDING_INTERRUPT',
-          HttpStatus.CONFLICT,
-        );
-      }
+      this.assertNoPendingInterrupt(
+        parent,
+        Boolean(requestDto.tool_call?.decisions?.length),
+      );
       await this.claimStreamActive(
         namespaceId,
         requestDto.conversation_id,
@@ -800,6 +793,28 @@ export class StreamService implements OnModuleDestroy {
       return parent?.id;
     } finally {
       await release?.();
+    }
+  }
+
+  // A message waiting for tool decisions only accepts those decisions. The
+  // error names the message and how many decisions it needs, so a client
+  // that did not know about it (an approval raised in another client) can
+  // decide it and retry.
+  assertNoPendingInterrupt(
+    parent: Message | null | undefined,
+    hasDecisions: boolean,
+  ) {
+    const interrupts: unknown[] | undefined =
+      parent?.message.role === OpenAIMessageRole.ASSISTANT
+        ? parent.attrs?.tool_call?.interrupts
+        : undefined;
+    if (parent && interrupts?.length && !hasDecisions) {
+      throw new AppException(
+        this.i18n.t('system.errors.pendingInterrupt'),
+        'PENDING_INTERRUPT',
+        HttpStatus.CONFLICT,
+        { message_id: parent.id, interrupt_count: interrupts.length },
+      );
     }
   }
 

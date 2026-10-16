@@ -429,20 +429,23 @@ describe('StreamService parent resolution', () => {
         id: 'interrupt-id',
         conversationId: 'conversation-id',
         message: { role: 'assistant' },
-        attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
+        attrs: {
+          tool_call: { interrupts: [{ id: 'call-1' }, { id: 'call-2' }] },
+        },
       }),
     };
     const service = serviceWith(messagesService);
 
-    await expect(
-      (service as any).resolveStreamParent(
-        'namespace-id',
-        request,
-        'user-id',
-        '',
-        'latest',
-      ),
-    ).rejects.toMatchObject({ code: 'PENDING_INTERRUPT' });
+    const error = await (service as any)
+      .resolveStreamParent('namespace-id', request, 'user-id', '', 'latest')
+      .catch((e: unknown) => e);
+
+    expect(error).toMatchObject({ code: 'PENDING_INTERRUPT' });
+    expect(error.getResponse()).toMatchObject({
+      code: 'pending_interrupt',
+      message_id: 'interrupt-id',
+      interrupt_count: 2,
+    });
   });
 
   it('allows a decision to resume a pending interrupt', async () => {

@@ -4,6 +4,7 @@ import { StreamService } from 'omniboxd/wizard/stream.service';
 
 function createService(mocks: {
   configService?: { get: jest.Mock };
+  messagesService?: Record<string, jest.Mock>;
   conversationsService?: Record<string, jest.Mock>;
   namespaceResourcesService?: Record<string, jest.Mock>;
   sharedResourcesService?: Record<string, jest.Mock>;
@@ -13,13 +14,13 @@ function createService(mocks: {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
     {} as any,
-    {} as any,
+    (mocks.messagesService ?? {}) as any,
     mocks.conversationsService as any,
     mocks.namespaceResourcesService as any,
     mocks.sharedResourcesService as any,
     mocks.resourcesService as any,
     mocks.smartFoldersService as any,
-    {} as any,
+    { t: jest.fn((key: string) => key) } as any,
     { mint: jest.fn(() => 'share-access-token') } as any,
     {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
@@ -357,6 +358,218 @@ describe('StreamService private_search visible resources', () => {
   });
 });
 
+describe('StreamService parent resolution', () => {
+  const request = {
+    conversation_id: 'conversation-id',
+    query: 'hello',
+    tools: [],
+  };
+
+  function serviceWith(messagesService: Record<string, jest.Mock>) {
+    const service = createService({ messagesService });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    return service;
+  }
+
+  it('follows the latest message inside the conversation lock', async () => {
+    const messagesService = {
+      findLatest: jest.fn().mockResolvedValue({
+        id: 'latest-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+      }),
+      findOneInConversation: jest.fn(),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        request,
+        'user-id',
+        '',
+        'latest',
+      ),
+    ).resolves.toBe('latest-id');
+
+    expect(messagesService.findLatest).toHaveBeenCalledWith(
+      'user-id',
+      'conversation-id',
+    );
+    expect(messagesService.findOneInConversation).not.toHaveBeenCalled();
+  });
+
+  it('keeps an explicit parent instead of replacing it with the latest message', async () => {
+    const messagesService = {
+      findLatest: jest.fn(),
+      findOneInConversation: jest.fn().mockResolvedValue({
+        id: 'parent-id',
+        conversationId: 'conversation-id',
+        message: { role: 'user' },
+      }),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        { ...request, parent_message_id: 'parent-id' },
+        'user-id',
+        '',
+        'explicit',
+      ),
+    ).resolves.toBe('parent-id');
+
+    expect(messagesService.findLatest).not.toHaveBeenCalled();
+  });
+
+  it('rejects a normal reply while the latest message waits for a decision', async () => {
+    const messagesService = {
+      findLatest: jest.fn().mockResolvedValue({
+        id: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+        attrs: {
+          tool_call: { interrupts: [{ id: 'call-1' }, { id: 'call-2' }] },
+        },
+      }),
+    };
+    const service = serviceWith(messagesService);
+
+    const error = await (service as any)
+      .resolveStreamParent('namespace-id', request, 'user-id', '', 'latest')
+      .catch((e: unknown) => e);
+
+    expect(error).toMatchObject({ code: 'PENDING_INTERRUPT' });
+    expect(error.getResponse()).toMatchObject({
+      code: 'pending_interrupt',
+      message_id: 'interrupt-id',
+      interrupt_count: 2,
+    });
+  });
+
+  it('allows a decision to resume a pending interrupt', async () => {
+    const messagesService = {
+      findOneInConversation: jest.fn().mockResolvedValue({
+        id: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+        attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
+      }),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        {
+          ...request,
+          parent_message_id: 'interrupt-id',
+          tool_call: { decisions: [{ type: 'approve' }] },
+        },
+        'user-id',
+        '',
+        'explicit',
+      ),
+    ).resolves.toBe('interrupt-id');
+  });
+
+  it('does not join an in-memory session that is already streaming', async () => {
+    const service = serviceWith({});
+    (service as any).streamSessions.set(
+      'user:user-id:namespace-id:conversation-id',
+      {
+        finished: false,
+      },
+    );
+
+    await expect(
+      (service as any).createAgentStream(
+        'namespace-id',
+        request,
+        'request-id',
+        'ask',
+        'user-id',
+      ),
+    ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
+  });
+
+  function lockedServiceWith(messagesService: Record<string, jest.Mock>) {
+    const service = createService({ messagesService });
+    jest
+      .spyOn(service, 'acquireConversationLock')
+      .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
+    jest
+      .spyOn(service as any, 'claimStreamActive')
+      .mockResolvedValue(undefined);
+    return service;
+  }
+
+  it('finds the parent of a share stream without a user id', async () => {
+    const messagesService = {
+      findOneInConversation: jest.fn().mockResolvedValue({
+        id: 'parent-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+      }),
+    };
+    const service = lockedServiceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        { ...request, parent_message_id: 'parent-id' },
+        '',
+        'share-id',
+        'explicit',
+      ),
+    ).resolves.toBe('parent-id');
+
+    expect(messagesService.findOneInConversation).toHaveBeenCalledWith(
+      'parent-id',
+      'conversation-id',
+      '',
+    );
+  });
+
+  it('rejects a parent outside the conversation', async () => {
+    const service = lockedServiceWith({
+      findOneInConversation: jest.fn().mockResolvedValue(null),
+    });
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        { ...request, parent_message_id: 'other-parent-id' },
+        'user-id',
+        '',
+        'explicit',
+      ),
+    ).rejects.toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
+  });
+
+  it('turns a share stream setup failure into a stream error', async () => {
+    const service = createService({});
+    jest
+      .spyOn(service as any, 'createAgentStream')
+      .mockRejectedValue(new Error('setup failed'));
+    jest.spyOn(service as any, 'streamError').mockImplementation(() => {});
+
+    const observable = await service.createShareAgentStream(
+      { namespaceId: 'namespace-id', id: 'share-id' } as any,
+      { ...request, parent_message_id: 'parent-id' } as any,
+      'request-id',
+      'ask',
+    );
+    observable.subscribe({});
+
+    expect((service as any).streamError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ message: 'setup failed' }),
+    );
+  });
+});
+
 describe('StreamService redis stream replay', () => {
   it('sends stopped data when abort rejects the active stream', async () => {
     const service = createService({});
@@ -414,7 +627,7 @@ describe('StreamService redis stream replay', () => {
     const client = {
       del: jest.fn(),
       exists: jest.fn().mockResolvedValue(0),
-      set: jest.fn(),
+      set: jest.fn().mockResolvedValue('OK'),
     };
     const subscriber = {
       subscribe: jest.fn(),
@@ -428,16 +641,16 @@ describe('StreamService redis stream replay', () => {
 
     await (service as any).startRedisSession({ key: 'stream-key' });
 
-    expect(client.del).toHaveBeenCalledWith([
-      'wizard:stream:stream-key:events',
-      'wizard:stream:stream-key:seq',
-    ]);
-    expect(client.del).toHaveBeenCalledWith('wizard:stream:stream-key:cancel');
     expect(client.set).toHaveBeenCalledWith(
       'wizard:stream:stream-key:active',
       '1',
-      { EX: 3600 },
+      { NX: true, EX: 3600 },
     );
+    expect(client.del).toHaveBeenCalledWith([
+      'wizard:stream:stream-key:events',
+      'wizard:stream:stream-key:seq',
+      'wizard:stream:stream-key:cancel',
+    ]);
     expect(subscriber.subscribe).toHaveBeenCalledWith(
       'wizard:stream:stream-key:control',
       expect.any(Function),
@@ -897,6 +1110,9 @@ describe('persisted query receipts', () => {
       }),
     );
     expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][3].attrs.user_context).toEqual({
+      lang: '简体中文',
+    });
     expect(update).toHaveBeenCalledWith(
       'query-id',
       'ns',
@@ -948,6 +1164,95 @@ describe('persisted query receipts', () => {
       observable.subscribe({ complete: resolve, error: reject }),
     );
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('records the messaging channel on the user message', async () => {
+    const service = createService({});
+    const create = jest.fn().mockResolvedValue({
+      id: 'query-id',
+      parentId: null,
+      message: { role: 'user', content: 'hello' },
+      attrs: {},
+    });
+    (service as any).messagesService = { create, findOne: jest.fn() };
+    jest.spyOn(service, 'stream').mockResolvedValue(undefined);
+
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      {
+        query: 'hello',
+        conversation_id: 'conv',
+        tools: [],
+        source_channel: 'qq',
+      },
+      'req',
+      'ask',
+      'user',
+    );
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({ complete: resolve, error: reject }),
+    );
+
+    expect(create.mock.calls[0][3].attrs.user_context).toEqual({
+      lang: '简体中文',
+      channel: 'qq',
+    });
+  });
+
+  it('saves a decision as one message under the interrupt it resumes', async () => {
+    const service = createService({});
+    const interrupt = {
+      id: 'interrupt-id',
+      createdAt: new Date('2026-09-12T02:30:00Z'),
+      parentId: null,
+      message: { role: 'assistant', content: '' },
+      attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
+    };
+    const decision = {
+      id: 'decision-id',
+      parentId: 'interrupt-id',
+      message: { role: 'user', content: '/reject' },
+      attrs: {},
+    };
+    const create = jest.fn().mockResolvedValue(decision);
+    (service as any).messagesService = {
+      create,
+      findOne: jest.fn(),
+      findAll: jest.fn().mockResolvedValue([interrupt]),
+    };
+    jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {
+      expect(body.messages.map((message) => message.id)).toEqual([
+        'interrupt-id',
+        'decision-id',
+      ]);
+      return Promise.resolve();
+    });
+
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      {
+        query: '/reject',
+        conversation_id: 'conv',
+        parent_message_id: 'interrupt-id',
+        tools: [],
+        source_channel: 'qq',
+        tool_call: { decisions: [{ type: 'reject' }] },
+      },
+      'req',
+      'ask',
+      'user',
+    );
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({ complete: resolve, error: reject }),
+    );
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][3].parentId).toBe('interrupt-id');
+    expect(create.mock.calls[0][3].message.content).toBe('/reject');
+    expect(create.mock.calls[0][3].attrs.user_context).toEqual({
+      lang: '简体中文',
+      channel: 'qq',
+    });
   });
 });
 

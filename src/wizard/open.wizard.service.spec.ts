@@ -57,7 +57,134 @@ describe('OpenWizardService', () => {
       }),
       'request-1',
       'ask',
+      'explicit',
     );
+  });
+
+  it('follows the latest message when only conversation_id is set', async () => {
+    conversationsService.findOneForUserInNamespace.mockResolvedValue({
+      id: 'conversation-1',
+    });
+    streamService.chat.mockResolvedValue([
+      {
+        response_type: 'bos',
+        id: 'assistant-1',
+        role: 'assistant',
+        parentId: 'message-1',
+      },
+      { response_type: 'eos' },
+    ]);
+
+    const response = await service.ask('user-1', 'namespace-1', 'request-1', {
+      query: 'hello',
+      tools: [],
+      conversation_id: 'conversation-1',
+    });
+
+    expect(conversationsService.create).not.toHaveBeenCalled();
+    expect(messagesService.findOneForUser).not.toHaveBeenCalled();
+    expect(streamService.chat).toHaveBeenCalledWith(
+      'user-1',
+      'namespace-1',
+      expect.objectContaining({ conversation_id: 'conversation-1' }),
+      'request-1',
+      'ask',
+      'latest',
+    );
+    expect(response).toMatchObject({ conversation_id: 'conversation-1' });
+  });
+
+  it('forwards the messaging channel without changing the API surface', async () => {
+    conversationsService.findOneForUserInNamespace.mockResolvedValue({
+      id: 'conversation-1',
+    });
+
+    await service.ask('user-1', 'namespace-1', 'request-1', {
+      query: 'hello',
+      tools: [],
+      conversation_id: 'conversation-1',
+      source_channel: 'qq',
+    });
+
+    expect(streamService.chat).toHaveBeenCalledWith(
+      'user-1',
+      'namespace-1',
+      expect.objectContaining({
+        channel: AgentRequestChannel.OPEN_API,
+        source_channel: 'qq',
+      }),
+      'request-1',
+      'ask',
+      'latest',
+    );
+  });
+
+  it('keeps an explicit parent when conversation_id is also set', async () => {
+    messagesService.findOneForUser.mockResolvedValue({
+      id: 'message-1',
+      conversationId: 'conversation-1',
+    });
+    conversationsService.findOneForUserInNamespace.mockResolvedValue({
+      id: 'conversation-1',
+    });
+
+    await service.ask('user-1', 'namespace-1', 'request-1', {
+      query: '/approve',
+      tools: [],
+      conversation_id: 'conversation-1',
+      parent_message_id: 'message-1',
+    });
+
+    expect(streamService.chat).toHaveBeenCalledWith(
+      'user-1',
+      'namespace-1',
+      expect.objectContaining({
+        conversation_id: 'conversation-1',
+        parent_message_id: 'message-1',
+      }),
+      'request-1',
+      'ask',
+      'explicit',
+    );
+  });
+
+  it('rejects a parent from another conversation', async () => {
+    messagesService.findOneForUser.mockResolvedValue({
+      id: 'message-1',
+      conversationId: 'conversation-2',
+    });
+    conversationsService.findOneForUserInNamespace.mockResolvedValue({
+      id: 'conversation-2',
+    });
+
+    await expect(
+      service.ask('user-1', 'namespace-1', 'request-1', {
+        query: 'hello',
+        tools: [],
+        conversation_id: 'conversation-1',
+        parent_message_id: 'message-1',
+      }),
+    ).rejects.toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
+    expect(streamService.chat).not.toHaveBeenCalled();
+  });
+
+  it('denies a conversation_id the user cannot access', async () => {
+    conversationsService.findOneForUserInNamespace.mockRejectedValue(
+      new AppException(
+        'denied',
+        'CONVERSATION_ACCESS_DENIED',
+        HttpStatus.FORBIDDEN,
+      ),
+    );
+
+    await expect(
+      service.ask('user-1', 'namespace-1', 'request-1', {
+        query: 'hello',
+        tools: [],
+        conversation_id: 'conversation-1',
+      }),
+    ).rejects.toMatchObject({ code: 'CONVERSATION_ACCESS_DENIED' });
+    expect(streamService.chat).not.toHaveBeenCalled();
   });
 
   it('reuses the parent message conversation only within the current user and namespace', async () => {
@@ -94,6 +221,7 @@ describe('OpenWizardService', () => {
       }),
       'request-1',
       'ask',
+      'explicit',
     );
   });
 

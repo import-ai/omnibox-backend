@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import {
   PrivateSearchToolDto,
@@ -49,7 +55,9 @@ export class OpenAgentRequestDto {
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsOptional()
-  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
   conversation_id?: string;
 
   @ApiPropertyOptional({
@@ -58,7 +66,9 @@ export class OpenAgentRequestDto {
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsOptional()
-  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
   parent_message_id?: string;
 
   @ApiPropertyOptional({

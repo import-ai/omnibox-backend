@@ -754,8 +754,9 @@ export class StreamService implements OnModuleDestroy {
               requestDto.conversation_id,
             )
           : requestDto.parent_message_id && release
-            ? await this.messagesService.findOneForUser(
+            ? await this.messagesService.findOneInConversation(
                 requestDto.parent_message_id,
+                requestDto.conversation_id,
                 userId,
               )
             : null;
@@ -769,9 +770,9 @@ export class StreamService implements OnModuleDestroy {
         return requestDto.parent_message_id;
       }
       if (
-        parent &&
+        parentMode === 'explicit' &&
         requestDto.parent_message_id &&
-        parent.conversationId !== requestDto.conversation_id
+        !parent
       ) {
         throw new AppException(
           this.i18n.t('system.errors.parentConversationMismatch'),
@@ -1599,7 +1600,7 @@ export class StreamService implements OnModuleDestroy {
           );
         }
       }
-      return this.createAgentStream(
+      return await this.createAgentStream(
         share.namespaceId,
         requestDto,
         requestId,

@@ -1,3 +1,4 @@
+import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
 import { TestClient } from 'test/test-client';
 
 describe('SharesController (e2e)', () => {
@@ -46,8 +47,28 @@ describe('SharesController (e2e)', () => {
     const publicShareUrl = `/api/v1/shares/${shareId}`;
     const internalRootsUrl = `/internal/api/v1/shares/${shareId}/resources/roots`;
 
+    const accessToken = client.app.get(ShareAccessTokenService).mint(shareId);
+    const otherShareToken = client.app
+      .get(ShareAccessTokenService)
+      .mint('0000000000');
+    const trusted = () =>
+      client.request().get(internalRootsUrl).set('x-share-access', accessToken);
+
     await client.request().get(publicShareUrl).expect(403);
-    await client.request().get(internalRootsUrl).expect(200);
+    // Only the token minted for this share after the visitor was validated
+    // opens the trusted path; without it the share is validated as a visitor.
+    await trusted().expect(200);
+    await client.request().get(internalRootsUrl).expect(403);
+    await client
+      .request()
+      .get(internalRootsUrl)
+      .set('x-share-access', otherShareToken)
+      .expect(403);
+    await client
+      .request()
+      .get(internalRootsUrl)
+      .set('x-user-id', client.user.id)
+      .expect(403);
 
     const loginShare = await client.patch(shareUrl).send({
       password: null,
@@ -56,9 +77,15 @@ describe('SharesController (e2e)', () => {
     expect(loginShare.status).toBe(200);
 
     await client.request().get(publicShareUrl).expect(401);
-    await client.request().get(internalRootsUrl).expect(200);
+    await trusted().expect(200);
+    await client.request().get(internalRootsUrl).expect(401);
+    await client
+      .request()
+      .get(internalRootsUrl)
+      .set('x-user-id', client.user.id)
+      .expect(200);
 
     await client.patch(shareUrl).send({ enabled: false }).expect(200);
-    await client.request().get(internalRootsUrl).expect(404);
+    await trusted().expect(404);
   });
 });

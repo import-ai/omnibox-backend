@@ -8,6 +8,11 @@ import { resourceFromAttributes } from '@opentelemetry/resources';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+import { ServerResponse } from 'http';
+import {
+  DropEmptyPollSpanProcessor,
+  EMPTY_POLL_TRACE_ATTR,
+} from 'omniboxd/tracing/drop-empty-poll-span-processor';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 
 const env = process.env.ENV || 'unknown';
@@ -31,7 +36,9 @@ if (isTracingEnabled()) {
   const url = `${otlpEndpoint}/v1/traces`;
 
   const otlpTraceExporter = new OTLPTraceExporter({ url });
-  const spanProcessor = new BatchSpanProcessor(otlpTraceExporter);
+  const spanProcessor = new DropEmptyPollSpanProcessor(
+    new BatchSpanProcessor(otlpTraceExporter),
+  );
 
   const excludedUrls = ['/api/v1/health'];
 
@@ -46,6 +53,19 @@ if (isTracingEnabled()) {
         ignoreIncomingRequestHook: (req) => {
           const pathname = new URL(req.url!, 'http://localhost').pathname;
           return excludedUrls.some((url) => pathname === url) || false;
+        },
+        applyCustomAttributesOnSpan: (span, _request, response) => {
+          const locals = (
+            response as ServerResponse & {
+              locals?: { dropEmptyPollTrace?: boolean };
+            }
+          ).locals;
+          if (
+            response instanceof ServerResponse &&
+            locals?.dropEmptyPollTrace === true
+          ) {
+            span.setAttribute(EMPTY_POLL_TRACE_ATTR, true);
+          }
         },
       }),
       new ExpressInstrumentation({

@@ -1,5 +1,6 @@
 import { OpenAIMessageRole } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
 import { TestClient } from 'test/test-client';
 
 // A chat-only share lends its resources to the assistant, never to a visitor:
@@ -73,6 +74,15 @@ describe('Chat-only share (e2e)', () => {
 
   // client.request() sends no auth headers — a public viewer.
   const asViewer = () => client.request();
+  // The assistant's internal reads carry the share-access token the backend
+  // mints once the share chat's visitor has been validated.
+  const asAssistant = () => {
+    const token = client.app.get(ShareAccessTokenService).mint(chatOnlyShareId);
+    return {
+      get: (url: string) =>
+        client.request().get(url).set('x-share-access', token),
+    };
+  };
 
   it('refuses to serve a resource, its children, its rss items or its attachments', async () => {
     const detail = await asViewer()
@@ -218,12 +228,12 @@ describe('Chat-only share (e2e)', () => {
   });
 
   it('still exposes the resources the assistant reads', async () => {
-    const roots = await asViewer()
+    const roots = await asAssistant()
       .get(`/internal/api/v1/shares/${chatOnlyShareId}/resources/roots`)
       .expect(200);
     expect(roots.body.root.id).toBe(chatOnlyFolderId);
 
-    const listed = await asViewer()
+    const listed = await asAssistant()
       .get(
         `/internal/api/v1/shares/${chatOnlyShareId}/resources/${chatOnlyFolderId}/list`,
       )
@@ -232,7 +242,7 @@ describe('Chat-only share (e2e)', () => {
       listed.body.resources.map((child: { name: string }) => child.name),
     ).toContain('Chat only doc');
 
-    await asViewer()
+    await asAssistant()
       .get(
         `/internal/api/v1/shares/${chatOnlyShareId}/resources/${chatOnlyDocId}`,
       )

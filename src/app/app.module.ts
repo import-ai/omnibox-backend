@@ -47,6 +47,7 @@ import { KafkaModule } from 'omniboxd/kafka/kafka.module';
 import { MailModule } from 'omniboxd/mail/mail.module';
 import { MessagesModule } from 'omniboxd/messages/messages.module';
 import { AccessLogMiddleware } from 'omniboxd/middlewares/access-log.middleware';
+import { ClientContextMiddleware } from 'omniboxd/middlewares/client-context.middleware';
 import { Init1751900000000 } from 'omniboxd/migrations/1751900000000-init';
 import { UserOptions1751904560034 } from 'omniboxd/migrations/1751904560034-user-options';
 import { Tags1751905414493 } from 'omniboxd/migrations/1751905414493-tags';
@@ -391,6 +392,6 @@ export class AppModule implements NestModule {
   }
 
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(AccessLogMiddleware).forRoutes('*');
+    consumer.apply(ClientContextMiddleware, AccessLogMiddleware).forRoutes('*');
   }
 }

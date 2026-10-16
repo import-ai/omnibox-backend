@@ -69,28 +69,43 @@ export class ResourceCommentQueriesService {
       );
     }
 
-    const builder = this.threadRepository
+    // The page is cut on threads alone: paging the joined query would let a
+    // thread with several comments take up more than one offset slot.
+    const pageBuilder = this.threadRepository
       .createQueryBuilder('thread')
-      .leftJoinAndSelect('thread.creator', 'creator')
-      .leftJoinAndSelect('thread.comments', 'comment')
-      .leftJoinAndSelect('comment.author', 'author')
-      .leftJoinAndSelect('comment.attachments', 'attachment')
       .where('thread.namespace_id = :namespaceId', { namespaceId })
       .andWhere('thread.resource_id = :resourceId', { resourceId });
     if (query.resolved !== undefined) {
-      builder.andWhere(
+      pageBuilder.andWhere(
         query.resolved === 'true'
           ? 'thread.resolved_at IS NOT NULL'
           : 'thread.resolved_at IS NULL',
       );
     }
-    const [threads, total] = await builder
-      .orderBy('thread.createdAt', 'DESC')
-      .addOrderBy('comment.createdAt', 'ASC')
-      .addOrderBy('attachment.createdAt', 'ASC')
+    const [page, total] = await pageBuilder
+      .orderBy('thread.created_at', 'DESC')
+      .addOrderBy('thread.id', 'DESC')
       .skip(query.offset)
       .take(query.limit)
       .getManyAndCount();
+
+    const threads =
+      page.length === 0
+        ? []
+        : await this.threadRepository
+            .createQueryBuilder('thread')
+            .leftJoinAndSelect('thread.creator', 'creator')
+            .leftJoinAndSelect('thread.comments', 'comment')
+            .leftJoinAndSelect('comment.author', 'author')
+            .leftJoinAndSelect('comment.attachments', 'attachment')
+            .where('thread.id IN (:...threadIds)', {
+              threadIds: page.map((thread) => thread.id),
+            })
+            .orderBy('thread.created_at', 'DESC')
+            .addOrderBy('thread.id', 'DESC')
+            .addOrderBy('comment.created_at', 'ASC')
+            .addOrderBy('attachment.created_at', 'ASC')
+            .getMany();
 
     return {
       items: threads.map((thread) =>

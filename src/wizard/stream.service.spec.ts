@@ -24,6 +24,7 @@ function createService(mocks: {
     mocks.resourcesService as any,
     mocks.smartFoldersService as any,
     {} as any,
+    { mint: jest.fn(() => 'share-access-token') } as any,
     {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
@@ -681,6 +682,7 @@ describe('StreamService agent stream hooks', () => {
       {} as any,
       {} as any,
       {} as any,
+      { mint: jest.fn(() => 'share-access-token') } as any,
       hooks as any,
     );
     return { service, hooks };
@@ -841,6 +843,7 @@ describe('trusted upstream billing metadata', () => {
       {} as never,
       {} as never,
       {} as never,
+      { mint: jest.fn(() => 'share-access-token') } as never,
       {
         onStreamStarted: started,
         onCallCompleted: jest.fn(),
@@ -879,6 +882,7 @@ describe('trusted upstream billing metadata', () => {
       {} as never,
       {} as never,
       {} as never,
+      { mint: jest.fn(() => 'share-access-token') } as never,
       {
         onStreamStarted: jest.fn().mockRejectedValue(failure),
         onCallCompleted: jest.fn(),
@@ -1054,4 +1058,53 @@ describe('StreamService cancellation extensions', () => {
       expect(controller.signal.aborted).toBe(location === 'local');
     },
   );
+});
+
+describe('StreamService.chat() never receives the SSE heartbeat', () => {
+  const saved = {
+    id: 'query-id',
+    createdAt: new Date('2026-09-12T02:30:00Z'),
+    parentId: null,
+    message: { role: 'user', content: 'hello' },
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('collects only wizard chunks for the non-streaming open API', async () => {
+    const service = createService({
+      conversationsService: {
+        findOneForUserInNamespace: jest.fn().mockResolvedValue({}),
+      },
+    });
+    (service as any).messagesService = {
+      create: jest.fn().mockResolvedValue(saved),
+      update: jest.fn().mockResolvedValue(saved),
+      findOne: jest.fn().mockResolvedValue(saved),
+    };
+    jest
+      .spyOn(service, 'stream')
+      .mockImplementation(async (_ns, _mode, _body, _req, callback) => {
+        await new Promise((resolve) => setTimeout(resolve, 40_000));
+        await callback(JSON.stringify({ response_type: 'done' }));
+      });
+    const chunks = service.chat(
+      'user',
+      'ns',
+      { query: 'hello', conversation_id: 'conv', tools: [] } as any,
+      'req',
+    );
+    await jest.advanceTimersByTimeAsync(40_000);
+    expect((await chunks).map((chunk: any) => chunk.response_type)).toEqual([
+      'bos',
+      'delta',
+      'eos',
+      'done',
+    ]);
+  });
 });

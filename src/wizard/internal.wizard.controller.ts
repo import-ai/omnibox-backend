@@ -1,4 +1,5 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Param, Post, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { ChunkCallbackDto } from 'omniboxd/wizard/dto/chunk-callback.dto';
@@ -28,10 +29,16 @@ export class InternalWizardController {
   @Post('tasks/poll')
   async pollTask(
     @Body() body: PollTaskRequestDto,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<PollTaskResponseDto> {
-    return {
-      task: await this.wizardService.pollTask(body.functions, body.workerId),
-    };
+    const task = await this.wizardService.pollTask(
+      body.functions,
+      body.workerId,
+    );
+    if (task == null) {
+      res.locals.dropEmptyPollTrace = true;
+    }
+    return { task };
   }
 
   @Public()

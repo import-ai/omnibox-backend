@@ -290,10 +290,33 @@ export class MessagesService {
     });
   }
 
+  // The newest message no other message replies to. Messages saved in one
+  // transaction share a created_at, so recency alone can pick a message that
+  // already has a reply.
   async findLatest(userId: string, conversationId: string) {
-    return await this.messageRepository.findOne({
+    const messages = await this.messageRepository.find({
+      select: { id: true, parentId: true, createdAt: true },
       where: { conversationId, userId },
-      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+    const parentIds = new Set(messages.map((message) => message.parentId));
+    const [leaf] = messages
+      .filter((message) => !parentIds.has(message.id))
+      .sort(
+        (a, b) =>
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          b.id.localeCompare(a.id),
+      );
+    if (!leaf) return null;
+    return await this.messageRepository.findOne({ where: { id: leaf.id } });
+  }
+
+  async findOneInConversation(
+    id: string,
+    conversationId: string,
+    userId: string | undefined,
+  ) {
+    return await this.messageRepository.findOne({
+      where: { id, conversationId, userId: userId ? userId : IsNull() },
     });
   }
 

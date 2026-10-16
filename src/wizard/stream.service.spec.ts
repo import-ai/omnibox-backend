@@ -1086,6 +1086,7 @@ describe('StreamService.chat() never receives the SSE heartbeat', () => {
       create: jest.fn().mockResolvedValue(saved),
       update: jest.fn().mockResolvedValue(saved),
       findOne: jest.fn().mockResolvedValue(saved),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
     };
     jest
       .spyOn(service, 'stream')

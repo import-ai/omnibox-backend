@@ -22,7 +22,6 @@ function createService(mocks: {
     mocks.smartFoldersService as any,
     { t: jest.fn((key: string) => key) } as any,
     { mint: jest.fn(() => 'share-access-token') } as any,
-    { manager: {} } as any,
     {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
@@ -810,7 +809,6 @@ describe('StreamService agent stream hooks', () => {
       {} as any,
       {} as any,
       { mint: jest.fn(() => 'share-access-token') } as any,
-      { manager: {} } as any,
       hooks as any,
     );
     return { service, hooks };
@@ -922,7 +920,6 @@ describe('trusted upstream billing metadata', () => {
       {} as never,
       {} as never,
       { mint: jest.fn(() => 'share-access-token') } as never,
-      { manager: {} } as never,
       {
         onStreamStarted: started,
         onCallCompleted: jest.fn(),
@@ -962,7 +959,6 @@ describe('trusted upstream billing metadata', () => {
       {} as never,
       {} as never,
       { mint: jest.fn(() => 'share-access-token') } as never,
-      { manager: {} } as never,
       {
         onStreamStarted: jest.fn().mockRejectedValue(failure),
         onCallCompleted: jest.fn(),
@@ -1125,27 +1121,30 @@ describe('persisted query receipts', () => {
     });
   });
 
-  it('keeps a decision reply as its own message ahead of the decision', async () => {
+  it('saves a decision as one message under the interrupt it resumes', async () => {
     const service = createService({});
-    const spoken = {
-      id: 'spoken-id',
+    const interrupt = {
+      id: 'interrupt-id',
       createdAt: new Date('2026-09-12T02:30:00Z'),
-      parentId: 'interrupt-id',
-      message: { role: 'user', content: '先别改' },
-      attrs: { user_context: { lang: '简体中文', channel: 'qq' } },
+      parentId: null,
+      message: { role: 'assistant', content: '' },
+      attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
     };
     const decision = {
       id: 'decision-id',
-      parentId: 'spoken-id',
-      message: { role: 'user', content: '' },
+      parentId: 'interrupt-id',
+      message: { role: 'user', content: '/reject' },
       attrs: {},
     };
     const create = jest.fn().mockResolvedValue(decision);
-    (service as any).messagesService = { create, findOne: jest.fn() };
-    jest.spyOn(service as any, 'saveSpokenMessage').mockResolvedValue(spoken);
+    (service as any).messagesService = {
+      create,
+      findOne: jest.fn(),
+      findAll: jest.fn().mockResolvedValue([interrupt]),
+    };
     jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {
       expect(body.messages.map((message) => message.id)).toEqual([
-        'spoken-id',
+        'interrupt-id',
         'decision-id',
       ]);
       return Promise.resolve();
@@ -1154,8 +1153,9 @@ describe('persisted query receipts', () => {
     const observable = await (service as any).createAgentStream(
       'ns',
       {
-        query: '先别改',
+        query: '/reject',
         conversation_id: 'conv',
+        parent_message_id: 'interrupt-id',
         tools: [],
         source_channel: 'qq',
         tool_call: { decisions: [{ type: 'reject' }] },
@@ -1168,8 +1168,13 @@ describe('persisted query receipts', () => {
       observable.subscribe({ complete: resolve, error: reject }),
     );
 
-    expect(create.mock.calls[0][3].parentId).toBe('spoken-id');
-    expect(create.mock.calls[0][3].message.content).toBe('');
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][3].parentId).toBe('interrupt-id');
+    expect(create.mock.calls[0][3].message.content).toBe('/reject');
+    expect(create.mock.calls[0][3].attrs.user_context).toEqual({
+      lang: '简体中文',
+      channel: 'qq',
+    });
   });
 });
 

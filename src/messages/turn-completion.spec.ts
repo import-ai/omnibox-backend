@@ -14,8 +14,8 @@ describe('Turn completion dispatch', () => {
     let enqueued = false;
     const builder: any = {
       withDeleted: () => builder,
-      where: () => builder,
-      andWhere: () => builder,
+      where: jest.fn(() => builder),
+      andWhere: jest.fn(() => builder),
       getExists: () => Promise.resolve(enqueued),
     };
     const repo = {
@@ -43,6 +43,22 @@ describe('Turn completion dispatch', () => {
     // Each hook owns its independent task deduplication.
     expect(hook).toHaveBeenCalledTimes(2);
     expect(final.attrs).toEqual({});
+    // Namespace + conversation + message match idx_tasks_message_index_dedup.
+    expect(builder.where).toHaveBeenCalledWith(
+      "task.function = 'upsert_message_index'",
+    );
+    expect(builder.andWhere).toHaveBeenCalledWith(
+      'task.namespaceId = :namespaceId',
+      { namespaceId: 'n' },
+    );
+    expect(builder.andWhere).toHaveBeenCalledWith(
+      "task.input ->> 'conversation_id' = :conversationId",
+      { conversationId: 'c' },
+    );
+    expect(builder.andWhere).toHaveBeenCalledWith(
+      "task.input ->> 'message_id' = :id",
+      { id: 'a' },
+    );
     expect(repo.findOneOrFail).toHaveBeenCalledWith(
       expect.objectContaining({ lock: { mode: 'pessimistic_write' } }),
     );

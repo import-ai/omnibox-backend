@@ -310,9 +310,10 @@ export class MessagesService {
       const alreadyEnqueued = await taskRepo
         .createQueryBuilder('task')
         .withDeleted()
-        .where('task.function = :function', {
-          function: 'upsert_message_index',
-        })
+        // Matches idx_tasks_message_index_dedup; the function stays a literal
+        // so the planner can use the partial index.
+        .where("task.function = 'upsert_message_index'")
+        .andWhere('task.namespaceId = :namespaceId', { namespaceId })
         .andWhere("task.input ->> 'conversation_id' = :conversationId", {
           conversationId,
         })

@@ -1,6 +1,9 @@
+import { HttpStatus, MessageEvent } from '@nestjs/common';
 import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
+import { Observable } from 'rxjs';
 
 function createService(mocks: {
   configService?: { get: jest.Mock };
@@ -548,12 +551,30 @@ describe('StreamService parent resolution', () => {
     ).rejects.toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
   });
 
-  it('turns a share stream setup failure into a stream error', async () => {
+  async function chunksOf(observable: Observable<MessageEvent>) {
+    const chunks: any[] = [];
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({
+        next: (event) => chunks.push(JSON.parse(event.data as string)),
+        complete: resolve,
+        error: reject,
+      }),
+    );
+    return chunks;
+  }
+
+  const pending = new AppException(
+    'This conversation is waiting for a tool decision',
+    'PENDING_INTERRUPT',
+    HttpStatus.CONFLICT,
+    { message_id: 'interrupt-id', interrupt_count: 2 },
+  );
+
+  it('turns a share stream setup failure into an error chunk', async () => {
     const service = createService({});
     jest
       .spyOn(service as any, 'createAgentStream')
       .mockRejectedValue(new Error('setup failed'));
-    jest.spyOn(service as any, 'streamError').mockImplementation(() => {});
 
     const observable = await service.createShareAgentStream(
       { namespaceId: 'namespace-id', id: 'share-id' } as any,
@@ -561,12 +582,50 @@ describe('StreamService parent resolution', () => {
       'request-id',
       'ask',
     );
-    observable.subscribe({});
 
-    expect((service as any).streamError).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ message: 'setup failed' }),
+    await expect(chunksOf(observable)).resolves.toEqual([
+      { response_type: 'error', message: 'system.errors.wizardRequestFailed' },
+    ]);
+  });
+
+  it('sends a pending decision to the web as a parseable error chunk', async () => {
+    const service = createService({
+      conversationsService: {
+        findOneForUserInNamespace: jest.fn().mockResolvedValue({}),
+      },
+    });
+    jest.spyOn(service as any, 'createAgentStream').mockRejectedValue(pending);
+
+    const observable = await service.createUserAgentStream(
+      'user-id',
+      'namespace-id',
+      { ...request } as any,
+      'request-id',
+      'ask',
     );
+
+    await expect(chunksOf(observable)).resolves.toEqual([
+      {
+        response_type: 'error',
+        code: 'pending_interrupt',
+        message: 'This conversation is waiting for a tool decision',
+        message_id: 'interrupt-id',
+        interrupt_count: 2,
+      },
+    ]);
+  });
+
+  it('keeps throwing a pending decision for the Open API', async () => {
+    const service = createService({
+      conversationsService: {
+        findOneForUserInNamespace: jest.fn().mockResolvedValue({}),
+      },
+    });
+    jest.spyOn(service as any, 'createAgentStream').mockRejectedValue(pending);
+
+    await expect(
+      service.chat('user-id', 'namespace-id', { ...request } as any, 'req'),
+    ).rejects.toBe(pending);
   });
 });
 

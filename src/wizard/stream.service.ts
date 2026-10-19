@@ -1,4 +1,5 @@
 import {
+  HttpException,
   HttpStatus,
   Inject,
   Injectable,
@@ -481,6 +482,31 @@ export class StreamService implements OnModuleDestroy {
       parentId = message.parentId;
     }
     return messages;
+  }
+
+  // An error raised before the agent stream exists (the conversation waits
+  // for a decision, is busy, ...) goes to the client as an error chunk it can
+  // parse, carrying the exception payload such as message_id and
+  // interrupt_count.
+  errorChunkStream(error: unknown): Observable<MessageEvent> {
+    this.logger.error({ error });
+    trace.getActiveSpan()?.recordException(error as Error);
+    let payload: Record<string, unknown>;
+    if (error instanceof AppException) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { statusCode, timestamp, ...rest } = error.getResponse();
+      payload = rest;
+    } else if (error instanceof HttpException) {
+      payload = { message: error.message };
+    } else {
+      payload = { message: this.i18n.t('system.errors.wizardRequestFailed') };
+    }
+    return new Observable<MessageEvent>((subscriber) => {
+      subscriber.next({
+        data: JSON.stringify({ response_type: 'error', ...payload }),
+      });
+      subscriber.complete();
+    });
   }
 
   streamError(
@@ -1572,31 +1598,51 @@ export class StreamService implements OnModuleDestroy {
       namespaceId,
     );
     try {
-      for (const tool of requestDto.tools || []) {
-        if (tool.name === 'private_search') {
-          tool.visible_resources = await this.getUserVisibleResources(
-            namespaceId,
-            userId,
-            tool.resources || [],
-          );
-        }
-      }
-      return this.createAgentStream(
+      return await this.openUserAgentStream(
+        userId,
         namespaceId,
         requestDto,
         requestId,
         mode,
-        userId,
-        '',
-        false,
         timeZone,
         parentMode,
       );
     } catch (e) {
-      return new Observable<MessageEvent>((subscriber) =>
-        this.streamError(subscriber, e),
-      );
+      return this.errorChunkStream(e);
     }
+  }
+
+  // Throws instead of answering with an error chunk, so the Open API keeps
+  // its HTTP status and JSON body (e.g. 409 PENDING_INTERRUPT for the bots).
+  private async openUserAgentStream(
+    userId: string,
+    namespaceId: string,
+    requestDto: AgentRequestDto,
+    requestId: string,
+    mode: 'ask' | 'write',
+    timeZone?: string,
+    parentMode: 'latest' | 'explicit' = 'explicit',
+  ): Promise<Observable<MessageEvent>> {
+    for (const tool of requestDto.tools || []) {
+      if (tool.name === 'private_search') {
+        tool.visible_resources = await this.getUserVisibleResources(
+          namespaceId,
+          userId,
+          tool.resources || [],
+        );
+      }
+    }
+    return await this.createAgentStream(
+      namespaceId,
+      requestDto,
+      requestId,
+      mode,
+      userId,
+      '',
+      false,
+      timeZone,
+      parentMode,
+    );
   }
 
   async createShareAgentStream(
@@ -1626,9 +1672,7 @@ export class StreamService implements OnModuleDestroy {
         timeZone,
       );
     } catch (e) {
-      return new Observable<MessageEvent>((subscriber) =>
-        this.streamError(subscriber, e),
-      );
+      return this.errorChunkStream(e);
     }
   }
 
@@ -1640,7 +1684,12 @@ export class StreamService implements OnModuleDestroy {
     mode: 'ask' | 'write' = 'ask',
     parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<any> {
-    const observable = await this.createUserAgentStream(
+    await this.conversationsService.findOneForUserInNamespace(
+      body.conversation_id,
+      userId,
+      namespaceId,
+    );
+    const observable = await this.openUserAgentStream(
       userId,
       namespaceId,
       body,

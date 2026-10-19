@@ -617,6 +617,191 @@ describe('StreamService parent resolution', () => {
     ]);
   });
 
+  describe('decisions that were not applied', () => {
+    const decision = {
+      id: 'decision-d',
+      parentId: 'interrupt-id',
+      conversationId: 'conversation-id',
+      message: { role: 'user', content: '' },
+      attrs: {
+        tool_call: {
+          decisions: [{ type: 'reject' }, { type: 'reject' }],
+        },
+      },
+    };
+    const failedReply = {
+      id: 'failed-f',
+      parentId: 'decision-d',
+      conversationId: 'conversation-id',
+      status: 'failed',
+      message: { role: 'assistant', content: '' },
+      attrs: { error_message: 'fetch failed' },
+    };
+    const toolResult = {
+      id: 'tool-t',
+      parentId: 'decision-d',
+      status: 'success',
+      message: { role: 'tool', content: 'rejected' },
+      attrs: {},
+    };
+
+    function serviceWithMessages(
+      messagesService: Record<string, jest.Mock>,
+      lock?: Promise<unknown>,
+    ) {
+      const service = createService({ messagesService });
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockImplementation(async () => {
+          await lock;
+          return jest.fn().mockResolvedValue(undefined);
+        });
+      jest
+        .spyOn(service as any, 'claimStreamActive')
+        .mockResolvedValue(undefined);
+      return service;
+    }
+
+    const resolve = (
+      service: StreamService,
+      body: object,
+      mode: 'latest' | 'explicit' = 'explicit',
+    ) =>
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        { ...request, ...body },
+        'user-id',
+        '',
+        mode,
+      );
+    const decisionsUnder = (parentId: string) => ({
+      parent_message_id: parentId,
+      tool_call: { decisions: [{ type: 'reject', end_turn: true }] },
+    });
+
+    it('refuses to resume a decision that already has a tool result', async () => {
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(decision),
+        findChildren: jest.fn().mockResolvedValue([toolResult]),
+      });
+
+      const error = await resolve(service, decisionsUnder('decision-d')).catch(
+        (e: unknown) => e,
+      );
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'interrupt_already_decided',
+        message_id: 'decision-d',
+      });
+    });
+
+    it('resumes again a decision whose resume only left a failed reply', async () => {
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(decision),
+        findChildren: jest.fn().mockResolvedValue([failedReply]),
+      });
+
+      await expect(
+        resolve(service, decisionsUnder('decision-d')),
+      ).resolves.toBe('decision-d');
+    });
+
+    it('refuses a resume that waited behind another client resuming it', async () => {
+      let release!: () => void;
+      const lock = new Promise<void>((resolve) => (release = resolve));
+      const children: object[] = [];
+      const findChildren = jest.fn(() => Promise.resolve(children));
+      const service = serviceWithMessages(
+        {
+          findOneInConversation: jest.fn().mockResolvedValue(decision),
+          findChildren,
+        },
+        lock,
+      );
+
+      const parent = resolve(service, decisionsUnder('decision-d')).catch(
+        (e: unknown) => e,
+      );
+      await Promise.resolve();
+      // The other client's resume finishes while this request waits.
+      children.push(toolResult);
+      release();
+
+      expect((await parent).getResponse()).toMatchObject({
+        code: 'interrupt_already_decided',
+      });
+    });
+
+    it.each([
+      ['latest', {}, { findLatest: jest.fn().mockResolvedValue(failedReply) }],
+      [
+        'explicit',
+        { parent_message_id: 'failed-f' },
+        {
+          findOneInConversation: jest.fn((id: string) =>
+            Promise.resolve(id === 'failed-f' ? failedReply : decision),
+          ),
+        },
+      ],
+      [
+        'explicit',
+        { parent_message_id: 'answer-1', follow_latest: true },
+        {
+          findOneInConversation: jest.fn((id: string) =>
+            Promise.resolve(
+              id === 'answer-1'
+                ? { id: 'answer-1', message: { role: 'assistant' }, attrs: {} }
+                : decision,
+            ),
+          ),
+          findLeafBelow: jest.fn().mockResolvedValue(failedReply),
+        },
+      ],
+    ] as const)(
+      'refuses a question (%s parent %j) under a decision that was not applied',
+      async (mode, body, lookups) => {
+        const service = serviceWithMessages({
+          findOneInConversation: jest.fn().mockResolvedValue(decision),
+          findChildren: jest.fn().mockResolvedValue([failedReply]),
+          ...lookups,
+        });
+
+        const error = await resolve(service, body, mode).catch(
+          (e: unknown) => e,
+        );
+
+        expect(error.getResponse()).toMatchObject({
+          code: 'decision_not_applied',
+          message_id: 'decision-d',
+          interrupt_count: 2,
+        });
+      },
+    );
+
+    it('refuses a question under a decision that has no result at all', async () => {
+      const service = serviceWithMessages({
+        findLatest: jest.fn().mockResolvedValue(decision),
+        findChildren: jest.fn().mockResolvedValue([]),
+      });
+
+      const error = await resolve(service, {}, 'latest').catch(
+        (e: unknown) => e,
+      );
+
+      expect(error).toMatchObject({ code: 'DECISION_NOT_APPLIED' });
+    });
+
+    it('allows a question once the decision was applied', async () => {
+      const service = serviceWithMessages({
+        findLatest: jest.fn().mockResolvedValue(failedReply),
+        findOneInConversation: jest.fn().mockResolvedValue(decision),
+        findChildren: jest.fn().mockResolvedValue([failedReply, toolResult]),
+      });
+
+      await expect(resolve(service, {}, 'latest')).resolves.toBe('failed-f');
+    });
+  });
+
   describe('follow_latest', () => {
     const stale = {
       id: 'answer-1',

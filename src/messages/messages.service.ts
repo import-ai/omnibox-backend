@@ -312,6 +312,14 @@ export class MessagesService {
   }
 
   // Filtered by conversation so the lookup uses the conversation index.
+  async findChildren(id: string, conversationId: string) {
+    return await this.messageRepository.find({
+      where: { parentId: id, conversationId },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+  }
+
+  // Filtered by conversation so the lookup uses the conversation index.
   async hasChildren(id: string, conversationId: string) {
     return await this.messageRepository.exists({
       where: { parentId: id, conversationId },

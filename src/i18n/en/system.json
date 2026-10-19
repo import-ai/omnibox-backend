@@ -14,6 +14,7 @@
     "parentConversationMismatch": "Parent message does not belong to this conversation",
     "pendingInterrupt": "This conversation is waiting for a tool decision",
     "interruptAlreadyDecided": "This tool decision was already made",
+    "decisionNotApplied": "A decision in this conversation was not applied yet",
     "conversationBusy": "This conversation is still generating a reply",
     "requestFailed": "Request failed with status {status}"
   }

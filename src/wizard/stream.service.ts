@@ -822,6 +822,11 @@ export class StreamService implements OnModuleDestroy {
         requestDto.conversation_id,
         Boolean(requestDto.tool_call?.decisions?.length),
       );
+      if (requestDto.tool_call?.decisions?.length) {
+        await this.assertDecisionUnapplied(parent, requestDto.conversation_id);
+      } else {
+        await this.assertDecisionApplied(parent, requestDto, userId);
+      }
       await this.claimStreamActive(
         namespaceId,
         requestDto.conversation_id,
@@ -870,8 +875,107 @@ export class StreamService implements OnModuleDestroy {
       requestDto.conversation_id,
       userId,
     );
-    if (!leaf || leaf.message.role === OpenAIMessageRole.USER) return parent;
+    if (!leaf) return parent;
+    // An accepted decision without results is returned so that the question
+    // is refused until the decision is applied (assertDecisionApplied).
+    if (
+      leaf.message.role === OpenAIMessageRole.USER &&
+      !leaf.attrs?.tool_call?.decisions?.length
+    )
+      return parent;
     return leaf;
+  }
+
+  // An accepted decision message D whose resume produced nothing usable: no
+  // child at all, or only failed empty replies (the resume errored before any
+  // tool result). Sending the decision again under D resumes it once more.
+  private isUnappliedDecision(
+    decision: Message | null | undefined,
+    children: Message[],
+  ): boolean {
+    return Boolean(
+      decision?.message.role === OpenAIMessageRole.USER &&
+      decision.attrs?.tool_call?.decisions?.length &&
+      children.every((child) => this.isFailedEmptyReply(child)),
+    );
+  }
+
+  private isFailedEmptyReply(message: Message): boolean {
+    const content = message.message.content;
+    return (
+      message.message.role === OpenAIMessageRole.ASSISTANT &&
+      ![
+        MessageStatus.SUCCESS,
+        MessageStatus.STREAMING,
+        MessageStatus.PENDING,
+      ].includes(message.status) &&
+      !(typeof content === 'string' ? content.trim() : content) &&
+      !message.message.tool_calls?.length &&
+      !message.attrs?.tool_call?.interrupts?.length
+    );
+  }
+
+  // Decisions sent again under a decision message D may only re-resume a D
+  // whose resume failed. Once D has a tool result or a reply (another client
+  // resumed it, possibly while this request waited for the lock), resuming
+  // it again would run an approved tool twice.
+  private async assertDecisionUnapplied(
+    parent: Message | null | undefined,
+    conversationId: string,
+  ) {
+    if (
+      !parent ||
+      parent.message.role !== OpenAIMessageRole.USER ||
+      !parent.attrs?.tool_call?.decisions?.length
+    )
+      return;
+    const children = await this.messagesService.findChildren(
+      parent.id,
+      conversationId,
+    );
+    if (this.isUnappliedDecision(parent, children)) return;
+    throw new AppException(
+      this.i18n.t('system.errors.interruptAlreadyDecided'),
+      'INTERRUPT_ALREADY_DECIDED',
+      HttpStatus.CONFLICT,
+      { message_id: parent.id },
+    );
+  }
+
+  // A new question may not continue from a decision that was accepted but
+  // never applied: the rejected or approved calls would stay without a tool
+  // result. The client applies the decision again under D, then retries.
+  private async assertDecisionApplied(
+    parent: Message | null | undefined,
+    requestDto: AgentRequestDto,
+    userId: string,
+  ) {
+    if (!parent) return;
+    let decision: Message | null | undefined;
+    if (parent.message.role === OpenAIMessageRole.USER) {
+      decision = parent;
+    } else if (this.isFailedEmptyReply(parent) && parent.parentId) {
+      decision = await this.messagesService.findOneInConversation(
+        parent.parentId,
+        requestDto.conversation_id,
+        userId,
+      );
+    }
+    if (!decision?.attrs?.tool_call?.decisions?.length) return;
+    const children = await this.messagesService.findChildren(
+      decision.id,
+      requestDto.conversation_id,
+    );
+    if (!this.isUnappliedDecision(decision, children)) return;
+    throw new AppException(
+      this.i18n.t('system.errors.decisionNotApplied'),
+      'DECISION_NOT_APPLIED',
+      HttpStatus.CONFLICT,
+      {
+        message_id: decision.id,
+        interrupt_count: decision.attrs.tool_call.decisions.length,
+      },
+    );
   }
 
   // Decisions resume the interrupted run once. A message that already has a

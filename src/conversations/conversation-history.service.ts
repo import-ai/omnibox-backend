@@ -35,6 +35,7 @@ interface HistoryRow {
   attrs: MessageAttrs | null;
   has_reasoning: boolean;
   tool_call_summaries: { id: string; name: string }[];
+  interrupts?: unknown[] | null;
 }
 
 const activeStatuses = [
@@ -121,11 +122,12 @@ export class ConversationHistoryService {
       pageNodes.map((node) => {
         const row = rowById.get(node.id);
         if (!row) throw this.invalid();
+        const children = relations.children.get(node.id) ?? [];
         return [
           node.id,
           {
-            ...this.serialize(row),
-            children: relations.children.get(node.id) ?? [],
+            ...this.serialize(this.withPendingInterrupts(row, children)),
+            children,
             sibling_ids: relations.siblings(node),
             details_loaded: activeStatuses.includes(node.status),
           },
@@ -172,11 +174,29 @@ export class ConversationHistoryService {
     };
   }
 
-  private serialize(row: HistoryRow) {
+  // The summary drops interrupts to keep pages small. A message nobody has
+  // answered yet still waits for those decisions, so it keeps them: the web
+  // shows the decision buttons from them after a reload.
+  private withPendingInterrupts(row: HistoryRow, children: string[]) {
+    const interrupts = row.interrupts;
+    if (children.length || !Array.isArray(interrupts) || !interrupts.length)
+      return row;
     return {
       ...row,
-      created_at: row.created_at.toISOString(),
-      updated_at: row.updated_at.toISOString(),
+      attrs: {
+        ...row.attrs,
+        tool_call: { ...row.attrs?.tool_call, interrupts },
+      },
+    };
+  }
+
+  private serialize(row: HistoryRow) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { interrupts, ...rest } = row;
+    return {
+      ...rest,
+      created_at: rest.created_at.toISOString(),
+      updated_at: rest.updated_at.toISOString(),
     };
   }
 
@@ -196,9 +216,8 @@ export class ConversationHistoryService {
         CASE WHEN $4 OR status = ANY($5::messages_status[]) THEN attrs - 'context'
         ELSE (attrs - 'context' - 'citations' - 'tool_call') ||
           jsonb_build_object('citations', COALESCE((SELECT jsonb_agg(c - 'snippet') FROM jsonb_array_elements(attrs->'citations') c), '[]'::jsonb),
-            'tool_call', (attrs->'tool_call') - 'operations' - 'error' -
-              CASE WHEN EXISTS (SELECT 1 FROM messages child WHERE child.parent_id = messages.id AND child.deleted_at IS NULL)
-              THEN 'interrupts' ELSE '__unused__' END) END AS attrs,
+            'tool_call', (attrs->'tool_call') - 'interrupts' - 'operations' - 'error') END AS attrs,
+        attrs->'tool_call'->'interrupts' AS interrupts,
         COALESCE(length(trim(message->>'reasoning_content')) > 0, false) AS has_reasoning,
         COALESCE((SELECT jsonb_agg(jsonb_build_object('id', t->>'id', 'name', t->'function'->>'name'))
           FROM jsonb_array_elements(message->'tool_calls') t), '[]'::jsonb) AS tool_call_summaries

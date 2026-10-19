@@ -196,7 +196,9 @@ export class ConversationHistoryService {
         CASE WHEN $4 OR status = ANY($5::messages_status[]) THEN attrs - 'context'
         ELSE (attrs - 'context' - 'citations' - 'tool_call') ||
           jsonb_build_object('citations', COALESCE((SELECT jsonb_agg(c - 'snippet') FROM jsonb_array_elements(attrs->'citations') c), '[]'::jsonb),
-            'tool_call', (attrs->'tool_call') - 'interrupts' - 'operations' - 'error') END AS attrs,
+            'tool_call', (attrs->'tool_call') - 'operations' - 'error' -
+              CASE WHEN EXISTS (SELECT 1 FROM messages child WHERE child.parent_id = messages.id AND child.deleted_at IS NULL)
+              THEN 'interrupts' ELSE '__unused__' END) END AS attrs,
         COALESCE(length(trim(message->>'reasoning_content')) > 0, false) AS has_reasoning,
         COALESCE((SELECT jsonb_agg(jsonb_build_object('id', t->>'id', 'name', t->'function'->>'name'))
           FROM jsonb_array_elements(message->'tool_calls') t), '[]'::jsonb) AS tool_call_summaries

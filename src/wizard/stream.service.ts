@@ -810,6 +810,11 @@ export class StreamService implements OnModuleDestroy {
         parent,
         Boolean(requestDto.tool_call?.decisions?.length),
       );
+      await this.assertInterruptOpen(
+        parent,
+        requestDto.conversation_id,
+        Boolean(requestDto.tool_call?.decisions?.length),
+      );
       await this.claimStreamActive(
         namespaceId,
         requestDto.conversation_id,
@@ -842,6 +847,28 @@ export class StreamService implements OnModuleDestroy {
         { message_id: parent.id, interrupt_count: interrupts.length },
       );
     }
+  }
+
+  // Decisions resume the interrupted run once. A message that already has a
+  // reply was decided elsewhere (e.g. in the web while the bot still thought
+  // it was pending); deciding it again would fork a second resume.
+  private async assertInterruptOpen(
+    parent: Message | null | undefined,
+    conversationId: string,
+    hasDecisions: boolean,
+  ) {
+    if (
+      !hasDecisions ||
+      !parent?.attrs?.tool_call?.interrupts?.length ||
+      !(await this.messagesService.hasChildren(parent.id, conversationId))
+    )
+      return;
+    throw new AppException(
+      this.i18n.t('system.errors.interruptAlreadyDecided'),
+      'INTERRUPT_ALREADY_DECIDED',
+      HttpStatus.CONFLICT,
+      { message_id: parent.id },
+    );
   }
 
   async acquireConversationLock(
@@ -1592,12 +1619,12 @@ export class StreamService implements OnModuleDestroy {
     timeZone?: string,
     parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<Observable<MessageEvent>> {
-    await this.conversationsService.findOneForUserInNamespace(
-      requestDto.conversation_id,
-      userId,
-      namespaceId,
-    );
     try {
+      await this.conversationsService.findOneForUserInNamespace(
+        requestDto.conversation_id,
+        userId,
+        namespaceId,
+      );
       return await this.openUserAgentStream(
         userId,
         namespaceId,

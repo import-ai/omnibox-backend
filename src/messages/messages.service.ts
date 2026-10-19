@@ -310,6 +310,13 @@ export class MessagesService {
     return await this.messageRepository.findOne({ where: { id: leaf.id } });
   }
 
+  // Filtered by conversation so the lookup uses the conversation index.
+  async hasChildren(id: string, conversationId: string) {
+    return await this.messageRepository.exists({
+      where: { parentId: id, conversationId },
+    });
+  }
+
   async findOneInConversation(
     id: string,
     conversationId: string,

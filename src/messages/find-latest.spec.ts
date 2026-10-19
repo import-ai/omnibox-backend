@@ -60,4 +60,18 @@ describe('MessagesService.findLatest', () => {
     ).resolves.toBeNull();
     expect(repository.findOne).not.toHaveBeenCalled();
   });
+
+  it('finds the newest message below a node by following the newest child', async () => {
+    const { service } = serviceWith([
+      { id: 'a1', parentId: null },
+      { id: 'q-old', parentId: 'a1' },
+      { id: 'a-old', parentId: 'q-old' },
+      { id: 'q-new', parentId: 'a1' },
+      { id: 'a-new', parentId: 'q-new' },
+    ]);
+
+    await expect(
+      service.findLeafBelow('a1', 'conversation-id', 'user-id'),
+    ).resolves.toEqual({ id: 'a-new' });
+  });
 });

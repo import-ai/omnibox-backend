@@ -617,6 +617,119 @@ describe('StreamService parent resolution', () => {
     ]);
   });
 
+  describe('follow_latest', () => {
+    const stale = {
+      id: 'answer-1',
+      conversationId: 'conversation-id',
+      message: { role: 'assistant' },
+      attrs: {},
+    };
+    const followRequest = {
+      ...request,
+      parent_message_id: 'answer-1',
+      follow_latest: true,
+    };
+
+    function serviceFollowing(leaf: object | null, lock?: Promise<unknown>) {
+      const messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(stale),
+        findLeafBelow: jest.fn().mockResolvedValue(leaf),
+      };
+      const service = createService({ messagesService });
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockImplementation(async () => {
+          await lock;
+          return jest.fn().mockResolvedValue(undefined);
+        });
+      jest
+        .spyOn(service as any, 'claimStreamActive')
+        .mockResolvedValue(undefined);
+      return { service, messagesService };
+    }
+
+    const resolve = (service: StreamService, body: object) =>
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        body,
+        'user-id',
+        '',
+        'explicit',
+      );
+
+    it('continues from the newest message below a stale parent', async () => {
+      const { service, messagesService } = serviceFollowing({
+        id: 'answer-2',
+        message: { role: 'assistant' },
+        attrs: {},
+      });
+
+      await expect(resolve(service, followRequest)).resolves.toBe('answer-2');
+      expect(messagesService.findLeafBelow).toHaveBeenCalledWith(
+        'answer-1',
+        'conversation-id',
+        'user-id',
+      );
+    });
+
+    it('waits for the running reply before looking for the newest message', async () => {
+      let release!: () => void;
+      const lock = new Promise<void>((resolve) => (release = resolve));
+      const { service, messagesService } = serviceFollowing(
+        { id: 'answer-2', message: { role: 'assistant' }, attrs: {} },
+        lock,
+      );
+
+      const parent = resolve(service, followRequest);
+      await Promise.resolve();
+      expect(messagesService.findLeafBelow).not.toHaveBeenCalled();
+      release();
+
+      await expect(parent).resolves.toBe('answer-2');
+    });
+
+    it('refuses a question below a newest message that waits for a decision', async () => {
+      const { service } = serviceFollowing({
+        id: 'interrupt-2',
+        message: { role: 'assistant' },
+        attrs: { tool_call: { interrupts: [{}, {}] } },
+      });
+
+      const error = await resolve(service, followRequest).catch(
+        (e: unknown) => e,
+      );
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'pending_interrupt',
+        message_id: 'interrupt-2',
+        interrupt_count: 2,
+      });
+    });
+
+    it('keeps the parent when the newest message is an unanswered question', async () => {
+      const { service } = serviceFollowing({
+        id: 'question-2',
+        message: { role: 'user' },
+        attrs: {},
+      });
+
+      await expect(resolve(service, followRequest)).resolves.toBe('answer-1');
+    });
+
+    it('keeps the given parent without the flag', async () => {
+      const { service, messagesService } = serviceFollowing({
+        id: 'answer-2',
+        message: { role: 'assistant' },
+        attrs: {},
+      });
+
+      await expect(
+        resolve(service, { ...followRequest, follow_latest: undefined }),
+      ).resolves.toBe('answer-1');
+      expect(messagesService.findLeafBelow).not.toHaveBeenCalled();
+    });
+  });
+
   it('finds the parent of a share stream without a user id', async () => {
     const messagesService = {
       findOneInConversation: jest.fn().mockResolvedValue({

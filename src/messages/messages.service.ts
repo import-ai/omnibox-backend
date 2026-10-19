@@ -6,6 +6,7 @@ import { I18nService } from 'nestjs-i18n';
 import { ConversationAttachment } from 'omniboxd/attachments/entities/conversation-attachment.entity';
 import { MessageAttachment } from 'omniboxd/attachments/entities/message-attachment.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { branchRelations } from 'omniboxd/conversations/conversation-branch';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import { agentTokenDeltaOf } from 'omniboxd/messages/agent-token-usage';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
@@ -315,6 +316,32 @@ export class MessagesService {
     return await this.messageRepository.exists({
       where: { parentId: id, conversationId },
     });
+  }
+
+  // The newest message below `id`, following the newest child at each step
+  // (the history API's branch rule).
+  async findLeafBelow(
+    id: string,
+    conversationId: string,
+    userId: string | undefined,
+  ) {
+    const nodes = await this.messageRepository.find({
+      select: { id: true, parentId: true, createdAt: true },
+      where: { conversationId, userId: userId ? userId : IsNull() },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+    const leafId = branchRelations(
+      nodes.map((node) => ({
+        id: node.id,
+        parent_id: node.parentId,
+        role: '',
+        status: MessageStatus.SUCCESS,
+        has_content: false,
+        has_tool_calls: false,
+        is_decision: false,
+      })),
+    ).leaf(id);
+    return await this.messageRepository.findOne({ where: { id: leafId } });
   }
 
   async findOneInConversation(

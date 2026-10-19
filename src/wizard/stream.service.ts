@@ -773,7 +773,7 @@ export class StreamService implements OnModuleDestroy {
       shareId,
     );
     try {
-      const parent =
+      let parent =
         parentMode === 'latest'
           ? await this.messagesService.findLatest(
               userId,
@@ -805,6 +805,13 @@ export class StreamService implements OnModuleDestroy {
           'PARENT_CONVERSATION_MISMATCH',
           HttpStatus.BAD_REQUEST,
         );
+      }
+      if (
+        parent &&
+        requestDto.follow_latest &&
+        !requestDto.tool_call?.decisions?.length
+      ) {
+        parent = await this.followLatest(parent, requestDto, userId);
       }
       this.assertNoPendingInterrupt(
         parent,
@@ -847,6 +854,24 @@ export class StreamService implements OnModuleDestroy {
         { message_id: parent.id, interrupt_count: interrupts.length },
       );
     }
+  }
+
+  // Runs under the conversation lock, after any running reply finished, so
+  // the newest message is final. A user message there is a question whose
+  // reply never came; a new question under it would be taken as a retry of
+  // it, so the given parent is kept then.
+  private async followLatest(
+    parent: Message,
+    requestDto: AgentRequestDto,
+    userId: string,
+  ): Promise<Message> {
+    const leaf = await this.messagesService.findLeafBelow(
+      parent.id,
+      requestDto.conversation_id,
+      userId,
+    );
+    if (!leaf || leaf.message.role === OpenAIMessageRole.USER) return parent;
+    return leaf;
   }
 
   // Decisions resume the interrupted run once. A message that already has a

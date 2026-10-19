@@ -46,6 +46,9 @@ export class OpenWizardService {
       enable_thinking: data.enable_thinking ?? false,
       channel: AgentRequestChannel.OPEN_API,
       source_channel: data.source_channel,
+      // Only the web composer may ask to follow the newest message; the
+      // public API keeps the parent it was given.
+      follow_latest: undefined,
     };
 
     const chunks: ChatResponse[] = await this.streamService.chat(

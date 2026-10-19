@@ -119,6 +119,27 @@ describe('OpenWizardService', () => {
     );
   });
 
+  it('ignores follow_latest from the public API', async () => {
+    messagesService.findOneForUser.mockResolvedValue({
+      id: 'message-1',
+      conversationId: 'conversation-1',
+    });
+    conversationsService.findOneForUserInNamespace.mockResolvedValue({
+      id: 'conversation-1',
+    });
+
+    await service.ask('user-1', 'namespace-1', 'request-1', {
+      query: 'hello',
+      tools: [],
+      parent_message_id: 'message-1',
+      follow_latest: true,
+    } as never);
+
+    const request = streamService.chat.mock.calls[0][2];
+    expect(request.parent_message_id).toBe('message-1');
+    expect(request.follow_latest).toBeUndefined();
+  });
+
   it('keeps an explicit parent when conversation_id is also set', async () => {
     messagesService.findOneForUser.mockResolvedValue({
       id: 'message-1',

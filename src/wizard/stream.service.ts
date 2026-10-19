@@ -825,7 +825,11 @@ export class StreamService implements OnModuleDestroy {
       if (requestDto.tool_call?.decisions?.length) {
         await this.assertDecisionUnapplied(parent, requestDto.conversation_id);
       } else {
-        await this.assertDecisionApplied(parent, requestDto, userId);
+        await this.assertDecisionApplied(
+          parent,
+          requestDto.conversation_id,
+          userId,
+        );
       }
       await this.claimStreamActive(
         namespaceId,
@@ -945,9 +949,10 @@ export class StreamService implements OnModuleDestroy {
   // A new question may not continue from a decision that was accepted but
   // never applied: the rejected or approved calls would stay without a tool
   // result. The client applies the decision again under D, then retries.
-  private async assertDecisionApplied(
+  // Also used before appending saved resource messages (backend-pro).
+  async assertDecisionApplied(
     parent: Message | null | undefined,
-    requestDto: AgentRequestDto,
+    conversationId: string,
     userId: string,
   ) {
     if (!parent) return;
@@ -957,14 +962,14 @@ export class StreamService implements OnModuleDestroy {
     } else if (this.isFailedEmptyReply(parent) && parent.parentId) {
       decision = await this.messagesService.findOneInConversation(
         parent.parentId,
-        requestDto.conversation_id,
+        conversationId,
         userId,
       );
     }
     if (!decision?.attrs?.tool_call?.decisions?.length) return;
     const children = await this.messagesService.findChildren(
       decision.id,
-      requestDto.conversation_id,
+      conversationId,
     );
     if (!this.isUnappliedDecision(decision, children)) return;
     throw new AppException(

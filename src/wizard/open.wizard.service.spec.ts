@@ -97,6 +97,51 @@ describe('OpenWizardService', () => {
     );
   });
 
+  it('ignores metrics while preserving the complete answer', async () => {
+    conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
+    streamService.chat.mockResolvedValue([
+      { response_type: 'metrics', tokens: 0, tps: 0 },
+      {
+        response_type: 'bos',
+        role: 'assistant',
+        id: 'answer-1',
+        parentId: 'query-1',
+      },
+      {
+        response_type: 'delta',
+        message: { reasoning_content: 'Thinking', content: 'Hello' },
+        attrs: { context: { provider: 'agent' } },
+      },
+      { response_type: 'metrics', tokens: 2, tps: 1.5 },
+      { response_type: 'delta', message: { content: ' world' } },
+      { response_type: 'metrics', tokens: 3, tps: 2 },
+      { response_type: 'eos', role: 'assistant', id: 'answer-1' },
+      { response_type: 'metrics', tokens: 3, tps: 0 },
+      { response_type: 'done' },
+    ]);
+
+    await expect(
+      service.ask('user-1', 'namespace-1', 'request-1', {
+        query: 'hello',
+        tools: [],
+      }),
+    ).resolves.toEqual({
+      messages: [
+        {
+          id: 'answer-1',
+          role: 'assistant',
+          parent_id: 'query-1',
+          message: {
+            role: 'assistant',
+            reasoning_content: 'Thinking',
+            content: 'Hello world',
+          },
+          attrs: { context: { provider: 'agent' } },
+        },
+      ],
+    });
+  });
+
   it('rejects parent messages owned by another user', async () => {
     messagesService.findOneForUser.mockRejectedValue(
       new EntityNotFoundError('Message', { id: 'message-1' }),

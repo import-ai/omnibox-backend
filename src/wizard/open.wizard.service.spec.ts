@@ -288,6 +288,7 @@ describe('OpenWizardService', () => {
           attrs: { context: { provider: 'agent' } },
         },
       ],
+      conversation_id: 'conversation-new',
     });
   });
 

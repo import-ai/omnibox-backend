@@ -7,6 +7,7 @@ import { QQBot } from 'omniboxd/applications/apps/qq-bot';
 import { TelegramBot } from 'omniboxd/applications/apps/telegram-bot';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
+import { WechatOaBot } from 'omniboxd/applications/apps/wechat-oa-bot';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Repository } from 'typeorm';
 
@@ -31,6 +32,7 @@ export class ApplicationsService {
     private readonly qqBot: QQBot,
     private readonly telegramBot: TelegramBot,
     private readonly wechatClaw: WechatClaw,
+    private readonly wechatOaBot: WechatOaBot,
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
   ) {
@@ -53,6 +55,9 @@ export class ApplicationsService {
     }
     if (this.isAppEnabled(WechatClaw.appId, enabledAppIds)) {
       this.apps[WechatClaw.appId] = this.wechatClaw;
+    }
+    if (this.isAppEnabled(WechatOaBot.appId, enabledAppIds)) {
+      this.apps[WechatOaBot.appId] = this.wechatOaBot;
     }
     if (this.isAppEnabled(TelegramBot.appId, enabledAppIds)) {
       this.apps[TelegramBot.appId] = this.telegramBot;

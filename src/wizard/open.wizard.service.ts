@@ -138,6 +138,9 @@ export class OpenWizardService {
     let currentMessage: any = null;
 
     for (const chunk of chunks) {
+      if (chunk.response_type === 'metrics') {
+        continue;
+      }
       if (chunk.response_type === 'bos') {
         const bosChunk = chunk;
         currentMessage = {

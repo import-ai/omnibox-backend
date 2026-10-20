@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomBytes } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { CreateApplicationsDto } from 'omniboxd/applications/applications.dto';
@@ -18,6 +19,12 @@ const QRCODE_URL_PREFIXES = [
  * WeChat Official Account assistant. Every binding gets its own temporary
  * parametric QR code from the bot; following (or scanning while already
  * following) the account pushes the binding key back through the bot callback.
+ *
+ * The key travels in the QR scene, and a temporary QR code stays scannable for
+ * up to 30 days after its binding completed or was cancelled. A 6-digit key
+ * would be drawn again for someone else's later binding, letting the old QR
+ * code bind into that namespace, so this key is a 128-bit random token that
+ * never repeats.
  */
 @Injectable()
 export class WechatOaBot extends BotBase {
@@ -36,6 +43,10 @@ export class WechatOaBot extends BotBase {
     this.obbotBaseUrl = this.configService
       .get<string>('OBBOT_BASE_URL', '')
       .replace(/\/+$/, '');
+  }
+
+  override generateUniqueKey(): Promise<string> {
+    return Promise.resolve(randomBytes(16).toString('hex'));
   }
 
   protected override removeBindingCredentials(

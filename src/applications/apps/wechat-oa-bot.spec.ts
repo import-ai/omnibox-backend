@@ -8,6 +8,8 @@ import { Repository } from 'typeorm';
 
 import { WechatOaBot } from './wechat-oa-bot';
 
+const KEY = '0123456789abcdef0123456789abcdef';
+
 describe('WechatOaBot', () => {
   const fetchMock = jest.fn();
   const originalFetch = global.fetch;
@@ -80,7 +82,7 @@ describe('WechatOaBot', () => {
     const attrs = await createBot().getAttrs('ns', 'user', {});
 
     expect(attrs).toEqual({
-      key: expect.stringMatching(/^\d{6}$/),
+      key: expect.stringMatching(/^[0-9a-f]{32}$/),
       qrcode_content: 'http://weixin.qq.com/q/abc',
       qrcode_expires_at: '2026-11-19T00:00:00.000Z',
     });
@@ -91,6 +93,37 @@ describe('WechatOaBot', () => {
         body: JSON.stringify({ key: attrs.key }),
       }),
     );
+  });
+
+  it('never reuses a binding key, so an old QR code cannot match a later binding', async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({
+          qrcode_content: 'http://weixin.qq.com/q/abc',
+          qrcode_expires_at: '2026-11-19T00:00:00Z',
+        }),
+      ),
+    );
+    const bot = createBot();
+
+    const keys = new Set<string>();
+    for (let i = 0; i < 50; i++) {
+      keys.add((await bot.getAttrs('ns', 'user', {})).key);
+    }
+
+    expect(keys.size).toBe(50);
+    for (const key of keys) expect(key).toMatch(/^[0-9a-f]{32}$/);
+  });
+
+  it('rejects the callback for a key that is no longer pending', async () => {
+    queryBuilder.getOne.mockResolvedValue(null);
+
+    await expect(
+      createBot().callback({ key: KEY, primary_key: 'openid' } as {
+        key: string;
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_VERIFY_CODE' });
+    expect(apiKeyService.create).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -138,7 +171,7 @@ describe('WechatOaBot', () => {
       userId: 'user',
       namespaceId: 'ns',
       attrs: {
-        key: '123456',
+        key: KEY,
         qrcode_content: 'http://weixin.qq.com/q/abc',
         qrcode_expires_at: '2026-11-19T00:00:00.000Z',
       },
@@ -146,7 +179,7 @@ describe('WechatOaBot', () => {
     queryBuilder.getOne.mockResolvedValue(entity);
 
     const result = await createBot().callback({
-      key: '123456',
+      key: KEY,
       primary_key: 'openid',
     } as { key: string });
 

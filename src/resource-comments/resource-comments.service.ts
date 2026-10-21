@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
@@ -5,6 +7,10 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
+import {
+  isReadOnlyResourceType,
+  Resource,
+} from 'omniboxd/resources/entities/resource.entity';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 
@@ -237,13 +243,64 @@ export class ResourceCommentsService {
       if (next === comment.content) {
         continue;
       }
-      await this.dataSource.query(
-        'UPDATE resource_comments SET content = $1 WHERE id = $2',
-        [next, comment.id],
+      // A comment saved after this read keeps that edit. The label sync can
+      // run again on the next open.
+      const written = await this.dataSource.query(
+        'UPDATE resource_comments SET content = $1 WHERE id = $2 AND content = $3',
+        [next, comment.id, comment.content],
       );
-      updated += 1;
+      if (Array.isArray(written) && written[1] === 1) {
+        updated += 1;
+      }
     }
-    return { updated };
+    const resources = this.dataSource.getRepository(Resource);
+    const resource = await resources.findOne({
+      where: { id: resourceId, namespaceId },
+    });
+    const content = resource?.content ?? '';
+    let storedContent: string | undefined;
+    if (
+      resource &&
+      !isReadOnlyResourceType(resource.resourceType) &&
+      content.includes('[@')
+    ) {
+      const next = rewriteMentionLabels(content, names);
+      if (next !== content) {
+        // Same guard as comments: a save that landed after this read wins.
+        // Returning the stale body would roll that save back on the client.
+        const written = await this.dataSource.query(
+          'UPDATE resources SET content = $1, content_size = $2 WHERE id = $3 AND namespace_id = $4 AND content = $5',
+          [
+            next,
+            Buffer.byteLength(next, 'utf8').toString(),
+            resourceId,
+            namespaceId,
+            content,
+          ],
+        );
+        if (Array.isArray(written) && written[1] === 1) {
+          storedContent = next;
+          updated += 1;
+        } else {
+          const current = await resources.findOne({
+            where: { id: resourceId, namespaceId },
+          });
+          // Another open already stored this label. Hand back that hash so
+          // the next save is not rejected as a conflict.
+          if (current?.content === next) {
+            storedContent = next;
+          }
+        }
+      }
+    }
+    if (storedContent === undefined) {
+      return { updated };
+    }
+    return {
+      updated,
+      content: storedContent,
+      content_hash: createHash('sha256').update(storedContent).digest('hex'),
+    };
   }
 
   // Edits a comment only when the requester is its author.

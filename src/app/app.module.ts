@@ -121,6 +121,7 @@ import { AddNamespaceMemberNicknameAndNotes1789704000000 } from 'omniboxd/migrat
 import { AddResourceRevisions1790094055950 } from 'omniboxd/migrations/1790094055950-add-resource-revisions';
 import { AddConversationHistoryIndex1790966111694 } from 'omniboxd/migrations/1790966111694-add-conversation-history-index';
 import { AddTaskDedupIndexes1792142626851 } from 'omniboxd/migrations/1792142626851-add-task-dedup-indexes';
+import { AddDocumentComments1792575770997 } from 'omniboxd/migrations/1792575770997-add-document-comments';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -382,6 +383,7 @@ export class AppModule implements NestModule {
               AddNamespaceMemberNicknameAndNotes1789704000000,
               AddResourceRevisions1790094055950,
               AddTaskDedupIndexes1792142626851,
+              AddDocumentComments1792575770997,
               ...extraMigrations,
             ],
             migrationsRun: true,

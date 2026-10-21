@@ -59,6 +59,21 @@ export class ResourceCommentsController {
     );
   }
 
+  @Get(':threadId')
+  async getThread(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('threadId') threadId: string,
+  ) {
+    return await this.resourceCommentQueriesService.getThread(
+      namespaceId,
+      resourceId,
+      threadId,
+      userId,
+    );
+  }
+
   @Post(':threadId/comments')
   async createComment(
     @UserId() userId: string,

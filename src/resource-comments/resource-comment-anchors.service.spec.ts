@@ -133,3 +133,55 @@ describe('ResourceCommentAnchorsService', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe('document comments are excluded from anchor mutations', () => {
+  const service = new ResourceCommentAnchorsService({
+    t: (key: string) => key,
+  } as any);
+
+  it.each(['anchor', 'orphan'])(
+    'rejects a document id submitted as an %s',
+    async (operation) => {
+      const document = { id: 'document', type: 'document', anchorStatus: null };
+      const save = jest.fn();
+      const manager = {
+        getRepository: () => ({
+          find: () => Promise.resolve([document]),
+          save,
+        }),
+      } as any;
+      await expect(
+        service.syncAnchors(
+          manager,
+          'namespace',
+          'resource',
+          'body',
+          operation === 'anchor'
+            ? [{ threadId: 'document', from: 0, to: 1, quotedText: 'b' }]
+            : [],
+          operation === 'orphan' ? ['document'] : [],
+        ),
+      ).rejects.toMatchObject({ code: 'INVALID_COMMENT_ANCHOR' });
+      expect(document.anchorStatus).toBeNull();
+      expect(save).not.toHaveBeenCalled();
+    },
+  );
+
+  it('limits mass orphaning used by history restore to inline threads', async () => {
+    const update = jest.fn().mockResolvedValue({ affected: 1 });
+    await service.orphanAnchors(
+      { getRepository: () => ({ update }) } as any,
+      'namespace',
+      'resource',
+    );
+    expect(update).toHaveBeenCalledWith(
+      {
+        namespaceId: 'namespace',
+        resourceId: 'resource',
+        type: 'inline',
+        anchorStatus: 'active',
+      },
+      { anchorStatus: 'orphaned' },
+    );
+  });
+});

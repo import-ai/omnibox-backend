@@ -1,5 +1,6 @@
 {
   "errors": {
+    "invalidContentHashUpdate": "请同时提交正文和 expected_content_hash",
     "resourceNotFile": "资源不是文件",
     "parentOrResourceIdRequired": "需要 parent_id 或 resource_id",
     "resourceNotFound": "资源未找到",

@@ -10,6 +10,7 @@ import {
 import { ConversationSummaryDto } from 'omniboxd/conversations/dto/conversation-summary.dto';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import {
+  childrenByMessage,
   Message,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
@@ -24,7 +25,7 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { UserService } from 'omniboxd/user/user.service';
 import { transaction } from 'omniboxd/utils/transaction-utils';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, MoreThan, Repository } from 'typeorm';
 
 const TASK_PRIORITY = 5;
 
@@ -268,7 +269,8 @@ export class ConversationsService {
       if (msg.message.role === OpenAIMessageRole.SYSTEM) {
         continue;
       }
-      delete msg.attrs?.context;
+      const attrs = { ...msg.attrs };
+      delete attrs.context;
       // Citations and tool-call args name the shared resources; a chat-only
       // share keeps them for the assistant and withholds them from the
       // visitor's history.
@@ -279,7 +281,7 @@ export class ConversationsService {
         children: childrenMap[msg.id] || [],
         created_at: msg.createdAt.toISOString(),
         status: msg.status,
-        attrs: chatOnly ? attrsForVisitor(msg.attrs) : msg.attrs,
+        attrs: chatOnly ? attrsForVisitor(attrs) : attrs,
       } as ConversationMessageMappingDto;
     }
     if (messages.length > 0) {
@@ -329,20 +331,56 @@ export class ConversationsService {
     });
   }
 
-  async findOneForUserInNamespace(
+  private async findLiveConversation(
     conversationId: string,
     userId: string,
     namespaceId: string,
   ) {
     await this.namespacesService.getMe(namespaceId, userId);
-    const conversation = await this.conversationRepository.findOne({
+    return this.conversationRepository.findOne({
       where: { id: conversationId, userId, namespaceId },
     });
+  }
+
+  async findOneForUserInNamespace(
+    conversationId: string,
+    userId: string,
+    namespaceId: string,
+  ) {
+    const conversation = await this.findLiveConversation(
+      conversationId,
+      userId,
+      namespaceId,
+    );
     if (!conversation) {
       throw new AppException(
         this.i18n.t('conversation.errors.accessDenied'),
         'CONVERSATION_ACCESS_DENIED',
         HttpStatus.FORBIDDEN,
+      );
+    }
+    return conversation;
+  }
+
+  /**
+   * Like findOneForUserInNamespace, but a missing or soft-deleted conversation
+   * is 404: background workers treat only 404 as "source gone" and skip.
+   */
+  async findLiveForUserInNamespace(
+    conversationId: string,
+    userId: string,
+    namespaceId: string,
+  ) {
+    const conversation = await this.findLiveConversation(
+      conversationId,
+      userId,
+      namespaceId,
+    );
+    if (!conversation) {
+      throw new AppException(
+        this.i18n.t('conversation.errors.notFound'),
+        'CONVERSATION_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
       );
     }
     return conversation;
@@ -375,6 +413,7 @@ export class ConversationsService {
   async restore(namespaceId: string, userId: string, conversationId: string) {
     await this.findOneForUserInNamespace(conversationId, userId, namespaceId);
     const messages = await this.messagesService.findAll(userId, conversationId);
+    const children = childrenByMessage(messages);
     return await transaction(this.dataSource.manager, async (tx) => {
       for (const message of messages) {
         await this.wizardTaskService.emitUpsertMessageIndexTask(
@@ -384,6 +423,7 @@ export class ConversationsService {
           conversationId,
           message,
           tx,
+          children.get(message.id) || [],
         );
       }
       const manager = tx.entityManager;
@@ -407,6 +447,18 @@ export class ConversationsService {
   async has(id: string) {
     return await this.conversationRepository.exists({
       where: { id },
+    });
+  }
+
+  async listForMessageIndex(
+    namespaceId: string,
+    afterId: string | undefined,
+    limit: number,
+  ) {
+    return this.conversationRepository.find({
+      where: { namespaceId, ...(afterId ? { id: MoreThan(afterId) } : {}) },
+      order: { id: 'ASC' },
+      take: limit,
     });
   }
 

@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import {
   PrivateSearchToolDto,
@@ -51,4 +57,14 @@ export class OpenAgentRequestDto {
   @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   parent_message_id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Agent edition. "pro" requires Agent 2.1 credits and fails with INSUFFICIENT_AGENT_CREDITS instead of falling back to the basic agent.',
+    enum: ['basic', 'pro'],
+    example: 'pro',
+  })
+  @IsOptional()
+  @IsIn(['basic', 'pro'])
+  edition?: 'basic' | 'pro';
 }

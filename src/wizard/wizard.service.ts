@@ -321,6 +321,33 @@ export class WizardService {
       task.status = TaskStatus.FINISHED;
     }
 
+    if (
+      [TaskStatus.ERROR, TaskStatus.TIMEOUT].includes(task.status) &&
+      this.tasksService.canRetry(task, task.exception ?? undefined)
+    ) {
+      const result = await this.wizardTaskService.taskRepository.update(
+        {
+          id: task.id,
+          status: TaskStatus.RUNNING,
+          workerId: task.workerId ?? IsNull(),
+        },
+        {
+          status: TaskStatus.PENDING,
+          workerId: null,
+          lastHeartbeat: null,
+          startedAt: null,
+          endedAt: null,
+          exception: task.exception,
+          output: null,
+        },
+      );
+      return {
+        taskId: task.id,
+        function: task.function,
+        requeued: !!result.affected,
+      };
+    }
+
     // Persist atomically, guarded on task id + worker id + running status, so a
     // callback that lost the race (task reclaimed by another worker, or no
     // longer running, between the read above and this write) cannot overwrite a

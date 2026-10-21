@@ -44,7 +44,10 @@ export interface AgentStream {
  * the message transaction; its hook must only enqueue transactional work.
  */
 export interface IAgentStreamHooks {
-  /** Complete deployment-specific cancellation before stopping the stream, including on another instance. */
+  /**
+   * Complete deployment-specific cancellation before stopping the stream, including on another instance.
+   * Also awaited, best effort, when a stream fails, so nothing the turn started outlives it.
+   */
   onCancellationRequested?(
     userId: string,
     conversationId: string,

@@ -47,6 +47,10 @@ const BACKFILL_PAGE_SIZE = 100;
 const WEAVIATE_SYNC_LOG_EVERY = 1000;
 const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_SEARCH_LIMIT = 100;
+// History search asks for this many candidates per requested hit in a single
+// Wizard call, so hits dropped as ineligible are backfilled without another
+// round trip (auto-recall has a 1 s budget).
+const HISTORY_CANDIDATE_FACTOR = 3;
 const SEMANTIC_SEARCH_PAGE_SIZE = 100;
 const SEMANTIC_SEARCH_CACHE_TTL_MS = 30 * 1000;
 const SEMANTIC_SEARCH_CACHE_MAX_ENTRIES = 100;
@@ -343,7 +347,11 @@ export class SearchService {
     searchRequest.userId = userId;
     searchRequest.type = IndexRecordType.MESSAGE;
     searchRequest.offset = 0;
-    searchRequest.limit = history ? (history.limit ?? 10) : MAX_SEARCH_LIMIT;
+    const historyLimit = history ? (history.limit ?? 10) : undefined;
+    searchRequest.limit =
+      historyLimit === undefined
+        ? MAX_SEARCH_LIMIT
+        : Math.min(historyLimit * HISTORY_CANDIDATE_FACTOR, MAX_SEARCH_LIMIT);
     const excluded = history?.excludeConversationIds ?? [];
     const included = history?.conversationIds?.length
       ? history.conversationIds.filter((id) => !excluded.includes(id))
@@ -356,6 +364,8 @@ export class SearchService {
     const items: IndexedMessageDto[] = [];
     const conversationTitles = new Map<string, string | null>();
     const seenMessageIds = new Set<string>();
+    // A message can rank with several chunks; load it once.
+    const messageById = new Map<string, Message | null>();
 
     for (const record of result?.records || []) {
       if (record.type !== IndexRecordType.MESSAGE || !record.message) {
@@ -370,18 +380,35 @@ export class SearchService {
         !messageId ||
         seenMessageIds.has(identity) ||
         excluded.includes(conversationId) ||
-        (included !== undefined && !included.includes(conversationId))
+        (included !== undefined && !included.includes(conversationId)) ||
+        conversationTitles.get(conversationId) === null
       ) {
         continue;
       }
 
-      let message: Message;
-      try {
-        message = await this.messagesService.findOne(messageId);
-      } catch {
+      let message = messageById.get(messageId);
+      if (message === undefined) {
+        try {
+          message = await this.messagesService.findOne(messageId);
+        } catch {
+          message = null;
+        }
+        messageById.set(messageId, message);
+      }
+      if (
+        !message ||
+        message.conversationId !== conversationId ||
+        message.userId !== userId ||
+        (message.message.role !== OpenAIMessageRole.USER &&
+          message.message.role !== OpenAIMessageRole.ASSISTANT)
+      ) {
         continue;
       }
-      if (!conversationChildren.has(conversationId)) {
+      // Only an assistant's eligibility depends on its children.
+      if (
+        message.message.role === OpenAIMessageRole.ASSISTANT &&
+        !conversationChildren.has(conversationId)
+      ) {
         conversationChildren.set(
           conversationId,
           childrenByMessage(
@@ -390,14 +417,10 @@ export class SearchService {
         );
       }
       if (
-        message.conversationId !== conversationId ||
-        message.userId !== userId ||
         !isMessageIndexable(
           message,
-          conversationChildren.get(conversationId)!.get(message.id) || [],
-        ) ||
-        (message.message.role !== OpenAIMessageRole.USER &&
-          message.message.role !== OpenAIMessageRole.ASSISTANT)
+          conversationChildren.get(conversationId)?.get(message.id) || [],
+        )
       ) {
         continue;
       }
@@ -443,7 +466,7 @@ export class SearchService {
             }
           : {}),
       });
-      if (history && items.length >= (history.limit ?? 10)) break;
+      if (historyLimit !== undefined && items.length >= historyLimit) break;
     }
 
     return items;

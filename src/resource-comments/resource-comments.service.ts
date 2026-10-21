@@ -1,9 +1,12 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { DataSource, EntityManager } from 'typeorm';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 
 import {
   CreateResourceCommentRequestDto,
@@ -21,6 +24,7 @@ import {
   ResourceCommentAnchorStatus,
   ResourceCommentThread,
 } from './entities/resource-comment-thread.entity';
+import { mentionDisplayName, rewriteMentionLabels } from './mention-labels';
 import { ResourceCommentAnchorsService } from './resource-comment-anchors.service';
 import { ResourceCommentAttachmentsService } from './resource-comment-attachments.service';
 import { ResourceCommentQueriesService } from './resource-comment-queries.service';
@@ -35,6 +39,10 @@ export class ResourceCommentsService {
     private readonly attachmentsService: ResourceCommentAttachmentsService,
     private readonly i18n: I18nService,
     private readonly anchorsService: ResourceCommentAnchorsService,
+    @InjectRepository(NamespaceMember)
+    private readonly memberRepository: Repository<NamespaceMember>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   // Creates an anchored thread. Exact-match anchors are allowed to form separate threads.
@@ -170,6 +178,72 @@ export class ResourceCommentsService {
       await manager.save(thread);
       return await this.queriesService.getThreadResponse(manager, threadId);
     });
+  }
+
+  // Writes current member names into comment shortcodes without touching
+  // updated_at, so the label stays after the member leaves and the comment
+  // is not marked edited.
+  async syncMentionLabels(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ) {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    const members = await this.memberRepository.find({
+      where: { namespaceId },
+    });
+    if (members.length === 0) {
+      return { updated: 0 };
+    }
+    const users = await this.userRepository.find({
+      where: { id: In(members.map((member) => member.userId)) },
+    });
+    const usersById = new Map(users.map((user) => [user.id, user]));
+    const names: Record<string, string> = {};
+    for (const member of members) {
+      const user = usersById.get(member.userId);
+      if (!user) {
+        continue;
+      }
+      const name = mentionDisplayName({
+        nickname: member.nickname,
+        username: user.username,
+        email: user.email,
+        userId: member.userId,
+      });
+      if (name) {
+        names[member.userId] = name;
+      }
+    }
+    if (Object.keys(names).length === 0) {
+      return { updated: 0 };
+    }
+    const comments = await this.dataSource
+      .getRepository(ResourceComment)
+      .createQueryBuilder('comment')
+      .innerJoin('comment.thread', 'thread')
+      .where('thread.namespaceId = :namespaceId', { namespaceId })
+      .andWhere('thread.resourceId = :resourceId', { resourceId })
+      .andWhere('comment.content LIKE :mark', { mark: '%[@%' })
+      .getMany();
+    let updated = 0;
+    for (const comment of comments) {
+      const next = rewriteMentionLabels(comment.content, names);
+      if (next === comment.content) {
+        continue;
+      }
+      await this.dataSource.query(
+        'UPDATE resource_comments SET content = $1 WHERE id = $2',
+        [next, comment.id],
+      );
+      updated += 1;
+    }
+    return { updated };
   }
 
   // Edits a comment only when the requester is its author.

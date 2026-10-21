@@ -1,6 +1,7 @@
 import { HttpStatus, MessageEvent } from '@nestjs/common';
 import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { MessageStatus } from 'omniboxd/messages/entities/message.entity';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { Observable } from 'rxjs';
@@ -17,7 +18,9 @@ function createService(mocks: {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
     {} as any,
-    (mocks.messagesService ?? {}) as any,
+    (mocks.messagesService ?? {
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+    }) as any,
     mocks.conversationsService as any,
     mocks.namespaceResourcesService as any,
     mocks.sharedResourcesService as any,
@@ -1336,7 +1339,11 @@ describe('StreamService agent stream hooks', () => {
   };
 
   const createHookedService = (message: Record<string, any>) => {
-    const hooks = { onCallCompleted: jest.fn(), onStreamClosed: jest.fn() };
+    const hooks = {
+      onCallCompleted: jest.fn(),
+      onStreamClosed: jest.fn(),
+      onStreamCompleted: jest.fn(),
+    };
     hooks.onCallCompleted.mockResolvedValue(undefined);
     hooks.onStreamClosed.mockResolvedValue(undefined);
     const service = new StreamService(
@@ -1345,6 +1352,7 @@ describe('StreamService agent stream hooks', () => {
       {
         updateDelta: jest.fn().mockResolvedValue({ message: {} }),
         update: jest.fn().mockResolvedValue({ message: {}, ...message }),
+        indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
       } as any,
       {} as any,
       {} as any,
@@ -1439,6 +1447,56 @@ describe('StreamService agent stream hooks', () => {
     await eos(service, undefined);
 
     expect(hooks.onCallCompleted).not.toHaveBeenCalled();
+  });
+
+  it('indexes only the final assistant after done', async () => {
+    const { service, hooks } = createHookedService({
+      id: 'message-id',
+      inputTokenCached: 0,
+      inputTokenUncached: 100,
+      outputToken: 5,
+    });
+    hooks.onStreamCompleted = jest.fn().mockResolvedValue(undefined);
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      jest.fn().mockResolvedValue(undefined),
+      false,
+      userStream,
+    );
+
+    await handler(JSON.stringify({ response_type: 'eos' }), {
+      messageId: 'message-id',
+    } as any);
+    await handler(JSON.stringify({ response_type: 'done' }), {
+      parentId: 'message-id',
+    } as any);
+
+    expect((service as any).messagesService.update).toHaveBeenCalledWith(
+      'message-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.SUCCESS },
+      false,
+    );
+    expect(
+      (service as any).messagesService.indexFinalAssistant,
+    ).toHaveBeenCalledWith(
+      'message-id',
+      'namespace-id',
+      'conversation-id',
+      expect.any(Function),
+    );
+    const callback = (service as any).messagesService.indexFinalAssistant.mock
+      .calls[0][3];
+    await callback(undefined);
+    expect(hooks.onStreamCompleted).toHaveBeenCalledWith(
+      userStream,
+      'conversation-id',
+      'message-id',
+      undefined,
+    );
   });
 });
 
@@ -1537,6 +1595,7 @@ describe('persisted query receipts', () => {
       create,
       update,
       findOne: jest.fn().mockResolvedValue(saved),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
     };
     const events: any[] = [];
     jest
@@ -1797,6 +1856,7 @@ describe('StreamService.chat() never receives the SSE heartbeat', () => {
       create: jest.fn().mockResolvedValue(saved),
       update: jest.fn().mockResolvedValue(saved),
       findOne: jest.fn().mockResolvedValue(saved),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
     };
     jest
       .spyOn(service, 'stream')

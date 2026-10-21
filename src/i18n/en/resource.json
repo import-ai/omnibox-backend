@@ -1,5 +1,6 @@
 {
   "errors": {
+    "invalidContentHashUpdate": "Content and expected_content_hash must be submitted together",
     "resourceNotFile": "Resource is not a file",
     "parentOrResourceIdRequired": "parent_id or resource_id is required",
     "resourceNotFound": "Resource not found",

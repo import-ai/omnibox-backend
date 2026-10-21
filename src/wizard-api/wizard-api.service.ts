@@ -222,6 +222,16 @@ export class WizardAPIService {
     };
   }
 
+  async clearMessageIndex(namespaceId: string): Promise<{ deleted: number }> {
+    const result = await this.request(
+      'POST',
+      '/internal/api/v1/wizard/clear_message_index',
+      { namespace_id: namespaceId },
+      {},
+    );
+    return { deleted: Number(result.deleted) };
+  }
+
   async upsertWeaviateMessage(
     req: UpsertWeaviateMessageRequestDto,
   ): Promise<WeaviateUpsertResponseDto> {

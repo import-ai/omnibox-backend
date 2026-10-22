@@ -25,6 +25,7 @@ const PRO_ONLY_FUNCTIONS = new Set<string>([
   'file_reader_image',
   'generate_video_note',
   'generate_audio_note',
+  'update_memory',
 ]);
 
 // Functions that turn a raw resource (an uploaded file or a link) into the
@@ -336,6 +337,15 @@ export class TasksService {
     });
 
     return TaskDto.fromEntity(newTask);
+  }
+
+  canRetry(task: Task, exception?: Record<string, any>): boolean {
+    return (
+      ['update_memory', 'upsert_message_index'].includes(task.function) &&
+      exception?.retryable === true &&
+      !task.canceledAt &&
+      task.numSchedules <= this.maxRetries
+    );
   }
 
   async getNextTaskV2(

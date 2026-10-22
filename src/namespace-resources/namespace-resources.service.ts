@@ -1757,10 +1757,10 @@ export class NamespaceResourcesService {
       );
     }
     const syncingCommentAnchors =
-      data.expectedContentHash !== undefined ||
       data.commentAnchors !== undefined ||
       data.orphanedCommentThreadIds !== undefined;
-    if (syncingCommentAnchors && !tx) {
+    const assertingContentHash = data.expectedContentHash !== undefined;
+    if ((syncingCommentAnchors || assertingContentHash) && !tx) {
       return await transaction(this.dataSource.manager, async (newTx) => {
         return await this.update(
           namespaceId,
@@ -1773,16 +1773,15 @@ export class NamespaceResourcesService {
         );
       });
     }
-    if (syncingCommentAnchors) {
+    if (assertingContentHash) {
       if (
         data.content === undefined ||
         data.expectedContentHash === undefined ||
-        data.commentAnchors === undefined ||
         !tx
       ) {
         throw new AppException(
-          this.i18n.t('resourceComment.errors.invalidSyncPayload'),
-          'INVALID_COMMENT_SYNC_PAYLOAD',
+          this.i18n.t('resource.errors.invalidContentHashUpdate'),
+          'INVALID_CONTENT_HASH_UPDATE',
           HttpStatus.BAD_REQUEST,
         );
       }
@@ -1791,6 +1790,19 @@ export class NamespaceResourcesService {
         namespaceId,
         resourceId,
         data.expectedContentHash,
+      );
+    }
+    if (
+      syncingCommentAnchors &&
+      (data.content === undefined ||
+        data.expectedContentHash === undefined ||
+        !data.commentAnchors ||
+        !tx)
+    ) {
+      throw new AppException(
+        this.i18n.t('resourceComment.errors.invalidSyncPayload'),
+        'INVALID_COMMENT_SYNC_PAYLOAD',
+        HttpStatus.BAD_REQUEST,
       );
     }
     if (data.parentId) {
@@ -2046,7 +2058,10 @@ export class NamespaceResourcesService {
     const usage =
       await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
 
-    const { items, total } = await this.resourcesService.getDeletedResources(
+    // Filter before paging. A SQL window applied first would let rows the
+    // user cannot edit consume offset slots, and the unfiltered count would
+    // keep the client requesting empty pages.
+    const { items } = await this.resourcesService.getDeletedResources(
       namespaceId,
       usage.trashRetentionDays,
       { search },
@@ -2065,23 +2080,22 @@ export class NamespaceResourcesService {
       [...resourceMetaMap.values()],
     );
 
-    const filteredItems = items
-      .filter((resource) => {
-        const permission = permissionMap.get(resource.id);
-        return (
-          permission &&
-          comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
-        );
-      })
-      .slice(offset, offset + limit);
+    const visibleItems = items.filter((resource) => {
+      const permission = permissionMap.get(resource.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
+      );
+    });
+    const pageItems = visibleItems.slice(offset, offset + limit);
 
-    const trashItems = filteredItems.map((resource) =>
+    const trashItems = pageItems.map((resource) =>
       TrashItemDto.fromEntity(resource, false),
     );
 
     return TrashListResponseDto.create(
       trashItems,
-      total,
+      visibleItems.length,
       limit,
       offset,
       usage.trashRetentionDays,

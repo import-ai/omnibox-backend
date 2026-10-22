@@ -44,6 +44,19 @@ export class ResourceCommentsController {
     );
   }
 
+  @Post('mention-labels')
+  async syncMentionLabels(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+  ) {
+    return await this.resourceCommentsService.syncMentionLabels(
+      namespaceId,
+      resourceId,
+      userId,
+    );
+  }
+
   @Post()
   async createThread(
     @UserId() userId: string,

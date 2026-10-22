@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
@@ -26,6 +27,7 @@ import { ResourceCommentsService } from './resource-comments.service';
       ResourceComment,
       ResourceCommentAttachment,
       User,
+      NamespaceMember,
     ]),
     PermissionsModule,
     ResourcesModule,

@@ -1,4 +1,5 @@
 import {
+  HttpException,
   HttpStatus,
   Inject,
   Injectable,
@@ -9,6 +10,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
 import { isUUID } from 'class-validator';
+import { randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { Span } from 'nestjs-otel';
 import {
@@ -171,6 +173,17 @@ export class StreamService implements OnModuleDestroy {
 
   private streamControlChannel(key: string): string {
     return `wizard:stream:${key}:control`;
+  }
+
+  private conversationLockKey(
+    namespaceId: string,
+    conversationId: string,
+  ): string {
+    return `wizard:lock:conversation:${namespaceId}:${conversationId}`;
+  }
+
+  private async sleep(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   @Span('stream')
@@ -497,6 +510,31 @@ export class StreamService implements OnModuleDestroy {
     return messages;
   }
 
+  // An error raised before the agent stream exists (the conversation waits
+  // for a decision, is busy, ...) goes to the client as an error chunk it can
+  // parse, carrying the exception payload such as message_id and
+  // interrupt_count.
+  errorChunkStream(error: unknown): Observable<MessageEvent> {
+    this.logger.error({ error });
+    trace.getActiveSpan()?.recordException(error as Error);
+    let payload: Record<string, unknown>;
+    if (error instanceof AppException) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { statusCode, timestamp, ...rest } = error.getResponse();
+      payload = rest;
+    } else if (error instanceof HttpException) {
+      payload = { message: error.message };
+    } else {
+      payload = { message: this.i18n.t('system.errors.wizardRequestFailed') };
+    }
+    return new Observable<MessageEvent>((subscriber) => {
+      subscriber.next({
+        data: JSON.stringify({ response_type: 'error', ...payload }),
+      });
+      subscriber.complete();
+    });
+  }
+
   streamError(
     subscriber: Subscriber<MessageEvent>,
     error: Error | AppException,
@@ -697,11 +735,17 @@ export class StreamService implements OnModuleDestroy {
     shareId: string = '',
     chatOnly = false,
     timeZone?: string,
+    parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<Observable<MessageEvent>> {
-    let parentId: string | undefined = undefined;
+    const parentId = await this.resolveStreamParent(
+      namespaceId,
+      requestDto,
+      userId,
+      shareId,
+      parentMode,
+    );
     let messages: Message[] = [];
-    if (requestDto.parent_message_id) {
-      parentId = requestDto.parent_message_id;
+    if (parentId) {
       const allMessages = await this.messagesService.findAll(
         userId,
         requestDto.conversation_id,
@@ -715,25 +759,359 @@ export class StreamService implements OnModuleDestroy {
       userId,
       shareId,
     );
+    if (this.streamSessions.has(key)) {
+      throw new AppException(
+        this.i18n.t('system.errors.conversationBusy'),
+        'CONVERSATION_BUSY',
+        HttpStatus.CONFLICT,
+      );
+    }
 
     return new Observable<MessageEvent>((subscriber) => {
-      const session =
-        this.streamSessions.get(key) ||
-        this.startAgentSession(
-          key,
-          namespaceId,
-          requestDto,
-          requestId,
-          mode,
-          userId,
-          shareId,
-          parentId,
-          messages,
-          chatOnly,
-          timeZone,
-        );
+      const session = this.startAgentSession(
+        key,
+        namespaceId,
+        requestDto,
+        requestId,
+        mode,
+        userId,
+        shareId,
+        parentId,
+        messages,
+        chatOnly,
+        timeZone,
+      );
       return this.attachSession(session, subscriber);
     });
+  }
+
+  private async resolveStreamParent(
+    namespaceId: string,
+    requestDto: AgentRequestDto,
+    userId: string,
+    shareId: string,
+    parentMode: 'latest' | 'explicit',
+  ): Promise<string | undefined> {
+    const release = await this.acquireConversationLock(
+      namespaceId,
+      requestDto.conversation_id,
+      userId,
+      shareId,
+    );
+    try {
+      let parent =
+        parentMode === 'latest'
+          ? await this.findLatestParent(userId, requestDto.conversation_id)
+          : requestDto.parent_message_id && release
+            ? await this.messagesService.findOneInConversation(
+                requestDto.parent_message_id,
+                requestDto.conversation_id,
+                userId,
+              )
+            : null;
+      if (!release && parentMode === 'explicit') {
+        await this.claimStreamActive(
+          namespaceId,
+          requestDto.conversation_id,
+          userId,
+          shareId,
+        );
+        return requestDto.parent_message_id;
+      }
+      if (
+        parentMode === 'explicit' &&
+        requestDto.parent_message_id &&
+        !parent
+      ) {
+        throw new AppException(
+          this.i18n.t('system.errors.parentConversationMismatch'),
+          'PARENT_CONVERSATION_MISMATCH',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      if (
+        parent &&
+        requestDto.follow_latest &&
+        !requestDto.tool_call?.decisions?.length
+      ) {
+        parent = await this.followLatest(parent, requestDto, userId);
+      }
+      this.assertNoPendingInterrupt(
+        parent,
+        Boolean(requestDto.tool_call?.decisions?.length),
+      );
+      await this.assertInterruptOpen(
+        parent,
+        requestDto.conversation_id,
+        Boolean(requestDto.tool_call?.decisions?.length),
+      );
+      if (requestDto.tool_call?.decisions?.length) {
+        await this.assertDecisionUnapplied(parent, requestDto.conversation_id);
+      } else {
+        await this.assertDecisionApplied(
+          parent,
+          requestDto.conversation_id,
+          userId,
+        );
+      }
+      await this.claimStreamActive(
+        namespaceId,
+        requestDto.conversation_id,
+        userId,
+        shareId,
+      );
+      return parent?.id;
+    } finally {
+      await release?.();
+    }
+  }
+
+  // A message waiting for tool decisions only accepts those decisions. The
+  // error names the message and how many decisions it needs, so a client
+  // that did not know about it (an approval raised in another client) can
+  // decide it and retry.
+  assertNoPendingInterrupt(
+    parent: Message | null | undefined,
+    hasDecisions: boolean,
+  ) {
+    const interrupts: unknown[] | undefined =
+      parent?.message.role === OpenAIMessageRole.ASSISTANT
+        ? parent.attrs?.tool_call?.interrupts
+        : undefined;
+    if (parent && interrupts?.length && !hasDecisions) {
+      throw new AppException(
+        this.i18n.t('system.errors.pendingInterrupt'),
+        'PENDING_INTERRUPT',
+        HttpStatus.CONFLICT,
+        { message_id: parent.id, interrupt_count: interrupts.length },
+      );
+    }
+  }
+
+  // The newest message, read under the conversation lock. A user message
+  // there is a question whose reply never came; startAgentSession would take
+  // a new question under it as a retry of it and drop the new text, so the
+  // message above it is returned, as followLatest does. An accepted decision
+  // is returned so that the question is refused until it is applied.
+  private async findLatestParent(
+    userId: string,
+    conversationId: string,
+  ): Promise<Message | null> {
+    const latest = await this.messagesService.findLatest(
+      userId,
+      conversationId,
+    );
+    if (
+      latest?.message.role !== OpenAIMessageRole.USER ||
+      latest.attrs?.tool_call?.decisions?.length
+    )
+      return latest;
+    if (!latest.parentId) return null;
+    return await this.messagesService.findOneInConversation(
+      latest.parentId,
+      conversationId,
+      userId,
+    );
+  }
+
+  // Runs under the conversation lock, after any running reply finished, so
+  // the newest message is final. A user message there is a question whose
+  // reply never came; a new question under it would be taken as a retry of
+  // it, so the given parent is kept then.
+  private async followLatest(
+    parent: Message,
+    requestDto: AgentRequestDto,
+    userId: string,
+  ): Promise<Message> {
+    const leaf = await this.messagesService.findLeafBelow(
+      parent.id,
+      requestDto.conversation_id,
+      userId,
+    );
+    if (!leaf) return parent;
+    // An accepted decision without results is returned so that the question
+    // is refused until the decision is applied (assertDecisionApplied).
+    if (
+      leaf.message.role === OpenAIMessageRole.USER &&
+      !leaf.attrs?.tool_call?.decisions?.length
+    )
+      return parent;
+    return leaf;
+  }
+
+  // An accepted decision message D whose resume produced nothing usable: no
+  // child at all, or only failed empty replies (the resume errored before any
+  // tool result). Sending the decision again under D resumes it once more.
+  private isUnappliedDecision(
+    decision: Message | null | undefined,
+    children: Message[],
+  ): boolean {
+    return Boolean(
+      decision?.message.role === OpenAIMessageRole.USER &&
+      decision.attrs?.tool_call?.decisions?.length &&
+      children.every((child) => this.isFailedEmptyReply(child)),
+    );
+  }
+
+  private isFailedEmptyReply(message: Message): boolean {
+    const content = message.message.content;
+    return (
+      message.message.role === OpenAIMessageRole.ASSISTANT &&
+      ![
+        MessageStatus.SUCCESS,
+        MessageStatus.STREAMING,
+        MessageStatus.PENDING,
+      ].includes(message.status) &&
+      !(typeof content === 'string' ? content.trim() : content) &&
+      !message.message.tool_calls?.length &&
+      !message.attrs?.tool_call?.interrupts?.length
+    );
+  }
+
+  // Decisions sent again under a decision message D may only re-resume a D
+  // whose resume failed. Once D has a tool result or a reply (another client
+  // resumed it, possibly while this request waited for the lock), resuming
+  // it again would run an approved tool twice.
+  private async assertDecisionUnapplied(
+    parent: Message | null | undefined,
+    conversationId: string,
+  ) {
+    if (
+      !parent ||
+      parent.message.role !== OpenAIMessageRole.USER ||
+      !parent.attrs?.tool_call?.decisions?.length
+    )
+      return;
+    const children = await this.messagesService.findChildren(
+      parent.id,
+      conversationId,
+    );
+    if (this.isUnappliedDecision(parent, children)) return;
+    throw new AppException(
+      this.i18n.t('system.errors.interruptAlreadyDecided'),
+      'INTERRUPT_ALREADY_DECIDED',
+      HttpStatus.CONFLICT,
+      { message_id: parent.id },
+    );
+  }
+
+  // A new question may not continue from a decision that was accepted but
+  // never applied: the rejected or approved calls would stay without a tool
+  // result. The client applies the decision again under D, then retries.
+  // Also used before appending saved resource messages (backend-pro).
+  async assertDecisionApplied(
+    parent: Message | null | undefined,
+    conversationId: string,
+    userId: string,
+  ) {
+    if (!parent) return;
+    let decision: Message | null | undefined;
+    if (parent.message.role === OpenAIMessageRole.USER) {
+      decision = parent;
+    } else if (this.isFailedEmptyReply(parent) && parent.parentId) {
+      decision = await this.messagesService.findOneInConversation(
+        parent.parentId,
+        conversationId,
+        userId,
+      );
+    }
+    if (!decision?.attrs?.tool_call?.decisions?.length) return;
+    const children = await this.messagesService.findChildren(
+      decision.id,
+      conversationId,
+    );
+    if (!this.isUnappliedDecision(decision, children)) return;
+    throw new AppException(
+      this.i18n.t('system.errors.decisionNotApplied'),
+      'DECISION_NOT_APPLIED',
+      HttpStatus.CONFLICT,
+      {
+        message_id: decision.id,
+        interrupt_count: decision.attrs.tool_call.decisions.length,
+      },
+    );
+  }
+
+  // Decisions resume the interrupted run once. A message that already has a
+  // reply was decided elsewhere (e.g. in the web while the bot still thought
+  // it was pending); deciding it again would fork a second resume.
+  private async assertInterruptOpen(
+    parent: Message | null | undefined,
+    conversationId: string,
+    hasDecisions: boolean,
+  ) {
+    if (
+      !hasDecisions ||
+      !parent?.attrs?.tool_call?.interrupts?.length ||
+      !(await this.messagesService.hasChildren(parent.id, conversationId))
+    )
+      return;
+    throw new AppException(
+      this.i18n.t('system.errors.interruptAlreadyDecided'),
+      'INTERRUPT_ALREADY_DECIDED',
+      HttpStatus.CONFLICT,
+      { message_id: parent.id },
+    );
+  }
+
+  async acquireConversationLock(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId: string,
+  ): Promise<(() => Promise<void>) | null> {
+    const client = await this.getRedisClient();
+    if (!client) {
+      return null;
+    }
+    const streamKey = getStreamKey(
+      namespaceId,
+      conversationId,
+      userId,
+      shareId,
+    );
+    const activeKey = this.streamActiveKey(streamKey);
+    const deadline = Date.now() + 290_000;
+    while (await client.exists(activeKey)) {
+      if (Date.now() > deadline) {
+        throw new AppException(
+          this.i18n.t('system.errors.conversationBusy'),
+          'CONVERSATION_BUSY',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await this.sleep(250);
+    }
+    const lockKey = this.conversationLockKey(namespaceId, conversationId);
+    const token = randomUUID();
+    while (!(await client.set(lockKey, token, { NX: true, EX: 30 }))) {
+      if (Date.now() > deadline) {
+        throw new AppException(
+          this.i18n.t('system.errors.conversationBusy'),
+          'CONVERSATION_BUSY',
+          HttpStatus.CONFLICT,
+        );
+      }
+      await this.sleep(250);
+    }
+    if (await client.exists(activeKey)) {
+      await client.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        { keys: [lockKey], arguments: [token] },
+      );
+      return this.acquireConversationLock(
+        namespaceId,
+        conversationId,
+        userId,
+        shareId,
+      );
+    }
+    return async () => {
+      await client.eval(
+        "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+        { keys: [lockKey], arguments: [token] },
+      );
+    };
   }
 
   private startAgentSession(
@@ -846,7 +1224,12 @@ export class StreamService implements OnModuleDestroy {
             status: MessageStatus.SUCCESS,
             attrs: {
               ...attrs,
-              user_context: { lang: requestDto.lang || '简体中文' },
+              user_context: {
+                lang: requestDto.lang || '简体中文',
+                ...(requestDto.source_channel
+                  ? { channel: requestDto.source_channel }
+                  : {}),
+              },
               ...(requestDto.images?.length
                 ? {
                     composer: {
@@ -998,20 +1381,41 @@ export class StreamService implements OnModuleDestroy {
     };
   }
 
+  private async claimStreamActive(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId: string,
+  ) {
+    const client = await this.getRedisClient();
+    if (!client) return;
+    const key = getStreamKey(namespaceId, conversationId, userId, shareId);
+    await client.del([
+      this.streamEventsKey(key),
+      this.streamSequenceKey(key),
+      this.streamCancelKey(key),
+    ]);
+    await client.set(this.streamActiveKey(key), '1', {
+      EX: STREAM_TTL_SECONDS,
+    });
+  }
+
   private async startRedisSession(session: StreamSession) {
     try {
       const client = await this.getRedisClient();
       if (client) {
-        if (!(await client.exists(this.streamActiveKey(session.key)))) {
+        const claimed = await client.set(
+          this.streamActiveKey(session.key),
+          '1',
+          { NX: true, EX: STREAM_TTL_SECONDS },
+        );
+        if (claimed) {
           await client.del([
             this.streamEventsKey(session.key),
             this.streamSequenceKey(session.key),
+            this.streamCancelKey(session.key),
           ]);
         }
-        await client.del(this.streamCancelKey(session.key));
-        await client.set(this.streamActiveKey(session.key), '1', {
-          EX: STREAM_TTL_SECONDS,
-        });
       }
 
       const subscriber = await this.getRedisSubscriber();
@@ -1411,37 +1815,59 @@ export class StreamService implements OnModuleDestroy {
     requestId: string,
     mode: 'ask' | 'write',
     timeZone?: string,
+    parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<Observable<MessageEvent>> {
-    await this.conversationsService.findOneForUserInNamespace(
-      requestDto.conversation_id,
-      userId,
-      namespaceId,
-    );
     try {
-      for (const tool of requestDto.tools || []) {
-        if (tool.name === 'private_search') {
-          tool.visible_resources = await this.getUserVisibleResources(
-            namespaceId,
-            userId,
-            tool.resources || [],
-          );
-        }
-      }
-      return this.createAgentStream(
+      await this.conversationsService.findOneForUserInNamespace(
+        requestDto.conversation_id,
+        userId,
+        namespaceId,
+      );
+      return await this.openUserAgentStream(
+        userId,
         namespaceId,
         requestDto,
         requestId,
         mode,
-        userId,
-        '',
-        false,
         timeZone,
+        parentMode,
       );
     } catch (e) {
-      return new Observable<MessageEvent>((subscriber) =>
-        this.streamError(subscriber, e),
-      );
+      return this.errorChunkStream(e);
     }
+  }
+
+  // Throws instead of answering with an error chunk, so the Open API keeps
+  // its HTTP status and JSON body (e.g. 409 PENDING_INTERRUPT for the bots).
+  private async openUserAgentStream(
+    userId: string,
+    namespaceId: string,
+    requestDto: AgentRequestDto,
+    requestId: string,
+    mode: 'ask' | 'write',
+    timeZone?: string,
+    parentMode: 'latest' | 'explicit' = 'explicit',
+  ): Promise<Observable<MessageEvent>> {
+    for (const tool of requestDto.tools || []) {
+      if (tool.name === 'private_search') {
+        tool.visible_resources = await this.getUserVisibleResources(
+          namespaceId,
+          userId,
+          tool.resources || [],
+        );
+      }
+    }
+    return await this.createAgentStream(
+      namespaceId,
+      requestDto,
+      requestId,
+      mode,
+      userId,
+      '',
+      false,
+      timeZone,
+      parentMode,
+    );
   }
 
   async createShareAgentStream(
@@ -1460,7 +1886,7 @@ export class StreamService implements OnModuleDestroy {
           );
         }
       }
-      return this.createAgentStream(
+      return await this.createAgentStream(
         share.namespaceId,
         requestDto,
         requestId,
@@ -1471,9 +1897,7 @@ export class StreamService implements OnModuleDestroy {
         timeZone,
       );
     } catch (e) {
-      return new Observable<MessageEvent>((subscriber) =>
-        this.streamError(subscriber, e),
-      );
+      return this.errorChunkStream(e);
     }
   }
 
@@ -1483,13 +1907,21 @@ export class StreamService implements OnModuleDestroy {
     body: AgentRequestDto,
     requestId: string,
     mode: 'ask' | 'write' = 'ask',
+    parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<any> {
-    const observable = await this.createUserAgentStream(
+    await this.conversationsService.findOneForUserInNamespace(
+      body.conversation_id,
+      userId,
+      namespaceId,
+    );
+    const observable = await this.openUserAgentStream(
       userId,
       namespaceId,
       body,
       requestId,
       mode,
+      undefined,
+      parentMode,
     );
 
     const chunks: ChatResponse[] = [];

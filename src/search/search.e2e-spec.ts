@@ -10,9 +10,14 @@ import {
 } from 'omniboxd/api-key/api-key.entity';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import { SnakeCaseInterceptor } from 'omniboxd/interceptor/snake-case';
+import {
+  MessageStatus,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
+import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
@@ -34,7 +39,10 @@ import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import * as request from 'supertest';
 
 import { DocType } from './doc-type.enum';
+import { MessageIndexMigrationController } from './message-index-migration.controller';
+import { MessageIndexMigrationService } from './message-index-migration.service';
 import {
+  InternalConversationMessageSearchController,
   InternalSearchController,
   SearchController,
 } from './search.controller';
@@ -115,9 +123,22 @@ describe('SearchController (e2e)', () => {
         SearchController,
         OpenSearchController,
         InternalSearchController,
+        InternalConversationMessageSearchController,
+        MessageIndexMigrationController,
       ],
       providers: [
         SearchService,
+        {
+          provide: MessageIndexMigrationService,
+          useValue: {
+            rebuildMessageIndex: jest
+              .fn()
+              .mockResolvedValue({ namespace_id: 'n' }),
+            rebuildAllMessageIndexes: jest
+              .fn()
+              .mockResolvedValue({ namespace_count: 1 }),
+          },
+        },
         SearchResourceFilterService,
         SearchCandidateService,
         OpenSearchService,
@@ -231,6 +252,19 @@ describe('SearchController (e2e)', () => {
         {
           provide: MessagesService,
           useValue: {
+            findOne: jest.fn().mockImplementation((id: string) =>
+              Promise.resolve({
+                id,
+                conversationId: '550e8400-e29b-41d4-a716-446655440001',
+                userId: mockUser.id,
+                status: MessageStatus.SUCCESS,
+                message: {
+                  role: OpenAIMessageRole.USER,
+                  content: 'This is a test message content',
+                },
+                attrs: null,
+              }),
+            ),
             findAll: jest.fn().mockResolvedValue([]),
           },
         },
@@ -258,6 +292,12 @@ describe('SearchController (e2e)', () => {
           useValue: {
             find: jest.fn().mockResolvedValue([]),
             save: jest.fn().mockResolvedValue({}),
+          },
+        },
+        {
+          provide: getRepositoryToken(Namespace),
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
           },
         },
         {
@@ -411,6 +451,97 @@ describe('SearchController (e2e)', () => {
           content: 'This is a test message content',
         }),
       ]);
+    });
+
+    it('excludes deleted messages even when their vectors still exist', async () => {
+      jest
+        .spyOn(app.get(MessagesService), 'findOne')
+        .mockRejectedValueOnce(new Error('Message not found'));
+
+      const response = await request(app.getHttpServer())
+        .get(
+          `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
+        )
+        .set('user', JSON.stringify(mockUser))
+        .expect(HttpStatus.OK);
+
+      expect(response.body).toEqual([]);
+    });
+
+    it.each([false, true])(
+      'returns historical final answers and excludes intermediate assistants (has assistant child: %s)',
+      async (hasAssistantChild) => {
+        const messages = app.get(MessagesService);
+        const message = await messages.findOne(
+          '550e8400-e29b-41d4-a716-446655440002',
+        );
+        jest.spyOn(messages, 'findOne').mockResolvedValueOnce({
+          ...message,
+          message: { ...message.message, role: OpenAIMessageRole.ASSISTANT },
+        });
+
+        jest.spyOn(messages, 'findAll').mockResolvedValueOnce(
+          hasAssistantChild
+            ? [
+                {
+                  ...message,
+                  id: '550e8400-e29b-41d4-a716-446655440003',
+                  parentId: message.id,
+                  message: {
+                    ...message.message,
+                    role: OpenAIMessageRole.ASSISTANT,
+                  },
+                },
+              ]
+            : [],
+        );
+
+        const response = await request(app.getHttpServer())
+          .get(
+            `/api/v1/namespaces/${mockNamespaceId}/search?query=test&type=${DocType.MESSAGE}`,
+          )
+          .set('user', JSON.stringify(mockUser))
+          .expect(HttpStatus.OK);
+
+        expect(response.body).toEqual(
+          hasAssistantChild
+            ? []
+            : [
+                expect.objectContaining({
+                  message_id: message.id,
+                  conversation_id: message.conversationId,
+                  role: 'assistant',
+                  content: message.message.content,
+                }),
+              ],
+        );
+      },
+    );
+
+    it('applies conversation scope on the top-k endpoint without a total', async () => {
+      const conversationId = '550e8400-e29b-41d4-a716-446655440001';
+      const response = await request(app.getHttpServer())
+        .post(
+          `/internal/api/v1/namespaces/${mockNamespaceId}/conversations/messages/search`,
+        )
+        .set('x-user-id', mockUser.id)
+        .send({ query: 'test', conversation_ids: [conversationId], limit: 1 })
+        .expect(HttpStatus.CREATED);
+      expect(response.body).toEqual({
+        items: [expect.objectContaining({ conversation_id: conversationId })],
+      });
+      const excluded = await request(app.getHttpServer())
+        .post(
+          `/internal/api/v1/namespaces/${mockNamespaceId}/conversations/messages/search`,
+        )
+        .set('x-user-id', mockUser.id)
+        .send({
+          query: 'test',
+          conversation_ids: [conversationId],
+          exclude_conversation_ids: [conversationId],
+        })
+        .expect(HttpStatus.CREATED);
+      expect(excluded.body).toEqual({ items: [] });
     });
 
     it('should handle missing query parameter', async () => {
@@ -575,6 +706,27 @@ describe('SearchController (e2e)', () => {
       });
       expect((result[0] as any).conversationId).toBeUndefined();
     });
+  });
+
+  it('preserves migration routes and snake_case request fields after extraction', async () => {
+    const one = jest.spyOn(
+      app.get(MessageIndexMigrationService),
+      'rebuildMessageIndex',
+    );
+    const all = jest.spyOn(
+      app.get(MessageIndexMigrationService),
+      'rebuildAllMessageIndexes',
+    );
+    await request(app.getHttpServer())
+      .post('/internal/api/v1/rebuild_message_index')
+      .send({ namespace_id: 'n', apply: true, message_ids: ['m'] })
+      .expect(HttpStatus.CREATED);
+    expect(one).toHaveBeenCalledWith('n', true, ['m']);
+    await request(app.getHttpServer())
+      .post('/internal/api/v1/rebuild_all_message_indexes')
+      .send({ apply: false, namespace_ids: ['n'] })
+      .expect(HttpStatus.CREATED);
+    expect(all).toHaveBeenCalledWith(false, ['n']);
   });
 
   describe('POST /internal/api/v1/refresh_index', () => {

@@ -54,7 +54,9 @@ export class NamespaceTasksService {
         task.canRedirect = true;
       } else {
         task.canCancel = false;
-        task.canRerun = false;
+        task.canRerun =
+          task.function === 'update_memory' &&
+          RETRYABLE_TASK_STATUSES.includes(task.status as TaskStatus);
         task.canRedirect = false;
       }
     }

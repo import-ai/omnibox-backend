@@ -190,10 +190,12 @@ export class ConversationHistoryService {
     return this.dataSource.query<HistoryRow[]>(
       `
       SELECT id, parent_id, created_at, updated_at, status,
-        CASE WHEN $4 OR status = ANY($5::messages_status[]) THEN message
+        CASE WHEN $4 OR status = ANY($5::messages_status[])
+          OR COALESCE(jsonb_array_length(attrs->'tool_call'->'interrupts'), 0) > 0 THEN message
         ELSE (message - 'reasoning_content' - 'tool_calls') -
           CASE WHEN message->>'role' = 'tool' THEN 'content' ELSE '__unused__' END END AS message,
-        CASE WHEN $4 OR status = ANY($5::messages_status[]) THEN attrs - 'context'
+        CASE WHEN $4 OR status = ANY($5::messages_status[])
+          OR COALESCE(jsonb_array_length(attrs->'tool_call'->'interrupts'), 0) > 0 THEN attrs - 'context'
         ELSE (attrs - 'context' - 'citations' - 'tool_call') ||
           jsonb_build_object('citations', COALESCE((SELECT jsonb_agg(c - 'snippet') FROM jsonb_array_elements(attrs->'citations') c), '[]'::jsonb),
             'tool_call', (attrs->'tool_call') - 'interrupts' - 'operations' - 'error') END AS attrs,

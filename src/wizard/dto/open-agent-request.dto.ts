@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -70,6 +71,16 @@ export class OpenAgentRequestDto {
     message: i18nValidationMessage('validation.errors.isUUID'),
   })
   parent_message_id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Agent edition. "pro" requires Agent 2.1 credits and fails with INSUFFICIENT_AGENT_CREDITS instead of falling back to the basic agent.',
+    enum: ['basic', 'pro'],
+    example: 'pro',
+  })
+  @IsOptional()
+  @IsIn(['basic', 'pro'])
+  edition?: 'basic' | 'pro';
 
   @ApiPropertyOptional({
     description:

@@ -11,10 +11,18 @@ import { QQBot } from './apps/qq-bot';
 import { TelegramBot } from './apps/telegram-bot';
 import { WechatBot } from './apps/wechat-bot';
 import { WechatClaw } from './apps/wechat-claw';
+import { WechatOaBot } from './apps/wechat-oa-bot';
 import { InternalApplicationsController } from './internal.applications.controller';
 
 @Module({
-  providers: [ApplicationsService, WechatBot, QQBot, WechatClaw, TelegramBot],
+  providers: [
+    ApplicationsService,
+    WechatBot,
+    QQBot,
+    WechatClaw,
+    WechatOaBot,
+    TelegramBot,
+  ],
   controllers: [ApplicationsController, InternalApplicationsController],
   exports: [ApplicationsService],
   imports: [

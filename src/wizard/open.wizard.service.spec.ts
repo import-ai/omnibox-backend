@@ -343,6 +343,7 @@ describe('OpenWizardService', () => {
       expect.objectContaining({ edition: 'pro' }),
       'request-1',
       'ask',
+      'explicit',
     );
   });
 

@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 import {
@@ -51,11 +52,24 @@ export class OpenAgentRequestDto {
 
   @ApiPropertyOptional({
     description:
-      'Parent message ID for conversation threading. Must belong to the current API key user and namespace.',
+      'Continue this conversation. Without parent_message_id, the new message follows the latest message in the conversation.',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsOptional()
-  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
+  conversation_id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Parent message ID for conversation threading. Must belong to the current API key user and namespace. When both this and conversation_id are set, this parent is used.',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsOptional()
+  @IsUUID(undefined, {
+    message: i18nValidationMessage('validation.errors.isUUID'),
+  })
   parent_message_id?: string;
 
   @ApiPropertyOptional({
@@ -67,4 +81,13 @@ export class OpenAgentRequestDto {
   @IsOptional()
   @IsIn(['basic', 'pro'])
   edition?: 'basic' | 'pro';
+
+  @ApiPropertyOptional({
+    description:
+      'Messaging channel the user sent from, such as qq, wechat, or telegram. Stored on the user message so clients can show where it came from.',
+    example: 'qq',
+  })
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  source_channel?: string;
 }

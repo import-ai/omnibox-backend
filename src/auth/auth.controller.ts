@@ -11,12 +11,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
+import { I18nService } from 'nestjs-i18n';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
 import { LocalAuthGuard } from 'omniboxd/auth/local-auth.guard';
 import { RequireCaptcha } from 'omniboxd/captcha/captcha.decorator';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
+import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import { RateLimitByIp } from 'omniboxd/rate-limit/rate-limit.decorator';
 
@@ -38,6 +40,7 @@ export class AuthController {
     private authService: AuthService,
     private configService: ConfigService,
     private namespacesService: NamespacesService,
+    private readonly i18n: I18nService,
   ) {}
 
   @UseGuards(LocalAuthGuard)
@@ -206,15 +209,29 @@ export class AuthController {
       inviteType,
     } = inviteDto;
 
-    // Check if current user is owner or admin of the namespace
-    const isOwnerOrAdmin = await this.namespacesService.userIsOwnerOrAdmin(
+    const member = await this.namespacesService.getMemberByUserId(
       namespaceId,
       req.user.id,
     );
-    if (!isOwnerOrAdmin) {
+    if (
+      member?.role !== NamespaceRole.OWNER &&
+      member?.role !== NamespaceRole.ADMIN
+    ) {
       throw new AppException(
         'Only owner or admin can invite users',
         'USER_NOT_OWNER_OR_ADMIN',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    if (
+      emails?.length &&
+      role !== NamespaceRole.MEMBER &&
+      !(member.role === NamespaceRole.OWNER && role === NamespaceRole.ADMIN)
+    ) {
+      throw new AppException(
+        this.i18n.t('namespace.errors.cannotAssignHigherRole'),
+        'CANNOT_ASSIGN_HIGHER_ROLE',
         HttpStatus.FORBIDDEN,
       );
     }

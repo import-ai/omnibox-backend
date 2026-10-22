@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
+import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import {
   comparePermission,
@@ -12,6 +13,7 @@ import { ResourceCommentQueriesService } from 'omniboxd/resource-comments/resour
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
+import { User } from 'omniboxd/user/entities/user.entity';
 import { Readable } from 'stream';
 import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
 
@@ -184,6 +186,8 @@ describe('Resource comment write permissions', () => {
           provide: getRepositoryToken(ResourceCommentAttachment),
           useValue: {},
         },
+        { provide: getRepositoryToken(NamespaceMember), useValue: {} },
+        { provide: getRepositoryToken(User), useValue: {} },
         { provide: DataSource, useValue: { transaction } },
         {
           provide: PermissionsService,

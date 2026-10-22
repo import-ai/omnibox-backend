@@ -54,6 +54,28 @@ describe('ResourcesController (e2e)', () => {
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/resources', () => {
+    it('serializes concurrent creation of the same sibling name', async () => {
+      const name = uniqueName('Concurrent memory asset');
+      const responses = await Promise.all(
+        Array.from({ length: 4 }, () =>
+          client
+            .post(
+              `/internal/api/v1/namespaces/${client.namespace.id}/resources`,
+            )
+            .set('X-User-ID', client.user.id)
+            .send({
+              name,
+              parentId: client.namespace.root_resource_id,
+              resourceType: ResourceType.DOC,
+              content: '# AGENTS.md',
+            }),
+        ),
+      );
+      expect(responses.map((r) => r.status).sort()).toEqual([
+        201, 409, 409, 409,
+      ]);
+    });
+
     it('should create a new document resource', async () => {
       const tagIds = await client.createTags(['test', 'document']);
 

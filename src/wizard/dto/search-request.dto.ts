@@ -21,6 +21,12 @@ export class SearchRequestDto {
   @Expose({ name: 'limit' })
   limit?: number;
 
+  @Expose({ name: 'conversation_ids' })
+  conversationIds?: string[];
+
+  @Expose({ name: 'exclude_conversation_ids' })
+  excludeConversationIds?: string[];
+
   @Expose({ name: 'resource_ids' })
   resourceIds?: string[];
 }

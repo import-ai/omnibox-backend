@@ -425,6 +425,68 @@ describe('StreamService parent resolution', () => {
     expect(messagesService.findOneInConversation).not.toHaveBeenCalled();
   });
 
+  it('puts a new question beside a latest question whose reply never came', async () => {
+    const answer = {
+      id: 'answer-id',
+      conversationId: 'conversation-id',
+      message: { role: 'assistant' },
+      attrs: {},
+    };
+    const messagesService = {
+      findLatest: jest.fn().mockResolvedValue({
+        id: 'unanswered-id',
+        parentId: 'answer-id',
+        conversationId: 'conversation-id',
+        message: { role: 'user' },
+        attrs: {},
+      }),
+      findOneInConversation: jest.fn().mockResolvedValue(answer),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        request,
+        'user-id',
+        '',
+        'latest',
+      ),
+    ).resolves.toBe('answer-id');
+
+    expect(messagesService.findOneInConversation).toHaveBeenCalledWith(
+      'answer-id',
+      'conversation-id',
+      'user-id',
+    );
+  });
+
+  it('starts a new root beside a first question whose reply never came', async () => {
+    const messagesService = {
+      findLatest: jest.fn().mockResolvedValue({
+        id: 'unanswered-id',
+        parentId: null,
+        conversationId: 'conversation-id',
+        message: { role: 'user' },
+        attrs: {},
+      }),
+      findOneInConversation: jest.fn(),
+    };
+    const service = serviceWith(messagesService);
+
+    await expect(
+      (service as any).resolveStreamParent(
+        'namespace-id',
+        request,
+        'user-id',
+        '',
+        'latest',
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(messagesService.findOneInConversation).not.toHaveBeenCalled();
+  });
+
   it('keeps an explicit parent instead of replacing it with the latest message', async () => {
     const messagesService = {
       findLatest: jest.fn(),

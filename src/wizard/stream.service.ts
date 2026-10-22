@@ -801,10 +801,7 @@ export class StreamService implements OnModuleDestroy {
     try {
       let parent =
         parentMode === 'latest'
-          ? await this.messagesService.findLatest(
-              userId,
-              requestDto.conversation_id,
-            )
+          ? await this.findLatestParent(userId, requestDto.conversation_id)
           : requestDto.parent_message_id && release
             ? await this.messagesService.findOneInConversation(
                 requestDto.parent_message_id,
@@ -889,6 +886,32 @@ export class StreamService implements OnModuleDestroy {
         { message_id: parent.id, interrupt_count: interrupts.length },
       );
     }
+  }
+
+  // The newest message, read under the conversation lock. A user message
+  // there is a question whose reply never came; startAgentSession would take
+  // a new question under it as a retry of it and drop the new text, so the
+  // message above it is returned, as followLatest does. An accepted decision
+  // is returned so that the question is refused until it is applied.
+  private async findLatestParent(
+    userId: string,
+    conversationId: string,
+  ): Promise<Message | null> {
+    const latest = await this.messagesService.findLatest(
+      userId,
+      conversationId,
+    );
+    if (
+      latest?.message.role !== OpenAIMessageRole.USER ||
+      latest.attrs?.tool_call?.decisions?.length
+    )
+      return latest;
+    if (!latest.parentId) return null;
+    return await this.messagesService.findOneInConversation(
+      latest.parentId,
+      conversationId,
+      userId,
+    );
   }
 
   // Runs under the conversation lock, after any running reply finished, so

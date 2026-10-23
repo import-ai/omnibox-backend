@@ -13,9 +13,34 @@ import {
   Max,
   MaxLength,
   Min,
+  Validate,
+  ValidateIf,
   ValidateNested,
+  ValidationArguments,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+
+import { ResourceCommentThreadType } from '../entities/resource-comment-thread.entity';
+
+@ValidatorConstraint({ name: 'documentCommentHasNoAnchor', async: false })
+class DocumentCommentHasNoAnchor implements ValidatorConstraintInterface {
+  validate(_value: unknown, args: ValidationArguments): boolean {
+    const dto = args.object as CreateResourceCommentThreadRequestDto;
+    return (
+      dto.type !== ResourceCommentThreadType.DOCUMENT ||
+      [
+        dto.quotedText,
+        dto.anchorFrom,
+        dto.anchorTo,
+        dto.anchorPrefix,
+        dto.anchorSuffix,
+        dto.expectedContentHash,
+      ].every((value) => value === undefined)
+    );
+  }
+}
 
 export class ResourceCommentAnchorRequestDto {
   @IsUUID(undefined, {
@@ -49,23 +74,43 @@ export class ResourceCommentAnchorRequestDto {
 }
 
 export class CreateResourceCommentThreadRequestDto {
+  @IsIn(Object.values(ResourceCommentThreadType), {
+    message: i18nValidationMessage('validation.errors.isIn'),
+  })
+  @Validate(DocumentCommentHasNoAnchor, {
+    message: i18nValidationMessage('resourceComment.errors.invalidAnchor'),
+  })
+  type?: ResourceCommentThreadType = ResourceCommentThreadType.INLINE;
+
+  @ValidateIf(
+    (dto: CreateResourceCommentThreadRequestDto) =>
+      dto.type !== ResourceCommentThreadType.DOCUMENT,
+  )
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsNotEmpty({
     message: i18nValidationMessage('validation.errors.isNotEmpty'),
   })
   @MaxLength(5000)
   @Expose({ name: 'quoted_text' })
-  quotedText: string;
+  quotedText?: string;
 
+  @ValidateIf(
+    (dto: CreateResourceCommentThreadRequestDto) =>
+      dto.type !== ResourceCommentThreadType.DOCUMENT,
+  )
   @IsInt({ message: i18nValidationMessage('validation.errors.isInt') })
   @Min(0, { message: i18nValidationMessage('validation.errors.min') })
   @Expose({ name: 'anchor_from' })
-  anchorFrom: number;
+  anchorFrom?: number;
 
+  @ValidateIf(
+    (dto: CreateResourceCommentThreadRequestDto) =>
+      dto.type !== ResourceCommentThreadType.DOCUMENT,
+  )
   @IsInt({ message: i18nValidationMessage('validation.errors.isInt') })
   @Min(1, { message: i18nValidationMessage('validation.errors.min') })
   @Expose({ name: 'anchor_to' })
-  anchorTo: number;
+  anchorTo?: number;
 
   @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
@@ -79,9 +124,13 @@ export class CreateResourceCommentThreadRequestDto {
   @Expose({ name: 'anchor_suffix' })
   anchorSuffix?: string;
 
+  @ValidateIf(
+    (dto: CreateResourceCommentThreadRequestDto) =>
+      dto.type !== ResourceCommentThreadType.DOCUMENT,
+  )
   @IsHash('sha256')
   @Expose({ name: 'expected_content_hash' })
-  expectedContentHash: string;
+  expectedContentHash?: string;
 
   @IsOptional()
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
@@ -144,6 +193,12 @@ function parseCommentPageValue(value: unknown): number {
 }
 
 export class ListResourceCommentThreadsRequestDto {
+  @IsOptional()
+  @IsIn(['inline', 'sidebar', 'document'], {
+    message: i18nValidationMessage('validation.errors.isIn'),
+  })
+  view?: 'inline' | 'sidebar' | 'document';
+
   @Expose()
   @Transform(({ obj }: { obj: Record<string, unknown> }) =>
     parseCommentPageValue(obj.offset ?? obj.offlet ?? 0),

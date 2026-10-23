@@ -3,6 +3,7 @@ import { ResourceCommentAttachment } from '../entities/resource-comment-attachme
 import {
   ResourceCommentAnchorStatus,
   ResourceCommentThread,
+  ResourceCommentThreadType,
 } from '../entities/resource-comment-thread.entity';
 
 export class ResourceCommentAuthorResponseDto {
@@ -67,6 +68,7 @@ export class ResourceCommentResponseDto {
 
 export class ResourceCommentThreadResponseDto {
   id: string;
+  type: ResourceCommentThreadType;
   quoted_text: string;
   anchor: {
     from: number;
@@ -75,7 +77,7 @@ export class ResourceCommentThreadResponseDto {
     suffix: string;
     content_hash: string;
     status: ResourceCommentAnchorStatus;
-  };
+  } | null;
   resolved: boolean;
   creator: ResourceCommentAuthorResponseDto;
   comments: ResourceCommentResponseDto[];
@@ -87,15 +89,19 @@ export class ResourceCommentThreadResponseDto {
   ): ResourceCommentThreadResponseDto {
     return {
       id: thread.id,
+      type: thread.type ?? ResourceCommentThreadType.INLINE,
       quoted_text: thread.quotedText,
-      anchor: {
-        from: thread.anchorFrom,
-        to: thread.anchorTo,
-        prefix: thread.anchorPrefix,
-        suffix: thread.anchorSuffix,
-        content_hash: thread.contentHash,
-        status: thread.anchorStatus,
-      },
+      anchor:
+        thread.type === ResourceCommentThreadType.DOCUMENT
+          ? null
+          : {
+              from: thread.anchorFrom!,
+              to: thread.anchorTo!,
+              prefix: thread.anchorPrefix!,
+              suffix: thread.anchorSuffix!,
+              content_hash: thread.contentHash!,
+              status: thread.anchorStatus!,
+            },
       resolved: thread.resolvedAt !== null,
       creator: {
         id: thread.creatorId,

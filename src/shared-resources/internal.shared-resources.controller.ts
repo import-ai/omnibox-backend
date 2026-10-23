@@ -100,6 +100,25 @@ export class InternalSharedResourcesController {
   }
 
   @Public()
+  @ValidateShare({ trustedInternal: true, requireResources: true })
+  @Get(':resourceId/comment-threads/:threadId')
+  async getCommentThread(
+    @ValidatedShare() share: Share,
+    @Param('resourceId') resourceId: string,
+    @Param('threadId') threadId: string,
+  ) {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    const thread = await this.resourceCommentQueriesService.getThread(
+      share.namespaceId,
+      resourceId,
+      threadId,
+      '',
+      false,
+    );
+    return toSharedCommentThreads([thread], share.id, resourceId)[0];
+  }
+
+  @Public()
   @ValidateShare({ trustedInternal: true })
   @Get(':resourceId')
   async getResource(

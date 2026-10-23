@@ -1892,6 +1892,72 @@ describe('StreamService cancellation extensions', () => {
   );
 });
 
+describe('StreamService failed streams', () => {
+  const start = (service: any) =>
+    service.startAgentSession(
+      'stream-key',
+      'namespace-id',
+      { conversation_id: 'conversation-id' },
+      'request-id',
+      'ask',
+      'user-id',
+      '',
+      undefined,
+      [],
+    );
+  const setup = (hook: jest.Mock) => {
+    const service = createService({}) as any;
+    service.agentStreamHooks.onCancellationRequested = hook;
+    jest.spyOn(service, 'startRedisSession').mockResolvedValue(undefined);
+    jest.spyOn(service, 'getRedisClient').mockResolvedValue(null);
+    // An invalid request fails the turn before contacting Wizard, through the
+    // same error path an upstream `terminated` takes.
+    service.i18n = { t: (key: string) => key };
+    const subscriber = { closed: false, complete: jest.fn(), next: jest.fn() };
+    return { service, subscriber };
+  };
+
+  it.each([
+    ['succeeds', jest.fn().mockResolvedValue(undefined)],
+    ['fails', jest.fn().mockRejectedValue(new Error('Database unavailable'))],
+  ])(
+    'cancels deployment work when a turn fails and the hook %s',
+    async (_name, hook) => {
+      const { service, subscriber } = setup(hook);
+      const session = start(service);
+      session.subscribers.add(subscriber);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(hook).toHaveBeenCalledTimes(1);
+      expect(hook).toHaveBeenCalledWith('user-id', 'conversation-id');
+      expect(subscriber.next).toHaveBeenCalledWith({
+        data: expect.stringContaining('"response_type":"error"'),
+      });
+      expect(subscriber.complete).toHaveBeenCalled();
+    },
+  );
+
+  it('does not call the hook for a share visitor stream', async () => {
+    const hook = jest.fn().mockResolvedValue(undefined);
+    const { service } = setup(hook);
+    service.startAgentSession(
+      'stream-key',
+      'namespace-id',
+      { conversation_id: 'conversation-id', query: 'hi' },
+      'request-id',
+      'ask',
+      '',
+      'share-id',
+      undefined,
+      [],
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(hook).not.toHaveBeenCalled();
+  });
+});
+
 describe('StreamService.chat() never receives the SSE heartbeat', () => {
   const saved = {
     id: 'query-id',

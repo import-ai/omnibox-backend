@@ -15,6 +15,7 @@ describe('Document comments (e2e)', () => {
   let owner: TestClient;
   let author: TestClient;
   let resourceId: string;
+  let resourceSequence = 0;
   const content = 'Original document';
   const hash = createHash('sha256').update(content).digest('hex');
   const resourceUrl = () =>
@@ -43,7 +44,7 @@ describe('Document comments (e2e)', () => {
       await owner
         .post(`/api/v1/namespaces/${owner.namespace.id}/resources`)
         .send({
-          name: 'Document comments',
+          name: `Document comments ${++resourceSequence}`,
           namespaceId: owner.namespace.id,
           parentId: owner.namespace.root_resource_id,
           resourceType: ResourceType.DOC,

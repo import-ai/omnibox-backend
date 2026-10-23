@@ -1,10 +1,19 @@
+import { createHash } from 'node:crypto';
+
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
-import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
-import { DataSource, EntityManager } from 'typeorm';
+import {
+  isReadOnlyResourceType,
+  Resource,
+  ResourceType,
+} from 'omniboxd/resources/entities/resource.entity';
+import { User } from 'omniboxd/user/entities/user.entity';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 
 import {
   CreateResourceCommentRequestDto,
@@ -23,6 +32,7 @@ import {
   ResourceCommentThread,
   ResourceCommentThreadType,
 } from './entities/resource-comment-thread.entity';
+import { mentionDisplayName, rewriteMentionLabels } from './mention-labels';
 import { ResourceCommentAnchorsService } from './resource-comment-anchors.service';
 import { ResourceCommentAttachmentsService } from './resource-comment-attachments.service';
 import { ResourceCommentQueriesService } from './resource-comment-queries.service';
@@ -37,6 +47,10 @@ export class ResourceCommentsService {
     private readonly attachmentsService: ResourceCommentAttachmentsService,
     private readonly i18n: I18nService,
     private readonly anchorsService: ResourceCommentAnchorsService,
+    @InjectRepository(NamespaceMember)
+    private readonly memberRepository: Repository<NamespaceMember>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   // Creates an anchored thread. Exact-match anchors are allowed to form separate threads.
@@ -218,6 +232,123 @@ export class ResourceCommentsService {
       await manager.save(thread);
       return await this.queriesService.getThreadResponse(manager, threadId);
     });
+  }
+
+  // Writes current member names into comment shortcodes without touching
+  // updated_at, so the label stays after the member leaves and the comment
+  // is not marked edited.
+  async syncMentionLabels(
+    namespaceId: string,
+    resourceId: string,
+    userId: string,
+  ) {
+    await this.permissionsService.userHasPermissionOrFail(
+      namespaceId,
+      resourceId,
+      userId,
+      ResourcePermission.CAN_VIEW,
+    );
+    const members = await this.memberRepository.find({
+      where: { namespaceId },
+    });
+    if (members.length === 0) {
+      return { updated: 0 };
+    }
+    const users = await this.userRepository.find({
+      where: { id: In(members.map((member) => member.userId)) },
+    });
+    const usersById = new Map(users.map((user) => [user.id, user]));
+    const names: Record<string, string> = {};
+    for (const member of members) {
+      const user = usersById.get(member.userId);
+      if (!user) {
+        continue;
+      }
+      const name = mentionDisplayName({
+        nickname: member.nickname,
+        username: user.username,
+        email: user.email,
+        userId: member.userId,
+      });
+      if (name) {
+        names[member.userId] = name;
+      }
+    }
+    if (Object.keys(names).length === 0) {
+      return { updated: 0 };
+    }
+    const comments = await this.dataSource
+      .getRepository(ResourceComment)
+      .createQueryBuilder('comment')
+      .innerJoin('comment.thread', 'thread')
+      .where('thread.namespaceId = :namespaceId', { namespaceId })
+      .andWhere('thread.resourceId = :resourceId', { resourceId })
+      .andWhere('comment.content LIKE :mark', { mark: '%[@%' })
+      .getMany();
+    let updated = 0;
+    for (const comment of comments) {
+      const next = rewriteMentionLabels(comment.content, names);
+      if (next === comment.content) {
+        continue;
+      }
+      // A comment saved after this read keeps that edit. The label sync can
+      // run again on the next open.
+      const written = await this.dataSource.query(
+        'UPDATE resource_comments SET content = $1 WHERE id = $2 AND content = $3',
+        [next, comment.id, comment.content],
+      );
+      if (Array.isArray(written) && written[1] === 1) {
+        updated += 1;
+      }
+    }
+    const resources = this.dataSource.getRepository(Resource);
+    const resource = await resources.findOne({
+      where: { id: resourceId, namespaceId },
+    });
+    const content = resource?.content ?? '';
+    let storedContent: string | undefined;
+    if (
+      resource &&
+      !isReadOnlyResourceType(resource.resourceType) &&
+      content.includes('[@')
+    ) {
+      const next = rewriteMentionLabels(content, names);
+      if (next !== content) {
+        // Same guard as comments: a save that landed after this read wins.
+        // Returning the stale body would roll that save back on the client.
+        const written = await this.dataSource.query(
+          'UPDATE resources SET content = $1, content_size = $2 WHERE id = $3 AND namespace_id = $4 AND content = $5',
+          [
+            next,
+            Buffer.byteLength(next, 'utf8').toString(),
+            resourceId,
+            namespaceId,
+            content,
+          ],
+        );
+        if (Array.isArray(written) && written[1] === 1) {
+          storedContent = next;
+          updated += 1;
+        } else {
+          const current = await resources.findOne({
+            where: { id: resourceId, namespaceId },
+          });
+          // Another open already stored this label. Hand back that hash so
+          // the next save is not rejected as a conflict.
+          if (current?.content === next) {
+            storedContent = next;
+          }
+        }
+      }
+    }
+    if (storedContent === undefined) {
+      return { updated };
+    }
+    return {
+      updated,
+      content: storedContent,
+      content_hash: createHash('sha256').update(storedContent).digest('hex'),
+    };
   }
 
   // Edits a comment only when the requester is its author.

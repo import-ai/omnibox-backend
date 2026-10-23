@@ -189,6 +189,8 @@ describe('document comment writes', () => {
       } as unknown as ResourceCommentAttachmentsService,
       i18n,
       anchors,
+      { find: jest.fn().mockResolvedValue([]) } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
     );
   });
 

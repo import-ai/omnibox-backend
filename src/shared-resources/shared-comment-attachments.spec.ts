@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as cookieParser from 'cookie-parser';
 import { I18nService } from 'nestjs-i18n';
+import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import type { ResourceCommentThreadResponseDto } from 'omniboxd/resource-comments/dto/resource-comment-response.dto';
 import { ResourceCommentAttachment } from 'omniboxd/resource-comments/entities/resource-comment-attachment.entity';
@@ -29,6 +30,7 @@ import { SharesService } from 'omniboxd/shares/shares.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { StorageUsagesService } from 'omniboxd/storage-usages/storage-usages.service';
 import { TagService } from 'omniboxd/tag/tag.service';
+import { User } from 'omniboxd/user/entities/user.entity';
 import * as request from 'supertest';
 import type { App } from 'supertest/types';
 import { commentPng } from 'test/comment-image-fixture';
@@ -132,6 +134,8 @@ describe('shared comment images', () => {
           provide: getRepositoryToken(ResourceCommentAttachment),
           useValue: { findOne: findAttachment },
         },
+        { provide: getRepositoryToken(NamespaceMember), useValue: {} },
+        { provide: getRepositoryToken(User), useValue: {} },
         { provide: DataSource, useValue: {} },
         {
           provide: PermissionsService,

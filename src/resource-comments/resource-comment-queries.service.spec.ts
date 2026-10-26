@@ -1,4 +1,5 @@
 import { I18nService } from 'nestjs-i18n';
+import * as identityNames from 'omniboxd/namespaces/member-display-names';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
@@ -66,6 +67,9 @@ describe('ResourceCommentQueriesService views and direct lookup', () => {
   });
 
   beforeEach(() => {
+    jest
+      .spyOn(identityNames, 'resolveMemberDisplayNames')
+      .mockResolvedValue({ author: 'Nick（Author）' });
     repository = source.getRepository(ResourceCommentThread);
     permission = jest.fn().mockResolvedValue(undefined);
     builders = [];
@@ -199,6 +203,12 @@ describe('ResourceCommentQueriesService views and direct lookup', () => {
       'viewer',
     );
     expect(result.id).toBe('outside-current-page');
+    expect(result.creator.display_name).toBe('Nick（Author）');
+    expect(identityNames.resolveMemberDisplayNames).toHaveBeenCalledWith(
+      repository.manager,
+      'namespace',
+      ['author'],
+    );
     expect(permission).toHaveBeenCalledWith(
       'namespace',
       'resource',

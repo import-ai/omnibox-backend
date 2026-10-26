@@ -5,10 +5,12 @@ import {
   ResourceCommentThread,
   ResourceCommentThreadType,
 } from '../entities/resource-comment-thread.entity';
+import { referencedMentionNames } from '../mention-labels';
 
 export class ResourceCommentAuthorResponseDto {
   id: string | null;
   username: string | null;
+  display_name?: string | null;
 }
 
 export class ResourceCommentAttachmentResponseDto {
@@ -45,13 +47,18 @@ export class ResourceCommentResponseDto {
     comment: ResourceComment,
     namespaceId: string,
     resourceId: string,
+    names?: Record<string, string>,
   ): ResourceCommentResponseDto {
     return {
       id: comment.id,
       content: comment.content,
       author: {
         id: comment.authorId,
-        username: comment.author?.username ?? null,
+        username:
+          names === undefined
+            ? (comment.author?.username ?? null)
+            : (names[comment.authorId ?? ''] ?? null),
+        display_name: names?.[comment.authorId ?? ''] ?? null,
       },
       attachments: (comment.attachments ?? []).map((attachment) =>
         ResourceCommentAttachmentResponseDto.fromEntity(
@@ -81,11 +88,13 @@ export class ResourceCommentThreadResponseDto {
   resolved: boolean;
   creator: ResourceCommentAuthorResponseDto;
   comments: ResourceCommentResponseDto[];
+  mention_display_names?: Record<string, string>;
   created_at: string;
   updated_at: string;
 
   static fromEntity(
     thread: ResourceCommentThread,
+    names?: Record<string, string>,
   ): ResourceCommentThreadResponseDto {
     return {
       id: thread.id,
@@ -105,14 +114,23 @@ export class ResourceCommentThreadResponseDto {
       resolved: thread.resolvedAt !== null,
       creator: {
         id: thread.creatorId,
-        username: thread.creator?.username ?? null,
+        username:
+          names === undefined
+            ? (thread.creator?.username ?? null)
+            : (names[thread.creatorId ?? ''] ?? null),
+        display_name: names?.[thread.creatorId ?? ''] ?? null,
       },
       comments: (thread.comments ?? []).map((comment) =>
         ResourceCommentResponseDto.fromEntity(
           comment,
           thread.namespaceId,
           thread.resourceId,
+          names,
         ),
+      ),
+      mention_display_names: referencedMentionNames(
+        (thread.comments ?? []).map((comment) => comment.content).join('\n'),
+        names ?? {},
       ),
       created_at: thread.createdAt.toISOString(),
       updated_at: thread.updatedAt.toISOString(),

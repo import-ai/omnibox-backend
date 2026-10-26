@@ -93,6 +93,7 @@ export class SharedResourcesService {
           resource.id,
           resource.content,
         );
+      dto.mention_display_names = comments.mention_display_names;
       dto.content_hash = comments.content_hash;
       dto.comment_threads = toSharedCommentThreads(
         comments.comment_threads,

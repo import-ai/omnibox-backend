@@ -1386,6 +1386,7 @@ export class NamespaceResourcesService {
         resourceId,
         resource.content,
       );
+    dto.mention_display_names = commentData.mention_display_names;
     dto.content_hash = commentData.content_hash;
     dto.comment_threads = commentData.comment_threads;
     return dto;

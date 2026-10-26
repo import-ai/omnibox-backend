@@ -147,6 +147,7 @@ describe('Internal resource comments (e2e)', () => {
     expect(open.comments[1].author).toEqual({
       id: owner.user.id,
       username: owner.user.username,
+      display_name: owner.user.username,
     });
     expect(open.comments[1].attachments[0]).toMatchObject({
       id: attachmentId,

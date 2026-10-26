@@ -3,6 +3,7 @@ import {
   generateUniqueResourceName,
   randomResourceNameSuffix,
   sanitizeResourceName,
+  UniqueResourceNameExhaustedError,
 } from './sanitize-resource-name';
 
 jest.mock('./generate-id', () => {
@@ -75,10 +76,52 @@ describe('generateUniqueResourceName', () => {
     expect(name).toBe('doc_bbbb');
   });
 
-  it('throws after maxAttempts', () => {
+  it('throws UniqueResourceNameExhaustedError after maxAttempts', () => {
+    const isNameExists = jest.fn(() => true);
+    expect(() => generateUniqueResourceName('doc', isNameExists, 3)).toThrow(
+      new UniqueResourceNameExhaustedError(3),
+    );
     expect(() => generateUniqueResourceName('doc', () => true, 3)).toThrow(
       'Failed to generate unique name after 3 attempts',
     );
+    expect(isNameExists).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects with UniqueResourceNameExhaustedError after maxAttempts when async', async () => {
+    const isNameExists = jest.fn(() => Promise.resolve(true));
+    const result = generateUniqueResourceName('doc', isNameExists, 3);
+    await expect(result).rejects.toBeInstanceOf(
+      UniqueResourceNameExhaustedError,
+    );
+    await expect(result).rejects.toThrow(
+      'Failed to generate unique name after 3 attempts',
+    );
+    expect(isNameExists).toHaveBeenCalledTimes(3);
+  });
+
+  it('propagates async check errors without leaving a rejection unhandled', async () => {
+    const onUnhandled = jest.fn();
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const dbError = new Error('db down');
+      const isNameExists = jest.fn(() => Promise.reject(dbError));
+      await expect(
+        generateUniqueResourceName('doc', isNameExists),
+      ).rejects.toBe(dbError);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(onUnhandled).not.toHaveBeenCalled();
+      expect(isNameExists).toHaveBeenCalledTimes(1);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  it('returns the original name from an async check without re-querying it', async () => {
+    const isNameExists = jest.fn(() => Promise.resolve(false));
+    await expect(generateUniqueResourceName('doc', isNameExists)).resolves.toBe(
+      'doc',
+    );
+    expect(isNameExists).toHaveBeenCalledTimes(1);
   });
 
   it('supports async uniqueness checks', async () => {

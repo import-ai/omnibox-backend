@@ -19,6 +19,7 @@ import { isOptional } from 'omniboxd/utils/is-empty';
 import {
   generateUniqueResourceName,
   sanitizeResourceName,
+  UniqueResourceNameExhaustedError,
 } from 'omniboxd/utils/sanitize-resource-name';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import {
@@ -254,7 +255,19 @@ export class ResourcesService {
       );
     };
 
-    return generateUniqueResourceName(name, isNameExists);
+    try {
+      return await generateUniqueResourceName(name, isNameExists);
+    } catch (error) {
+      if (error instanceof UniqueResourceNameExhaustedError) {
+        const message = this.i18n.t('resource.errors.resourceNameConflict');
+        throw new AppException(
+          message,
+          'RESOURCE_NAME_CONFLICT',
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw error;
+    }
   }
 
   async getParentResourcesOrFail(

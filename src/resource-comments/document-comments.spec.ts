@@ -279,7 +279,7 @@ describe('document comment writes', () => {
   });
 
   it.each(['thread', 'comment'])(
-    'rejects editor deletion of another author’s document %s',
+    'allows editor soft deletion of another author’s document %s',
     async (target) => {
       const deletion =
         target === 'thread'
@@ -291,8 +291,16 @@ describe('document comment writes', () => {
               'comment',
               'editor',
             );
-      await expect(deletion).rejects.toMatchObject({ status: 403 });
-      expect(softDelete).not.toHaveBeenCalled();
+      await deletion;
+      expect(softDelete).toHaveBeenCalledWith(
+        ResourceComment,
+        target === 'thread'
+          ? { threadId: 'thread' }
+          : { id: 'comment', threadId: 'thread' },
+      );
+      expect(softDelete).toHaveBeenCalledWith(ResourceCommentThread, {
+        id: 'thread',
+      });
     },
   );
 

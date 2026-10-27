@@ -1695,7 +1695,12 @@ export class ResourcesService {
       offset?: number;
     },
   ): Promise<{ items: Resource[]; total: number }> {
-    const { search, limit = 20, offset = 0 } = options || {};
+    const search = options?.search;
+    // Omit `limit` to read every matching row. A default of 20 here capped
+    // the trash listing at the first page while `total` still described the
+    // whole retention window, so later pages came back empty.
+    const limit = options?.limit;
+    const offset = options?.offset ?? 0;
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
@@ -1734,11 +1739,11 @@ export class ResourcesService {
 
     const total = await queryBuilder.getCount();
 
-    const items = await queryBuilder
-      .orderBy('resource.deleted_at', 'DESC')
-      .skip(offset)
-      .take(limit)
-      .getMany();
+    const ordered = queryBuilder.orderBy('resource.deleted_at', 'DESC');
+    if (limit !== undefined) {
+      ordered.skip(offset).take(limit);
+    }
+    const items = await ordered.getMany();
 
     return { items, total };
   }

@@ -47,6 +47,9 @@ export interface BaseAgentRequestDto {
     decisions?: Record<string, any>[];
   };
   channel: AgentRequestChannel;
+  // Messaging channel the user actually sent from, e.g. "qq" or "telegram".
+  // Distinct from `channel`, which records the API surface (web, open_api).
+  source_channel?: string;
   images?: {
     attachment_id: string;
     url: string;
@@ -59,6 +62,10 @@ export interface AgentRequestDto extends BaseAgentRequestDto {
   client_request_id?: string;
   tools: Array<PrivateSearchToolDto | WebSearchToolDto>;
   parent_message_id?: string;
+  // A new question from the web composer: once any running reply has
+  // finished, continue from the newest message below parent_message_id,
+  // which another client may have added after the page loaded.
+  follow_latest?: boolean;
 }
 
 export interface WizardPrivateSearchToolDto extends PrivateSearchToolDto {

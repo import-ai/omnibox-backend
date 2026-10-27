@@ -2058,7 +2058,10 @@ export class NamespaceResourcesService {
     const usage =
       await this.namespacesQuotaService.getNamespaceUsage(namespaceId);
 
-    const { items, total } = await this.resourcesService.getDeletedResources(
+    // Filter before paging. A SQL window applied first would let rows the
+    // user cannot edit consume offset slots, and the unfiltered count would
+    // keep the client requesting empty pages.
+    const { items } = await this.resourcesService.getDeletedResources(
       namespaceId,
       usage.trashRetentionDays,
       { search },
@@ -2077,23 +2080,22 @@ export class NamespaceResourcesService {
       [...resourceMetaMap.values()],
     );
 
-    const filteredItems = items
-      .filter((resource) => {
-        const permission = permissionMap.get(resource.id);
-        return (
-          permission &&
-          comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
-        );
-      })
-      .slice(offset, offset + limit);
+    const visibleItems = items.filter((resource) => {
+      const permission = permissionMap.get(resource.id);
+      return (
+        permission &&
+        comparePermission(permission, ResourcePermission.CAN_EDIT) >= 0
+      );
+    });
+    const pageItems = visibleItems.slice(offset, offset + limit);
 
-    const trashItems = filteredItems.map((resource) =>
+    const trashItems = pageItems.map((resource) =>
       TrashItemDto.fromEntity(resource, false),
     );
 
     return TrashListResponseDto.create(
       trashItems,
-      total,
+      visibleItems.length,
       limit,
       offset,
       usage.trashRetentionDays,

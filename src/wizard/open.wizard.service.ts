@@ -23,23 +23,32 @@ export class OpenWizardService {
     private readonly i18n: I18nService,
   ) {}
 
+  protected translate(key: string): string {
+    return this.i18n.t(key);
+  }
+
   async ask(
     userId: string,
     namespaceId: string,
     requestId: string,
     data: OpenAgentRequestDto,
   ): Promise<any> {
-    const conversationId = await this.resolveConversationId(
+    const resolved = await this.resolveConversation(
       userId,
       namespaceId,
+      data.conversation_id,
       data.parent_message_id,
     );
 
     const agentRequest: AgentRequestDto = {
       ...data,
-      conversation_id: conversationId,
+      conversation_id: resolved.conversationId,
       enable_thinking: data.enable_thinking ?? false,
       channel: AgentRequestChannel.OPEN_API,
+      source_channel: data.source_channel,
+      // Only the web composer may ask to follow the newest message; the
+      // public API keeps the parent it was given.
+      follow_latest: undefined,
     };
 
     const chunks: ChatResponse[] = await this.streamService.chat(
@@ -48,52 +57,83 @@ export class OpenWizardService {
       agentRequest,
       requestId,
       'ask',
+      resolved.parentMode,
     );
 
-    return this.mergeChunks(chunks);
+    return this.mergeChunks(chunks, resolved.conversationId);
   }
 
-  private async resolveConversationId(
+  private async resolveConversation(
     userId: string,
     namespaceId: string,
+    conversationId?: string,
     parentMessageId?: string,
-  ): Promise<string> {
+  ): Promise<{ conversationId: string; parentMode: 'latest' | 'explicit' }> {
+    if (conversationId && !parentMessageId) {
+      await this.conversationsService.findOneForUserInNamespace(
+        conversationId,
+        userId,
+        namespaceId,
+      );
+      return { conversationId, parentMode: 'latest' };
+    }
+
     if (parentMessageId) {
+      const parentMessage = await this.findParentMessage(
+        parentMessageId,
+        userId,
+      );
+      let conversation;
       try {
-        const parentMessage = await this.messagesService.findOneForUser(
-          parentMessageId,
-          userId,
-        );
-        const conversation =
+        conversation =
           await this.conversationsService.findOneForUserInNamespace(
             parentMessage.conversationId,
             userId,
             namespaceId,
           );
-        return conversation.id;
       } catch (error) {
         if (!(error instanceof EntityNotFoundError)) {
           throw error;
         }
-
-        const message = this.i18n.t('system.errors.messageNotFound');
         throw new AppException(
-          message,
+          this.i18n.t('system.errors.messageNotFound'),
           'PARENT_MESSAGE_NOT_FOUND',
           HttpStatus.NOT_FOUND,
         );
       }
-    } else {
-      // Create a new conversation
-      const conversation = await this.conversationsService.create(
-        namespaceId,
-        userId,
+      if (conversationId && conversation.id !== conversationId) {
+        throw new AppException(
+          this.i18n.t('system.errors.parentConversationMismatch'),
+          'PARENT_CONVERSATION_MISMATCH',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      return { conversationId: conversation.id, parentMode: 'explicit' };
+    }
+
+    const conversation = await this.conversationsService.create(
+      namespaceId,
+      userId,
+    );
+    return { conversationId: conversation.id, parentMode: 'explicit' };
+  }
+
+  private async findParentMessage(parentMessageId: string, userId: string) {
+    try {
+      return await this.messagesService.findOneForUser(parentMessageId, userId);
+    } catch (error) {
+      if (!(error instanceof EntityNotFoundError)) {
+        throw error;
+      }
+      throw new AppException(
+        this.i18n.t('system.errors.messageNotFound'),
+        'PARENT_MESSAGE_NOT_FOUND',
+        HttpStatus.NOT_FOUND,
       );
-      return conversation.id;
     }
   }
 
-  private mergeChunks(chunks: ChatResponse[]) {
+  private mergeChunks(chunks: ChatResponse[], conversationId: string) {
     const messages: any[] = [];
     let currentMessage: any = null;
 
@@ -152,6 +192,6 @@ export class OpenWizardService {
       }
     }
 
-    return { messages };
+    return { messages, conversation_id: conversationId };
   }
 }

@@ -180,17 +180,6 @@ export class OpenWizardService {
         currentMessage = null;
       } else if (chunk.response_type === 'done') {
         // Done
-      } else if (chunk.response_type === 'error') {
-        // Keep the failure's own code (e.g. INSUFFICIENT_AGENT_CREDITS) so
-        // Open API callers can tell it apart from a malformed stream.
-        const code = chunk.code ?? 'WIZARD_STREAM_ERROR';
-        throw new AppException(
-          chunk.message,
-          code,
-          code === 'INSUFFICIENT_AGENT_CREDITS'
-            ? HttpStatus.FORBIDDEN
-            : HttpStatus.BAD_GATEWAY,
-        );
       } else {
         const message = this.i18n.t('system.errors.invalidResponseType', {
           args: { responseType: chunk.response_type },

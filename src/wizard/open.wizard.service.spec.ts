@@ -292,61 +292,6 @@ describe('OpenWizardService', () => {
     });
   });
 
-  it.each([
-    [
-      'keeps INSUFFICIENT_AGENT_CREDITS as a 403',
-      { code: 'INSUFFICIENT_AGENT_CREDITS' },
-      'INSUFFICIENT_AGENT_CREDITS',
-      HttpStatus.FORBIDDEN,
-    ],
-    [
-      'keeps any other stream error code as a 502',
-      { code: 'SOMETHING_ELSE' },
-      'SOMETHING_ELSE',
-      HttpStatus.BAD_GATEWAY,
-    ],
-    [
-      'reports a stream error without a code as WIZARD_STREAM_ERROR',
-      {},
-      'WIZARD_STREAM_ERROR',
-      HttpStatus.BAD_GATEWAY,
-    ],
-  ])('%s', async (_name, extra, code, status) => {
-    conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
-    streamService.chat.mockResolvedValue([
-      { response_type: 'bos', role: 'assistant', id: 'answer-1' },
-      { response_type: 'error', message: 'stream failed', ...extra },
-    ]);
-
-    const error: AppException = await service
-      .ask('user-1', 'namespace-1', 'request-1', { query: 'hi', tools: [] })
-      .catch((e: AppException) => e);
-
-    expect(error).toBeInstanceOf(AppException);
-    expect(error.code).toBe(code);
-    expect(error.getStatus()).toBe(status);
-    expect(error.message).toBe('stream failed');
-  });
-
-  it('passes edition through to the agent request', async () => {
-    conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
-
-    await service.ask('user-1', 'namespace-1', 'request-1', {
-      query: 'hi',
-      tools: [],
-      edition: 'pro',
-    });
-
-    expect(streamService.chat).toHaveBeenCalledWith(
-      'user-1',
-      'namespace-1',
-      expect.objectContaining({ edition: 'pro' }),
-      'request-1',
-      'ask',
-      'explicit',
-    );
-  });
-
   it('rejects parent messages owned by another user', async () => {
     messagesService.findOneForUser.mockRejectedValue(
       new EntityNotFoundError('Message', { id: 'message-1' }),

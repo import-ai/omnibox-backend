@@ -139,13 +139,6 @@ export class WizardAPIService {
       namespaceId,
       body,
     );
-    // An edition without a level (Open API callers) only picks the wizard;
-    // the wizards refuse it, and answer at their own default level when
-    // neither is given.
-    const forwarded =
-      body.edition !== undefined && body.level === undefined
-        ? { ...body, edition: undefined }
-        : body;
     const url = `${wizardBaseUrl}/api/v1/wizard/${mode}`;
     const requestHeaders = {
       'Content-Type': 'application/json',
@@ -156,7 +149,7 @@ export class WizardAPIService {
     const response = await fetch(url, {
       method: 'POST',
       headers: requestHeaders,
-      body: JSON.stringify(forwarded),
+      body: JSON.stringify(body),
       signal,
     });
 

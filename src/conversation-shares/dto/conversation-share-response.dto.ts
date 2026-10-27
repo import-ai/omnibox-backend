@@ -1,6 +1,12 @@
+export interface ConversationShareQuestionImageDto {
+  attachmentId: string;
+  name: string;
+}
+
 export interface ConversationShareGroupResponseDto {
   answer: string;
   question: string;
+  questionImages: ConversationShareQuestionImageDto[];
 }
 
 export interface ConversationShareResponseDto {

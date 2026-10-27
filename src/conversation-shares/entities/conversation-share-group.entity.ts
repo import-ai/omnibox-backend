@@ -9,6 +9,17 @@ import {
 
 import { ConversationShare } from './conversation-share.entity';
 
+export interface ConversationShareQuestionImage {
+  attachmentId: string;
+  name: string;
+}
+
+export interface ConversationShareResourceImage {
+  resourceId: string;
+  attachmentId: string;
+  name: string;
+}
+
 @Entity('conversation_share_groups')
 export class ConversationShareGroup extends Base {
   @PrimaryGeneratedColumn()
@@ -25,6 +36,12 @@ export class ConversationShareGroup extends Base {
 
   @Column('text')
   answerContent: string;
+
+  @Column('jsonb', { default: () => "'[]'" })
+  questionImages: ConversationShareQuestionImage[];
+
+  @Column('jsonb', { default: () => "'[]'" })
+  resourceImages: ConversationShareResourceImage[];
 
   @ManyToOne(() => ConversationShare, (share) => share.groups, {
     onDelete: 'CASCADE',

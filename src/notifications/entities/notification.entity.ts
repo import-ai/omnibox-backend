@@ -41,6 +41,9 @@ export class Notification extends Base {
   @Column('uuid', { nullable: true, unique: true })
   dedupKey: string | null;
 
+  @Column('timestamptz', { nullable: true })
+  jpushSentAt: Date | null;
+
   @Column('jsonb', { default: {} })
   target: Record<string, any>;
 

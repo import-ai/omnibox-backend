@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
-import { Repository } from 'typeorm';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { QueryFailedError, Repository } from 'typeorm';
 
 import {
   Notification,
@@ -8,6 +9,7 @@ import {
   NotificationStatus,
 } from './entities/notification.entity';
 import { NotificationsService } from './notifications.service';
+import { SYSTEM_NOTIFICATION_PUSH_TIMEOUT_MS } from './system-notification-push';
 
 describe('NotificationsService', () => {
   const findAndCount = jest.fn();
@@ -61,33 +63,142 @@ describe('NotificationsService', () => {
   });
 
   it('broadcasts a new system notification through JPush', async () => {
-    const findOne = jest.fn().mockResolvedValue(null);
-    const create = jest.fn((value) => value);
-    const save = jest.fn(async (value) => ({ ...value, id: 'notification-1' }));
-    const fetchMock = jest.fn().mockResolvedValue({ ok: true });
-    const originalFetch = global.fetch;
-    global.fetch = fetchMock as typeof fetch;
-    const pushingService = new NotificationsService(
-      { findOne, create, save } as unknown as Repository<Notification>,
-      {} as Repository<NotificationRead>,
-      {} as I18nService,
-      { get: () => 'http://pro.internal' } as unknown as ConfigService,
-    );
+    const repository = repositoryMock();
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    const { service, timeout } = pushingService(repository, fetchMock);
 
     try {
-      await pushingService.createSystemNotification({
-        dedupKey: 'dedup-1',
-        title: '更新日志',
-        content: '新版本',
-        tags: ['changelog'],
-      });
+      await service.createSystemNotification(systemNotificationDto());
+      expect(timeout).toHaveBeenCalledWith(SYSTEM_NOTIFICATION_PUSH_TIMEOUT_MS);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://pro.internal/internal/api/v1/notification/broadcast',
+        expect.objectContaining({
+          method: 'POST',
+          signal: expect.any(AbortSignal),
+        }),
+      );
+      expect(repository.update).toHaveBeenCalledWith(
+        'notification-1',
+        expect.objectContaining({ jpushSentAt: expect.any(Date) }),
+      );
     } finally {
+      timeout.mockRestore();
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('retries a failed broadcast when the same dedup key is published again', async () => {
+    const repository = repositoryMock();
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    const { service, timeout } = pushingService(repository, fetchMock);
+
+    try {
+      await expect(
+        service.createSystemNotification(systemNotificationDto()),
+      ).rejects.toBeInstanceOf(AppException);
+      expect(repository.update).not.toHaveBeenCalled();
+
+      repository.findOne.mockResolvedValueOnce({
+        id: 'notification-1',
+        title: 'Changelog',
+        content: 'New version',
+        tags: ['changelog'],
+        jpushSentAt: null,
+      });
+      await service.createSystemNotification(systemNotificationDto());
+    } finally {
+      timeout.mockRestore();
       global.fetch = originalFetch;
     }
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://pro.internal/internal/api/v1/notification/broadcast',
-      expect.objectContaining({ method: 'POST' }),
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(repository.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not broadcast a system notification that was already pushed', async () => {
+    const repository = repositoryMock();
+    repository.findOne.mockResolvedValue({
+      id: 'notification-1',
+      jpushSentAt: new Date('2026-10-28T00:00:00.000Z'),
+    });
+    const fetchMock = jest.fn();
+    const { service, timeout } = pushingService(repository, fetchMock);
+
+    try {
+      await service.createSystemNotification(systemNotificationDto());
+    } finally {
+      timeout.mockRestore();
+      global.fetch = originalFetch;
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(repository.save).not.toHaveBeenCalled();
+  });
+
+  it('retries the broadcast after a concurrent dedup conflict', async () => {
+    const repository = repositoryMock();
+    repository.save.mockRejectedValue(
+      new QueryFailedError('', [], { code: '23505' } as unknown as Error),
     );
+    repository.findOneByOrFail.mockResolvedValue({
+      id: 'notification-1',
+      title: 'Changelog',
+      content: 'New version',
+      tags: ['changelog'],
+      jpushSentAt: null,
+    });
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    const { service, timeout } = pushingService(repository, fetchMock);
+
+    try {
+      await service.createSystemNotification(systemNotificationDto());
+    } finally {
+      timeout.mockRestore();
+      global.fetch = originalFetch;
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(repository.update).toHaveBeenCalledTimes(1);
   });
 });
+
+function systemNotificationDto() {
+  return {
+    dedupKey: 'dedup-1',
+    title: 'Changelog',
+    content: 'New version',
+    tags: ['changelog'],
+  };
+}
+
+function repositoryMock() {
+  return {
+    findOne: jest.fn().mockResolvedValue(null),
+    findOneByOrFail: jest.fn(),
+    create: jest.fn((value) => value),
+    save: jest.fn((value) => ({ ...value, id: 'notification-1' })),
+    update: jest.fn().mockResolvedValue({ affected: 1 }),
+  };
+}
+
+const originalFetch = global.fetch;
+
+function pushingService(
+  repository: ReturnType<typeof repositoryMock>,
+  fetchMock: jest.Mock,
+) {
+  global.fetch = fetchMock as typeof fetch;
+  const timeout = jest
+    .spyOn(AbortSignal, 'timeout')
+    .mockReturnValue(new AbortController().signal);
+  const service = new NotificationsService(
+    repository as unknown as Repository<Notification>,
+    {} as Repository<NotificationRead>,
+    {} as I18nService,
+    { get: () => 'http://pro.internal' } as unknown as ConfigService,
+  );
+  return { service, timeout };
+}

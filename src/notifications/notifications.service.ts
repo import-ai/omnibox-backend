@@ -30,6 +30,7 @@ import {
   NotificationRead,
   NotificationStatus,
 } from './entities/notification.entity';
+import { broadcastSystemNotification } from './system-notification-push';
 
 const NOTIFICATION_RETENTION_DAYS = 30;
 
@@ -84,7 +85,7 @@ export class NotificationsService {
       where: { dedupKey: dto.dedupKey },
     });
     if (existing) {
-      return existing;
+      return await this.ensureSystemNotificationPushed(existing);
     }
 
     const notification = this.notificationRepository.create({
@@ -96,6 +97,7 @@ export class NotificationsService {
       notificationType: 'system',
       isGlobal: true,
       dedupKey: dto.dedupKey,
+      jpushSentAt: null,
       target: {},
       tags: [...new Set(dto.tags.map((tag) => tag.trim()))],
       attrs: dto.attrs || {},
@@ -104,56 +106,46 @@ export class NotificationsService {
 
     try {
       const saved = await this.notificationRepository.save(notification);
-      await this.pushSystemNotification(saved);
-      return saved;
+      return await this.ensureSystemNotificationPushed(saved);
     } catch (error) {
-      if (
-        error instanceof QueryFailedError &&
-        (error as QueryFailedError & { driverError?: { code?: string } })
-          .driverError?.code === '23505'
-      ) {
-        return await this.notificationRepository.findOneByOrFail({
-          dedupKey: dto.dedupKey,
-        });
+      if (!this.isDedupConflict(error)) {
+        throw error;
       }
-      throw error;
+      const saved = await this.notificationRepository.findOneByOrFail({
+        dedupKey: dto.dedupKey,
+      });
+      return await this.ensureSystemNotificationPushed(saved);
     }
   }
 
-  private async pushSystemNotification(notification: Notification) {
-    if (!this.proUrl) {
-      return;
+  private async ensureSystemNotificationPushed(notification: Notification) {
+    if (notification.jpushSentAt || !this.proUrl) {
+      return notification;
     }
 
-    const content = (notification.content || notification.title)
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 120);
     try {
-      const response = await fetch(
-        `${this.proUrl}/internal/api/v1/notification/broadcast`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: notification.title,
-            content: content || notification.title,
-            extras: {
-              notification_id: notification.id,
-              notification_type: 'system',
-              tags: notification.tags,
-            },
-          }),
-        },
-      );
-      if (!response.ok) {
-        this.logger.error(
-          `system notification push failed: ${response.status}`,
-        );
-      }
+      await broadcastSystemNotification(this.proUrl, notification);
     } catch (error) {
       this.logger.error('system notification push failed', error);
+      throw new AppException(
+        'System notification push failed',
+        'SYSTEM_NOTIFICATION_PUSH_FAILED',
+        HttpStatus.BAD_GATEWAY,
+      );
     }
+
+    const jpushSentAt = new Date();
+    await this.notificationRepository.update(notification.id, { jpushSentAt });
+    notification.jpushSentAt = jpushSentAt;
+    return notification;
+  }
+
+  private isDedupConflict(error: unknown) {
+    return (
+      error instanceof QueryFailedError &&
+      (error as QueryFailedError & { driverError?: { code?: string } })
+        .driverError?.code === '23505'
+    );
   }
 
   async listSystemNotifications(

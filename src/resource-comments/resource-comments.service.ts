@@ -441,12 +441,6 @@ export class ResourceCommentsService {
         manager,
         true,
       );
-      if (
-        thread.type === ResourceCommentThreadType.DOCUMENT &&
-        thread.creatorId !== userId
-      ) {
-        throw this.notAuthorizedException();
-      }
       await this.assertCanModerate(thread, userId);
       await manager.softDelete(ResourceComment, { threadId });
       await manager.softDelete(ResourceCommentThread, { id: threadId });
@@ -482,12 +476,6 @@ export class ResourceCommentsService {
         throw this.commentNotFoundException();
       }
 
-      if (
-        thread.type === ResourceCommentThreadType.DOCUMENT &&
-        comment.authorId !== userId
-      ) {
-        throw this.notAuthorizedException();
-      }
       await this.assertCanDeleteComment(
         namespaceId,
         resourceId,

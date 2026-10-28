@@ -135,51 +135,92 @@ describe('Document comments (e2e)', () => {
       .expect(400);
   });
 
-  it('binds and soft-deletes an image-only comment using the existing attachment lifecycle', async () => {
-    const image = (
+  it.each([
+    { target: 'thread', resolved: false },
+    { target: 'comment', resolved: false },
+    { target: 'thread', resolved: true },
+    { target: 'comment', resolved: true },
+  ])(
+    'allows owner $target deletion of another author’s image-only comment (resolved=$resolved)',
+    async ({ target, resolved }) => {
+      const image = (
+        await author
+          .post(`${resourceUrl()}/comment-attachments`)
+          .attach('file', commentPng, {
+            filename: 'comment.png',
+            contentType: 'image/png',
+          })
+          .expect(201)
+      ).body;
+      const document = (
+        await author
+          .post(threadsUrl())
+          .send({ type: 'document', attachment_ids: [image.id] })
+          .expect(201)
+      ).body.thread;
+      expect(document.comments[0].attachments[0].id).toBe(image.id);
+      if (resolved) {
+        await owner
+          .patch(`${threadsUrl()}/${document.id}`)
+          .send({ resolved: true })
+          .expect(200);
+      }
+      await owner
+        .patch(
+          `${threadsUrl()}/${document.id}/comments/${document.comments[0].id}`,
+        )
+        .send({ content: 'Cannot rewrite another author', attachment_ids: [] })
+        .expect(403);
+      const deletionUrl =
+        target === 'thread'
+          ? `${threadsUrl()}/${document.id}`
+          : `${threadsUrl()}/${document.id}/comments/${document.comments[0].id}`;
+      await owner.delete(deletionUrl).expect(200);
+      await author.get(`${threadsUrl()}/${document.id}`).expect(404);
+      // Soft deletion keeps the attachment until the existing cleanup reclaims it.
       await author
-        .post(`${resourceUrl()}/comment-attachments`)
-        .attach('file', commentPng, {
-          filename: 'comment.png',
-          contentType: 'image/png',
-        })
-        .expect(201)
-    ).body;
+        .get(`${resourceUrl()}/comment-attachments/${image.id}`)
+        .expect(200);
+      const db = owner.app.get(DataSource);
+      expect(
+        (
+          await db
+            .getRepository(ResourceCommentThread)
+            .findOne({ where: { id: document.id }, withDeleted: true })
+        )?.deletedAt,
+      ).toBeInstanceOf(Date);
+      expect(
+        (
+          await db.getRepository(ResourceComment).findOne({
+            where: { id: document.comments[0].id },
+            withDeleted: true,
+          })
+        )?.deletedAt,
+      ).toBeInstanceOf(Date);
+    },
+  );
+
+  it('denies a commenter deletion of another author’s document comments in both states', async () => {
     const document = (
-      await author
+      await owner
         .post(threadsUrl())
-        .send({ type: 'document', attachment_ids: [image.id] })
+        .send({ type: 'document', content: 'Owner comment' })
         .expect(201)
     ).body.thread;
-    expect(document.comments[0].attachments[0].id).toBe(image.id);
-    await owner.delete(`${threadsUrl()}/${document.id}`).expect(403);
-    await owner
-      .delete(
-        `${threadsUrl()}/${document.id}/comments/${document.comments[0].id}`,
-      )
-      .expect(403);
-    await author.delete(`${threadsUrl()}/${document.id}`).expect(200);
-    await author.get(`${threadsUrl()}/${document.id}`).expect(404);
-    // Soft deletion keeps the attachment until the existing cleanup reclaims it.
-    await author
-      .get(`${resourceUrl()}/comment-attachments/${image.id}`)
-      .expect(200);
-    const db = owner.app.get(DataSource);
-    expect(
-      (
-        await db
-          .getRepository(ResourceCommentThread)
-          .findOne({ where: { id: document.id }, withDeleted: true })
-      )?.deletedAt,
-    ).toBeInstanceOf(Date);
-    expect(
-      (
-        await db.getRepository(ResourceComment).findOne({
-          where: { id: document.comments[0].id },
-          withDeleted: true,
-        })
-      )?.deletedAt,
-    ).toBeInstanceOf(Date);
+    for (const resolved of [false, true]) {
+      await owner
+        .patch(`${threadsUrl()}/${document.id}`)
+        .send({ resolved })
+        .expect(200);
+      await author.delete(`${threadsUrl()}/${document.id}`).expect(403);
+      await author
+        .delete(
+          `${threadsUrl()}/${document.id}/comments/${document.comments[0].id}`,
+        )
+        .expect(403);
+      await author.get(`${threadsUrl()}/${document.id}`).expect(200);
+    }
+    await owner.delete(`${threadsUrl()}/${document.id}`).expect(200);
   });
 
   it('pages 25 same-time threads stably and locates threads outside the loaded page', async () => {
@@ -212,7 +253,6 @@ describe('Document comments (e2e)', () => {
     );
     expect(second).toMatchObject({ total: 25, has_more: false });
     await owner.get(`${threadsUrl()}/${sortedIds[24]}`).expect(200);
-    await owner.delete(`${threadsUrl()}/${sortedIds[24]}`).expect(403);
     await author.delete(`${threadsUrl()}/${sortedIds[24]}`).expect(200);
     expect(
       (await owner.get(`${threadsUrl()}?view=document`).expect(200)).body.total,

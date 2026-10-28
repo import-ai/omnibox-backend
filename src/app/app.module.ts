@@ -121,6 +121,8 @@ import { AddNamespaceMemberNicknameAndNotes1789704000000 } from 'omniboxd/migrat
 import { AddResourceRevisions1790094055950 } from 'omniboxd/migrations/1790094055950-add-resource-revisions';
 import { AddConversationHistoryIndex1790966111694 } from 'omniboxd/migrations/1790966111694-add-conversation-history-index';
 import { AddTaskDedupIndexes1792142626851 } from 'omniboxd/migrations/1792142626851-add-task-dedup-indexes';
+import { ConversationShareImages1792487655534 } from 'omniboxd/migrations/1792487655534-conversation-share-images';
+import { ConversationShareResourceImages1792496161554 } from 'omniboxd/migrations/1792496161554-conversation-share-resource-images';
 import { AddDocumentComments1792575770997 } from 'omniboxd/migrations/1792575770997-add-document-comments';
 import { AddMemberDisplayNameSnapshot1793012728794 } from 'omniboxd/migrations/1793012728794-add-member-display-name-snapshot';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
@@ -384,6 +386,8 @@ export class AppModule implements NestModule {
               AddNamespaceMemberNicknameAndNotes1789704000000,
               AddResourceRevisions1790094055950,
               AddTaskDedupIndexes1792142626851,
+              ConversationShareImages1792487655534,
+              ConversationShareResourceImages1792496161554,
               AddDocumentComments1792575770997,
               AddMemberDisplayNameSnapshot1793012728794,
               ...extraMigrations,

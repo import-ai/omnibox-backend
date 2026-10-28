@@ -18,6 +18,8 @@ import {
   sanitizeConversationShareAnswer,
   sanitizeConversationShareQuestion,
 } from './conversation-share-content';
+import { ConversationShareImagesService } from './conversation-share-images.service';
+import { publishConversationShareText } from './conversation-share-resource-images';
 import {
   ConversationShareResponseDto,
   PublicConversationShareDto,
@@ -46,6 +48,7 @@ export class ConversationSharesService {
     private readonly shareRepo: Repository<ConversationShare>,
     @InjectRepository(ConversationShareGroup)
     private readonly groupRepo: Repository<ConversationShareGroup>,
+    private readonly images: ConversationShareImagesService,
     private readonly config: ConfigService,
   ) {}
 
@@ -76,6 +79,31 @@ export class ConversationSharesService {
         selectedGroups[0].answer.message.content ?? '',
       ),
     );
+    const draftedGroups = selectedGroups.map(
+      ({ question, answer }, ordinal) => ({
+        ordinal,
+        questionContent: sanitizeConversationShareQuestion(
+          question.message.content?.trim() ?? '',
+        ),
+        answerContent: sanitizeConversationShareAnswer(
+          answer.message.content?.trim() ?? '',
+        ),
+      }),
+    );
+    const questionImages = await this.images.questionImages(
+      namespaceId,
+      conversation.id,
+      userId,
+      selectedGroups.map(({ question }) => question),
+    );
+    const resourceImages = await Promise.all(
+      draftedGroups.map((group) =>
+        this.images.resourceImages(namespaceId, userId, [
+          group.questionContent,
+          group.answerContent,
+        ]),
+      ),
+    );
 
     const share = this.shareRepo.create({
       namespaceId,
@@ -86,14 +114,10 @@ export class ConversationSharesService {
       status: ConversationShareStatus.ACTIVE,
       invalidatedAt: null,
       groups: this.groupRepo.create(
-        selectedGroups.map(({ question, answer }, ordinal) => ({
-          ordinal,
-          questionContent: sanitizeConversationShareQuestion(
-            question.message.content?.trim() ?? '',
-          ),
-          answerContent: sanitizeConversationShareAnswer(
-            answer.message.content?.trim() ?? '',
-          ),
+        draftedGroups.map((group, index) => ({
+          ...group,
+          questionImages: questionImages[index],
+          resourceImages: resourceImages[index],
         })),
       ),
       events: [
@@ -117,16 +141,42 @@ export class ConversationSharesService {
       throw this.notFound();
     }
 
+    const resourceImages = share.groups.flatMap(
+      (group) => group.resourceImages ?? [],
+    );
     return {
       id: share.id,
-      title: sanitizeConversationShareQuestion(share.title),
-      summary: sanitizeConversationShareAnswer(share.summary),
+      title: publishConversationShareText(
+        sanitizeConversationShareQuestion(share.title),
+        share.id,
+        resourceImages,
+      ),
+      summary: publishConversationShareText(
+        sanitizeConversationShareAnswer(share.summary),
+        share.id,
+        resourceImages,
+      ),
       groups: share.groups
         .sort((left, right) => left.ordinal - right.ordinal)
-        .map((group) => ({
-          question: sanitizeConversationShareQuestion(group.questionContent),
-          answer: sanitizeConversationShareAnswer(group.answerContent),
-        })),
+        .map((group) => {
+          const images = group.resourceImages ?? [];
+          return {
+            question: publishConversationShareText(
+              sanitizeConversationShareQuestion(group.questionContent),
+              share.id,
+              images,
+            ),
+            answer: publishConversationShareText(
+              sanitizeConversationShareAnswer(group.answerContent),
+              share.id,
+              images,
+            ),
+            questionImages: (group.questionImages ?? []).map((image) => ({
+              attachmentId: image.attachmentId,
+              name: image.name,
+            })),
+          };
+        }),
     };
   }
 

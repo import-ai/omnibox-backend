@@ -19,6 +19,10 @@ describe('ConversationSharesService', () => {
   const groupRepo = {
     create: jest.fn(),
   };
+  const images = {
+    questionImages: jest.fn(),
+    resourceImages: jest.fn(),
+  };
   const config = {
     get: jest.fn((key: string, defaultValue?: string) =>
       key === 'OBB_BASE_URL' ? 'https://test.omnibox.pro' : defaultValue,
@@ -31,6 +35,7 @@ describe('ConversationSharesService', () => {
       messageRepo as never,
       shareRepo as never,
       groupRepo as never,
+      images as never,
       config as never,
     );
   }
@@ -40,6 +45,8 @@ describe('ConversationSharesService', () => {
     shareRepo.create.mockImplementation((value) => value);
     groupRepo.create.mockImplementation((value) => value);
     shareRepo.save.mockImplementation((value) => value);
+    images.questionImages.mockResolvedValue([]);
+    images.resourceImages.mockResolvedValue([]);
   });
 
   it('creates an immutable snapshot in selected chronological group order', async () => {
@@ -116,6 +123,106 @@ describe('ConversationSharesService', () => {
         answerContent: 'Selected answer',
       }),
     ]);
+  });
+
+  it('stores the image lists returned for each group', async () => {
+    const png = '11111111-1111-4111-8111-111111111111';
+    conversationRepo.findOne.mockResolvedValue({
+      id: 'conversation-1',
+      namespaceId: 'namespace-1',
+      userId: 'user-1',
+      title: 'Photos',
+    });
+    messageRepo.find.mockResolvedValue([
+      message('question-1', null, 'user', 'Look at these'),
+      message('answer-1', 'question-1', 'assistant', 'Noted'),
+    ]);
+    images.questionImages.mockResolvedValue([
+      [{ attachmentId: png, name: 'shot.png' }],
+    ]);
+    images.resourceImages.mockResolvedValue([
+      { resourceId: 'res-1', attachmentId: 'pic-1', name: 'pic.png' },
+    ]);
+
+    await createService().create('namespace-1', 'user-1', {
+      channel: ConversationShareChannel.COPY_LINK,
+      conversation_id: 'conversation-1',
+      answer_ids: ['answer-1'],
+    });
+
+    expect(images.questionImages).toHaveBeenCalledWith(
+      'namespace-1',
+      'conversation-1',
+      'user-1',
+      [expect.objectContaining({ id: 'question-1' })],
+    );
+    expect(images.resourceImages).toHaveBeenCalledWith(
+      'namespace-1',
+      'user-1',
+      ['Look at these', 'Noted'],
+    );
+    expect(groupRepo.create).toHaveBeenCalledWith([
+      expect.objectContaining({
+        questionImages: [{ attachmentId: png, name: 'shot.png' }],
+        resourceImages: [
+          { resourceId: 'res-1', attachmentId: 'pic-1', name: 'pic.png' },
+        ],
+      }),
+    ]);
+  });
+
+  it('rewrites an approved resource image in the public snapshot', async () => {
+    shareRepo.findOne.mockResolvedValue({
+      id: 'share-1',
+      title: 'Resources',
+      summary: '看图',
+      groups: [
+        {
+          ordinal: 0,
+          questionContent: '这个文件里有什么',
+          answerContent:
+            '看 ![图](</api/v1/namespaces/namespace-1/resources/res-1/attachments/pic-1>)',
+          resourceImages: [
+            { resourceId: 'res-1', attachmentId: 'pic-1', name: 'pic.png' },
+          ],
+        },
+      ],
+    });
+
+    await expect(createService().getPublic('share-1')).resolves.toMatchObject({
+      groups: [
+        {
+          answer:
+            '看 ![图](</api/v1/conversation-shares/share-1/resource-images/pic-1>)',
+        },
+      ],
+    });
+  });
+
+  it('returns question images from a public snapshot', async () => {
+    const png = '11111111-1111-4111-8111-111111111111';
+    shareRepo.findOne.mockResolvedValue({
+      id: 'share-1',
+      title: 'Photos',
+      summary: 'Noted',
+      groups: [
+        {
+          ordinal: 0,
+          questionContent: 'Look at these',
+          answerContent: 'Noted',
+          questionImages: [{ attachmentId: png, name: 'shot.png' }],
+        },
+      ],
+    });
+
+    await expect(createService().getPublic('share-1')).resolves.toMatchObject({
+      groups: [
+        {
+          question: 'Look at these',
+          questionImages: [{ attachmentId: png, name: 'shot.png' }],
+        },
+      ],
+    });
   });
 
   it('removes internal resource and citation markers from a new snapshot', async () => {
@@ -307,11 +414,13 @@ function message(
   role: 'user' | 'assistant',
   content: string,
   status = 'success',
+  attrs?: { composer?: { display_parts?: unknown[] } },
 ) {
   return {
     id,
     parentId,
     status,
+    attrs,
     message: { role, content },
     createdAt: new Date(),
   };

@@ -39,3 +39,17 @@ export async function assertCompatibleCommentAnchors(
     END $$;
   `);
 }
+
+export async function assertNoDocumentCommentThreads(
+  queryRunner: QueryRunner,
+): Promise<void> {
+  assertRollbackTransaction(queryRunner);
+  await queryRunner.query(`
+    LOCK TABLE resource_comment_threads IN ACCESS EXCLUSIVE MODE;
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM resource_comment_threads WHERE type = 'document') THEN
+        RAISE EXCEPTION 'Cannot roll back document comments while document thread rows remain, including soft-deleted rows awaiting attachment cleanup. Roll back application code only and retain the schema; do not purge comment records to force rollback.';
+      END IF;
+    END $$;
+  `);
+}

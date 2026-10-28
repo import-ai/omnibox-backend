@@ -4,6 +4,7 @@ import { CaptchaModule } from 'omniboxd/captcha/captcha.module';
 import { CacheService } from 'omniboxd/common/cache.service';
 import { MailModule } from 'omniboxd/mail/mail.module';
 import { RateLimitModule } from 'omniboxd/rate-limit/rate-limit.module';
+import { ResourceContributorsModule } from 'omniboxd/resources/resource-contributors.module';
 import { SmsModule } from 'omniboxd/sms/sms.module';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { UserBinding } from 'omniboxd/user/entities/user-binding.entity';
@@ -21,6 +22,7 @@ import { UserService } from 'omniboxd/user/user.service';
     SmsModule,
     CaptchaModule,
     RateLimitModule,
+    ResourceContributorsModule,
   ],
 })
 export class UserModule {}

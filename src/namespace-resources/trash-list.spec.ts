@@ -42,6 +42,7 @@ describe('NamespaceResourcesService.listTrash', () => {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
 
   function deleted(id: string): Resource {

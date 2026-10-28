@@ -79,7 +79,7 @@ describe('WechatOaBot', () => {
       }),
     );
 
-    const attrs = await createBot().getAttrs();
+    const attrs = await createBot().getAttrs('ns', 'user');
 
     expect(attrs).toEqual({
       key: expect.stringMatching(/^[0-9a-f]{32}$/),
@@ -108,7 +108,7 @@ describe('WechatOaBot', () => {
 
     const keys = new Set<string>();
     for (let i = 0; i < 50; i++) {
-      keys.add((await bot.getAttrs()).key);
+      keys.add((await bot.getAttrs('ns', 'user')).key);
     }
 
     expect(keys.size).toBe(50);
@@ -145,7 +145,7 @@ describe('WechatOaBot', () => {
   ])('rejects %s', async (_name, response) => {
     fetchMock.mockResolvedValue(response);
 
-    await expect(createBot().getAttrs()).rejects.toMatchObject({
+    await expect(createBot().getAttrs('ns', 'user')).rejects.toMatchObject({
       code: 'BINDING_REQUEST_FAILED',
     });
   });
@@ -153,11 +153,15 @@ describe('WechatOaBot', () => {
   it('rejects when the bot is unreachable', async () => {
     fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
 
-    await expect(createBot().getAttrs()).rejects.toThrow(AppException);
+    await expect(createBot().getAttrs('ns', 'user')).rejects.toThrow(
+      AppException,
+    );
   });
 
   it('rejects without calling the bot when OBBOT_BASE_URL is unset', async () => {
-    await expect(createBot('').getAttrs()).rejects.toThrow(AppException);
+    await expect(createBot('').getAttrs('ns', 'user')).rejects.toThrow(
+      AppException,
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

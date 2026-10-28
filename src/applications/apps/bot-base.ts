@@ -71,7 +71,13 @@ export abstract class BotBase extends BaseApp {
     );
   }
 
-  async getAttrs(): Promise<{ key: string } & Record<string, any>> {
+  async getAttrs(
+    // Part of the app contract; only some apps need the ids for a bot link.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    namespaceId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    userId: string,
+  ): Promise<{ key: string } & Record<string, any>> {
     return { key: await this.generateUniqueKey() };
   }
 

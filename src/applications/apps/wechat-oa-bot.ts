@@ -62,14 +62,17 @@ export class WechatOaBot extends BotBase {
     return rest;
   }
 
-  async getAttrs(): Promise<
+  async getAttrs(
+    namespaceId: string,
+    userId: string,
+  ): Promise<
     {
       key: string;
       qrcode_content: string;
       qrcode_expires_at: string;
     } & Record<string, any>
   > {
-    const attrs = await super.getAttrs();
+    const attrs = await super.getAttrs(namespaceId, userId);
 
     try {
       if (!this.obbotBaseUrl) {

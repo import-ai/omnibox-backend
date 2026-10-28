@@ -16,10 +16,11 @@ export class QQBot extends BotBase {
     return rest;
   }
 
-  async getAttrs(): Promise<
-    { key: string; url_link?: string } & Record<string, any>
-  > {
-    const attrs = await super.getAttrs();
+  async getAttrs(
+    namespaceId: string,
+    userId: string,
+  ): Promise<{ key: string; url_link?: string } & Record<string, any>> {
+    const attrs = await super.getAttrs(namespaceId, userId);
     const baseUrl = process.env.OBBOT_BASE_URL?.replace(/\/+$/, '');
 
     if (!baseUrl) {

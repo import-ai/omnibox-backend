@@ -52,42 +52,31 @@ describe('generateUniqueResourceName', () => {
     );
   });
 
-  it('returns the original name when it is unique', () => {
-    expect(generateUniqueResourceName('得到听书', () => false)).toBe(
-      '得到听书',
-    );
+  it('returns the original name when it is unique', async () => {
+    await expect(
+      generateUniqueResourceName('得到听书', () => false),
+    ).resolves.toBe('得到听书');
   });
 
-  it('appends _[a-z0-9]{4} to the original name on conflict', () => {
+  it('appends _[a-z0-9]{4} to the original name on conflict', async () => {
     mockedGenerateId.mockReturnValueOnce('ab3x');
     const taken = new Set(['得到听书']);
-    const name = generateUniqueResourceName('得到听书', (candidate) =>
+    const name = await generateUniqueResourceName('得到听书', (candidate) =>
       taken.has(candidate),
     );
     expect(name).toBe('得到听书_ab3x');
   });
 
-  it('retries from the original name instead of chaining suffixes', () => {
+  it('retries from the original name instead of chaining suffixes', async () => {
     mockedGenerateId.mockReturnValueOnce('aaaa').mockReturnValueOnce('bbbb');
     const taken = new Set(['doc', 'doc_aaaa']);
-    const name = generateUniqueResourceName('doc', (candidate) =>
+    const name = await generateUniqueResourceName('doc', (candidate) =>
       taken.has(candidate),
     );
     expect(name).toBe('doc_bbbb');
   });
 
-  it('throws UniqueResourceNameExhaustedError after maxAttempts', () => {
-    const isNameExists = jest.fn(() => true);
-    expect(() => generateUniqueResourceName('doc', isNameExists, 3)).toThrow(
-      new UniqueResourceNameExhaustedError(3),
-    );
-    expect(() => generateUniqueResourceName('doc', () => true, 3)).toThrow(
-      'Failed to generate unique name after 3 attempts',
-    );
-    expect(isNameExists).toHaveBeenCalledTimes(3);
-  });
-
-  it('rejects with UniqueResourceNameExhaustedError after maxAttempts when async', async () => {
+  it('rejects with UniqueResourceNameExhaustedError after maxAttempts', async () => {
     const isNameExists = jest.fn(() => Promise.resolve(true));
     const result = generateUniqueResourceName('doc', isNameExists, 3);
     await expect(result).rejects.toBeInstanceOf(
@@ -95,6 +84,15 @@ describe('generateUniqueResourceName', () => {
     );
     await expect(result).rejects.toThrow(
       'Failed to generate unique name after 3 attempts',
+    );
+    expect(isNameExists).toHaveBeenCalledTimes(3);
+  });
+
+  it('enforces maxAttempts for sync checks too', async () => {
+    const isNameExists = jest.fn(() => true);
+    const result = generateUniqueResourceName('doc', isNameExists, 3);
+    await expect(result).rejects.toBeInstanceOf(
+      UniqueResourceNameExhaustedError,
     );
     expect(isNameExists).toHaveBeenCalledTimes(3);
   });

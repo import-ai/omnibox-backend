@@ -10,6 +10,7 @@ import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
+import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import {
   ResourceSortBy,
   ResourceSortOrder,
@@ -55,6 +56,7 @@ export class SharedResourcesService {
     private readonly smartFoldersService: SmartFoldersService,
     private readonly tagService: TagService,
     private readonly i18n: I18nService,
+    private readonly resourceContributorsService: ResourceContributorsService,
     @Optional()
     private readonly resourceCommentQueriesService?: ResourceCommentQueriesService,
   ) {}
@@ -86,6 +88,15 @@ export class SharedResourcesService {
     const tags = await this.getTagsForResource(share.namespaceId, resource);
     const path = await this.getResourcePath(share, resource, timeZone);
     const dto = SharedResourceDto.fromEntity(resource, tags, path);
+    if (resource.resourceType === ResourceType.DOC) {
+      const attribution = await this.resourceContributorsService.present(
+        share.namespaceId,
+        resource.id,
+        false,
+      );
+      dto.creator = attribution.creator;
+      dto.collaborators = attribution.collaborators;
+    }
     if (this.resourceCommentQueriesService) {
       const comments =
         await this.resourceCommentQueriesService.getResourceCommentData(

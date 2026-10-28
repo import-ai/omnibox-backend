@@ -39,6 +39,8 @@ import {
   Resource,
   ResourceType,
 } from './entities/resource.entity';
+import { sameStringSet } from './resource-contributors';
+import { ResourceContributorsService } from './resource-contributors.service';
 import { ResourceRevisionService } from './resource-revision.service';
 
 const TASK_PRIORITY = 5;
@@ -56,6 +58,7 @@ export class ResourcesService {
     private readonly storageUsagesService: StorageUsagesService,
     private readonly tagService: TagService,
     private readonly resourceRevisionService: ResourceRevisionService,
+    private readonly resourceContributorsService: ResourceContributorsService,
   ) {}
 
   private validateResourceName(
@@ -911,6 +914,11 @@ export class ResourcesService {
 
     const contentChanged =
       props.content !== undefined && props.content !== oldResource.content;
+    const explicitNameChanged =
+      props.name !== undefined &&
+      props.name !== oldResource.name &&
+      resolvedName !== oldResource.name;
+    const tagsChanged = !sameStringSet(props.tagIds, oldResource.tagIds ?? []);
     const nameChanged =
       resolvedName !== undefined && resolvedName !== oldResource.name;
     const trackRevision =
@@ -983,6 +991,18 @@ export class ResourcesService {
         tx,
       );
     }
+
+    await this.resourceContributorsService.recordEdit(entityManager, {
+      namespaceId,
+      resourceId,
+      resourceType: oldResource.resourceType,
+      creatorUserId: oldResource.userId,
+      actorUserId: userId,
+      parentId: resource.parentId,
+      explicitNameChanged,
+      contentChanged,
+      tagsChanged,
+    });
   }
 
   async createResource(

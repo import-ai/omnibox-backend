@@ -18,6 +18,7 @@ import {
   NamespaceRole,
 } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { ContactRateLimiter } from 'omniboxd/rate-limit/contact-rate-limiter.service';
+import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
 import { SmsService } from 'omniboxd/sms/sms.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
@@ -82,6 +83,7 @@ export class UserService {
     private readonly cacheService: CacheService,
     private readonly dataSource: DataSource,
     private readonly contactRateLimiter: ContactRateLimiter,
+    private readonly resourceContributorsService: ResourceContributorsService,
   ) {}
 
   async verify(identifier: string, password: string, type?: 'email' | 'phone') {
@@ -900,6 +902,10 @@ export class UserService {
 
     // 3. Execute cleanup in transaction
     await this.dataSource.transaction(async (manager) => {
+      await this.resourceContributorsService.freezeUser(
+        deletionState.userId,
+        manager,
+      );
       const shareRepo = manager.getRepository(Share);
       const apiKeyRepo = manager.getRepository(APIKey);
       const applicationsRepo = manager.getRepository(Applications);

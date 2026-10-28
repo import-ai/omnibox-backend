@@ -12,6 +12,11 @@ import {
 
 import { ResourceComment } from './resource-comment.entity';
 
+export enum ResourceCommentThreadType {
+  INLINE = 'inline',
+  DOCUMENT = 'document',
+}
+
 export enum ResourceCommentAnchorStatus {
   ACTIVE = 'active',
   ORPHANED = 'orphaned',
@@ -36,26 +41,32 @@ export class ResourceCommentThread extends Base {
   @JoinColumn({ name: 'creator_id' })
   creator?: User | null;
 
+  @Column('varchar', { default: ResourceCommentThreadType.INLINE })
+  type: ResourceCommentThreadType;
+
   @Column('text')
   quotedText: string;
 
-  @Column('integer')
-  anchorFrom: number;
+  @Column('integer', { nullable: true })
+  anchorFrom: number | null;
 
-  @Column('integer')
-  anchorTo: number;
+  @Column('integer', { nullable: true })
+  anchorTo: number | null;
 
-  @Column('text', { default: '' })
-  anchorPrefix: string;
+  @Column('text', { nullable: true, default: '' })
+  anchorPrefix: string | null;
 
-  @Column('text', { default: '' })
-  anchorSuffix: string;
+  @Column('text', { nullable: true, default: '' })
+  anchorSuffix: string | null;
 
-  @Column('varchar', { length: 64 })
-  contentHash: string;
+  @Column('varchar', { length: 64, nullable: true })
+  contentHash: string | null;
 
-  @Column('varchar', { default: ResourceCommentAnchorStatus.ACTIVE })
-  anchorStatus: ResourceCommentAnchorStatus;
+  @Column('varchar', {
+    nullable: true,
+    default: ResourceCommentAnchorStatus.ACTIVE,
+  })
+  anchorStatus: ResourceCommentAnchorStatus | null;
 
   @Column('timestamptz', { nullable: true })
   resolvedAt: Date | null;

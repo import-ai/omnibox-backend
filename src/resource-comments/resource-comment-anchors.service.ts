@@ -10,6 +10,7 @@ import { ResourceCommentAnchorRequestDto } from './dto/resource-comment-request.
 import {
   ResourceCommentAnchorStatus,
   ResourceCommentThread,
+  ResourceCommentThreadType,
 } from './entities/resource-comment-thread.entity';
 
 @Injectable()
@@ -56,7 +57,11 @@ export class ResourceCommentAnchorsService {
     for (const anchor of anchors) {
       this.assertValidRange(anchor.from, anchor.to);
       const thread = threadsById.get(anchor.threadId);
-      if (!thread || submittedIds.has(thread.id)) {
+      if (
+        !thread ||
+        thread.type === ResourceCommentThreadType.DOCUMENT ||
+        submittedIds.has(thread.id)
+      ) {
         throw this.invalidAnchorException();
       }
       if (orphanedIds.has(thread.id)) {
@@ -74,7 +79,7 @@ export class ResourceCommentAnchorsService {
 
     for (const threadId of orphanedIds) {
       const thread = threadsById.get(threadId);
-      if (!thread) {
+      if (!thread || thread.type === ResourceCommentThreadType.DOCUMENT) {
         throw this.invalidAnchorException();
       }
       thread.anchorStatus = ResourceCommentAnchorStatus.ORPHANED;
@@ -96,6 +101,7 @@ export class ResourceCommentAnchorsService {
       {
         namespaceId,
         resourceId,
+        type: ResourceCommentThreadType.INLINE,
         anchorStatus: ResourceCommentAnchorStatus.ACTIVE,
       },
       { anchorStatus: ResourceCommentAnchorStatus.ORPHANED },

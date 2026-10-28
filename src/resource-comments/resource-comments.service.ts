@@ -10,6 +10,7 @@ import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enu
 import {
   isReadOnlyResourceType,
   Resource,
+  ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -29,6 +30,7 @@ import { ResourceCommentAttachment } from './entities/resource-comment-attachmen
 import {
   ResourceCommentAnchorStatus,
   ResourceCommentThread,
+  ResourceCommentThreadType,
 } from './entities/resource-comment-thread.entity';
 import { mentionDisplayName, rewriteMentionLabels } from './mention-labels';
 import { ResourceCommentAnchorsService } from './resource-comment-anchors.service';
@@ -67,7 +69,27 @@ export class ResourceCommentsService {
         ResourcePermission.CAN_COMMENT,
       );
     }
-    this.anchorsService.assertValidRange(dto.anchorFrom, dto.anchorTo);
+    const isDocument = dto.type === ResourceCommentThreadType.DOCUMENT;
+    if (isDocument) {
+      if (
+        [
+          dto.quotedText,
+          dto.anchorFrom,
+          dto.anchorTo,
+          dto.anchorPrefix,
+          dto.anchorSuffix,
+          dto.expectedContentHash,
+        ].some((value) => value !== undefined)
+      ) {
+        throw new AppException(
+          this.i18n.t('resourceComment.errors.invalidAnchor'),
+          'INVALID_COMMENT_ANCHOR',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    } else {
+      this.anchorsService.assertValidRange(dto.anchorFrom!, dto.anchorTo!);
+    }
 
     return await this.dataSource.transaction(async (manager) => {
       const resource = await this.anchorsService.lockResource(
@@ -75,22 +97,41 @@ export class ResourceCommentsService {
         namespaceId,
         resourceId,
       );
-      this.anchorsService.assertContentHash(
-        resource.content,
-        dto.expectedContentHash,
-      );
+      if (isDocument) {
+        if (
+          [
+            ResourceType.FOLDER,
+            ResourceType.SMART_FOLDER,
+            ResourceType.RSS_FOLDER,
+          ].includes(resource.resourceType)
+        ) {
+          throw new AppException(
+            this.i18n.t('resourceComment.errors.unsupportedResourceType'),
+            'UNSUPPORTED_COMMENT_RESOURCE_TYPE',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      } else {
+        this.anchorsService.assertContentHash(
+          resource.content,
+          dto.expectedContentHash!,
+        );
+      }
 
       const thread = manager.getRepository(ResourceCommentThread).create({
         namespaceId,
         resourceId,
         creatorId: userId,
-        quotedText: dto.quotedText,
-        anchorFrom: dto.anchorFrom,
-        anchorTo: dto.anchorTo,
-        anchorPrefix: dto.anchorPrefix ?? '',
-        anchorSuffix: dto.anchorSuffix ?? '',
-        contentHash: dto.expectedContentHash,
-        anchorStatus: ResourceCommentAnchorStatus.ACTIVE,
+        type: isDocument
+          ? ResourceCommentThreadType.DOCUMENT
+          : ResourceCommentThreadType.INLINE,
+        quotedText: isDocument ? '' : dto.quotedText,
+        anchorFrom: isDocument ? null : dto.anchorFrom,
+        anchorTo: isDocument ? null : dto.anchorTo,
+        anchorPrefix: isDocument ? null : (dto.anchorPrefix ?? ''),
+        anchorSuffix: isDocument ? null : (dto.anchorSuffix ?? ''),
+        contentHash: isDocument ? null : dto.expectedContentHash,
+        anchorStatus: isDocument ? null : ResourceCommentAnchorStatus.ACTIVE,
         resolvedAt: null,
         resolvedById: null,
       });
@@ -134,13 +175,20 @@ export class ResourceCommentsService {
       );
     }
     return await this.dataSource.transaction(async (manager) => {
-      await this.getThreadOrFail(
+      const thread = await this.getThreadOrFail(
         namespaceId,
         resourceId,
         threadId,
         manager,
         true,
       );
+      if (thread.type === ResourceCommentThreadType.DOCUMENT) {
+        throw new AppException(
+          this.i18n.t('resourceComment.errors.documentRepliesUnsupported'),
+          'DOCUMENT_COMMENT_REPLIES_UNSUPPORTED',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
       await this.saveComment(
         manager,
         namespaceId,

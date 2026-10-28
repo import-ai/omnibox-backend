@@ -12,6 +12,7 @@ import { ResourceCommentAttachment } from 'omniboxd/resource-comments/entities/r
 import {
   ResourceCommentAnchorStatus,
   ResourceCommentThread,
+  ResourceCommentThreadType,
 } from 'omniboxd/resource-comments/entities/resource-comment-thread.entity';
 import { ResourceCommentAnchorsService } from 'omniboxd/resource-comments/resource-comment-anchors.service';
 import { ResourceCommentAttachmentsService } from 'omniboxd/resource-comments/resource-comment-attachments.service';
@@ -55,6 +56,7 @@ const sharedResourceUrl = '/api/v1/shares/share/resources/resource';
 const sharedImageUrl = `${sharedResourceUrl}/comment-attachments/image-id`;
 const thread: ResourceCommentThreadResponseDto = {
   id: 'thread',
+  type: ResourceCommentThreadType.INLINE,
   quoted_text: 'text',
   resolved: false,
   anchor: {
@@ -96,6 +98,7 @@ describe('shared comment images', () => {
   const validateShare = jest.fn();
   const checkPermission = jest.fn();
   const isResourceMatched = jest.fn();
+  let getThread: jest.SpyInstance;
 
   beforeAll(async () => {
     const resource = Object.assign(new Resource(), {
@@ -171,6 +174,9 @@ describe('shared comment images', () => {
       limit: 20,
       has_more: false,
     });
+    getThread = jest
+      .spyOn(commentsService, 'getThread')
+      .mockResolvedValue(thread);
     app = module.createNestApplication();
     app.use(cookieParser());
     await app.init();
@@ -216,6 +222,37 @@ describe('shared comment images', () => {
     );
     expect(thread.comments[0].attachments[0].url).toBe(workspaceImageUrl);
   });
+
+  it('reads a direct thread with rewritten image URLs after validating the share', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`${sharedResourceUrl}/comment-threads/thread`)
+      .expect(200);
+    expect(response.body.comments[0].attachments[0].url).toBe(sharedImageUrl);
+    expect(getThread).toHaveBeenCalledWith(
+      'namespace',
+      'resource',
+      'thread',
+      '',
+      false,
+    );
+    expect(validateShare.mock.invocationCallOrder[0]).toBeLessThan(
+      getThread.mock.invocationCallOrder[0],
+    );
+  });
+
+  it.each(['share', 'resource'])(
+    'rejects denied direct-thread %s access before reading comments',
+    async (scope) => {
+      if (scope === 'share')
+        validateShare.mockRejectedValueOnce(new ForbiddenException());
+      await request(app.getHttpServer())
+        .get(
+          `${scope === 'resource' ? sharedResourceUrl.replace('/resources/resource', '/resources/outside') : sharedResourceUrl}/comment-threads/thread`,
+        )
+        .expect(scope === 'share' ? 403 : 404);
+      expect(getThread).not.toHaveBeenCalled();
+    },
+  );
 
   it('preserves timezone-aware smart-folder paths and shared comment images', async () => {
     share.resourceId = 'smart-folder';

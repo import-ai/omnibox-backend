@@ -44,6 +44,12 @@ export class Notification extends Base {
   @Column('timestamptz', { nullable: true })
   jpushSentAt: Date | null;
 
+  @Column('uuid', { nullable: true })
+  jpushClaimId: string | null;
+
+  @Column('timestamptz', { nullable: true })
+  jpushClaimedAt: Date | null;
+
   @Column('jsonb', { default: {} })
   target: Record<string, any>;
 

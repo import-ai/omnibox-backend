@@ -30,7 +30,7 @@ import {
   NotificationRead,
   NotificationStatus,
 } from './entities/notification.entity';
-import { broadcastSystemNotification } from './system-notification-push';
+import { deliverSystemNotificationPush } from './system-notification-push';
 
 const NOTIFICATION_RETENTION_DAYS = 30;
 
@@ -98,6 +98,8 @@ export class NotificationsService {
       isGlobal: true,
       dedupKey: dto.dedupKey,
       jpushSentAt: null,
+      jpushClaimId: null,
+      jpushClaimedAt: null,
       target: {},
       tags: [...new Set(dto.tags.map((tag) => tag.trim()))],
       attrs: dto.attrs || {},
@@ -119,25 +121,17 @@ export class NotificationsService {
   }
 
   private async ensureSystemNotificationPushed(notification: Notification) {
-    if (notification.jpushSentAt || !this.proUrl) {
-      return notification;
-    }
-
-    try {
-      await broadcastSystemNotification(this.proUrl, notification);
-    } catch (error) {
-      this.logger.error('system notification push failed', error);
-      throw new AppException(
-        'System notification push failed',
-        'SYSTEM_NOTIFICATION_PUSH_FAILED',
-        HttpStatus.BAD_GATEWAY,
-      );
-    }
-
-    const jpushSentAt = new Date();
-    await this.notificationRepository.update(notification.id, { jpushSentAt });
-    notification.jpushSentAt = jpushSentAt;
-    return notification;
+    return await deliverSystemNotificationPush(this.proUrl, notification, {
+      query: (sql, parameters) =>
+        this.notificationRepository.query(sql, parameters),
+      update: (criteria, values) =>
+        this.notificationRepository.update(criteria, values),
+      findOneByOrFail: (where) =>
+        this.notificationRepository.findOneByOrFail(where),
+      recordFailure: (error) => {
+        this.logger.error('system notification push failed', error);
+      },
+    });
   }
 
   private isDedupConflict(error: unknown) {

@@ -1,3 +1,4 @@
+import { HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -9,7 +10,10 @@ import {
   NotificationStatus,
 } from './entities/notification.entity';
 import { NotificationsService } from './notifications.service';
-import { SYSTEM_NOTIFICATION_PUSH_TIMEOUT_MS } from './system-notification-push';
+import {
+  SYSTEM_NOTIFICATION_PUSH_CLAIM_LEASE_SECONDS,
+  SYSTEM_NOTIFICATION_PUSH_TIMEOUT_MS,
+} from './system-notification-push';
 
 describe('NotificationsService', () => {
   const findAndCount = jest.fn();
@@ -70,16 +74,25 @@ describe('NotificationsService', () => {
     try {
       await service.createSystemNotification(systemNotificationDto());
       expect(timeout).toHaveBeenCalledWith(SYSTEM_NOTIFICATION_PUSH_TIMEOUT_MS);
-      expect(fetchMock).toHaveBeenCalledWith(
-        'http://pro.internal/internal/api/v1/notification/broadcast',
-        expect.objectContaining({
-          method: 'POST',
-          signal: expect.any(AbortSignal),
-        }),
+      expect(
+        SYSTEM_NOTIFICATION_PUSH_CLAIM_LEASE_SECONDS * 1000,
+      ).toBeGreaterThan(SYSTEM_NOTIFICATION_PUSH_TIMEOUT_MS);
+      expect(repository.query).toHaveBeenCalledWith(
+        expect.stringContaining('jpush_sent_at IS NULL'),
+        [
+          expect.any(String),
+          'notification-1',
+          SYSTEM_NOTIFICATION_PUSH_CLAIM_LEASE_SECONDS,
+        ],
       );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(repository.update).toHaveBeenCalledWith(
-        'notification-1',
-        expect.objectContaining({ jpushSentAt: expect.any(Date) }),
+        { id: 'notification-1', jpushClaimId: expect.any(String) },
+        expect.objectContaining({
+          jpushSentAt: expect.any(Date),
+          jpushClaimId: null,
+          jpushClaimedAt: null,
+        }),
       );
     } finally {
       timeout.mockRestore();
@@ -99,15 +112,12 @@ describe('NotificationsService', () => {
       await expect(
         service.createSystemNotification(systemNotificationDto()),
       ).rejects.toBeInstanceOf(AppException);
-      expect(repository.update).not.toHaveBeenCalled();
+      expect(repository.update).toHaveBeenCalledWith(
+        { id: 'notification-1', jpushClaimId: expect.any(String) },
+        { jpushClaimId: null, jpushClaimedAt: null },
+      );
 
-      repository.findOne.mockResolvedValueOnce({
-        id: 'notification-1',
-        title: 'Changelog',
-        content: 'New version',
-        tags: ['changelog'],
-        jpushSentAt: null,
-      });
+      repository.findOne.mockResolvedValueOnce(unsentNotification());
       await service.createSystemNotification(systemNotificationDto());
     } finally {
       timeout.mockRestore();
@@ -115,13 +125,90 @@ describe('NotificationsService', () => {
     }
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(repository.update).toHaveBeenCalledTimes(1);
+    expect(repository.query).toHaveBeenCalledTimes(2);
+    expect(repository.update).toHaveBeenCalledTimes(2);
+  });
+
+  it('broadcasts once while another attempt holds the claim', async () => {
+    const repository = repositoryMock();
+    repository.findOne.mockResolvedValue(unsentNotification());
+    let claims = 0;
+    repository.query.mockImplementation(() => {
+      claims += 1;
+      return Promise.resolve(
+        claims === 1 ? [[{ id: 'notification-1' }], 1] : [[], 0],
+      );
+    });
+    let releaseBroadcast: (value: {
+      ok: boolean;
+      status: number;
+    }) => void = () => undefined;
+    let broadcastStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      broadcastStarted = resolve;
+    });
+    const fetchMock = jest.fn(
+      () =>
+        new Promise<{ ok: boolean; status: number }>((resolve) => {
+          releaseBroadcast = resolve;
+          broadcastStarted();
+        }),
+    );
+    const { service, timeout } = pushingService(repository, fetchMock);
+
+    try {
+      const first = service.createSystemNotification(systemNotificationDto());
+      await started;
+      repository.findOneByOrFail.mockResolvedValue(unsentNotification());
+      const duplicate = service.createSystemNotification(
+        systemNotificationDto(),
+      );
+      await expect(duplicate).rejects.toBeInstanceOf(AppException);
+      await expect(duplicate).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      releaseBroadcast({ ok: true, status: 200 });
+      await first;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      timeout.mockRestore();
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('returns the notification when another attempt already finished', async () => {
+    const repository = repositoryMock();
+    repository.findOne.mockResolvedValue(unsentNotification());
+    repository.query.mockResolvedValue([[], 0]);
+    repository.findOneByOrFail.mockResolvedValue({
+      ...unsentNotification(),
+      jpushSentAt: new Date('2026-10-28T00:00:00.000Z'),
+    });
+    const fetchMock = jest.fn();
+    const { service, timeout } = pushingService(repository, fetchMock);
+
+    try {
+      await expect(
+        service.createSystemNotification(systemNotificationDto()),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          id: 'notification-1',
+          jpushSentAt: expect.any(Date),
+        }),
+      );
+    } finally {
+      timeout.mockRestore();
+      global.fetch = originalFetch;
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('does not broadcast a system notification that was already pushed', async () => {
     const repository = repositoryMock();
     repository.findOne.mockResolvedValue({
-      id: 'notification-1',
+      ...unsentNotification(),
       jpushSentAt: new Date('2026-10-28T00:00:00.000Z'),
     });
     const fetchMock = jest.fn();
@@ -135,6 +222,7 @@ describe('NotificationsService', () => {
     }
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(repository.query).not.toHaveBeenCalled();
     expect(repository.save).not.toHaveBeenCalled();
   });
 
@@ -143,13 +231,7 @@ describe('NotificationsService', () => {
     repository.save.mockRejectedValue(
       new QueryFailedError('', [], { code: '23505' } as unknown as Error),
     );
-    repository.findOneByOrFail.mockResolvedValue({
-      id: 'notification-1',
-      title: 'Changelog',
-      content: 'New version',
-      tags: ['changelog'],
-      jpushSentAt: null,
-    });
+    repository.findOneByOrFail.mockResolvedValue(unsentNotification());
     const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200 });
     const { service, timeout } = pushingService(repository, fetchMock);
 
@@ -174,6 +256,18 @@ function systemNotificationDto() {
   };
 }
 
+function unsentNotification() {
+  return {
+    id: 'notification-1',
+    title: 'Changelog',
+    content: 'New version',
+    tags: ['changelog'],
+    jpushSentAt: null,
+    jpushClaimId: null,
+    jpushClaimedAt: null,
+  };
+}
+
 function repositoryMock() {
   return {
     findOne: jest.fn().mockResolvedValue(null),
@@ -181,6 +275,7 @@ function repositoryMock() {
     create: jest.fn((value) => value),
     save: jest.fn((value) => ({ ...value, id: 'notification-1' })),
     update: jest.fn().mockResolvedValue({ affected: 1 }),
+    query: jest.fn().mockResolvedValue([[{ id: 'notification-1' }], 1]),
   };
 }
 

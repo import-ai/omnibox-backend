@@ -123,6 +123,7 @@ import { AddConversationHistoryIndex1790966111694 } from 'omniboxd/migrations/17
 import { AddTaskDedupIndexes1792142626851 } from 'omniboxd/migrations/1792142626851-add-task-dedup-indexes';
 import { ConversationShareImages1792487655534 } from 'omniboxd/migrations/1792487655534-conversation-share-images';
 import { ConversationShareResourceImages1792496161554 } from 'omniboxd/migrations/1792496161554-conversation-share-resource-images';
+import { AddDocumentComments1792575770997 } from 'omniboxd/migrations/1792575770997-add-document-comments';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -386,6 +387,7 @@ export class AppModule implements NestModule {
               AddTaskDedupIndexes1792142626851,
               ConversationShareImages1792487655534,
               ConversationShareResourceImages1792496161554,
+              AddDocumentComments1792575770997,
               ...extraMigrations,
             ],
             migrationsRun: true,

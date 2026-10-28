@@ -1,3 +1,6 @@
+jest.mock('omniboxd/namespaces/member-display-names', () => ({
+  resolveMemberDisplayNames: jest.fn().mockResolvedValue({}),
+}));
 import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';

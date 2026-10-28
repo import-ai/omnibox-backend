@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { resolveMemberDisplayNames } from 'omniboxd/namespaces/member-display-names';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { EntityManager, Repository } from 'typeorm';
@@ -15,6 +16,7 @@ import {
   ResourceCommentThread,
   ResourceCommentThreadType,
 } from './entities/resource-comment-thread.entity';
+import { referencedMentionIds, referencedMentionNames } from './mention-labels';
 import { ResourceCommentAnchorsService } from './resource-comment-anchors.service';
 @Injectable()
 export class ResourceCommentQueriesService {
@@ -33,6 +35,7 @@ export class ResourceCommentQueriesService {
   ): Promise<{
     content_hash: string;
     comment_threads: ResourceCommentThreadResponseDto[];
+    mention_display_names?: Record<string, string>;
   }> {
     const threads = await this.threadRepository
       .createQueryBuilder('thread')
@@ -50,10 +53,17 @@ export class ResourceCommentQueriesService {
       .addOrderBy('attachment.created_at', 'ASC')
       .getMany();
 
+    const names = await this.namesForThreads(
+      this.threadRepository.manager,
+      namespaceId,
+      threads,
+      content,
+    );
     return {
+      mention_display_names: referencedMentionNames(content, names),
       content_hash: this.anchorsService.contentHash(content),
       comment_threads: threads.map((thread) =>
-        ResourceCommentThreadResponseDto.fromEntity(thread),
+        ResourceCommentThreadResponseDto.fromEntity(thread, names),
       ),
     };
   }
@@ -139,9 +149,14 @@ export class ResourceCommentQueriesService {
     threads.sort(
       (left, right) => pageOrder.get(left.id)! - pageOrder.get(right.id)!,
     );
+    const names = await this.namesForThreads(
+      this.threadRepository.manager,
+      namespaceId,
+      threads,
+    );
     return {
       items: threads.map((thread) =>
-        ResourceCommentThreadResponseDto.fromEntity(thread),
+        ResourceCommentThreadResponseDto.fromEntity(thread, names),
       ),
       total,
       offset: query.offset,
@@ -182,7 +197,12 @@ export class ResourceCommentQueriesService {
     if (!thread) {
       throw this.threadNotFoundException();
     }
-    return ResourceCommentThreadResponseDto.fromEntity(thread);
+    const names = await this.namesForThreads(
+      this.threadRepository.manager,
+      namespaceId,
+      [thread],
+    );
+    return ResourceCommentThreadResponseDto.fromEntity(thread, names);
   }
 
   // Reloads a thread with its creator, comments, and comment authors.
@@ -204,7 +224,27 @@ export class ResourceCommentQueriesService {
     if (!thread) {
       throw this.threadNotFoundException();
     }
-    return ResourceCommentThreadResponseDto.fromEntity(thread);
+    const names = await this.namesForThreads(manager, thread.namespaceId, [
+      thread,
+    ]);
+    return ResourceCommentThreadResponseDto.fromEntity(thread, names);
+  }
+
+  private async namesForThreads(
+    manager: EntityManager,
+    namespaceId: string,
+    threads: ResourceCommentThread[],
+    content = '',
+  ) {
+    const ids = referencedMentionIds(content);
+    for (const thread of threads) {
+      if (thread.creatorId) ids.push(thread.creatorId);
+      for (const comment of thread.comments ?? []) {
+        if (comment.authorId) ids.push(comment.authorId);
+        ids.push(...referencedMentionIds(comment.content));
+      }
+    }
+    return resolveMemberDisplayNames(manager, namespaceId, ids);
   }
 
   // Builds the standard thread-not-found API exception.

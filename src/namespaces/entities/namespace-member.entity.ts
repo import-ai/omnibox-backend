@@ -30,6 +30,9 @@ export class NamespaceMember extends Base {
   @Column()
   rootResourceId: string;
 
+  @Column('text', { nullable: true })
+  displayNameSnapshot: string | null;
+
   @Column('varchar', { length: 64, nullable: true })
   nickname: string | null;
 }

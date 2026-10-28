@@ -39,3 +39,43 @@ export function sameStringSet(
   const right = [...current].sort();
   return left.every((value, index) => value === right[index]);
 }
+
+export function historicalMemberDisplayName(
+  memberships: Array<{
+    deletedAt?: Date | null;
+    displayNameSnapshot?: string | null;
+  }>,
+): string {
+  const deleted = memberships
+    .filter((membership) => membership.deletedAt)
+    .sort(
+      (left, right) =>
+        new Date(right.deletedAt ?? 0).getTime() -
+        new Date(left.deletedAt ?? 0).getTime(),
+    );
+  for (const membership of deleted) {
+    const snapshot = membership.displayNameSnapshot?.trim();
+    if (snapshot) {
+      return snapshot;
+    }
+  }
+  return '';
+}
+
+export function formerContributorLabel(input: {
+  historicalName?: string | null;
+  frozenLabel?: string | null;
+  username?: string | null;
+  email?: string | null;
+  userId?: string | null;
+}): string {
+  return (
+    input.historicalName?.trim() ||
+    input.frozenLabel?.trim() ||
+    contributorLabel({
+      username: input.username,
+      email: input.email,
+      userId: input.userId,
+    })
+  );
+}

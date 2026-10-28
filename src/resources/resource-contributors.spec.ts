@@ -2,6 +2,8 @@ import {
   contributorInitial,
   contributorLabel,
   contributorTone,
+  formerContributorLabel,
+  historicalMemberDisplayName,
   sameStringSet,
 } from './resource-contributors';
 
@@ -44,5 +46,38 @@ describe('sameStringSet', () => {
     expect(sameStringSet(undefined, ['b'])).toBe(true);
     expect(sameStringSet(['b', 'a'], ['a', 'b'])).toBe(true);
     expect(sameStringSet(['a'], ['a', 'b'])).toBe(false);
+  });
+});
+
+describe('formerContributorLabel', () => {
+  it('keeps a historical membership snapshot ahead of a later username', () => {
+    expect(
+      historicalMemberDisplayName([
+        {
+          deletedAt: new Date('2026-01-01T00:00:00Z'),
+          displayNameSnapshot: '旧名（old）',
+        },
+        {
+          deletedAt: new Date('2026-02-01T00:00:00Z'),
+          displayNameSnapshot: '离开时（left）',
+        },
+      ]),
+    ).toBe('离开时（left）');
+    expect(
+      formerContributorLabel({
+        historicalName: '离开时（left）',
+        username: 'renamed',
+        userId: 'user-1',
+      }),
+    ).toBe('离开时（left）');
+  });
+
+  it('uses this feature snapshot only when no historical membership name exists', () => {
+    expect(
+      formerContributorLabel({
+        frozenLabel: '冻结（frozen）',
+        username: 'renamed',
+      }),
+    ).toBe('冻结（frozen）');
   });
 });

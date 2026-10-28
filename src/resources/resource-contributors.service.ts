@@ -12,6 +12,8 @@ import {
   contributorInitial,
   contributorLabel,
   contributorTone,
+  formerContributorLabel,
+  historicalMemberDisplayName,
 } from './resource-contributors';
 
 export interface RecordResourceEdit {
@@ -121,20 +123,25 @@ export class ResourceContributorsService {
       }),
       this.memberRepository.find({
         where: { namespaceId, userId: In(ids) },
+        withDeleted: true,
       }),
       this.snapshotRepository.find({
         where: { namespaceId, userId: In(ids) },
       }),
     ]);
     const usersById = new Map(users.map((user) => [user.id, user]));
-    const membersById = new Map(
-      members.map((member) => [member.userId, member]),
-    );
+    const membershipsByUser = new Map<string, typeof members>();
+    for (const member of members) {
+      const rows = membershipsByUser.get(member.userId) ?? [];
+      rows.push(member);
+      membershipsByUser.set(member.userId, rows);
+    }
     const snapshotsById = new Map(
       snapshots.map((snapshot) => [snapshot.userId, snapshot]),
     );
     const toDto = (userId: string): ResourceContributorDto | null => {
-      const member = membersById.get(userId);
+      const memberships = membershipsByUser.get(userId) ?? [];
+      const member = memberships.find((row) => !row.deletedAt);
       const user = usersById.get(userId);
       const snapshot = snapshotsById.get(userId);
       const label = member
@@ -144,8 +151,9 @@ export class ResourceContributorsService {
             email: user?.email,
             userId,
           })
-        : snapshot?.label ||
-          contributorLabel({
+        : formerContributorLabel({
+            historicalName: historicalMemberDisplayName(memberships),
+            frozenLabel: snapshot?.label,
             username: user?.username,
             email: user?.email,
             userId,

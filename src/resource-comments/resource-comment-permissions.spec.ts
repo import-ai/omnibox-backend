@@ -1,3 +1,6 @@
+jest.mock('omniboxd/namespaces/member-display-names', () => ({
+  resolveMemberDisplayNames: jest.fn().mockResolvedValue({}),
+}));
 import { ForbiddenException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -19,7 +22,10 @@ import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
 
 import { ResourceComment } from './entities/resource-comment.entity';
 import { ResourceCommentAttachment } from './entities/resource-comment-attachment.entity';
-import { ResourceCommentThread } from './entities/resource-comment-thread.entity';
+import {
+  ResourceCommentThread,
+  ResourceCommentThreadType,
+} from './entities/resource-comment-thread.entity';
 import { ResourceCommentAttachmentsService } from './resource-comment-attachments.service';
 import { ResourceCommentsService } from './resource-comments.service';
 
@@ -251,6 +257,65 @@ describe('Resource comment write permissions', () => {
       expect(softDelete).not.toHaveBeenCalled();
     },
   );
+
+  describe.each([
+    ResourceCommentThreadType.INLINE,
+    ResourceCommentThreadType.DOCUMENT,
+  ])('%s actor permissions', (type) => {
+    const roles = [
+      { role: ResourcePermission.NO_ACCESS, writes: false, moderates: false },
+      { role: ResourcePermission.CAN_VIEW, writes: false, moderates: false },
+      { role: ResourcePermission.CAN_COMMENT, writes: true, moderates: false },
+      { role: ResourcePermission.CAN_EDIT, writes: true, moderates: true },
+      { role: ResourcePermission.FULL_ACCESS, writes: true, moderates: true },
+    ];
+    describe.each(roles)('$role', ({ role, writes, moderates }) => {
+      it.each([
+        { own: true, resolved: false },
+        { own: false, resolved: false },
+        { own: true, resolved: true },
+        { own: false, resolved: true },
+      ])(
+        'enforces actor access for own=$own resolved=$resolved',
+        async ({ own, resolved }) => {
+          permission = role;
+          thread.type = type;
+          thread.resolvedAt = resolved ? new Date() : null;
+          thread.creatorId = own ? 'author' : 'other';
+          comment.authorId = own ? 'author' : 'other';
+          for (const operation of operations) {
+            save.mockClear();
+            softDelete.mockClear();
+            const allowed =
+              writes && (own || (operation.name !== 'edit' && moderates));
+            if (allowed) {
+              await operation.run();
+              if (operation.name.startsWith('delete')) {
+                expect(softDelete).toHaveBeenCalledWith(
+                  ResourceComment,
+                  operation.name === 'delete thread'
+                    ? { threadId: 'thread' }
+                    : { id: 'comment', threadId: 'thread' },
+                );
+                expect(softDelete).toHaveBeenCalledWith(ResourceCommentThread, {
+                  id: 'thread',
+                });
+              } else {
+                expect(save).toHaveBeenCalled();
+              }
+            } else {
+              await expect(operation.run()).rejects.toMatchObject({
+                status: 403,
+              });
+              expect(save).not.toHaveBeenCalled();
+              expect(softDelete).not.toHaveBeenCalled();
+            }
+            thread.resolvedAt = resolved ? new Date() : null;
+          }
+        },
+      );
+    });
+  });
 
   it('persists edits and resolution after the author regains comment permission', async () => {
     permission = ResourcePermission.CAN_VIEW;

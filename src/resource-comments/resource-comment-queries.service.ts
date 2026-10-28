@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { resolveMemberDisplayNames } from 'omniboxd/namespaces/member-display-names';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { EntityManager, Repository } from 'typeorm';
@@ -11,7 +12,11 @@ import {
   ListResourceCommentThreadsResponseDto,
   ResourceCommentThreadResponseDto,
 } from './dto/resource-comment-response.dto';
-import { ResourceCommentThread } from './entities/resource-comment-thread.entity';
+import {
+  ResourceCommentThread,
+  ResourceCommentThreadType,
+} from './entities/resource-comment-thread.entity';
+import { referencedMentionIds, referencedMentionNames } from './mention-labels';
 import { ResourceCommentAnchorsService } from './resource-comment-anchors.service';
 @Injectable()
 export class ResourceCommentQueriesService {
@@ -30,6 +35,7 @@ export class ResourceCommentQueriesService {
   ): Promise<{
     content_hash: string;
     comment_threads: ResourceCommentThreadResponseDto[];
+    mention_display_names?: Record<string, string>;
   }> {
     const threads = await this.threadRepository
       .createQueryBuilder('thread')
@@ -39,15 +45,25 @@ export class ResourceCommentQueriesService {
       .leftJoinAndSelect('comment.attachments', 'attachment')
       .where('thread.namespace_id = :namespaceId', { namespaceId })
       .andWhere('thread.resource_id = :resourceId', { resourceId })
+      .andWhere('thread.type = :type', {
+        type: ResourceCommentThreadType.INLINE,
+      })
       .orderBy('thread.created_at', 'ASC')
       .addOrderBy('comment.created_at', 'ASC')
       .addOrderBy('attachment.created_at', 'ASC')
       .getMany();
 
+    const names = await this.namesForThreads(
+      this.threadRepository.manager,
+      namespaceId,
+      threads,
+      content,
+    );
     return {
+      mention_display_names: referencedMentionNames(content, names),
       content_hash: this.anchorsService.contentHash(content),
       comment_threads: threads.map((thread) =>
-        ResourceCommentThreadResponseDto.fromEntity(thread),
+        ResourceCommentThreadResponseDto.fromEntity(thread, names),
       ),
     };
   }
@@ -75,6 +91,18 @@ export class ResourceCommentQueriesService {
       .createQueryBuilder('thread')
       .where('thread.namespace_id = :namespaceId', { namespaceId })
       .andWhere('thread.resource_id = :resourceId', { resourceId });
+    if (query.view === 'sidebar') {
+      pageBuilder.andWhere(
+        "(thread.type = 'inline' OR (thread.type = 'document' AND thread.resolved_at IS NOT NULL))",
+      );
+    } else {
+      pageBuilder.andWhere('thread.type = :type', {
+        type:
+          query.view === 'document'
+            ? ResourceCommentThreadType.DOCUMENT
+            : ResourceCommentThreadType.INLINE,
+      });
+    }
     if (query.resolved !== undefined) {
       pageBuilder.andWhere(
         query.resolved === 'true'
@@ -82,9 +110,18 @@ export class ResourceCommentQueriesService {
           : 'thread.resolved_at IS NULL',
       );
     }
+    const direction = query.view === undefined ? 'DESC' : 'ASC';
+    if (query.view === 'sidebar') {
+      pageBuilder.orderBy(
+        "CASE WHEN thread.type = 'inline' THEN 0 ELSE 1 END",
+        'ASC',
+      );
+      pageBuilder.addOrderBy('thread.created_at', direction);
+    } else {
+      pageBuilder.orderBy('thread.created_at', direction);
+    }
+    pageBuilder.addOrderBy('thread.id', direction);
     const [page, total] = await pageBuilder
-      .orderBy('thread.created_at', 'DESC')
-      .addOrderBy('thread.id', 'DESC')
       .skip(query.offset)
       .take(query.limit)
       .getManyAndCount();
@@ -101,21 +138,71 @@ export class ResourceCommentQueriesService {
             .where('thread.id IN (:...threadIds)', {
               threadIds: page.map((thread) => thread.id),
             })
-            .orderBy('thread.created_at', 'DESC')
-            .addOrderBy('thread.id', 'DESC')
-            .addOrderBy('comment.created_at', 'ASC')
+            .orderBy('comment.created_at', 'ASC')
+            .addOrderBy('comment.id', 'ASC')
             .addOrderBy('attachment.created_at', 'ASC')
             .getMany();
 
+    // Hydration may produce a different order after joining comments; retain
+    // the exact page order chosen before the joins.
+    const pageOrder = new Map(page.map((thread, index) => [thread.id, index]));
+    threads.sort(
+      (left, right) => pageOrder.get(left.id)! - pageOrder.get(right.id)!,
+    );
+    const names = await this.namesForThreads(
+      this.threadRepository.manager,
+      namespaceId,
+      threads,
+    );
     return {
       items: threads.map((thread) =>
-        ResourceCommentThreadResponseDto.fromEntity(thread),
+        ResourceCommentThreadResponseDto.fromEntity(thread, names),
       ),
       total,
       offset: query.offset,
       limit: query.limit,
       has_more: query.offset + threads.length < total,
     };
+  }
+
+  // Reads one scoped thread independently of the current list page.
+  async getThread(
+    namespaceId: string,
+    resourceId: string,
+    threadId: string,
+    userId: string,
+    enforcePermission = true,
+  ): Promise<ResourceCommentThreadResponseDto> {
+    if (enforcePermission) {
+      await this.permissionsService.userHasPermissionOrFail(
+        namespaceId,
+        resourceId,
+        userId,
+        ResourcePermission.CAN_VIEW,
+      );
+    }
+    const thread = await this.threadRepository
+      .createQueryBuilder('thread')
+      .leftJoinAndSelect('thread.creator', 'creator')
+      .leftJoinAndSelect('thread.comments', 'comment')
+      .leftJoinAndSelect('comment.author', 'author')
+      .leftJoinAndSelect('comment.attachments', 'attachment')
+      .where('thread.id = :threadId', { threadId })
+      .andWhere('thread.namespace_id = :namespaceId', { namespaceId })
+      .andWhere('thread.resource_id = :resourceId', { resourceId })
+      .orderBy('comment.created_at', 'ASC')
+      .addOrderBy('comment.id', 'ASC')
+      .addOrderBy('attachment.created_at', 'ASC')
+      .getOne();
+    if (!thread) {
+      throw this.threadNotFoundException();
+    }
+    const names = await this.namesForThreads(
+      this.threadRepository.manager,
+      namespaceId,
+      [thread],
+    );
+    return ResourceCommentThreadResponseDto.fromEntity(thread, names);
   }
 
   // Reloads a thread with its creator, comments, and comment authors.
@@ -137,7 +224,27 @@ export class ResourceCommentQueriesService {
     if (!thread) {
       throw this.threadNotFoundException();
     }
-    return ResourceCommentThreadResponseDto.fromEntity(thread);
+    const names = await this.namesForThreads(manager, thread.namespaceId, [
+      thread,
+    ]);
+    return ResourceCommentThreadResponseDto.fromEntity(thread, names);
+  }
+
+  private async namesForThreads(
+    manager: EntityManager,
+    namespaceId: string,
+    threads: ResourceCommentThread[],
+    content = '',
+  ) {
+    const ids = referencedMentionIds(content);
+    for (const thread of threads) {
+      if (thread.creatorId) ids.push(thread.creatorId);
+      for (const comment of thread.comments ?? []) {
+        if (comment.authorId) ids.push(comment.authorId);
+        ids.push(...referencedMentionIds(comment.content));
+      }
+    }
+    return resolveMemberDisplayNames(manager, namespaceId, ids);
   }
 
   // Builds the standard thread-not-found API exception.

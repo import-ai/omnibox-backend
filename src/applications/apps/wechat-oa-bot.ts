@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
-import { CreateApplicationsDto } from 'omniboxd/applications/applications.dto';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { BotBase } from 'omniboxd/applications/apps/bot-base';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -63,18 +62,14 @@ export class WechatOaBot extends BotBase {
     return rest;
   }
 
-  async getAttrs(
-    namespaceId: string,
-    userId: string,
-    createDto: CreateApplicationsDto,
-  ): Promise<
+  async getAttrs(): Promise<
     {
       key: string;
       qrcode_content: string;
       qrcode_expires_at: string;
     } & Record<string, any>
   > {
-    const attrs = await super.getAttrs(namespaceId, userId, createDto);
+    const attrs = await super.getAttrs();
 
     try {
       if (!this.obbotBaseUrl) {

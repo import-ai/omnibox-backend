@@ -11,10 +11,7 @@ import { WechatOaBot } from 'omniboxd/applications/apps/wechat-oa-bot';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Repository } from 'typeorm';
 
-import {
-  ApplicationsResponseDto,
-  CreateApplicationsDto,
-} from './applications.dto';
+import { ApplicationsResponseDto } from './applications.dto';
 import { Applications } from './applications.entity';
 
 export interface FindAllOptions {
@@ -132,7 +129,6 @@ export class ApplicationsService {
     appId: string,
     namespaceId: string,
     userId: string,
-    createDto: CreateApplicationsDto,
   ): Promise<ApplicationsResponseDto> {
     if (!this.apps[appId]) {
       const message = this.i18n.t('application.errors.appNotFound', {
@@ -141,17 +137,13 @@ export class ApplicationsService {
       throw new AppException(message, 'APP_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
-    const attrs = await this.apps[appId].getAttrs(
-      namespaceId,
-      userId,
-      createDto,
-    );
+    const attrs = await this.apps[appId].getAttrs(namespaceId, userId);
 
     const applications = this.applicationsRepository.create({
       namespaceId,
       userId,
       appId,
-      apiKeyId: createDto.api_key_id || null,
+      apiKeyId: null,
       attrs,
     });
 

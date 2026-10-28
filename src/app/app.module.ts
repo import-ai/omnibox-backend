@@ -125,6 +125,7 @@ import { ConversationShareImages1792487655534 } from 'omniboxd/migrations/179248
 import { ConversationShareResourceImages1792496161554 } from 'omniboxd/migrations/1792496161554-conversation-share-resource-images';
 import { AddDocumentComments1792575770997 } from 'omniboxd/migrations/1792575770997-add-document-comments';
 import { AddMemberDisplayNameSnapshot1793012728794 } from 'omniboxd/migrations/1793012728794-add-member-display-name-snapshot';
+import { AddApplicationBoundAt1793186335736 } from 'omniboxd/migrations/1793186335736-add-application-bound-at';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -390,6 +391,7 @@ export class AppModule implements NestModule {
               ConversationShareResourceImages1792496161554,
               AddDocumentComments1792575770997,
               AddMemberDisplayNameSnapshot1793012728794,
+              AddApplicationBoundAt1793186335736,
               ...extraMigrations,
             ],
             migrationsRun: true,

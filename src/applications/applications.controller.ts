@@ -1,17 +1,8 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
 import {
   ApplicationsResponseDto,
-  CreateApplicationsDto,
   FindAllApplicationsDto,
 } from './applications.dto';
 import { ApplicationsService } from './applications.service';
@@ -46,14 +37,8 @@ export class ApplicationsController {
     @Param('appId') appId: string,
     @Param('namespaceId') namespaceId: string,
     @UserId() userId: string,
-    @Body() createDto: CreateApplicationsDto,
   ): Promise<ApplicationsResponseDto> {
-    return await this.applicationsService.create(
-      appId,
-      namespaceId,
-      userId,
-      createDto,
-    );
+    return await this.applicationsService.create(appId, namespaceId, userId);
   }
 
   @Delete(':id')

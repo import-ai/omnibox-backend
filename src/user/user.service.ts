@@ -17,6 +17,7 @@ import {
   NamespaceMember,
   NamespaceRole,
 } from 'omniboxd/namespaces/entities/namespace-member.entity';
+import { freezeMemberDisplayNames } from 'omniboxd/namespaces/member-display-names';
 import { ContactRateLimiter } from 'omniboxd/rate-limit/contact-rate-limiter.service';
 import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import { Share } from 'omniboxd/shares/entities/share.entity';
@@ -34,7 +35,14 @@ import { isNameBlocked } from 'omniboxd/utils/blocked-names';
 import { filterEmoji } from 'omniboxd/utils/emoji';
 import generateId from 'omniboxd/utils/generate-id';
 import { appendTokenToUrl } from 'omniboxd/utils/url-utils';
-import { DataSource, EntityManager, In, Like, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  Like,
+  Repository,
+} from 'typeorm';
 
 interface EmailVerificationState {
   code: string;
@@ -681,8 +689,9 @@ export class UserService {
       );
     }
     const existUser = await this.find(id);
+    const changes: Partial<User> = {};
     if (account.password) {
-      existUser.password = await bcrypt.hash(account.password, 10);
+      changes.password = await bcrypt.hash(account.password, 10);
     }
     if (account.username && existUser.username !== account.username) {
       // Check if the new username is already taken by another user
@@ -699,7 +708,7 @@ export class UserService {
         );
       }
 
-      existUser.username = account.username;
+      changes.username = account.username;
     }
     if (account.email && existUser.email !== account.email) {
       if (!account.code) {
@@ -734,7 +743,7 @@ export class UserService {
 
       // Store old email before updating
       const oldEmail = existUser.email;
-      existUser.email = account.email;
+      changes.email = account.email;
 
       // Send notification to old email after successful update (only if old email exists)
       // Users from WeChat/OAuth signup may not have an email initially
@@ -757,18 +766,29 @@ export class UserService {
           });
       }
     }
-    return await this.userRepository.update(id, existUser);
+    if (!Object.keys(changes).length)
+      return { affected: 0, raw: [], generatedMaps: [] };
+    return await this.userRepository.update(
+      { id, deletedAt: IsNull() },
+      changes,
+    );
   }
 
   async updatePassword(id: string, password: string) {
-    const account = await this.find(id);
-    account.password = await bcrypt.hash(password, 10);
-
-    return await this.userRepository.update(id, account);
+    await this.find(id);
+    const hashedPassword = await bcrypt.hash(password, 10);
+    return await this.userRepository.update(
+      { id, deletedAt: IsNull() },
+      { password: hashedPassword },
+    );
   }
 
   async remove(id: string) {
-    return await this.userRepository.softDelete(id);
+    return await this.dataSource.transaction(async (manager) => {
+      await freezeMemberDisplayNames(manager, id);
+      await this.resourceContributorsService.freezeUser(id, manager);
+      return manager.getRepository(User).softDelete(id);
+    });
   }
 
   async initiateAccountDeletion(
@@ -902,6 +922,7 @@ export class UserService {
 
     // 3. Execute cleanup in transaction
     await this.dataSource.transaction(async (manager) => {
+      await freezeMemberDisplayNames(manager, deletionState.userId);
       await this.resourceContributorsService.freezeUser(
         deletionState.userId,
         manager,
@@ -949,13 +970,17 @@ export class UserService {
         await namespaceMemberRepo.softDelete({
           namespaceId,
           userId: deletionState.userId,
+          deletedAt: IsNull(),
         });
         // Soft delete the namespace itself
         await namespaceRepo.softDelete(namespaceId);
       }
 
       // Soft delete user's membership in all other namespaces (multi-member namespaces)
-      await namespaceMemberRepo.softDelete({ userId: deletionState.userId });
+      await namespaceMemberRepo.softDelete({
+        userId: deletionState.userId,
+        deletedAt: IsNull(),
+      });
 
       // Soft delete user
       await manager.getRepository(User).softDelete(deletionState.userId);

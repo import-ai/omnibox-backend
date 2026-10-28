@@ -22,6 +22,7 @@ export class SharedResourceDto {
   created_at: string;
   updated_at: string;
   content_hash?: string;
+  mention_display_names?: Record<string, string>;
   comment_threads?: ResourceCommentThreadResponseDto[];
   creator: ResourceContributorDto | null;
   collaborators: ResourceContributorDto[];

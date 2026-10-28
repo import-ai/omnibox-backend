@@ -25,6 +25,7 @@ export class ResourceDto {
   content: string;
   version: number;
   content_hash: string;
+  mention_display_names?: Record<string, string>;
   comment_threads: ResourceCommentThreadResponseDto[];
   tags: TagDto[];
   attrs: Record<string, any>;

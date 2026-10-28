@@ -1,6 +1,7 @@
 {
   "errors": {
-    "unsupportedResourceType": "Comments are only supported on document resources",
+    "unsupportedResourceType": "Comments are not supported on folders",
+    "documentRepliesUnsupported": "Replies to document comments are not supported",
     "contentConflict": "The document changed before the comment could be saved",
     "invalidAnchor": "The comment anchor is invalid",
     "anchorOverlap": "The selected text overlaps an existing comment thread",

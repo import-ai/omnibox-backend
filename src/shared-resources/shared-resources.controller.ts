@@ -75,6 +75,26 @@ export class SharedResourcesController {
 
   @CookieAuth({ onAuthFail: 'continue' })
   @ValidateShare({ requireResources: true })
+  @Get(':resourceId/comment-threads/:threadId')
+  async getCommentThread(
+    @ValidatedShare() share: Share,
+    @Param('resourceId') resourceId: string,
+    @Param('threadId') threadId: string,
+    @UserId({ optional: true }) userId?: string,
+  ) {
+    await this.sharedResourcesService.getAndValidateResource(share, resourceId);
+    const thread = await this.resourceCommentQueriesService.getThread(
+      share.namespaceId,
+      resourceId,
+      threadId,
+      userId ?? '',
+      false,
+    );
+    return toSharedCommentThreads([thread], share.id, resourceId)[0];
+  }
+
+  @CookieAuth({ onAuthFail: 'continue' })
+  @ValidateShare({ requireResources: true })
   @Get(':resourceId/comment-attachments/:attachmentId')
   async downloadCommentAttachment(
     @ValidatedShare() share: Share,

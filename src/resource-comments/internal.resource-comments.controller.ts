@@ -26,4 +26,22 @@ export class InternalResourceCommentsController {
       query,
     );
   }
+
+  @Public()
+  @Get(
+    'namespaces/:namespaceId/resources/:resourceId/comment-threads/:threadId',
+  )
+  async getThread(
+    @HeaderUserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('resourceId') resourceId: string,
+    @Param('threadId') threadId: string,
+  ) {
+    return await this.resourceCommentQueriesService.getThread(
+      namespaceId,
+      resourceId,
+      threadId,
+      userId,
+    );
+  }
 }

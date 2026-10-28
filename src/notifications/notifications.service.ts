@@ -1,4 +1,5 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -42,13 +43,19 @@ interface ListNotificationsOptions {
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+  private readonly proUrl: string | undefined;
+
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
     @InjectRepository(NotificationRead)
     private readonly notificationReadRepository: Repository<NotificationRead>,
     private readonly i18n: I18nService,
-  ) {}
+    configService: ConfigService,
+  ) {
+    this.proUrl = configService.get<string>('OBB_PRO_URL');
+  }
 
   /**
    * Write the notification into the notification database
@@ -96,7 +103,9 @@ export class NotificationsService {
     });
 
     try {
-      return await this.notificationRepository.save(notification);
+      const saved = await this.notificationRepository.save(notification);
+      await this.pushSystemNotification(saved);
+      return saved;
     } catch (error) {
       if (
         error instanceof QueryFailedError &&
@@ -108,6 +117,42 @@ export class NotificationsService {
         });
       }
       throw error;
+    }
+  }
+
+  private async pushSystemNotification(notification: Notification) {
+    if (!this.proUrl) {
+      return;
+    }
+
+    const content = (notification.content || notification.title)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120);
+    try {
+      const response = await fetch(
+        `${this.proUrl}/internal/api/v1/notification/broadcast`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: notification.title,
+            content: content || notification.title,
+            extras: {
+              notification_id: notification.id,
+              notification_type: 'system',
+              tags: notification.tags,
+            },
+          }),
+        },
+      );
+      if (!response.ok) {
+        this.logger.error(
+          `system notification push failed: ${response.status}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('system notification push failed', error);
     }
   }
 

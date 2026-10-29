@@ -359,13 +359,25 @@ export class NotificationsService {
                 'notification.user_id IS NULL AND notification.namespace_id = :namespaceId',
                 { namespaceId },
               )
-              // A personal notice stays visible in every namespace the user is
-              // browsing. Activity rewards record the namespace that received
-              // the entitlement, which may not be the one currently open.
-              .orWhere('notification.user_id = :userId', { userId });
+              .orWhere(
+                'notification.user_id = :userId AND notification.namespace_id IS NULL',
+                { userId },
+              )
+              .orWhere(
+                'notification.user_id = :userId AND notification.namespace_id = :namespaceId',
+                { userId, namespaceId },
+              );
           } else {
-            visibility.orWhere('notification.user_id = :userId', { userId });
+            visibility.orWhere(
+              'notification.user_id = :userId AND notification.namespace_id IS NULL',
+              { userId },
+            );
           }
+          // Rewards remain personal, but can be read outside their grant namespace.
+          visibility.orWhere(
+            'notification.user_id = :userId AND :rewardTag = ANY(notification.tags)',
+            { userId, rewardTag: 'activity_reward' },
+          );
         }),
       )
       .andWhere('notification.created_at >= :retainedAfter', {

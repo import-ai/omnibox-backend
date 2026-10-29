@@ -4,6 +4,7 @@ import type { IncomingHttpHeaders } from 'node:http';
 export const MINIMUM_APP_VERSIONS = {
   conversationImages: { android: '0.1.50', ios: '0.1.50' },
   captcha: { android: '0.1.52', ios: '0.1.52' },
+  wechatOaInviteTask: { android: '0.1.55', ios: '0.1.55' },
 } as const;
 
 export function supportsClientFeature(

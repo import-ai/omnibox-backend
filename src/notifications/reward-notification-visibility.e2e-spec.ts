@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { HttpStatus } from '@nestjs/common';
 import { TestClient } from 'test/test-client';
 
@@ -6,6 +8,7 @@ describe('Reward notification namespace visibility (e2e)', () => {
   let otherClient: TestClient;
   let namespaceA: string;
   let namespaceB: string;
+  const fixtureTag = `visibility-${randomUUID()}`;
   const notices: Record<string, string> = {};
 
   beforeAll(async () => {
@@ -40,7 +43,12 @@ describe('Reward notification namespace visibility (e2e)', () => {
       const response = await client
         .request()
         .post('/internal/api/v1/notifications')
-        .send({ ...receiver, title: key, type: 'activity', tags })
+        .send({
+          ...receiver,
+          title: key,
+          type: 'activity',
+          tags: [...tags, fixtureTag],
+        })
         .expect(HttpStatus.CREATED);
       notices[key] = response.body.id;
     }
@@ -53,14 +61,14 @@ describe('Reward notification namespace visibility (e2e)', () => {
   it('only adds own rewards to the existing namespace and personal visibility', async () => {
     for (const scope of ['', `&namespaceId=${namespaceB}`]) {
       const response = await client
-        .get(`/api/v1/notifications?status=all${scope}`)
+        .get(`/api/v1/notifications?status=all&tags=${fixtureTag}${scope}`)
         .expect(HttpStatus.OK);
       expect(
         response.body.list.map((item: { id: string }) => item.id).sort(),
       ).toEqual([notices.reward, notices.personal].sort());
     }
     const inOriginalNamespace = await client
-      .get(`/api/v1/notifications?namespaceId=${namespaceA}`)
+      .get(`/api/v1/notifications?namespaceId=${namespaceA}&tags=${fixtureTag}`)
       .expect(HttpStatus.OK);
     expect(
       inOriginalNamespace.body.list

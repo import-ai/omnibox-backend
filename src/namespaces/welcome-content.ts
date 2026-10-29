@@ -15,7 +15,7 @@ const WELCOME_CONTENT_ZH = `**小黑 OmniBox —— 随时随地，万物变成�
 
 [[text-color color="var(--tt-color-text)"]++下载移动端 App，从其他应用分享到小黑++[/text-color]](https://www.omnibox.pro/docs/zh-cn/download#mobile-app)
 
-[[text-color color="var(--tt-color-text)"]++绑定微信助手，保存其中的内容++[/text-color]](https://www.omnibox.pro/docs/zh-cn/applications/wechat-assistant)
+[[text-color color="var(--tt-color-text)"]++绑定微信收藏助手，保存其中的内容++[/text-color]](https://www.omnibox.pro/docs/zh-cn/applications/wechat-assistant)
 
 [[text-color color="var(--tt-color-text)"]++创建 RSS 订阅文件夹，持续接收关注的内容++[/text-color]](https://www.omnibox.pro/docs/zh-cn/knowledge-base/rss-folders)
 
@@ -61,7 +61,7 @@ Save web pages, files, images, voice notes, videos, and messages through the bro
 
 [Download the mobile app and share content from other apps](https://www.omnibox.pro/docs/download#mobile-app)
 
-[Connect the WeChat Assistant to save content from your chats](https://www.omnibox.pro/docs/applications/wechat-assistant)
+[Connect the WeChat Collection Assistant to save content from your chats](https://www.omnibox.pro/docs/applications/wechat-assistant)
 
 [Create an RSS folder to automatically collect new content from your favorite sources](https://www.omnibox.pro/docs/knowledge-base/rss-folders)
 

@@ -322,6 +322,7 @@ export class StreamService implements OnModuleDestroy {
     chatOnly = false,
     stream?: AgentStream,
   ): (data: string, context: HandlerContext) => Promise<void> {
+    let firstTokenRecorded = false;
     const handle = async (
       data: string,
       context: HandlerContext,
@@ -373,6 +374,18 @@ export class StreamService implements OnModuleDestroy {
             'MESSAGE_ID_NOT_SET',
             HttpStatus.INTERNAL_SERVER_ERROR,
           );
+        }
+        if (
+          !firstTokenRecorded &&
+          context.message?.role === OpenAIMessageRole.ASSISTANT &&
+          (chunk.message.content || chunk.message.reasoning_content)
+        ) {
+          trace.getActiveSpan()?.addEvent('agent.first_token', {
+            'agent.token.kind': chunk.message.reasoning_content
+              ? 'reasoning'
+              : 'content',
+          });
+          firstTokenRecorded = true;
         }
         const message: Message = await this.messagesService.updateDelta(
           context.messageId,

@@ -95,3 +95,25 @@ export function rewriteMentionLabels(
   );
   return restoreCodeBlocks(rewritten, slots);
 }
+
+export function referencedMentionIds(markdown: string): string[] {
+  const { text } = holdCodeBlocks(markdown || '');
+  const ids = new Set<string>();
+  for (const match of text.matchAll(MENTION_SHORTCODE)) {
+    const type = attribute(match[1], 'type');
+    const id = attribute(match[1], 'id');
+    if (id && (!type || type === 'user')) ids.add(id);
+  }
+  return [...ids];
+}
+
+export function referencedMentionNames(
+  content: string,
+  names: Record<string, string>,
+) {
+  return Object.fromEntries(
+    referencedMentionIds(content)
+      .filter((id) => names[id])
+      .map((id) => [id, names[id]]),
+  );
+}

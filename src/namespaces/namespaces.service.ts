@@ -15,6 +15,7 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import {
   hasExplicitSortOptions,
   ResourceSortOptions,
@@ -38,6 +39,10 @@ import {
   ROLE_LEVEL,
 } from './entities/namespace-member.entity';
 import { NamespaceMemberNote } from './entities/namespace-member-note.entity';
+import {
+  freezeMemberDisplayNames,
+  lockMemberUser,
+} from './member-display-names';
 import { WELCOME_CONTENT } from './welcome-content';
 
 @Injectable()
@@ -65,6 +70,7 @@ export class NamespacesService {
     private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
     configService: ConfigService,
+    private readonly resourceContributorsService: ResourceContributorsService,
   ) {
     this.proUrl = configService.get<string>('OBB_PRO_URL');
   }
@@ -394,6 +400,11 @@ export class NamespacesService {
       });
 
       if (member) {
+        await freezeMemberDisplayNames(
+          entityManager,
+          member.userId,
+          namespaceId,
+        );
         // Run destructor to clean up member's data in this namespace
         await this.destructor(namespaceId, member.userId, tx);
 
@@ -412,7 +423,15 @@ export class NamespacesService {
           namespaceId,
           userId: member.userId,
         });
-        await entityManager.softDelete(NamespaceMember, { id: member.id });
+        await this.resourceContributorsService.freezeMember(
+          namespaceId,
+          member.userId,
+          entityManager,
+        );
+        await entityManager.softDelete(NamespaceMember, {
+          id: member.id,
+          deletedAt: IsNull(),
+        });
 
         // Delete teamspace root resource
         const namespace = await this.getNamespace(namespaceId, entityManager);
@@ -467,6 +486,7 @@ export class NamespacesService {
   ) {
     const entityManager = tx.entityManager;
 
+    await lockMemberUser(entityManager, userId);
     const count = await entityManager.count(NamespaceMember, {
       where: { namespaceId, userId },
     });
@@ -500,6 +520,11 @@ export class NamespacesService {
         role,
         rootResourceId: privateRootId,
       }),
+    );
+    await this.resourceContributorsService.clearSnapshot(
+      namespaceId,
+      userId,
+      entityManager,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(
       namespaceId,
@@ -743,6 +768,7 @@ export class NamespacesService {
 
     await transaction(this.dataSource.manager, async (tx) => {
       const entityManager = tx.entityManager;
+      await lockMemberUser(entityManager, targetUserId);
       const currentUserMember = await entityManager.findOne(NamespaceMember, {
         where: { namespaceId, userId: currentUserId, deletedAt: IsNull() },
       });
@@ -756,6 +782,7 @@ export class NamespacesService {
 
       const targetMember = await entityManager.findOne(NamespaceMember, {
         where: { namespaceId, userId: targetUserId, deletedAt: IsNull() },
+        lock: { mode: 'pessimistic_write' },
       });
       if (!targetMember) {
         throw new AppException(
@@ -775,7 +802,7 @@ export class NamespacesService {
         }
         await entityManager.update(
           NamespaceMember,
-          { id: targetMember.id },
+          { id: targetMember.id, deletedAt: IsNull() },
           { nickname },
         );
       }
@@ -918,6 +945,7 @@ export class NamespacesService {
     await transaction(this.dataSource.manager, async (tx) => {
       const entityManager = tx.entityManager;
 
+      await lockMemberUser(entityManager, userId);
       const isSelfRemoval = userId === currentUserId;
 
       const member = await entityManager.findOne(NamespaceMember, {
@@ -999,6 +1027,8 @@ export class NamespacesService {
         }
       }
 
+      await freezeMemberDisplayNames(entityManager, userId, namespaceId);
+
       // Run destructor to clean up user's data in this namespace
       await this.destructor(namespaceId, userId, tx);
 
@@ -1025,7 +1055,15 @@ export class NamespacesService {
         namespaceId,
         targetUserId: userId,
       });
-      await entityManager.softDelete(NamespaceMember, { id: member.id });
+      await this.resourceContributorsService.freezeMember(
+        namespaceId,
+        userId,
+        entityManager,
+      );
+      await entityManager.softDelete(NamespaceMember, {
+        id: member.id,
+        deletedAt: IsNull(),
+      });
 
       // Admin removal validation
       if (!isSelfRemoval) {

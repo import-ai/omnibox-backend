@@ -1,5 +1,6 @@
 import { BreadcrumbItemDto } from 'omniboxd/namespace-resources/dto/breadcrumb-item.dto';
 import { ResourceCommentThreadResponseDto } from 'omniboxd/resource-comments/dto/resource-comment-response.dto';
+import { ResourceContributorDto } from 'omniboxd/resources/dto/resource-contributor.dto';
 import {
   isReadOnlyResourceType,
   Resource,
@@ -21,7 +22,10 @@ export class SharedResourceDto {
   created_at: string;
   updated_at: string;
   content_hash?: string;
+  mention_display_names?: Record<string, string>;
   comment_threads?: ResourceCommentThreadResponseDto[];
+  creator: ResourceContributorDto | null;
+  collaborators: ResourceContributorDto[];
 
   static fromEntity(
     resource: Resource,
@@ -39,6 +43,8 @@ export class SharedResourceDto {
     dto.read_only = isReadOnlyResourceType(resource.resourceType);
     dto.created_at = resource.createdAt.toISOString();
     dto.updated_at = resource.updatedAt.toISOString();
+    dto.creator = null;
+    dto.collaborators = [];
     return dto;
   }
 }

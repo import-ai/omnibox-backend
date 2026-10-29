@@ -19,6 +19,7 @@ import { isOptional } from 'omniboxd/utils/is-empty';
 import {
   generateUniqueResourceName,
   sanitizeResourceName,
+  UniqueResourceNameExhaustedError,
 } from 'omniboxd/utils/sanitize-resource-name';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import {
@@ -39,6 +40,8 @@ import {
   Resource,
   ResourceType,
 } from './entities/resource.entity';
+import { sameStringSet } from './resource-contributors';
+import { ResourceContributorsService } from './resource-contributors.service';
 import { ResourceRevisionService } from './resource-revision.service';
 
 const TASK_PRIORITY = 5;
@@ -56,6 +59,7 @@ export class ResourcesService {
     private readonly storageUsagesService: StorageUsagesService,
     private readonly tagService: TagService,
     private readonly resourceRevisionService: ResourceRevisionService,
+    private readonly resourceContributorsService: ResourceContributorsService,
   ) {}
 
   private validateResourceName(
@@ -254,7 +258,19 @@ export class ResourcesService {
       );
     };
 
-    return generateUniqueResourceName(name, isNameExists);
+    try {
+      return await generateUniqueResourceName(name, isNameExists);
+    } catch (error) {
+      if (error instanceof UniqueResourceNameExhaustedError) {
+        const message = this.i18n.t('resource.errors.resourceNameConflict');
+        throw new AppException(
+          message,
+          'RESOURCE_NAME_CONFLICT',
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw error;
+    }
   }
 
   async getParentResourcesOrFail(
@@ -911,6 +927,11 @@ export class ResourcesService {
 
     const contentChanged =
       props.content !== undefined && props.content !== oldResource.content;
+    const explicitNameChanged =
+      props.name !== undefined &&
+      props.name !== oldResource.name &&
+      resolvedName !== oldResource.name;
+    const tagsChanged = !sameStringSet(props.tagIds, oldResource.tagIds ?? []);
     const nameChanged =
       resolvedName !== undefined && resolvedName !== oldResource.name;
     const trackRevision =
@@ -983,6 +1004,18 @@ export class ResourcesService {
         tx,
       );
     }
+
+    await this.resourceContributorsService.recordEdit(entityManager, {
+      namespaceId,
+      resourceId,
+      resourceType: oldResource.resourceType,
+      creatorUserId: oldResource.userId,
+      actorUserId: userId,
+      parentId: resource.parentId,
+      explicitNameChanged,
+      contentChanged,
+      tagsChanged,
+    });
   }
 
   async createResource(

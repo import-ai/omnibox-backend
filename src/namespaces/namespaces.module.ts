@@ -12,6 +12,7 @@ import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.modu
 import { OpenAPIQuotaModule } from 'omniboxd/open-api/open-api-quota.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
+import { ResourceContributorsModule } from 'omniboxd/resources/resource-contributors.module';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { UserModule } from 'omniboxd/user/user.module';
@@ -43,6 +44,7 @@ import { NamespaceOwnerInterceptor } from './interceptors/namespace-owner.interc
     OpenAPIQuotaModule,
     NamespaceResourcesModule,
     ResourcesModule,
+    ResourceContributorsModule,
     PermissionsModule,
     TasksModule,
     TypeOrmModule.forFeature([Resource]),

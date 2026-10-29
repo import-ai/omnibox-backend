@@ -1,6 +1,7 @@
 import { Expose } from 'class-transformer';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceCommentThreadResponseDto } from 'omniboxd/resource-comments/dto/resource-comment-response.dto';
+import { ResourceContributorDto } from 'omniboxd/resources/dto/resource-contributor.dto';
 import {
   isReadOnlyResourceType,
   Resource,
@@ -24,6 +25,7 @@ export class ResourceDto {
   content: string;
   version: number;
   content_hash: string;
+  mention_display_names?: Record<string, string>;
   comment_threads: ResourceCommentThreadResponseDto[];
   tags: TagDto[];
   attrs: Record<string, any>;
@@ -38,6 +40,8 @@ export class ResourceDto {
   readOnly: boolean;
   created_at: string;
   updated_at: string;
+  creator: ResourceContributorDto | null;
+  collaborators: ResourceContributorDto[];
 
   static fromEntity(
     resource: Resource,
@@ -63,6 +67,8 @@ export class ResourceDto {
     dto.readOnly = isReadOnlyResourceType(resource.resourceType);
     dto.created_at = resource.createdAt.toISOString();
     dto.updated_at = resource.updatedAt.toISOString();
+    dto.creator = null;
+    dto.collaborators = [];
     return dto;
   }
 }

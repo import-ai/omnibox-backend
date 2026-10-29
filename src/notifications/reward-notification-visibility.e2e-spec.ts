@@ -110,7 +110,7 @@ describe('Reward notification namespace visibility (e2e)', () => {
     await client
       .post(`/api/v1/notifications/unread/clear?namespaceId=${namespaceB}`)
       .send({ status: 'unread' })
-      .expect(HttpStatus.OK);
+      .expect(HttpStatus.CREATED);
     const original = await client
       .get(
         `/api/v1/notifications/${notices.ordinary}?namespaceId=${namespaceA}`,

@@ -359,19 +359,12 @@ export class NotificationsService {
                 'notification.user_id IS NULL AND notification.namespace_id = :namespaceId',
                 { namespaceId },
               )
-              .orWhere(
-                'notification.user_id = :userId AND notification.namespace_id IS NULL',
-                { userId },
-              )
-              .orWhere(
-                'notification.user_id = :userId AND notification.namespace_id = :namespaceId',
-                { userId, namespaceId },
-              );
+              // A personal notice stays visible in every namespace the user is
+              // browsing. Activity rewards record the namespace that received
+              // the entitlement, which may not be the one currently open.
+              .orWhere('notification.user_id = :userId', { userId });
           } else {
-            visibility.orWhere(
-              'notification.user_id = :userId AND notification.namespace_id IS NULL',
-              { userId },
-            );
+            visibility.orWhere('notification.user_id = :userId', { userId });
           }
         }),
       )

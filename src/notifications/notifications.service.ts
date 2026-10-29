@@ -373,6 +373,11 @@ export class NotificationsService {
               { userId },
             );
           }
+          // Rewards remain personal, but can be read outside their grant namespace.
+          visibility.orWhere(
+            'notification.user_id = :userId AND :rewardTag = ANY(notification.tags)',
+            { userId, rewardTag: 'activity_reward' },
+          );
         }),
       )
       .andWhere('notification.created_at >= :retainedAfter', {

@@ -15,6 +15,7 @@ import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceMetaDto } from 'omniboxd/resources/dto/resource-meta.dto';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import {
   hasExplicitSortOptions,
   ResourceSortOptions,
@@ -69,6 +70,7 @@ export class NamespacesService {
     private readonly tasksService: TasksService,
     private readonly i18n: I18nService,
     configService: ConfigService,
+    private readonly resourceContributorsService: ResourceContributorsService,
   ) {
     this.proUrl = configService.get<string>('OBB_PRO_URL');
   }
@@ -421,6 +423,11 @@ export class NamespacesService {
           namespaceId,
           userId: member.userId,
         });
+        await this.resourceContributorsService.freezeMember(
+          namespaceId,
+          member.userId,
+          entityManager,
+        );
         await entityManager.softDelete(NamespaceMember, {
           id: member.id,
           deletedAt: IsNull(),
@@ -513,6 +520,11 @@ export class NamespacesService {
         role,
         rootResourceId: privateRootId,
       }),
+    );
+    await this.resourceContributorsService.clearSnapshot(
+      namespaceId,
+      userId,
+      entityManager,
     );
     const teamspaceRoot = await this.getTeamspaceRoot(
       namespaceId,
@@ -1043,6 +1055,11 @@ export class NamespacesService {
         namespaceId,
         targetUserId: userId,
       });
+      await this.resourceContributorsService.freezeMember(
+        namespaceId,
+        userId,
+        entityManager,
+      );
       await entityManager.softDelete(NamespaceMember, {
         id: member.id,
         deletedAt: IsNull(),

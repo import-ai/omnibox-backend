@@ -9,12 +9,14 @@ import { User } from 'omniboxd/user/entities/user.entity';
 
 import { Resource } from './entities/resource.entity';
 import { ResourceRevision } from './entities/resource-revision.entity';
+import { ResourceContributorsModule } from './resource-contributors.module';
 import { ResourceRevisionService } from './resource-revision.service';
 import { ResourcesService } from './resources.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Resource, ResourceRevision, User]),
+    ResourceContributorsModule,
     NamespacesQuotaModule,
     TasksModule,
     FilesModule,
@@ -22,6 +24,10 @@ import { ResourcesService } from './resources.service';
     TagModule,
   ],
   providers: [ResourcesService, ResourceRevisionService],
-  exports: [ResourcesService, ResourceRevisionService],
+  exports: [
+    ResourcesService,
+    ResourceRevisionService,
+    ResourceContributorsModule,
+  ],
 })
 export class ResourcesModule {}

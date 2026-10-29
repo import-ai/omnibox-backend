@@ -4,28 +4,36 @@ import { TestClient } from 'test/test-client';
 describe('Reward notification namespace visibility (e2e)', () => {
   let client: TestClient;
   let otherClient: TestClient;
+  let namespaceA: string;
+  let namespaceB: string;
   const notices: Record<string, string> = {};
 
   beforeAll(async () => {
     client = await TestClient.create();
     otherClient = new TestClient(client.app);
     await otherClient.signUp();
+    namespaceA = client.namespace.id;
+    const secondNamespace = await client
+      .post('/api/v1/namespaces')
+      .send({ name: 'Notification visibility B' })
+      .expect(HttpStatus.CREATED);
+    namespaceB = secondNamespace.body.id;
     for (const [key, receiver, tags] of [
       [
         'ordinary',
-        { user_id: client.user.id, namespace_id: 'notice-A' },
+        { user_id: client.user.id, namespace_id: namespaceA },
         ['marketing'],
       ],
       [
         'reward',
-        { user_id: client.user.id, namespace_id: 'notice-A' },
+        { user_id: client.user.id, namespace_id: namespaceA },
         ['activity_reward'],
       ],
       ['personal', { user_id: client.user.id }, []],
-      ['broadcast', { namespace_id: 'notice-A' }, []],
+      ['broadcast', { namespace_id: namespaceA }, []],
       [
         'otherReward',
-        { user_id: otherClient.user.id, namespace_id: 'notice-A' },
+        { user_id: otherClient.user.id, namespace_id: namespaceA },
         ['activity_reward'],
       ],
     ] as const) {
@@ -43,7 +51,7 @@ describe('Reward notification namespace visibility (e2e)', () => {
   });
 
   it('only adds own rewards to the existing namespace and personal visibility', async () => {
-    for (const scope of ['', '&namespaceId=notice-B']) {
+    for (const scope of ['', `&namespaceId=${namespaceB}`]) {
       const response = await client
         .get(`/api/v1/notifications?status=all${scope}`)
         .expect(HttpStatus.OK);
@@ -52,7 +60,7 @@ describe('Reward notification namespace visibility (e2e)', () => {
       ).toEqual([notices.reward, notices.personal].sort());
     }
     const inOriginalNamespace = await client
-      .get('/api/v1/notifications?namespaceId=notice-A')
+      .get(`/api/v1/notifications?namespaceId=${namespaceA}`)
       .expect(HttpStatus.OK);
     expect(
       inOriginalNamespace.body.list
@@ -70,39 +78,49 @@ describe('Reward notification namespace visibility (e2e)', () => {
 
   it('does not allow another namespace or user to read unrelated personal details', async () => {
     await client
-      .get(`/api/v1/notifications/${notices.ordinary}?namespaceId=notice-B`)
+      .get(
+        `/api/v1/notifications/${notices.ordinary}?namespaceId=${namespaceB}`,
+      )
       .expect(HttpStatus.NOT_FOUND);
     await client
-      .get(`/api/v1/notifications/${notices.otherReward}?namespaceId=notice-B`)
+      .get(
+        `/api/v1/notifications/${notices.otherReward}?namespaceId=${namespaceB}`,
+      )
       .expect(HttpStatus.NOT_FOUND);
     await client
-      .get(`/api/v1/notifications/${notices.reward}?namespaceId=notice-B`)
+      .get(`/api/v1/notifications/${notices.reward}?namespaceId=${namespaceB}`)
       .expect(HttpStatus.OK);
     await client
-      .patch(`/api/v1/notifications/${notices.ordinary}?namespaceId=notice-B`)
+      .patch(
+        `/api/v1/notifications/${notices.ordinary}?namespaceId=${namespaceB}`,
+      )
       .send({ status: 'read' })
       .expect(HttpStatus.NOT_FOUND);
   });
 
   it('clears own rewards without marking another namespace ordinary notices read', async () => {
     await client
-      .post('/api/v1/notifications/unread/clear?namespaceId=notice-B')
+      .post(`/api/v1/notifications/unread/clear?namespaceId=${namespaceB}`)
       .send({ status: 'unread' })
       .expect(HttpStatus.OK);
     const original = await client
-      .get(`/api/v1/notifications/${notices.ordinary}?namespaceId=notice-A`)
+      .get(
+        `/api/v1/notifications/${notices.ordinary}?namespaceId=${namespaceA}`,
+      )
       .expect(HttpStatus.OK);
     expect(original.body.status).toBe('unread');
     const reward = await client
-      .get(`/api/v1/notifications/${notices.reward}?namespaceId=notice-B`)
+      .get(`/api/v1/notifications/${notices.reward}?namespaceId=${namespaceB}`)
       .expect(HttpStatus.OK);
     expect(reward.body.status).toBe('read');
     const otherReward = await otherClient
-      .get(`/api/v1/notifications/${notices.otherReward}?namespaceId=notice-A`)
+      .get(
+        `/api/v1/notifications/${notices.otherReward}?namespaceId=${namespaceA}`,
+      )
       .expect(HttpStatus.OK);
     expect(otherReward.body.status).toBe('unread');
     const count = await client
-      .get('/api/v1/notifications/unread/count?namespaceId=notice-B')
+      .get(`/api/v1/notifications/unread/count?namespaceId=${namespaceB}`)
       .expect(HttpStatus.OK);
     expect(count.body.unread_count).toBe(0);
   });

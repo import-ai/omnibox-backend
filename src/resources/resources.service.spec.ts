@@ -56,6 +56,7 @@ describe('ResourcesService', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
       );
       const resolve = (name: string): Promise<string | undefined> =>
         (service as any).resolveUniqueName('namespace-id', null, name, true);

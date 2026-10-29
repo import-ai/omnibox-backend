@@ -3,6 +3,7 @@ import { QQBot } from 'omniboxd/applications/apps/qq-bot';
 import { TelegramBot } from 'omniboxd/applications/apps/telegram-bot';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
+import { WechatOaBot } from 'omniboxd/applications/apps/wechat-oa-bot';
 import { TestClient } from 'test/test-client';
 
 describe('ApplicationsController (e2e)', () => {
@@ -17,7 +18,7 @@ describe('ApplicationsController (e2e)', () => {
   });
 
   describe('Create Application (POST)', () => {
-    it('should create a wechat_bot application with verify code', async () => {
+    it('should ignore client-supplied binding fields when creating an application', async () => {
       const getAllResponse = await client
         .get(`/api/v1/namespaces/${client.namespace.id}/applications`)
         .expect(200);
@@ -27,13 +28,18 @@ describe('ApplicationsController (e2e)', () => {
           { app_id: WechatBot.appId },
           { app_id: QQBot.appId },
           { app_id: WechatClaw.appId },
+          { app_id: WechatOaBot.appId },
           { app_id: TelegramBot.appId },
         ]),
       );
-      expect(getAllResponse.body).toHaveLength(4);
+      expect(getAllResponse.body).toHaveLength(5);
 
+      // A binding is only completed by the bot's verified callback. Client
+      // fields must not set the bound openid or the binding-completed marker.
       const appData = {
+        api_key_id: client.apiKey.id,
         attrs: {
+          primary_key: 'victim-openid',
           additional_field: 'value',
         },
       };
@@ -49,11 +55,13 @@ describe('ApplicationsController (e2e)', () => {
         namespace_id: client.namespace.id,
         user_id: client.user.id,
         app_id: 'wechat_bot',
+        api_key_id: null,
         attrs: {
-          additional_field: 'value',
           key: expect.any(String),
         },
       });
+      expect(response.body.attrs.primary_key).toBeUndefined();
+      expect(response.body.attrs.additional_field).toBeUndefined();
       expect(response.body.attrs.key).toMatch(/^\d{6}$/);
       expect(response.body.id).toBeDefined();
     });
@@ -73,22 +81,6 @@ describe('ApplicationsController (e2e)', () => {
         .send(appData)
         .expect(HttpStatus.NOT_FOUND);
     });
-
-    it('should fail to create application with invalid api_key_id', async () => {
-      const appData = {
-        api_key_id: 'invalid-uuid-format',
-        attrs: {
-          test: 'data',
-        },
-      };
-
-      await client
-        .post(
-          `/api/v1/namespaces/${client.namespace.id}/applications/wechat_bot`,
-        )
-        .send(appData)
-        .expect(HttpStatus.BAD_REQUEST);
-    });
   });
 
   describe('FindAll Applications with Query Parameters (GET)', () => {
@@ -99,13 +91,14 @@ describe('ApplicationsController (e2e)', () => {
         .expect(200);
 
       // Should always have the registered apps available
-      expect(initialResponse.body).toHaveLength(4);
+      expect(initialResponse.body).toHaveLength(5);
       const appIds = initialResponse.body.map(
         (app: { app_id: string }) => app.app_id,
       );
       expect(appIds).toContain(WechatBot.appId);
       expect(appIds).toContain(QQBot.appId);
       expect(appIds).toContain(WechatClaw.appId);
+      expect(appIds).toContain(WechatOaBot.appId);
       expect(appIds).toContain(TelegramBot.appId);
 
       // The test passes if we can retrieve applications without query parameters
@@ -113,46 +106,40 @@ describe('ApplicationsController (e2e)', () => {
     });
 
     it('should filter applications by api_key_id when provided', async () => {
-      // Check current state
+      // Clear applications left by earlier tests.
       const currentResponse = await client
         .get(`/api/v1/namespaces/${client.namespace.id}/applications`)
         .expect(200);
-
-      if (currentResponse.body.length > 0 && currentResponse.body[0].id) {
-        const existingApp = currentResponse.body[0];
-        // Delete existing application first
-        await client
-          .delete(
-            `/api/v1/namespaces/${client.namespace.id}/applications/${existingApp.id}`,
-          )
-          .expect(200);
+      for (const existingApp of currentResponse.body) {
+        if (existingApp.id) {
+          await client
+            .delete(
+              `/api/v1/namespaces/${client.namespace.id}/applications/${existingApp.id}`,
+            )
+            .expect(200);
+        }
       }
-
-      // Create application with API key
-      const appData = {
-        api_key_id: client.apiKey.id,
-        attrs: {
-          test_field: 'test_value',
-        },
-      };
 
       const createResponse = await client
         .post(
           `/api/v1/namespaces/${client.namespace.id}/applications/wechat_bot`,
         )
-        .send(appData)
         .expect(201);
+      const callbackResponse = await client
+        .post('/internal/api/v1/applications/wechat_bot/callback')
+        .send({ key: createResponse.body.attrs.key })
+        .expect(201);
+      const apiKeyId = callbackResponse.body.api_key.id;
 
-      // Filter by the API key
       const getFilteredResponse = await client
         .get(
-          `/api/v1/namespaces/${client.namespace.id}/applications?api_key_id=${client.apiKey.id}`,
+          `/api/v1/namespaces/${client.namespace.id}/applications?api_key_id=${apiKeyId}`,
         )
         .expect(200);
 
       expect(getFilteredResponse.body).toHaveLength(1);
-      expect(getFilteredResponse.body[0].api_key_id).toBe(client.apiKey.id);
-      expect(getFilteredResponse.body[0].attrs.test_field).toBe('test_value');
+      expect(getFilteredResponse.body[0].id).toBe(createResponse.body.id);
+      expect(getFilteredResponse.body[0].api_key_id).toBe(apiKeyId);
 
       // Clean up
       await client

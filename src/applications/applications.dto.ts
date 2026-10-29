@@ -10,18 +10,6 @@ export class FindAllApplicationsDto {
   api_key_id?: string;
 }
 
-export class CreateApplicationsDto {
-  @IsUUID(undefined, {
-    message: i18nValidationMessage('validation.errors.isUUID'),
-  })
-  @IsOptional()
-  api_key_id?: string;
-
-  @IsObject({ message: i18nValidationMessage('validation.errors.isObject') })
-  @IsOptional()
-  attrs?: Record<string, any>;
-}
-
 export class ApplicationsResponseDto {
   @IsUUID(undefined, {
     message: i18nValidationMessage('validation.errors.isUUID'),

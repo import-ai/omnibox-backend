@@ -25,6 +25,7 @@ describe('ResourcesService.getDeletedResources', () => {
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
   );
 
   beforeEach(() => {

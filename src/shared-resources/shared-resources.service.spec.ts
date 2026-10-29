@@ -40,6 +40,7 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
       smartFoldersService as any,
       {} as any,
       { t: jest.fn((key: string) => key) } as any,
+      {} as any,
     );
 
     return { resourcesService, service, smartFoldersService };

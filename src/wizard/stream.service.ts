@@ -1560,6 +1560,8 @@ export class StreamService implements OnModuleDestroy {
     if (span) {
       span.recordException(error);
     }
+    // A failed turn can never consume what it started, so release it like a stop.
+    await this.requestDeploymentCancellation(session);
     try {
       if (session.handlerContext.queryId) {
         const handler = this.agentHandler(
@@ -1609,6 +1611,18 @@ export class StreamService implements OnModuleDestroy {
       );
     } finally {
       this.completeSession(session);
+    }
+  }
+
+  private async requestDeploymentCancellation(session: StreamSession) {
+    if (!session.userId) return;
+    try {
+      await this.agentStreamHooks.onCancellationRequested?.(
+        session.userId,
+        session.conversationId,
+      );
+    } catch (error) {
+      this.logger.error({ error });
     }
   }
 

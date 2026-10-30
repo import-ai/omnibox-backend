@@ -27,6 +27,7 @@ import {
   ResourceType,
   SERVICE_OWNED_RESOURCE_TYPES,
 } from 'omniboxd/resources/entities/resource.entity';
+import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import {
   ResourceRevisionDetail,
   ResourceRevisionService,
@@ -105,6 +106,7 @@ export class NamespaceResourcesService {
     @Inject(RSS_FOLDERS_QUOTA_SERVICE)
     private readonly rssFoldersQuotaService: IRssFoldersQuotaService,
     private readonly resourceRevisionService: ResourceRevisionService,
+    private readonly resourceContributorsService: ResourceContributorsService,
   ) {}
 
   private async getTagsByIds(
@@ -1389,6 +1391,15 @@ export class NamespaceResourcesService {
     dto.mention_display_names = commentData.mention_display_names;
     dto.content_hash = commentData.content_hash;
     dto.comment_threads = commentData.comment_threads;
+    if (resource.resourceType === ResourceType.DOC) {
+      const attribution = await this.resourceContributorsService.present(
+        namespaceId,
+        resourceId,
+        true,
+      );
+      dto.creator = attribution.creator;
+      dto.collaborators = attribution.collaborators;
+    }
     return dto;
   }
 

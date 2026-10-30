@@ -2,7 +2,6 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
-import { CreateApplicationsDto } from 'omniboxd/applications/applications.dto';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { BotBase } from 'omniboxd/applications/apps/bot-base';
@@ -29,9 +28,7 @@ export class WechatClaw extends BotBase {
   async getAttrs(
     namespaceId: string,
     userId: string,
-    createDto: CreateApplicationsDto,
   ): Promise<{ key: string } & Record<string, any>> {
-    const attrs = createDto.attrs || {};
     if (!this.OBBOT_BASE_URL) {
       const message = this.i18n.t(
         'application.errors.failedToGenerateVerifyCode',
@@ -70,7 +67,7 @@ export class WechatClaw extends BotBase {
         qrcode_content: string;
       };
 
-      return { ...attrs, ...data };
+      return { ...data };
     } catch {
       const message = this.i18n.t('application.errors.bindingRequestFailed');
       throw new AppException(

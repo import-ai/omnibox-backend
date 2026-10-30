@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CreateApplicationsDto } from 'omniboxd/applications/applications.dto';
 import { BotBase } from 'omniboxd/applications/apps/bot-base';
 
 @Injectable()
@@ -20,9 +19,8 @@ export class QQBot extends BotBase {
   async getAttrs(
     namespaceId: string,
     userId: string,
-    createDto: CreateApplicationsDto,
   ): Promise<{ key: string; url_link?: string } & Record<string, any>> {
-    const attrs = await super.getAttrs(namespaceId, userId, createDto);
+    const attrs = await super.getAttrs(namespaceId, userId);
     const baseUrl = process.env.OBBOT_BASE_URL?.replace(/\/+$/, '');
 
     if (!baseUrl) {

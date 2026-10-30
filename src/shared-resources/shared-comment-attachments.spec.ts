@@ -22,6 +22,7 @@ import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
+import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
@@ -161,6 +162,13 @@ describe('shared comment images', () => {
           useValue: { getAndValidateShare: validateShare },
         },
         { provide: I18nService, useValue: { t: (key: string) => key } },
+        {
+          provide: ResourceContributorsService,
+          useValue: {
+            present: () =>
+              Promise.resolve({ creator: null, collaborators: [] }),
+          },
+        },
       ],
     }).compile();
     const commentsService = module.get(ResourceCommentQueriesService);

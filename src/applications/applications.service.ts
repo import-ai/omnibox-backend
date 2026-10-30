@@ -7,13 +7,11 @@ import { QQBot } from 'omniboxd/applications/apps/qq-bot';
 import { TelegramBot } from 'omniboxd/applications/apps/telegram-bot';
 import { WechatBot } from 'omniboxd/applications/apps/wechat-bot';
 import { WechatClaw } from 'omniboxd/applications/apps/wechat-claw';
+import { WechatOaBot } from 'omniboxd/applications/apps/wechat-oa-bot';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { Repository } from 'typeorm';
 
-import {
-  ApplicationsResponseDto,
-  CreateApplicationsDto,
-} from './applications.dto';
+import { ApplicationsResponseDto } from './applications.dto';
 import { Applications } from './applications.entity';
 
 export interface FindAllOptions {
@@ -31,6 +29,7 @@ export class ApplicationsService {
     private readonly qqBot: QQBot,
     private readonly telegramBot: TelegramBot,
     private readonly wechatClaw: WechatClaw,
+    private readonly wechatOaBot: WechatOaBot,
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
   ) {
@@ -53,6 +52,9 @@ export class ApplicationsService {
     }
     if (this.isAppEnabled(WechatClaw.appId, enabledAppIds)) {
       this.apps[WechatClaw.appId] = this.wechatClaw;
+    }
+    if (this.isAppEnabled(WechatOaBot.appId, enabledAppIds)) {
+      this.apps[WechatOaBot.appId] = this.wechatOaBot;
     }
     if (this.isAppEnabled(TelegramBot.appId, enabledAppIds)) {
       this.apps[TelegramBot.appId] = this.telegramBot;
@@ -127,7 +129,6 @@ export class ApplicationsService {
     appId: string,
     namespaceId: string,
     userId: string,
-    createDto: CreateApplicationsDto,
   ): Promise<ApplicationsResponseDto> {
     if (!this.apps[appId]) {
       const message = this.i18n.t('application.errors.appNotFound', {
@@ -136,17 +137,13 @@ export class ApplicationsService {
       throw new AppException(message, 'APP_NOT_FOUND', HttpStatus.NOT_FOUND);
     }
 
-    const attrs = await this.apps[appId].getAttrs(
-      namespaceId,
-      userId,
-      createDto,
-    );
+    const attrs = await this.apps[appId].getAttrs(namespaceId, userId);
 
     const applications = this.applicationsRepository.create({
       namespaceId,
       userId,
       appId,
-      apiKeyId: createDto.api_key_id || null,
+      apiKeyId: null,
       attrs,
     });
 

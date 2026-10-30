@@ -7,10 +7,7 @@ import {
   APIKeyPermissionType,
 } from 'omniboxd/api-key/api-key.entity';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
-import {
-  ApplicationsResponseDto,
-  CreateApplicationsDto,
-} from 'omniboxd/applications/applications.dto';
+import { ApplicationsResponseDto } from 'omniboxd/applications/applications.dto';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -75,15 +72,13 @@ export abstract class BotBase extends BaseApp {
   }
 
   async getAttrs(
+    // Part of the app contract; only some apps need the ids for a bot link.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     namespaceId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     userId: string,
-    createDto: CreateApplicationsDto,
   ): Promise<{ key: string } & Record<string, any>> {
-    const attrs = createDto.attrs || {};
-    return {
-      ...attrs,
-      key: await this.generateUniqueKey(),
-    };
+    return { key: await this.generateUniqueKey() };
   }
 
   protected removeBindingCredentials(
@@ -142,6 +137,8 @@ export abstract class BotBase extends BaseApp {
     });
 
     entity.apiKeyId = apiKeyResponse.id;
+    // Only the bot's verified callback sets this; login trusts it.
+    entity.boundAt = new Date();
 
     // Remove binding credentials after successful API key creation
     entity.attrs = this.removeBindingCredentials(entity.attrs);

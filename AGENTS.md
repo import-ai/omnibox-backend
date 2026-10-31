@@ -26,13 +26,20 @@ pnpm run test:watch
 pnpm run test:e2e
 pnpm run test:e2e -- src/path/to/file.e2e-spec.ts
 pnpm run test:e2e:remote
+pnpm run typecheck
+pnpm run test:compile
+pnpm run test:ci --shard=1/4 --coverage
 ```
 
 Unit and e2e tests are colocated under `src/**/*.spec.ts` and
 `src/**/*.e2e-spec.ts`. E2E tests use `testcontainers` for PostgreSQL and
 RustFS; keep Docker available. Prefer the narrowest relevant test, then run
-`pnpm run lint` for code changes. CI runs `pnpm run lint` and
-`pnpm run test:e2e --coverage --bail`.
+`pnpm run lint` for code changes. CI runs lint and type checking separately
+from test execution. Four independent runners each compile tests with
+`pnpm test:compile` and run `pnpm test:ci --coverage --coverageReporters=json
+--bail --shard=N/4`. The aggregate test job merges all four coverage reports. Recompile after changing source or tests
+before running `test:ci` locally. Each shard owns its test containers and
+runs the database bootstrap test first so migrations are included in coverage.
 
 ### Docker
 

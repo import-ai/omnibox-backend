@@ -3,11 +3,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { CaptchaService } from './captcha.service';
 
-const verifyIntelligentCaptcha = jest.fn();
+const mockVerifyIntelligentCaptcha = jest.fn();
 
 jest.mock('@alicloud/captcha20230305', () => {
   class MockClient {
-    verifyIntelligentCaptcha = verifyIntelligentCaptcha;
+    verifyIntelligentCaptcha = mockVerifyIntelligentCaptcha;
   }
   class VerifyIntelligentCaptchaRequest {
     constructor(public readonly map: Record<string, unknown>) {
@@ -79,7 +79,7 @@ async function createService(
 
 describe('CaptchaService', () => {
   beforeEach(() => {
-    verifyIntelligentCaptcha.mockReset();
+    mockVerifyIntelligentCaptcha.mockReset();
   });
 
   describe('enabled', () => {
@@ -122,7 +122,7 @@ describe('CaptchaService', () => {
 
   describe('verify', () => {
     it('passes when verifyResult is true', async () => {
-      verifyIntelligentCaptcha.mockResolvedValue({
+      mockVerifyIntelligentCaptcha.mockResolvedValue({
         body: { result: { verifyResult: true, verifyCode: 'T' } },
       });
       const service = await createService(FULL_CONFIG);
@@ -130,7 +130,7 @@ describe('CaptchaService', () => {
       const result = await service.verify('param', 'web');
 
       expect(result).toEqual({ passed: true, code: 'T' });
-      expect(verifyIntelligentCaptcha).toHaveBeenCalledWith(
+      expect(mockVerifyIntelligentCaptcha).toHaveBeenCalledWith(
         expect.objectContaining({
           sceneId: 'scene-web',
           captchaVerifyParam: 'param',
@@ -139,20 +139,20 @@ describe('CaptchaService', () => {
     });
 
     it('uses the app scene id for app clients', async () => {
-      verifyIntelligentCaptcha.mockResolvedValue({
+      mockVerifyIntelligentCaptcha.mockResolvedValue({
         body: { result: { verifyResult: true } },
       });
       const service = await createService(FULL_CONFIG);
 
       await service.verify('param', 'app');
 
-      expect(verifyIntelligentCaptcha).toHaveBeenCalledWith(
+      expect(mockVerifyIntelligentCaptcha).toHaveBeenCalledWith(
         expect.objectContaining({ sceneId: 'scene-app' }),
       );
     });
 
     it('fails with the verify code when verifyResult is false', async () => {
-      verifyIntelligentCaptcha.mockResolvedValue({
+      mockVerifyIntelligentCaptcha.mockResolvedValue({
         body: { result: { verifyResult: false, verifyCode: 'F' } },
       });
       const service = await createService(FULL_CONFIG);
@@ -164,7 +164,7 @@ describe('CaptchaService', () => {
     });
 
     it('fails when the response has no result', async () => {
-      verifyIntelligentCaptcha.mockResolvedValue({
+      mockVerifyIntelligentCaptcha.mockResolvedValue({
         body: { code: 'InvalidParam' },
       });
       const service = await createService(FULL_CONFIG);
@@ -176,7 +176,7 @@ describe('CaptchaService', () => {
     });
 
     it('fails open when the SDK throws', async () => {
-      verifyIntelligentCaptcha.mockRejectedValue(new Error('timeout'));
+      mockVerifyIntelligentCaptcha.mockRejectedValue(new Error('timeout'));
       const service = await createService(FULL_CONFIG);
 
       expect(await service.verify('param', 'web')).toEqual({
@@ -193,7 +193,7 @@ describe('CaptchaService', () => {
       ['a 404 without a credential code', sdkError('NotFound', 'gone', 404)],
       ['a plain string rejection', 'nope'],
     ])('keeps failing open on %s', async (_label, error) => {
-      verifyIntelligentCaptcha.mockRejectedValue(error);
+      mockVerifyIntelligentCaptcha.mockRejectedValue(error);
       const service = await createService(FULL_CONFIG);
 
       expect(await service.verify('param', 'web')).toEqual({
@@ -237,7 +237,7 @@ describe('CaptchaService', () => {
         sdkError('Something.Unknown', 'denied', 401),
       ],
     ])('fails closed on %s', async (_label, error) => {
-      verifyIntelligentCaptcha.mockRejectedValue(error);
+      mockVerifyIntelligentCaptcha.mockRejectedValue(error);
       const service = await createService(FULL_CONFIG);
 
       expect(await service.verify('param', 'web')).toEqual({
@@ -253,7 +253,7 @@ describe('CaptchaService', () => {
         passed: true,
         code: 'DISABLED',
       });
-      expect(verifyIntelligentCaptcha).not.toHaveBeenCalled();
+      expect(mockVerifyIntelligentCaptcha).not.toHaveBeenCalled();
     });
   });
 });

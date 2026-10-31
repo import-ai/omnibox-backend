@@ -6,7 +6,7 @@ let mailhogContainer: StartedTestContainer;
 let kafkaContainer: StartedTestContainer;
 
 // https://node.testcontainers.org/supported-container-runtimes
-export default async () => {
+export default async (config: { shard: { shardIndex: number } | null }) => {
   console.log('Setting up test containers...');
   postgresContainer = await new GenericContainer('postgres:17.5')
     .withExposedPorts(5432)
@@ -45,7 +45,7 @@ export default async () => {
     .start();
   console.log('MailHog container started');
 
-  const kafkaPort = 19092; // Use fixed port for tests
+  const kafkaPort = 19092 + (config.shard?.shardIndex ?? 0);
   kafkaContainer = await new GenericContainer('bitnamilegacy/kafka:4.0')
     .withExposedPorts({ container: 9092, host: kafkaPort })
     .withEnvironment({

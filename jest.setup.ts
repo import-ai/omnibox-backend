@@ -2,7 +2,7 @@ function randomChoice(choices: string) {
   return choices[Math.floor(Math.random() * choices.length)];
 }
 
-function customAlphabet(alphabet: string, size: number) {
+function mockCustomAlphabet(alphabet: string, size: number) {
   return () => {
     let result = '';
     for (let i = 0; i < size; i++) {
@@ -28,7 +28,7 @@ expect.extend({
 });
 
 jest.mock('nanoid', () => ({
-  customAlphabet,
+  customAlphabet: mockCustomAlphabet,
 }));
 
 jest.mock('@css-inline/css-inline', () => ({

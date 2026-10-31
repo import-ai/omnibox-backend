@@ -34,7 +34,6 @@ import { SmartFoldersRuleService } from 'omniboxd/smart-folders/smart-folders-ru
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
-import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import * as request from 'supertest';
 
@@ -52,6 +51,10 @@ import { SearchResourceFilterService } from './search-resource-filter.service';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
 jest.mock('../wizard-api/wizard-api.service', () => {
+  const { IndexRecordType } = jest.requireActual<
+    typeof import('omniboxd/wizard/dto/index-record.dto')
+  >('omniboxd/wizard/dto/index-record.dto');
+
   return {
     WizardAPIService: jest.fn().mockImplementation(() => ({
       search: jest.fn().mockImplementation((req) => {

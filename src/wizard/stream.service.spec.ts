@@ -1,7 +1,10 @@
 import { HttpStatus, MessageEvent } from '@nestjs/common';
 import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { MessageStatus } from 'omniboxd/messages/entities/message.entity';
+import {
+  MessageStatus,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { Observable } from 'rxjs';
@@ -1939,5 +1942,121 @@ describe('StreamService.chat() never receives the SSE heartbeat', () => {
       'eos',
       'done',
     ]);
+  });
+});
+
+describe('StreamService agent handler error finalization', () => {
+  function handlerWithMessages() {
+    const service = createService({});
+    const messagesService = {
+      create: jest.fn(),
+      updateDelta: jest.fn().mockResolvedValue({ message: {} }),
+      update: jest.fn().mockResolvedValue({ message: {} }),
+    };
+    (service as any).messagesService = messagesService;
+    const send = jest.fn().mockResolvedValue(undefined);
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      send,
+    );
+    return { handler, messagesService, send };
+  }
+
+  it('marks an open tool message as a failed tool call', async () => {
+    const { handler, messagesService, send } = handlerWithMessages();
+
+    await handler(JSON.stringify({ response_type: 'error', message: 'boom' }), {
+      messageId: 'message-id',
+      message: { role: OpenAIMessageRole.TOOL },
+    });
+
+    expect(messagesService.updateDelta).toHaveBeenCalledWith('message-id', {
+      response_type: 'delta',
+      message: {},
+      attrs: {
+        error_message: 'boom',
+        tool_call: { status: 'failed', error: 'boom' },
+      },
+    });
+    expect(messagesService.update).toHaveBeenCalledWith(
+      'message-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+    expect(JSON.parse(send.mock.calls[0][0])).toEqual({
+      response_type: 'error',
+      id: 'message-id',
+      message: 'boom',
+    });
+  });
+
+  it('leaves the attrs of an open assistant message alone', async () => {
+    const { handler, messagesService } = handlerWithMessages();
+
+    await handler(JSON.stringify({ response_type: 'error', message: 'boom' }), {
+      messageId: 'message-id',
+      message: { role: OpenAIMessageRole.ASSISTANT },
+    });
+
+    expect(messagesService.updateDelta).toHaveBeenCalledWith('message-id', {
+      response_type: 'delta',
+      message: {},
+      attrs: { error_message: 'boom' },
+    });
+    expect(messagesService.update).toHaveBeenCalledWith(
+      'message-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+  });
+
+  it('opens an assistant message before failing when only a query is open', async () => {
+    const { handler, messagesService, send } = handlerWithMessages();
+    messagesService.create = jest.fn().mockResolvedValue({
+      id: 'new-message-id',
+      parentId: 'parent-id',
+      createdAt: new Date('2026-07-10T08:00:00.000Z'),
+      message: { role: OpenAIMessageRole.ASSISTANT },
+    });
+
+    await handler(JSON.stringify({ response_type: 'error', message: 'boom' }), {
+      queryId: 'query-id',
+      parentId: 'parent-id',
+    });
+
+    expect(messagesService.create).toHaveBeenCalledWith(
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      {
+        message: { role: OpenAIMessageRole.ASSISTANT },
+        parentId: 'parent-id',
+        attrs: undefined,
+      },
+      false,
+    );
+    expect(messagesService.updateDelta).toHaveBeenCalledWith('new-message-id', {
+      response_type: 'delta',
+      message: {},
+      attrs: { error_message: 'boom' },
+    });
+    expect(messagesService.update).toHaveBeenCalledWith(
+      'new-message-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+    expect(JSON.parse(send.mock.calls.at(-1)![0])).toEqual({
+      response_type: 'error',
+      id: 'new-message-id',
+      message: 'boom',
+    });
   });
 });

@@ -23,6 +23,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
   Message,
+  MessageAttrs,
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
@@ -460,12 +461,14 @@ export class StreamService implements OnModuleDestroy {
         }
         if (context.messageId) {
           chunk.id = context.messageId;
+          const attrs: MessageAttrs = { error_message: chunk.message };
+          if (context.message?.role === OpenAIMessageRole.TOOL) {
+            attrs.tool_call = { status: 'failed', error: chunk.message };
+          }
           await this.messagesService.updateDelta(context.messageId, {
             response_type: 'delta',
             message: {},
-            attrs: {
-              error_message: chunk.message,
-            },
+            attrs,
           });
 
           await this.messagesService.update(

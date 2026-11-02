@@ -252,6 +252,9 @@ importers:
       '@types/supertest':
         specifier: ^6.0.3
         version: 6.0.3
+      babel-jest:
+        specifier: 29.7.0
+        version: 29.7.0(@babel/core@7.29.0)
       dotenv-cli:
         specifier: ^11.0.0
         version: 11.0.0
@@ -273,6 +276,15 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      istanbul-lib-coverage:
+        specifier: 3.2.2
+        version: 3.2.2
+      istanbul-lib-report:
+        specifier: 3.0.1
+        version: 3.0.1
+      istanbul-reports:
+        specifier: 3.2.0
+        version: 3.2.0
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@22.19.17)(ts-node@10.9.2(@swc/core@1.15.24)(@types/node@22.19.17)(typescript@5.9.3))

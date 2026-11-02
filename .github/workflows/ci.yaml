@@ -52,9 +52,16 @@ jobs:
       - name: Run lint
         run: pnpm lint
 
-  test:
+      - name: Check types
+        run: pnpm typecheck
+
+  test-shards:
     needs: [branch-name]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -71,6 +78,62 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check shard sequencing
+        run: node --test test/custom-sequencer.test.cjs
+
+      - name: Compile tests without type checking
+        run: pnpm test:compile
+
+      - name: Prepare .env
+        run: cp example.env .env
+
+      - name: Run tests
+        run: pnpm test:ci --coverage --coverageReporters=json --bail --shard=${{ matrix.shard }}/4
+        env:
+          OBB_LOG_LEVELS: ''
+
+      - name: Upload shard coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: coverage/coverage-final.json
+          if-no-files-found: error
+
+  test:
+    needs: [test-shards]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all test shards to pass
+        env:
+          SHARD_RESULT: ${{ needs.test-shards.result }}
+        run: test "$SHARD_RESULT" = success
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download shard coverage
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-shard-*
+          path: coverage-shards
+
+      - name: Merge coverage
+        run: |
+          node --test test/merge-coverage.test.cjs
+          node test/merge-coverage.cjs coverage-shards/coverage-shard-{1,2,3,4}/coverage-final.json
+
       - name: Get version identifier
         id: get_version
         run: |
@@ -79,14 +142,6 @@ jobs:
           else
             echo "version=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
           fi
-
-      - name: Prepare .env
-        run: cp example.env .env
-
-      - name: Run tests
-        run: pnpm test:e2e --coverage --bail
-        env:
-          OBB_LOG_LEVELS: ''
 
       - name: Print coverage report
         run: |

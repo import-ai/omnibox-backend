@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.typecheck.json",
+  "compilerOptions": {
+    "noCheck": true,
+    "removeComments": false,
+    "declaration": false,
+    "incremental": false,
+    "outDir": ".test-build",
+    "rootDir": "."
+  }
+}

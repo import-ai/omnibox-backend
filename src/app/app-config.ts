@@ -57,7 +57,9 @@ export function configureApp(app: INestApplication): INestApplication {
   const configService = app.get(ConfigService);
   const logLevels: LogLevel[] = configService
     .get('OBB_LOG_LEVELS', 'error,warn,log')
-    .split(',');
+    .split(',')
+    .map((level: string) => level.trim())
+    .filter(Boolean);
   const logger = new ConsoleLogger({ json: true, logLevels });
   app.useLogger(logger);
 

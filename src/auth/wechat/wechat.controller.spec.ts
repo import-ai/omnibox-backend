@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthService } from 'omniboxd/auth/auth.service';
 
 import { WechatController } from './wechat.controller';
@@ -11,6 +11,10 @@ describe('WechatController', () => {
       key === 'OBB_JWT_EXPIRE' ? '3600' : fallback,
     ),
   } as unknown as ConfigService;
+  const req = {
+    secure: true,
+    headers: {},
+  } as unknown as Request;
 
   function createController(checkState: jest.Mock): {
     controller: WechatController;
@@ -33,7 +37,7 @@ describe('WechatController', () => {
     const { controller, cookie } = createController(checkState);
 
     await expect(
-      controller.checkState('state-1', 'device-token', {
+      controller.checkState('state-1', 'device-token', req, {
         cookie,
       } as unknown as Response),
     ).resolves.toEqual({
@@ -53,7 +57,7 @@ describe('WechatController', () => {
     const checkState = jest.fn().mockResolvedValue({ status: 'pending' });
     const { controller, cookie } = createController(checkState);
 
-    await controller.checkState('state-1', 'device-token', {
+    await controller.checkState('state-1', 'device-token', req, {
       cookie,
     } as unknown as Response);
 
@@ -64,7 +68,7 @@ describe('WechatController', () => {
     const checkState = jest.fn().mockResolvedValue({ status: 'expired' });
     const { controller, cookie } = createController(checkState);
 
-    await controller.checkState('state-1', 'device-token', {
+    await controller.checkState('state-1', 'device-token', req, {
       cookie,
     } as unknown as Response);
 

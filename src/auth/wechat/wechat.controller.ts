@@ -51,6 +51,7 @@ export class WechatController extends SocialController {
   async checkState(
     @Query('state') state: string,
     @Query('device_token') deviceToken: string | undefined,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.wechatService.checkState(state, deviceToken);
@@ -59,6 +60,7 @@ export class WechatController extends SocialController {
     // the app, so the cookie has to be set here rather than in the callback.
     if (result.status === 'success' && result.user?.access_token) {
       setSessionCookie(
+        req,
         res,
         result.user.access_token,
         getSessionCookieMaxAge(this.configService),
@@ -96,17 +98,12 @@ export class WechatController extends SocialController {
     const loginData = await this.wechatService.nativeLogin(code, source, lang);
 
     if (loginData && loginData.access_token) {
-      const jwtExpireSeconds = parseInt(
-        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-        10,
+      setSessionCookie(
+        req,
+        res,
+        loginData.access_token,
+        getSessionCookieMaxAge(this.configService),
       );
-      res.cookie('token', loginData.access_token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/',
-        maxAge: jwtExpireSeconds * 1000,
-      });
     }
 
     return res.json(loginData);
@@ -133,17 +130,12 @@ export class WechatController extends SocialController {
     const loginData = await this.wechatService.miniProgramLogin(code, lang);
 
     if (loginData && loginData.access_token) {
-      const jwtExpireSeconds = parseInt(
-        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-        10,
+      setSessionCookie(
+        req,
+        res,
+        loginData.access_token,
+        getSessionCookieMaxAge(this.configService),
       );
-      res.cookie('token', loginData.access_token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/',
-        maxAge: jwtExpireSeconds * 1000,
-      });
     }
 
     return res.json(loginData);
@@ -173,17 +165,12 @@ export class WechatController extends SocialController {
     );
 
     if (loginData && loginData.access_token) {
-      const jwtExpireSeconds = parseInt(
-        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-        10,
+      setSessionCookie(
+        req,
+        res,
+        loginData.access_token,
+        getSessionCookieMaxAge(this.configService),
       );
-      res.cookie('token', loginData.access_token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/',
-        maxAge: jwtExpireSeconds * 1000,
-      });
     }
 
     return res.json(loginData);

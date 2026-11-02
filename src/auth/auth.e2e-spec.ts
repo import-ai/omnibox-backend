@@ -170,11 +170,24 @@ describe('AuthModule (e2e)', () => {
         .request()
         .post('/api/v1/auth/session')
         .set('Authorization', `Bearer ${client.user.token}`)
-        .expect(HttpStatus.NO_CONTENT);
+        .expect(HttpStatus.OK);
 
       const cookie = response.headers['set-cookie'] as unknown as string[];
       expect(cookie.some((item) => item.startsWith('token='))).toBe(true);
       expect(cookie.some((item) => item.includes('HttpOnly'))).toBe(true);
+      expect(response.body.uid).toBe(client.user.id);
+    });
+
+    it('should refresh the cookie from an existing session cookie', async () => {
+      const response = await client
+        .request()
+        .post('/api/v1/auth/session')
+        .set('Cookie', `token=${client.user.token}`)
+        .expect(HttpStatus.OK);
+
+      const cookie = response.headers['set-cookie'] as unknown as string[];
+      expect(cookie.some((item) => item.startsWith('token='))).toBe(true);
+      expect(response.body.uid).toBe(client.user.id);
     });
 
     it('should reject a request without a token', async () => {

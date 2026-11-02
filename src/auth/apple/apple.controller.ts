@@ -4,6 +4,10 @@ import { Request, Response } from 'express';
 import { AppleService } from 'omniboxd/auth/apple/apple.service';
 import { AuthService } from 'omniboxd/auth/auth.service';
 import { Public } from 'omniboxd/auth/decorators/public.auth.decorator';
+import {
+  getSessionCookieMaxAge,
+  setSessionCookie,
+} from 'omniboxd/auth/session-cookie';
 import { SocialController } from 'omniboxd/auth/social.controller';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
@@ -53,17 +57,12 @@ export class AppleController extends SocialController {
     );
 
     if (loginData && loginData.access_token) {
-      const jwtExpireSeconds = parseInt(
-        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-        10,
+      setSessionCookie(
+        req,
+        res,
+        loginData.access_token,
+        getSessionCookieMaxAge(this.configService),
       );
-      res.cookie('token', loginData.access_token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/',
-        maxAge: jwtExpireSeconds * 1000,
-      });
     }
 
     return res.json(loginData);
@@ -95,17 +94,12 @@ export class AppleController extends SocialController {
     );
 
     if (loginData && loginData.access_token) {
-      const jwtExpireSeconds = parseInt(
-        this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-        10,
+      setSessionCookie(
+        req,
+        res,
+        loginData.access_token,
+        getSessionCookieMaxAge(this.configService),
       );
-      res.cookie('token', loginData.access_token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/',
-        maxAge: jwtExpireSeconds * 1000,
-      });
     }
 
     return res.json(loginData);

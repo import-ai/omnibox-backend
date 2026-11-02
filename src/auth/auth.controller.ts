@@ -52,17 +52,12 @@ export class AuthController {
   login(@Request() req, @Res() res: Response) {
     const loginData = this.authService.login(req.user);
 
-    const jwtExpireSeconds = parseInt(
-      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-      10,
+    setSessionCookie(
+      req,
+      res,
+      loginData.access_token,
+      getSessionCookieMaxAge(this.configService),
     );
-    res.cookie('token', loginData.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      path: '/',
-      maxAge: jwtExpireSeconds * 1000,
-    });
 
     return res.json(loginData);
   }
@@ -102,11 +97,13 @@ export class AuthController {
   @Public()
   @Post('auth/session')
   createSession(@Request() req, @Res() res: Response) {
+    const cookieToken = req.cookies?.token as string | undefined;
     const authorization = req.headers.authorization;
     const bearerToken = authorization?.startsWith('Bearer ')
       ? authorization.slice(7).trim()
       : '';
-    const payload = this.authService.jwtVerify(bearerToken);
+    const token = bearerToken || cookieToken || '';
+    const payload = this.authService.jwtVerify(token);
 
     if (!payload?.sub) {
       throw new AppException(
@@ -117,11 +114,12 @@ export class AuthController {
     }
 
     setSessionCookie(
+      req,
       res,
-      bearerToken,
+      token,
       getSessionCookieMaxAge(this.configService),
     );
-    return res.status(HttpStatus.NO_CONTENT).send();
+    return res.json({ uid: payload.sub });
   }
 
   @Public()
@@ -153,6 +151,7 @@ export class AuthController {
   @HttpCode(200)
   async verifyEmailOtp(
     @Body() dto: VerifyEmailOtpDto,
+    @Request() req,
     @Res() res: Response,
     @Body('lang') lang?: string,
   ) {
@@ -162,17 +161,12 @@ export class AuthController {
       lang,
     );
 
-    const jwtExpireSeconds = parseInt(
-      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-      10,
+    setSessionCookie(
+      req,
+      res,
+      authData.access_token,
+      getSessionCookieMaxAge(this.configService),
     );
-    res.cookie('token', authData.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      path: '/',
-      maxAge: jwtExpireSeconds * 1000,
-    });
 
     return res.json(authData);
   }
@@ -182,22 +176,18 @@ export class AuthController {
   @HttpCode(200)
   async verifyMagicLink(
     @Query('token') token: string,
+    @Request() req,
     @Res() res: Response,
     @Body('lang') lang?: string,
   ) {
     const authData = await this.authService.verifyMagicLink(token, lang);
 
-    const jwtExpireSeconds = parseInt(
-      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-      10,
+    setSessionCookie(
+      req,
+      res,
+      authData.access_token,
+      getSessionCookieMaxAge(this.configService),
     );
-    res.cookie('token', authData.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      path: '/',
-      maxAge: jwtExpireSeconds * 1000,
-    });
 
     return res.json(authData);
   }
@@ -229,6 +219,7 @@ export class AuthController {
   @HttpCode(200)
   async verifyPhoneOtp(
     @Body() dto: VerifyPhoneOtpRequestDto,
+    @Request() req,
     @Res() res: Response,
     @Body('lang') lang?: string,
   ) {
@@ -238,17 +229,12 @@ export class AuthController {
       lang,
     );
 
-    const jwtExpireSeconds = parseInt(
-      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-      10,
+    setSessionCookie(
+      req,
+      res,
+      authData.access_token,
+      getSessionCookieMaxAge(this.configService),
     );
-    res.cookie('token', authData.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      path: '/',
-      maxAge: jwtExpireSeconds * 1000,
-    });
 
     return res.json(authData);
   }
@@ -327,22 +313,18 @@ export class AuthController {
   @HttpCode(200)
   async acceptInvite(
     @Query('token') token: string,
+    @Request() req,
     @Res() res: Response,
     @Body('lang') lang?: string,
   ) {
     const authData = await this.authService.acceptInvite(token, lang);
 
-    const jwtExpireSeconds = parseInt(
-      this.configService.get('OBB_JWT_EXPIRE', '2678400'),
-      10,
+    setSessionCookie(
+      req,
+      res,
+      authData.access_token,
+      getSessionCookieMaxAge(this.configService),
     );
-    res.cookie('token', authData.access_token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      path: '/',
-      maxAge: jwtExpireSeconds * 1000,
-    });
 
     return res.json(authData);
   }

@@ -96,6 +96,7 @@ export class AuthController {
    */
   @Public()
   @Post('auth/session')
+  @HttpCode(HttpStatus.OK)
   createSession(@Request() req, @Res() res: Response) {
     const cookieToken = req.cookies?.token as string | undefined;
     const authorization = req.headers.authorization;

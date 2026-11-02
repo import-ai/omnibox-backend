@@ -47,6 +47,11 @@ export interface OpenAIMessage {
 }
 
 export interface MessageAttrs {
+  turn_id?: string;
+  turn_run_id?: string;
+  stopped_run_id?: string;
+  stopped_runs?: string[];
+  turn_status?: 'stopped';
   client_request_id?: string;
   citations?: Record<string, any>[];
   error_message?: string;

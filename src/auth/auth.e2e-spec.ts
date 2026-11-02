@@ -164,6 +164,35 @@ describe('AuthModule (e2e)', () => {
     });
   });
 
+  describe('POST /api/v1/auth/session', () => {
+    it('should exchange a bearer token for a session cookie', async () => {
+      const response = await client
+        .request()
+        .post('/api/v1/auth/session')
+        .set('Authorization', `Bearer ${client.user.token}`)
+        .expect(HttpStatus.NO_CONTENT);
+
+      const cookie = response.headers['set-cookie'] as unknown as string[];
+      expect(cookie.some((item) => item.startsWith('token='))).toBe(true);
+      expect(cookie.some((item) => item.includes('HttpOnly'))).toBe(true);
+    });
+
+    it('should reject a request without a token', async () => {
+      await client
+        .request()
+        .post('/api/v1/auth/session')
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should reject an invalid token', async () => {
+      await client
+        .request()
+        .post('/api/v1/auth/session')
+        .set('Authorization', 'Bearer invalid-token')
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+  });
+
   describe('API Key Authentication', () => {
     describe('API Key Format Validation', () => {
       it('should accept valid API key with sk- prefix', async () => {

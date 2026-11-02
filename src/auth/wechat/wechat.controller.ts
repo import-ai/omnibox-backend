@@ -10,6 +10,8 @@ import {
 } from 'omniboxd/auth/wechat/wechat.service';
 import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
+import { getSessionCookieMaxAge, setSessionCookie } from '../session-cookie';
+
 @Controller('api/v1/wechat')
 export class WechatController extends SocialController {
   constructor(
@@ -46,11 +48,24 @@ export class WechatController extends SocialController {
 
   @Public()
   @Get('check')
-  checkState(
+  async checkState(
     @Query('state') state: string,
-    @Query('device_token') deviceToken?: string,
+    @Query('device_token') deviceToken: string | undefined,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.wechatService.checkState(state, deviceToken);
+    const result = await this.wechatService.checkState(state, deviceToken);
+
+    // The browser polling this endpoint is the one that ends up navigating to
+    // the app, so the cookie has to be set here rather than in the callback.
+    if (result.status === 'success' && result.user?.access_token) {
+      setSessionCookie(
+        res,
+        result.user.access_token,
+        getSessionCookieMaxAge(this.configService),
+      );
+    }
+
+    return result;
   }
 
   @Public()

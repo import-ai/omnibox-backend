@@ -34,6 +34,7 @@ import {
   SendPhoneOtpResponseDto,
   VerifyPhoneOtpRequestDto,
 } from './dto/phone-otp.dto';
+import { getSessionCookieMaxAge, setSessionCookie } from './session-cookie';
 
 @Controller('api/v1')
 export class AuthController {
@@ -91,6 +92,36 @@ export class AuthController {
         HttpStatus.UNAUTHORIZED,
       );
     }
+  }
+
+  /**
+   * Establishes the session cookie for clients that receive a token outside a
+   * cookie, such as the mini program hash hand-off. The gateway only sees
+   * cookies, so a full-page navigation would otherwise look signed out.
+   */
+  @Public()
+  @Post('auth/session')
+  createSession(@Request() req, @Res() res: Response) {
+    const authorization = req.headers.authorization;
+    const bearerToken = authorization?.startsWith('Bearer ')
+      ? authorization.slice(7).trim()
+      : '';
+    const payload = this.authService.jwtVerify(bearerToken);
+
+    if (!payload?.sub) {
+      throw new AppException(
+        this.i18n.t('auth.errors.invalidTokenPayload'),
+        'INVALID_TOKEN_PAYLOAD',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    setSessionCookie(
+      res,
+      bearerToken,
+      getSessionCookieMaxAge(this.configService),
+    );
+    return res.status(HttpStatus.NO_CONTENT).send();
   }
 
   @Public()

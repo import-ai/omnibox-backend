@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -63,6 +64,33 @@ export class AuthController {
     });
 
     return res.json(loginData);
+  }
+
+  /**
+   * Validates the current session for the gateway's auth_request check.
+   * Only verifies the JWT signature and expiry; it deliberately skips the user
+   * lookup so root path navigations do not hit the database.
+   */
+  @Public()
+  @Get('auth/session')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  authSession(@Request() req) {
+    const cookieToken = req.cookies?.token as string | undefined;
+    const authorization = req.headers.authorization;
+    const bearerToken = authorization?.startsWith('Bearer ')
+      ? authorization.slice(7).trim()
+      : undefined;
+    const payload = this.authService.jwtVerify(
+      cookieToken || bearerToken || '',
+    );
+
+    if (!payload?.sub) {
+      throw new AppException(
+        this.i18n.t('auth.errors.invalidTokenPayload'),
+        'INVALID_TOKEN_PAYLOAD',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
   }
 
   @Public()

@@ -1889,6 +1889,7 @@ describe('StreamService cancellation extensions', () => {
         'space',
         'conversation',
         'user',
+        ...(location === 'local' ? [undefined, undefined] : []),
       );
       expect(controller.signal.aborted).toBe(location === 'local');
     },
@@ -1949,6 +1950,7 @@ describe('StreamService agent handler error finalization', () => {
   function handlerWithMessages() {
     const service = createService({});
     const messagesService = {
+      findOne: jest.fn().mockResolvedValue({ attrs: {} }),
       create: jest.fn(),
       updateDelta: jest.fn().mockResolvedValue({ message: {} }),
       update: jest.fn().mockResolvedValue({ message: {} }),
@@ -2037,7 +2039,7 @@ describe('StreamService agent handler error finalization', () => {
       {
         message: { role: OpenAIMessageRole.ASSISTANT },
         parentId: 'parent-id',
-        attrs: undefined,
+        attrs: { turn_id: 'query-id' },
       },
       false,
     );
@@ -2059,4 +2061,31 @@ describe('StreamService agent handler error finalization', () => {
       message: 'boom',
     });
   });
+});
+
+test('live BOS carries the same run identity used for persisted cancellation', async () => {
+  const service = createService({});
+  (service as any).messagesService = {
+    findOne: jest.fn().mockResolvedValue({ attrs: {} }),
+    create: jest.fn().mockResolvedValue({
+      id: 'tool',
+      parentId: 'decision',
+      createdAt: new Date(),
+      message: { role: 'tool' },
+    }),
+  };
+  const send = jest.fn().mockResolvedValue(undefined);
+  await service.agentHandler(
+    'n',
+    'c',
+    'u',
+    send,
+  )(JSON.stringify({ response_type: 'bos', role: 'tool' }), {
+    queryId: 'decision',
+    runId: 'retry-run',
+  });
+  expect(JSON.parse(send.mock.calls[0][0]).attrs.turn_run_id).toBe('retry-run');
+  expect(
+    (service as any).messagesService.create.mock.calls[0][3].attrs,
+  ).toMatchObject({ turn_id: 'decision', turn_run_id: 'retry-run' });
 });

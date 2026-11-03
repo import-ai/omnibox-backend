@@ -7,9 +7,10 @@ import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
 import { PermissionsModule } from 'omniboxd/permissions/permissions.module';
 
 import { APIKey } from './api-key.entity';
+import { APIKeyOwnerGuard } from './api-key-owner.guard';
 
 @Module({
-  providers: [APIKeyService],
+  providers: [APIKeyService, APIKeyOwnerGuard],
   controllers: [APIKeyController],
   exports: [APIKeyService],
   imports: [

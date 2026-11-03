@@ -64,6 +64,7 @@ type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
 type RedisClient = ReturnType<typeof createClient>;
 
 interface HandlerContext {
+  runId?: string;
   failed?: boolean;
   interrupted?: boolean;
   queryId?: string;
@@ -329,6 +330,16 @@ export class StreamService implements OnModuleDestroy {
       context: HandlerContext,
     ): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
+      if (context.queryId) {
+        const turn = await this.messagesService.findOne(context.queryId);
+        if (
+          context.runId &&
+          turn.attrs?.stopped_runs?.includes(context.runId)
+        ) {
+          context.failed = true;
+          return;
+        }
+      }
 
       if (chunk.response_type === 'query_attrs') {
         if (!context.queryId) throw new Error('Missing persisted query');
@@ -353,10 +364,17 @@ export class StreamService implements OnModuleDestroy {
               role: chunk.role,
             },
             parentId: context.parentId,
-            attrs: chunk.attrs,
+            attrs: {
+              ...chunk.attrs,
+              ...(context.queryId
+                ? { turn_id: context.queryId, turn_run_id: context.runId }
+                : {}),
+            },
           },
           false,
         );
+        if (context.runId)
+          chunk.attrs = { ...chunk.attrs, turn_run_id: context.runId };
         chunk.id = message.id;
         chunk.created_at = message.createdAt.toISOString();
         chunk.parentId = message.parentId || undefined;
@@ -393,6 +411,10 @@ export class StreamService implements OnModuleDestroy {
           chunk,
         );
 
+        if (message.status === MessageStatus.STOPPED) {
+          context.failed = true;
+          return;
+        }
         chunk.id = context.messageId;
         delete chunk.attrs?.context;
         context.message = message.message;
@@ -408,6 +430,10 @@ export class StreamService implements OnModuleDestroy {
           false,
         );
 
+        if (message.status === MessageStatus.STOPPED) {
+          context.failed = true;
+          return;
+        }
         this.reportCallCompleted(message, stream);
         context.message = message.message;
         context.parentId = message.id;
@@ -1288,7 +1314,11 @@ export class StreamService implements OnModuleDestroy {
           }
         }
       }
-      session.handlerContext = { parentId: query.id, queryId: query.id };
+      session.handlerContext = {
+        parentId: query.id,
+        queryId: query.id,
+        runId: requestId,
+      };
       wizardRequest.query_persisted = true;
       wizardRequest.messages = messages.map((message) => {
         if (
@@ -1630,6 +1660,13 @@ export class StreamService implements OnModuleDestroy {
         session.namespaceId,
         session.conversationId,
         session.userId,
+        session.handlerContext.messageId ?? session.handlerContext.parentId,
+        session.handlerContext.runId && session.handlerContext.queryId
+          ? {
+              id: session.handlerContext.runId,
+              queryId: session.handlerContext.queryId,
+            }
+          : undefined,
       );
       const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
       await this.sendSessionData(

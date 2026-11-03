@@ -491,6 +491,7 @@ export class StreamService implements OnModuleDestroy {
             message: {},
             attrs: {
               error_message: chunk.message,
+              ...(chunk.code ? { error_code: chunk.code } : {}),
             },
           });
 
@@ -1403,6 +1404,9 @@ export class StreamService implements OnModuleDestroy {
         JSON.stringify({
           response_type: 'error',
           id: message.id,
+          ...(message.attrs?.error_code
+            ? { code: message.attrs.error_code }
+            : {}),
           message: message.attrs?.error_message || 'Response failed',
         }),
       );

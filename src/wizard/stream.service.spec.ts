@@ -1969,3 +1969,145 @@ test('live BOS carries the same run identity used for persisted cancellation', a
     (service as any).messagesService.create.mock.calls[0][3].attrs,
   ).toMatchObject({ turn_id: 'decision', turn_run_id: 'retry-run' });
 });
+
+describe('StreamService persisted error codes', () => {
+  it('persists the error code from an error chunk', async () => {
+    const service = createService({});
+    const deltaAttrs: Record<string, unknown>[] = [];
+    (service as any).messagesService = {
+      updateDelta: jest.fn().mockImplementation((_id, chunk) => {
+        deltaAttrs.push(chunk.attrs);
+        return { message: {} };
+      }),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const sent: string[] = [];
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      '',
+      (data: string) => {
+        sent.push(data);
+        return Promise.resolve();
+      },
+      false,
+    );
+
+    await handler(
+      JSON.stringify({
+        response_type: 'error',
+        code: 'content_review_rejected',
+        message:
+          '本次请求未通过模型服务的安全审核，请修改相关内容后重试，或新建对话。',
+      }),
+      { messageId: 'message-id' } as any,
+    );
+
+    expect(deltaAttrs).toEqual([
+      {
+        error_message:
+          '本次请求未通过模型服务的安全审核，请修改相关内容后重试，或新建对话。',
+        error_code: 'content_review_rejected',
+      },
+    ]);
+    expect(JSON.parse(sent[0])).toMatchObject({
+      response_type: 'error',
+      id: 'message-id',
+      code: 'content_review_rejected',
+    });
+  });
+
+  it('persists only the message when the error chunk has no code', async () => {
+    const service = createService({});
+    const deltaAttrs: Record<string, unknown>[] = [];
+    (service as any).messagesService = {
+      updateDelta: jest.fn().mockImplementation((_id, chunk) => {
+        deltaAttrs.push(chunk.attrs);
+        return { message: {} };
+      }),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      '',
+      jest.fn().mockResolvedValue(undefined),
+      false,
+    );
+
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'fetch failed' }),
+      { messageId: 'message-id' } as any,
+    );
+
+    expect(deltaAttrs).toEqual([{ error_message: 'fetch failed' }]);
+  });
+
+  describe('replay of a saved failed message', () => {
+    const failedMessage = (attrs: Record<string, unknown>) => ({
+      id: 'message-id',
+      parentId: null,
+      conversationId: 'conversation-id',
+      status: MessageStatus.FAILED,
+      createdAt: new Date('2026-07-10T08:00:00.000Z'),
+      message: { role: 'assistant', content: '' },
+      attrs,
+    });
+
+    function replayableService() {
+      const service = createService({});
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+      return service;
+    }
+
+    function session() {
+      return {
+        key: 'stream-key',
+        namespaceId: 'namespace-id',
+        finished: false,
+        events: [] as string[],
+        subscribers: [] as unknown[],
+      };
+    }
+
+    it('replays the persisted error code', async () => {
+      const service = replayableService();
+      const target = session();
+
+      await (service as any).sendSavedMessage(
+        target,
+        failedMessage({
+          error_message:
+            '本次请求未通过模型服务的安全审核，请修改相关内容后重试，或新建对话。',
+          error_code: 'content_review_rejected',
+        }),
+        false,
+      );
+
+      expect(JSON.parse(target.events[target.events.length - 1])).toEqual({
+        response_type: 'error',
+        id: 'message-id',
+        code: 'content_review_rejected',
+        message:
+          '本次请求未通过模型服务的安全审核，请修改相关内容后重试，或新建对话。',
+      });
+    });
+
+    it('replays a legacy row that only has an error message', async () => {
+      const service = replayableService();
+      const target = session();
+
+      await (service as any).sendSavedMessage(
+        target,
+        failedMessage({ error_message: 'fetch failed' }),
+        false,
+      );
+
+      expect(JSON.parse(target.events[target.events.length - 1])).toEqual({
+        response_type: 'error',
+        id: 'message-id',
+        message: 'fetch failed',
+      });
+    });
+  });
+});

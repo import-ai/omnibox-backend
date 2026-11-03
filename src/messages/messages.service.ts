@@ -23,7 +23,15 @@ import { Task } from 'omniboxd/tasks/tasks.entity';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { User } from 'omniboxd/user/entities/user.entity';
 import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
-import { DataSource, In, IsNull, MoreThan, Not, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  In,
+  IsNull,
+  MoreThan,
+  Not,
+  Repository,
+} from 'typeorm';
 
 import {
   ChatCheckpointResponse,
@@ -78,6 +86,26 @@ export class MessagesService {
     });
     return await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
+      if (dto.attrs?.turn_id) {
+        const turn = await manager.getRepository(Message).findOneOrFail({
+          where: {
+            id: dto.attrs.turn_id,
+            conversationId,
+            userId: userId ?? IsNull(),
+          },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (
+          dto.attrs.turn_run_id &&
+          turn.attrs?.stopped_runs?.includes(dto.attrs.turn_run_id)
+        ) {
+          throw new AppException(
+            this.i18n.t('system.errors.wizardRequestFailed'),
+            'STREAM_CANCELED',
+            HttpStatus.CONFLICT,
+          );
+        }
+      }
       if (queryOptions?.clientRequestId) {
         await manager.getRepository(Conversation).findOneOrFail({
           where: { id: conversationId, namespaceId },
@@ -197,12 +225,26 @@ export class MessagesService {
     dto: Partial<CreateMessageDto>,
     index: boolean = true,
   ): Promise<Message> {
-    const message = await this.messageRepository.findOneOrFail({
-      where: { id },
-    });
-    Object.assign(message, dto);
     return await transaction(this.dataSource.manager, async (tx) => {
       const manager = tx.entityManager;
+      const message = await this.lockStreamMessage(manager, id);
+      if (
+        message.status === MessageStatus.STOPPED &&
+        dto.status !== MessageStatus.STOPPED
+      )
+        return message;
+      const stoppedRuns = message.attrs?.stopped_runs;
+      Object.assign(message, dto);
+      if (stoppedRuns?.length)
+        message.attrs = {
+          ...message.attrs,
+          stopped_runs: [
+            ...new Set([
+              ...stoppedRuns,
+              ...(message.attrs?.stopped_runs ?? []),
+            ]),
+          ],
+        };
       const updatedMsg = await manager.save(message);
       if (index && message.userId) {
         await this.wizardTaskService.emitUpsertMessageIndexTask(
@@ -339,68 +381,83 @@ export class MessagesService {
   }
 
   async saveCheckpoint(id: string, chunk: ChatCheckpointResponse) {
-    if (chunk.checkpoint) {
-      const message = await this.messageRepository.findOneOrFail({
-        where: { id },
-      });
-
-      message.attrs = message.attrs || {};
-      message.attrs.context = message.attrs.context || {};
-      message.attrs.context = {
-        ...message.attrs.context,
-        checkpoint: chunk.checkpoint,
+    if (!chunk.checkpoint) return;
+    return this.dataSource.transaction(async (manager) => {
+      const message = await this.lockStreamMessage(manager, id);
+      if (message.status === MessageStatus.STOPPED) return message;
+      message.attrs = {
+        ...message.attrs,
+        context: { ...message.attrs?.context, checkpoint: chunk.checkpoint },
       };
       message.status = MessageStatus.SUCCESS;
-      return await this.messageRepository.save(message);
+      return manager.save(message);
+    });
+  }
+
+  private async lockStreamMessage(
+    manager: EntityManager,
+    id: string,
+  ): Promise<Message> {
+    const repo = manager.getRepository(Message);
+    const snapshot = await repo.findOneByOrFail({ id });
+    if (snapshot.attrs?.turn_id && snapshot.attrs.turn_id !== id) {
+      await repo.findOneOrFail({
+        where: { id: snapshot.attrs.turn_id },
+        lock: { mode: 'pessimistic_write' },
+      });
     }
+    return repo.findOneOrFail({
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
   }
 
   async updateDelta(id: string, delta: ChatDeltaResponse) {
     const deltaMessage: Partial<OpenAIMessage> = delta.message;
 
-    const message = await this.messageRepository.findOneOrFail({
-      where: { id },
-    });
-    if (
-      [
-        MessageStatus.SUCCESS,
-        MessageStatus.STOPPED,
-        MessageStatus.FAILED,
-      ].includes(message.status)
-    ) {
-      return message;
-    }
+    return this.dataSource.transaction(async (manager) => {
+      const message = await this.lockStreamMessage(manager, id);
+      if (
+        [
+          MessageStatus.SUCCESS,
+          MessageStatus.STOPPED,
+          MessageStatus.FAILED,
+        ].includes(message.status)
+      ) {
+        return message;
+      }
 
-    // >>> OpenAI Message
-    message.message.content = this.add(
-      message.message.content,
-      deltaMessage.content,
-    );
-    message.message.reasoning_content = this.add(
-      message.message.reasoning_content,
-      deltaMessage.reasoning_content,
-    );
-    if (deltaMessage.tool_calls && deltaMessage.tool_calls.length > 0) {
-      message.message.tool_calls = deltaMessage.tool_calls;
-    }
-    if (deltaMessage.tool_call_id) {
-      message.message.tool_call_id = deltaMessage.tool_call_id;
-    }
-    // <<< OpenAI Message
-    message.status = MessageStatus.STREAMING;
-    if (delta.attrs) {
-      message.attrs = message.attrs || {};
-      Object.assign(message.attrs, delta.attrs);
-    }
-    // attrs.usage is overwritten by the merge above, so the columns are what
-    // add up to the whole call. Agent credits are billed off them at eos.
-    const tokens = agentTokenDeltaOf(delta.attrs);
-    if (tokens) {
-      message.inputTokenCached += tokens.inputTokenCached;
-      message.inputTokenUncached += tokens.inputTokenUncached;
-      message.outputToken += tokens.outputToken;
-    }
-    return await this.messageRepository.save(message);
+      // >>> OpenAI Message
+      message.message.content = this.add(
+        message.message.content,
+        deltaMessage.content,
+      );
+      message.message.reasoning_content = this.add(
+        message.message.reasoning_content,
+        deltaMessage.reasoning_content,
+      );
+      if (deltaMessage.tool_calls && deltaMessage.tool_calls.length > 0) {
+        message.message.tool_calls = deltaMessage.tool_calls;
+      }
+      if (deltaMessage.tool_call_id) {
+        message.message.tool_call_id = deltaMessage.tool_call_id;
+      }
+      // <<< OpenAI Message
+      message.status = MessageStatus.STREAMING;
+      if (delta.attrs) {
+        message.attrs = message.attrs || {};
+        Object.assign(message.attrs, delta.attrs);
+      }
+      // attrs.usage is overwritten by the merge above, so the columns are what
+      // add up to the whole call. Agent credits are billed off them at eos.
+      const tokens = agentTokenDeltaOf(delta.attrs);
+      if (tokens) {
+        message.inputTokenCached += tokens.inputTokenCached;
+        message.inputTokenUncached += tokens.inputTokenUncached;
+        message.outputToken += tokens.outputToken;
+      }
+      return await manager.save(message);
+    });
   }
 
   async findAll(userId: string | undefined, conversationId: string) {
@@ -501,27 +558,140 @@ export class MessagesService {
     namespaceId: string,
     conversationId: string,
     userId: string | undefined,
+    leafId?: string,
+    activeRun?: { id: string; queryId: string },
   ): Promise<Message | null> {
-    const message = await this.messageRepository.findOne({
-      where: {
-        conversationId,
-        userId: userId ? userId : IsNull(),
-        status: In([
-          MessageStatus.PENDING,
-          MessageStatus.STREAMING,
-          MessageStatus.INTERRUPTED,
-        ]),
-      },
-      order: { createdAt: 'DESC' },
+    const messages = await this.findAll(userId, conversationId);
+    const byId = new Map(messages.map((m) => [m.id, m]));
+    const parents = new Set(messages.map((m) => m.parentId));
+    let leaf = leafId
+      ? byId.get(leafId)
+      : messages
+          .filter((m) => !parents.has(m.id))
+          .sort(
+            (a, b) =>
+              b.createdAt.getTime() - a.createdAt.getTime() ||
+              b.id.localeCompare(a.id),
+          )[0];
+    if (!leaf) return null;
+    const branch: Message[] = [];
+    const seen = new Set<string>();
+    while (leaf && !seen.has(leaf.id)) {
+      seen.add(leaf.id);
+      branch.push(leaf);
+      if (
+        leaf.message.role === OpenAIMessageRole.USER &&
+        !leaf.attrs?.tool_call?.decisions?.length
+      )
+        break;
+      leaf = leaf.parentId ? byId.get(leaf.parentId) : undefined;
+    }
+    const query =
+      byId.get(activeRun?.queryId ?? branch[0].attrs?.turn_id ?? '') ??
+      branch.at(-1);
+    if (
+      !query ||
+      !branch.some((m) => m.id === query.id) ||
+      query.message.role !== OpenAIMessageRole.USER
+    )
+      return null;
+    return this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Message);
+      const turn = await repo.findOneOrFail({
+        where: { id: query.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const scoped = await repo.find({
+        where: { conversationId, userId: userId ?? IsNull() },
+      });
+      const activeIds = new Set(branch.map((m) => m.id));
+      const runId = activeRun?.id ?? branch[0].attrs?.turn_run_id;
+      for (const message of scoped)
+        if (
+          runId &&
+          message.attrs?.turn_id === query.id &&
+          message.attrs.turn_run_id === runId
+        )
+          activeIds.add(message.id);
+      const active = scoped.filter((m) => activeIds.has(m.id));
+      const terminal = new Set(['success', 'failed', 'rejected', 'stopped']);
+      const pending = active.filter(
+        (m) =>
+          m.id !== query.id &&
+          [
+            MessageStatus.PENDING,
+            MessageStatus.STREAMING,
+            MessageStatus.INTERRUPTED,
+          ].includes(m.status),
+      );
+      const unresolved = active.some((m) =>
+        m.message.tool_calls?.some(
+          (call) =>
+            !active.some(
+              (tool) =>
+                tool.message.tool_call_id === call.id &&
+                (terminal.has(tool.attrs?.tool_call?.status) ||
+                  [
+                    MessageStatus.SUCCESS,
+                    MessageStatus.FAILED,
+                    MessageStatus.STOPPED,
+                  ].includes(tool.status)),
+            ),
+        ),
+      );
+      if (!pending.length && !unresolved && !activeRun) return null;
+      if (runId) {
+        turn.attrs = {
+          ...turn.attrs,
+          stopped_runs: [
+            ...new Set([...(turn.attrs?.stopped_runs ?? []), runId]),
+          ],
+        };
+        await repo.save(turn);
+      }
+      for (const assistant of active.filter(
+        (m) =>
+          m.message.role === OpenAIMessageRole.ASSISTANT &&
+          m.message.tool_calls?.length,
+      )) {
+        const message = await repo.findOneOrFail({
+          where: { id: assistant.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        message.attrs = {
+          ...message.attrs,
+          turn_status: 'stopped',
+          ...(runId ? { stopped_run_id: runId } : {}),
+        };
+        await repo.save(message);
+      }
+      for (const candidate of pending) {
+        const message = await repo.findOneOrFail({
+          where: { id: candidate.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (
+          ![
+            MessageStatus.PENDING,
+            MessageStatus.STREAMING,
+            MessageStatus.INTERRUPTED,
+          ].includes(message.status)
+        )
+          continue;
+        message.status = MessageStatus.STOPPED;
+        if (
+          message.message.role === OpenAIMessageRole.TOOL &&
+          !terminal.has(message.attrs?.tool_call?.status)
+        ) {
+          message.attrs = {
+            ...message.attrs,
+            tool_call: { ...message.attrs?.tool_call, status: 'stopped' },
+          };
+        }
+        await repo.save(message);
+      }
+      return repo.findOneBy({ id: branch[0].id });
     });
-    if (!message) return null;
-    return await this.update(
-      message.id,
-      namespaceId,
-      conversationId,
-      { status: MessageStatus.STOPPED },
-      false,
-    );
   }
 
   async remove(conversationId: string, messageId: string, user: User) {

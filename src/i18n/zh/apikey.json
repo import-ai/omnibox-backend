@@ -13,6 +13,9 @@
     "noPermissionForNamespace": "用户 {userId} 没有空间 {namespaceId} 的权限",
     "noWritePermission": "用户 {userId} 没有空间 {namespaceId} 中资源 {resourceId} 的写入权限",
     "userOrNamespaceRequired": "需要提供 user_id 或 namespace_id 参数",
-    "noteTooLong": "API 密钥备注不能超过 {max} 个字符"
-  }
+    "noteTooLong": "API 密钥备注不能超过 {max} 个字符",
+    "invalidResourceScope": "API 密钥权限范围无效"
+  },
+  "personal": "个人",
+  "team": "团队"
 }

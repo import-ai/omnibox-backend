@@ -2018,6 +2018,179 @@ describe('StreamService agent handler error finalization', () => {
     );
   });
 
+  function sequencedHandler() {
+    const result = handlerWithMessages();
+    let created = 0;
+    result.messagesService.create.mockImplementation(
+      (_namespaceId, _conversationId, _userId, dto) => {
+        created += 1;
+        const id =
+          created === 1
+            ? 'assistant-id'
+            : created === 2
+              ? 'tool-id'
+              : `synthetic-tool-${created}`;
+        return Promise.resolve({
+          id,
+          parentId: dto.parentId,
+          createdAt: new Date('2026-11-03T00:00:00.000Z'),
+          message: dto.message,
+        });
+      },
+    );
+    result.messagesService.update.mockImplementation(
+      (id, _namespaceId, _conversationId, changes) =>
+        Promise.resolve({ id, message: {}, status: changes.status }),
+    );
+    return result;
+  }
+
+  it('links an old-wizard failed tool message to its pending tool call', async () => {
+    const { handler, messagesService, send } = sequencedHandler();
+    const context = {};
+
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: {
+          role: OpenAIMessageRole.ASSISTANT,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'read_resource', arguments: '{}' },
+            },
+          ],
+        },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'eos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'bos', role: OpenAIMessageRole.TOOL }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'error',
+        message: 'Unknown function: read_resource',
+      }),
+      context,
+    );
+
+    expect(messagesService.updateDelta).toHaveBeenLastCalledWith('tool-id', {
+      response_type: 'delta',
+      message: { tool_call_id: 'call_1' },
+      attrs: {
+        error_message: 'Unknown function: read_resource',
+        tool_call: {
+          status: 'failed',
+          error: 'Unknown function: read_resource',
+        },
+      },
+    });
+    expect(messagesService.update).toHaveBeenLastCalledWith(
+      'tool-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+    expect(messagesService.create).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(send.mock.calls.at(-1)![0])).toEqual({
+      response_type: 'error',
+      id: 'tool-id',
+      message: 'Unknown function: read_resource',
+    });
+  });
+
+  it('creates failed rows for the remaining unmatched tool calls', async () => {
+    const { handler, messagesService } = sequencedHandler();
+    const context = {};
+
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: {
+          role: OpenAIMessageRole.ASSISTANT,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'read_resource', arguments: '{}' },
+            },
+            {
+              id: 'call_2',
+              type: 'function',
+              function: { name: 'read_resource', arguments: '{}' },
+            },
+          ],
+        },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'bos', role: OpenAIMessageRole.TOOL }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+
+    expect(messagesService.updateDelta).toHaveBeenLastCalledWith('tool-id', {
+      response_type: 'delta',
+      message: { tool_call_id: 'call_1' },
+      attrs: {
+        error_message: 'boom',
+        tool_call: { status: 'failed', error: 'boom' },
+      },
+    });
+    expect(messagesService.create).toHaveBeenNthCalledWith(
+      3,
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      {
+        message: {
+          role: OpenAIMessageRole.TOOL,
+          tool_call_id: 'call_2',
+        },
+        parentId: 'tool-id',
+        status: MessageStatus.FAILED,
+        attrs: { tool_call: { status: 'failed', error: 'boom' } },
+      },
+      false,
+    );
+    expect(messagesService.update).toHaveBeenLastCalledWith(
+      'tool-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+  });
+
   it('opens an assistant message before failing when only a query is open', async () => {
     const { handler, messagesService, send } = handlerWithMessages();
     messagesService.create = jest.fn().mockResolvedValue({

@@ -2117,7 +2117,7 @@ describe('StreamService agent handler error finalization', () => {
     });
   });
 
-  it('creates failed rows for the remaining unmatched tool calls', async () => {
+  it('chains failed rows for the remaining unmatched tool calls', async () => {
     const { handler, messagesService } = sequencedHandler();
     const context = {};
 
@@ -2144,6 +2144,11 @@ describe('StreamService agent handler error finalization', () => {
               type: 'function',
               function: { name: 'read_resource', arguments: '{}' },
             },
+            {
+              id: 'call_3',
+              type: 'function',
+              function: { name: 'read_resource', arguments: '{}' },
+            },
           ],
         },
       }),
@@ -2166,6 +2171,7 @@ describe('StreamService agent handler error finalization', () => {
         tool_call: { status: 'failed', error: 'boom' },
       },
     });
+    expect(messagesService.create).toHaveBeenCalledTimes(4);
     expect(messagesService.create).toHaveBeenNthCalledWith(
       3,
       'namespace-id',
@@ -2177,6 +2183,22 @@ describe('StreamService agent handler error finalization', () => {
           tool_call_id: 'call_2',
         },
         parentId: 'tool-id',
+        status: MessageStatus.FAILED,
+        attrs: { tool_call: { status: 'failed', error: 'boom' } },
+      },
+      false,
+    );
+    expect(messagesService.create).toHaveBeenNthCalledWith(
+      4,
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      {
+        message: {
+          role: OpenAIMessageRole.TOOL,
+          tool_call_id: 'call_3',
+        },
+        parentId: 'synthetic-tool-3',
         status: MessageStatus.FAILED,
         attrs: { tool_call: { status: 'failed', error: 'boom' } },
       },

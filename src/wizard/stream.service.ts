@@ -529,8 +529,9 @@ export class StreamService implements OnModuleDestroy {
             attrs,
           });
 
+          let parentId = context.messageId;
           for (const toolCallId of syntheticToolCallIds) {
-            await this.messagesService.create(
+            const created = await this.messagesService.create(
               namespaceId,
               conversationId,
               userId || null,
@@ -539,7 +540,7 @@ export class StreamService implements OnModuleDestroy {
                   role: OpenAIMessageRole.TOOL,
                   tool_call_id: toolCallId,
                 },
-                parentId: context.messageId,
+                parentId,
                 status: MessageStatus.FAILED,
                 attrs: {
                   tool_call: { status: 'failed', error: chunk.message },
@@ -547,6 +548,7 @@ export class StreamService implements OnModuleDestroy {
               },
               false,
             );
+            parentId = created.id;
           }
 
           await this.messagesService.update(

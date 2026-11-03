@@ -68,7 +68,7 @@ export class OpenAttachmentsController {
   ): Promise<ListAttachmentsResponseDto> {
     await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       resourceId,
       userId,
     );
@@ -118,7 +118,7 @@ export class OpenAttachmentsController {
   ): Promise<UploadAttachmentsResponseDto> {
     await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       resourceId,
       userId,
       ResourcePermission.CAN_EDIT,
@@ -151,7 +151,7 @@ export class OpenAttachmentsController {
   ) {
     await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       resourceId,
       userId,
     );
@@ -185,7 +185,7 @@ export class OpenAttachmentsController {
   ) {
     await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       resourceId,
       userId,
       ResourcePermission.CAN_EDIT,

@@ -1118,10 +1118,7 @@ export class NamespacesService {
     const spaces: any = {
       private: { ...privateRoot, parentId: '0', children: privateChildren },
     };
-    const memberCount = await this.namespaceMemberRepository.countBy({
-      namespaceId,
-    });
-    if (memberCount > 1 || teamspaceChildren.length > 0) {
+    if (teamspaceRoot.id) {
       spaces.teamspace = {
         ...teamspaceRoot,
         parentId: '0',

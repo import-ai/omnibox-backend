@@ -542,6 +542,90 @@ describe('APIKeyService', () => {
     });
   });
 
+  describe('combined scope', () => {
+    beforeEach(() => {
+      namespacesService.getPrivateRootId = jest
+        .fn()
+        .mockResolvedValue('personal');
+      namespacesService.getTeamspaceRoot = jest
+        .fn()
+        .mockResolvedValue({ id: 'team' });
+      namespacesService.getMemberByUserId.mockResolvedValue({} as never);
+      permissionsService.userHasPermission.mockResolvedValue(true);
+    });
+
+    it('resolves only the owner personal and namespace team roots at request time', async () => {
+      apiKeyRepository.findOne.mockResolvedValue({
+        ...mockApiKey,
+        attrs: { ...mockApiKey.attrs, resource_scope: 'personal_and_team' },
+      } as never);
+      const key = await service.findByValue('sk-key');
+      expect(key?.resourceScope).toEqual({
+        rootIds: ['personal', 'team'],
+        defaultResourceId: 'personal',
+      });
+      expect(namespacesService.getPrivateRootId).toHaveBeenCalledWith(
+        mockApiKey.userId,
+        mockApiKey.namespaceId,
+      );
+    });
+
+    it('denies access immediately after namespace membership is removed', async () => {
+      apiKeyRepository.findOne.mockResolvedValue({
+        ...mockApiKey,
+        attrs: { ...mockApiKey.attrs, resource_scope: 'personal_and_team' },
+      } as never);
+      namespacesService.getMemberByUserId.mockResolvedValue(null);
+      await expect(service.findByValue('sk-key')).rejects.toThrow();
+    });
+
+    it('keeps the existing assistant destination when widening its scope', async () => {
+      apiKeyRepository.findOne.mockResolvedValue(mockApiKey as never);
+      await service.patch(mockApiKey.id, {
+        resource_scope: 'personal_and_team',
+      });
+      expect(apiKeyRepository.update).toHaveBeenCalledWith(mockApiKey.id, {
+        attrs: expect.objectContaining({
+          resource_scope: 'personal_and_team',
+          default_save_resource_id: mockApiKey.attrs.root_resource_id,
+        }),
+      });
+    });
+
+    it('preserves a combined destination on unrelated edits', async () => {
+      apiKeyRepository.findOne.mockResolvedValue({
+        ...mockApiKey,
+        attrs: {
+          ...mockApiKey.attrs,
+          resource_scope: 'personal_and_team',
+          default_save_resource_id: 'team-folder',
+        },
+      } as never);
+      await service.patch(mockApiKey.id, { note: 'Updated' });
+      expect(apiKeyRepository.update).toHaveBeenCalledWith(mockApiKey.id, {
+        attrs: expect.objectContaining({
+          default_save_resource_id: 'team-folder',
+        }),
+      });
+    });
+
+    it('does not upgrade legacy keys on unrelated edits', async () => {
+      apiKeyRepository.findOne.mockResolvedValue(mockApiKey as never);
+      await service.patch(mockApiKey.id, { note: 'Updated' });
+      expect(apiKeyRepository.update.mock.calls[0][1].attrs).not.toHaveProperty(
+        'resource_scope',
+      );
+    });
+
+    it('rejects an unknown scope without persisting it', async () => {
+      apiKeyRepository.findOne.mockResolvedValue(mockApiKey as never);
+      await expect(
+        service.patch(mockApiKey.id, { resource_scope: 'all' as never }),
+      ).rejects.toThrow();
+      expect(apiKeyRepository.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('generateUniqueApiKeyValue', () => {
     it('should generate a unique API key value with sk- prefix', async () => {
       // Mock findOne to return null (value is unique)

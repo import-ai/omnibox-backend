@@ -38,6 +38,14 @@ export class UpdateAPIKeyDto {
 export class PatchAPIKeyDto {
   @IsString({ message: i18nValidationMessage('validation.errors.isString') })
   @IsOptional()
+  resource_scope?: 'resource' | 'personal_and_team';
+
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsOptional()
+  default_save_resource_id?: string;
+
+  @IsString({ message: i18nValidationMessage('validation.errors.isString') })
+  @IsOptional()
   root_resource_id?: string;
 
   @IsArray({ message: i18nValidationMessage('validation.errors.isArray') })

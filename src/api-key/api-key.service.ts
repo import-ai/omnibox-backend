@@ -57,6 +57,20 @@ export class APIKeyService {
       );
     }
 
+    if (createApiKeyDto.attrs?.resource_scope === 'personal_and_team') {
+      const personal = await this.namespacesService.getPrivateRootId(
+        createApiKeyDto.user_id,
+        createApiKeyDto.namespace_id,
+      );
+      createApiKeyDto.attrs.root_resource_id = personal;
+      if (createApiKeyDto.attrs.default_save_resource_id) {
+        await this.validateUserResourcePermission(
+          createApiKeyDto.user_id,
+          createApiKeyDto.namespace_id,
+          createApiKeyDto.attrs.default_save_resource_id,
+        );
+      }
+    }
     const value = await this.generateUniqueApiKeyValue();
 
     const apiKey = this.apiKeyRepository.create({
@@ -84,7 +98,19 @@ export class APIKeyService {
   }
 
   async findByValue(value: string): Promise<APIKey | null> {
-    return await this.apiKeyRepository.findOne({ where: { value } });
+    const key = await this.apiKeyRepository.findOne({ where: { value } });
+    if (key?.attrs.resource_scope === 'personal_and_team') {
+      await this.validateUserNamespacePermission(key.userId, key.namespaceId);
+      const [personal, team] = await Promise.all([
+        this.namespacesService.getPrivateRootId(key.userId, key.namespaceId),
+        this.namespacesService.getTeamspaceRoot(key.namespaceId),
+      ]);
+      key.resourceScope = {
+        rootIds: [personal, team.id],
+        defaultResourceId: key.attrs.default_save_resource_id || personal,
+      };
+    }
+    return key;
   }
 
   async findAll(
@@ -103,14 +129,7 @@ export class APIKeyService {
     id: string,
     updateApiKeyDto: UpdateAPIKeyDto,
   ): Promise<APIKeyResponseDto> {
-    const updateData: Partial<APIKey> = {};
-    if (updateApiKeyDto.attrs !== undefined) {
-      this.validateAttrs(updateApiKeyDto.attrs);
-      updateData.attrs = updateApiKeyDto.attrs;
-    }
-
-    await this.apiKeyRepository.update(id, updateData);
-    return await this.findOne(id);
+    return this.patch(id, updateApiKeyDto.attrs ?? {});
   }
 
   async patch(
@@ -142,6 +161,28 @@ export class APIKeyService {
     // Prepare the updated attrs by merging with existing attrs
     const updatedAttrs = { ...existingApiKey.attrs };
 
+    if (patchApiKeyDto.resource_scope !== undefined) {
+      updatedAttrs.resource_scope = patchApiKeyDto.resource_scope;
+      if (
+        patchApiKeyDto.resource_scope === 'personal_and_team' &&
+        existingApiKey.attrs.resource_scope !== 'personal_and_team'
+      ) {
+        updatedAttrs.default_save_resource_id =
+          existingApiKey.attrs.root_resource_id;
+      }
+      if (patchApiKeyDto.resource_scope === 'resource') {
+        delete updatedAttrs.default_save_resource_id;
+      }
+    }
+    if (patchApiKeyDto.default_save_resource_id !== undefined) {
+      await this.validateUserResourcePermission(
+        existingApiKey.userId,
+        existingApiKey.namespaceId,
+        patchApiKeyDto.default_save_resource_id,
+      );
+      updatedAttrs.default_save_resource_id =
+        patchApiKeyDto.default_save_resource_id;
+    }
     // Update only the fields that are provided
     if (patchApiKeyDto.root_resource_id !== undefined) {
       updatedAttrs.root_resource_id = patchApiKeyDto.root_resource_id;
@@ -197,6 +238,27 @@ export class APIKeyService {
   }
 
   private validateAttrs(attrs?: APIKeyAttrs): void {
+    if (
+      attrs?.resource_scope !== undefined &&
+      !['resource', 'personal_and_team'].includes(attrs.resource_scope)
+    ) {
+      throw new AppException(
+        this.i18n.t('apikey.errors.invalidResourceScope'),
+        'INVALID_RESOURCE_SCOPE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    if (
+      attrs?.default_save_resource_id !== undefined &&
+      (typeof attrs.default_save_resource_id !== 'string' ||
+        !attrs.default_save_resource_id)
+    ) {
+      throw new AppException(
+        this.i18n.t('apikey.errors.invalidResourceScope'),
+        'INVALID_RESOURCE_SCOPE',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     if (attrs?.note !== undefined && typeof attrs.note !== 'string') {
       const message = this.i18n.t('validation.errors.isString');
       throw new AppException(

@@ -53,7 +53,7 @@ export class OpenSearchService {
     const scopedResourceIds =
       await this.openResourcesService.filterResourceScope(
         apiKey.namespaceId,
-        apiKey.attrs.root_resource_id,
+        apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
         apiKey.userId,
         resourceIds,
       );

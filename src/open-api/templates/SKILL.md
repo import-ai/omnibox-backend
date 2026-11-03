@@ -33,14 +33,18 @@ Do not put API keys in logs, chat messages, documents, or URLs. If a request fai
 An API key is scoped to:
 
 - one user
-- one namespace / workspace
-- one root resource
+- one Namespace
+- one root resource, or Personal + Team within the same namespace
 - a permission matrix
 
 Important rules for agents:
 
-- Never assume access to the full namespace. Only operate under the API key root resource.
-- If `parent_id` is omitted when creating/listing resources, the API key root resource is used.
+- Never assume access to the full namespace. A legacy/resource key can only access its root and descendants. A `personal_and_team` key can access the owner's Personal tree and the Team tree, intersected with the owner's current permissions. Other members' Personal trees are excluded.
+- Existing keys keep their scope. New keys default to Personal; users must explicitly choose Personal + Team.
+- For a combined key, `GET /resources` without `parent_id` returns the Personal and Team entry folders with `total`; list their children by passing an entry ID as `parent_id`.
+- For creation, collection, and upload, an explicit `parent_id` takes precedence. Otherwise a combined key uses `default_save_resource_id` when configured, or Personal. Existing assistant save destinations are preserved when widening scope.
+- An invalid or inaccessible explicit/default save destination is an error, never a reason to save elsewhere. Updates and deletes act on the original resource in place.
+- Resource scope and action permissions are independent. Widening scope does not grant create/update/delete permissions.
 - Only use `parent_id` values returned by this Open API or explicitly provided by the user.
 - For `403`, explain that the API key lacks permission or the target is outside scope.
 - For `404`, treat the resource as not visible within this API key scope; do not guess other IDs.
@@ -166,7 +170,7 @@ Notes:
 
 - `resource_type` defaults to `doc`.
 - Document resources require non-empty `content`.
-- If `parent_id` is omitted, the document is created under the API key root resource.
+- If `parent_id` is omitted, the document uses the default save destination described above.
 - `tag_names` contains tag names, not tag IDs. Each tag name must be non-empty and at most 20 characters. Missing tags are created automatically.
 
 ### Create a folder resource
@@ -188,7 +192,7 @@ Rules:
 
 - Folder resources require non-empty `name`.
 - Do not send `content` for folders.
-- If `parent_id` is omitted, the folder is created under the API key root resource.
+- If `parent_id` is omitted, the folder uses the default save destination described above.
 
 ### Update a resource
 

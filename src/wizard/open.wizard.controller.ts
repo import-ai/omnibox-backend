@@ -98,7 +98,7 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect/gzip' \\
   ): Promise<CollectResponseDto> {
     const parentId = await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       data.parentId,
       userId,
       ResourcePermission.CAN_EDIT,
@@ -187,7 +187,7 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect/gzip' \\
   ): Promise<CollectUrlResponseDto> {
     const parentId = await this.openResourcesService.resolveResourceId(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       data.parentId,
       userId,
       ResourcePermission.CAN_EDIT,

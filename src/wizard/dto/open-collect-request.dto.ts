@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Expose, Transform } from 'class-transformer';
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
@@ -28,6 +29,7 @@ export class OpenCollectRequestDto {
   title: string;
 
   @ApiPropertyOptional({
+    name: 'parent_id',
     description: 'Parent resource ID. Defaults to the API key root resource',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
@@ -35,5 +37,10 @@ export class OpenCollectRequestDto {
     message: i18nValidationMessage('validation.errors.parentId.isString'),
   })
   @IsOptional()
+  @Expose({ name: 'parent_id' })
+  @Transform(
+    ({ value, obj }: { value: unknown; obj: { parentId?: unknown } }) =>
+      value ?? obj.parentId,
+  )
   parentId?: string;
 }

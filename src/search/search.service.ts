@@ -58,6 +58,9 @@ const SEMANTIC_SEARCH_PAGE_SIZE = 100;
 const RELEVANCE_SEARCH_PAGE_SIZE = 20;
 const MAX_FILTERED_PAGES = 3;
 const RELEVANCE_TOTAL_BUDGET_MS = 1500;
+// The GET picker is not the interactive search dialog and may wait longer to
+// fill its single response with up to MAX_SEARCH_LIMIT filtered items.
+const PICKER_RELEVANCE_TOTAL_BUDGET_MS = 3000;
 const FIRST_PAGE_EMPTY_BUDGET_MS = 3000;
 const MAX_EMPTY_PAGES = 10;
 const SEMANTIC_SEARCH_CACHE_TTL_MS = 30 * 1000;
@@ -153,16 +156,18 @@ export class SearchService {
     if (candidateResourceIds && candidateResourceIds.length <= 0) {
       return [];
     }
-    const result = await this.searchSemanticResources(
+    const result = await this.searchSemanticResourcesPaginated(
       userId,
       namespaceId,
       normalizedQuery,
       candidateResourceIds,
+      0,
+      MAX_SEARCH_LIMIT,
       {
-        offset: 0,
-        limit: this.isSearchRelevanceEnabled()
-          ? RELEVANCE_SEARCH_PAGE_SIZE
-          : MAX_SEARCH_LIMIT,
+        maxPages: this.isSearchRelevanceEnabled()
+          ? Math.ceil(MAX_SEARCH_LIMIT / RELEVANCE_SEARCH_PAGE_SIZE)
+          : 1,
+        budgetMs: PICKER_RELEVANCE_TOTAL_BUDGET_MS,
       },
     );
     return result.items;
@@ -266,6 +271,7 @@ export class SearchService {
     candidateResourceIds: string[] | null,
     offset: number,
     limit: number,
+    options?: { maxPages?: number; budgetMs?: number },
   ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
     const requestedItemCount = offset + limit;
     const requestedItemCountWithLookahead = requestedItemCount + 1;
@@ -284,12 +290,21 @@ export class SearchService {
       : SEMANTIC_SEARCH_PAGE_SIZE;
     const requestStartedAt = Date.now();
     let fetchedPages = 0;
+    const maxFilteredPages = options?.maxPages ?? MAX_FILTERED_PAGES;
+    const filteredBudgetMs = options?.budgetMs ?? RELEVANCE_TOTAL_BUDGET_MS;
 
     for (
       ;
       cacheEntry.items.length < requestedItemCountWithLookahead &&
       cacheEntry.hasMoreRawResults;
     ) {
+      if (
+        !relevanceEnabled &&
+        options?.maxPages !== undefined &&
+        fetchedPages >= options.maxPages
+      ) {
+        break;
+      }
       let remainingBudgetMs = 0;
       if (relevanceEnabled) {
         // The first page gets a larger budget so an empty result set is only
@@ -297,13 +312,11 @@ export class SearchService {
         const exploringFirstPage =
           offset === 0 && cacheEntry.items.length === 0;
         remainingBudgetMs =
-          (exploringFirstPage
-            ? FIRST_PAGE_EMPTY_BUDGET_MS
-            : RELEVANCE_TOTAL_BUDGET_MS) -
+          (exploringFirstPage ? FIRST_PAGE_EMPTY_BUDGET_MS : filteredBudgetMs) -
           (Date.now() - requestStartedAt);
         const pageLimit = exploringFirstPage
           ? MAX_EMPTY_PAGES
-          : MAX_FILTERED_PAGES;
+          : maxFilteredPages;
         if (fetchedPages >= pageLimit || remainingBudgetMs <= 0) {
           break;
         }

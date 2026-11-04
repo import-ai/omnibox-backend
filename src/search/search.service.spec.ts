@@ -1679,6 +1679,7 @@ describe('SearchService', () => {
             limit: 20,
             filterRelevance: true,
           }),
+          expect.objectContaining({ signal: expect.any(AbortSignal) }),
         );
       },
     );
@@ -1698,7 +1699,7 @@ describe('SearchService', () => {
       expect(wizardApiService.search.mock.calls[0]).toHaveLength(1);
     });
 
-    it('requests 20-row relevance pages without a signal for the picker', async () => {
+    it('requests 20-row relevance pages with an abort signal for the picker', async () => {
       const { configService, service, wizardApiService } = createService();
       configService.get.mockReturnValue('true');
 
@@ -1710,8 +1711,98 @@ describe('SearchService', () => {
           limit: 20,
           filterRelevance: true,
         }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
-      expect(wizardApiService.search.mock.calls[0]).toHaveLength(1);
+      expect(wizardApiService.search.mock.calls[0]).toHaveLength(2);
+    });
+
+    it('backfills the picker across 20-row relevance pages', async () => {
+      const {
+        configService,
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      configService.get.mockReturnValue('true');
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      const allRecords = Array.from({ length: 26 }, (_, index) =>
+        chunkRecord(`resource-${index}`),
+      );
+      wizardApiService.search.mockImplementation((request: any) => {
+        const records = allRecords.slice(
+          request.offset,
+          request.offset + request.limit,
+        );
+        return Promise.resolve({ records, rawCount: records.length });
+      });
+
+      const result = await service.search(userId, namespaceId, 'query');
+
+      expect(result).toHaveLength(26);
+      expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+      expect(wizardApiService.search.mock.calls[0][0].filterRelevance).toBe(
+        true,
+      );
+      expect(wizardApiService.search.mock.calls[1][0].offset).toBe(20);
+    });
+
+    it('backfills past a fully filtered raw page in the picker', async () => {
+      const {
+        configService,
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      configService.get.mockReturnValue('true');
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      wizardApiService.search.mockImplementation((request: any) =>
+        Promise.resolve(
+          request.offset === 0
+            ? { records: [], rawCount: 20 }
+            : { records: [chunkRecord('survivor')], rawCount: 1 },
+        ),
+      );
+
+      const result = await service.search(userId, namespaceId, 'query');
+
+      expect(result.map((item: any) => item.resourceId)).toEqual(['survivor']);
+      expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+      expect(wizardApiService.search.mock.calls[1][0].offset).toBe(20);
+    });
+
+    it('keeps the picker to one 100-row page when relevance is disabled', async () => {
+      const {
+        configService,
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      configService.get.mockReturnValue('false');
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      const allRecords = Array.from({ length: 120 }, (_, index) =>
+        chunkRecord(`resource-${index}`),
+      );
+      wizardApiService.search.mockImplementation((request: any) => {
+        const records = allRecords.slice(
+          request.offset,
+          request.offset + request.limit,
+        );
+        return Promise.resolve({ records, rawCount: records.length });
+      });
+
+      const result = await service.search(userId, namespaceId, 'query');
+
+      expect(result).toHaveLength(100);
+      expect(wizardApiService.search).toHaveBeenCalledTimes(1);
+      expect(wizardApiService.search.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ offset: 0, limit: 100 }),
+      );
+      expect(
+        wizardApiService.search.mock.calls[0][0].filterRelevance,
+      ).toBeUndefined();
     });
 
     it('requests 20-row relevance pages with an abort signal when paginated', async () => {

@@ -131,6 +131,81 @@ describe('AuthModule (e2e)', () => {
     });
   });
 
+  describe('GET /api/v1/auth/session', () => {
+    it('should accept a valid token cookie', async () => {
+      await client
+        .request()
+        .get('/api/v1/auth/session')
+        .set('Cookie', `token=${client.user.token}`)
+        .expect(HttpStatus.NO_CONTENT);
+    });
+
+    it('should accept a valid bearer token', async () => {
+      await client
+        .request()
+        .get('/api/v1/auth/session')
+        .set('Authorization', `Bearer ${client.user.token}`)
+        .expect(HttpStatus.NO_CONTENT);
+    });
+
+    it('should reject a request without a token', async () => {
+      await client
+        .request()
+        .get('/api/v1/auth/session')
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should reject an invalid token cookie', async () => {
+      await client
+        .request()
+        .get('/api/v1/auth/session')
+        .set('Cookie', 'token=invalid-token')
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+  });
+
+  describe('POST /api/v1/auth/session', () => {
+    it('should exchange a bearer token for a session cookie', async () => {
+      const response = await client
+        .request()
+        .post('/api/v1/auth/session')
+        .set('Authorization', `Bearer ${client.user.token}`)
+        .expect(HttpStatus.OK);
+
+      const cookie = response.headers['set-cookie'] as unknown as string[];
+      expect(cookie.some((item) => item.startsWith('token='))).toBe(true);
+      expect(cookie.some((item) => item.includes('HttpOnly'))).toBe(true);
+      expect(response.body.uid).toBe(client.user.id);
+    });
+
+    it('should refresh the cookie from an existing session cookie', async () => {
+      const response = await client
+        .request()
+        .post('/api/v1/auth/session')
+        .set('Cookie', `token=${client.user.token}`)
+        .expect(HttpStatus.OK);
+
+      const cookie = response.headers['set-cookie'] as unknown as string[];
+      expect(cookie.some((item) => item.startsWith('token='))).toBe(true);
+      expect(response.body.uid).toBe(client.user.id);
+    });
+
+    it('should reject a request without a token', async () => {
+      await client
+        .request()
+        .post('/api/v1/auth/session')
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should reject an invalid token', async () => {
+      await client
+        .request()
+        .post('/api/v1/auth/session')
+        .set('Authorization', 'Bearer invalid-token')
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+  });
+
   describe('API Key Authentication', () => {
     describe('API Key Format Validation', () => {
       it('should accept valid API key with sk- prefix', async () => {

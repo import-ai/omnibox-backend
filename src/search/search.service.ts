@@ -787,11 +787,11 @@ export class SearchService {
   }
 
   private isSearchRelevanceEnabled(): boolean {
-    return (
-      (
-        this.configService.get<string>('OBB_SEARCH_RELEVANCE_ENABLED') ?? ''
-      ).toLowerCase() === 'true'
-    );
+    const raw = this.configService.get<string>('OBB_SEARCH_RELEVANCE_ENABLED');
+    if (raw == null || raw.trim() === '') {
+      return true;
+    }
+    return raw.trim().toLowerCase() === 'true';
   }
 
   private isAbortError(error: unknown): boolean {

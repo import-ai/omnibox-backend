@@ -321,7 +321,7 @@ describe('SearchService', () => {
       ),
     };
     const configService = {
-      get: jest.fn().mockReturnValue(undefined),
+      get: jest.fn().mockReturnValue('false'),
     };
     const service = new SearchService(
       wizardApiService as any,
@@ -1660,6 +1660,28 @@ describe('SearchService', () => {
           ),
       );
     };
+
+    it.each([
+      ['unset', undefined],
+      ['empty', ''],
+      ['true', 'true'],
+    ])(
+      'enables relevance when OBB_SEARCH_RELEVANCE_ENABLED is %s',
+      async (_label, value) => {
+        const { configService, service, wizardApiService } = createService();
+        configService.get.mockReturnValue(value);
+
+        await service.search(userId, namespaceId, 'query');
+
+        expect(wizardApiService.search).toHaveBeenCalledWith(
+          expect.objectContaining({
+            offset: 0,
+            limit: 20,
+            filterRelevance: true,
+          }),
+        );
+      },
+    );
 
     it('keeps the picker limit at 100 and omits the flag when disabled', async () => {
       const { configService, service, wizardApiService } = createService();

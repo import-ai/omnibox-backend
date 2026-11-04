@@ -1,16 +1,23 @@
 import { HttpStatus } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { AttributionReporter } from 'omniboxd/attribution/attribution-reporter.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
-import { Task } from 'omniboxd/tasks/tasks.entity';
+import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { prefixFailedResourceName } from 'omniboxd/wizard/processors/failed-resource-name';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { buildTaskErrorContent } from 'omniboxd/wizard/processors/task-error-content';
 import { ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
+
+const CLIP_TASK_FUNCTIONS = new Set([
+  'collect',
+  'generate_audio_note',
+  'generate_video_note',
+]);
 
 export class CollectProcessor extends Processor {
   constructor(
@@ -18,6 +25,7 @@ export class CollectProcessor extends Processor {
     private readonly resourcesService: ResourcesService,
     private readonly tagService: TagService,
     private readonly i18n: I18nService,
+    private readonly attributionReporter: AttributionReporter,
   ) {
     super();
   }
@@ -93,6 +101,12 @@ export class CollectProcessor extends Processor {
         }),
         true, // autoRenameOnConflict for AI-generated titles
       );
+      if (
+        task.status === TaskStatus.FINISHED &&
+        CLIP_TASK_FUNCTIONS.has(task.function)
+      ) {
+        this.attributionReporter.reportKeyActionCandidate(task.userId);
+      }
       return { resourceId, tagIds };
     }
     return {};

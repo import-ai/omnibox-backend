@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
+import { AttributionReporter } from 'omniboxd/attribution/attribution-reporter.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { File } from 'omniboxd/files/entities/file.entity';
 import { FilesService } from 'omniboxd/files/files.service';
@@ -60,6 +61,7 @@ export class ResourcesService {
     private readonly tagService: TagService,
     private readonly resourceRevisionService: ResourceRevisionService,
     private readonly resourceContributorsService: ResourceContributorsService,
+    private readonly attributionReporter: AttributionReporter,
   ) {}
 
   private validateResourceName(
@@ -1129,6 +1131,8 @@ export class ResourcesService {
       }),
     );
 
+    this.reportKeyActionCandidate(tx, resource, props.source);
+
     // content_size is stored for every type; only the quota charge is skipped
     // for a storage-exempt one (the poller's internal create path lands here
     // too).
@@ -1174,6 +1178,27 @@ export class ResourcesService {
     }
 
     return resource;
+  }
+
+  private reportKeyActionCandidate(
+    tx: Transaction,
+    resource: Resource,
+    source?: string,
+  ): void {
+    const userId = resource.userId;
+    if (!userId) return;
+    if (source === 'collect' || source === 'welcome') return;
+    const isContent = isContentResourceType(resource.resourceType);
+    const isChildFolder =
+      resource.resourceType === ResourceType.FOLDER &&
+      resource.parentId !== null;
+    if (!isContent && !isChildFolder) return;
+    // Reported after commit so a rolled-back create leaves no candidate, and
+    // the pro-side query sees the row.
+    tx.afterCommitHooks.push(() => {
+      this.attributionReporter.reportKeyActionCandidate(userId);
+      return Promise.resolve();
+    });
   }
 
   async restoreResource(

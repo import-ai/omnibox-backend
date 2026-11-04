@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
+import { AttributionReporter } from 'omniboxd/attribution/attribution-reporter.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
@@ -16,6 +17,7 @@ describe('CollectProcessor', () => {
   let resourcesService: jest.Mocked<ResourcesService>;
   let tagService: jest.Mocked<TagService>;
   let i18nService: jest.Mocked<I18nService>;
+  let attributionReporter: jest.Mocked<AttributionReporter>;
 
   const mockResource: Partial<Resource> = {
     id: 'test-resource-id',
@@ -48,6 +50,10 @@ describe('CollectProcessor', () => {
       }),
     };
 
+    const mockAttributionReporter = {
+      reportKeyActionCandidate: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
@@ -66,6 +72,10 @@ describe('CollectProcessor', () => {
           provide: I18nService,
           useValue: mockI18nService,
         },
+        {
+          provide: AttributionReporter,
+          useValue: mockAttributionReporter,
+        },
       ],
     }).compile();
 
@@ -73,11 +83,13 @@ describe('CollectProcessor', () => {
     resourcesService = module.get(ResourcesService);
     tagService = module.get(TagService);
     i18nService = module.get(I18nService);
+    attributionReporter = module.get(AttributionReporter);
     processor = new CollectProcessor(
       namespaceResourcesService,
       resourcesService,
       tagService,
       i18nService,
+      attributionReporter,
     );
   });
 
@@ -541,6 +553,93 @@ describe('CollectProcessor', () => {
           resourceId: 'test-resource-id',
           tagIds: undefined,
         });
+      });
+    });
+
+    describe('key action reporting', () => {
+      const successOutput = { markdown: 'content', title: 'title' };
+
+      beforeEach(() => {
+        resourcesService.getResourceOrFail.mockResolvedValue(
+          mockResource as Resource,
+        );
+        namespaceResourcesService.update.mockResolvedValue(undefined);
+      });
+
+      it.each(['collect', 'generate_audio_note', 'generate_video_note'])(
+        'reports a candidate when a %s task finishes successfully',
+        async (taskFunction) => {
+          const task = createMockTask({
+            payload: { resource_id: 'test-resource-id' },
+            function: taskFunction,
+            status: TaskStatus.FINISHED,
+            output: successOutput,
+          });
+
+          await processor.process(task);
+
+          expect(
+            attributionReporter.reportKeyActionCandidate,
+          ).toHaveBeenCalledWith('test-user');
+        },
+      );
+
+      it('does not report when the task failed', async () => {
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          status: TaskStatus.ERROR,
+          exception: { error: 'failed' },
+          output: successOutput,
+        });
+
+        await processor.process(task);
+
+        expect(
+          attributionReporter.reportKeyActionCandidate,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('does not report when a non-finished task produces output', async () => {
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          status: TaskStatus.ERROR,
+          output: successOutput,
+        });
+
+        await processor.process(task);
+
+        expect(
+          attributionReporter.reportKeyActionCandidate,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('does not report when the task has no output', async () => {
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          status: TaskStatus.FINISHED,
+          output: null,
+        });
+
+        await processor.process(task);
+
+        expect(
+          attributionReporter.reportKeyActionCandidate,
+        ).not.toHaveBeenCalled();
+      });
+
+      it('does not report for a file reader task', async () => {
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          function: 'file_reader_pdf',
+          status: TaskStatus.FINISHED,
+          output: successOutput,
+        });
+
+        await processor.process(task);
+
+        expect(
+          attributionReporter.reportKeyActionCandidate,
+        ).not.toHaveBeenCalled();
       });
     });
 

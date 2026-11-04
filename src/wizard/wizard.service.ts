@@ -4,6 +4,7 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
+import { AttributionReporter } from 'omniboxd/attribution/attribution-reporter.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
@@ -53,6 +54,7 @@ export class WizardService {
     private readonly resourcesService: ResourcesService,
     private readonly i18n: I18nService,
     private readonly configService: ConfigService,
+    private readonly attributionReporter: AttributionReporter,
   ) {
     this.baseHostname = new URL(
       this.configService.get<string>('OBB_BASE_URL', 'https://www.omnibox.pro'),
@@ -67,6 +69,7 @@ export class WizardService {
       this.resourcesService,
       this.tagService,
       this.i18n,
+      this.attributionReporter,
     );
     this.processors = {
       collect: new CollectProcessor(
@@ -74,6 +77,7 @@ export class WizardService {
         this.resourcesService,
         this.tagService,
         this.i18n,
+        this.attributionReporter,
       ),
       file_reader: readerProcessor,
       file_reader_text: readerProcessor,
@@ -97,12 +101,14 @@ export class WizardService {
         this.resourcesService,
         this.tagService,
         this.i18n,
+        this.attributionReporter,
       ),
       generate_audio_note: new CollectProcessor(
         this.namespaceResourcesService,
         this.resourcesService,
         this.tagService,
         this.i18n,
+        this.attributionReporter,
       ),
       collect_url: new CollectUrlProcessor(
         this.namespaceResourcesService,
@@ -141,14 +147,14 @@ export class WizardService {
       name: title || url,
       resourceType: ResourceType.LINK,
       parentId: parentId,
-      attrs: { url },
+      attrs: { url, key_action_source: 'collect' },
     };
     const resource = await this.namespaceResourcesService.create(
       userId,
       namespaceId,
       resourceDto,
       undefined,
-      undefined,
+      'collect',
       true, // autoRenameOnConflict for URL-based names
     );
 
@@ -207,14 +213,14 @@ export class WizardService {
       name: url,
       resourceType: ResourceType.LINK,
       parentId,
-      attrs: { url },
+      attrs: { url, key_action_source: 'collect' },
     };
     const resource = await this.namespaceResourcesService.create(
       userId,
       namespaceId,
       resourceDto,
       undefined,
-      undefined,
+      'collect',
       true, // autoRenameOnConflict for URL-based names
     );
 

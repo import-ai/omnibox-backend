@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method, @typescript-eslint/no-require-imports */
 import { Test, TestingModule } from '@nestjs/testing';
 import { I18nService } from 'nestjs-i18n';
+import { AttributionReporter } from 'omniboxd/attribution/attribution-reporter.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { Resource } from 'omniboxd/resources/entities/resource.entity';
@@ -16,6 +17,7 @@ describe('ReaderProcessor', () => {
   let resourcesService: jest.Mocked<ResourcesService>;
   let tagService: jest.Mocked<TagService>;
   let i18nService: jest.Mocked<I18nService>;
+  let attributionReporter: jest.Mocked<AttributionReporter>;
 
   const mockResource: Partial<Resource> = {
     id: 'test-resource-id',
@@ -48,6 +50,10 @@ describe('ReaderProcessor', () => {
       }),
     };
 
+    const mockAttributionReporter = {
+      reportKeyActionCandidate: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
@@ -66,6 +72,10 @@ describe('ReaderProcessor', () => {
           provide: I18nService,
           useValue: mockI18nService,
         },
+        {
+          provide: AttributionReporter,
+          useValue: mockAttributionReporter,
+        },
       ],
     }).compile();
 
@@ -73,11 +83,13 @@ describe('ReaderProcessor', () => {
     resourcesService = module.get(ResourcesService);
     tagService = module.get(TagService);
     i18nService = module.get(I18nService);
+    attributionReporter = module.get(AttributionReporter);
     processor = new ReaderProcessor(
       namespaceResourcesService,
       resourcesService,
       tagService,
       i18nService,
+      attributionReporter,
     );
   });
 
@@ -178,6 +190,28 @@ describe('ReaderProcessor', () => {
           'test-resource-id',
         );
         expect(namespaceResourcesService.update).toHaveBeenCalled();
+      });
+
+      it('should not report a key action candidate for a finished reader task', async () => {
+        const task = createMockTask({
+          payload: { resource_id: 'test-resource-id' },
+          status: TaskStatus.FINISHED,
+          output: {
+            markdown: '# Test Document',
+            title: 'Test Document',
+          },
+        });
+
+        resourcesService.getResourceOrFail.mockResolvedValue(
+          mockResource as Resource,
+        );
+        namespaceResourcesService.update.mockResolvedValue(undefined);
+
+        await processor.process(task);
+
+        expect(
+          attributionReporter.reportKeyActionCandidate,
+        ).not.toHaveBeenCalled();
       });
     });
 

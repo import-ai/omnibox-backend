@@ -249,6 +249,8 @@ export class NamespacesService {
         resourceType: ResourceType.DOC,
         name: welcome.name,
         content: welcome.content,
+        attrs: { key_action_source: 'welcome' },
+        source: 'welcome',
       },
       tx,
     );

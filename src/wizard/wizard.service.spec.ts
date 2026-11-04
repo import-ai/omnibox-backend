@@ -74,6 +74,7 @@ describe('WizardService', () => {
         {} as any,
         i18n as any,
         configService as any,
+        {} as any,
       );
 
       await expect(
@@ -102,6 +103,7 @@ describe('WizardService', () => {
         {} as any,
         { t: jest.fn() } as any,
         { get: jest.fn().mockReturnValue('https://box.example.com') } as any,
+        {} as any,
       );
 
       await expect(
@@ -112,7 +114,83 @@ describe('WizardService', () => {
           'parent-id',
         ),
       ).resolves.toMatchObject({ resourceId: 'resource-id' });
-      expect(namespaceResourcesService.create).toHaveBeenCalled();
+      expect(namespaceResourcesService.create).toHaveBeenCalledWith(
+        'user-id',
+        'namespace-id',
+        expect.objectContaining({
+          parentId: 'parent-id',
+          attrs: {
+            url: 'https://external.example/abc123/0123456789ABCDEF',
+            key_action_source: 'collect',
+          },
+        }),
+        undefined,
+        'collect',
+        true,
+      );
+    });
+  });
+
+  describe('compressedCollect', () => {
+    it('marks the placeholder resource as a collect resource', async () => {
+      const wizardTaskService = {
+        emitWebAnalysisTask: jest.fn().mockResolvedValue({ id: 'task-id' }),
+      };
+      const namespaceResourcesService = {
+        create: jest.fn().mockResolvedValue({ id: 'resource-id' }),
+      };
+      const s3Service = {
+        generateObjectKey: jest.fn().mockResolvedValue({
+          objectKey: 'collect/html/gzip/html.gz',
+        }),
+        putObject: jest.fn().mockResolvedValue(undefined),
+      };
+      const service = new WizardService(
+        wizardTaskService as any,
+        {} as any,
+        namespaceResourcesService as any,
+        {} as any,
+        {} as any,
+        s3Service as any,
+        {} as any,
+        { t: jest.fn() } as any,
+        { get: jest.fn().mockReturnValue('https://box.example.com') } as any,
+        {} as any,
+      );
+
+      await expect(
+        service.compressedCollect(
+          'namespace-id',
+          'user-id',
+          {
+            url: 'https://external.example/a',
+            title: 'Title',
+            parentId: 'parent-id',
+          } as any,
+          {
+            buffer: Buffer.from('<html></html>'),
+            mimetype: 'text/html',
+          } as any,
+        ),
+      ).resolves.toMatchObject({
+        task_id: 'task-id',
+        resource_id: 'resource-id',
+      });
+      expect(namespaceResourcesService.create).toHaveBeenCalledWith(
+        'user-id',
+        'namespace-id',
+        expect.objectContaining({
+          name: 'Title',
+          parentId: 'parent-id',
+          attrs: {
+            url: 'https://external.example/a',
+            key_action_source: 'collect',
+          },
+        }),
+        undefined,
+        'collect',
+        true,
+      );
     });
   });
 
@@ -146,6 +224,7 @@ describe('WizardService', () => {
         resourcesService as any,
         i18n as any,
         { get: jest.fn().mockReturnValue('https://www.omnibox.pro') } as any,
+        {} as any,
       );
       const message =
         '当前文件内容（32769 字符）超过系统可处理上限（32768 字符），请尝试拆分文档后重新上传。';

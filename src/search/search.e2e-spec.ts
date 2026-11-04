@@ -1,6 +1,5 @@
 import { INestApplication } from '@nestjs/common';
 import { HttpStatus } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { I18nService, I18nValidationPipe } from 'nestjs-i18n';
@@ -132,14 +131,6 @@ describe('SearchController (e2e)', () => {
       ],
       providers: [
         SearchService,
-        {
-          // Keep these tests on the pre-relevance unfiltered search behavior.
-          provide: ConfigService,
-          useValue: {
-            get: (key: string) =>
-              key === 'OBB_SEARCH_RELEVANCE_ENABLED' ? 'false' : undefined,
-          },
-        },
         {
           provide: MessageIndexMigrationService,
           useValue: {

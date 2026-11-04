@@ -29,7 +29,4 @@ export class SearchRequestDto {
 
   @Expose({ name: 'resource_ids' })
   resourceIds?: string[];
-
-  @Expose({ name: 'filter_relevance' })
-  filterRelevance?: boolean;
 }

@@ -320,9 +320,6 @@ describe('SearchService', () => {
         },
       ),
     };
-    const configService = {
-      get: jest.fn().mockReturnValue('false'),
-    };
     const service = new SearchService(
       wizardApiService as any,
       permissionsService as any,
@@ -337,11 +334,9 @@ describe('SearchService', () => {
       {} as any,
       searchResourceFilterService as any,
       searchCandidateService as any,
-      configService as any,
     );
 
     return {
-      configService,
       conversationsService,
       messagesService,
       matcherService,
@@ -365,6 +360,7 @@ describe('SearchService', () => {
       expect.objectContaining({
         type: IndexRecordType.CHUNK,
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result).toHaveLength(2);
     result.forEach((item) => {
@@ -716,6 +712,7 @@ describe('SearchService', () => {
       expect.objectContaining({
         resourceIds: [matchingResourceId],
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(matcherService.matches).toHaveBeenCalledWith(
       expect.objectContaining({ id: resourceId }),
@@ -824,7 +821,7 @@ describe('SearchService', () => {
     });
   });
 
-  it('uses default response limit while fetching semantic pages in larger batches', async () => {
+  it('uses default response limit while fetching 20-row semantic pages', async () => {
     const { service, wizardApiService } = createService();
 
     const result = await service.searchPaginated(
@@ -841,8 +838,9 @@ describe('SearchService', () => {
     expect(wizardApiService.search).toHaveBeenCalledWith(
       expect.objectContaining({
         offset: 0,
-        limit: 100,
+        limit: 20,
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result.limit).toBe(20);
   });
@@ -1019,8 +1017,9 @@ describe('SearchService', () => {
       1,
       expect.objectContaining({
         offset: 0,
-        limit: 100,
+        limit: 20,
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(secondPage.items[0]).toMatchObject({
       resourceId: 'page-0-resource-20',
@@ -1374,17 +1373,19 @@ describe('SearchService', () => {
       1,
       expect.objectContaining({
         offset: 0,
-        limit: 100,
+        limit: 20,
         resourceIds: [laterMatchingResourceId],
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(wizardApiService.search).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        offset: 100,
-        limit: 100,
+        offset: 20,
+        limit: 20,
         resourceIds: [laterMatchingResourceId],
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result).toEqual({
       items: [
@@ -1460,6 +1461,7 @@ describe('SearchService', () => {
       expect.objectContaining({
         resourceIds: [matchingResourceId],
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result).toEqual([]);
   });
@@ -1661,47 +1663,8 @@ describe('SearchService', () => {
       );
     };
 
-    it.each([
-      ['unset', undefined],
-      ['empty', ''],
-      ['true', 'true'],
-    ])(
-      'enables relevance when OBB_SEARCH_RELEVANCE_ENABLED is %s',
-      async (_label, value) => {
-        const { configService, service, wizardApiService } = createService();
-        configService.get.mockReturnValue(value);
-
-        await service.search(userId, namespaceId, 'query');
-
-        expect(wizardApiService.search).toHaveBeenCalledWith(
-          expect.objectContaining({
-            offset: 0,
-            limit: 20,
-            filterRelevance: true,
-          }),
-          expect.objectContaining({ signal: expect.any(AbortSignal) }),
-        );
-      },
-    );
-
-    it('keeps the picker limit at 100 and omits the flag when disabled', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('false');
-
-      await service.search(userId, namespaceId, 'query');
-
-      expect(wizardApiService.search).toHaveBeenCalledWith(
-        expect.objectContaining({ offset: 0, limit: 100 }),
-      );
-      expect(
-        wizardApiService.search.mock.calls[0][0].filterRelevance,
-      ).toBeUndefined();
-      expect(wizardApiService.search.mock.calls[0]).toHaveLength(1);
-    });
-
-    it('requests 20-row relevance pages with an abort signal for the picker', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('true');
+    it('requests 20-row pages with an abort signal for the picker', async () => {
+      const { service, wizardApiService } = createService();
 
       await service.search(userId, namespaceId, 'query');
 
@@ -1709,7 +1672,6 @@ describe('SearchService', () => {
         expect.objectContaining({
           offset: 0,
           limit: 20,
-          filterRelevance: true,
         }),
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
@@ -1718,13 +1680,11 @@ describe('SearchService', () => {
 
     it('backfills the picker across 20-row relevance pages', async () => {
       const {
-        configService,
         permissionsService,
         resourcesService,
         service,
         wizardApiService,
       } = createService();
-      configService.get.mockReturnValue('true');
       makeAllResourcesVisible(permissionsService, resourcesService);
       const allRecords = Array.from({ length: 26 }, (_, index) =>
         chunkRecord(`resource-${index}`),
@@ -1741,21 +1701,16 @@ describe('SearchService', () => {
 
       expect(result).toHaveLength(26);
       expect(wizardApiService.search).toHaveBeenCalledTimes(2);
-      expect(wizardApiService.search.mock.calls[0][0].filterRelevance).toBe(
-        true,
-      );
       expect(wizardApiService.search.mock.calls[1][0].offset).toBe(20);
     });
 
     it('backfills past a fully filtered raw page in the picker', async () => {
       const {
-        configService,
         permissionsService,
         resourcesService,
         service,
         wizardApiService,
       } = createService();
-      configService.get.mockReturnValue('true');
       makeAllResourcesVisible(permissionsService, resourcesService);
       wizardApiService.search.mockImplementation((request: any) =>
         Promise.resolve(
@@ -1772,15 +1727,13 @@ describe('SearchService', () => {
       expect(wizardApiService.search.mock.calls[1][0].offset).toBe(20);
     });
 
-    it('keeps the picker to one 100-row page when relevance is disabled', async () => {
+    it('caps the picker at 100 filtered items across five 20-row pages', async () => {
       const {
-        configService,
         permissionsService,
         resourcesService,
         service,
         wizardApiService,
       } = createService();
-      configService.get.mockReturnValue('false');
       makeAllResourcesVisible(permissionsService, resourcesService);
       const allRecords = Array.from({ length: 120 }, (_, index) =>
         chunkRecord(`resource-${index}`),
@@ -1796,18 +1749,46 @@ describe('SearchService', () => {
       const result = await service.search(userId, namespaceId, 'query');
 
       expect(result).toHaveLength(100);
-      expect(wizardApiService.search).toHaveBeenCalledTimes(1);
-      expect(wizardApiService.search.mock.calls[0][0]).toEqual(
-        expect.objectContaining({ offset: 0, limit: 100 }),
-      );
+      expect(wizardApiService.search).toHaveBeenCalledTimes(5);
       expect(
-        wizardApiService.search.mock.calls[0][0].filterRelevance,
-      ).toBeUndefined();
+        wizardApiService.search.mock.calls.map((call) => call[0].offset),
+      ).toEqual([0, 20, 40, 60, 80]);
+      expect(
+        wizardApiService.search.mock.calls.every(
+          (call) => call[0].limit === 20,
+        ),
+      ).toBe(true);
+    });
+
+    it('serves a repeated picker request from the accumulated cache', async () => {
+      const {
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      const allRecords = Array.from({ length: 26 }, (_, index) =>
+        chunkRecord(`resource-${index}`),
+      );
+      wizardApiService.search.mockImplementation((request: any) => {
+        const records = allRecords.slice(
+          request.offset,
+          request.offset + request.limit,
+        );
+        return Promise.resolve({ records, rawCount: records.length });
+      });
+
+      const first = await service.search(userId, namespaceId, 'query');
+      const second = await service.search(userId, namespaceId, 'query');
+
+      expect(first).toHaveLength(26);
+      expect(second).toHaveLength(26);
+      expect(wizardApiService.search).toHaveBeenCalledTimes(2);
     });
 
     it('requests 20-row relevance pages with an abort signal when paginated', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('true');
+      const { service, wizardApiService } = createService();
       wizardApiService.search.mockResolvedValue({ records: [], rawCount: 0 });
 
       const result = await service.searchPaginated(
@@ -1823,7 +1804,6 @@ describe('SearchService', () => {
         expect.objectContaining({
           offset: 0,
           limit: 20,
-          filterRelevance: true,
         }),
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
@@ -1832,13 +1812,11 @@ describe('SearchService', () => {
 
     it('continues relevance pagination from raw_count', async () => {
       const {
-        configService,
         permissionsService,
         resourcesService,
         service,
         wizardApiService,
       } = createService();
-      configService.get.mockReturnValue('true');
       makeAllResourcesVisible(permissionsService, resourcesService);
       wizardApiService.search
         .mockResolvedValueOnce({
@@ -1872,13 +1850,11 @@ describe('SearchService', () => {
 
     it('keeps the accumulated total when the raw set is exhausted while filling a page', async () => {
       const {
-        configService,
         permissionsService,
         resourcesService,
         service,
         wizardApiService,
       } = createService();
-      configService.get.mockReturnValue('true');
       makeAllResourcesVisible(permissionsService, resourcesService);
       const allRecords = Array.from({ length: 26 }, (_, index) =>
         chunkRecord(`resource-${index}`),
@@ -1917,8 +1893,7 @@ describe('SearchService', () => {
     });
 
     it('falls back to the record count when raw_count is absent', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('true');
+      const { service, wizardApiService } = createService();
       wizardApiService.search.mockResolvedValue({
         records: [chunkRecord(resourceId)],
       });
@@ -1938,13 +1913,11 @@ describe('SearchService', () => {
 
     it('stops relevance pagination after three raw pages per request', async () => {
       const {
-        configService,
         permissionsService,
         resourcesService,
         service,
         wizardApiService,
       } = createService();
-      configService.get.mockReturnValue('true');
       makeAllResourcesVisible(permissionsService, resourcesService);
       wizardApiService.search.mockImplementation((request: any) =>
         Promise.resolve({
@@ -1968,8 +1941,7 @@ describe('SearchService', () => {
     });
 
     it('keeps scanning the first page within its own budget before reporting no results', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('true');
+      const { service, wizardApiService } = createService();
       wizardApiService.search.mockResolvedValue({
         records: [],
         rawCount: 20,
@@ -1989,8 +1961,7 @@ describe('SearchService', () => {
     });
 
     it('keeps a lookahead total when a later relevance page is empty', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('true');
+      const { service, wizardApiService } = createService();
       wizardApiService.search.mockResolvedValue({
         records: [],
         rawCount: 20,
@@ -2011,8 +1982,7 @@ describe('SearchService', () => {
     });
 
     it('returns accumulated results when the deadline aborts a page', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('true');
+      const { service, wizardApiService } = createService();
       wizardApiService.search.mockRejectedValueOnce(
         Object.assign(new Error('aborted'), { name: 'TimeoutError' }),
       );
@@ -2030,8 +2000,7 @@ describe('SearchService', () => {
     });
 
     it('rethrows non-abort relevance page errors', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('true');
+      const { service, wizardApiService } = createService();
       wizardApiService.search.mockRejectedValueOnce(new Error('boom'));
 
       await expect(
@@ -2046,16 +2015,15 @@ describe('SearchService', () => {
       ).rejects.toThrow('boom');
     });
 
-    it('does not send the relevance flag for message searches', async () => {
-      const { configService, service, wizardApiService } = createService();
-      configService.get.mockReturnValue('true');
+    it('requests message records only for message searches', async () => {
+      const { service, wizardApiService } = createService();
       wizardApiService.search.mockResolvedValue({ records: [] });
 
       await service.searchMessages(userId, namespaceId, 'query');
 
-      expect(
-        wizardApiService.search.mock.calls[0][0].filterRelevance,
-      ).toBeUndefined();
+      expect(wizardApiService.search).toHaveBeenCalledWith(
+        expect.objectContaining({ type: IndexRecordType.MESSAGE, limit: 100 }),
+      );
     });
   });
 

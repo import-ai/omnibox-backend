@@ -320,6 +320,9 @@ describe('SearchService', () => {
         },
       ),
     };
+    const configService = {
+      get: jest.fn().mockReturnValue(undefined),
+    };
     const service = new SearchService(
       wizardApiService as any,
       permissionsService as any,
@@ -334,9 +337,11 @@ describe('SearchService', () => {
       {} as any,
       searchResourceFilterService as any,
       searchCandidateService as any,
+      configService as any,
     );
 
     return {
+      configService,
       conversationsService,
       messagesService,
       matcherService,
@@ -1610,6 +1615,289 @@ describe('SearchService', () => {
       'feed-one',
       'feed-two',
     ]);
+  });
+
+  describe('search relevance', () => {
+    const chunkRecord = (id: string) => ({
+      id: `record-${id}`,
+      type: IndexRecordType.CHUNK,
+      chunk: {
+        resourceId: id,
+        title: `Title ${id}`,
+        text: `Content ${id}`,
+      },
+    });
+
+    const makeAllResourcesVisible = (
+      permissionsService: any,
+      resourcesService: any,
+    ) => {
+      permissionsService.getCurrentPermissions.mockImplementation(
+        (_userId: string, _namespaceId: string, resources: any[]) =>
+          Promise.resolve(
+            new Map(
+              resources.map((resource) => [
+                resource.id,
+                ResourcePermission.CAN_VIEW,
+              ]),
+            ),
+          ),
+      );
+      resourcesService.batchGetParentResources.mockImplementation(
+        (_namespaceId: string, ids: string[]) =>
+          Promise.resolve(
+            new Map(
+              ids.map((id) => [
+                id,
+                {
+                  id,
+                  name: id,
+                  attrs: {},
+                  resourceType: ResourceType.DOC,
+                },
+              ]),
+            ),
+          ),
+      );
+    };
+
+    it('keeps the picker limit at 100 and omits the flag when disabled', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('false');
+
+      await service.search(userId, namespaceId, 'query');
+
+      expect(wizardApiService.search).toHaveBeenCalledWith(
+        expect.objectContaining({ offset: 0, limit: 100 }),
+      );
+      expect(
+        wizardApiService.search.mock.calls[0][0].filterRelevance,
+      ).toBeUndefined();
+      expect(wizardApiService.search.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('requests 20-row relevance pages without a signal for the picker', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('true');
+
+      await service.search(userId, namespaceId, 'query');
+
+      expect(wizardApiService.search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          offset: 0,
+          limit: 20,
+          filterRelevance: true,
+        }),
+      );
+      expect(wizardApiService.search.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('requests 20-row relevance pages with an abort signal when paginated', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('true');
+      wizardApiService.search.mockResolvedValue({ records: [], rawCount: 0 });
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 20 },
+      );
+
+      expect(wizardApiService.search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          offset: 0,
+          limit: 20,
+          filterRelevance: true,
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(result).toMatchObject({ items: [], total: 0 });
+    });
+
+    it('continues relevance pagination from raw_count', async () => {
+      const {
+        configService,
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      configService.get.mockReturnValue('true');
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      wizardApiService.search
+        .mockResolvedValueOnce({
+          records: [chunkRecord('first')],
+          rawCount: 20,
+        })
+        .mockResolvedValueOnce({
+          records: [chunkRecord('second')],
+          rawCount: 5,
+        });
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 20 },
+      );
+
+      expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+      expect(wizardApiService.search.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ offset: 20 }),
+      );
+      expect(result.items.map((item: any) => item.resourceId)).toEqual([
+        'first',
+        'second',
+      ]);
+      expect(result.total).toBe(2);
+    });
+
+    it('falls back to the record count when raw_count is absent', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('true');
+      wizardApiService.search.mockResolvedValue({
+        records: [chunkRecord(resourceId)],
+      });
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 20 },
+      );
+
+      expect(wizardApiService.search).toHaveBeenCalledTimes(1);
+      expect(result.total).toBe(1);
+    });
+
+    it('stops relevance pagination after three raw pages per request', async () => {
+      const {
+        configService,
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      configService.get.mockReturnValue('true');
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      wizardApiService.search.mockImplementation((request: any) =>
+        Promise.resolve({
+          records: [chunkRecord(`resource-${request.offset}`)],
+          rawCount: 20,
+        }),
+      );
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 20 },
+      );
+
+      expect(wizardApiService.search).toHaveBeenCalledTimes(3);
+      expect(result.items).toHaveLength(3);
+      expect(result.total).toBe(21);
+    });
+
+    it('keeps scanning the first page within its own budget before reporting no results', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('true');
+      wizardApiService.search.mockResolvedValue({
+        records: [],
+        rawCount: 20,
+      });
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 20 },
+      );
+
+      expect(wizardApiService.search).toHaveBeenCalledTimes(10);
+      expect(result).toMatchObject({ items: [], total: 0 });
+    });
+
+    it('keeps a lookahead total when a later relevance page is empty', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('true');
+      wizardApiService.search.mockResolvedValue({
+        records: [],
+        rawCount: 20,
+      });
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 20, limit: 20 },
+      );
+
+      expect(wizardApiService.search).toHaveBeenCalledTimes(3);
+      expect(result.items).toEqual([]);
+      expect(result.total).toBe(41);
+    });
+
+    it('returns accumulated results when the deadline aborts a page', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('true');
+      wizardApiService.search.mockRejectedValueOnce(
+        Object.assign(new Error('aborted'), { name: 'TimeoutError' }),
+      );
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 20 },
+      );
+
+      expect(result).toMatchObject({ items: [], total: 0 });
+    });
+
+    it('rethrows non-abort relevance page errors', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('true');
+      wizardApiService.search.mockRejectedValueOnce(new Error('boom'));
+
+      await expect(
+        service.searchPaginated(
+          userId,
+          namespaceId,
+          'query',
+          undefined,
+          {},
+          { offset: 0, limit: 20 },
+        ),
+      ).rejects.toThrow('boom');
+    });
+
+    it('does not send the relevance flag for message searches', async () => {
+      const { configService, service, wizardApiService } = createService();
+      configService.get.mockReturnValue('true');
+      wizardApiService.search.mockResolvedValue({ records: [] });
+
+      await service.searchMessages(userId, namespaceId, 'query');
+
+      expect(
+        wizardApiService.search.mock.calls[0][0].filterRelevance,
+      ).toBeUndefined();
+    });
   });
 
   it('rejects users outside the namespace', async () => {

@@ -6,4 +6,7 @@ export class SearchResponseDto {
   @Expose({ name: 'records' })
   @Type(() => IndexRecordDto)
   records: IndexRecordDto[];
+
+  @Expose({ name: 'raw_count' })
+  rawCount?: number;
 }

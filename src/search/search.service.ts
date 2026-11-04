@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -52,6 +53,13 @@ const MAX_SEARCH_LIMIT = 100;
 // round trip (auto-recall has a 1 s budget).
 const HISTORY_CANDIDATE_FACTOR = 3;
 const SEMANTIC_SEARCH_PAGE_SIZE = 100;
+// Relevance judges at most one small batch per wizard call, so the backend asks
+// for pages it can fully filter within the wizard's search budget.
+const RELEVANCE_SEARCH_PAGE_SIZE = 20;
+const MAX_FILTERED_PAGES = 3;
+const RELEVANCE_TOTAL_BUDGET_MS = 1500;
+const FIRST_PAGE_EMPTY_BUDGET_MS = 3000;
+const MAX_EMPTY_PAGES = 10;
 const SEMANTIC_SEARCH_CACHE_TTL_MS = 30 * 1000;
 const SEMANTIC_SEARCH_CACHE_MAX_ENTRIES = 100;
 const SEMANTIC_SEARCH_CACHE_MAX_ITEMS = 2000;
@@ -99,6 +107,7 @@ export class SearchService {
     private readonly tagService: TagService,
     private readonly searchResourceFilterService: SearchResourceFilterService,
     private readonly searchCandidateService: SearchCandidateService,
+    private readonly configService: ConfigService,
   ) {}
 
   async search(
@@ -151,7 +160,9 @@ export class SearchService {
       candidateResourceIds,
       {
         offset: 0,
-        limit: MAX_SEARCH_LIMIT,
+        limit: this.isSearchRelevanceEnabled()
+          ? RELEVANCE_SEARCH_PAGE_SIZE
+          : MAX_SEARCH_LIMIT,
       },
     );
     return result.items;
@@ -267,22 +278,58 @@ export class SearchService {
     const cachedEntry = this.getSemanticSearchCacheEntry(cacheKey);
     const cacheEntry = cachedEntry || this.createSemanticSearchCacheEntry();
     const cachedItemCount = cachedEntry?.items.length ?? 0;
+    const relevanceEnabled = this.isSearchRelevanceEnabled();
+    const pageSize = relevanceEnabled
+      ? RELEVANCE_SEARCH_PAGE_SIZE
+      : SEMANTIC_SEARCH_PAGE_SIZE;
+    const requestStartedAt = Date.now();
+    let fetchedPages = 0;
 
     for (
       ;
       cacheEntry.items.length < requestedItemCountWithLookahead &&
       cacheEntry.hasMoreRawResults;
     ) {
-      const searchPage = await this.searchSemanticResources(
-        userId,
-        namespaceId,
-        normalizedQuery,
-        candidateResourceIds,
-        {
-          offset: cacheEntry.nextSearchOffset,
-          limit: SEMANTIC_SEARCH_PAGE_SIZE,
-        },
-      );
+      let remainingBudgetMs = 0;
+      if (relevanceEnabled) {
+        // The first page gets a larger budget so an empty result set is only
+        // reported after sparse filtered pages were given a chance.
+        const exploringFirstPage =
+          offset === 0 && cacheEntry.items.length === 0;
+        remainingBudgetMs =
+          (exploringFirstPage
+            ? FIRST_PAGE_EMPTY_BUDGET_MS
+            : RELEVANCE_TOTAL_BUDGET_MS) -
+          (Date.now() - requestStartedAt);
+        const pageLimit = exploringFirstPage
+          ? MAX_EMPTY_PAGES
+          : MAX_FILTERED_PAGES;
+        if (fetchedPages >= pageLimit || remainingBudgetMs <= 0) {
+          break;
+        }
+      }
+      let searchPage;
+      try {
+        searchPage = await this.searchSemanticResources(
+          userId,
+          namespaceId,
+          normalizedQuery,
+          candidateResourceIds,
+          {
+            offset: cacheEntry.nextSearchOffset,
+            limit: pageSize,
+          },
+          relevanceEnabled
+            ? AbortSignal.timeout(Math.max(1, Math.floor(remainingBudgetMs)))
+            : undefined,
+        );
+      } catch (error) {
+        if (relevanceEnabled && this.isAbortError(error)) {
+          break;
+        }
+        throw error;
+      }
+      fetchedPages += 1;
       cacheEntry.nextSearchOffset += searchPage.limit;
       for (const item of searchPage.items) {
         if (item.type === DocType.RESOURCE) {
@@ -309,16 +356,25 @@ export class SearchService {
     const items = cacheEntry.items.slice(offset, requestedItemCount);
     const shouldRefreshCachedPermissions =
       cachedEntry !== null && offset < cachedItemCount;
+    const visibleItems = shouldRefreshCachedPermissions
+      ? await this.refreshCachedResourcePermissions(userId, namespaceId, items)
+      : items;
+
+    let total: number;
+    if (!relevanceEnabled) {
+      total = cacheEntry.items.length;
+    } else if (visibleItems.length === 0 && offset === 0) {
+      total = 0;
+    } else if (cacheEntry.hasMoreRawResults) {
+      // Keep a lookahead so clients retry the next page after a sparse slice.
+      total = Math.max(visibleItems.length, offset + limit + 1);
+    } else {
+      total = visibleItems.length;
+    }
 
     return {
-      items: shouldRefreshCachedPermissions
-        ? await this.refreshCachedResourcePermissions(
-            userId,
-            namespaceId,
-            items,
-          )
-        : items,
-      total: cacheEntry.items.length,
+      items: visibleItems,
+      total,
     };
   }
 
@@ -604,6 +660,7 @@ export class SearchService {
     normalizedQuery: string,
     candidateResourceIds: string[] | null,
     pagination: Required<SearchPaginationOptions>,
+    signal?: AbortSignal,
   ): Promise<{
     items: IndexedDocDto[];
     limit: number;
@@ -620,7 +677,12 @@ export class SearchService {
     searchRequest.offset = Math.max(pagination.offset, 0);
     searchRequest.type = IndexRecordType.CHUNK;
     searchRequest.resourceIds = candidateResourceIds || undefined;
-    const result = await this.wizardApiService.search(searchRequest);
+    if (this.isSearchRelevanceEnabled()) {
+      searchRequest.filterRelevance = true;
+    }
+    const result = signal
+      ? await this.wizardApiService.search(searchRequest, { signal })
+      : await this.wizardApiService.search(searchRequest);
     const records = result?.records || [];
     const items: IndexedDocDto[] = [];
     const seenResourceIds = new Set<string>();
@@ -708,7 +770,7 @@ export class SearchService {
     return {
       items,
       limit: searchRequest.limit,
-      rawCount: records.length,
+      rawCount: result?.rawCount ?? records.length,
     };
   }
 
@@ -722,6 +784,19 @@ export class SearchService {
       namespaceId,
       filterOptions,
     );
+  }
+
+  private isSearchRelevanceEnabled(): boolean {
+    return (
+      (
+        this.configService.get<string>('OBB_SEARCH_RELEVANCE_ENABLED') ?? ''
+      ).toLowerCase() === 'true'
+    );
+  }
+
+  private isAbortError(error: unknown): boolean {
+    const name = (error as { name?: unknown } | null)?.name;
+    return name === 'AbortError' || name === 'TimeoutError';
   }
 
   private normalizePagination(

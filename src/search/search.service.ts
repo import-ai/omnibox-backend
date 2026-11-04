@@ -369,7 +369,7 @@ export class SearchService {
       // Keep a lookahead so clients retry the next page after a sparse slice.
       total = Math.max(visibleItems.length, offset + limit + 1);
     } else {
-      total = visibleItems.length;
+      total = cacheEntry.items.length;
     }
 
     return {

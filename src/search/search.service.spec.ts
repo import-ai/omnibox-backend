@@ -1779,6 +1779,52 @@ describe('SearchService', () => {
       expect(result.total).toBe(2);
     });
 
+    it('keeps the accumulated total when the raw set is exhausted while filling a page', async () => {
+      const {
+        configService,
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      configService.get.mockReturnValue('true');
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      const allRecords = Array.from({ length: 26 }, (_, index) =>
+        chunkRecord(`resource-${index}`),
+      );
+      wizardApiService.search.mockImplementation((request: any) => {
+        const records = allRecords.slice(
+          request.offset,
+          request.offset + request.limit,
+        );
+        return Promise.resolve({ records, rawCount: records.length });
+      });
+
+      const firstPage = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 20 },
+      );
+      expect(firstPage.items).toHaveLength(20);
+      expect(firstPage.total).toBe(26);
+      expect(0 + firstPage.items.length < firstPage.total).toBe(true);
+
+      const secondPage = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 20, limit: 20 },
+      );
+      expect(secondPage.items).toHaveLength(6);
+      expect(secondPage.total).toBe(26);
+      expect(20 + secondPage.items.length < secondPage.total).toBe(false);
+    });
+
     it('falls back to the record count when raw_count is absent', async () => {
       const { configService, service, wizardApiService } = createService();
       configService.get.mockReturnValue('true');

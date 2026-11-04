@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
+import { APIKeyResourceScopeInput } from 'omniboxd/api-key/api-key.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { OpenCreateResourceRequestDto } from 'omniboxd/namespace-resources/dto/open-create-resource-request.dto';
@@ -22,6 +23,8 @@ import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { parseHashtags } from 'omniboxd/utils/parse-hashtags';
 
+import { ResourceSummaryDto } from './dto/resource-summary.dto';
+
 @Injectable()
 export class OpenResourcesService {
   constructor(
@@ -35,7 +38,7 @@ export class OpenResourcesService {
 
   async listResources(
     namespaceId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     userId: string,
     options?: {
       parentId?: string;
@@ -44,6 +47,47 @@ export class OpenResourcesService {
       summary?: boolean;
     },
   ): Promise<OpenListResourcesResponseDto> {
+    if (typeof rootResourceId !== 'string' && !options?.parentId) {
+      const ids = await this.filterResourceScope(
+        namespaceId,
+        rootResourceId,
+        userId,
+        rootResourceId.rootIds,
+      );
+      const roots = await Promise.all(
+        ids.map(async (id) => {
+          const resource = await this.resourcesService.getResourceOrFail(
+            namespaceId,
+            id,
+          );
+          const children =
+            await this.namespaceResourcesService.listChildrenWithTotal(
+              namespaceId,
+              id,
+              userId,
+              { limit: 1, offset: 0 },
+            );
+          const summary = ResourceSummaryDto.fromEntity(
+            resource,
+            children.total > 0,
+          );
+          summary.name = this.i18n.t(
+            id === rootResourceId.rootIds[0]
+              ? 'apikey.personal'
+              : 'apikey.team',
+          );
+          return summary;
+        }),
+      );
+      const offset = Math.max(0, options?.offset ?? 0);
+      return {
+        resources: roots.slice(
+          offset,
+          offset + Math.max(1, options?.limit ?? roots.length),
+        ),
+        total: roots.length,
+      };
+    }
     const resourceId = await this.resolveResourceId(
       namespaceId,
       rootResourceId,
@@ -64,7 +108,7 @@ export class OpenResourcesService {
 
   async createResource(
     namespaceId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     userId: string,
     data: OpenCreateResourceRequestDto,
   ): Promise<{ id: string; name: string }> {
@@ -154,21 +198,29 @@ export class OpenResourcesService {
 
   async uploadFile(
     namespaceId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     userId: string,
     file: Express.Multer.File | undefined,
     parsedContent?: string,
+    parentId?: string,
   ): Promise<{ id: string; name: string }> {
     if (!file) {
       const message = this.i18n.t('resource.errors.fileRequired');
       throw new AppException(message, 'FILE_REQUIRED', HttpStatus.BAD_REQUEST);
     }
 
+    const destination = await this.resolveResourceId(
+      namespaceId,
+      rootResourceId,
+      parentId,
+      userId,
+      ResourcePermission.CAN_EDIT,
+    );
     const newResource = await this.namespaceResourcesService.uploadFile(
       userId,
       namespaceId,
       file,
-      rootResourceId,
+      destination,
       'open_api',
       parsedContent,
     );
@@ -177,7 +229,7 @@ export class OpenResourcesService {
 
   async getResource(
     namespaceId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     userId: string,
     resourceId: string,
     contentPagination: { offset: number; limit: number },
@@ -198,7 +250,7 @@ export class OpenResourcesService {
 
   async updateResource(
     namespaceId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     userId: string,
     resourceId: string,
     data: OpenUpdateResourceRequestDto,
@@ -243,7 +295,7 @@ export class OpenResourcesService {
 
   async deleteResource(
     namespaceId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     userId: string,
     resourceId: string,
   ): Promise<void> {
@@ -263,12 +315,16 @@ export class OpenResourcesService {
 
   async resolveResourceId(
     namespaceId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     resourceId: string | undefined,
     userId: string,
     requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
   ): Promise<string> {
-    const effectiveResourceId = resourceId || rootResourceId;
+    const effectiveResourceId =
+      resourceId ||
+      (typeof rootResourceId === 'string'
+        ? rootResourceId
+        : rootResourceId.defaultResourceId);
     const resourceMetaMap = await this.resourcesService.batchGetParentResources(
       namespaceId,
       [effectiveResourceId],
@@ -304,7 +360,7 @@ export class OpenResourcesService {
 
   async filterResourceScope(
     namespaceId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     userId: string,
     resourceIds: string[],
     requiredPermission: ResourcePermission = ResourcePermission.CAN_VIEW,
@@ -343,7 +399,7 @@ export class OpenResourcesService {
   async addResourceTag(
     namespaceId: string,
     userId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     resourceId: string,
     tagName: string,
   ): Promise<ResourceDto> {
@@ -384,7 +440,7 @@ export class OpenResourcesService {
   async removeResourceTag(
     namespaceId: string,
     userId: string,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     resourceId: string,
     tagId: string,
   ): Promise<ResourceDto> {
@@ -418,12 +474,16 @@ export class OpenResourcesService {
 
   private isResourceInScope(
     resourceMetaMap: Map<string, ResourceMetaDto>,
-    rootResourceId: string,
+    rootResourceId: APIKeyResourceScopeInput,
     resource: ResourceMetaDto,
   ): boolean {
+    const rootIds =
+      typeof rootResourceId === 'string'
+        ? [rootResourceId]
+        : rootResourceId.rootIds;
     let current: ResourceMetaDto | undefined = resource;
     while (current) {
-      if (current.id === rootResourceId) {
+      if (rootIds.includes(current.id)) {
         return true;
       }
       if (!current.parentId) {

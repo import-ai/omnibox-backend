@@ -20,7 +20,16 @@ export type APIKeyPermission = {
   permissions: APIKeyPermissionType[];
 };
 
+export type APIKeyResourceScope = {
+  rootIds: string[];
+  defaultResourceId: string;
+};
+
+export type APIKeyResourceScopeInput = string | APIKeyResourceScope;
+
 export type APIKeyAttrs = {
+  resource_scope?: 'resource' | 'personal_and_team';
+  default_save_resource_id?: string;
   related_app_id?: string;
   note?: string;
   root_resource_id: string;
@@ -63,4 +72,6 @@ export class APIKey extends Base {
 
   @Column('jsonb')
   attrs: APIKeyAttrs;
+
+  resourceScope?: APIKeyResourceScope;
 }

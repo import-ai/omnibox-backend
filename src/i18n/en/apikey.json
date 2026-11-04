@@ -13,6 +13,9 @@
     "noPermissionForNamespace": "User {userId} does not have permission to namespace {namespaceId}",
     "noWritePermission": "User {userId} does not have write permission to resource {resourceId} in namespace {namespaceId}",
     "userOrNamespaceRequired": "Either user_id or namespace_id parameter is required",
-    "noteTooLong": "API key note cannot exceed {max} characters"
-  }
+    "noteTooLong": "API key note cannot exceed {max} characters",
+    "invalidResourceScope": "Invalid API key resource scope"
+  },
+  "personal": "Personal",
+  "team": "Team"
 }

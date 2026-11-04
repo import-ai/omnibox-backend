@@ -9,6 +9,7 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { I18n, I18nContext } from 'nestjs-i18n';
 import {
@@ -19,7 +20,11 @@ import {
 } from 'omniboxd/api-key/api-key.dto';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import { UserId } from 'omniboxd/decorators/user-id.decorator';
 
+import { APIKeyOwnerGuard } from './api-key-owner.guard';
+
+@UseGuards(APIKeyOwnerGuard)
 @Controller('api/v1/api-keys')
 export class APIKeyController {
   constructor(private readonly apiKeyService: APIKeyService) {}
@@ -34,6 +39,7 @@ export class APIKeyController {
   @Get()
   async findAll(
     @I18n() i18n: I18nContext,
+    @UserId() currentUserId: string,
     @Query('user_id') userId?: string,
     @Query('namespace_id') namespaceId?: string,
   ): Promise<APIKeyResponseDto[]> {
@@ -45,7 +51,7 @@ export class APIKeyController {
         HttpStatus.BAD_REQUEST,
       );
     }
-    return await this.apiKeyService.findAll(userId, namespaceId);
+    return await this.apiKeyService.findAll(currentUserId, namespaceId);
   }
 
   @Get(':id')

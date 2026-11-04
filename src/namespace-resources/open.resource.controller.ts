@@ -119,7 +119,7 @@ export class OpenResourcesController {
   ): Promise<OpenListResourcesResponseDto> {
     return await this.openResourcesService.listResources(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       userId,
       {
         parentId,
@@ -173,7 +173,7 @@ export class OpenResourcesController {
   ): Promise<{ id: string; name: string }> {
     return await this.openResourcesService.createResource(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       userId,
       data,
     );
@@ -194,7 +194,7 @@ export class OpenResourcesController {
   @ApiOperation({
     summary: 'Upload a file resource',
     description:
-      'Uploads a file and creates a resource under the API key root resource. parsed_content can be supplied when the caller has already extracted text content.',
+      'Uploads a file and creates a resource under the default save destination, or parent_id when specified. parsed_content can be supplied when the caller has already extracted text content.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -206,6 +206,10 @@ export class OpenResourcesController {
           type: 'string',
           format: 'binary',
           description: 'File to upload',
+        },
+        parent_id: {
+          type: 'string',
+          description: 'Optional destination within the authorized scope',
         },
         parsed_content: {
           type: 'string',
@@ -232,13 +236,15 @@ export class OpenResourcesController {
     @UserId() userId: string,
     @UploadedFile() file?: Express.Multer.File,
     @Body('parsed_content') parsedContent?: string,
+    @Body('parent_id') parentId?: string,
   ): Promise<{ id: string; name: string }> {
     return await this.openResourcesService.uploadFile(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       userId,
       file,
       parsedContent,
+      parentId,
     );
   }
 
@@ -272,7 +278,7 @@ export class OpenResourcesController {
   ): Promise<OpenResourceDto> {
     return await this.openResourcesService.getResource(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       userId,
       resourceId,
       {
@@ -317,7 +323,7 @@ export class OpenResourcesController {
   ): Promise<ResourceDto> {
     return await this.openResourcesService.updateResource(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       userId,
       resourceId,
       data,
@@ -362,7 +368,7 @@ export class OpenResourcesController {
     return await this.openResourcesService.addResourceTag(
       apiKey.namespaceId,
       userId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       resourceId,
       data.tag_name,
     );
@@ -400,7 +406,7 @@ export class OpenResourcesController {
     return await this.openResourcesService.removeResourceTag(
       apiKey.namespaceId,
       userId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       resourceId,
       tagId,
     );
@@ -431,7 +437,7 @@ export class OpenResourcesController {
   ): Promise<void> {
     await this.openResourcesService.deleteResource(
       apiKey.namespaceId,
-      apiKey.attrs.root_resource_id,
+      apiKey.resourceScope ?? apiKey.attrs.root_resource_id,
       userId,
       resourceId,
     );

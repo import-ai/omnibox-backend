@@ -544,6 +544,50 @@ describe('Resource revisions (e2e)', () => {
     expect(contents.sort()).toEqual(['First', 'Original', 'Second']);
   });
 
+  it('does not create history or touch the resource for same-value title and content updates', async () => {
+    const resource = await createDoc(uniqueName('No-op'), 'Original body');
+    const path = `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`;
+    const before = (await client.get(path).expect(200)).body;
+    expect((await listRevisions(resource.id).expect(200)).body).toHaveLength(1);
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await client
+      .patch(path)
+      .send({ name: resource.name, content: 'Original body' })
+      .expect(200);
+
+    const after = (await client.get(path).expect(200)).body;
+    expect(after).toMatchObject({
+      name: before.name,
+      content: before.content,
+      version: before.version,
+      updated_at: before.updated_at,
+    });
+    expect((await listRevisions(resource.id).expect(200)).body).toHaveLength(1);
+  });
+
+  it('still syncs comment anchors for a same-content update', async () => {
+    const resource = await createDoc(
+      uniqueName('Anchor no-op'),
+      'Original body',
+    );
+    const path = `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`;
+
+    await client
+      .patch(path)
+      .send({
+        content: 'Original body',
+        expected_content_hash: createHash('sha256')
+          .update('Original body')
+          .digest('hex'),
+        comment_anchors: [],
+        orphaned_comment_thread_ids: [],
+      })
+      .expect(200);
+
+    expect((await listRevisions(resource.id).expect(200)).body).toHaveLength(1);
+  });
+
   it('rolls back both the archive and current version when a write fails after archiving', async () => {
     const resource = await createDoc(uniqueName('Rollback'), 'Original');
     const revisions = client.app.get(ResourceRevisionService);

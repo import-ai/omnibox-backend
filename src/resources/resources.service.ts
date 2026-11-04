@@ -46,6 +46,27 @@ import { ResourceRevisionService } from './resource-revision.service';
 
 const TASK_PRIORITY = 5;
 
+type ResourceUpdateProps = {
+  name?: string;
+  parentId?: string;
+  tagIds?: string[];
+  content?: string;
+  attrs?: Record<string, any>;
+  manualSortIndex?: string | null;
+};
+
+function isNameContentOnlyUpdate(props: ResourceUpdateProps): boolean {
+  const hasNameOrContent =
+    props.name !== undefined || props.content !== undefined;
+  return (
+    hasNameOrContent &&
+    props.parentId === undefined &&
+    props.tagIds === undefined &&
+    props.attrs === undefined &&
+    props.manualSortIndex === undefined
+  );
+}
+
 @Injectable()
 export class ResourcesService {
   constructor(
@@ -773,14 +794,7 @@ export class ResourcesService {
     namespaceId: string,
     resourceId: string,
     userId: string,
-    props: {
-      name?: string;
-      parentId?: string;
-      tagIds?: string[];
-      content?: string;
-      attrs?: Record<string, any>;
-      manualSortIndex?: string | null;
-    },
+    props: ResourceUpdateProps,
     tx?: Transaction,
     autoRenameOnConflict: boolean = false,
     options?: {
@@ -937,6 +951,14 @@ export class ResourcesService {
     const trackRevision =
       isContentResourceType(oldResource.resourceType) &&
       (contentChanged || nameChanged || options?.forceRevision);
+    if (
+      isNameContentOnlyUpdate(props) &&
+      !options?.forceRevision &&
+      !contentChanged &&
+      !nameChanged
+    ) {
+      return;
+    }
     if (trackRevision) {
       await this.resourceRevisionService.archive(
         oldResource,

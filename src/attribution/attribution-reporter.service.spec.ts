@@ -88,19 +88,28 @@ describe('AttributionReporter', () => {
   describe('reportKeyActionCandidate', () => {
     const candidateUrl =
       'http://pro/internal/api/v1/attribution/key-action-candidates';
-
-    it('posts a candidate once per user per day after a successful response', async () => {
-      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
-        ok: true,
-      } as Response);
-      const reporter = new AttributionReporter({
+    const candidateResponse = (recorded: boolean): Response =>
+      ({ ok: true, json: () => Promise.resolve({ recorded }) }) as Response;
+    const flushMicrotasks = async (): Promise<void> => {
+      for (let i = 0; i < 5; i += 1) {
+        await Promise.resolve();
+      }
+    };
+    const createReporter = (): AttributionReporter =>
+      new AttributionReporter({
         get: () => 'http://pro',
       } as unknown as ConfigService);
 
+    it('posts a candidate once per user per day when pro records the event', async () => {
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(candidateResponse(true));
+      const reporter = createReporter();
+
       reporter.reportKeyActionCandidate('user-1');
-      await Promise.resolve();
+      await flushMicrotasks();
       reporter.reportKeyActionCandidate('user-1');
-      await Promise.resolve();
+      await flushMicrotasks();
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -112,21 +121,52 @@ describe('AttributionReporter', () => {
       );
     });
 
+    it('keeps posting candidates while pro records no event', async () => {
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(candidateResponse(false));
+      const reporter = createReporter();
+
+      reporter.reportKeyActionCandidate('user-1');
+      await flushMicrotasks();
+      reporter.reportKeyActionCandidate('user-1');
+      await flushMicrotasks();
+
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
     it('retries after a failed candidate post and stops after success', async () => {
       const fetchSpy = jest
         .spyOn(global, 'fetch')
         .mockResolvedValueOnce({ ok: false, status: 500 } as Response)
-        .mockResolvedValueOnce({ ok: true } as Response);
-      const reporter = new AttributionReporter({
-        get: () => 'http://pro',
-      } as unknown as ConfigService);
+        .mockResolvedValueOnce(candidateResponse(true));
+      const reporter = createReporter();
 
       reporter.reportKeyActionCandidate('user-1');
-      await Promise.resolve();
+      await flushMicrotasks();
       reporter.reportKeyActionCandidate('user-1');
-      await Promise.resolve();
+      await flushMicrotasks();
       reporter.reportKeyActionCandidate('user-1');
-      await Promise.resolve();
+      await flushMicrotasks();
+
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('treats a non-JSON response as a failure and retries', async () => {
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+        } as Response)
+        .mockResolvedValueOnce(candidateResponse(true));
+      const reporter = createReporter();
+
+      reporter.reportKeyActionCandidate('user-1');
+      await flushMicrotasks();
+      reporter.reportKeyActionCandidate('user-1');
+      await flushMicrotasks();
 
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
@@ -136,18 +176,16 @@ describe('AttributionReporter', () => {
       const secondDay = Date.parse('2026-11-05T12:00:00+08:00');
       jest.useFakeTimers({ now: firstDay });
       try {
-        const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
-          ok: true,
-        } as Response);
-        const reporter = new AttributionReporter({
-          get: () => 'http://pro',
-        } as unknown as ConfigService);
+        const fetchSpy = jest
+          .spyOn(global, 'fetch')
+          .mockResolvedValue(candidateResponse(true));
+        const reporter = createReporter();
 
         reporter.reportKeyActionCandidate('user-1');
-        await Promise.resolve();
+        await flushMicrotasks();
         jest.setSystemTime(secondDay);
         reporter.reportKeyActionCandidate('user-1');
-        await Promise.resolve();
+        await flushMicrotasks();
 
         expect(fetchSpy).toHaveBeenCalledTimes(2);
       } finally {
@@ -166,12 +204,10 @@ describe('AttributionReporter', () => {
         ok: false,
         status: 500,
       } as Response);
-      const reporter = new AttributionReporter({
-        get: () => 'http://pro',
-      } as unknown as ConfigService);
+      const reporter = createReporter();
 
       reporter.reportKeyActionCandidate('user-1');
-      await Promise.resolve();
+      await flushMicrotasks();
 
       expect(recordException).toHaveBeenCalled();
       expect(addEvent).toHaveBeenCalledWith(
@@ -180,14 +216,16 @@ describe('AttributionReporter', () => {
       );
     });
 
-    it('does nothing when OBB_PRO_URL is empty', async () => {
+    it('does nothing without a pro URL or a user id', async () => {
       const fetchSpy = jest.spyOn(global, 'fetch');
-      const reporter = new AttributionReporter({
+      const reporterWithoutPro = new AttributionReporter({
         get: () => '',
       } as unknown as ConfigService);
+      const reporter = createReporter();
 
-      reporter.reportKeyActionCandidate('user-1');
-      await Promise.resolve();
+      reporterWithoutPro.reportKeyActionCandidate('user-1');
+      reporter.reportKeyActionCandidate('');
+      await flushMicrotasks();
 
       expect(fetchSpy).not.toHaveBeenCalled();
     });

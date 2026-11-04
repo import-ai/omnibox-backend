@@ -83,6 +83,8 @@ export class AttributionReporter {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
+      const body = (await response.json()) as { recorded?: unknown };
+      if (body?.recorded !== true) return;
       this.seenKeyAction.add(userId);
     } catch (error) {
       const span = trace.getActiveSpan();

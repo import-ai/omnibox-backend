@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { NamespaceTier } from 'omniboxd/namespaces/dto/namespace-tier.enum';
+import { resolveMemberDisplayNames } from 'omniboxd/namespaces/member-display-names';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import {
   isContentResourceType,
@@ -14,12 +15,18 @@ import { Between, EntityManager, Repository } from 'typeorm';
 
 import { ResourceRevision } from './entities/resource-revision.entity';
 
+export interface ResourceRevisionAuthor {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
 export interface ResourceRevisionSummary {
   id: string;
   version: number;
   name: string;
   createdAt: Date;
-  author: { id: string; username: string } | null;
+  author: ResourceRevisionAuthor | null;
   isCurrent: boolean;
 }
 
@@ -112,18 +119,28 @@ export class ResourceRevisionService {
               .getRepository(User)
               .findOneBy({ id: current.revisionAuthorId })
           : null;
+        const displayNames = await resolveMemberDisplayNames(
+          manager,
+          current.namespaceId,
+          [
+            ...(author ? [author.id] : []),
+            ...revisions.flatMap((revision) =>
+              revision.author ? [revision.author.id] : [],
+            ),
+          ],
+        );
         return [
           {
             id: 'current',
             version: current.version,
             name: current.name,
             createdAt: current.revisionCreatedAt,
-            author: author
-              ? { id: author.id, username: author.username }
-              : null,
+            author: this.toAuthor(author, displayNames),
             isCurrent: true,
           },
-          ...revisions.map((revision) => this.toSummary(revision)),
+          ...revisions.map((revision) =>
+            this.toSummary(revision, displayNames),
+          ),
         ];
       },
     );
@@ -156,6 +173,11 @@ export class ResourceRevisionService {
             .getRepository(User)
             .findOneBy({ id: resource.revisionAuthorId })
         : null;
+      const displayNames = await resolveMemberDisplayNames(
+        manager,
+        resource.namespaceId,
+        author ? [author.id] : [],
+      );
       return {
         id: 'current',
         version: resource.version,
@@ -164,7 +186,7 @@ export class ResourceRevisionService {
         content: resource.content,
         contentHash: this.contentHash(resource.content),
         createdAt: resource.revisionCreatedAt,
-        author: author ? { id: author.id, username: author.username } : null,
+        author: this.toAuthor(author, displayNames),
         isCurrent: true,
       };
     }
@@ -183,8 +205,13 @@ export class ResourceRevisionService {
       revision.version >= resource.version
     )
       return null;
+    const displayNames = await resolveMemberDisplayNames(
+      manager,
+      resource.namespaceId,
+      revision.author ? [revision.author.id] : [],
+    );
     return {
-      ...this.toSummary(revision),
+      ...this.toSummary(revision, displayNames),
       resourceId: revision.resourceId,
       content: revision.content,
       contentHash: this.contentHash(revision.content),
@@ -195,15 +222,28 @@ export class ResourceRevisionService {
     return createHash('sha256').update(content).digest('hex');
   }
 
-  private toSummary(revision: ResourceRevision): ResourceRevisionSummary {
+  private toAuthor(
+    author: Pick<User, 'id' | 'username'> | null | undefined,
+    displayNames: Record<string, string>,
+  ): ResourceRevisionAuthor | null {
+    if (!author) return null;
+    return {
+      id: author.id,
+      username: author.username,
+      displayName: displayNames[author.id] || author.username,
+    };
+  }
+
+  private toSummary(
+    revision: ResourceRevision,
+    displayNames: Record<string, string>,
+  ): ResourceRevisionSummary {
     return {
       id: revision.id,
       version: revision.version,
       name: revision.name,
       createdAt: revision.createdAt,
-      author: revision.author
-        ? { id: revision.author.id, username: revision.author.username }
-        : null,
+      author: this.toAuthor(revision.author, displayNames),
       isCurrent: false,
     };
   }

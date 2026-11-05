@@ -1,7 +1,10 @@
 import { HttpStatus, MessageEvent } from '@nestjs/common';
 import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { MessageStatus } from 'omniboxd/messages/entities/message.entity';
+import {
+  MessageStatus,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { Observable } from 'rxjs';
@@ -14,6 +17,7 @@ function createService(mocks: {
   sharedResourcesService?: Record<string, jest.Mock>;
   resourcesService?: Record<string, jest.Mock>;
   smartFoldersService?: Record<string, jest.Mock>;
+  traceService?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
@@ -32,6 +36,7 @@ function createService(mocks: {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
     } as any,
+    mocks.traceService as any,
   );
 }
 
@@ -99,6 +104,213 @@ describe('StreamService conversation ownership', () => {
     ).rejects.toBe(accessDenied);
 
     expect(resumeAgentStream).not.toHaveBeenCalled();
+  });
+
+  it('reports a server-side chat error to trace with request context', async () => {
+    const conversationsService = {
+      findOneForUserInNamespace: jest
+        .fn()
+        .mockRejectedValue(
+          new AppException('denied', 'CONVERSATION_ACCESS_DENIED', 403),
+        ),
+    };
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ conversationsService, traceService });
+
+    const observable = await service.createUserAgentStream(
+      'user-id',
+      'namespace-id',
+      {
+        conversation_id: 'conversation-id',
+        channel: 'web',
+      } as any,
+      'request-id',
+      'ask',
+      undefined,
+      'explicit',
+      { platform: 'web' },
+    );
+    await new Promise<void>((resolve) =>
+      observable.subscribe({ complete: resolve }),
+    );
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledWith(
+      [
+        {
+          name: 'chat_error',
+          props: expect.objectContaining({
+            conversation_id: 'conversation-id',
+            request_id: 'request-id',
+            channel: 'web',
+            stage: 'transport',
+            error_category: 'forbidden',
+            error_group: 'auth',
+            error_code: 'conversation_access_denied',
+            http_status: 403,
+            error_message: 'denied',
+            source: 'server',
+            dedupe_key:
+              'user-id:conversation-id:request-id:transport:conversation_access_denied:sending:visible',
+          }),
+        },
+      ],
+      {
+        userId: 'user-id',
+        platform: 'web',
+        clientVersion: undefined,
+        clientBuild: undefined,
+      },
+    );
+  });
+
+  it('does not trace expected decision control flow', async () => {
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ traceService });
+    const observable = service.errorChunkStream(
+      new AppException('waiting', 'PENDING_INTERRUPT', 409),
+      {
+        conversationId: 'conversation-id',
+        requestId: 'request-id',
+        stage: 'transport',
+      },
+    );
+
+    await new Promise<void>((resolve) =>
+      observable.subscribe({ complete: resolve }),
+    );
+
+    expect(traceService.emitTraceEvents).not.toHaveBeenCalled();
+  });
+
+  it('does not emit duplicate trace events for the same request stage and code', () => {
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ traceService });
+    const error = new AppException('denied', 'CONVERSATION_ACCESS_DENIED', 403);
+    const context = {
+      userId: 'user-id',
+      conversationId: 'conversation-id',
+      requestId: 'request-id',
+      channel: 'web',
+      stage: 'stream',
+    };
+
+    (service as any).reportChatErrorTrace(error, context);
+    (service as any).reportChatErrorTrace(error, context);
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['CONVERSATION_NOT_FOUND', 404, 'not_found', 'request'],
+    ['LOCAL_RUNTIME_SEQUENCE', 409, 'tool_failed', 'service'],
+    ['INVALID_CLIENT_REQUEST_ID', 400, 'invalid_request', 'request'],
+  ])('normalizes %s to %s/%s', (code, status, category, group) => {
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ traceService });
+
+    (service as any).reportChatErrorTrace(
+      new AppException('failed', code, status),
+      {
+        userId: 'user-id',
+        conversationId: 'conversation-id',
+        requestId: `request-${code}`,
+        channel: 'web',
+        stage: 'stream',
+      },
+    );
+
+    expect(
+      traceService.emitTraceEvents.mock.calls[0][0][0].props,
+    ).toMatchObject({
+      error_category: category,
+      error_group: group,
+      error_code: code.toLowerCase(),
+    });
+  });
+
+  it('does not deduplicate the same request across users or conversations', () => {
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ traceService });
+    const error = new AppException('denied', 'CONVERSATION_ACCESS_DENIED', 403);
+    const base = {
+      requestId: 'request-id',
+      channel: 'web',
+      stage: 'stream',
+    };
+
+    (service as any).reportChatErrorTrace(error, {
+      ...base,
+      userId: 'user-1',
+      conversationId: 'conversation-id',
+    });
+    (service as any).reportChatErrorTrace(error, {
+      ...base,
+      userId: 'user-2',
+      conversationId: 'conversation-id',
+    });
+    (service as any).reportChatErrorTrace(error, {
+      ...base,
+      userId: 'user-1',
+      conversationId: 'other-conversation-id',
+    });
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledTimes(3);
+  });
+
+  it('traces the real client platform instead of the API channel', async () => {
+    const conversationsService = {
+      findOneForUserInNamespace: jest
+        .fn()
+        .mockRejectedValue(
+          new AppException('denied', 'CONVERSATION_ACCESS_DENIED', 403),
+        ),
+    };
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ conversationsService, traceService });
+
+    const observable = await service.createUserAgentStream(
+      'user-id',
+      'namespace-id',
+      {
+        conversation_id: 'conversation-id',
+        channel: 'mobile',
+      } as any,
+      'request-id',
+      'ask',
+      undefined,
+      'explicit',
+      { platform: 'ios', clientVersion: '0.1.56', clientBuild: '56' },
+    );
+    await new Promise<void>((resolve) =>
+      observable.subscribe({ complete: resolve }),
+    );
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledWith(
+      [
+        {
+          name: 'chat_error',
+          props: expect.objectContaining({ channel: 'mobile' }),
+        },
+      ],
+      {
+        userId: 'user-id',
+        platform: 'ios',
+        clientVersion: '0.1.56',
+        clientBuild: '56',
+      },
+    );
   });
 
   it('rejects cancel before mutating stream state', async () => {
@@ -1384,6 +1596,8 @@ describe('StreamService citations on a chat-only share', () => {
       'share-id',
       true,
       undefined,
+      'explicit',
+      {},
     );
   });
 });
@@ -1893,6 +2107,72 @@ describe('StreamService cancellation extensions', () => {
   );
 });
 
+describe('StreamService failed streams', () => {
+  const start = (service: any) =>
+    service.startAgentSession(
+      'stream-key',
+      'namespace-id',
+      { conversation_id: 'conversation-id' },
+      'request-id',
+      'ask',
+      'user-id',
+      '',
+      undefined,
+      [],
+    );
+  const setup = (hook: jest.Mock) => {
+    const service = createService({}) as any;
+    service.agentStreamHooks.onCancellationRequested = hook;
+    jest.spyOn(service, 'startRedisSession').mockResolvedValue(undefined);
+    jest.spyOn(service, 'getRedisClient').mockResolvedValue(null);
+    // An invalid request fails the turn before contacting Wizard, through the
+    // same error path an upstream `terminated` takes.
+    service.i18n = { t: (key: string) => key };
+    const subscriber = { closed: false, complete: jest.fn(), next: jest.fn() };
+    return { service, subscriber };
+  };
+
+  it.each([
+    ['succeeds', jest.fn().mockResolvedValue(undefined)],
+    ['fails', jest.fn().mockRejectedValue(new Error('Database unavailable'))],
+  ])(
+    'cancels deployment work when a turn fails and the hook %s',
+    async (_name, hook) => {
+      const { service, subscriber } = setup(hook);
+      const session = start(service);
+      session.subscribers.add(subscriber);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(hook).toHaveBeenCalledTimes(1);
+      expect(hook).toHaveBeenCalledWith('user-id', 'conversation-id');
+      expect(subscriber.next).toHaveBeenCalledWith({
+        data: expect.stringContaining('"response_type":"error"'),
+      });
+      expect(subscriber.complete).toHaveBeenCalled();
+    },
+  );
+
+  it('does not call the hook for a share visitor stream', async () => {
+    const hook = jest.fn().mockResolvedValue(undefined);
+    const { service } = setup(hook);
+    service.startAgentSession(
+      'stream-key',
+      'namespace-id',
+      { conversation_id: 'conversation-id', query: 'hi' },
+      'request-id',
+      'ask',
+      '',
+      'share-id',
+      undefined,
+      [],
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(hook).not.toHaveBeenCalled();
+  });
+});
+
 describe('StreamService.chat() never receives the SSE heartbeat', () => {
   const saved = {
     id: 'query-id',
@@ -1943,6 +2223,318 @@ describe('StreamService.chat() never receives the SSE heartbeat', () => {
   });
 });
 
+describe('StreamService agent handler error finalization', () => {
+  function handlerWithMessages() {
+    const service = createService({});
+    const messagesService = {
+      findOne: jest.fn().mockResolvedValue({ attrs: {} }),
+      create: jest.fn(),
+      updateDelta: jest.fn().mockResolvedValue({ message: {} }),
+      update: jest.fn().mockResolvedValue({ message: {} }),
+    };
+    (service as any).messagesService = messagesService;
+    const send = jest.fn().mockResolvedValue(undefined);
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      send,
+    );
+    return { handler, messagesService, send };
+  }
+
+  it('marks an open tool message as a failed tool call', async () => {
+    const { handler, messagesService, send } = handlerWithMessages();
+
+    await handler(JSON.stringify({ response_type: 'error', message: 'boom' }), {
+      messageId: 'message-id',
+      message: { role: OpenAIMessageRole.TOOL },
+    });
+
+    expect(messagesService.updateDelta).toHaveBeenCalledWith('message-id', {
+      response_type: 'delta',
+      message: {},
+      attrs: {
+        error_message: 'boom',
+        tool_call: { status: 'failed', error: 'boom' },
+      },
+    });
+    expect(messagesService.update).toHaveBeenCalledWith(
+      'message-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+    expect(JSON.parse(send.mock.calls[0][0])).toEqual({
+      response_type: 'error',
+      id: 'message-id',
+      message: 'boom',
+    });
+  });
+
+  it('leaves the attrs of an open assistant message alone', async () => {
+    const { handler, messagesService } = handlerWithMessages();
+
+    await handler(JSON.stringify({ response_type: 'error', message: 'boom' }), {
+      messageId: 'message-id',
+      message: { role: OpenAIMessageRole.ASSISTANT },
+    });
+
+    expect(messagesService.updateDelta).toHaveBeenCalledWith('message-id', {
+      response_type: 'delta',
+      message: {},
+      attrs: { error_message: 'boom' },
+    });
+    expect(messagesService.update).toHaveBeenCalledWith(
+      'message-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+  });
+
+  function sequencedHandler() {
+    const result = handlerWithMessages();
+    let created = 0;
+    result.messagesService.create.mockImplementation(
+      (_namespaceId, _conversationId, _userId, dto) => {
+        created += 1;
+        const id =
+          created === 1
+            ? 'assistant-id'
+            : created === 2
+              ? 'tool-id'
+              : `synthetic-tool-${created}`;
+        return Promise.resolve({
+          id,
+          parentId: dto.parentId,
+          createdAt: new Date('2026-11-03T00:00:00.000Z'),
+          message: dto.message,
+        });
+      },
+    );
+    result.messagesService.update.mockImplementation(
+      (id, _namespaceId, _conversationId, changes) =>
+        Promise.resolve({ id, message: {}, status: changes.status }),
+    );
+    return result;
+  }
+
+  it('links an old-wizard failed tool message to its pending tool call', async () => {
+    const { handler, messagesService, send } = sequencedHandler();
+    const context = {};
+
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: {
+          role: OpenAIMessageRole.ASSISTANT,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'read_resource', arguments: '{}' },
+            },
+          ],
+        },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'eos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'bos', role: OpenAIMessageRole.TOOL }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'error',
+        message: 'Unknown function: read_resource',
+      }),
+      context,
+    );
+
+    expect(messagesService.updateDelta).toHaveBeenLastCalledWith('tool-id', {
+      response_type: 'delta',
+      message: { tool_call_id: 'call_1' },
+      attrs: {
+        error_message: 'Unknown function: read_resource',
+        tool_call: {
+          status: 'failed',
+          error: 'Unknown function: read_resource',
+        },
+      },
+    });
+    expect(messagesService.update).toHaveBeenLastCalledWith(
+      'tool-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+    expect(messagesService.create).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(send.mock.calls.at(-1)![0])).toEqual({
+      response_type: 'error',
+      id: 'tool-id',
+      message: 'Unknown function: read_resource',
+    });
+  });
+
+  it('chains failed rows for the remaining unmatched tool calls', async () => {
+    const { handler, messagesService } = sequencedHandler();
+    const context = {};
+
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: {
+          role: OpenAIMessageRole.ASSISTANT,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'read_resource', arguments: '{}' },
+            },
+            {
+              id: 'call_2',
+              type: 'function',
+              function: { name: 'read_resource', arguments: '{}' },
+            },
+            {
+              id: 'call_3',
+              type: 'function',
+              function: { name: 'read_resource', arguments: '{}' },
+            },
+          ],
+        },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'bos', role: OpenAIMessageRole.TOOL }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+
+    expect(messagesService.updateDelta).toHaveBeenLastCalledWith('tool-id', {
+      response_type: 'delta',
+      message: { tool_call_id: 'call_1' },
+      attrs: {
+        error_message: 'boom',
+        tool_call: { status: 'failed', error: 'boom' },
+      },
+    });
+    expect(messagesService.create).toHaveBeenCalledTimes(4);
+    expect(messagesService.create).toHaveBeenNthCalledWith(
+      3,
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      {
+        message: {
+          role: OpenAIMessageRole.TOOL,
+          tool_call_id: 'call_2',
+        },
+        parentId: 'tool-id',
+        status: MessageStatus.FAILED,
+        attrs: { tool_call: { status: 'failed', error: 'boom' } },
+      },
+      false,
+    );
+    expect(messagesService.create).toHaveBeenNthCalledWith(
+      4,
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      {
+        message: {
+          role: OpenAIMessageRole.TOOL,
+          tool_call_id: 'call_3',
+        },
+        parentId: 'synthetic-tool-3',
+        status: MessageStatus.FAILED,
+        attrs: { tool_call: { status: 'failed', error: 'boom' } },
+      },
+      false,
+    );
+    expect(messagesService.update).toHaveBeenLastCalledWith(
+      'tool-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+  });
+
+  it('opens an assistant message before failing when only a query is open', async () => {
+    const { handler, messagesService, send } = handlerWithMessages();
+    messagesService.create = jest.fn().mockResolvedValue({
+      id: 'new-message-id',
+      parentId: 'parent-id',
+      createdAt: new Date('2026-07-10T08:00:00.000Z'),
+      message: { role: OpenAIMessageRole.ASSISTANT },
+    });
+
+    await handler(JSON.stringify({ response_type: 'error', message: 'boom' }), {
+      queryId: 'query-id',
+      parentId: 'parent-id',
+    });
+
+    expect(messagesService.create).toHaveBeenCalledWith(
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      {
+        message: { role: OpenAIMessageRole.ASSISTANT },
+        parentId: 'parent-id',
+        attrs: { turn_id: 'query-id' },
+      },
+      false,
+    );
+    expect(messagesService.updateDelta).toHaveBeenCalledWith('new-message-id', {
+      response_type: 'delta',
+      message: {},
+      attrs: { error_message: 'boom' },
+    });
+    expect(messagesService.update).toHaveBeenCalledWith(
+      'new-message-id',
+      'namespace-id',
+      'conversation-id',
+      { status: MessageStatus.FAILED },
+      false,
+    );
+    expect(JSON.parse(send.mock.calls.at(-1)![0])).toEqual({
+      response_type: 'error',
+      id: 'new-message-id',
+      message: 'boom',
+    });
+  });
+});
+
 test('live BOS carries the same run identity used for persisted cancellation', async () => {
   const service = createService({});
   (service as any).messagesService = {
@@ -1968,4 +2560,146 @@ test('live BOS carries the same run identity used for persisted cancellation', a
   expect(
     (service as any).messagesService.create.mock.calls[0][3].attrs,
   ).toMatchObject({ turn_id: 'decision', turn_run_id: 'retry-run' });
+});
+
+describe('StreamService persisted error codes', () => {
+  it('persists the error code from an error chunk', async () => {
+    const service = createService({});
+    const deltaAttrs: Record<string, unknown>[] = [];
+    (service as any).messagesService = {
+      updateDelta: jest.fn().mockImplementation((_id, chunk) => {
+        deltaAttrs.push(chunk.attrs);
+        return { message: {} };
+      }),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const sent: string[] = [];
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      '',
+      (data: string) => {
+        sent.push(data);
+        return Promise.resolve();
+      },
+      false,
+    );
+
+    await handler(
+      JSON.stringify({
+        response_type: 'error',
+        code: 'content_review_rejected',
+        message:
+          '本次请求未通过模型服务的安全审核，请修改相关内容后重试，或新建对话。',
+      }),
+      { messageId: 'message-id' } as any,
+    );
+
+    expect(deltaAttrs).toEqual([
+      {
+        error_message:
+          '本次请求未通过模型服务的安全审核，请修改相关内容后重试，或新建对话。',
+        error_code: 'content_review_rejected',
+      },
+    ]);
+    expect(JSON.parse(sent[0])).toMatchObject({
+      response_type: 'error',
+      id: 'message-id',
+      code: 'content_review_rejected',
+    });
+  });
+
+  it('persists only the message when the error chunk has no code', async () => {
+    const service = createService({});
+    const deltaAttrs: Record<string, unknown>[] = [];
+    (service as any).messagesService = {
+      updateDelta: jest.fn().mockImplementation((_id, chunk) => {
+        deltaAttrs.push(chunk.attrs);
+        return { message: {} };
+      }),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      '',
+      jest.fn().mockResolvedValue(undefined),
+      false,
+    );
+
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'fetch failed' }),
+      { messageId: 'message-id' } as any,
+    );
+
+    expect(deltaAttrs).toEqual([{ error_message: 'fetch failed' }]);
+  });
+
+  describe('replay of a saved failed message', () => {
+    const failedMessage = (attrs: Record<string, unknown>) => ({
+      id: 'message-id',
+      parentId: null,
+      conversationId: 'conversation-id',
+      status: MessageStatus.FAILED,
+      createdAt: new Date('2026-07-10T08:00:00.000Z'),
+      message: { role: 'assistant', content: '' },
+      attrs,
+    });
+
+    function replayableService() {
+      const service = createService({});
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+      return service;
+    }
+
+    function session() {
+      return {
+        key: 'stream-key',
+        namespaceId: 'namespace-id',
+        finished: false,
+        events: [] as string[],
+        subscribers: [] as unknown[],
+      };
+    }
+
+    it('replays the persisted error code', async () => {
+      const service = replayableService();
+      const target = session();
+
+      await (service as any).sendSavedMessage(
+        target,
+        failedMessage({
+          error_message:
+            '本次请求未通过模型服务的安全审核，请修改相关内容后重试，或新建对话。',
+          error_code: 'content_review_rejected',
+        }),
+        false,
+      );
+
+      expect(JSON.parse(target.events[target.events.length - 1])).toEqual({
+        response_type: 'error',
+        id: 'message-id',
+        code: 'content_review_rejected',
+        message:
+          '本次请求未通过模型服务的安全审核，请修改相关内容后重试，或新建对话。',
+      });
+    });
+
+    it('replays a legacy row that only has an error message', async () => {
+      const service = replayableService();
+      const target = session();
+
+      await (service as any).sendSavedMessage(
+        target,
+        failedMessage({ error_message: 'fetch failed' }),
+        false,
+      );
+
+      expect(JSON.parse(target.events[target.events.length - 1])).toEqual({
+        response_type: 'error',
+        id: 'message-id',
+        message: 'fetch failed',
+      });
+    });
+  });
 });

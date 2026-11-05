@@ -634,6 +634,45 @@ describe('OpenResourcesController (e2e)', () => {
         .expect(404);
     });
 
+    it('ignores client attrs.origin on open create and update', async () => {
+      const created = await client
+        .request()
+        .post('/open/api/v1/resources')
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({
+          name: 'Open Origin Protected',
+          content: 'Open origin content',
+          attrs: { origin: 'agent', url: 'https://a.example' },
+        })
+        .expect(201);
+
+      const afterCreate = await client
+        .request()
+        .get(`/open/api/v1/resources/${created.body.id}`)
+        .set('Authorization', `Bearer ${readOnlyApiKeyValue}`)
+        .expect(200);
+      expect(afterCreate.body.attrs).toEqual({ url: 'https://a.example' });
+
+      await client
+        .patch(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${created.body.id}`,
+        )
+        .send({ attrs: { origin: 'collect', url: 'https://a.example' } })
+        .expect(200);
+
+      const updated = await client
+        .request()
+        .patch(`/open/api/v1/resources/${created.body.id}`)
+        .set('Authorization', `Bearer ${lifecycleApiKeyValue}`)
+        .send({ attrs: { origin: 'agent', url: 'https://b.example' } })
+        .expect(200);
+
+      expect(updated.body.attrs).toEqual({
+        origin: 'collect',
+        url: 'https://b.example',
+      });
+    });
+
     it('should reject folder content updates', async () => {
       const resourceResponse = await client
         .request()

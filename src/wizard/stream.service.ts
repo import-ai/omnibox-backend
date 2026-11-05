@@ -6,6 +6,7 @@ import {
   Logger,
   MessageEvent,
   OnModuleDestroy,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
@@ -23,6 +24,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
   Message,
+  MessageAttrs,
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
@@ -42,6 +44,11 @@ import {
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
 import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
+import { TraceService } from 'omniboxd/trace/trace.service';
+import {
+  chatErrorCategory,
+  chatErrorGroup,
+} from 'omniboxd/wizard/chat-error-trace';
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
@@ -70,6 +77,16 @@ interface HandlerContext {
   parentId?: string;
   messageId?: string;
   message?: OpenAIMessage;
+  toolCalls?: Array<{
+    id?: string;
+    function?: { name?: string; arguments?: string };
+  }>;
+  answeredToolCallIds?: Set<string>;
+  channel?: string;
+  platform?: string;
+  clientVersion?: string;
+  clientBuild?: string;
+  shareId?: string;
 }
 
 interface StreamSession {
@@ -79,11 +96,35 @@ interface StreamSession {
   userId: string;
   /** The share the stream arrived through, empty for a signed-in member. */
   shareId: string;
+  channel?: string;
+  platform?: string;
+  clientVersion?: string;
+  clientBuild?: string;
   subscribers: Set<Subscriber<MessageEvent>>;
   events: string[];
   controller: AbortController;
   handlerContext: HandlerContext;
   finished: boolean;
+}
+
+interface ChatClientTraceContext {
+  platform?: string;
+  clientVersion?: string;
+  clientBuild?: string;
+}
+
+interface ChatErrorTraceContext extends ChatClientTraceContext {
+  userId?: string;
+  namespaceId?: string;
+  conversationId?: string;
+  requestId?: string;
+  messageId?: string;
+  channel?: string;
+  shareId?: string;
+  parentMessageId?: string;
+  stage?: string;
+  clientState?: string;
+  userVisible?: boolean;
 }
 
 /** The hook-facing view of a live session. */
@@ -99,6 +140,7 @@ function agentStreamOf(session: StreamSession): AgentStream {
 export class StreamService implements OnModuleDestroy {
   private readonly logger = new Logger(StreamService.name);
   private readonly streamSessions = new Map<string, StreamSession>();
+  private readonly reportedChatErrors = new Map<string, number>();
   private redisClient: RedisClient | null = null;
   private redisSubscriber: RedisClient | null = null;
 
@@ -115,6 +157,8 @@ export class StreamService implements OnModuleDestroy {
     private readonly shareAccessTokenService: ShareAccessTokenService,
     @Inject(AGENT_STREAM_HOOKS)
     private readonly agentStreamHooks: IAgentStreamHooks,
+    @Optional()
+    private readonly traceService?: TraceService,
   ) {}
 
   async onModuleDestroy() {
@@ -354,6 +398,10 @@ export class StreamService implements OnModuleDestroy {
         return;
       }
       if (chunk.response_type === 'bos') {
+        if (chunk.role === OpenAIMessageRole.ASSISTANT) {
+          context.toolCalls = undefined;
+          context.answeredToolCallIds = new Set();
+        }
         const message: Message = await this.messagesService.create(
           namespaceId,
           conversationId,
@@ -409,6 +457,12 @@ export class StreamService implements OnModuleDestroy {
           context.messageId,
           chunk,
         );
+        if (chunk.message.tool_calls?.length) {
+          context.toolCalls = chunk.message.tool_calls;
+        }
+        if (chunk.message.tool_call_id) {
+          context.answeredToolCallIds?.add(String(chunk.message.tool_call_id));
+        }
 
         if (message.status === MessageStatus.STOPPED) {
           context.failed = true;
@@ -475,6 +529,21 @@ export class StreamService implements OnModuleDestroy {
         await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
         context.failed = true;
+        this.reportChatErrorTrace(chunk, {
+          userId,
+          namespaceId,
+          conversationId,
+          requestId: context.runId,
+          messageId: context.messageId,
+          parentMessageId: context.parentId,
+          channel: context.channel,
+          platform: context.platform,
+          clientVersion: context.clientVersion,
+          clientBuild: context.clientBuild,
+          shareId: context.shareId ?? stream?.shareId,
+          stage: 'stream',
+          clientState: 'streaming',
+        });
         if (!context.messageId && context.queryId) {
           await handle(
             JSON.stringify({
@@ -486,13 +555,57 @@ export class StreamService implements OnModuleDestroy {
         }
         if (context.messageId) {
           chunk.id = context.messageId;
+          const attrs: MessageAttrs = {
+            error_message: chunk.message,
+            ...(chunk.code ? { error_code: chunk.code } : {}),
+          };
+          const message: Partial<OpenAIMessage> = {};
+          const syntheticToolCallIds: string[] = [];
+          if (context.message?.role === OpenAIMessageRole.TOOL) {
+            attrs.tool_call = { status: 'failed', error: chunk.message };
+            if (!context.message.tool_call_id && context.toolCalls?.length) {
+              const missing = context.toolCalls
+                .map((toolCall) => toolCall.id)
+                .filter((id): id is string => Boolean(id))
+                .filter((id) => !context.answeredToolCallIds?.has(String(id)));
+              const [openRowId, ...rest] = missing;
+              if (openRowId) {
+                message.tool_call_id = openRowId;
+                context.message = {
+                  ...context.message,
+                  tool_call_id: openRowId,
+                };
+                syntheticToolCallIds.push(...rest);
+              }
+            }
+          }
           await this.messagesService.updateDelta(context.messageId, {
             response_type: 'delta',
-            message: {},
-            attrs: {
-              error_message: chunk.message,
-            },
+            message,
+            attrs,
           });
+
+          let parentId = context.messageId;
+          for (const toolCallId of syntheticToolCallIds) {
+            const created = await this.messagesService.create(
+              namespaceId,
+              conversationId,
+              userId || null,
+              {
+                message: {
+                  role: OpenAIMessageRole.TOOL,
+                  tool_call_id: toolCallId,
+                },
+                parentId,
+                status: MessageStatus.FAILED,
+                attrs: {
+                  tool_call: { status: 'failed', error: chunk.message },
+                },
+              },
+              false,
+            );
+            parentId = created.id;
+          }
 
           await this.messagesService.update(
             context.messageId,
@@ -549,13 +662,144 @@ export class StreamService implements OnModuleDestroy {
     return messages;
   }
 
+  private sanitizeErrorMessage(value: unknown): string | undefined {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    return value
+      .replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [redacted]')
+      .replace(
+        /\b(token|authorization|cookie|password|secret|api[_-]?key)\b\s*[:=]\s*[^\s,;]+/gi,
+        '$1=[redacted]',
+      )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 512);
+  }
+
+  private isDuplicateChatError(key: string): boolean {
+    const now = Date.now();
+    for (const [entry, expiresAt] of this.reportedChatErrors) {
+      if (expiresAt <= now) this.reportedChatErrors.delete(entry);
+    }
+    if (this.reportedChatErrors.has(key)) return true;
+    this.reportedChatErrors.set(key, now + 5 * 60 * 1000);
+    if (this.reportedChatErrors.size > 500) {
+      const oldest = this.reportedChatErrors.keys().next().value;
+      if (oldest) this.reportedChatErrors.delete(oldest);
+    }
+    return false;
+  }
+
+  private reportChatErrorTrace(error: unknown, context: ChatErrorTraceContext) {
+    if (!this.traceService) return;
+    const record =
+      error !== null && typeof error === 'object'
+        ? (error as Record<string, unknown>)
+        : {};
+    const response =
+      record.response !== null && typeof record.response === 'object'
+        ? (record.response as Record<string, unknown>)
+        : undefined;
+    const responseData =
+      response?.data !== null && typeof response?.data === 'object'
+        ? (response.data as Record<string, unknown>)
+        : undefined;
+    const appResponse =
+      error instanceof AppException
+        ? (error.getResponse() as Record<string, unknown>)
+        : undefined;
+    const statusValue =
+      appResponse?.statusCode ??
+      response?.status ??
+      record.status ??
+      record.statusCode ??
+      responseData?.statusCode;
+    const status = typeof statusValue === 'number' ? statusValue : undefined;
+    const codeValue = appResponse?.code ?? responseData?.code ?? record.code;
+    const code =
+      typeof codeValue === 'string' && codeValue.trim()
+        ? codeValue.trim().toLowerCase()
+        : undefined;
+    if (
+      code &&
+      [
+        'pending_interrupt',
+        'decision_not_applied',
+        'interrupt_already_decided',
+      ].includes(code)
+    ) {
+      return;
+    }
+    const message =
+      appResponse?.message ??
+      responseData?.message ??
+      record.message ??
+      (error instanceof Error ? error.message : undefined);
+    const category = chatErrorCategory(code, status);
+    const group = chatErrorGroup(category);
+    const stage = context.stage ?? 'stream';
+    const userVisible = context.userVisible ?? true;
+    const identity =
+      context.userId ||
+      (context.shareId ? `share:${context.shareId}` : 'anonymous');
+    const dedupeKey = [
+      identity,
+      context.conversationId || 'unknown',
+      context.requestId || 'unknown',
+      stage,
+      code || 'unknown',
+      context.clientState || stage,
+      userVisible ? 'visible' : 'hidden',
+    ].join(':');
+    if (this.isDuplicateChatError(dedupeKey)) return;
+
+    void this.traceService
+      .emitTraceEvents(
+        [
+          {
+            name: 'chat_error',
+            props: {
+              schema_version: 1,
+              conversation_id: context.conversationId,
+              request_id: context.requestId,
+              message_id: context.messageId,
+              parent_message_id: context.parentMessageId,
+              channel: context.channel,
+              stage,
+              error_category: category,
+              error_group: group,
+              error_code: code,
+              http_status: status,
+              error_message: this.sanitizeErrorMessage(message),
+              user_visible: userVisible,
+              retryable: ['network', 'service', 'quota'].includes(group),
+              client_state: context.clientState ?? stage,
+              share_id: context.shareId,
+              source: 'server',
+              dedupe_key: dedupeKey,
+            },
+          },
+        ],
+        {
+          userId: context.userId,
+          platform: context.platform,
+          clientVersion: context.clientVersion,
+          clientBuild: context.clientBuild,
+        },
+      )
+      .catch((traceError) => this.logger.error({ error: traceError }));
+  }
+
   // An error raised before the agent stream exists (the conversation waits
   // for a decision, is busy, ...) goes to the client as an error chunk it can
   // parse, carrying the exception payload such as message_id and
   // interrupt_count.
-  errorChunkStream(error: unknown): Observable<MessageEvent> {
+  errorChunkStream(
+    error: unknown,
+    context: ChatErrorTraceContext = {},
+  ): Observable<MessageEvent> {
     this.logger.error({ error });
     trace.getActiveSpan()?.recordException(error as Error);
+    this.reportChatErrorTrace(error, context);
     let payload: Record<string, unknown>;
     if (error instanceof AppException) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -577,8 +821,10 @@ export class StreamService implements OnModuleDestroy {
   streamError(
     subscriber: Subscriber<MessageEvent>,
     error: Error | AppException,
+    context: ChatErrorTraceContext = {},
   ) {
     this.logger.error({ error });
+    this.reportChatErrorTrace(error, context);
     const span = trace.getActiveSpan();
     if (span) {
       span.recordException(error);
@@ -775,6 +1021,7 @@ export class StreamService implements OnModuleDestroy {
     chatOnly = false,
     timeZone?: string,
     parentMode: 'latest' | 'explicit' = 'explicit',
+    traceContext: ChatClientTraceContext = {},
   ): Promise<Observable<MessageEvent>> {
     const parentId = await this.resolveStreamParent(
       namespaceId,
@@ -819,6 +1066,7 @@ export class StreamService implements OnModuleDestroy {
         messages,
         chatOnly,
         timeZone,
+        traceContext,
       );
       return this.attachSession(session, subscriber);
     });
@@ -1165,6 +1413,7 @@ export class StreamService implements OnModuleDestroy {
     messages: Message[],
     chatOnly = false,
     timeZone?: string,
+    traceContext: ChatClientTraceContext = {},
   ): StreamSession {
     const session: StreamSession = {
       key,
@@ -1172,10 +1421,21 @@ export class StreamService implements OnModuleDestroy {
       conversationId: requestDto.conversation_id,
       userId,
       shareId,
+      channel: requestDto.channel,
+      platform: traceContext.platform,
+      clientVersion: traceContext.clientVersion,
+      clientBuild: traceContext.clientBuild,
       subscribers: new Set(),
       events: [],
       controller: new AbortController(),
-      handlerContext: { parentId },
+      handlerContext: {
+        parentId,
+        channel: requestDto.channel,
+        platform: traceContext.platform,
+        clientVersion: traceContext.clientVersion,
+        clientBuild: traceContext.clientBuild,
+        shareId,
+      },
       finished: false,
     };
     this.streamSessions.set(key, session);
@@ -1315,6 +1575,11 @@ export class StreamService implements OnModuleDestroy {
         parentId: query.id,
         queryId: query.id,
         runId: requestId,
+        channel: session.channel,
+        platform: session.platform,
+        clientVersion: session.clientVersion,
+        clientBuild: session.clientBuild,
+        shareId: session.shareId,
       };
       wizardRequest.query_persisted = true;
       wizardRequest.messages = messages.map((message) => {
@@ -1403,6 +1668,9 @@ export class StreamService implements OnModuleDestroy {
         JSON.stringify({
           response_type: 'error',
           id: message.id,
+          ...(message.attrs?.error_code
+            ? { code: message.attrs.error_code }
+            : {}),
           message: message.attrs?.error_message || 'Response failed',
         }),
       );
@@ -1586,10 +1854,27 @@ export class StreamService implements OnModuleDestroy {
 
   private async errorSession(session: StreamSession, error: Error) {
     this.logger.error({ error });
+    this.reportChatErrorTrace(error, {
+      userId: session.userId,
+      namespaceId: session.namespaceId,
+      conversationId: session.conversationId,
+      requestId: session.handlerContext.runId,
+      messageId: session.handlerContext.messageId,
+      parentMessageId: session.handlerContext.parentId,
+      channel: session.channel,
+      platform: session.platform,
+      clientVersion: session.clientVersion,
+      clientBuild: session.clientBuild,
+      shareId: session.shareId,
+      stage: 'stream',
+      clientState: 'streaming',
+    });
     const span = trace.getActiveSpan();
     if (span) {
       span.recordException(error);
     }
+    // A failed turn can never consume what it started, so release it like a stop.
+    await this.requestDeploymentCancellation(session);
     try {
       if (session.handlerContext.queryId) {
         const handler = this.agentHandler(
@@ -1639,6 +1924,18 @@ export class StreamService implements OnModuleDestroy {
       );
     } finally {
       this.completeSession(session);
+    }
+  }
+
+  private async requestDeploymentCancellation(session: StreamSession) {
+    if (!session.userId) return;
+    try {
+      await this.agentStreamHooks.onCancellationRequested?.(
+        session.userId,
+        session.conversationId,
+      );
+    } catch (error) {
+      this.logger.error({ error });
     }
   }
 
@@ -1695,6 +1992,9 @@ export class StreamService implements OnModuleDestroy {
     namespaceId: string,
     conversationId: string,
     lastEventId?: string,
+    requestId?: string,
+    channel = 'web',
+    traceContext: ChatClientTraceContext = {},
   ): Promise<Observable<MessageEvent>> {
     await this.conversationsService.findOneForUserInNamespace(
       conversationId,
@@ -1704,6 +2004,16 @@ export class StreamService implements OnModuleDestroy {
     return this.resumeAgentStream(
       getStreamKey(namespaceId, conversationId, userId),
       lastEventId,
+      {
+        userId,
+        namespaceId,
+        conversationId,
+        requestId,
+        channel,
+        ...traceContext,
+        stage: 'resume',
+        clientState: 'resuming',
+      },
     );
   }
 
@@ -1711,19 +2021,33 @@ export class StreamService implements OnModuleDestroy {
     share: Share,
     conversationId: string,
     lastEventId?: string,
+    requestId?: string,
+    channel = 'web_share',
+    traceContext: ChatClientTraceContext = {},
   ): Observable<MessageEvent> {
     return this.resumeAgentStream(
       getStreamKey(share.namespaceId, conversationId, '', share.id),
       lastEventId,
+      {
+        namespaceId: share.namespaceId,
+        conversationId,
+        requestId,
+        channel,
+        ...traceContext,
+        shareId: share.id,
+        stage: 'resume',
+        clientState: 'resuming',
+      },
     );
   }
 
   private resumeAgentStream(
     key: string,
     lastEventId?: string,
+    context: ChatErrorTraceContext = {},
   ): Observable<MessageEvent> {
     return new Observable<MessageEvent>((subscriber) => {
-      void this.resumeRedisStream(key, lastEventId, subscriber);
+      void this.resumeRedisStream(key, lastEventId, subscriber, context);
     });
   }
 
@@ -1731,6 +2055,7 @@ export class StreamService implements OnModuleDestroy {
     key: string,
     lastEventId: string | undefined,
     subscriber: Subscriber<MessageEvent>,
+    context: ChatErrorTraceContext = {},
   ) {
     const client = await this.createRedisConnection();
     if (!client) {
@@ -1781,7 +2106,7 @@ export class StreamService implements OnModuleDestroy {
       }
       subscriber.complete();
     } catch (error) {
-      this.streamError(subscriber, error as Error);
+      this.streamError(subscriber, error as Error, context);
     } finally {
       if (client.isOpen) {
         try {
@@ -1852,6 +2177,7 @@ export class StreamService implements OnModuleDestroy {
     mode: 'ask' | 'write',
     timeZone?: string,
     parentMode: 'latest' | 'explicit' = 'explicit',
+    traceContext: ChatClientTraceContext = {},
   ): Promise<Observable<MessageEvent>> {
     try {
       await this.conversationsService.findOneForUserInNamespace(
@@ -1867,9 +2193,19 @@ export class StreamService implements OnModuleDestroy {
         mode,
         timeZone,
         parentMode,
+        traceContext,
       );
     } catch (e) {
-      return this.errorChunkStream(e);
+      return this.errorChunkStream(e, {
+        userId,
+        namespaceId,
+        conversationId: requestDto.conversation_id,
+        requestId,
+        channel: requestDto.channel,
+        ...traceContext,
+        stage: 'transport',
+        clientState: 'sending',
+      });
     }
   }
 
@@ -1883,6 +2219,7 @@ export class StreamService implements OnModuleDestroy {
     mode: 'ask' | 'write',
     timeZone?: string,
     parentMode: 'latest' | 'explicit' = 'explicit',
+    traceContext: ChatClientTraceContext = {},
   ): Promise<Observable<MessageEvent>> {
     for (const tool of requestDto.tools || []) {
       if (tool.name === 'private_search') {
@@ -1903,6 +2240,7 @@ export class StreamService implements OnModuleDestroy {
       false,
       timeZone,
       parentMode,
+      traceContext,
     );
   }
 
@@ -1912,6 +2250,7 @@ export class StreamService implements OnModuleDestroy {
     requestId: string,
     mode: 'ask' | 'write',
     timeZone?: string,
+    traceContext: ChatClientTraceContext = {},
   ): Promise<Observable<MessageEvent>> {
     try {
       for (const tool of requestDto.tools || []) {
@@ -1931,9 +2270,20 @@ export class StreamService implements OnModuleDestroy {
         share.id,
         share.shareType === ShareType.CHAT_ONLY,
         timeZone,
+        'explicit',
+        traceContext,
       );
     } catch (e) {
-      return this.errorChunkStream(e);
+      return this.errorChunkStream(e, {
+        namespaceId: share.namespaceId,
+        conversationId: requestDto.conversation_id,
+        requestId,
+        channel: requestDto.channel,
+        ...traceContext,
+        shareId: share.id,
+        stage: 'transport',
+        clientState: 'sending',
+      });
     }
   }
 

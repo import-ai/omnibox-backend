@@ -10,6 +10,7 @@ import { OpenUpdateResourceRequestDto } from 'omniboxd/namespace-resources/dto/o
 import { ResourceDto } from 'omniboxd/namespace-resources/dto/resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { withoutClientOrigin } from 'omniboxd/namespace-resources/resource-attrs';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import {
   comparePermission,
@@ -160,7 +161,7 @@ export class OpenResourcesService {
       name: data.name || '',
       content: data.content,
       tag_ids: tagIds,
-      attrs: data.attrs || {},
+      attrs: withoutClientOrigin(data.attrs || {}),
       resourceType,
       parentId,
     } as CreateResourceDto;
@@ -285,6 +286,10 @@ export class OpenResourcesService {
       userId,
       resourceId,
       updateData,
+      false,
+      undefined,
+      undefined,
+      { preserveAttrsOrigin: true },
     );
     return await this.namespaceResourcesService.getResource({
       namespaceId,

@@ -121,6 +121,17 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const userId = client.data.userId;
     const requestId = client.handshake.headers['x-request-id'] as string;
+    const traceContext = {
+      platform: client.handshake.headers['x-client-platform'] as
+        | string
+        | undefined,
+      clientVersion: client.handshake.headers['x-client-version'] as
+        | string
+        | undefined,
+      clientBuild: client.handshake.headers['x-client-build'] as
+        | string
+        | undefined,
+    };
 
     try {
       const observable = await this.streamService.createUserAgentStream(
@@ -129,6 +140,9 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         agentRequest,
         requestId,
         eventType,
+        undefined,
+        'explicit',
+        traceContext,
       );
 
       observable.subscribe({
@@ -166,6 +180,17 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const userId = client.data.userId;
     const requestId = client.handshake.headers['x-request-id'] as string;
+    const traceContext = {
+      platform: client.handshake.headers['x-client-platform'] as
+        | string
+        | undefined,
+      clientVersion: client.handshake.headers['x-client-version'] as
+        | string
+        | undefined,
+      clientBuild: client.handshake.headers['x-client-build'] as
+        | string
+        | undefined,
+    };
 
     const share = await this.sharesService.getAndValidateShare(
       shareId,
@@ -186,6 +211,8 @@ export class WizardGateway implements OnGatewayConnection, OnGatewayDisconnect {
         agentRequest,
         requestId,
         eventType,
+        undefined,
+        traceContext,
       );
       observable.subscribe({
         next: (message) => {

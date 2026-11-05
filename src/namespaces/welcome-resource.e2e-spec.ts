@@ -94,6 +94,7 @@ describe('Welcome resource (e2e)', () => {
     expect(welcome.parent_id).toBe(user.privateRootId);
     // The doc is a normal editable resource, not a read-only system resource.
     expect(welcome.read_only).toBe(false);
+    expect(welcome.attrs).toMatchObject({ origin: 'welcome' });
 
     expect(await getWelcomeContent(user)).toBe(WELCOME_CONTENT.zh.content);
     // The zh markup carries text-color spans that must survive verbatim.

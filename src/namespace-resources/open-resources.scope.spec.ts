@@ -20,6 +20,7 @@ describe('Open API combined resource scope', () => {
   };
   const permissions = { getCurrentPermissions: jest.fn() };
   const namespaceResources = {
+    create: jest.fn(),
     uploadFile: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -129,6 +130,25 @@ describe('Open API combined resource scope', () => {
     expect(namespaceResources.uploadFile.mock.calls[1][3]).toBe('shared');
   });
 
+  it('strips client attrs.origin when creating through the open API', async () => {
+    namespaceResources.create.mockResolvedValue({
+      id: 'new',
+      name: 'folder',
+    });
+    await service.createResource('ns', scope, 'user', {
+      name: 'folder',
+      resourceType: ResourceType.FOLDER,
+      attrs: { origin: 'agent', url: 'https://example.com' },
+    });
+    expect(namespaceResources.create).toHaveBeenCalledWith(
+      'user',
+      'ns',
+      expect.objectContaining({
+        attrs: { url: 'https://example.com' },
+      }),
+    );
+  });
+
   it('modifies and deletes the original team resource in place', async () => {
     await service.updateResource('ns', scope, 'user', 'shared', {
       name: 'Renamed',
@@ -138,6 +158,10 @@ describe('Open API combined resource scope', () => {
       'user',
       'shared',
       expect.objectContaining({ name: 'Renamed', parentId: undefined }),
+      false,
+      undefined,
+      undefined,
+      { preserveAttrsOrigin: true },
     );
     await service.deleteResource('ns', scope, 'user', 'shared');
     expect(namespaceResources.delete).toHaveBeenCalledWith(

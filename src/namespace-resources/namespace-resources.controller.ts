@@ -18,6 +18,7 @@ import { UserId } from 'omniboxd/decorators/user-id.decorator';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
+import { withoutClientOrigin } from 'omniboxd/namespace-resources/resource-attrs';
 import { ResourceRetryService } from 'omniboxd/namespace-resources/resource-retry.service';
 import { ResourceSortingService } from 'omniboxd/namespace-resources/resource-sorting.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
@@ -89,7 +90,7 @@ export class NamespaceResourcesController {
     const newResource = await this.namespaceResourcesService.create(
       userId,
       namespaceId,
-      data,
+      { ...data, attrs: withoutClientOrigin(data.attrs) },
     );
     return await this.namespaceResourcesService.getResource({
       namespaceId,
@@ -466,6 +467,10 @@ export class NamespaceResourcesController {
       userId,
       resourceId,
       data,
+      false,
+      undefined,
+      undefined,
+      { preserveAttrsOrigin: true },
     );
     return await this.namespaceResourcesService.getResource({
       namespaceId,

@@ -3,6 +3,7 @@ import {
   MessageStatus,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
+import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceRole } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { TestClient } from 'test/test-client';
@@ -69,7 +70,7 @@ describe('ConversationsController (e2e)', () => {
   });
 
   describe('POST /api/v1/namespaces/:namespaceId/conversations/:id/messages', () => {
-    it('rejects a namespace member writing to another user conversation without creating a message', async () => {
+    it('is no longer a client route', async () => {
       const member = await TestClient.create();
       tempClients.push(member);
       await addNamespaceMember(client, member, client.namespace.id);
@@ -88,7 +89,7 @@ describe('ConversationsController (e2e)', () => {
           },
           status: MessageStatus.SUCCESS,
         })
-        .expect(HttpStatus.FORBIDDEN);
+        .expect(HttpStatus.NOT_FOUND);
 
       const detail = await client
         .get(
@@ -96,6 +97,29 @@ describe('ConversationsController (e2e)', () => {
         )
         .expect(HttpStatus.OK);
       expect(Object.keys(detail.body.mapping)).toHaveLength(0);
+    });
+  });
+
+  describe('DELETE /api/v1/namespaces/:namespaceId/conversations/:id/messages/:messageId', () => {
+    it('still deletes a message written by the internal service', async () => {
+      const conversation = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/conversations`)
+        .expect(HttpStatus.CREATED);
+      const message = await client.app
+        .get(MessagesService)
+        .create(client.namespace.id, conversation.body.id, client.user.id, {
+          message: {
+            role: OpenAIMessageRole.USER,
+            content: 'Delete me',
+          },
+          status: MessageStatus.SUCCESS,
+        });
+
+      await client
+        .delete(
+          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversation.body.id}/messages/${message.id}`,
+        )
+        .expect(HttpStatus.OK);
     });
   });
 
@@ -191,37 +215,34 @@ describe('ConversationsController (e2e)', () => {
     });
 
     it('should get conversation details with messages', async () => {
+      const messagesService = client.app.get(MessagesService);
       // Add a system message to the conversation
-      const messageData = {
-        message: {
-          role: OpenAIMessageRole.SYSTEM,
-          content: 'You are a helpful assistant.',
+      await messagesService.create(
+        client.namespace.id,
+        conversationId,
+        client.user.id,
+        {
+          message: {
+            role: OpenAIMessageRole.SYSTEM,
+            content: 'You are a helpful assistant.',
+          },
+          status: MessageStatus.SUCCESS,
         },
-        status: MessageStatus.SUCCESS,
-      };
-
-      await client
-        .post(
-          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}/messages`,
-        )
-        .send(messageData)
-        .expect(HttpStatus.CREATED);
+      );
 
       // Add a user message
-      const userMessageData = {
-        message: {
-          role: OpenAIMessageRole.USER,
-          content: 'Hello, how are you?',
+      await messagesService.create(
+        client.namespace.id,
+        conversationId,
+        client.user.id,
+        {
+          message: {
+            role: OpenAIMessageRole.USER,
+            content: 'Hello, how are you?',
+          },
+          status: MessageStatus.SUCCESS,
         },
-        status: MessageStatus.SUCCESS,
-      };
-
-      await client
-        .post(
-          `/api/v1/namespaces/${client.namespace.id}/conversations/${conversationId}/messages`,
-        )
-        .send(userMessageData)
-        .expect(HttpStatus.CREATED);
+      );
 
       const response = await client
         .get(

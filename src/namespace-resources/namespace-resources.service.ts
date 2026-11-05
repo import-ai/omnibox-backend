@@ -1756,7 +1756,22 @@ export class NamespaceResourcesService {
     autoRenameOnConflict: boolean = false,
     tx?: Transaction,
     historyLimit?: number,
+    options?: { preserveAttrsOrigin?: boolean },
   ) {
+    // Runs before the comment-anchor/content-hash recursion below so the
+    // recursive call reuses the already-processed attrs. A client may not set
+    // or clear origin; the stored value wins and every other attr passes
+    // through. `attrs: null` clears them to an empty object.
+    if (
+      options?.preserveAttrsOrigin &&
+      (data.attrs !== undefined || data.attrs === null)
+    ) {
+      data.attrs = await this.withPreservedOrigin(
+        namespaceId,
+        resourceId,
+        data.attrs,
+      );
+    }
     if (
       historyLimit === undefined &&
       (data.name !== undefined ||
@@ -1856,6 +1871,28 @@ export class NamespaceResourcesService {
         data.orphanedCommentThreadIds ?? [],
       );
     }
+  }
+
+  /**
+   * Strip a client-supplied origin and restore the stored one, so a public
+   * update can change every other attr but never the origin marker.
+   */
+  private async withPreservedOrigin(
+    namespaceId: string,
+    resourceId: string,
+    attrs: Record<string, any> | null | undefined,
+  ): Promise<Record<string, any>> {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { origin: _clientOrigin, ...rest } = attrs ?? {};
+    const existing = await this.resourceRepository.findOne({
+      where: { namespaceId, id: resourceId },
+      select: { id: true, attrs: true },
+    });
+    const existingOrigin = existing?.attrs?.origin;
+    if (existingOrigin !== undefined) {
+      rest.origin = existingOrigin;
+    }
+    return rest;
   }
 
   async delete(userId: string, namespaceId: string, id: string) {

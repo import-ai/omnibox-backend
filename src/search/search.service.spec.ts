@@ -1758,6 +1758,36 @@ describe('SearchService', () => {
       ).toEqual([0, 1]);
     });
 
+    it('fills the picker when the wizard has cached filtered results left', async () => {
+      const {
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      const allRecords = Array.from({ length: 25 }, (_, index) =>
+        chunkRecord(`cached-resource-${index}`),
+      );
+      wizardApiService.search
+        .mockResolvedValueOnce({
+          records: allRecords.slice(0, 20),
+          total: 25,
+          hasMore: true,
+        })
+        .mockResolvedValueOnce({
+          records: allRecords.slice(20),
+          total: 25,
+          hasMore: false,
+        });
+
+      const result = await service.search(userId, namespaceId, 'query');
+
+      expect(result).toHaveLength(25);
+      expect(wizardApiService.search).toHaveBeenCalledTimes(2);
+      expect(wizardApiService.search.mock.calls[1][0].offset).toBe(20);
+    });
+
     it('retries the same wizard offset when a page is empty but has more', async () => {
       const {
         permissionsService,

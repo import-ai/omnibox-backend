@@ -2,6 +2,10 @@ import { HttpStatus, MessageEvent } from '@nestjs/common';
 import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
+  beginAnswerTiming,
+  finishAnswerTiming,
+} from 'omniboxd/messages/answer-timing';
+import {
   MessageStatus,
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
@@ -39,6 +43,199 @@ function createService(mocks: {
     mocks.traceService as any,
   );
 }
+
+describe('server answer timing', () => {
+  function fixture() {
+    const rows = new Map<string, any>();
+    let sequence = 0;
+    const messagesService = {
+      create: jest.fn((_n, _c, _u, dto) => {
+        const row = {
+          ...dto,
+          id: `message-${++sequence}`,
+          createdAt: new Date(),
+          status: dto.status ?? MessageStatus.PENDING,
+        };
+        rows.set(row.id, row);
+        return Promise.resolve(row);
+      }),
+      updateDelta: jest.fn((id, delta) => {
+        const row = rows.get(id);
+        row.message = { ...row.message, ...delta.message };
+        row.attrs = { ...row.attrs, ...delta.attrs };
+        return Promise.resolve(row);
+      }),
+      update: jest.fn((id, _n, _c, dto) =>
+        Promise.resolve(Object.assign(rows.get(id), dto)),
+      ),
+      finalizeAnswerTiming: jest.fn((id, run, outcome, end) => {
+        const row = rows.get(id);
+        if (row.attrs?.answer_timing?.run_id === run)
+          row.attrs.answer_timing = finishAnswerTiming(
+            row.attrs.answer_timing,
+            outcome,
+            end,
+          );
+        return Promise.resolve(row);
+      }),
+      indexFinalAssistant: jest.fn(),
+    };
+    const service = createService({ messagesService });
+    const send = jest.fn().mockResolvedValue(undefined);
+    const context: any = {
+      runId: 'run',
+      parentId: 'query',
+      answerTiming: beginAnswerTiming('run', [], 1000),
+    };
+    const handler = service.agentHandler('n', 'c', '', send);
+    const emit = (chunk: object) => handler(JSON.stringify(chunk), context);
+    return { emit, context, send, rows, messagesService, service };
+  }
+
+  afterEach(() => jest.restoreAllMocks());
+
+  test('publishes single-node reasoning duration after final completion and persists before sending', async () => {
+    const { emit, rows, send, messagesService } = fixture();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(1500);
+    await emit({ response_type: 'bos', role: 'assistant' });
+    await emit({
+      response_type: 'delta',
+      message: { reasoning_content: 'think', content: 'answer' },
+    });
+    clock.mockReturnValue(5000);
+    await emit({ response_type: 'eos', role: 'assistant' });
+    expect(messagesService.finalizeAnswerTiming).not.toHaveBeenCalled();
+    clock.mockReturnValue(8000);
+    await emit({ response_type: 'done' });
+    expect(rows.get('message-1').attrs.answer_timing).toMatchObject({
+      outcome: 'success',
+      duration_ms: 4000,
+    });
+    const snapshot = send.mock.calls
+      .map(([data]) => JSON.parse(data))
+      .find(
+        (chunk) =>
+          chunk.response_type === 'delta' &&
+          chunk.attrs?.answer_timing?.outcome === 'success',
+      );
+    expect(snapshot?.attrs.answer_timing.duration_ms).toBe(4000);
+    const snapshotIndex = send.mock.calls.findIndex(
+      ([data]) => JSON.parse(data).attrs?.answer_timing?.outcome === 'success',
+    );
+    expect(snapshotIndex).toBeGreaterThanOrEqual(0);
+    expect(
+      messagesService.finalizeAnswerTiming.mock.invocationCallOrder[0],
+    ).toBeLessThan(send.mock.invocationCallOrder[snapshotIndex]);
+    await emit({ response_type: 'done' });
+    expect(messagesService.finalizeAnswerTiming).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not use an intermediate tool-call eos as the final endpoint', async () => {
+    const { emit, rows } = fixture();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(2000);
+    await emit({ response_type: 'bos', role: 'assistant' });
+    await emit({
+      response_type: 'delta',
+      message: { tool_calls: [{ id: 'tool' }] },
+    });
+    await emit({ response_type: 'eos', role: 'assistant' });
+    await emit({ response_type: 'bos', role: 'assistant' });
+    await emit({ response_type: 'delta', message: { content: 'answer' } });
+    clock.mockReturnValue(7000);
+    await emit({ response_type: 'eos', role: 'assistant' });
+    await emit({ response_type: 'done' });
+    expect(rows.get('message-2').attrs.answer_timing?.duration_ms).toBe(6000);
+    expect(rows.get('message-1').attrs.answer_timing?.outcome).toBe('running');
+  });
+
+  test('freezes an approval pause at the interruption event instead of DONE', async () => {
+    const { emit, rows } = fixture();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(6000);
+    await emit({ response_type: 'bos', role: 'assistant' });
+    await emit({
+      response_type: 'delta',
+      message: {},
+      attrs: { tool_call: { interrupts: [{}] } },
+    });
+    clock.mockReturnValue(9000);
+    await emit({ response_type: 'eos', role: 'assistant' });
+    await emit({ response_type: 'done' });
+    expect(rows.get('message-1').attrs.answer_timing).toMatchObject({
+      outcome: 'paused',
+      duration_ms: 5000,
+    });
+  });
+
+  test.each(['done', 'error'])(
+    'keeps inserted timing and %s events ordered for Redis replay',
+    async (terminal) => {
+      const { emit, send, service } = fixture();
+      let sequence = 10;
+      const redis = {
+        incr: jest.fn(() => Promise.resolve(++sequence)),
+        expire: jest.fn(),
+        sendCommand: jest.fn(),
+      };
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(redis);
+      const session: any = { key: 'stream', subscribers: new Set() };
+      send.mockImplementation((data) =>
+        (service as any).sendSessionData(session, data),
+      );
+      jest.spyOn(Date, 'now').mockReturnValue(5000);
+      await emit({ response_type: 'bos', role: 'assistant', event_id: '1-1' });
+      await emit({
+        response_type: 'delta',
+        message: { content: 'answer' },
+        event_id: '1-2',
+      });
+      if (terminal === 'done')
+        await emit({
+          response_type: 'eos',
+          role: 'assistant',
+          event_id: '1-3',
+        });
+      await emit({
+        response_type: terminal,
+        message: 'failure',
+        event_id: '1-10',
+      });
+      const events = session.events.map((payload: string) =>
+        JSON.parse(payload),
+      );
+      expect(events.at(-2).attrs.answer_timing.outcome).toBe(
+        terminal === 'done' ? 'success' : 'failed',
+      );
+      expect(events.at(-1).response_type).toBe(terminal);
+      const ids = events.map((event: any) =>
+        Number(event.event_id.split('-')[1]),
+      );
+      expect(ids).toEqual([...ids].sort((a, b) => a - b));
+      expect(new Set(ids).size).toBe(ids.length);
+    },
+  );
+
+  test('ignores upstream timing and persists failed duration on tool errors', async () => {
+    const { emit, rows } = fixture();
+    jest.spyOn(Date, 'now').mockReturnValue(3500);
+    await emit({
+      response_type: 'bos',
+      role: 'tool',
+      attrs: { answer_timing: { duration_ms: 999 } },
+    });
+    await emit({
+      response_type: 'delta',
+      message: {},
+      attrs: { answer_timing: { outcome: 'success', duration_ms: 999 } },
+    });
+    expect(rows.get('message-1').attrs.answer_timing.outcome).toBe('running');
+    await emit({ response_type: 'error', message: 'tool failed' });
+    await emit({ response_type: 'done' });
+    expect(rows.get('message-1').attrs.answer_timing).toMatchObject({
+      outcome: 'failed',
+      duration_ms: 2500,
+    });
+  });
+});
 
 describe('StreamService conversation ownership', () => {
   const accessDenied = new Error('conversation access denied');
@@ -2100,7 +2297,9 @@ describe('StreamService cancellation extensions', () => {
         'space',
         'conversation',
         'user',
-        ...(location === 'local' ? [undefined, undefined] : []),
+        ...(location === 'local'
+          ? [undefined, undefined, expect.any(Number)]
+          : []),
       );
       expect(controller.signal.aborted).toBe(location === 'local');
     },

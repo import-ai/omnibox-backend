@@ -9,6 +9,10 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { branchRelations } from 'omniboxd/conversations/conversation-branch';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import { agentTokenDeltaOf } from 'omniboxd/messages/agent-token-usage';
+import {
+  AnswerTiming,
+  finishAnswerTiming,
+} from 'omniboxd/messages/answer-timing';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import {
   isMessageIndexable,
@@ -271,6 +275,32 @@ export class MessagesService {
           })
         : [];
     return isMessageIndexable(message, children);
+  }
+
+  /** Finalize under the same turn/message locks used by stop and stream writes. */
+  async finalizeAnswerTiming(
+    id: string,
+    runId: string,
+    outcome: Exclude<AnswerTiming['outcome'], 'running'>,
+    endedAt: number,
+  ): Promise<Message> {
+    return this.dataSource.transaction(async (manager) => {
+      const message = await this.lockStreamMessage(manager, id);
+      const timing = message.attrs?.answer_timing;
+      if (timing?.run_id !== runId || timing.outcome !== 'running')
+        return message;
+      const result =
+        message.status === MessageStatus.STOPPED
+          ? 'stopped'
+          : message.status === MessageStatus.FAILED
+            ? 'failed'
+            : outcome;
+      message.attrs = {
+        ...message.attrs,
+        answer_timing: finishAnswerTiming(timing, result, endedAt),
+      };
+      return manager.save(message);
+    });
   }
 
   /**
@@ -560,6 +590,7 @@ export class MessagesService {
     userId: string | undefined,
     leafId?: string,
     activeRun?: { id: string; queryId: string },
+    stoppedAt = Date.now(),
   ): Promise<Message | null> {
     const messages = await this.findAll(userId, conversationId);
     const byId = new Map(messages.map((m) => [m.id, m]));
@@ -639,7 +670,10 @@ export class MessagesService {
             ),
         ),
       );
-      if (!pending.length && !unresolved && !activeRun) return null;
+      const timingRunning =
+        branch[0].attrs?.answer_timing?.outcome === 'running';
+      if (!pending.length && !unresolved && !activeRun && !timingRunning)
+        return null;
       if (runId) {
         turn.attrs = {
           ...turn.attrs,
@@ -690,7 +724,21 @@ export class MessagesService {
         }
         await repo.save(message);
       }
-      return repo.findOneBy({ id: branch[0].id });
+      const stoppedLeaf = await repo.findOneOrFail({
+        where: { id: branch[0].id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const timing = stoppedLeaf.attrs?.answer_timing;
+      if (timing?.outcome === 'running' && timing.run_id === runId) {
+        stoppedLeaf.attrs = {
+          ...stoppedLeaf.attrs,
+          answer_timing: finishAnswerTiming(timing, 'stopped', stoppedAt),
+        };
+        if (stoppedLeaf.status !== MessageStatus.FAILED)
+          stoppedLeaf.status = MessageStatus.STOPPED;
+        return repo.save(stoppedLeaf);
+      }
+      return stoppedLeaf;
     });
   }
 

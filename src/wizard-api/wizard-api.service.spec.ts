@@ -7,7 +7,7 @@ import {
 } from 'omniboxd/wizard-api/wizard-api.service';
 
 describe('WizardAPIService.search', () => {
-  it('maps total and has_more from the wizard search response', async () => {
+  it('maps total, has_more, and the deprecated raw_count', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       json: () =>
@@ -32,7 +32,7 @@ describe('WizardAPIService.search', () => {
 
       expect(response.total).toBe(37);
       expect(response.hasMore).toBe(true);
-      expect((response as any).rawCount).toBeUndefined();
+      expect((response as any).rawCount).toBe(20);
     } finally {
       fetchMock.mockRestore();
     }

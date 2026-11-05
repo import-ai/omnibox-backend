@@ -1686,6 +1686,78 @@ describe('SearchService', () => {
       expect(wizardApiService.search.mock.calls[1][0].offset).toBe(20);
     });
 
+    it('paginates a legacy wizard that only reports raw_count', async () => {
+      const {
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      const allRecords = Array.from({ length: 26 }, (_, index) =>
+        chunkRecord(`legacy-resource-${index}`),
+      );
+      wizardApiService.search.mockImplementation((request: any) => {
+        const records = allRecords.slice(
+          request.offset,
+          request.offset + request.limit,
+        );
+        return Promise.resolve({ records, rawCount: records.length });
+      });
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 26 },
+      );
+
+      expect(result.items).toHaveLength(26);
+      expect(result.total).toBe(26);
+      expect(
+        wizardApiService.search.mock.calls.map((call) => call[0].offset),
+      ).toEqual([0, 20]);
+    });
+
+    it('advances by returned filtered records when the wizard reports has_more', async () => {
+      const {
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      wizardApiService.search
+        .mockResolvedValueOnce({
+          records: [chunkRecord('filtered-resource-1')],
+          hasMore: true,
+        })
+        .mockResolvedValueOnce({
+          records: [chunkRecord('filtered-resource-2')],
+          hasMore: false,
+        });
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
+        { offset: 0, limit: 2 },
+      );
+
+      expect(result.items.map((item: any) => item.resourceId)).toEqual([
+        'filtered-resource-1',
+        'filtered-resource-2',
+      ]);
+      expect(result.total).toBe(2);
+      expect(
+        wizardApiService.search.mock.calls.map((call) => call[0].offset),
+      ).toEqual([0, 1]);
+    });
+
     it('retries the same wizard offset when a page is empty but has more', async () => {
       const {
         permissionsService,

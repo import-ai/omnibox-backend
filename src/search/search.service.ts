@@ -268,6 +268,7 @@ export class SearchService {
         items: IndexedDocDto[];
         recordCount: number;
         hasMore: boolean;
+        advanceBy: number;
       };
       try {
         page = await this.searchWizardPage(
@@ -291,9 +292,9 @@ export class SearchService {
       }
       permissionDropped += page.recordCount - page.items.length;
       visibleItems.push(...page.items);
-      // The wizard offset addresses filtered results, so it advances by what
-      // the wizard actually returned, not by the requested page size.
-      wizardOffset += page.recordCount;
+      // The wizard offset indexes filtered results in the new contract and raw
+      // results in the legacy one, so the page decides how far to advance.
+      wizardOffset += page.advanceBy;
       wizardHasMore = page.hasMore;
     }
 
@@ -331,6 +332,7 @@ export class SearchService {
     items: IndexedDocDto[];
     recordCount: number;
     hasMore: boolean;
+    advanceBy: number;
   }> {
     const searchRequest = new SearchRequestDto();
     searchRequest.query = normalizedQuery;
@@ -437,10 +439,17 @@ export class SearchService {
       items.push(resourceDto);
     }
 
+    // A wizard without has_more predates filtered pagination: its offset is a
+    // raw offset, so advance by the requested page size and use raw_count to
+    // decide whether raw results remain.
+    const legacyWizard = result?.hasMore === undefined;
     return {
       items,
       recordCount: records.length,
-      hasMore: result?.hasMore === true,
+      hasMore: legacyWizard
+        ? (result?.rawCount ?? records.length) >= WIZARD_PAGE_SIZE
+        : result.hasMore === true,
+      advanceBy: legacyWizard ? WIZARD_PAGE_SIZE : records.length,
     };
   }
 

@@ -112,7 +112,70 @@ describe('WizardService', () => {
           'parent-id',
         ),
       ).resolves.toMatchObject({ resourceId: 'resource-id' });
-      expect(namespaceResourcesService.create).toHaveBeenCalled();
+      expect(namespaceResourcesService.create).toHaveBeenCalledWith(
+        'user-id',
+        'namespace-id',
+        expect.objectContaining({
+          attrs: {
+            url: 'https://external.example/abc123/0123456789ABCDEF',
+            origin: 'collect',
+          },
+        }),
+        undefined,
+        undefined,
+        true,
+      );
+    });
+
+    it('marks the compressed collect placeholder with origin collect', async () => {
+      const wizardTaskService = {
+        emitWebAnalysisTask: jest.fn().mockResolvedValue({ id: 'task-id' }),
+      };
+      const namespaceResourcesService = {
+        create: jest.fn().mockResolvedValue({ id: 'resource-id' }),
+      };
+      const s3Service = {
+        generateObjectKey: jest
+          .fn()
+          .mockResolvedValue({ objectKey: 'collect/html/gzip/html.gz' }),
+        putObject: jest.fn().mockResolvedValue(undefined),
+      };
+      const service = new WizardService(
+        wizardTaskService as any,
+        {} as any,
+        namespaceResourcesService as any,
+        {} as any,
+        {} as any,
+        s3Service as any,
+        {} as any,
+        { t: jest.fn() } as any,
+        { get: jest.fn().mockReturnValue('https://box.example.com') } as any,
+      );
+
+      await service.compressedCollect(
+        'namespace-id',
+        'user-id',
+        {
+          url: 'https://external.example/page',
+          title: 'Page',
+          parentId: 'parent-id',
+        },
+        {
+          buffer: Buffer.from('html'),
+          mimetype: 'text/html',
+        } as Express.Multer.File,
+      );
+
+      expect(namespaceResourcesService.create).toHaveBeenCalledWith(
+        'user-id',
+        'namespace-id',
+        expect.objectContaining({
+          attrs: { url: 'https://external.example/page', origin: 'collect' },
+        }),
+        undefined,
+        undefined,
+        true,
+      );
     });
   });
 

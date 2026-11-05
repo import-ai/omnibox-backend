@@ -1,3 +1,4 @@
+import { HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
@@ -39,6 +40,17 @@ describe('Task schedule limit (e2e)', () => {
 
   afterAll(async () => {
     await client.close();
+  });
+
+  it('no longer exposes client task creation', async () => {
+    const before = await taskRepo.count();
+
+    await client
+      .post(`/api/v1/namespaces/${client.namespace.id}/tasks`)
+      .send({ function: 'collect', input: {} })
+      .expect(HttpStatus.NOT_FOUND);
+
+    expect(await taskRepo.count()).toBe(before);
   });
 
   it('increments num_schedules atomically on each claim', async () => {

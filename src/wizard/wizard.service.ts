@@ -141,7 +141,7 @@ export class WizardService {
       name: title || url,
       resourceType: ResourceType.LINK,
       parentId: parentId,
-      attrs: { url },
+      attrs: { url, origin: 'collect' },
     };
     const resource = await this.namespaceResourcesService.create(
       userId,
@@ -207,7 +207,7 @@ export class WizardService {
       name: url,
       resourceType: ResourceType.LINK,
       parentId,
-      attrs: { url },
+      attrs: { url, origin: 'collect' },
     };
     const resource = await this.namespaceResourcesService.create(
       userId,

@@ -23,6 +23,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
   Message,
+  MessageAttrs,
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
@@ -70,6 +71,11 @@ interface HandlerContext {
   parentId?: string;
   messageId?: string;
   message?: OpenAIMessage;
+  toolCalls?: Array<{
+    id?: string;
+    function?: { name?: string; arguments?: string };
+  }>;
+  answeredToolCallIds?: Set<string>;
 }
 
 interface StreamSession {
@@ -354,6 +360,10 @@ export class StreamService implements OnModuleDestroy {
         return;
       }
       if (chunk.response_type === 'bos') {
+        if (chunk.role === OpenAIMessageRole.ASSISTANT) {
+          context.toolCalls = undefined;
+          context.answeredToolCallIds = new Set();
+        }
         const message: Message = await this.messagesService.create(
           namespaceId,
           conversationId,
@@ -409,6 +419,12 @@ export class StreamService implements OnModuleDestroy {
           context.messageId,
           chunk,
         );
+        if (chunk.message.tool_calls?.length) {
+          context.toolCalls = chunk.message.tool_calls;
+        }
+        if (chunk.message.tool_call_id) {
+          context.answeredToolCallIds?.add(String(chunk.message.tool_call_id));
+        }
 
         if (message.status === MessageStatus.STOPPED) {
           context.failed = true;
@@ -486,14 +502,57 @@ export class StreamService implements OnModuleDestroy {
         }
         if (context.messageId) {
           chunk.id = context.messageId;
+          const attrs: MessageAttrs = {
+            error_message: chunk.message,
+            ...(chunk.code ? { error_code: chunk.code } : {}),
+          };
+          const message: Partial<OpenAIMessage> = {};
+          const syntheticToolCallIds: string[] = [];
+          if (context.message?.role === OpenAIMessageRole.TOOL) {
+            attrs.tool_call = { status: 'failed', error: chunk.message };
+            if (!context.message.tool_call_id && context.toolCalls?.length) {
+              const missing = context.toolCalls
+                .map((toolCall) => toolCall.id)
+                .filter((id): id is string => Boolean(id))
+                .filter((id) => !context.answeredToolCallIds?.has(String(id)));
+              const [openRowId, ...rest] = missing;
+              if (openRowId) {
+                message.tool_call_id = openRowId;
+                context.message = {
+                  ...context.message,
+                  tool_call_id: openRowId,
+                };
+                syntheticToolCallIds.push(...rest);
+              }
+            }
+          }
           await this.messagesService.updateDelta(context.messageId, {
             response_type: 'delta',
-            message: {},
-            attrs: {
-              error_message: chunk.message,
-              ...(chunk.code ? { error_code: chunk.code } : {}),
-            },
+            message,
+            attrs,
           });
+
+          let parentId = context.messageId;
+          for (const toolCallId of syntheticToolCallIds) {
+            const created = await this.messagesService.create(
+              namespaceId,
+              conversationId,
+              userId || null,
+              {
+                message: {
+                  role: OpenAIMessageRole.TOOL,
+                  tool_call_id: toolCallId,
+                },
+                parentId,
+                status: MessageStatus.FAILED,
+                attrs: {
+                  tool_call: { status: 'failed', error: chunk.message },
+                },
+              },
+              false,
+            );
+            parentId = created.id;
+          }
 
           await this.messagesService.update(
             context.messageId,

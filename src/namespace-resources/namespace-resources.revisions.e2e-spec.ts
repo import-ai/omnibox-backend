@@ -292,6 +292,73 @@ describe('Resource revisions (e2e)', () => {
     expect(after.body).toEqual(before.body);
   });
 
+  it('returns the latest member display name for revision authors', async () => {
+    const resource = await createDoc(
+      uniqueName('Revision author display name'),
+      'Original',
+    );
+    const resourcePath = `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`;
+    const profilePath = `/api/v1/namespaces/${client.namespace.id}/members/${client.user.id}/profile`;
+
+    const withoutNickname = await listRevisions(resource.id).expect(
+      HttpStatus.OK,
+    );
+    expect(withoutNickname.body[0].author.display_name).toBe(
+      client.user.username,
+    );
+
+    await client
+      .patch(profilePath)
+      .send({ nickname: '修订作者' })
+      .expect(HttpStatus.OK);
+    await client
+      .patch(resourcePath)
+      .send({ content: 'Edited' })
+      .expect(HttpStatus.OK);
+
+    const revisions = await listRevisions(resource.id).expect(HttpStatus.OK);
+    const expectedDisplayName = `修订作者（${client.user.username}）`;
+    expect(revisions.body.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        id: 'current',
+        author: expect.objectContaining({
+          id: client.user.id,
+          display_name: expectedDisplayName,
+        }),
+      }),
+      expect.objectContaining({
+        author: expect.objectContaining({
+          id: client.user.id,
+          display_name: expectedDisplayName,
+        }),
+      }),
+    ]);
+
+    for (const revision of revisions.body.slice(0, 2)) {
+      const detail = await client
+        .get(`${resourcePath}/revisions/${revision.id}`)
+        .expect(HttpStatus.OK);
+      expect(detail.body.author.display_name).toBe(expectedDisplayName);
+    }
+
+    await client
+      .patch(profilePath)
+      .send({ nickname: '新修订作者' })
+      .expect(HttpStatus.OK);
+    const renamed = await listRevisions(resource.id).expect(HttpStatus.OK);
+    expect(renamed.body[0].author.display_name).toBe(
+      `新修订作者（${client.user.username}）`,
+    );
+    expect(renamed.body[1].author.display_name).toBe(
+      `新修订作者（${client.user.username}）`,
+    );
+
+    await client
+      .patch(profilePath)
+      .send({ nickname: '' })
+      .expect(HttpStatus.OK);
+  });
+
   it.each([
     [NamespaceTier.BASIC, 3],
     [NamespaceTier.PREMIUM, 100],

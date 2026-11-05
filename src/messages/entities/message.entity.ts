@@ -55,6 +55,7 @@ export interface MessageAttrs {
   client_request_id?: string;
   citations?: Record<string, any>[];
   error_message?: string;
+  error_code?: string;
   context?: Record<string, any>;
   compact?: {
     status: 'compacting' | 'compacted';

@@ -502,7 +502,10 @@ export class StreamService implements OnModuleDestroy {
         }
         if (context.messageId) {
           chunk.id = context.messageId;
-          const attrs: MessageAttrs = { error_message: chunk.message };
+          const attrs: MessageAttrs = {
+            error_message: chunk.message,
+            ...(chunk.code ? { error_code: chunk.code } : {}),
+          };
           const message: Partial<OpenAIMessage> = {};
           const syntheticToolCallIds: string[] = [];
           if (context.message?.role === OpenAIMessageRole.TOOL) {
@@ -1460,6 +1463,9 @@ export class StreamService implements OnModuleDestroy {
         JSON.stringify({
           response_type: 'error',
           id: message.id,
+          ...(message.attrs?.error_code
+            ? { code: message.attrs.error_code }
+            : {}),
           message: message.attrs?.error_message || 'Response failed',
         }),
       );

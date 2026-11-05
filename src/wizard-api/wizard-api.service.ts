@@ -16,6 +16,17 @@ import {
   WIZARD_URL_PROVIDER,
 } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
 
+export function buildWizardRequestHeaders(
+  traceHeaders: Record<string, string>,
+  requestId?: string,
+): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...(requestId ? { 'X-Request-Id': requestId } : {}),
+    ...traceHeaders,
+  };
+}
+
 @Injectable()
 export class WizardAPIService {
   constructor(
@@ -140,11 +151,10 @@ export class WizardAPIService {
       body,
     );
     const url = `${wizardBaseUrl}/api/v1/wizard/${mode}`;
-    const requestHeaders = {
-      'Content-Type': 'application/json',
-      'X-Request-Id': requestId,
-      ...this.getTraceHeaders(),
-    };
+    const requestHeaders = buildWizardRequestHeaders(
+      this.getTraceHeaders(),
+      requestId,
+    );
 
     const response = await fetch(url, {
       method: 'POST',

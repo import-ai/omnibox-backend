@@ -91,6 +91,9 @@ export class WizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
     @Headers('x-timezone') timeZone?: string,
+    @Headers('x-client-platform') clientPlatform?: string,
+    @Headers('x-client-version') clientVersion?: string,
+    @Headers('x-client-build') clientBuild?: string,
   ) {
     const stream = await this.streamService.createUserAgentStream(
       userId,
@@ -99,6 +102,8 @@ export class WizardController {
       requestId,
       'ask',
       timeZone,
+      'explicit',
+      { platform: clientPlatform, clientVersion, clientBuild },
     );
     return stream.pipe(withSseHeartbeat());
   }
@@ -111,6 +116,9 @@ export class WizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
     @Headers('x-timezone') timeZone?: string,
+    @Headers('x-client-platform') clientPlatform?: string,
+    @Headers('x-client-version') clientVersion?: string,
+    @Headers('x-client-build') clientBuild?: string,
   ) {
     const stream = await this.streamService.createUserAgentStream(
       userId,
@@ -119,6 +127,8 @@ export class WizardController {
       requestId,
       'write',
       timeZone,
+      'explicit',
+      { platform: clientPlatform, clientVersion, clientBuild },
     );
     return stream.pipe(withSseHeartbeat());
   }
@@ -128,14 +138,21 @@ export class WizardController {
   async resume(
     @UserId() userId: string,
     @Param('namespaceId') namespaceId: string,
+    @RequestId() requestId: string,
     @Body('conversation_id', new ValidationPipe()) conversationId: string,
     @Body('last_event_id') lastEventId?: string,
+    @Headers('x-client-platform') clientPlatform?: string,
+    @Headers('x-client-version') clientVersion?: string,
+    @Headers('x-client-build') clientBuild?: string,
   ) {
     const stream = await this.streamService.resumeUserAgentStream(
       userId,
       namespaceId,
       conversationId,
       lastEventId,
+      requestId,
+      clientPlatform && clientPlatform !== 'web' ? 'mobile' : 'web',
+      { platform: clientPlatform, clientVersion, clientBuild },
     );
     return stream.pipe(withSseHeartbeat());
   }
@@ -192,6 +209,9 @@ export class SharedWizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
     @Headers('x-timezone') timeZone?: string,
+    @Headers('x-client-platform') clientPlatform?: string,
+    @Headers('x-client-version') clientVersion?: string,
+    @Headers('x-client-build') clientBuild?: string,
   ) {
     const stream = await this.streamService.createShareAgentStream(
       share,
@@ -199,6 +219,7 @@ export class SharedWizardController {
       requestId,
       'ask',
       timeZone,
+      { platform: clientPlatform, clientVersion, clientBuild },
     );
     return stream.pipe(withSseHeartbeat());
   }
@@ -212,6 +233,9 @@ export class SharedWizardController {
     @RequestId() requestId: string,
     @Body() body: AgentRequestDto,
     @Headers('x-timezone') timeZone?: string,
+    @Headers('x-client-platform') clientPlatform?: string,
+    @Headers('x-client-version') clientVersion?: string,
+    @Headers('x-client-build') clientBuild?: string,
   ) {
     const stream = await this.streamService.createShareAgentStream(
       share,
@@ -219,6 +243,7 @@ export class SharedWizardController {
       requestId,
       'write',
       timeZone,
+      { platform: clientPlatform, clientVersion, clientBuild },
     );
     return stream.pipe(withSseHeartbeat());
   }
@@ -229,11 +254,24 @@ export class SharedWizardController {
   @ValidateShare()
   resume(
     @ValidatedShare() share: Share,
+    @RequestId() requestId: string,
     @Body('conversation_id', new ValidationPipe()) conversationId: string,
     @Body('last_event_id') lastEventId?: string,
+    @Headers('x-client-platform') clientPlatform?: string,
+    @Headers('x-client-version') clientVersion?: string,
+    @Headers('x-client-build') clientBuild?: string,
   ) {
     return this.streamService
-      .resumeShareAgentStream(share, conversationId, lastEventId)
+      .resumeShareAgentStream(
+        share,
+        conversationId,
+        lastEventId,
+        requestId,
+        clientPlatform && clientPlatform !== 'web'
+          ? 'mobile_share'
+          : 'web_share',
+        { platform: clientPlatform, clientVersion, clientBuild },
+      )
       .pipe(withSseHeartbeat());
   }
 

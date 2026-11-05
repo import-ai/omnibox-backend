@@ -14,6 +14,7 @@ import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module'
 import { TagModule } from 'omniboxd/tag/tag.module';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
+import { TraceModule } from 'omniboxd/trace/trace.module';
 import { UserModule } from 'omniboxd/user/user.module';
 import { ChunkManagerService } from 'omniboxd/wizard/chunk-manager.service';
 import { InternalNamespaceWizardController } from 'omniboxd/wizard/internal.namespace-wizard.controller';
@@ -51,6 +52,7 @@ import { WizardAPIModule } from 'omniboxd/wizard-api/wizard-api.module';
     S3Module,
     SharedResourcesModule,
     SmartFoldersModule,
+    TraceModule,
     TypeOrmModule.forFeature([Task]),
   ],
   controllers: [

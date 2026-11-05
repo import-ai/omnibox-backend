@@ -57,6 +57,7 @@ export interface ChatErrorResponse extends ChatBaseResponse {
   id?: string;
   code?: string;
   message: string;
+  status?: number;
 }
 
 export interface ChatStoppedResponse extends ChatBaseResponse {

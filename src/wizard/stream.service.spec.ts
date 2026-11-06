@@ -130,6 +130,87 @@ describe('server answer timing', () => {
     expect(messagesService.finalizeAnswerTiming).toHaveBeenCalledTimes(1);
   });
 
+  test.each([undefined, ''])(
+    'finalizes independent regenerated runs without a request header (%s)',
+    async (requestId) => {
+      const { service, rows, messagesService } = fixture();
+      const query = {
+        id: 'query',
+        message: { role: OpenAIMessageRole.USER, content: 'question' },
+        attrs: {},
+      };
+      rows.set(query.id, query);
+      Object.assign(messagesService, {
+        findOne: jest.fn().mockResolvedValue(query),
+      });
+      jest
+        .spyOn(service as any, 'startRedisSession')
+        .mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+      jest.spyOn(service as any, 'isSessionCanceled').mockResolvedValue(false);
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(1000);
+      jest
+        .spyOn(service as any, 'stream')
+        .mockImplementation(async (...args: any[]) => {
+          const emit = args[4];
+          await emit(
+            JSON.stringify({ response_type: 'bos', role: 'assistant' }),
+          );
+          await emit(
+            JSON.stringify({
+              response_type: 'delta',
+              message: { content: 'answer', reasoning_content: 'think' },
+            }),
+          );
+          clock.mockReturnValue(Date.now() + 2000);
+          await emit(
+            JSON.stringify({ response_type: 'eos', role: 'assistant' }),
+          );
+          await emit(JSON.stringify({ response_type: 'done' }));
+        });
+      const timings: any[] = [];
+      for (let branch = 0; branch < 2; branch++) {
+        const session = (service as any).startAgentSession(
+          'key',
+          'n',
+          { conversation_id: 'c', query: 'question' },
+          requestId,
+          'ask',
+          'user',
+          '',
+          query.id,
+          [query],
+        );
+        await new Promise<void>((resolve) =>
+          session.subscribers.add({
+            closed: false,
+            next: jest.fn(),
+            complete: resolve,
+          }),
+        );
+        const completed = [...rows.values()]
+          .filter((row) => row.message.role === 'assistant')
+          .at(-1);
+        const timing = completed.attrs.answer_timing;
+        expect(timing).toMatchObject({
+          run_id: expect.any(String),
+          answer_id: expect.any(String),
+          outcome: 'success',
+          duration_ms: 2000,
+        });
+        expect(completed.attrs.turn_run_id).toBe(timing.run_id);
+        const delivered = session.events.map((data: string) =>
+          JSON.parse(data),
+        );
+        expect(delivered.at(-2).attrs.answer_timing).toEqual(timing);
+        expect(delivered.at(-1).response_type).toBe('done');
+        timings.push(timing);
+      }
+      expect(timings[0].run_id).not.toBe(timings[1].run_id);
+      expect(timings[0].duration_ms).toBe(2000);
+    },
+  );
+
   test('does not use an intermediate tool-call eos as the final endpoint', async () => {
     const { emit, rows } = fixture();
     const clock = jest.spyOn(Date, 'now').mockReturnValue(2000);

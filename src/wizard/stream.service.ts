@@ -1515,6 +1515,7 @@ export class StreamService implements OnModuleDestroy {
     timeZone?: string,
     traceContext: ChatClientTraceContext = {},
   ): StreamSession {
+    requestId ||= randomUUID();
     const session: StreamSession = {
       key,
       namespaceId,

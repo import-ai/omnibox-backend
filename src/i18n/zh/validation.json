@@ -85,6 +85,11 @@
       "isEnum": "权限必须是有效的值",
       "isNotEmpty": "权限不能为空"
     },
+    "invite": {
+      "permission": {
+        "invalid": "请选择有效的成员权限"
+      }
+    },
     "url": {
       "isString": "URL 必须是字符串",
       "isNotEmpty": "URL 不能为空",

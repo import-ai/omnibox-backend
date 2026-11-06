@@ -661,6 +661,35 @@ describe('AuthModule (e2e)', () => {
     });
 
     describe('POST /api/v1/invite', () => {
+      it.each([
+        ['zh', '', '请选择有效的成员权限'],
+        [
+          'en',
+          'invalid_permission',
+          'Please select a valid permission level for this member.',
+        ],
+      ])(
+        'should localize an invalid permission for %s',
+        async (lang, permission, expectedMessage) => {
+          await client
+            .post('/api/v1/invite')
+            .set('x-lang', lang)
+            .send({
+              inviteUrl: 'https://example.com/invite',
+              registerUrl: 'https://example.com/register',
+              namespace: client.namespace.id,
+              role: NamespaceRole.MEMBER,
+              emails: ['recipient@gmail.com'],
+              permission,
+            })
+            .expect(HttpStatus.BAD_REQUEST)
+            .expect((res) => {
+              expect(res.body.message).toContain(expectedMessage);
+              expect(res.body.message).not.toContain('no_access');
+            });
+        },
+      );
+
       it('should reject invite with disallowed email domain', async () => {
         await client
           .post('/api/v1/invite')

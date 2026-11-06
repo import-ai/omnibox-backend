@@ -85,6 +85,11 @@
       "isEnum": "Permission must be a valid value",
       "isNotEmpty": "Permission is required"
     },
+    "invite": {
+      "permission": {
+        "invalid": "Please select a valid permission level for this member."
+      }
+    },
     "url": {
       "isString": "URL must be a string",
       "isNotEmpty": "URL is required",

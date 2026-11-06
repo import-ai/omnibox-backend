@@ -1,3 +1,4 @@
+import { beginAnswerTiming } from './answer-timing';
 import {
   Message,
   MessageStatus as S,
@@ -61,6 +62,33 @@ function row(
 }
 
 describe('stopped turn persistence', () => {
+  it('atomically freezes the leaf timing on a remote stop, including the EOS to DONE gap', async () => {
+    const rows = [
+      row('q', null, R.USER),
+      row('a', 'q', R.ASSISTANT, S.SUCCESS, {
+        turn_id: 'q',
+        turn_run_id: 'run',
+        answer_timing: beginAnswerTiming('run', [], 1000),
+      }),
+    ];
+    const { service } = fixture(rows);
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(4000);
+    try {
+      await service.stopRunning('n', 'c', undefined, 'a');
+      expect(rows[1].status).toBe(S.STOPPED);
+      expect(rows[1].attrs?.answer_timing).toMatchObject({
+        outcome: 'stopped',
+        duration_ms: 3000,
+      });
+      await service.finalizeAnswerTiming('a', 'run', 'success', 9000);
+      expect(rows[1].attrs?.answer_timing).toMatchObject({
+        outcome: 'stopped',
+        duration_ms: 3000,
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
   it('stops the selected turn and keeps completed outcomes, siblings and earlier turns', async () => {
     const rows = [
       row('q1', null, R.USER),

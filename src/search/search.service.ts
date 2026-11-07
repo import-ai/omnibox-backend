@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { createHash } from 'crypto';
+import { trace } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
@@ -47,14 +47,14 @@ const BACKFILL_PAGE_SIZE = 100;
 const WEAVIATE_SYNC_LOG_EVERY = 1000;
 const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_SEARCH_LIMIT = 100;
+const WIZARD_PAGE_SIZE = 20;
+const PERMISSION_SLACK_PAGES = 2;
+const PICKER_SLACK_PAGES = 5;
+const WIZARD_SEARCH_TIMEOUT_MS = 10000;
 // History search asks for this many candidates per requested hit in a single
 // Wizard call, so hits dropped as ineligible are backfilled without another
 // round trip (auto-recall has a 1 s budget).
 const HISTORY_CANDIDATE_FACTOR = 3;
-const SEMANTIC_SEARCH_PAGE_SIZE = 100;
-const SEMANTIC_SEARCH_CACHE_TTL_MS = 30 * 1000;
-const SEMANTIC_SEARCH_CACHE_MAX_ENTRIES = 100;
-const SEMANTIC_SEARCH_CACHE_MAX_ITEMS = 2000;
 
 export interface SearchPaginationOptions {
   offset?: number;
@@ -68,24 +68,9 @@ export interface SearchPaginatedResult {
   limit: number;
 }
 
-interface SemanticSearchCacheEntry {
-  expiresAt: number;
-  hasMoreRawResults: boolean;
-  items: IndexedDocDto[];
-  nextSearchOffset: number;
-  // The articles already accumulated, so the copies a second subscribing folder
-  // holds are dropped even when they arrive on a later wizard page.
-  seenArticleIdentities: Set<string>;
-  seenResourceIds: Set<string>;
-}
-
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
-  private readonly semanticSearchCache = new Map<
-    string,
-    SemanticSearchCacheEntry
-  >();
 
   constructor(
     private readonly wizardApiService: WizardAPIService,
@@ -144,14 +129,16 @@ export class SearchService {
     if (candidateResourceIds && candidateResourceIds.length <= 0) {
       return [];
     }
-    const result = await this.searchSemanticResources(
+    const result = await this.searchVisibleResources(
       userId,
       namespaceId,
       normalizedQuery,
       candidateResourceIds,
+      0,
+      MAX_SEARCH_LIMIT,
       {
-        offset: 0,
-        limit: MAX_SEARCH_LIMIT,
+        maxPages:
+          Math.ceil(MAX_SEARCH_LIMIT / WIZARD_PAGE_SIZE) + PICKER_SLACK_PAGES,
       },
     );
     return result.items;
@@ -231,7 +218,7 @@ export class SearchService {
       };
     }
 
-    const result = await this.searchSemanticResourcesPaginated(
+    const result = await this.searchVisibleResources(
       userId,
       namespaceId,
       normalizedQuery,
@@ -248,78 +235,241 @@ export class SearchService {
     };
   }
 
-  private async searchSemanticResourcesPaginated(
+  private async searchVisibleResources(
     userId: string,
     namespaceId: string,
     normalizedQuery: string,
     candidateResourceIds: string[] | null,
     offset: number,
     limit: number,
+    options?: { maxPages?: number },
   ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
     const requestedItemCount = offset + limit;
-    const requestedItemCountWithLookahead = requestedItemCount + 1;
-    const cacheKey = this.getSemanticSearchCacheKey(
+    const maxPages =
+      options?.maxPages ??
+      Math.ceil(requestedItemCount / WIZARD_PAGE_SIZE) + PERMISSION_SLACK_PAGES;
+    const deadline = Date.now() + WIZARD_SEARCH_TIMEOUT_MS;
+    const visibleItems: IndexedDocDto[] = [];
+    const seenResourceIds = new Set<string>();
+    const seenArticleIdentities = new Set<string>();
+    let wizardOffset = 0;
+    let wizardHasMore = true;
+    let pagesRequested = 0;
+    let permissionDropped = 0;
+
+    while (
+      visibleItems.length < requestedItemCount &&
+      wizardHasMore &&
+      pagesRequested < maxPages &&
+      Date.now() < deadline
+    ) {
+      pagesRequested += 1;
+      let page: {
+        items: IndexedDocDto[];
+        recordCount: number;
+        hasMore: boolean;
+        advanceBy: number;
+      };
+      try {
+        page = await this.searchWizardPage(
+          userId,
+          namespaceId,
+          normalizedQuery,
+          candidateResourceIds,
+          {
+            offset: wizardOffset,
+            limit: WIZARD_PAGE_SIZE,
+          },
+          Math.max(1, deadline - Date.now()),
+          seenResourceIds,
+          seenArticleIdentities,
+        );
+      } catch (error) {
+        if (this.isAbortError(error)) {
+          break;
+        }
+        throw error;
+      }
+      permissionDropped += page.recordCount - page.items.length;
+      visibleItems.push(...page.items);
+      // The wizard offset indexes filtered results in the new contract and raw
+      // results in the legacy one, so the page decides how far to advance.
+      wizardOffset += page.advanceBy;
+      wizardHasMore = page.hasMore;
+    }
+
+    this.recordSearchPagination({
+      offset,
+      limit,
+      pagesRequested,
+      permissionDropped,
+    });
+
+    const items = visibleItems.slice(offset, offset + limit);
+    let total: number;
+    if (items.length === 0 && offset === 0) {
+      total = 0;
+    } else if (wizardHasMore) {
+      // Keep a lookahead so clients retry the next page after a sparse slice.
+      total = Math.max(visibleItems.length, offset + limit + 1);
+    } else {
+      total = visibleItems.length;
+    }
+
+    return { items, total };
+  }
+
+  private async searchWizardPage(
+    userId: string,
+    namespaceId: string,
+    normalizedQuery: string,
+    candidateResourceIds: string[] | null,
+    pagination: Required<SearchPaginationOptions>,
+    timeoutMs: number,
+    seenResourceIds: Set<string>,
+    seenArticleIdentities: Set<string>,
+  ): Promise<{
+    items: IndexedDocDto[];
+    recordCount: number;
+    hasMore: boolean;
+    advanceBy: number;
+  }> {
+    const searchRequest = new SearchRequestDto();
+    searchRequest.query = normalizedQuery;
+    searchRequest.namespaceId = namespaceId;
+    searchRequest.userId = userId;
+    searchRequest.type = IndexRecordType.CHUNK;
+    searchRequest.offset = Math.max(pagination.offset, 0);
+    searchRequest.limit = Math.min(
+      Math.max(pagination.limit, 1),
+      MAX_SEARCH_LIMIT,
+    );
+    searchRequest.resourceIds = candidateResourceIds || undefined;
+    const result = await this.wizardApiService.search(searchRequest, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const records = result?.records || [];
+    const candidateResourceIdSet = candidateResourceIds
+      ? new Set(candidateResourceIds)
+      : null;
+    const pageResourceIds: string[] = [];
+    const pageResourceIdSet = new Set<string>();
+    for (const record of records) {
+      if (record.type !== IndexRecordType.CHUNK || !record.chunk) {
+        continue;
+      }
+      const chunk = record.chunk;
+      if (
+        candidateResourceIdSet &&
+        !candidateResourceIdSet.has(chunk.resourceId)
+      ) {
+        continue;
+      }
+      if (pageResourceIdSet.has(chunk.resourceId)) {
+        continue;
+      }
+      pageResourceIdSet.add(chunk.resourceId);
+      pageResourceIds.push(chunk.resourceId);
+    }
+
+    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
+      namespaceId,
+      pageResourceIds,
+    );
+    const permissionMap = await this.permissionsService.getCurrentPermissions(
       userId,
       namespaceId,
-      normalizedQuery,
-      candidateResourceIds,
+      [...resourceMetaMap.values()],
     );
-    const cachedEntry = this.getSemanticSearchCacheEntry(cacheKey);
-    const cacheEntry = cachedEntry || this.createSemanticSearchCacheEntry();
-    const cachedItemCount = cachedEntry?.items.length ?? 0;
 
-    for (
-      ;
-      cacheEntry.items.length < requestedItemCountWithLookahead &&
-      cacheEntry.hasMoreRawResults;
-    ) {
-      const searchPage = await this.searchSemanticResources(
-        userId,
-        namespaceId,
-        normalizedQuery,
-        candidateResourceIds,
-        {
-          offset: cacheEntry.nextSearchOffset,
-          limit: SEMANTIC_SEARCH_PAGE_SIZE,
-        },
-      );
-      cacheEntry.nextSearchOffset += searchPage.limit;
-      for (const item of searchPage.items) {
-        if (item.type === DocType.RESOURCE) {
-          if (cacheEntry.seenResourceIds.has(item.resourceId)) {
-            continue;
-          }
-          // Collapsed as the accumulator is filled, i.e. before the page is
-          // sliced: the surviving copy is the one the wizard ranked highest,
-          // which keeps paging stable and the total honest.
-          const identity = getArticleIdentity(item);
-          if (identity !== null) {
-            if (cacheEntry.seenArticleIdentities.has(identity)) {
-              continue;
-            }
-            cacheEntry.seenArticleIdentities.add(identity);
-          }
-          cacheEntry.seenResourceIds.add(item.resourceId);
-        }
-        cacheEntry.items.push(item);
+    const items: IndexedDocDto[] = [];
+    const seenPageResourceIds = new Set<string>();
+    for (const record of records) {
+      if (record.type !== IndexRecordType.CHUNK || !record.chunk) {
+        continue;
       }
-      cacheEntry.hasMoreRawResults = searchPage.rawCount >= searchPage.limit;
-    }
-    this.setSemanticSearchCacheEntry(cacheKey, cacheEntry);
-    const items = cacheEntry.items.slice(offset, requestedItemCount);
-    const shouldRefreshCachedPermissions =
-      cachedEntry !== null && offset < cachedItemCount;
+      const chunk = record.chunk;
+      if (
+        candidateResourceIdSet &&
+        !candidateResourceIdSet.has(chunk.resourceId)
+      ) {
+        continue;
+      }
+      if (
+        seenPageResourceIds.has(chunk.resourceId) ||
+        seenResourceIds.has(chunk.resourceId)
+      ) {
+        continue;
+      }
+      seenPageResourceIds.add(chunk.resourceId);
+      const permission = permissionMap.get(chunk.resourceId);
+      if (
+        !permission ||
+        comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
+      ) {
+        continue;
+      }
 
+      const resourceMeta = resourceMetaMap.get(chunk.resourceId);
+      // One article, however many folders subscribe to its feed. The page is
+      // in wizard rank order, so the best-ranked copy is the one kept.
+      const identity = getArticleIdentity({
+        resourceType: resourceMeta?.resourceType,
+        attrs: resourceMeta?.attrs,
+      });
+      if (identity !== null) {
+        if (seenArticleIdentities.has(identity)) {
+          continue;
+        }
+        seenArticleIdentities.add(identity);
+      }
+      seenResourceIds.add(chunk.resourceId);
+      const resourceDto: IndexedResourceDto = {
+        type: DocType.RESOURCE,
+        id: record.id,
+        resourceId: chunk.resourceId,
+        title: chunk.title || 'Untitled',
+        content: chunk.text || '',
+        attrs: resourceMeta?.attrs || {},
+        resourceType: resourceMeta?.resourceType || ResourceType.DOC,
+        readOnly: isReadOnlyResourceType(
+          resourceMeta?.resourceType || ResourceType.DOC,
+        ),
+      };
+      items.push(resourceDto);
+    }
+
+    // A wizard without has_more predates filtered pagination: its offset is a
+    // raw offset, so advance by the requested page size and use raw_count to
+    // decide whether raw results remain.
+    const legacyWizard = result?.hasMore === undefined;
     return {
-      items: shouldRefreshCachedPermissions
-        ? await this.refreshCachedResourcePermissions(
-            userId,
-            namespaceId,
-            items,
-          )
-        : items,
-      total: cacheEntry.items.length,
+      items,
+      recordCount: records.length,
+      hasMore: legacyWizard
+        ? (result?.rawCount ?? records.length) >= WIZARD_PAGE_SIZE
+        : result.hasMore === true,
+      advanceBy: legacyWizard ? WIZARD_PAGE_SIZE : records.length,
     };
+  }
+
+  private recordSearchPagination(attributes: {
+    offset: number;
+    limit: number;
+    pagesRequested: number;
+    permissionDropped: number;
+  }) {
+    const span = trace.getActiveSpan();
+    if (!span) {
+      return;
+    }
+    span.setAttribute('search.offset', attributes.offset);
+    span.setAttribute('search.limit', attributes.limit);
+    span.setAttribute('search.pages_requested', attributes.pagesRequested);
+    span.setAttribute(
+      'search.permission_dropped',
+      attributes.permissionDropped,
+    );
   }
 
   async searchMessages(
@@ -484,234 +634,6 @@ export class SearchService {
       .every((keyword) => normalizedContent.includes(keyword));
   }
 
-  private async refreshCachedResourcePermissions(
-    userId: string,
-    namespaceId: string,
-    items: IndexedDocDto[],
-  ): Promise<IndexedDocDto[]> {
-    const resourceIds = items
-      .filter((item) => item.type === DocType.RESOURCE)
-      .map((item) => item.resourceId);
-    if (resourceIds.length <= 0) {
-      return items;
-    }
-
-    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
-      namespaceId,
-      resourceIds,
-    );
-    const permissionMap = await this.permissionsService.getCurrentPermissions(
-      userId,
-      namespaceId,
-      [...resourceMetaMap.values()],
-    );
-
-    const visibleItems: IndexedDocDto[] = [];
-    for (const item of items) {
-      if (item.type !== DocType.RESOURCE) {
-        visibleItems.push(item);
-        continue;
-      }
-      const permission = permissionMap.get(item.resourceId);
-      if (
-        !permission ||
-        comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
-      ) {
-        continue;
-      }
-
-      const resourceMeta = resourceMetaMap.get(item.resourceId);
-      visibleItems.push({
-        ...item,
-        attrs: resourceMeta?.attrs || {},
-        resourceType: resourceMeta?.resourceType || ResourceType.DOC,
-        readOnly: isReadOnlyResourceType(
-          resourceMeta?.resourceType || ResourceType.DOC,
-        ),
-      });
-    }
-
-    return visibleItems;
-  }
-
-  private createSemanticSearchCacheEntry(): SemanticSearchCacheEntry {
-    return {
-      expiresAt: Date.now() + SEMANTIC_SEARCH_CACHE_TTL_MS,
-      hasMoreRawResults: true,
-      items: [],
-      nextSearchOffset: 0,
-      seenArticleIdentities: new Set<string>(),
-      seenResourceIds: new Set<string>(),
-    };
-  }
-
-  private getSemanticSearchCacheEntry(
-    key: string,
-  ): SemanticSearchCacheEntry | null {
-    const entry = this.semanticSearchCache.get(key);
-    if (!entry) {
-      return null;
-    }
-    if (entry.expiresAt <= Date.now()) {
-      this.semanticSearchCache.delete(key);
-      return null;
-    }
-    this.semanticSearchCache.delete(key);
-    this.semanticSearchCache.set(key, entry);
-    return entry;
-  }
-
-  private setSemanticSearchCacheEntry(
-    key: string,
-    entry: SemanticSearchCacheEntry,
-  ) {
-    if (entry.items.length > SEMANTIC_SEARCH_CACHE_MAX_ITEMS) {
-      this.semanticSearchCache.delete(key);
-      return;
-    }
-    entry.expiresAt = Date.now() + SEMANTIC_SEARCH_CACHE_TTL_MS;
-    this.semanticSearchCache.delete(key);
-    this.semanticSearchCache.set(key, entry);
-    while (this.semanticSearchCache.size > SEMANTIC_SEARCH_CACHE_MAX_ENTRIES) {
-      const oldestKey = this.semanticSearchCache.keys().next().value as
-        | string
-        | undefined;
-      if (oldestKey === undefined) {
-        break;
-      }
-      this.semanticSearchCache.delete(oldestKey);
-    }
-  }
-
-  private getSemanticSearchCacheKey(
-    userId: string,
-    namespaceId: string,
-    normalizedQuery: string,
-    candidateResourceIds: string[] | null,
-  ): string {
-    const candidateHash = candidateResourceIds
-      ? createHash('sha256')
-          .update(candidateResourceIds.join('\0'))
-          .digest('hex')
-      : 'all';
-
-    return [userId, namespaceId, normalizedQuery, candidateHash].join('\0');
-  }
-
-  private async searchSemanticResources(
-    userId: string,
-    namespaceId: string,
-    normalizedQuery: string,
-    candidateResourceIds: string[] | null,
-    pagination: Required<SearchPaginationOptions>,
-  ): Promise<{
-    items: IndexedDocDto[];
-    limit: number;
-    rawCount: number;
-  }> {
-    const searchRequest = new SearchRequestDto();
-    searchRequest.query = normalizedQuery;
-    searchRequest.namespaceId = namespaceId;
-    searchRequest.userId = userId;
-    searchRequest.limit = Math.min(
-      Math.max(pagination.limit, 1),
-      MAX_SEARCH_LIMIT,
-    );
-    searchRequest.offset = Math.max(pagination.offset, 0);
-    searchRequest.type = IndexRecordType.CHUNK;
-    searchRequest.resourceIds = candidateResourceIds || undefined;
-    const result = await this.wizardApiService.search(searchRequest);
-    const records = result?.records || [];
-    const items: IndexedDocDto[] = [];
-    const seenResourceIds = new Set<string>();
-    const candidateResourceIdSet = candidateResourceIds
-      ? new Set(candidateResourceIds)
-      : null;
-    for (const record of records) {
-      if (record.type === IndexRecordType.CHUNK) {
-        const chunk = record.chunk!;
-        if (
-          candidateResourceIdSet &&
-          !candidateResourceIdSet.has(chunk.resourceId)
-        ) {
-          continue;
-        }
-        if (!seenResourceIds.has(chunk.resourceId)) {
-          seenResourceIds.add(chunk.resourceId);
-        }
-      }
-    }
-
-    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
-      namespaceId,
-      [...seenResourceIds],
-    );
-    const permissionMap = await this.permissionsService.getCurrentPermissions(
-      userId,
-      namespaceId,
-      [...resourceMetaMap.values()],
-    );
-
-    seenResourceIds.clear();
-    const seenArticleIdentities = new Set<string>();
-
-    for (const record of records) {
-      if (record.type === IndexRecordType.CHUNK) {
-        const chunk = record.chunk!;
-        if (seenResourceIds.has(chunk.resourceId)) {
-          continue;
-        }
-        if (
-          candidateResourceIdSet &&
-          !candidateResourceIdSet.has(chunk.resourceId)
-        ) {
-          continue;
-        }
-        seenResourceIds.add(chunk.resourceId);
-        const permission = permissionMap.get(chunk.resourceId);
-        if (
-          !permission ||
-          comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
-        ) {
-          continue;
-        }
-
-        const resourceMeta = resourceMetaMap.get(chunk.resourceId);
-        // One article, however many folders subscribe to its feed. The page is
-        // in wizard rank order, so the best-ranked copy is the one kept.
-        const identity = getArticleIdentity({
-          resourceType: resourceMeta?.resourceType,
-          attrs: resourceMeta?.attrs,
-        });
-        if (identity !== null) {
-          if (seenArticleIdentities.has(identity)) {
-            continue;
-          }
-          seenArticleIdentities.add(identity);
-        }
-        const resourceDto: IndexedResourceDto = {
-          type: DocType.RESOURCE,
-          id: record.id,
-          resourceId: chunk.resourceId,
-          title: chunk.title || 'Untitled',
-          content: chunk.text || '',
-          attrs: resourceMeta?.attrs || {},
-          resourceType: resourceMeta?.resourceType || ResourceType.DOC,
-          readOnly: isReadOnlyResourceType(
-            resourceMeta?.resourceType || ResourceType.DOC,
-          ),
-        };
-        items.push(resourceDto);
-      }
-    }
-
-    return {
-      items,
-      limit: searchRequest.limit,
-      rawCount: records.length,
-    };
-  }
-
   private async getFilterCandidateResourceIds(
     userId: string,
     namespaceId: string,
@@ -722,6 +644,11 @@ export class SearchService {
       namespaceId,
       filterOptions,
     );
+  }
+
+  private isAbortError(error: unknown): boolean {
+    const name = (error as { name?: unknown } | null)?.name;
+    return name === 'AbortError' || name === 'TimeoutError';
   }
 
   private normalizePagination(

@@ -166,12 +166,16 @@ export class WizardAPIService {
     return response;
   }
 
-  async search(req: SearchRequestDto): Promise<SearchResponseDto> {
+  async search(
+    req: SearchRequestDto,
+    options?: { signal?: AbortSignal },
+  ): Promise<SearchResponseDto> {
     const resp = await this.request(
       'POST',
       '/internal/api/v1/wizard/search',
       instanceToPlain(req),
       {},
+      options?.signal,
     );
     return plainToInstance(SearchResponseDto, resp);
   }

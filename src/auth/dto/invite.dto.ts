@@ -35,7 +35,11 @@ export class InviteDto {
   resourceId?: string;
 
   @Expose()
-  @IsEnum(ResourcePermission)
+  @IsEnum(ResourcePermission, {
+    message: i18nValidationMessage(
+      'validation.errors.invite.permission.invalid',
+    ),
+  })
   @IsOptional()
   permission?: ResourcePermission;
 

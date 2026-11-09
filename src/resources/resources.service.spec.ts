@@ -37,6 +37,116 @@ describe('ResourcesService', () => {
     expect(repo.update).not.toHaveBeenCalled();
   });
 
+  describe('same-value name and content updates', () => {
+    function createService() {
+      const oldResource = {
+        id: 'resource-id',
+        namespaceId: 'namespace-id',
+        resourceType: ResourceType.DOC,
+        name: 'Document',
+        content: 'Body',
+        version: 2,
+        parentId: null,
+        tagIds: [],
+      };
+      const repo = {
+        findOne: jest.fn().mockResolvedValue(oldResource),
+        findOneOrFail: jest.fn().mockResolvedValue(oldResource),
+        update: jest.fn(),
+      };
+      const resourceRevisionService = {
+        archive: jest.fn(),
+        historyLimit: jest.fn().mockResolvedValue(3),
+      };
+      const resourceContributorsService = {
+        recordEdit: jest.fn(),
+      };
+      const service = new ResourcesService(
+        {} as any,
+        repo as any,
+        { emitUpsertIndexTask: jest.fn() } as any,
+        {} as any,
+        { t: jest.fn() } as any,
+        {} as any,
+        { updateStorageUsage: jest.fn() } as any,
+        {} as any,
+        resourceRevisionService as any,
+        resourceContributorsService as any,
+      );
+
+      return {
+        service,
+        repo,
+        resourceRevisionService,
+        resourceContributorsService,
+      };
+    }
+
+    const tx = { entityManager: { getRepository: jest.fn() } } as any;
+
+    it('returns before archiving or updating when both values are unchanged', async () => {
+      const {
+        service,
+        repo,
+        resourceRevisionService,
+        resourceContributorsService,
+      } = createService();
+      tx.entityManager.getRepository.mockReturnValue(repo);
+      jest
+        .spyOn(service as any, 'resolveUniqueName')
+        .mockResolvedValue('Document');
+
+      await service.updateResource(
+        'namespace-id',
+        'resource-id',
+        'user-id',
+        { name: 'Document', content: 'Body' },
+        tx,
+        false,
+        { historyLimit: 3 },
+      );
+
+      expect(repo.update).not.toHaveBeenCalled();
+      expect(resourceRevisionService.archive).not.toHaveBeenCalled();
+      expect(resourceContributorsService.recordEdit).not.toHaveBeenCalled();
+    });
+
+    it('keeps tag updates on the normal persistence path', async () => {
+      const { service, repo } = createService();
+      tx.entityManager.getRepository.mockReturnValue(repo);
+
+      await service.updateResource(
+        'namespace-id',
+        'resource-id',
+        'user-id',
+        { content: 'Body', tagIds: ['tag-id'] },
+        tx,
+        false,
+        { historyLimit: 3 },
+      );
+
+      expect(repo.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps forced revisions on the normal persistence path', async () => {
+      const { service, repo, resourceRevisionService } = createService();
+      tx.entityManager.getRepository.mockReturnValue(repo);
+
+      await service.updateResource(
+        'namespace-id',
+        'resource-id',
+        'user-id',
+        { content: 'Body' },
+        tx,
+        false,
+        { historyLimit: 3, forceRevision: true },
+      );
+
+      expect(resourceRevisionService.archive).toHaveBeenCalledTimes(1);
+      expect(repo.update).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('resolveUniqueName with auto-rename', () => {
     function createService(getCount: jest.Mock) {
       const qb = {

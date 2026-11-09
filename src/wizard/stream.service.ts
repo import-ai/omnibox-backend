@@ -23,6 +23,12 @@ import {
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
+  AnswerTimingRun,
+  endAnswerTiming,
+  finishAnswerTiming,
+  startAnswerTiming,
+} from 'omniboxd/messages/answer-timing';
+import {
   Message,
   MessageAttrs,
   MessageStatus,
@@ -70,6 +76,9 @@ type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
 type RedisClient = ReturnType<typeof createClient>;
 
 interface HandlerContext {
+  answerTiming?: AnswerTimingRun;
+  timingFinalized?: boolean;
+  lastEos?: { message: Message; endedAt: Date; monotonic: number };
   runId?: string;
   failed?: boolean;
   interrupted?: boolean;
@@ -373,6 +382,13 @@ export class StreamService implements OnModuleDestroy {
       context: HandlerContext,
     ): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
+      if (
+        chunk.response_type === 'bos' ||
+        chunk.response_type === 'delta' ||
+        chunk.response_type === 'query_attrs'
+      ) {
+        delete chunk.attrs?.answer_timing;
+      }
       if (context.queryId) {
         const turn = await this.messagesService.findOne(context.queryId);
         if (
@@ -398,6 +414,12 @@ export class StreamService implements OnModuleDestroy {
         return;
       }
       if (chunk.response_type === 'bos') {
+        context.lastEos = undefined;
+        if (context.answerTiming)
+          chunk.attrs = {
+            ...chunk.attrs,
+            answer_timing: context.answerTiming.value,
+          };
         if (chunk.role === OpenAIMessageRole.ASSISTANT) {
           context.toolCalls = undefined;
           context.answeredToolCallIds = new Set();
@@ -472,6 +494,8 @@ export class StreamService implements OnModuleDestroy {
         delete chunk.attrs?.context;
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
+        const endedAt = new Date();
+        const monotonic = performance.now();
         chunk.id = context.messageId;
         const message: Message = await this.messagesService.update(
           context.messageId!,
@@ -487,11 +511,53 @@ export class StreamService implements OnModuleDestroy {
           context.failed = true;
           return;
         }
+        context.lastEos = { message, endedAt, monotonic };
         this.reportCallCompleted(message, stream);
         context.message = message.message;
         context.parentId = message.id;
         context.messageId = undefined;
       } else if (chunk.response_type === 'done') {
+        const last = context.lastEos;
+        if (
+          context.answerTiming &&
+          !context.timingFinalized &&
+          !context.failed &&
+          !context.messageId &&
+          last &&
+          (context.interrupted ||
+            (last.message.message.role === OpenAIMessageRole.ASSISTANT &&
+              last.message.message.content?.trim() &&
+              !last.message.message.tool_calls?.length))
+        ) {
+          context.timingFinalized = true;
+          const timing = finishAnswerTiming(
+            context.answerTiming,
+            context.interrupted ? 'paused' : 'complete',
+            last.endedAt,
+            last.monotonic,
+          );
+          const saved = await this.messagesService.setAnswerTiming(
+            last.message.id,
+            timing,
+          );
+          if (saved?.attrs?.answer_timing) {
+            await send(
+              JSON.stringify(
+                this.forVisitor(
+                  {
+                    response_type: 'delta',
+                    id: saved.id,
+                    message: {},
+                    attrs: { answer_timing: saved.attrs.answer_timing },
+                  },
+                  chatOnly,
+                ),
+              ),
+            );
+            // Allocate DONE after the inserted metadata so Redis IDs stay ordered.
+            delete chunk.event_id;
+          }
+        }
         if (
           !context.failed &&
           !context.interrupted &&
@@ -528,6 +594,7 @@ export class StreamService implements OnModuleDestroy {
         }
         await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
+        const failedAt = new Date();
         context.failed = true;
         this.reportChatErrorTrace(chunk, {
           userId,
@@ -616,6 +683,28 @@ export class StreamService implements OnModuleDestroy {
             },
             false,
           );
+          if (context.answerTiming) {
+            const saved = await this.messagesService.setAnswerTiming(
+              context.messageId,
+              endAnswerTiming(context.answerTiming.value, 'failed', failedAt),
+            );
+            if (saved?.attrs?.answer_timing) {
+              await send(
+                JSON.stringify(
+                  this.forVisitor(
+                    {
+                      response_type: 'delta',
+                      id: saved.id,
+                      message: {},
+                      attrs: { answer_timing: saved.attrs.answer_timing },
+                    },
+                    chatOnly,
+                  ),
+                ),
+              );
+              delete chunk.event_id;
+            }
+          }
         }
       } else {
         const message = this.i18n.t('system.errors.unknownResponseType', {
@@ -1415,6 +1504,7 @@ export class StreamService implements OnModuleDestroy {
     timeZone?: string,
     traceContext: ChatClientTraceContext = {},
   ): StreamSession {
+    requestId = requestId?.trim() || randomUUID();
     const session: StreamSession = {
       key,
       namespaceId,
@@ -1602,6 +1692,14 @@ export class StreamService implements OnModuleDestroy {
         };
       });
       if (session.finished || session.controller.signal.aborted) return;
+      session.handlerContext.answerTiming = startAnswerTiming(
+        requestId,
+        messages,
+        Boolean(
+          requestDto.tool_call?.decisions?.length ||
+          query.attrs?.tool_call?.decisions?.length,
+        ),
+      );
       await this.stream(
         namespaceId,
         mode,
@@ -1613,8 +1711,16 @@ export class StreamService implements OnModuleDestroy {
             await this.stopSession(session);
             return;
           }
+          const chunk = JSON.parse(data) as ChatResponse & {
+            event_id?: string;
+          };
+          delete chunk.event_id;
+          const payload = JSON.stringify(chunk);
+          // Allocate terminal cursors after synthetic metadata and error messages.
           await handler(
-            await this.addNextEventId(session, data),
+            ['bos', 'delta'].includes(chunk.response_type)
+              ? await this.addNextEventId(session, payload)
+              : payload,
             session.handlerContext,
           );
         },
@@ -1963,6 +2069,17 @@ export class StreamService implements OnModuleDestroy {
           : undefined,
       );
       const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
+      if (message?.attrs?.answer_timing) {
+        await this.sendSessionData(
+          session,
+          JSON.stringify({
+            response_type: 'delta',
+            id: message.id,
+            message: {},
+            attrs: { answer_timing: message.attrs.answer_timing },
+          }),
+        );
+      }
       await this.sendSessionData(
         session,
         JSON.stringify({

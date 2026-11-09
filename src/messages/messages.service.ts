@@ -9,6 +9,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { branchRelations } from 'omniboxd/conversations/conversation-branch';
 import { Conversation } from 'omniboxd/conversations/entities/conversation.entity';
 import { agentTokenDeltaOf } from 'omniboxd/messages/agent-token-usage';
+import { AnswerTiming, endAnswerTiming } from 'omniboxd/messages/answer-timing';
 import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import {
   isMessageIndexable,
@@ -394,6 +395,32 @@ export class MessagesService {
     });
   }
 
+  async setAnswerTiming(
+    id: string,
+    timing: AnswerTiming,
+  ): Promise<Message | null> {
+    return this.dataSource.transaction(async (manager) => {
+      const message = await this.lockStreamMessage(manager, id);
+      if (
+        (timing.status === 'failed'
+          ? message.status !== MessageStatus.FAILED
+          : message.status !== MessageStatus.SUCCESS) ||
+        message.attrs?.turn_run_id !== timing.run_id ||
+        message.attrs?.answer_timing?.answer_id !== timing.answer_id
+      )
+        return null;
+      if (message.attrs.turn_id) {
+        const turn = await manager
+          .getRepository(Message)
+          .findOneByOrFail({ id: message.attrs.turn_id });
+        if (turn.attrs?.stopped_runs?.includes(timing.run_id)) return null;
+      }
+      if (message.attrs.answer_timing?.status !== 'running') return message;
+      message.attrs = { ...message.attrs, answer_timing: timing };
+      return manager.save(message);
+    });
+  }
+
   private async lockStreamMessage(
     manager: EntityManager,
     id: string,
@@ -561,6 +588,7 @@ export class MessagesService {
     leafId?: string,
     activeRun?: { id: string; queryId: string },
   ): Promise<Message | null> {
+    const stoppedAt = new Date();
     const messages = await this.findAll(userId, conversationId);
     const byId = new Map(messages.map((m) => [m.id, m]));
     const parents = new Set(messages.map((m) => m.parentId));
@@ -639,7 +667,13 @@ export class MessagesService {
             ),
         ),
       );
-      if (!pending.length && !unresolved && !activeRun) return null;
+      if (
+        !pending.length &&
+        !unresolved &&
+        !activeRun &&
+        branch[0].attrs?.answer_timing?.status !== 'running'
+      )
+        return null;
       if (runId) {
         turn.attrs = {
           ...turn.attrs,
@@ -690,7 +724,16 @@ export class MessagesService {
         }
         await repo.save(message);
       }
-      return repo.findOneBy({ id: branch[0].id });
+      const stopped = await repo.findOneBy({ id: branch[0].id });
+      const timing = stopped?.attrs?.answer_timing;
+      if (stopped && timing && ['running', 'paused'].includes(timing.status)) {
+        stopped.attrs = {
+          ...stopped.attrs,
+          answer_timing: endAnswerTiming(timing, 'stopped', stoppedAt),
+        };
+        await repo.save(stopped);
+      }
+      return stopped;
     });
   }
 

@@ -1,4 +1,5 @@
 import { Base } from 'omniboxd/common/base.entity';
+import type { AnswerTiming } from 'omniboxd/messages/answer-timing';
 import {
   Column,
   Entity,
@@ -47,6 +48,7 @@ export interface OpenAIMessage {
 }
 
 export interface MessageAttrs {
+  answer_timing?: AnswerTiming;
   turn_id?: string;
   turn_run_id?: string;
   stopped_run_id?: string;

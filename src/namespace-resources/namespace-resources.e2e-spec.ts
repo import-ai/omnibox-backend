@@ -1,4 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import {
@@ -462,6 +463,182 @@ describe('ResourcesController (e2e)', () => {
         )
         .send(updateData)
         .expect(HttpStatus.NOT_FOUND);
+    });
+  });
+
+  describe('Resource attrs origin protection', () => {
+    const createInternalDoc = async (
+      attrs: Record<string, any> | undefined,
+      content = 'Origin content',
+    ) => {
+      const response = await client
+        .post(`/internal/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Origin Protected Resource'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content,
+          attrs,
+        })
+        .expect(HttpStatus.CREATED);
+      return response.body;
+    };
+
+    it('ignores attrs.origin sent by the client on public create', async () => {
+      const response = await client
+        .post(`/api/v1/namespaces/${client.namespace.id}/resources`)
+        .send({
+          name: uniqueName('Origin Public Create'),
+          namespaceId: client.namespace.id,
+          resourceType: ResourceType.DOC,
+          parentId: client.namespace.root_resource_id,
+          content: 'content',
+          attrs: { origin: 'agent', url: 'https://example.com' },
+        })
+        .expect(HttpStatus.CREATED);
+
+      expect(response.body.attrs).toEqual({ url: 'https://example.com' });
+    });
+
+    it('preserves the stored origin and writes other attrs on public update', async () => {
+      const resource = await createInternalDoc({
+        origin: 'welcome',
+        url: 'https://a.example',
+      });
+
+      const response = await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({
+          attrs: { origin: 'agent', url: 'https://b.example', extra: true },
+        })
+        .expect(HttpStatus.OK);
+
+      expect(response.body.attrs).toEqual({
+        origin: 'welcome',
+        url: 'https://b.example',
+        extra: true,
+      });
+    });
+
+    it('does not add an origin to a resource that has none', async () => {
+      const resource = await createInternalDoc({ url: 'https://a.example' });
+
+      const response = await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ attrs: { origin: 'agent' } })
+        .expect(HttpStatus.OK);
+
+      expect(response.body.attrs).toEqual({});
+    });
+
+    it('leaves attrs untouched when the update omits them', async () => {
+      const resource = await createInternalDoc({
+        origin: 'collect',
+        url: 'https://a.example',
+      });
+
+      const response = await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ name: uniqueName('Renamed Origin Resource') })
+        .expect(HttpStatus.OK);
+
+      expect(response.body.attrs).toEqual({
+        origin: 'collect',
+        url: 'https://a.example',
+      });
+    });
+
+    it('accepts attrs: null without failing and keeps the stored origin', async () => {
+      const resource = await createInternalDoc({
+        origin: 'welcome',
+        url: 'https://a.example',
+      });
+
+      const response = await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({ attrs: null })
+        .expect(HttpStatus.OK);
+
+      expect(response.body.attrs).toEqual({ origin: 'welcome' });
+    });
+
+    it('keeps the welcome document origin when its owner updates it', async () => {
+      const children = await client
+        .get(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${client.namespace.root_resource_id}/children`,
+        )
+        .expect(HttpStatus.OK);
+      const welcome = children.body.find(
+        (resource: any) => resource.attrs?.origin === 'welcome',
+      );
+      expect(welcome).toBeDefined();
+
+      const response = await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${welcome.id}`,
+        )
+        .send({ attrs: { origin: 'agent', url: 'https://welcome.example' } })
+        .expect(HttpStatus.OK);
+
+      expect(response.body.attrs).toEqual({
+        origin: 'welcome',
+        url: 'https://welcome.example',
+      });
+    });
+
+    it('allows internal create and update to write attrs.origin', async () => {
+      const created = await createInternalDoc({ origin: 'agent' });
+      expect(created.attrs).toMatchObject({ origin: 'agent' });
+
+      await client
+        .patch(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${created.id}`,
+        )
+        .send({ attrs: { origin: 'collect' } })
+        .expect(HttpStatus.OK);
+
+      const response = await client
+        .get(
+          `/internal/api/v1/namespaces/${client.namespace.id}/resources/${created.id}`,
+        )
+        .expect(HttpStatus.OK);
+      expect(response.body.attrs).toMatchObject({ origin: 'collect' });
+    });
+
+    it('protects origin on the content-hash and comment-anchor transaction path', async () => {
+      const resource = await createInternalDoc(
+        { origin: 'collect' },
+        'Original',
+      );
+
+      const response = await client
+        .patch(
+          `/api/v1/namespaces/${client.namespace.id}/resources/${resource.id}`,
+        )
+        .send({
+          content: 'Updated',
+          expected_content_hash: createHash('sha256')
+            .update('Original')
+            .digest('hex'),
+          comment_anchors: [],
+          attrs: { origin: 'agent', url: 'https://b.example' },
+        })
+        .expect(HttpStatus.OK);
+
+      expect(response.body.content).toBe('Updated');
+      expect(response.body.attrs).toEqual({
+        origin: 'collect',
+        url: 'https://b.example',
+      });
     });
   });
 

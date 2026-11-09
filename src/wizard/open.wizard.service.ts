@@ -141,6 +141,18 @@ export class OpenWizardService {
       if (chunk.response_type === 'metrics') {
         continue;
       }
+      if (
+        chunk.response_type === 'delta' &&
+        !currentMessage &&
+        chunk.id &&
+        Object.keys(chunk.message).length === 0
+      ) {
+        const completed = messages.find((message) => message.id === chunk.id);
+        if (completed) {
+          completed.attrs = { ...completed.attrs, ...chunk.attrs };
+          continue;
+        }
+      }
       if (chunk.response_type === 'bos') {
         const bosChunk = chunk;
         currentMessage = {

@@ -1,33 +1,10 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-} from '@nestjs/common';
+import { Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
-import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 
 @Controller('api/v1/namespaces/:namespaceId/tasks')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
-
-  @Post()
-  async createTask(@Body() data: Partial<Task>) {
-    if (data.input) {
-      delete data.input.html_s3_key;
-      if (typeof data.input.html === 'string') {
-        data.input.html_s3_key = await this.tasksService.uploadHtmlToS3(
-          data.input.html,
-        );
-        delete data.input.html;
-      }
-    }
-    return TaskDto.fromEntity(await this.tasksService.emitTask(data));
-  }
 
   @Get(':id')
   async getTaskById(@Param('id') id: string) {

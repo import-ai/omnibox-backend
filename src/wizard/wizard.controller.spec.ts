@@ -62,6 +62,12 @@ describe('WizardController SSE heartbeat', () => {
         'req',
         mode,
         'Asia/Shanghai',
+        'explicit',
+        {
+          platform: undefined,
+          clientVersion: undefined,
+          clientBuild: undefined,
+        },
       );
     },
   );
@@ -69,12 +75,49 @@ describe('WizardController SSE heartbeat', () => {
   it('pings a resumed stream after 15 seconds of silence', async () => {
     const { source, stub, service } = createStreamService();
     const controller = new WizardController({} as any, service, {} as any);
-    await collect(source, controller.resume('user', 'ns', 'conv', '1-0'));
+    await collect(
+      source,
+      controller.resume('user', 'ns', 'request-id', 'conv', '1-0'),
+    );
     expect(stub.resumeUserAgentStream).toHaveBeenCalledWith(
       'user',
       'ns',
       'conv',
       '1-0',
+      'request-id',
+      'web',
+      {
+        platform: undefined,
+        clientVersion: undefined,
+        clientBuild: undefined,
+      },
+    );
+  });
+
+  it('passes the client platform separately from the resume channel', async () => {
+    const { source, stub, service } = createStreamService();
+    const controller = new WizardController({} as any, service, {} as any);
+    await collect(
+      source,
+      controller.resume(
+        'user',
+        'ns',
+        'request-id',
+        'conv',
+        '1-0',
+        'ios',
+        '0.1.56',
+        '56',
+      ),
+    );
+    expect(stub.resumeUserAgentStream).toHaveBeenCalledWith(
+      'user',
+      'ns',
+      'conv',
+      '1-0',
+      'request-id',
+      'mobile',
+      { platform: 'ios', clientVersion: '0.1.56', clientBuild: '56' },
     );
   });
 });
@@ -103,6 +146,11 @@ describe('SharedWizardController SSE heartbeat', () => {
         'req',
         mode,
         'Asia/Shanghai',
+        {
+          platform: undefined,
+          clientVersion: undefined,
+          clientBuild: undefined,
+        },
       );
     },
   );
@@ -110,11 +158,21 @@ describe('SharedWizardController SSE heartbeat', () => {
   it('pings a resumed stream after 15 seconds of silence', async () => {
     const { source, stub, service } = createStreamService();
     const controller = new SharedWizardController(service);
-    await collect(source, controller.resume(share, 'conv', '1-0'));
+    await collect(
+      source,
+      controller.resume(share, 'request-id', 'conv', '1-0'),
+    );
     expect(stub.resumeShareAgentStream).toHaveBeenCalledWith(
       share,
       'conv',
       '1-0',
+      'request-id',
+      'web_share',
+      {
+        platform: undefined,
+        clientVersion: undefined,
+        clientBuild: undefined,
+      },
     );
   });
 });

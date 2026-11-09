@@ -16,6 +16,7 @@ export class AppConfigController {
     return this.wizardApi.getModelsConfig();
   }
 
+  @Public()
   @Get()
   getAppConfig(): AppConfigResponse {
     return {

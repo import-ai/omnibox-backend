@@ -5,6 +5,10 @@ import { TraceService } from 'omniboxd/trace/trace.service';
 
 import { TraceReqDto } from './dto/trace-req.dto';
 
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 @Controller('api/v1/trace')
 export class TraceController {
   constructor(private traceService: TraceService) {}
@@ -16,7 +20,12 @@ export class TraceController {
     @Body() traceReq: TraceReqDto,
     @UserId({ optional: true }) userId?: string,
   ): Promise<void> {
-    const userAgent = req.headers['user-agent'];
-    await this.traceService.emitTraceEvents(traceReq.events, userId, userAgent);
+    await this.traceService.emitTraceEvents(traceReq.events, {
+      userId,
+      userAgent: headerValue(req.headers['user-agent']),
+      platform: headerValue(req.headers['x-client-platform']),
+      clientVersion: headerValue(req.headers['x-client-version']),
+      clientBuild: headerValue(req.headers['x-client-build']),
+    });
   }
 }

@@ -17,6 +17,7 @@ function createService(mocks: {
   sharedResourcesService?: Record<string, jest.Mock>;
   resourcesService?: Record<string, jest.Mock>;
   smartFoldersService?: Record<string, jest.Mock>;
+  traceService?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
@@ -35,6 +36,7 @@ function createService(mocks: {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
     } as any,
+    mocks.traceService as any,
   );
 }
 
@@ -102,6 +104,213 @@ describe('StreamService conversation ownership', () => {
     ).rejects.toBe(accessDenied);
 
     expect(resumeAgentStream).not.toHaveBeenCalled();
+  });
+
+  it('reports a server-side chat error to trace with request context', async () => {
+    const conversationsService = {
+      findOneForUserInNamespace: jest
+        .fn()
+        .mockRejectedValue(
+          new AppException('denied', 'CONVERSATION_ACCESS_DENIED', 403),
+        ),
+    };
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ conversationsService, traceService });
+
+    const observable = await service.createUserAgentStream(
+      'user-id',
+      'namespace-id',
+      {
+        conversation_id: 'conversation-id',
+        channel: 'web',
+      } as any,
+      'request-id',
+      'ask',
+      undefined,
+      'explicit',
+      { platform: 'web' },
+    );
+    await new Promise<void>((resolve) =>
+      observable.subscribe({ complete: resolve }),
+    );
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledWith(
+      [
+        {
+          name: 'chat_error',
+          props: expect.objectContaining({
+            conversation_id: 'conversation-id',
+            request_id: 'request-id',
+            channel: 'web',
+            stage: 'transport',
+            error_category: 'forbidden',
+            error_group: 'auth',
+            error_code: 'conversation_access_denied',
+            http_status: 403,
+            error_message: 'denied',
+            source: 'server',
+            dedupe_key:
+              'user-id:conversation-id:request-id:transport:conversation_access_denied:sending:visible',
+          }),
+        },
+      ],
+      {
+        userId: 'user-id',
+        platform: 'web',
+        clientVersion: undefined,
+        clientBuild: undefined,
+      },
+    );
+  });
+
+  it('does not trace expected decision control flow', async () => {
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ traceService });
+    const observable = service.errorChunkStream(
+      new AppException('waiting', 'PENDING_INTERRUPT', 409),
+      {
+        conversationId: 'conversation-id',
+        requestId: 'request-id',
+        stage: 'transport',
+      },
+    );
+
+    await new Promise<void>((resolve) =>
+      observable.subscribe({ complete: resolve }),
+    );
+
+    expect(traceService.emitTraceEvents).not.toHaveBeenCalled();
+  });
+
+  it('does not emit duplicate trace events for the same request stage and code', () => {
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ traceService });
+    const error = new AppException('denied', 'CONVERSATION_ACCESS_DENIED', 403);
+    const context = {
+      userId: 'user-id',
+      conversationId: 'conversation-id',
+      requestId: 'request-id',
+      channel: 'web',
+      stage: 'stream',
+    };
+
+    (service as any).reportChatErrorTrace(error, context);
+    (service as any).reportChatErrorTrace(error, context);
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['CONVERSATION_NOT_FOUND', 404, 'not_found', 'request'],
+    ['LOCAL_RUNTIME_SEQUENCE', 409, 'tool_failed', 'service'],
+    ['INVALID_CLIENT_REQUEST_ID', 400, 'invalid_request', 'request'],
+  ])('normalizes %s to %s/%s', (code, status, category, group) => {
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ traceService });
+
+    (service as any).reportChatErrorTrace(
+      new AppException('failed', code, status),
+      {
+        userId: 'user-id',
+        conversationId: 'conversation-id',
+        requestId: `request-${code}`,
+        channel: 'web',
+        stage: 'stream',
+      },
+    );
+
+    expect(
+      traceService.emitTraceEvents.mock.calls[0][0][0].props,
+    ).toMatchObject({
+      error_category: category,
+      error_group: group,
+      error_code: code.toLowerCase(),
+    });
+  });
+
+  it('does not deduplicate the same request across users or conversations', () => {
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ traceService });
+    const error = new AppException('denied', 'CONVERSATION_ACCESS_DENIED', 403);
+    const base = {
+      requestId: 'request-id',
+      channel: 'web',
+      stage: 'stream',
+    };
+
+    (service as any).reportChatErrorTrace(error, {
+      ...base,
+      userId: 'user-1',
+      conversationId: 'conversation-id',
+    });
+    (service as any).reportChatErrorTrace(error, {
+      ...base,
+      userId: 'user-2',
+      conversationId: 'conversation-id',
+    });
+    (service as any).reportChatErrorTrace(error, {
+      ...base,
+      userId: 'user-1',
+      conversationId: 'other-conversation-id',
+    });
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledTimes(3);
+  });
+
+  it('traces the real client platform instead of the API channel', async () => {
+    const conversationsService = {
+      findOneForUserInNamespace: jest
+        .fn()
+        .mockRejectedValue(
+          new AppException('denied', 'CONVERSATION_ACCESS_DENIED', 403),
+        ),
+    };
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ conversationsService, traceService });
+
+    const observable = await service.createUserAgentStream(
+      'user-id',
+      'namespace-id',
+      {
+        conversation_id: 'conversation-id',
+        channel: 'mobile',
+      } as any,
+      'request-id',
+      'ask',
+      undefined,
+      'explicit',
+      { platform: 'ios', clientVersion: '0.1.56', clientBuild: '56' },
+    );
+    await new Promise<void>((resolve) =>
+      observable.subscribe({ complete: resolve }),
+    );
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledWith(
+      [
+        {
+          name: 'chat_error',
+          props: expect.objectContaining({ channel: 'mobile' }),
+        },
+      ],
+      {
+        userId: 'user-id',
+        platform: 'ios',
+        clientVersion: '0.1.56',
+        clientBuild: '56',
+      },
+    );
   });
 
   it('rejects cancel before mutating stream state', async () => {
@@ -1387,6 +1596,8 @@ describe('StreamService citations on a chat-only share', () => {
       'share-id',
       true,
       undefined,
+      'explicit',
+      {},
     );
   });
 });

@@ -6,6 +6,14 @@ import { KafkaService } from 'omniboxd/kafka/kafka.service';
 import { TraceEventDto } from './dto/trace-event.dto';
 import { TraceMessageDto } from './dto/trace-message.dto';
 
+export interface TraceContext {
+  userId?: string;
+  userAgent?: string;
+  platform?: string;
+  clientVersion?: string;
+  clientBuild?: string;
+}
+
 @Injectable()
 export class TraceService {
   private readonly topic?: string;
@@ -19,14 +27,13 @@ export class TraceService {
 
   async emitTraceEvents(
     events: TraceEventDto[],
-    userId?: string,
-    userAgent?: string,
+    context: TraceContext = {},
   ): Promise<void> {
     if (!this.topic) {
       return;
     }
     const messages = events.map((event) => {
-      const dto = TraceMessageDto.fromEvent(event, userId, userAgent);
+      const dto = TraceMessageDto.fromEvent(event, context);
       return {
         value: JSON.stringify(instanceToPlain(dto)),
       };

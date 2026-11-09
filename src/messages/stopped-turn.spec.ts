@@ -215,3 +215,100 @@ test('approval-resume cancellation locks and marks the decision root used by BOS
     ),
   ).rejects.toMatchObject({ code: 'STREAM_CANCELED' });
 });
+
+describe('answer timing persistence under the turn lock', () => {
+  const timing = {
+    version: 1 as const,
+    answer_id: 'answer',
+    run_id: 'run',
+    status: 'complete' as const,
+    started_at: new Date(1).toISOString(),
+    completed_at: new Date(2001).toISOString(),
+    duration_ms: 2000,
+  };
+  const rowsForTiming = () => [
+    row('query', null, R.USER),
+    row('answer', 'query', R.ASSISTANT, S.SUCCESS, {
+      turn_id: 'query',
+      turn_run_id: 'run',
+      answer_timing: { ...timing, status: 'running', duration_ms: undefined },
+      citations: [{ index: 1 }],
+    }),
+  ];
+
+  it('merges timing without replacing other attrs and saves no duplicate completion', async () => {
+    const { service, repo, rows } = fixture(rowsForTiming());
+    await service.setAnswerTiming('answer', timing);
+    expect(rows[1].attrs).toMatchObject({
+      citations: [{ index: 1 }],
+      answer_timing: timing,
+    });
+    await service.setAnswerTiming('answer', { ...timing, duration_ms: 9999 });
+    expect(rows[1].attrs?.answer_timing?.duration_ms).toBe(2000);
+    expect(repo.save).toHaveBeenCalledTimes(1);
+  });
+  it.each(['stopped', 'failed', 'canceled-run', 'wrong-run'])(
+    'rejects completion for %s',
+    async (state) => {
+      const { service, rows, repo } = fixture(rowsForTiming());
+      if (state === 'stopped') rows[1].status = S.STOPPED;
+      if (state === 'failed') rows[1].status = S.FAILED;
+      if (state === 'canceled-run') rows[0].attrs = { stopped_runs: ['run'] };
+      if (state === 'wrong-run') rows[1].attrs!.turn_run_id = 'other';
+      expect(await service.setAnswerTiming('answer', timing)).toBeNull();
+      expect(repo.save).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('unified cross-client timing outcomes', () => {
+  const startedAt = new Date(1).toISOString();
+  const attrs = {
+    turn_id: 'q1',
+    turn_run_id: 'run',
+    answer_timing: {
+      version: 1,
+      answer_id: 'a',
+      run_id: 'run',
+      status: 'running',
+      started_at: startedAt,
+    },
+  };
+  it('persists stop without inventing a complete-answer duration, including after EOS', async () => {
+    for (const state of [S.STREAMING, S.SUCCESS]) {
+      const { service, rows } = fixture([
+        row('q1', null, R.USER),
+        row('a1', 'q1', R.ASSISTANT, state, attrs),
+      ]);
+      await service.stopRunning('n', 'c', undefined, 'a1', {
+        id: 'run',
+        queryId: 'q1',
+      });
+      expect(rows[1].attrs?.answer_timing).toMatchObject({
+        status: 'stopped',
+        answer_id: 'a',
+      });
+      expect(rows[1].attrs?.answer_timing?.duration_ms).toBeUndefined();
+    }
+  });
+});
+
+it('stops post-EOS timing when cancellation arrives on another instance without an active session', async () => {
+  const { service, rows } = fixture([
+    row('q1', null, R.USER),
+    row('a1', 'q1', R.ASSISTANT, S.SUCCESS, {
+      turn_id: 'q1',
+      turn_run_id: 'run',
+      answer_timing: {
+        version: 1,
+        answer_id: 'a',
+        run_id: 'run',
+        status: 'running',
+        started_at: new Date(1).toISOString(),
+      },
+    }),
+  ]);
+  await service.stopRunning('n', 'c', undefined, 'a1');
+  expect(rows[0].attrs?.stopped_runs).toContain('run');
+  expect(rows[1].attrs?.answer_timing?.status).toBe('stopped');
+});

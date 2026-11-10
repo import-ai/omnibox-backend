@@ -801,6 +801,11 @@ export class ResourcesService {
       internal?: boolean;
       forceRevision?: boolean;
       historyLimit?: number;
+      /**
+       * Leave the write out of the collaborator record. Background jobs still
+       * change the content they own, but they are not collaboration: only a
+       * person editing the resource should show up as a collaborator.
+       */
       skipAttribution?: boolean;
     },
   ): Promise<void> {

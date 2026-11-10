@@ -53,9 +53,6 @@ export class ExtractTagsProcessor extends Processor {
           namespaceId: task.namespaceId,
           tag_ids: tagIds,
         }),
-        false,
-        undefined,
-        undefined,
         { skipAttribution: true },
       );
 

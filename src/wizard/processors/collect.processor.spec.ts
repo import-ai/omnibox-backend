@@ -192,10 +192,10 @@ describe('CollectProcessor', () => {
             parentId: undefined,
             resourceType: undefined,
           },
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({});
       });
@@ -228,10 +228,10 @@ describe('CollectProcessor', () => {
             name: '❌ Test Resource',
             content: message,
           }),
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({});
         expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
@@ -268,10 +268,10 @@ describe('CollectProcessor', () => {
             name: '❌ Test Resource',
             content: message,
           }),
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({});
         expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
@@ -301,10 +301,10 @@ describe('CollectProcessor', () => {
           expect.objectContaining({
             name: '❌ Test Resource',
           }),
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
     });
@@ -344,10 +344,10 @@ describe('CollectProcessor', () => {
               customAttr: 'custom value',
             },
           },
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({ resourceId: 'test-resource-id' });
       });
@@ -389,10 +389,10 @@ describe('CollectProcessor', () => {
               url: 'https://updated.com',
             },
           },
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -430,10 +430,10 @@ describe('CollectProcessor', () => {
               newAttr: 'new value',
             },
           },
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -464,10 +464,10 @@ describe('CollectProcessor', () => {
               url: 'https://example.com',
             },
           },
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -516,10 +516,10 @@ describe('CollectProcessor', () => {
             },
             tag_ids: ['id1', 'id2', 'id3'],
           },
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',
@@ -562,10 +562,10 @@ describe('CollectProcessor', () => {
             },
             tag_ids: undefined,
           },
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',
@@ -615,10 +615,10 @@ describe('CollectProcessor', () => {
             },
             tag_ids: undefined,
           },
-          true,
-          undefined,
-          undefined,
-          expect.objectContaining({ skipAttribution: true }),
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',

@@ -429,3 +429,100 @@ describe('SharedResourcesService.getSharedResourceChildren', () => {
     ]);
   });
 });
+
+describe('SharedResourcesService.getSharedResource attribution', () => {
+  const share = {
+    id: 'share-id',
+    namespaceId: 'namespace-id',
+    resourceId: 'resource-id',
+    userId: 'owner-user-id',
+    allResources: false,
+  } as any;
+
+  function createService() {
+    const resourcesService = { getResource: jest.fn() };
+    const resourceContributorsService = {
+      present: jest.fn().mockResolvedValue({
+        creator: {
+          label: 'creator',
+          initial: 'C',
+          tone: 'tone-1',
+          interactive: false,
+        },
+        collaborators: [
+          {
+            label: 'editor',
+            initial: 'E',
+            tone: 'tone-2',
+            interactive: false,
+          },
+        ],
+      }),
+    };
+    const service = new SharedResourcesService(
+      resourcesService as any,
+      {} as any,
+      {} as any,
+      { t: jest.fn((key: string) => key) } as any,
+      resourceContributorsService as any,
+    );
+    return { resourcesService, resourceContributorsService, service };
+  }
+
+  function resourceFixture(resourceType: ResourceType) {
+    return {
+      id: 'resource-id',
+      namespaceId: 'namespace-id',
+      parentId: 'root-id',
+      name: 'Shared resource',
+      resourceType,
+      content: '',
+      attrs: {},
+      tagIds: [],
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+  }
+
+  it.each([ResourceType.LINK, ResourceType.FILE])(
+    'exposes the creator and collaborators of a shared %s',
+    async (resourceType) => {
+      const { resourcesService, resourceContributorsService, service } =
+        createService();
+      resourcesService.getResource.mockResolvedValue(
+        resourceFixture(resourceType),
+      );
+
+      const result = await service.getSharedResource(share, 'resource-id');
+
+      expect(resourceContributorsService.present).toHaveBeenCalledWith(
+        'namespace-id',
+        'resource-id',
+        false,
+      );
+      expect(result.creator).toEqual(
+        expect.objectContaining({ label: 'creator' }),
+      );
+      expect(result.collaborators).toEqual([
+        expect.objectContaining({ label: 'editor' }),
+      ]);
+    },
+  );
+
+  it.each([ResourceType.FOLDER, ResourceType.RSS_ITEM])(
+    'keeps shared %s resources without attribution',
+    async (resourceType) => {
+      const { resourcesService, resourceContributorsService, service } =
+        createService();
+      resourcesService.getResource.mockResolvedValue(
+        resourceFixture(resourceType),
+      );
+
+      const result = await service.getSharedResource(share, 'resource-id');
+
+      expect(resourceContributorsService.present).not.toHaveBeenCalled();
+      expect(result.creator).toBeNull();
+      expect(result.collaborators).toEqual([]);
+    },
+  );
+});

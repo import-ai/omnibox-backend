@@ -515,8 +515,7 @@ export class RssFoldersService {
           userId,
           resourceId,
           { name: dto.name },
-          false,
-          tx,
+          { tx },
         );
       }
     });

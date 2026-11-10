@@ -1,4 +1,8 @@
-import { ResourceType } from './entities/resource.entity';
+import {
+  isContentResourceType,
+  ResourceType,
+} from './entities/resource.entity';
+
 export function contributorLabel(input: {
   nickname?: string | null;
   username?: string | null;
@@ -81,12 +85,6 @@ export function formerContributorLabel(input: {
   );
 }
 
-export const ATTRIBUTED_RESOURCE_TYPES: ResourceType[] = [
-  ResourceType.DOC,
-  ResourceType.LINK,
-  ResourceType.FILE,
-];
-
 /**
  * Resource types whose detail view exposes a creator and collaborators.
  * Folders and feed items are containers or externally authored content, so
@@ -95,5 +93,5 @@ export const ATTRIBUTED_RESOURCE_TYPES: ResourceType[] = [
 export function supportsResourceAttribution(
   resourceType: ResourceType,
 ): boolean {
-  return ATTRIBUTED_RESOURCE_TYPES.includes(resourceType);
+  return isContentResourceType(resourceType);
 }

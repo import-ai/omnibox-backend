@@ -156,9 +156,6 @@ describe('ExtractTagsProcessor', () => {
           namespaceId: 'test-namespace',
           tag_ids: ['tag-1', 'tag-2', 'tag-3'],
         },
-        false,
-        undefined,
-        undefined,
         expect.objectContaining({ skipAttribution: true }),
       );
     });
@@ -194,9 +191,6 @@ describe('ExtractTagsProcessor', () => {
           namespaceId: 'test-namespace',
           tag_ids: ['new-tag-1', 'new-tag-2'],
         },
-        false,
-        undefined,
-        undefined,
         expect.objectContaining({ skipAttribution: true }),
       );
     });
@@ -232,9 +226,6 @@ describe('ExtractTagsProcessor', () => {
           namespaceId: 'test-namespace',
           tag_ids: ['existing-1', 'new-1'],
         },
-        false,
-        undefined,
-        undefined,
         expect.objectContaining({ skipAttribution: true }),
       );
     });
@@ -266,9 +257,6 @@ describe('ExtractTagsProcessor', () => {
           namespaceId: 'test-namespace',
           tag_ids: [],
         },
-        false,
-        undefined,
-        undefined,
         expect.objectContaining({ skipAttribution: true }),
       );
     });
@@ -300,9 +288,6 @@ describe('ExtractTagsProcessor', () => {
           namespaceId: 'test-namespace',
           tag_ids: [],
         },
-        false,
-        undefined,
-        undefined,
         expect.objectContaining({ skipAttribution: true }),
       );
     });
@@ -365,9 +350,6 @@ describe('ExtractTagsProcessor', () => {
           namespaceId: 'test-namespace',
           tag_ids: ['tag-1', 'tag-2', 'tag-3'],
         },
-        false,
-        undefined,
-        undefined,
         expect.objectContaining({ skipAttribution: true }),
       );
     });

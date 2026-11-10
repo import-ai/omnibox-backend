@@ -146,6 +146,32 @@ describe('ResourcesService', () => {
       expect(resourceContributorsService.recordEdit).not.toHaveBeenCalled();
     });
 
+    // System writes opt out of attribution, but a user write must still credit
+    // the editor: the opt-out is per call, never per resource type.
+    it('records the edit for user writes on the same document', async () => {
+      const { service, repo, resourceContributorsService } = createService();
+      tx.entityManager.getRepository.mockReturnValue(repo);
+
+      await service.updateResource(
+        'namespace-id',
+        'resource-id',
+        'user-id',
+        { content: 'Edited body' },
+        tx,
+        false,
+        { historyLimit: 3 },
+      );
+
+      expect(resourceContributorsService.recordEdit).toHaveBeenCalledWith(
+        tx.entityManager,
+        expect.objectContaining({
+          resourceType: ResourceType.DOC,
+          actorUserId: 'user-id',
+          contentChanged: true,
+        }),
+      );
+    });
+
     it('keeps forced revisions on the normal persistence path', async () => {
       const { service, repo, resourceRevisionService } = createService();
       tx.entityManager.getRepository.mockReturnValue(repo);

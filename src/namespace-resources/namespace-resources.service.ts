@@ -83,6 +83,23 @@ import { ResourceSummaryDto } from './dto/resource-summary.dto';
 import { TrashItemDto } from './dto/trash-item.dto';
 import { TrashListResponseDto } from './dto/trash-list-response.dto';
 
+export interface UpdateResourceOptions {
+  /** Rename the target when the requested name collides instead of failing. */
+  autoRenameOnConflict?: boolean;
+  /** Join an existing transaction instead of opening one for comment sync. */
+  tx?: Transaction;
+  /** Revision history limit; read from the revision service when omitted. */
+  historyLimit?: number;
+  /** Keep the stored `attrs.origin` even though the caller rewrites attrs. */
+  preserveAttrsOrigin?: boolean;
+  /**
+   * Leave the write out of the collaborator record. Background jobs use it so
+   * AI-generated titles, tags and retries are attributed to nobody rather than
+   * to the user who happens to own the resource.
+   */
+  skipAttribution?: boolean;
+}
+
 @Injectable()
 export class NamespaceResourcesService {
   constructor(
@@ -1754,17 +1771,21 @@ export class NamespaceResourcesService {
     userId: string,
     resourceId: string,
     data: UpdateResourceDto,
-    autoRenameOnConflict: boolean = false,
-    tx?: Transaction,
-    historyLimit?: number,
-    options?: { preserveAttrsOrigin?: boolean; skipAttribution?: boolean },
+    options: UpdateResourceOptions = {},
   ) {
+    const {
+      autoRenameOnConflict = false,
+      preserveAttrsOrigin,
+      skipAttribution,
+      tx,
+    } = options;
+    let historyLimit = options.historyLimit;
     // Runs before the comment-anchor/content-hash recursion below so the
     // recursive call reuses the already-processed attrs. A client may not set
     // or clear origin; the stored value wins and every other attr passes
     // through. `attrs: null` clears them to an empty object.
     if (
-      options?.preserveAttrsOrigin &&
+      preserveAttrsOrigin &&
       (data.attrs !== undefined || data.attrs === null)
     ) {
       data.attrs = await this.withPreservedOrigin(
@@ -1790,16 +1811,11 @@ export class NamespaceResourcesService {
     const assertingContentHash = data.expectedContentHash !== undefined;
     if ((syncingCommentAnchors || assertingContentHash) && !tx) {
       return await transaction(this.dataSource.manager, async (newTx) => {
-        return await this.update(
-          namespaceId,
-          userId,
-          resourceId,
-          data,
-          autoRenameOnConflict,
-          newTx,
+        return await this.update(namespaceId, userId, resourceId, data, {
+          ...options,
+          tx: newTx,
           historyLimit,
-          options,
-        );
+        });
       });
     }
     if (assertingContentHash) {
@@ -1856,7 +1872,7 @@ export class NamespaceResourcesService {
       },
       tx,
       autoRenameOnConflict,
-      { historyLimit, skipAttribution: options?.skipAttribution },
+      { historyLimit, skipAttribution },
     );
     if (
       syncingCommentAnchors &&

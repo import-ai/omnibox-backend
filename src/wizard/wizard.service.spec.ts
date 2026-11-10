@@ -238,10 +238,10 @@ describe('WizardService', () => {
         'user-id',
         'resource-id',
         expect.objectContaining({ content: message, name: '❌ doc.pdf' }),
-        true,
-        undefined,
-        undefined,
-        expect.objectContaining({ skipAttribution: true }),
+        expect.objectContaining({
+          autoRenameOnConflict: true,
+          skipAttribution: true,
+        }),
       );
       expect(tasksService.emitTask).not.toHaveBeenCalled();
       expect(result).toEqual({

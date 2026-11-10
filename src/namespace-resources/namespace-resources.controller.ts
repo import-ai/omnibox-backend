@@ -467,9 +467,6 @@ export class NamespaceResourcesController {
       userId,
       resourceId,
       data,
-      false,
-      undefined,
-      undefined,
       { preserveAttrsOrigin: true },
     );
     return await this.namespaceResourcesService.getResource({

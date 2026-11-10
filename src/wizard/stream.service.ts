@@ -384,11 +384,16 @@ export class StreamService implements OnModuleDestroy {
     send: (data: string) => Promise<void>,
     chatOnly = false,
     stream?: AgentStream,
-  ): (data: string, context: HandlerContext) => Promise<void> {
+  ): (
+    data: string,
+    context: HandlerContext,
+    receivedAt?: number,
+  ) => Promise<void> {
     let firstTokenRecorded = false;
     const handle = async (
       data: string,
       context: HandlerContext,
+      receivedAt?: number,
     ): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
       if (
@@ -404,7 +409,7 @@ export class StreamService implements OnModuleDestroy {
         context.message?.role === OpenAIMessageRole.ASSISTANT &&
         context.roundFirstContentAt === undefined
       ) {
-        context.roundFirstContentAt = Date.now();
+        context.roundFirstContentAt = receivedAt ?? Date.now();
       }
       if (context.queryId) {
         const turn = await this.messagesService.findOne(context.queryId);
@@ -1797,6 +1802,7 @@ export class StreamService implements OnModuleDestroy {
         wizardRequest,
         requestId,
         async (data) => {
+          const chunkReceivedAt = Date.now();
           if (session.finished || session.controller.signal.aborted) return;
           if (await this.isSessionCanceled(session.key)) {
             await this.stopSession(session);
@@ -1813,6 +1819,7 @@ export class StreamService implements OnModuleDestroy {
               ? await this.addNextEventId(session, payload)
               : payload,
             session.handlerContext,
+            chunkReceivedAt,
           );
         },
         session.controller.signal,

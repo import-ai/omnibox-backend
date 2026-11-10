@@ -8,6 +8,7 @@ import { StreamService } from './stream.service';
 const QUERY_RECEIVED = 1_000_000_000;
 const FIRST_AWAIT_DELAY = 100;
 const FINAL_CONTENT_DELAY = 1800;
+const REDIS_WAIT_DELAY = 125;
 
 type Entry = 'user' | 'share' | 'chat';
 
@@ -27,6 +28,30 @@ interface FakeRow {
   inputTokenCached: number;
   inputTokenUncached: number;
   outputToken: number;
+}
+
+function singleRoundChunks(): EmittedChunk[] {
+  return [
+    {
+      at: QUERY_RECEIVED + 1000,
+      chunk: { response_type: 'bos', role: OpenAIMessageRole.ASSISTANT },
+    },
+    {
+      at: QUERY_RECEIVED + FINAL_CONTENT_DELAY,
+      chunk: {
+        response_type: 'delta',
+        message: { content: 'final answer' },
+      },
+    },
+    {
+      at: QUERY_RECEIVED + 1900,
+      chunk: { response_type: 'eos' },
+    },
+    {
+      at: QUERY_RECEIVED + 2000,
+      chunk: { response_type: 'done' },
+    },
+  ];
 }
 
 function multiRoundChunks(): EmittedChunk[] {
@@ -255,6 +280,9 @@ function fixture(script: EmittedChunk[]) {
     traceService,
     stream,
     clock,
+    advance: (ms: number) => {
+      now += ms;
+    },
     run,
   };
 }
@@ -326,6 +354,33 @@ describe('query first content token timing', () => {
     expect(events).toHaveLength(1);
     expect(events[0].props.query_received_at).toBe(QUERY_RECEIVED);
     expect(events[0].props.mode).toBe('write');
+  });
+
+  it('records the final content token at stream arrival, excluding Redis waits', async () => {
+    const { advance, service, traceService, run } =
+      fixture(singleRoundChunks());
+    jest.spyOn(service as any, 'isSessionCanceled').mockImplementation(() => {
+      advance(REDIS_WAIT_DELAY);
+      return Promise.resolve(false);
+    });
+    jest
+      .spyOn(service as any, 'addNextEventId')
+      .mockImplementation((_session: unknown, data: string) => {
+        advance(REDIS_WAIT_DELAY);
+        return Promise.resolve(data);
+      });
+
+    await run('user');
+
+    const events = firstTokenEvents(traceService);
+    expect(events).toHaveLength(1);
+    // A timestamp taken inside the handler would land at 1800 + 2 * 125 = 2050.
+    expect(events[0].props.first_content_token_at).toBe(
+      QUERY_RECEIVED + FINAL_CONTENT_DELAY,
+    );
+    expect(events[0].props.first_content_token_latency_ms).toBe(
+      FINAL_CONTENT_DELAY,
+    );
   });
 
   it('does not report a replayed query that was reused', async () => {

@@ -44,6 +44,9 @@ export class GenerateTitleProcessor extends Processor {
             name: generatedTitle.trim(),
           }),
           true, // autoRenameOnConflict for AI-generated titles
+          undefined,
+          undefined,
+          { skipAttribution: true },
         );
 
         return { resourceId, title: generatedTitle.trim() };

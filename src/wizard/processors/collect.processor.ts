@@ -48,6 +48,9 @@ export class CollectProcessor extends Processor {
           content,
         }),
         true, // autoRenameOnConflict for error content updates
+        undefined,
+        undefined,
+        { skipAttribution: true },
       );
       return {};
     } else if (task.output) {
@@ -92,6 +95,9 @@ export class CollectProcessor extends Processor {
           tag_ids: tagIds,
         }),
         true, // autoRenameOnConflict for AI-generated titles
+        undefined,
+        undefined,
+        { skipAttribution: true },
       );
       return { resourceId, tagIds };
     }

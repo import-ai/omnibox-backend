@@ -143,6 +143,9 @@ describe('ReaderProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
 
@@ -232,6 +235,9 @@ describe('ReaderProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
 
@@ -278,6 +284,9 @@ describe('ReaderProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
 
@@ -342,6 +351,9 @@ describe('ReaderProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
     });
@@ -378,6 +390,9 @@ describe('ReaderProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({});
       });
@@ -411,6 +426,9 @@ describe('ReaderProcessor', () => {
             content: message,
           }),
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({});
       });
@@ -456,6 +474,9 @@ describe('ReaderProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
 
@@ -499,6 +520,9 @@ describe('ReaderProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
 

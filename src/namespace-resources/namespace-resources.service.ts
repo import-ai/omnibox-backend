@@ -27,6 +27,7 @@ import {
   ResourceType,
   SERVICE_OWNED_RESOURCE_TYPES,
 } from 'omniboxd/resources/entities/resource.entity';
+import { supportsResourceAttribution } from 'omniboxd/resources/resource-contributors';
 import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import {
   ResourceRevisionDetail,
@@ -1391,7 +1392,7 @@ export class NamespaceResourcesService {
     dto.mention_display_names = commentData.mention_display_names;
     dto.content_hash = commentData.content_hash;
     dto.comment_threads = commentData.comment_threads;
-    if (resource.resourceType === ResourceType.DOC) {
+    if (supportsResourceAttribution(resource.resourceType)) {
       const attribution = await this.resourceContributorsService.present(
         namespaceId,
         resourceId,
@@ -1756,7 +1757,7 @@ export class NamespaceResourcesService {
     autoRenameOnConflict: boolean = false,
     tx?: Transaction,
     historyLimit?: number,
-    options?: { preserveAttrsOrigin?: boolean },
+    options?: { preserveAttrsOrigin?: boolean; skipAttribution?: boolean },
   ) {
     // Runs before the comment-anchor/content-hash recursion below so the
     // recursive call reuses the already-processed attrs. A client may not set
@@ -1797,6 +1798,7 @@ export class NamespaceResourcesService {
           autoRenameOnConflict,
           newTx,
           historyLimit,
+          options,
         );
       });
     }
@@ -1854,7 +1856,7 @@ export class NamespaceResourcesService {
       },
       tx,
       autoRenameOnConflict,
-      { historyLimit },
+      { historyLimit, skipAttribution: options?.skipAttribution },
     );
     if (
       syncingCommentAnchors &&

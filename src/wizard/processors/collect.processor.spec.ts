@@ -193,6 +193,9 @@ describe('CollectProcessor', () => {
             resourceType: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({});
       });
@@ -226,6 +229,9 @@ describe('CollectProcessor', () => {
             content: message,
           }),
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({});
         expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
@@ -263,6 +269,9 @@ describe('CollectProcessor', () => {
             content: message,
           }),
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({});
         expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
@@ -293,6 +302,9 @@ describe('CollectProcessor', () => {
             name: '❌ Test Resource',
           }),
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
     });
@@ -333,6 +345,9 @@ describe('CollectProcessor', () => {
             },
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({ resourceId: 'test-resource-id' });
       });
@@ -375,6 +390,9 @@ describe('CollectProcessor', () => {
             },
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
 
@@ -413,6 +431,9 @@ describe('CollectProcessor', () => {
             },
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
 
@@ -444,6 +465,9 @@ describe('CollectProcessor', () => {
             },
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
       });
 
@@ -493,6 +517,9 @@ describe('CollectProcessor', () => {
             tag_ids: ['id1', 'id2', 'id3'],
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',
@@ -536,6 +563,9 @@ describe('CollectProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',
@@ -586,6 +616,9 @@ describe('CollectProcessor', () => {
             tag_ids: undefined,
           },
           true,
+          undefined,
+          undefined,
+          expect.objectContaining({ skipAttribution: true }),
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',

@@ -801,6 +801,7 @@ export class ResourcesService {
       internal?: boolean;
       forceRevision?: boolean;
       historyLimit?: number;
+      skipAttribution?: boolean;
     },
   ): Promise<void> {
     if (
@@ -1027,17 +1028,19 @@ export class ResourcesService {
       );
     }
 
-    await this.resourceContributorsService.recordEdit(entityManager, {
-      namespaceId,
-      resourceId,
-      resourceType: oldResource.resourceType,
-      creatorUserId: oldResource.userId,
-      actorUserId: userId,
-      parentId: resource.parentId,
-      explicitNameChanged,
-      contentChanged,
-      tagsChanged,
-    });
+    if (!options?.skipAttribution) {
+      await this.resourceContributorsService.recordEdit(entityManager, {
+        namespaceId,
+        resourceId,
+        resourceType: oldResource.resourceType,
+        creatorUserId: oldResource.userId,
+        actorUserId: userId,
+        parentId: resource.parentId,
+        explicitNameChanged,
+        contentChanged,
+        tagsChanged,
+      });
+    }
   }
 
   async createResource(

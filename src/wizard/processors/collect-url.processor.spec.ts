@@ -124,6 +124,9 @@ describe('CollectUrlProcessor', () => {
           name: '❌ https://example.com',
         }),
         true,
+        undefined,
+        undefined,
+        expect.objectContaining({ skipAttribution: true }),
       );
       expect(result).toEqual({});
     });
@@ -149,6 +152,9 @@ describe('CollectUrlProcessor', () => {
           name: '❌ Example Title',
         }),
         true,
+        undefined,
+        undefined,
+        expect.objectContaining({ skipAttribution: true }),
       );
     });
 
@@ -172,6 +178,9 @@ describe('CollectUrlProcessor', () => {
           name: '❌ https://example.com',
         }),
         true,
+        undefined,
+        undefined,
+        expect.objectContaining({ skipAttribution: true }),
       );
     });
 
@@ -192,6 +201,9 @@ describe('CollectUrlProcessor', () => {
           name: 'Scraped Title',
         }),
         true,
+        undefined,
+        undefined,
+        expect.objectContaining({ skipAttribution: true }),
       );
       expect(result).toEqual({
         resourceId: 'test-resource-id',

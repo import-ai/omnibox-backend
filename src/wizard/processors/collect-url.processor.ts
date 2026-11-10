@@ -43,6 +43,9 @@ export class CollectUrlProcessor extends Processor {
           name: prefixFailedResourceName(resource.name),
         }),
         true,
+        undefined,
+        undefined,
+        { skipAttribution: true },
       );
       return {};
     } else if (task.output && task.output.title) {
@@ -60,6 +63,9 @@ export class CollectUrlProcessor extends Processor {
             name: scrapedTitle.trim(),
           }),
           true, // autoRenameOnConflict for scraped titles
+          undefined,
+          undefined,
+          { skipAttribution: true },
         );
 
         return { resourceId, title: scrapedTitle.trim() };

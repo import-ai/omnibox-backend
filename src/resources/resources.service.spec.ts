@@ -128,6 +128,24 @@ describe('ResourcesService', () => {
       expect(repo.update).toHaveBeenCalledTimes(1);
     });
 
+    it('skips contributor recording for system writes', async () => {
+      const { service, repo, resourceContributorsService } = createService();
+      tx.entityManager.getRepository.mockReturnValue(repo);
+
+      await service.updateResource(
+        'namespace-id',
+        'resource-id',
+        'user-id',
+        { content: 'Parsed body' },
+        tx,
+        false,
+        { historyLimit: 3, skipAttribution: true },
+      );
+
+      expect(repo.update).toHaveBeenCalledTimes(1);
+      expect(resourceContributorsService.recordEdit).not.toHaveBeenCalled();
+    });
+
     it('keeps forced revisions on the normal persistence path', async () => {
       const { service, repo, resourceRevisionService } = createService();
       tx.entityManager.getRepository.mockReturnValue(repo);

@@ -239,6 +239,7 @@ describe('WizardService', () => {
         'resource-id',
         expect.objectContaining({ content: message, name: '❌ doc.pdf' }),
         true,
+        undefined,
       );
       expect(tasksService.emitTask).not.toHaveBeenCalled();
       expect(result).toEqual({

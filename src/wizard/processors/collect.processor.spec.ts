@@ -327,7 +327,7 @@ describe('CollectProcessor', () => {
         const task = createMockTask({
           payload: { resource_id: 'test-resource-id' },
           output: {
-            markdown: '# Test Content',
+            markdown: '# Test Content\n\nA delivered body',
             title: 'Updated Title',
             customAttr: 'custom value',
           },
@@ -351,7 +351,7 @@ describe('CollectProcessor', () => {
           {
             namespaceId: 'test-namespace',
             name: 'Updated Title',
-            content: '# Test Content',
+            content: '# Test Content\n\nA delivered body',
             attrs: {
               url: 'https://example.com',
               customAttr: 'custom value',

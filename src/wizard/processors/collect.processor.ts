@@ -8,6 +8,7 @@ import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
+import { hasDeliverableContent } from 'omniboxd/wizard/processors/deliverable-content';
 import { prefixFailedResourceName } from 'omniboxd/wizard/processors/failed-resource-name';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { buildTaskErrorContent } from 'omniboxd/wizard/processors/task-error-content';
@@ -54,9 +55,10 @@ export class CollectProcessor extends Processor {
       return {};
     } else if (task.output) {
       const { markdown, title, ...attrs } = task.output || {};
-      if (typeof markdown !== 'string' || !markdown.trim()) {
+      if (!hasDeliverableContent(task)) {
         throw new Error('Task did not return deliverable content');
       }
+      delete attrs.body_delivered;
       delete attrs.images; // Remove images which is only required for task
 
       let tagIds: string[] | undefined = undefined;

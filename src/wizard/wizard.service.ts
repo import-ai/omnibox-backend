@@ -28,6 +28,7 @@ import {
 } from 'omniboxd/wizard/dto/task-callback.dto';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { CollectUrlProcessor } from 'omniboxd/wizard/processors/collect-url.processor';
+import { hasDeliverableContent } from 'omniboxd/wizard/processors/deliverable-content';
 import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-title.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
@@ -341,8 +342,7 @@ export class WizardService {
     if (
       task.status === TaskStatus.FINISHED &&
       this.processors[task.function] instanceof CollectProcessor &&
-      (typeof task.output?.markdown !== 'string' ||
-        !task.output.markdown.trim())
+      !hasDeliverableContent(task)
     ) {
       task.status = TaskStatus.ERROR;
       task.exception = {

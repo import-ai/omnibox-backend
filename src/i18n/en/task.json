@@ -7,6 +7,8 @@
     "invalidTaskPayload": "Invalid task payload",
     "retryAlreadyRunning": "A task is already running for this resource",
     "nothingToRetry": "This resource has no failed or canceled task to retry",
-    "insufficientCredits": "Insufficient credits. This task needs {requested} credits; {remaining} credits are available."
+    "insufficientCredits": "Insufficient credits. This task needs {requested} credits; {remaining} credits are available.",
+    "fileSizeLimitExceeded": "File exceeds the {limit} MB upload limit. Split or compress the file and try again.",
+    "fileSizeLimitExceededUnknown": "File exceeds the upload size limit. Split or compress the file and try again."
   }
 }

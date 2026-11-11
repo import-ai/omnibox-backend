@@ -37,6 +37,32 @@ describe('WizardAPIService.search', () => {
       fetchMock.mockRestore();
     }
   });
+
+  it('serializes the remaining budget as timeout_ms', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ records: [] }),
+    } as any);
+    const service = new WizardAPIService(
+      { getBaseUrl: () => Promise.resolve('http://wizard') } as any,
+      { t: (key: string) => key } as any,
+    );
+
+    try {
+      const request = new SearchRequestDto();
+      request.query = 'query';
+      request.namespaceId = 'namespace-id';
+      request.timeoutMs = 9500;
+      await service.search(request);
+
+      const body = JSON.parse(
+        fetchMock.mock.calls[0][1]!.body as string,
+      ) as Record<string, unknown>;
+      expect(body.timeout_ms).toBe(9500);
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
 });
 
 describe('buildWizardRequestHeaders', () => {

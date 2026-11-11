@@ -47,7 +47,9 @@ const BACKFILL_PAGE_SIZE = 100;
 const WEAVIATE_SYNC_LOG_EVERY = 1000;
 const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_SEARCH_LIMIT = 100;
-const WIZARD_PAGE_SIZE = 20;
+const WIZARD_PAGE_SIZE = 40;
+const MIN_WIZARD_CALL_BUDGET_MS = 500;
+const WIZARD_CALL_SAFETY_MARGIN_MS = 250;
 const PERMISSION_SLACK_PAGES = 2;
 const PICKER_SLACK_PAGES = 5;
 const WIZARD_SEARCH_TIMEOUT_MS = 10000;
@@ -260,9 +262,15 @@ export class SearchService {
     while (
       visibleItems.length < requestedItemCount &&
       wizardHasMore &&
-      pagesRequested < maxPages &&
-      Date.now() < deadline
+      pagesRequested < maxPages
     ) {
+      // The wizard gets the budget minus a margin so it can return partial
+      // results before the backend aborts; below the minimum it is not worth
+      // starting another round trip.
+      const remainingBudgetMs = deadline - Date.now();
+      if (remainingBudgetMs < MIN_WIZARD_CALL_BUDGET_MS) {
+        break;
+      }
       pagesRequested += 1;
       let page: {
         items: IndexedDocDto[];
@@ -280,7 +288,8 @@ export class SearchService {
             offset: wizardOffset,
             limit: WIZARD_PAGE_SIZE,
           },
-          Math.max(1, deadline - Date.now()),
+          Math.max(0, remainingBudgetMs - WIZARD_CALL_SAFETY_MARGIN_MS),
+          Math.max(1, remainingBudgetMs),
           seenResourceIds,
           seenArticleIdentities,
         );
@@ -303,6 +312,7 @@ export class SearchService {
       limit,
       pagesRequested,
       permissionDropped,
+      remainingBudgetMs: Math.max(0, deadline - Date.now()),
     });
 
     const items = visibleItems.slice(offset, offset + limit);
@@ -326,6 +336,7 @@ export class SearchService {
     candidateResourceIds: string[] | null,
     pagination: Required<SearchPaginationOptions>,
     timeoutMs: number,
+    signalTimeoutMs: number,
     seenResourceIds: Set<string>,
     seenArticleIdentities: Set<string>,
   ): Promise<{
@@ -345,8 +356,9 @@ export class SearchService {
       MAX_SEARCH_LIMIT,
     );
     searchRequest.resourceIds = candidateResourceIds || undefined;
+    searchRequest.timeoutMs = timeoutMs;
     const result = await this.wizardApiService.search(searchRequest, {
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(Math.max(1, signalTimeoutMs)),
     });
     const records = result?.records || [];
     const candidateResourceIdSet = candidateResourceIds
@@ -441,7 +453,9 @@ export class SearchService {
 
     // A wizard without has_more predates filtered pagination: its offset is a
     // raw offset, so advance by the requested page size and use raw_count to
-    // decide whether raw results remain.
+    // decide whether raw results remain. The legacy wizard forwards limit to
+    // its vector search and returns hits[offset:offset + limit], so the same
+    // page size is a valid raw page (no separate legacy constant needed).
     const legacyWizard = result?.hasMore === undefined;
     return {
       items,
@@ -458,6 +472,7 @@ export class SearchService {
     limit: number;
     pagesRequested: number;
     permissionDropped: number;
+    remainingBudgetMs: number;
   }) {
     const span = trace.getActiveSpan();
     if (!span) {
@@ -469,6 +484,12 @@ export class SearchService {
     span.setAttribute(
       'search.permission_dropped',
       attributes.permissionDropped,
+    );
+    span.setAttribute('search.wizard_calls', attributes.pagesRequested);
+    span.setAttribute('search.wizard_page_size', WIZARD_PAGE_SIZE);
+    span.setAttribute(
+      'search.remaining_budget_ms',
+      attributes.remainingBudgetMs,
     );
   }
 

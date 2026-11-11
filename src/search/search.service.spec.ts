@@ -1,3 +1,4 @@
+import { trace } from '@opentelemetry/api';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
@@ -821,7 +822,7 @@ describe('SearchService', () => {
     });
   });
 
-  it('uses default response limit while fetching 20-row semantic pages', async () => {
+  it('uses default response limit while fetching 40-row semantic pages', async () => {
     const { service, wizardApiService } = createService();
 
     const result = await service.searchPaginated(
@@ -838,7 +839,7 @@ describe('SearchService', () => {
     expect(wizardApiService.search).toHaveBeenCalledWith(
       expect.objectContaining({
         offset: 0,
-        limit: 20,
+        limit: 40,
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
@@ -957,7 +958,7 @@ describe('SearchService', () => {
 
       return Promise.resolve({
         records,
-        hasMore: records.length >= request.limit,
+        hasMore: request.offset === 0,
       });
     });
     permissionsService.getCurrentPermissions.mockImplementation(
@@ -1019,7 +1020,7 @@ describe('SearchService', () => {
       1,
       expect.objectContaining({
         offset: 0,
-        limit: 20,
+        limit: 40,
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
@@ -1352,7 +1353,7 @@ describe('SearchService', () => {
       1,
       expect.objectContaining({
         offset: 0,
-        limit: 20,
+        limit: 40,
         resourceIds: [laterMatchingResourceId],
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -1361,7 +1362,7 @@ describe('SearchService', () => {
       2,
       expect.objectContaining({
         offset: 20,
-        limit: 20,
+        limit: 40,
         resourceIds: [laterMatchingResourceId],
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
@@ -1642,7 +1643,7 @@ describe('SearchService', () => {
       );
     };
 
-    it('requests the picker as 20-item pages with an abort signal', async () => {
+    it('requests the picker as 40-item pages with a timeout budget', async () => {
       const { service, wizardApiService } = createService();
 
       await service.search(userId, namespaceId, 'query');
@@ -1650,14 +1651,21 @@ describe('SearchService', () => {
       expect(wizardApiService.search).toHaveBeenCalledWith(
         expect.objectContaining({
           offset: 0,
-          limit: 20,
+          limit: 40,
+          timeoutMs: expect.any(Number),
         }),
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
       expect(wizardApiService.search.mock.calls[0]).toHaveLength(2);
+      expect(
+        wizardApiService.search.mock.calls[0][0].timeoutMs,
+      ).toBeGreaterThan(0);
+      expect(
+        wizardApiService.search.mock.calls[0][0].timeoutMs,
+      ).toBeLessThanOrEqual(10000 - 250);
     });
 
-    it('backfills the picker across 20-item pages', async () => {
+    it('backfills the picker across 40-item pages', async () => {
       const {
         permissionsService,
         resourcesService,
@@ -1665,7 +1673,7 @@ describe('SearchService', () => {
         wizardApiService,
       } = createService();
       makeAllResourcesVisible(permissionsService, resourcesService);
-      const allRecords = Array.from({ length: 26 }, (_, index) =>
+      const allRecords = Array.from({ length: 66 }, (_, index) =>
         chunkRecord(`resource-${index}`),
       );
       wizardApiService.search.mockImplementation((request: any) => {
@@ -1681,9 +1689,14 @@ describe('SearchService', () => {
 
       const result = await service.search(userId, namespaceId, 'query');
 
-      expect(result).toHaveLength(26);
+      expect(result).toHaveLength(66);
       expect(wizardApiService.search).toHaveBeenCalledTimes(2);
-      expect(wizardApiService.search.mock.calls[1][0].offset).toBe(20);
+      expect(
+        wizardApiService.search.mock.calls.map((call) => call[0].offset),
+      ).toEqual([0, 40]);
+      expect(
+        wizardApiService.search.mock.calls.map((call) => call[0].limit),
+      ).toEqual([40, 40]);
     });
 
     it('paginates a legacy wizard that only reports raw_count', async () => {
@@ -1694,7 +1707,7 @@ describe('SearchService', () => {
         wizardApiService,
       } = createService();
       makeAllResourcesVisible(permissionsService, resourcesService);
-      const allRecords = Array.from({ length: 26 }, (_, index) =>
+      const allRecords = Array.from({ length: 66 }, (_, index) =>
         chunkRecord(`legacy-resource-${index}`),
       );
       wizardApiService.search.mockImplementation((request: any) => {
@@ -1711,14 +1724,58 @@ describe('SearchService', () => {
         'query',
         undefined,
         {},
+        { offset: 0, limit: 66 },
+      );
+
+      expect(result.items).toHaveLength(66);
+      expect(result.total).toBe(66);
+      expect(
+        wizardApiService.search.mock.calls.map((call) => call[0].offset),
+      ).toEqual([0, 40]);
+      expect(
+        wizardApiService.search.mock.calls.map((call) => call[0].limit),
+      ).toEqual([40, 40]);
+    });
+
+    it('reads a 26-result legacy wizard in one 40-record page', async () => {
+      const {
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      const allRecords = Array.from({ length: 26 }, (_, index) =>
+        chunkRecord(`legacy-26-resource-${index}`),
+      );
+      // The pre-filtered-pagination wizard reports neither has_more nor
+      // raw_count; a deployment mixing it with the current backend must see
+      // all 26 results in a single 40-record request.
+      wizardApiService.search.mockImplementation((request: any) =>
+        Promise.resolve({
+          records: allRecords.slice(
+            request.offset,
+            request.offset + request.limit,
+          ),
+        }),
+      );
+
+      const result = await service.searchPaginated(
+        userId,
+        namespaceId,
+        'query',
+        undefined,
+        {},
         { offset: 0, limit: 26 },
       );
 
       expect(result.items).toHaveLength(26);
       expect(result.total).toBe(26);
-      expect(
-        wizardApiService.search.mock.calls.map((call) => call[0].offset),
-      ).toEqual([0, 20]);
+      expect(wizardApiService.search).toHaveBeenCalledTimes(1);
+      expect(wizardApiService.search).toHaveBeenCalledWith(
+        expect.objectContaining({ offset: 0, limit: 40 }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     });
 
     it('advances by returned filtered records when the wizard reports has_more', async () => {
@@ -1810,7 +1867,7 @@ describe('SearchService', () => {
       expect(wizardApiService.search.mock.calls[1][0].offset).toBe(0);
     });
 
-    it('caps the picker at 100 visible items across five 20-item pages', async () => {
+    it('caps the picker at 100 visible items across three 40-item pages', async () => {
       const {
         permissionsService,
         resourcesService,
@@ -1835,15 +1892,29 @@ describe('SearchService', () => {
       const result = await service.search(userId, namespaceId, 'query');
 
       expect(result).toHaveLength(100);
-      expect(wizardApiService.search).toHaveBeenCalledTimes(5);
+      expect(wizardApiService.search).toHaveBeenCalledTimes(3);
       expect(
         wizardApiService.search.mock.calls.map((call) => call[0].offset),
-      ).toEqual([0, 20, 40, 60, 80]);
+      ).toEqual([0, 40, 80]);
       expect(
         wizardApiService.search.mock.calls.every(
-          (call) => call[0].limit === 20,
+          (call) => call[0].limit === 40,
         ),
       ).toBe(true);
+    });
+
+    it('stops picker scanning at the picker page budget', async () => {
+      const { service, wizardApiService } = createService();
+      wizardApiService.search.mockResolvedValue({
+        records: [],
+        hasMore: true,
+      });
+
+      const result = await service.search(userId, namespaceId, 'query');
+
+      // ceil(MAX_SEARCH_LIMIT / 40) + PICKER_SLACK_PAGES
+      expect(wizardApiService.search).toHaveBeenCalledTimes(8);
+      expect(result).toEqual([]);
     });
 
     it('starts every picker request at wizard offset zero', async () => {
@@ -1854,7 +1925,7 @@ describe('SearchService', () => {
         wizardApiService,
       } = createService();
       makeAllResourcesVisible(permissionsService, resourcesService);
-      const allRecords = Array.from({ length: 26 }, (_, index) =>
+      const allRecords = Array.from({ length: 66 }, (_, index) =>
         chunkRecord(`resource-${index}`),
       );
       wizardApiService.search.mockImplementation((request: any) => {
@@ -1871,15 +1942,15 @@ describe('SearchService', () => {
       const first = await service.search(userId, namespaceId, 'query');
       const second = await service.search(userId, namespaceId, 'query');
 
-      expect(first).toHaveLength(26);
-      expect(second).toHaveLength(26);
+      expect(first).toHaveLength(66);
+      expect(second).toHaveLength(66);
       expect(wizardApiService.search).toHaveBeenCalledTimes(4);
       expect(
         wizardApiService.search.mock.calls.map((call) => call[0].offset),
-      ).toEqual([0, 20, 0, 20]);
+      ).toEqual([0, 40, 0, 40]);
     });
 
-    it('requests 20-item pages with an abort signal when paginated', async () => {
+    it('requests 40-item pages with an abort signal when paginated', async () => {
       const { service, wizardApiService } = createService();
       wizardApiService.search.mockResolvedValue({
         records: [],
@@ -1898,11 +1969,76 @@ describe('SearchService', () => {
       expect(wizardApiService.search).toHaveBeenCalledWith(
         expect.objectContaining({
           offset: 0,
-          limit: 20,
+          limit: 40,
+          timeoutMs: expect.any(Number),
         }),
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
       expect(result).toMatchObject({ items: [], total: 0 });
+    });
+
+    it('does not start a wizard call below the minimum remaining budget', async () => {
+      const {
+        permissionsService,
+        resourcesService,
+        service,
+        wizardApiService,
+      } = createService();
+      makeAllResourcesVisible(permissionsService, resourcesService);
+      let now = 1_000_000;
+      jest.spyOn(Date, 'now').mockImplementation(() => now);
+      wizardApiService.search.mockImplementation(() => {
+        now += 9600;
+        return Promise.resolve({
+          records: [chunkRecord('budget-resource')],
+          hasMore: true,
+        });
+      });
+      const abortTimeoutSpy = jest.spyOn(AbortSignal, 'timeout');
+
+      try {
+        const result = await service.searchPaginated(
+          userId,
+          namespaceId,
+          'query',
+          undefined,
+          {},
+          { offset: 0, limit: 20 },
+        );
+
+        expect(wizardApiService.search).toHaveBeenCalledTimes(1);
+        expect(wizardApiService.search.mock.calls[0][0]).toEqual(
+          expect.objectContaining({ limit: 40, timeoutMs: 9750 }),
+        );
+        // The wizard gets the remaining budget minus the safety margin; the
+        // abort signal guards the full remaining budget.
+        expect(abortTimeoutSpy).toHaveBeenCalledWith(10000);
+        expect(result.items).toHaveLength(1);
+      } finally {
+        jest.restoreAllMocks();
+      }
+    });
+
+    it('records wizard pagination attributes on the active span', async () => {
+      const { service, wizardApiService } = createService();
+      const setAttribute = jest.fn();
+      const getActiveSpan = jest
+        .spyOn(trace, 'getActiveSpan')
+        .mockReturnValue({ setAttribute } as any);
+      wizardApiService.search.mockResolvedValue({ records: [] });
+
+      try {
+        await service.search(userId, namespaceId, 'query');
+      } finally {
+        getActiveSpan.mockRestore();
+      }
+
+      expect(setAttribute).toHaveBeenCalledWith('search.wizard_calls', 1);
+      expect(setAttribute).toHaveBeenCalledWith('search.wizard_page_size', 40);
+      expect(setAttribute).toHaveBeenCalledWith(
+        'search.remaining_budget_ms',
+        expect.any(Number),
+      );
     });
 
     it('continues pagination from the wizard has_more flag', async () => {
@@ -1951,7 +2087,7 @@ describe('SearchService', () => {
         wizardApiService,
       } = createService();
       makeAllResourcesVisible(permissionsService, resourcesService);
-      const allRecords = Array.from({ length: 26 }, (_, index) =>
+      const allRecords = Array.from({ length: 46 }, (_, index) =>
         chunkRecord(`resource-${index}`),
       );
       wizardApiService.search.mockImplementation((request: any) => {
@@ -1974,7 +2110,7 @@ describe('SearchService', () => {
         { offset: 0, limit: 20 },
       );
       expect(firstPage.items).toHaveLength(20);
-      expect(firstPage.total).toBe(21);
+      expect(firstPage.total).toBe(40);
       expect(0 + firstPage.items.length < firstPage.total).toBe(true);
 
       const secondPage = await service.searchPaginated(
@@ -1983,10 +2119,10 @@ describe('SearchService', () => {
         'query',
         undefined,
         {},
-        { offset: 20, limit: 20 },
+        { offset: 20, limit: 30 },
       );
-      expect(secondPage.items).toHaveLength(6);
-      expect(secondPage.total).toBe(26);
+      expect(secondPage.items).toHaveLength(26);
+      expect(secondPage.total).toBe(46);
       expect(20 + secondPage.items.length < secondPage.total).toBe(false);
     });
 
@@ -2074,7 +2210,7 @@ describe('SearchService', () => {
         { offset: 20, limit: 20 },
       );
 
-      expect(wizardApiService.search).toHaveBeenCalledTimes(4);
+      expect(wizardApiService.search).toHaveBeenCalledTimes(3);
       expect(result.items).toEqual([]);
       expect(result.total).toBe(41);
     });

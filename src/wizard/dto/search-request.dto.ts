@@ -29,4 +29,7 @@ export class SearchRequestDto {
 
   @Expose({ name: 'resource_ids' })
   resourceIds?: string[];
+
+  @Expose({ name: 'timeout_ms' })
+  timeoutMs?: number;
 }

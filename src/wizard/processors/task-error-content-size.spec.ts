@@ -37,3 +37,15 @@ it('keeps old code-only size failures informative without fabricating a limit', 
     'fileSizeLimitExceededUnknown',
   );
 });
+
+it('uses the task creator language rather than the worker callback language', () => {
+  const task = {
+    payload: { user: { options: { language: 'zh-CN' } } },
+    exception: {
+      details: { code: 'FILE_SIZE_LIMIT_EXCEEDED', limit_amount: 10485760 },
+    },
+  } as unknown as Task;
+  expect(buildTaskErrorContent(task, i18n)).toBe(
+    'task.errors.fileSizeLimitExceeded: zh 10',
+  );
+});

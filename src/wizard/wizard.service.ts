@@ -13,7 +13,7 @@ import { S3Service } from 'omniboxd/s3/s3.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
-import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { PARSE_FUNCTIONS, TasksService } from 'omniboxd/tasks/tasks.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 import { isEmpty } from 'omniboxd/utils/is-empty';
@@ -388,6 +388,24 @@ export class WizardService {
       await this.dispatchNextTasks(task, nextTasks);
     }
 
+    if (task.payload?.behavior_context) {
+      await this.wizardTaskService.taskRepository
+        .query(
+          `UPDATE tasks SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object('behavior_postprocessed', true, 'behavior_parse_success', $2::boolean) WHERE id = $1`,
+          [
+            task.id,
+            Boolean(
+              postprocessResult.resourceId &&
+              ((typeof task.output?.markdown === 'string' &&
+                task.output.markdown.trim()) ||
+                (['collect_url', 'web_analysis'].includes(task.function) &&
+                  typeof task.output?.title === 'string' &&
+                  task.output.title.trim())),
+            ),
+          ],
+        )
+        .catch(() => undefined);
+    }
     return { taskId: task.id, function: task.function, ...postprocessResult };
   }
 
@@ -417,6 +435,10 @@ export class WizardService {
           payload: {
             ...nextTask.payload,
             parent_task_id: parentTask.id,
+            ...(PARSE_FUNCTIONS.has(nextTask.function) &&
+            parentTask.payload?.behavior_context
+              ? { behavior_context: parentTask.payload.behavior_context }
+              : {}),
           },
         });
         this.logger.debug({

@@ -70,9 +70,15 @@ Capacity failures are explicit (429). Existing expired/retired V2 session IDs re
 search_session_expired (410), never silently rebuild. Session ownership includes
 the authenticated user and namespace; knowing an ID grants no access.
 
-OBB_SEARCH_RECALL_DEPTH accepts 200 (provisional default) or 400 per branch. A live
-200/400 latency/recall comparison remains a rollout gate; the test services were
-scaled to zero during implementation, so no completed live calibration is claimed.
+OBB_SEARCH_RECALL_DEPTH accepts 200 (provisional default) or 400 per branch. A read-only 200/400 comparison on five test queries retained the same target ranks.
+The Chinese-title query returned 395 versus 781 chunks (656450 versus 1448183
+serialized bytes); its single-sample retrieval times were 257 versus 420 ms.
+The mixed query returned 400 versus 611 chunks, also retaining the target at rank 1.
+These are illustrative samples, not a labeled quality benchmark or end-to-end SLA;
+the first numeric-query timing included cold-start effects. Keep 200 as the
+provisional default and evaluate broader labeled queries before changing it.
+Backend resource-candidate cursors index the globally resource-collapsed list, not
+the original chunk ranks; trace them as search.resource_candidate_cursor.
 Per-response processing scans at most 200 candidate positions, with a 10-second
 request budget and at most three seconds per judgment request. Remaining work is
 saved and continued, not replayed from candidate zero.
@@ -91,6 +97,7 @@ before Wizard exposes /internal/api/v1/wizard/search/snapshot and /search/judge.
 Older Web responses stay compatible through the V1 adapter. Disabling model
 relevance does not disable stable snapshots or thresholds.
 
-The shared test environment was observed scaled to zero by another operation.
-Do not restore replicas or run deployment webhooks as part of verification without
-resuming that environment intentionally.
+The shared test environment was paused during implementation and subsequently
+restored by another operation to its existing images. Only a read-only candidate
+comparison was run after restoration. The requester prohibits deployment for this
+change; publication-triggered build/deployment workflows were cancelled.

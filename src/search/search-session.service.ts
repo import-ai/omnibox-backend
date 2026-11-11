@@ -202,7 +202,7 @@ export class SearchSessionService {
               hasMore,
             };
             span?.setAttributes({
-              'search.raw_cursor': state.cursor,
+              'search.resource_candidate_cursor': state.cursor,
               'search.confirmed_count': state.confirmed.length,
               'search.has_more': hasMore,
               'search.session_status': status,

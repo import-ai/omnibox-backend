@@ -40,7 +40,7 @@ SELECT
   uniqExactIf(actor, event_name != 'onboarding_recording_result') AS dau,
   uniqExactIf(actor, is_core) AS core_dau,
   uniqExactIf(actor, is_success) AS successful_core_users,
-  successful_core_users / nullIf(dau, 0) AS successful_core_user_rate,
+  successful_core_users / nullIf(core_dau, 0) AS successful_core_user_rate,
   sumIf(duration_ms, event_name = 'active_duration' AND scope = 'global') AS foreground_duration_ms
 FROM facts
 WHERE day IS NOT NULL

@@ -58,7 +58,7 @@ function fixture() {
   const interceptor = new BehaviorInterceptor(
     behavior as unknown as BehaviorService,
   );
-  return { behavior, execution, interceptor };
+  return { behavior, execution, interceptor, req };
 }
 it('never invokes a business handler twice when it throws synchronously', async () => {
   const f = fixture();
@@ -90,4 +90,26 @@ it('carries action context into asynchronous parsing and does not declare queued
   await Promise.resolve();
   expect(f.behavior.bind).toHaveBeenCalled();
   expect(f.behavior.result).not.toHaveBeenCalled();
+});
+
+it('correlates manual URL collection without counting internal or automatic ingestion', async () => {
+  const f = fixture();
+  f.req.originalUrl = '/api/v1/namespaces/ns/wizard/collect/url';
+  f.req.body = { url: 'https://example.org', parent_id: 'root' };
+  const context = readBehaviorContext(f.req);
+  expect(context?.action_type).toBe('resource_add');
+  const handle = jest.fn(() => {
+    behaviorContext.getStore()!.task_ids.push('collect-task');
+    return of({ resourceId: 'placeholder' });
+  });
+  await firstValueFrom(f.interceptor.intercept(f.execution, { handle }));
+  expect(f.behavior.begin).toHaveBeenCalledWith(
+    expect.objectContaining({
+      action_type: 'resource_add',
+      task_ids: ['collect-task'],
+    }),
+  );
+  expect(f.behavior.result).not.toHaveBeenCalled();
+  f.req.originalUrl = '/internal/api/v1/namespaces/ns/wizard/collect/url';
+  expect(readBehaviorContext(f.req)).toBeUndefined();
 });

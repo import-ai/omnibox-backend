@@ -19,6 +19,11 @@ export function behaviorRequestKind(
   const verb = method.toUpperCase();
   if (
     verb === 'POST' &&
+    /^\/namespaces\/[^/]+\/wizard\/collect\/url$/.test(path)
+  )
+    return 'resource_add';
+  if (
+    verb === 'POST' &&
     /^\/namespaces\/[^/]+\/resources(?:\/batch-folder|\/files)?$/.test(path)
   )
     return 'resource_add';

@@ -313,3 +313,19 @@ it('returns a complete v2 envelope for empty filter candidates without widening 
   });
   expect(f.wizard.recallSearchSnapshot).not.toHaveBeenCalled();
 });
+
+it('does not invoke a judgment unless its attempt reservation is durable', async () => {
+  const f = fixture([record('A')], true);
+  const original = f.store.exclusive.bind(f.store);
+  jest.spyOn(f.store, 'exclusive').mockImplementation((owner, id, operation) =>
+    original(owner, id, (state, save) =>
+      operation(state, (value: any) => {
+        if (Object.keys(value.attempts).length)
+          return Promise.reject(new Error('Redis commit unavailable'));
+        return save(value);
+      }),
+    ),
+  );
+  await expect(f.page()).rejects.toMatchObject({ code: 'SEARCH_UNAVAILABLE' });
+  expect(f.wizard.judgeSearchCandidates).not.toHaveBeenCalled();
+});

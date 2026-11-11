@@ -31,7 +31,14 @@ export class SearchSessionStore implements OnModuleDestroy {
   constructor(config: ConfigService) {
     this.prefix = `${config.get('ENV', 'unknown')}:search-snapshot:`;
     const url = config.get<string>('OBB_REDIS_URL');
-    if (!url && config.get('NODE_ENV', process.env.NODE_ENV) === 'production') {
+    const nodeEnv = config.get('NODE_ENV', process.env.NODE_ENV);
+    const memoryAllowed =
+      nodeEnv === 'test' ||
+      String(config.get('OBB_SEARCH_SESSION_MEMORY', false)) === 'true';
+    const production =
+      nodeEnv === 'production' ||
+      ['pre', 'prod'].includes(config.get('ENV', 'local'));
+    if (!url && (!memoryAllowed || production)) {
       throw new SearchSessionError('SEARCH_REDIS_REQUIRED');
     }
     if (url) {

@@ -58,3 +58,27 @@ it('bounds snapshot and replay state size', async () => {
     ),
   ).rejects.toMatchObject({ code: 'SEARCH_CAPACITY' });
 });
+
+it('requires explicit local memory and never permits production fallback', () => {
+  expect(
+    () =>
+      new SearchSessionStore(
+        new ConfigService({
+          ENV: 'local',
+          NODE_ENV: 'development',
+          OBB_REDIS_URL: '',
+        }),
+      ),
+  ).toThrow('SEARCH_REDIS_REQUIRED');
+  expect(
+    () =>
+      new SearchSessionStore(
+        new ConfigService({
+          ENV: 'prod',
+          NODE_ENV: 'production',
+          OBB_REDIS_URL: '',
+          OBB_SEARCH_SESSION_MEMORY: true,
+        }),
+      ),
+  ).toThrow('SEARCH_REDIS_REQUIRED');
+});

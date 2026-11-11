@@ -169,6 +169,7 @@ export class SearchSessionService {
                 namespaceId,
                 page.offset + page.limit,
                 deadline,
+                save,
               );
             }
             const end =
@@ -252,6 +253,7 @@ export class SearchSessionService {
     namespaceId: string,
     wanted: number,
     deadline: number,
+    persist: (value: SessionState) => Promise<void>,
   ) {
     let scanned = 0;
     const attempted = new Set<number>();
@@ -292,6 +294,7 @@ export class SearchSessionService {
           state.attempts[i] = (state.attempts[i] || 0) + 1;
           attempted.add(i);
         }
+        await persist(state);
         let decisions: string[];
         try {
           const result = await this.wizard.judgeSearchCandidates(

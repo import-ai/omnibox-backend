@@ -40,7 +40,8 @@ skipped while advancing progress.
 
 The published resource list is append-only. If relevance is enabled, judgments of
 later candidates may finish first, but cannot pass an unresolved prefix. Pending
-attempts accumulate across requests; three unresolved attempts terminate the
+attempts are durably reserved before the judgment RPC and accumulate across
+requests; three unresolved attempts terminate the
 session with search_judgment_failed. Detector failures are not relevance rejections.
 With relevance disabled, the same engine skips judgment calls, not snapshot state.
 The representative-chunk policy is global and deterministic; it does not promise
@@ -55,8 +56,9 @@ current configuration; V1 may retain the frozen policy until its short cache exp
 
 ## Storage and bounds
 
-The store uses OBB_REDIS_URL. Production NODE_ENV requires Redis; memory storage
-is for a single development/test process only. Redis failures never trigger an
+The store uses OBB_REDIS_URL. Redis is required outside unit tests unless single-process local memory is
+explicitly enabled with OBB_SEARCH_SESSION_MEMORY=true; production/pre environments
+still require Redis. Redis failures never trigger an
 in-memory fallback. Owner-scoped leases and compare-owner commits reject stale
 writers and simultaneous mutation. Each response range is memoized by request ID;
 reusing an ID with a different offset/limit returns search_request_conflict.

@@ -1744,6 +1744,11 @@ export class StreamService implements OnModuleDestroy {
     chatOnly: boolean,
   ) {
     if (message.message.role === OpenAIMessageRole.SYSTEM) return;
+    // Replayed chunks carry attrs from the stored row; the per-call context is
+    // server-side observability only and must not reach clients. Copy first so
+    // the persisted attrs stay untouched.
+    const attrs = message.attrs ? { ...message.attrs } : undefined;
+    if (attrs) delete attrs.context;
     for (const chunk of [
       {
         response_type: 'bos',
@@ -1753,13 +1758,13 @@ export class StreamService implements OnModuleDestroy {
         parentId: message.parentId || undefined,
         userId: session.userId || undefined,
         namespaceId: session.namespaceId,
-        attrs: message.attrs || undefined,
+        attrs,
       },
       {
         response_type: 'delta',
         id: message.id,
         message: message.message,
-        attrs: message.attrs || undefined,
+        attrs,
       },
       { response_type: 'eos', id: message.id, role: message.message.role },
     ] as ChatResponse[]) {

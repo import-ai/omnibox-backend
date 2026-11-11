@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { HttpStatus } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { I18nService, I18nValidationPipe } from 'nestjs-i18n';
@@ -48,6 +49,8 @@ import {
 import { SearchService } from './search.service';
 import { SearchCandidateService } from './search-candidate.service';
 import { SearchResourceFilterService } from './search-resource-filter.service';
+import { SearchSessionService } from './search-session.service';
+import { SearchSessionStore } from './search-session.store';
 
 // Mock the WizardAPIService to avoid needing the actual wizard service during tests
 jest.mock('../wizard-api/wizard-api.service', () => {
@@ -62,14 +65,14 @@ jest.mock('../wizard-api/wizard-api.service', () => {
           {
             id: 'search-result-1',
             type: IndexRecordType.CHUNK,
-            namespaceId: 'test-namespace',
-            userId: 'test-user',
+            namespaceId: req.namespaceId || 'test-namespace',
+            userId: req.userId || 'test-user',
             chunk: {
               resourceId: '550e8400-e29b-41d4-a716-446655440000', // Valid UUID
               title: 'Test Document',
               text: 'This is test content for searching',
               chunkType: 'doc',
-              userId: 'test-user',
+              userId: req.userId || 'test-user',
               parentId: 'test-parent',
               chunkId: 'test-chunk-1',
               createdAt: new Date(),
@@ -79,8 +82,8 @@ jest.mock('../wizard-api/wizard-api.service', () => {
           {
             id: 'search-result-2',
             type: IndexRecordType.MESSAGE,
-            namespaceId: 'test-namespace',
-            userId: 'test-user',
+            namespaceId: req.namespaceId || 'test-namespace',
+            userId: req.userId || 'test-user',
             message: {
               conversationId: '550e8400-e29b-41d4-a716-446655440001', // Valid UUID
               messageId: '550e8400-e29b-41d4-a716-446655440002', // Valid UUID
@@ -131,6 +134,12 @@ describe('SearchController (e2e)', () => {
       ],
       providers: [
         SearchService,
+        SearchSessionService,
+        SearchSessionStore,
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({ ENV: 'test', OBB_REDIS_URL: '' }),
+        },
         {
           provide: MessageIndexMigrationService,
           useValue: {
@@ -325,6 +334,22 @@ describe('SearchController (e2e)', () => {
         },
       ],
     }).compile();
+
+    const wizard = moduleFixture.get(WizardAPIService);
+    wizard.recallSearchSnapshot = jest.fn(async (body) => {
+      const result = await wizard.search({
+        query: body.query,
+        namespaceId: body.namespace_id,
+        userId: body.user_id,
+        type: 'chunk',
+      } as any);
+      return {
+        records: result.records,
+        recallTruncated: false,
+        relevanceEnabled: false,
+        policySignature: 'test',
+      };
+    });
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
@@ -626,6 +651,9 @@ describe('SearchController (e2e)', () => {
         {
           offset: 0,
           limit: 20,
+          paginationVersion: undefined,
+          searchId: undefined,
+          requestId: undefined,
         },
       );
     });
@@ -768,6 +796,36 @@ describe('SearchController (e2e)', () => {
         response.status,
       );
     });
+  });
+
+  it('returns the v2 snake_case envelope and replays the same page', async () => {
+    const payload = {
+      query: 'v2-contract',
+      offset: 0,
+      limit: 20,
+      pagination_version: 2,
+      request_id: 'initial-wire-request',
+    };
+    const first = await request(app.getHttpServer())
+      .post(`/api/v1/namespaces/${mockNamespaceId}/search`)
+      .set('user', JSON.stringify(mockUser))
+      .send(payload)
+      .expect(HttpStatus.CREATED);
+    expect(first.body).toMatchObject({
+      search_id: expect.any(String),
+      next_offset: 1,
+      has_more: false,
+      status: 'complete',
+      recall_truncated: false,
+      total: 1,
+    });
+    expect(first.body).not.toHaveProperty('searchId');
+    const replay = await request(app.getHttpServer())
+      .post(`/api/v1/namespaces/${mockNamespaceId}/search`)
+      .set('user', JSON.stringify(mockUser))
+      .send({ ...payload, search_id: first.body.search_id })
+      .expect(HttpStatus.CREATED);
+    expect(replay.body).toEqual(first.body);
   });
 
   describe('Response format validation', () => {

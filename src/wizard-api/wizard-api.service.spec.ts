@@ -6,6 +6,8 @@ import {
   WizardAPIService,
 } from 'omniboxd/wizard-api/wizard-api.service';
 
+import wire from '../search/fixtures/snapshot-response';
+
 describe('WizardAPIService.search', () => {
   it('maps total, has_more, and the deprecated raw_count', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
@@ -92,5 +94,63 @@ describe('buildWizardRequestHeaders', () => {
       'X-Request-Id': 'req-123',
       traceparent: '00-abc-def-01',
     });
+  });
+});
+
+describe('snapshot wire contract', () => {
+  it('consumes the real Python response and serializes cached candidates back to snake_case', async () => {
+    const mock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(wire),
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            decisions: ['kept'],
+            policy_signature: wire.policy_signature,
+          }),
+      } as any);
+    const service = new WizardAPIService(
+      { getBaseUrl: () => Promise.resolve('http://wizard') } as any,
+      { t: (key: string) => key } as any,
+    );
+    try {
+      const snapshot = await service.recallSearchSnapshot(
+        { query: '610', namespace_id: 'n', user_id: 'u' },
+        AbortSignal.timeout(1000),
+      );
+      expect(snapshot.records[0].chunk?.resourceId).toBe('resource-a');
+      const cached = JSON.parse(JSON.stringify(snapshot));
+      const result = await service.judgeSearchCandidates(
+        {
+          query: '610',
+          namespace_id: 'n',
+          user_id: 'u',
+          recall_depth: 200,
+          policy_signature: snapshot.policySignature,
+          records: cached.records,
+          timeout_ms: 1000,
+        },
+        AbortSignal.timeout(1000),
+      );
+      expect(result.decisions).toEqual(['kept']);
+      const body = JSON.parse(mock.mock.calls[1][1]!.body as string);
+      expect(body.records[0]).toMatchObject({
+        namespace_id: 'n',
+        user_id: 'u',
+        chunk: {
+          resource_id: 'resource-a',
+          parent_id: 'root',
+          chunk_id: 'chunk-a',
+          text: 'immutable snippet',
+        },
+      });
+      expect(body.records[0].chunk).not.toHaveProperty('resourceId');
+    } finally {
+      mock.mockRestore();
+    }
   });
 });

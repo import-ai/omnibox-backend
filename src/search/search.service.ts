@@ -1,5 +1,4 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { trace } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
@@ -13,11 +12,6 @@ import { MessagesService } from 'omniboxd/messages/messages.service';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import {
-  comparePermission,
-  ResourcePermission,
-} from 'omniboxd/permissions/resource-permission.enum';
-import {
-  isReadOnlyResourceType,
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
@@ -28,31 +22,21 @@ import { IndexRecordType } from 'omniboxd/wizard/dto/index-record.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 
-import { getArticleIdentity } from './article-dedupe.util';
 import { DocType } from './doc-type.enum';
-import {
-  IndexedDocDto,
-  IndexedMessageDto,
-  IndexedResourceDto,
-} from './dto/indexed-doc.dto';
+import { IndexedDocDto, IndexedMessageDto } from './dto/indexed-doc.dto';
 import { WeaviateSyncStatsResponseDto } from './dto/weaviate-sync-stats-response.dto';
 import { SearchCandidateService } from './search-candidate.service';
 import {
   SearchFilterOptions,
   SearchResourceFilterService,
 } from './search-resource-filter.service';
+import { SearchSessionService } from './search-session.service';
 
 const TASK_PRIORITY = 4;
 const BACKFILL_PAGE_SIZE = 100;
 const WEAVIATE_SYNC_LOG_EVERY = 1000;
 const DEFAULT_SEARCH_LIMIT = 20;
 const MAX_SEARCH_LIMIT = 100;
-const WIZARD_PAGE_SIZE = 40;
-const MIN_WIZARD_CALL_BUDGET_MS = 500;
-const WIZARD_CALL_SAFETY_MARGIN_MS = 250;
-const PERMISSION_SLACK_PAGES = 2;
-const PICKER_SLACK_PAGES = 5;
-const WIZARD_SEARCH_TIMEOUT_MS = 10000;
 // History search asks for this many candidates per requested hit in a single
 // Wizard call, so hits dropped as ineligible are backfilled without another
 // round trip (auto-recall has a 1 s budget).
@@ -61,11 +45,19 @@ const HISTORY_CANDIDATE_FACTOR = 3;
 export interface SearchPaginationOptions {
   offset?: number;
   limit?: number;
+  paginationVersion?: number;
+  searchId?: string;
+  requestId?: string;
 }
 
 export interface SearchPaginatedResult {
   items: IndexedDocDto[];
-  total: number;
+  total: number | null;
+  searchId?: string;
+  nextOffset?: number;
+  hasMore?: boolean;
+  status?: string;
+  recallTruncated?: boolean;
   offset: number;
   limit: number;
 }
@@ -86,6 +78,7 @@ export class SearchService {
     private readonly tagService: TagService,
     private readonly searchResourceFilterService: SearchResourceFilterService,
     private readonly searchCandidateService: SearchCandidateService,
+    private readonly searchSessions: SearchSessionService,
   ) {}
 
   async search(
@@ -138,10 +131,6 @@ export class SearchService {
       candidateResourceIds,
       0,
       MAX_SEARCH_LIMIT,
-      {
-        maxPages:
-          Math.ceil(MAX_SEARCH_LIMIT / WIZARD_PAGE_SIZE) + PICKER_SLACK_PAGES,
-      },
     );
     return result.items;
   }
@@ -211,7 +200,11 @@ export class SearchService {
       namespaceId,
       filterOptions,
     );
-    if (candidateResourceIds && candidateResourceIds.length <= 0) {
+    if (
+      pagination?.paginationVersion !== 2 &&
+      candidateResourceIds &&
+      candidateResourceIds.length <= 0
+    ) {
       return {
         items: [],
         total: 0,
@@ -227,14 +220,10 @@ export class SearchService {
       candidateResourceIds,
       offset,
       limit,
+      pagination,
     );
 
-    return {
-      items: result.items,
-      total: result.total,
-      offset,
-      limit,
-    };
+    return { ...result, offset, limit };
   }
 
   private async searchVisibleResources(
@@ -244,253 +233,17 @@ export class SearchService {
     candidateResourceIds: string[] | null,
     offset: number,
     limit: number,
-    options?: { maxPages?: number },
-  ): Promise<Pick<SearchPaginatedResult, 'items' | 'total'>> {
-    const requestedItemCount = offset + limit;
-    const maxPages =
-      options?.maxPages ??
-      Math.ceil(requestedItemCount / WIZARD_PAGE_SIZE) + PERMISSION_SLACK_PAGES;
-    const deadline = Date.now() + WIZARD_SEARCH_TIMEOUT_MS;
-    const visibleItems: IndexedDocDto[] = [];
-    const seenResourceIds = new Set<string>();
-    const seenArticleIdentities = new Set<string>();
-    let wizardOffset = 0;
-    let wizardHasMore = true;
-    let pagesRequested = 0;
-    let permissionDropped = 0;
-
-    while (
-      visibleItems.length < requestedItemCount &&
-      wizardHasMore &&
-      pagesRequested < maxPages
-    ) {
-      // The wizard gets the budget minus a margin so it can return partial
-      // results before the backend aborts; below the minimum it is not worth
-      // starting another round trip.
-      const remainingBudgetMs = deadline - Date.now();
-      if (remainingBudgetMs < MIN_WIZARD_CALL_BUDGET_MS) {
-        break;
-      }
-      pagesRequested += 1;
-      let page: {
-        items: IndexedDocDto[];
-        recordCount: number;
-        hasMore: boolean;
-        advanceBy: number;
-      };
-      try {
-        page = await this.searchWizardPage(
-          userId,
-          namespaceId,
-          normalizedQuery,
-          candidateResourceIds,
-          {
-            offset: wizardOffset,
-            limit: WIZARD_PAGE_SIZE,
-          },
-          Math.max(0, remainingBudgetMs - WIZARD_CALL_SAFETY_MARGIN_MS),
-          Math.max(1, remainingBudgetMs),
-          seenResourceIds,
-          seenArticleIdentities,
-        );
-      } catch (error) {
-        if (this.isAbortError(error)) {
-          break;
-        }
-        throw error;
-      }
-      permissionDropped += page.recordCount - page.items.length;
-      visibleItems.push(...page.items);
-      // The wizard offset indexes filtered results in the new contract and raw
-      // results in the legacy one, so the page decides how far to advance.
-      wizardOffset += page.advanceBy;
-      wizardHasMore = page.hasMore;
-    }
-
-    this.recordSearchPagination({
-      offset,
-      limit,
-      pagesRequested,
-      permissionDropped,
-      remainingBudgetMs: Math.max(0, deadline - Date.now()),
-    });
-
-    const items = visibleItems.slice(offset, offset + limit);
-    let total: number;
-    if (items.length === 0 && offset === 0) {
-      total = 0;
-    } else if (wizardHasMore) {
-      // Keep a lookahead so clients retry the next page after a sparse slice.
-      total = Math.max(visibleItems.length, offset + limit + 1);
-    } else {
-      total = visibleItems.length;
-    }
-
-    return { items, total };
-  }
-
-  private async searchWizardPage(
-    userId: string,
-    namespaceId: string,
-    normalizedQuery: string,
-    candidateResourceIds: string[] | null,
-    pagination: Required<SearchPaginationOptions>,
-    timeoutMs: number,
-    signalTimeoutMs: number,
-    seenResourceIds: Set<string>,
-    seenArticleIdentities: Set<string>,
-  ): Promise<{
-    items: IndexedDocDto[];
-    recordCount: number;
-    hasMore: boolean;
-    advanceBy: number;
-  }> {
-    const searchRequest = new SearchRequestDto();
-    searchRequest.query = normalizedQuery;
-    searchRequest.namespaceId = namespaceId;
-    searchRequest.userId = userId;
-    searchRequest.type = IndexRecordType.CHUNK;
-    searchRequest.offset = Math.max(pagination.offset, 0);
-    searchRequest.limit = Math.min(
-      Math.max(pagination.limit, 1),
-      MAX_SEARCH_LIMIT,
-    );
-    searchRequest.resourceIds = candidateResourceIds || undefined;
-    searchRequest.timeoutMs = timeoutMs;
-    const result = await this.wizardApiService.search(searchRequest, {
-      signal: AbortSignal.timeout(Math.max(1, signalTimeoutMs)),
-    });
-    const records = result?.records || [];
-    const candidateResourceIdSet = candidateResourceIds
-      ? new Set(candidateResourceIds)
-      : null;
-    const pageResourceIds: string[] = [];
-    const pageResourceIdSet = new Set<string>();
-    for (const record of records) {
-      if (record.type !== IndexRecordType.CHUNK || !record.chunk) {
-        continue;
-      }
-      const chunk = record.chunk;
-      if (
-        candidateResourceIdSet &&
-        !candidateResourceIdSet.has(chunk.resourceId)
-      ) {
-        continue;
-      }
-      if (pageResourceIdSet.has(chunk.resourceId)) {
-        continue;
-      }
-      pageResourceIdSet.add(chunk.resourceId);
-      pageResourceIds.push(chunk.resourceId);
-    }
-
-    const resourceMetaMap = await this.resourcesService.batchGetParentResources(
-      namespaceId,
-      pageResourceIds,
-    );
-    const permissionMap = await this.permissionsService.getCurrentPermissions(
+    pagination?: SearchPaginationOptions,
+  ): Promise<SearchPaginatedResult> {
+    const result = await this.searchSessions.paginate(
       userId,
       namespaceId,
-      [...resourceMetaMap.values()],
+      normalizedQuery,
+      candidateResourceIds,
+      { ...pagination, offset, limit },
     );
-
-    const items: IndexedDocDto[] = [];
-    const seenPageResourceIds = new Set<string>();
-    for (const record of records) {
-      if (record.type !== IndexRecordType.CHUNK || !record.chunk) {
-        continue;
-      }
-      const chunk = record.chunk;
-      if (
-        candidateResourceIdSet &&
-        !candidateResourceIdSet.has(chunk.resourceId)
-      ) {
-        continue;
-      }
-      if (
-        seenPageResourceIds.has(chunk.resourceId) ||
-        seenResourceIds.has(chunk.resourceId)
-      ) {
-        continue;
-      }
-      seenPageResourceIds.add(chunk.resourceId);
-      const permission = permissionMap.get(chunk.resourceId);
-      if (
-        !permission ||
-        comparePermission(permission, ResourcePermission.CAN_VIEW) < 0
-      ) {
-        continue;
-      }
-
-      const resourceMeta = resourceMetaMap.get(chunk.resourceId);
-      // One article, however many folders subscribe to its feed. The page is
-      // in wizard rank order, so the best-ranked copy is the one kept.
-      const identity = getArticleIdentity({
-        resourceType: resourceMeta?.resourceType,
-        attrs: resourceMeta?.attrs,
-      });
-      if (identity !== null) {
-        if (seenArticleIdentities.has(identity)) {
-          continue;
-        }
-        seenArticleIdentities.add(identity);
-      }
-      seenResourceIds.add(chunk.resourceId);
-      const resourceDto: IndexedResourceDto = {
-        type: DocType.RESOURCE,
-        id: record.id,
-        resourceId: chunk.resourceId,
-        title: chunk.title || 'Untitled',
-        content: chunk.text || '',
-        attrs: resourceMeta?.attrs || {},
-        resourceType: resourceMeta?.resourceType || ResourceType.DOC,
-        readOnly: isReadOnlyResourceType(
-          resourceMeta?.resourceType || ResourceType.DOC,
-        ),
-      };
-      items.push(resourceDto);
-    }
-
-    // A wizard without has_more predates filtered pagination: its offset is a
-    // raw offset, so advance by the requested page size and use raw_count to
-    // decide whether raw results remain. The legacy wizard forwards limit to
-    // its vector search and returns hits[offset:offset + limit], so the same
-    // page size is a valid raw page (no separate legacy constant needed).
-    const legacyWizard = result?.hasMore === undefined;
-    return {
-      items,
-      recordCount: records.length,
-      hasMore: legacyWizard
-        ? (result?.rawCount ?? records.length) >= WIZARD_PAGE_SIZE
-        : result.hasMore === true,
-      advanceBy: legacyWizard ? WIZARD_PAGE_SIZE : records.length,
-    };
-  }
-
-  private recordSearchPagination(attributes: {
-    offset: number;
-    limit: number;
-    pagesRequested: number;
-    permissionDropped: number;
-    remainingBudgetMs: number;
-  }) {
-    const span = trace.getActiveSpan();
-    if (!span) {
-      return;
-    }
-    span.setAttribute('search.offset', attributes.offset);
-    span.setAttribute('search.limit', attributes.limit);
-    span.setAttribute('search.pages_requested', attributes.pagesRequested);
-    span.setAttribute(
-      'search.permission_dropped',
-      attributes.permissionDropped,
-    );
-    span.setAttribute('search.wizard_calls', attributes.pagesRequested);
-    span.setAttribute('search.wizard_page_size', WIZARD_PAGE_SIZE);
-    span.setAttribute(
-      'search.remaining_budget_ms',
-      attributes.remainingBudgetMs,
-    );
+    if (pagination?.paginationVersion === 2) return result;
+    return { items: result.items, total: result.total, offset, limit };
   }
 
   async searchMessages(
@@ -667,14 +420,10 @@ export class SearchService {
     );
   }
 
-  private isAbortError(error: unknown): boolean {
-    const name = (error as { name?: unknown } | null)?.name;
-    return name === 'AbortError' || name === 'TimeoutError';
-  }
-
-  private normalizePagination(
-    pagination?: SearchPaginationOptions,
-  ): Required<SearchPaginationOptions> {
+  private normalizePagination(pagination?: SearchPaginationOptions): {
+    offset: number;
+    limit: number;
+  } {
     const offset = Number.isInteger(pagination?.offset)
       ? Math.max(pagination!.offset!, 0)
       : 0;

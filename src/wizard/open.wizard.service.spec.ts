@@ -292,6 +292,101 @@ describe('OpenWizardService', () => {
     });
   });
 
+  it.each(['complete', 'paused'] as const)(
+    'merges post-EOS %s timing into the completed message without duplicating it',
+    async (status) => {
+      conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
+      const timing = {
+        version: 1,
+        answer_id: 'answer',
+        run_id: 'run',
+        started_at: '2026-11-09T00:00:00Z',
+        status,
+        duration_ms: 2500,
+        ...(status === 'complete'
+          ? { completed_at: '2026-11-09T00:00:03Z' }
+          : {}),
+      };
+      const metadata = {
+        response_type: 'delta',
+        id: 'answer-1',
+        message: {},
+        attrs: { answer_timing: timing },
+      };
+      streamService.chat.mockResolvedValue([
+        {
+          response_type: 'bos',
+          role: 'assistant',
+          id: 'answer-1',
+          parentId: 'query-1',
+        },
+        {
+          response_type: 'delta',
+          message: { content: 'answer' },
+          attrs: { citations: [{ index: 1 }] },
+        },
+        { response_type: 'eos', id: 'answer-1' },
+        metadata,
+        metadata,
+        { response_type: 'done' },
+      ]);
+      const response = await service.ask('user-1', 'namespace-1', 'request-1', {
+        query: 'hello',
+        tools: [],
+      });
+      expect(response.messages).toHaveLength(1);
+      expect(response.messages[0]).toMatchObject({
+        id: 'answer-1',
+        message: { content: 'answer' },
+        attrs: { citations: [{ index: 1 }], answer_timing: timing },
+      });
+    },
+  );
+
+  it('routes completed-message metadata by message ID', async () => {
+    conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
+    streamService.chat.mockResolvedValue([
+      { response_type: 'bos', role: 'assistant', id: 'first' },
+      { response_type: 'eos', id: 'first' },
+      { response_type: 'bos', role: 'assistant', id: 'second' },
+      { response_type: 'eos', id: 'second' },
+      {
+        response_type: 'delta',
+        id: 'first',
+        message: {},
+        attrs: { answer_timing: { answer_id: 'first-answer' } },
+      },
+      { response_type: 'done' },
+    ]);
+    const response = await service.ask('user-1', 'namespace-1', 'request-1', {
+      query: 'hello',
+      tools: [],
+    });
+    expect(response.messages[0].attrs.answer_timing.answer_id).toBe(
+      'first-answer',
+    );
+    expect(response.messages[1].attrs.answer_timing).toBeUndefined();
+  });
+
+  it.each([
+    { id: 'unknown', message: {}, attrs: { answer_timing: {} } },
+    { id: 'answer-1', message: { content: 'late text' }, attrs: {} },
+  ])('rejects invalid post-EOS deltas %#', async (delta) => {
+    conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
+    streamService.chat.mockResolvedValue([
+      { response_type: 'bos', role: 'assistant', id: 'answer-1' },
+      { response_type: 'eos', id: 'answer-1' },
+      { response_type: 'delta', ...delta },
+      { response_type: 'done' },
+    ]);
+    await expect(
+      service.ask('user-1', 'namespace-1', 'request-1', {
+        query: 'hello',
+        tools: [],
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_RESPONSE_TYPE' });
+  });
+
   it('rejects parent messages owned by another user', async () => {
     messagesService.findOneForUser.mockRejectedValue(
       new EntityNotFoundError('Message', { id: 'message-1' }),

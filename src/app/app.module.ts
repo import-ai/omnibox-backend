@@ -32,6 +32,7 @@ import { AttachmentsModule } from 'omniboxd/attachments/attachments.module';
 import { AttributionReporterModule } from 'omniboxd/attribution/attribution-reporter.module';
 import { AuthModule } from 'omniboxd/auth/auth.module';
 import { OAuthProviderModule } from 'omniboxd/auth/oauth-provider/oauth-provider.module';
+import { BehaviorModule } from 'omniboxd/behavior/behavior.module';
 import { CaptchaModule } from 'omniboxd/captcha/captcha.module';
 import { AtomicMemoryCache } from 'omniboxd/common/cache.service';
 import { ConversationSharesModule } from 'omniboxd/conversation-shares/conversation-shares.module';
@@ -128,6 +129,7 @@ import { AddMemberDisplayNameSnapshot1793012728794 } from 'omniboxd/migrations/1
 import { AddResourceContributors1793086632487 } from 'omniboxd/migrations/1793086632487-add-resource-contributors';
 import { AddApplicationBoundAt1793186335736 } from 'omniboxd/migrations/1793186335736-add-application-bound-at';
 import { AddUserLookupIndexes1793844103185 } from 'omniboxd/migrations/1793844103185-add-user-lookup-indexes';
+import { AddBehaviorActions1794377884056 } from 'omniboxd/migrations/1794377884056-add-behavior-actions';
 import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace-resources.module';
 import { NamespaceTasksModule } from 'omniboxd/namespace-tasks/namespace-tasks.module';
 import { NamespacesModule } from 'omniboxd/namespaces/namespaces.module';
@@ -240,6 +242,7 @@ export class AppModule implements NestModule {
         PhoneModule,
         CaptchaModule,
         TraceModule,
+        BehaviorModule,
         ApplicationsModule,
         WebSocketModule,
         FilesModule,
@@ -316,6 +319,7 @@ export class AppModule implements NestModule {
             autoLoadEntities: true,
             maxQueryExecutionTime: config.get('OBB_DB_EXEC_TIME', 0),
             migrations: [
+              AddBehaviorActions1794377884056,
               AddConversationHistoryIndex1790966111694,
               Init1751900000000,
               Tags1751905414493,

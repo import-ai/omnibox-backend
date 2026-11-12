@@ -123,7 +123,10 @@ describe('CollectUrlProcessor', () => {
           namespaceId: 'test-namespace',
           name: '❌ https://example.com',
         }),
-        true,
+        expect.objectContaining({
+          autoRenameOnConflict: true,
+          skipAttribution: true,
+        }),
       );
       expect(result).toEqual({});
     });
@@ -148,7 +151,10 @@ describe('CollectUrlProcessor', () => {
         expect.objectContaining({
           name: '❌ Example Title',
         }),
-        true,
+        expect.objectContaining({
+          autoRenameOnConflict: true,
+          skipAttribution: true,
+        }),
       );
     });
 
@@ -171,7 +177,10 @@ describe('CollectUrlProcessor', () => {
         expect.objectContaining({
           name: '❌ https://example.com',
         }),
-        true,
+        expect.objectContaining({
+          autoRenameOnConflict: true,
+          skipAttribution: true,
+        }),
       );
     });
 
@@ -191,7 +200,10 @@ describe('CollectUrlProcessor', () => {
         expect.objectContaining({
           name: 'Scraped Title',
         }),
-        true,
+        expect.objectContaining({
+          autoRenameOnConflict: true,
+          skipAttribution: true,
+        }),
       );
       expect(result).toEqual({
         resourceId: 'test-resource-id',

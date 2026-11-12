@@ -1,3 +1,4 @@
+import { ResourceType } from './entities/resource.entity';
 import {
   contributorInitial,
   contributorLabel,
@@ -5,7 +6,26 @@ import {
   formerContributorLabel,
   historicalMemberDisplayName,
   sameStringSet,
+  supportsResourceAttribution,
 } from './resource-contributors';
+
+describe('supportsResourceAttribution', () => {
+  it.each([ResourceType.DOC, ResourceType.LINK, ResourceType.FILE])(
+    'shows people for %s resources',
+    (resourceType) => {
+      expect(supportsResourceAttribution(resourceType)).toBe(true);
+    },
+  );
+
+  it.each([
+    ResourceType.FOLDER,
+    ResourceType.SMART_FOLDER,
+    ResourceType.RSS_FOLDER,
+    ResourceType.RSS_ITEM,
+  ])('keeps %s resources without people', (resourceType) => {
+    expect(supportsResourceAttribution(resourceType)).toBe(false);
+  });
+});
 
 describe('contributorLabel', () => {
   it('shows nickname with username when they differ', () => {

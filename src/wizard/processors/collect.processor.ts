@@ -49,8 +49,12 @@ export class CollectProcessor extends Processor {
           name: prefixFailedResourceName(resource.name),
           content,
         }),
-        true, // autoRenameOnConflict for error content updates
-        tx,
+        {
+          // The error content renames the resource and may collide.
+          autoRenameOnConflict: true,
+          skipAttribution: true,
+          tx,
+        },
       );
       return {};
     } else if (task.output) {
@@ -99,8 +103,12 @@ export class CollectProcessor extends Processor {
           attrs: mergedAttrs,
           tag_ids: tagIds,
         }),
-        true, // autoRenameOnConflict for AI-generated titles
-        tx,
+        {
+          // AI-generated titles may collide with an existing resource.
+          autoRenameOnConflict: true,
+          skipAttribution: true,
+          tx,
+        },
       );
       return { resourceId, tagIds };
     }

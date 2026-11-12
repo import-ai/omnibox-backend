@@ -205,8 +205,10 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
-          true,
-          undefined,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -252,8 +254,10 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
-          true,
-          undefined,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -317,8 +321,10 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
-          true,
-          undefined,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
     });
@@ -354,8 +360,10 @@ describe('ReaderProcessor', () => {
             attrs: undefined,
             tag_ids: undefined,
           },
-          true,
-          undefined,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({});
       });
@@ -388,8 +396,10 @@ describe('ReaderProcessor', () => {
             name: '❌ Test Resource',
             content: message,
           }),
-          true,
-          undefined,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({});
       });
@@ -434,8 +444,10 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
-          true,
-          undefined,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -478,8 +490,10 @@ describe('ReaderProcessor', () => {
             },
             tag_ids: undefined,
           },
-          true,
-          undefined,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 

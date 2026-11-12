@@ -14,6 +14,7 @@ import {
   contributorTone,
   formerContributorLabel,
   historicalMemberDisplayName,
+  supportsResourceAttribution,
 } from './resource-contributors';
 
 export interface RecordResourceEdit {
@@ -48,7 +49,7 @@ export class ResourceContributorsService {
     edit: RecordResourceEdit,
   ): Promise<void> {
     if (
-      edit.resourceType !== ResourceType.DOC ||
+      !supportsResourceAttribution(edit.resourceType) ||
       !(edit.explicitNameChanged || edit.contentChanged || edit.tagsChanged) ||
       !edit.actorUserId ||
       edit.actorUserId === edit.creatorUserId
@@ -90,7 +91,7 @@ export class ResourceContributorsService {
     });
     if (
       !resource ||
-      resource.resourceType !== ResourceType.DOC ||
+      !supportsResourceAttribution(resource.resourceType) ||
       !(await this.isTeamResource(this.resourceRepository.manager, {
         namespaceId,
         parentId: resource.parentId,

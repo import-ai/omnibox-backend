@@ -1598,6 +1598,7 @@ describe('StreamService citations on a chat-only share', () => {
       undefined,
       'explicit',
       {},
+      expect.any(Number),
     );
   });
 });
@@ -2790,5 +2791,346 @@ describe('StreamService persisted error codes', () => {
         expect('citations' in chunk.attrs).toBe(false);
       }
     });
+  });
+});
+
+describe('StreamService first content token trace', () => {
+  function handlerFixture() {
+    const rows = new Map<string, Record<string, any>>();
+    let sequence = 0;
+    const messagesService = {
+      findOne: jest.fn().mockResolvedValue({ attrs: {} }),
+      create: jest.fn(
+        (_n: string, conversationId: string, _u: string, dto: any) => {
+          const row: Record<string, any> = {
+            id: `message-${++sequence}`,
+            conversationId,
+            parentId: dto.parentId ?? null,
+            createdAt: new Date(),
+            status: MessageStatus.PENDING,
+            message: { ...dto.message },
+            attrs: dto.attrs ?? null,
+            inputTokenCached: 0,
+            inputTokenUncached: 0,
+            outputToken: 0,
+          };
+          rows.set(row.id, row);
+          return Promise.resolve(row);
+        },
+      ),
+      updateDelta: jest.fn((id: string, delta: any) => {
+        const row = rows.get(id)!;
+        row.message.content = `${row.message.content ?? ''}${delta.message.content ?? ''}`;
+        if (delta.message.reasoning_content) {
+          row.message.reasoning_content = `${row.message.reasoning_content ?? ''}${delta.message.reasoning_content}`;
+        }
+        if (delta.message.tool_calls) {
+          row.message.tool_calls = delta.message.tool_calls;
+        }
+        return Promise.resolve(row);
+      }),
+      update: jest.fn((id: string, _n: string, _c: string, dto: any) => {
+        const row = rows.get(id)!;
+        Object.assign(row, dto);
+        return Promise.resolve(row);
+      }),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+    };
+    const traceService = {
+      emitTraceEvents: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = createService({ messagesService, traceService });
+    let now = 1000;
+    jest.spyOn(Date, 'now').mockImplementation(() => now);
+    const context: Record<string, any> = {
+      runId: 'run-id',
+      queryId: 'query-id',
+      queryReceivedAt: 1000,
+      channel: 'web',
+      mode: 'ask',
+    };
+    const handler = service.agentHandler(
+      'namespace-id',
+      'conversation-id',
+      'user-id',
+      jest.fn().mockResolvedValue(undefined),
+    );
+    const emitAt = async (at: number, chunk: Record<string, any>) => {
+      now = at;
+      await handler(JSON.stringify(chunk), context);
+    };
+    const events = () =>
+      traceService.emitTraceEvents.mock.calls
+        .flatMap(([list]) => list)
+        .filter((event: any) => event.name === 'chat_first_content_token');
+    return { rows, traceService, context, emitAt, events };
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('reports the query to first content token timing for a single round', async () => {
+    const { rows, traceService, emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'answer' },
+    });
+    await emitAt(1300, { response_type: 'eos' });
+    await emitAt(1400, { response_type: 'done' });
+
+    expect(traceService.emitTraceEvents).toHaveBeenCalledTimes(1);
+    const reported = events();
+    expect(reported).toHaveLength(1);
+    expect(reported[0].props).toEqual({
+      schema_version: 1,
+      conversation_id: 'conversation-id',
+      request_id: 'run-id',
+      query_message_id: 'query-id',
+      answer_message_id: rows.get('message-1')!.id,
+      channel: 'web',
+      mode: 'ask',
+      query_received_at: 1000,
+      first_content_token_at: 1200,
+      first_content_token_latency_ms: 200,
+      source: 'server',
+    });
+  });
+
+  it('uses the final round content token across a tool round', async () => {
+    const { emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'early answer' },
+    });
+    await emitAt(1250, {
+      response_type: 'delta',
+      message: { tool_calls: [{ id: 'call-1' }] },
+    });
+    await emitAt(1300, { response_type: 'eos' });
+    await emitAt(1400, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.TOOL,
+    });
+    await emitAt(1500, {
+      response_type: 'delta',
+      message: { content: 'tool output' },
+    });
+    await emitAt(1600, { response_type: 'eos' });
+    await emitAt(1700, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1800, {
+      response_type: 'delta',
+      message: { reasoning_content: 'thinking' },
+    });
+    await emitAt(1900, {
+      response_type: 'delta',
+      message: { content: 'final answer' },
+    });
+    await emitAt(2000, { response_type: 'eos' });
+    await emitAt(2100, { response_type: 'done' });
+
+    const reported = events();
+    expect(reported).toHaveLength(1);
+    expect(reported[0].props.first_content_token_at).toBe(1900);
+    expect(reported[0].props.first_content_token_latency_ms).toBe(900);
+  });
+
+  it('does not report when only an earlier round has content', async () => {
+    const { emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'early answer' },
+    });
+    await emitAt(1300, { response_type: 'eos' });
+    await emitAt(1400, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1500, {
+      response_type: 'delta',
+      message: { reasoning_content: 'thinking' },
+    });
+    await emitAt(1600, { response_type: 'eos' });
+    await emitAt(1700, { response_type: 'done' });
+
+    expect(events()).toHaveLength(0);
+  });
+
+  it('ignores content on a trailing tool message', async () => {
+    const { emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'partial answer' },
+    });
+    await emitAt(1300, { response_type: 'eos' });
+    await emitAt(1400, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.TOOL,
+    });
+    await emitAt(1500, {
+      response_type: 'delta',
+      message: { content: 'tool output' },
+    });
+    await emitAt(1600, { response_type: 'eos' });
+    await emitAt(1700, { response_type: 'done' });
+
+    expect(events()).toHaveLength(0);
+  });
+
+  it('ignores reasoning content before the answer body', async () => {
+    const { emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { reasoning_content: 'thinking' },
+    });
+    await emitAt(1300, {
+      response_type: 'delta',
+      message: { content: 'answer' },
+    });
+    await emitAt(1400, { response_type: 'eos' });
+    await emitAt(1500, { response_type: 'done' });
+
+    const reported = events();
+    expect(reported).toHaveLength(1);
+    expect(reported[0].props.first_content_token_at).toBe(1300);
+  });
+
+  it('does not report an assistant round without content', async () => {
+    const { emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { reasoning_content: 'thinking' },
+    });
+    await emitAt(1300, { response_type: 'eos' });
+    await emitAt(1400, { response_type: 'done' });
+
+    expect(events()).toHaveLength(0);
+  });
+
+  it('does not report a failed run that still receives done', async () => {
+    const { traceService, emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'partial answer' },
+    });
+    await emitAt(1300, { response_type: 'error', message: 'boom' });
+    await emitAt(1400, { response_type: 'done' });
+
+    expect(events()).toHaveLength(0);
+    // The error trace path is independent of the new event.
+    expect(
+      traceService.emitTraceEvents.mock.calls
+        .flatMap(([list]) => list)
+        .filter((event: any) => event.name === 'chat_error'),
+    ).toHaveLength(1);
+  });
+
+  it('does not report an interrupted run', async () => {
+    const { emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'partial answer' },
+      attrs: { tool_call: { interrupts: [{ id: 'interrupt-id' }] } },
+    });
+    await emitAt(1300, { response_type: 'eos' });
+    await emitAt(1400, { response_type: 'done' });
+
+    expect(events()).toHaveLength(0);
+  });
+
+  it('reports only once when done arrives twice', async () => {
+    const { emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'answer' },
+    });
+    await emitAt(1300, { response_type: 'eos' });
+    await emitAt(1400, { response_type: 'done' });
+    await emitAt(1500, { response_type: 'done' });
+
+    expect(events()).toHaveLength(1);
+  });
+
+  it('does not report without a query received timestamp', async () => {
+    const { traceService, context, emitAt, events } = handlerFixture();
+    delete context.queryReceivedAt;
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'answer' },
+    });
+    await emitAt(1300, { response_type: 'eos' });
+    await emitAt(1400, { response_type: 'done' });
+
+    expect(events()).toHaveLength(0);
+    expect(traceService.emitTraceEvents).not.toHaveBeenCalled();
+  });
+
+  it('does not report a truncated stream that never receives eos', async () => {
+    const { emitAt, events } = handlerFixture();
+
+    await emitAt(1100, {
+      response_type: 'bos',
+      role: OpenAIMessageRole.ASSISTANT,
+    });
+    await emitAt(1200, {
+      response_type: 'delta',
+      message: { content: 'answer' },
+    });
+    await emitAt(1300, { response_type: 'done' });
+
+    expect(events()).toHaveLength(0);
   });
 });

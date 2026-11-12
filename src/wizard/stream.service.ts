@@ -84,7 +84,12 @@ interface HandlerContext {
   behavior?: BehaviorContext;
   answerTiming?: AnswerTimingRun;
   timingFinalized?: boolean;
-  lastEos?: { message: Message; endedAt: Date; monotonic: number };
+  lastEos?: {
+    message: Message;
+    endedAt: Date;
+    monotonic: number;
+    firstContentAt?: number;
+  };
   runId?: string;
   failed?: boolean;
   interrupted?: boolean;
@@ -102,6 +107,10 @@ interface HandlerContext {
   clientVersion?: string;
   clientBuild?: string;
   shareId?: string;
+  queryReceivedAt?: number;
+  roundFirstContentAt?: number;
+  mode?: 'ask' | 'write';
+  firstTokenTraceReported?: boolean;
 }
 
 interface StreamSession {
@@ -382,12 +391,17 @@ export class StreamService implements OnModuleDestroy {
     send: (data: string) => Promise<void>,
     chatOnly = false,
     stream?: AgentStream,
-  ): (data: string, context: HandlerContext) => Promise<void> {
+  ): (
+    data: string,
+    context: HandlerContext,
+    receivedAt?: number,
+  ) => Promise<void> {
     const behavior = behaviorContext.getStore();
     let firstTokenRecorded = false;
     const handle = async (
       data: string,
       context: HandlerContext,
+      receivedAt?: number,
     ): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
       if (behavior) context.behavior = behavior;
@@ -397,6 +411,14 @@ export class StreamService implements OnModuleDestroy {
         chunk.response_type === 'query_attrs'
       ) {
         delete chunk.attrs?.answer_timing;
+      }
+      if (
+        chunk.response_type === 'delta' &&
+        chunk.message.content &&
+        context.message?.role === OpenAIMessageRole.ASSISTANT &&
+        context.roundFirstContentAt === undefined
+      ) {
+        context.roundFirstContentAt = receivedAt ?? Date.now();
       }
       if (context.queryId) {
         const turn = await this.messagesService.findOne(context.queryId);
@@ -424,6 +446,7 @@ export class StreamService implements OnModuleDestroy {
       }
       if (chunk.response_type === 'bos') {
         context.lastEos = undefined;
+        context.roundFirstContentAt = undefined;
         if (context.answerTiming)
           chunk.attrs = {
             ...chunk.attrs,
@@ -521,7 +544,12 @@ export class StreamService implements OnModuleDestroy {
           context.failed = true;
           return;
         }
-        context.lastEos = { message, endedAt, monotonic };
+        context.lastEos = {
+          message,
+          endedAt,
+          monotonic,
+          firstContentAt: context.roundFirstContentAt,
+        };
         this.reportCallCompleted(message, stream);
         context.message = message.message;
         context.parentId = message.id;
@@ -604,6 +632,7 @@ export class StreamService implements OnModuleDestroy {
             ?.result(behavior, 'success')
             .catch(() => undefined);
         }
+        this.reportFirstContentTokenTrace(context, last, userId);
       } else if (chunk.response_type === 'metrics') {
         // Do nothing, frontend only
       } else if (chunk.response_type === 'checkpoint') {
@@ -906,6 +935,66 @@ export class StreamService implements OnModuleDestroy {
       .catch((traceError) => this.logger.error({ error: traceError }));
   }
 
+  private reportFirstContentTokenTrace(
+    context: HandlerContext,
+    last: HandlerContext['lastEos'],
+    userId: string,
+  ) {
+    if (!this.traceService) return;
+    if (
+      context.firstTokenTraceReported === true ||
+      context.failed ||
+      context.interrupted ||
+      context.messageId ||
+      !context.queryId ||
+      !context.runId ||
+      context.queryReceivedAt === undefined ||
+      !last ||
+      last.message.message.role !== OpenAIMessageRole.ASSISTANT ||
+      !last.message.message.content?.trim() ||
+      last.message.message.tool_calls?.length ||
+      last.firstContentAt === undefined
+    ) {
+      return;
+    }
+    context.firstTokenTraceReported = true;
+    const queryReceivedAt = context.queryReceivedAt;
+    const firstContentTokenAt = last.firstContentAt;
+    void this.traceService
+      .emitTraceEvents(
+        [
+          {
+            name: 'chat_first_content_token',
+            props: {
+              schema_version: 1,
+              conversation_id: last.message.conversationId,
+              request_id: context.runId,
+              query_message_id: context.queryId,
+              answer_message_id: last.message.id,
+              channel: context.channel,
+              mode: context.mode,
+              query_received_at: queryReceivedAt,
+              first_content_token_at: firstContentTokenAt,
+              first_content_token_latency_ms:
+                firstContentTokenAt - queryReceivedAt,
+              ...(context.shareId ? { share_id: context.shareId } : {}),
+              ...(context.answerTiming?.value.answer_id
+                ? { answer_id: context.answerTiming.value.answer_id }
+                : {}),
+              source: 'server',
+            },
+          },
+        ],
+        {
+          userId,
+          platform: context.platform,
+          clientVersion: context.clientVersion,
+          clientBuild: context.clientBuild,
+        },
+      )
+      .catch((error) => this.logger.error({ error }));
+  }
+
   // An error raised before the agent stream exists (the conversation waits
   // for a decision, is busy, ...) goes to the client as an error chunk it can
   // parse, carrying the exception payload such as message_id and
@@ -1139,6 +1228,7 @@ export class StreamService implements OnModuleDestroy {
     timeZone?: string,
     parentMode: 'latest' | 'explicit' = 'explicit',
     traceContext: ChatClientTraceContext = {},
+    queryReceivedAt?: number,
   ): Promise<Observable<MessageEvent>> {
     const parentId = await this.resolveStreamParent(
       namespaceId,
@@ -1184,6 +1274,7 @@ export class StreamService implements OnModuleDestroy {
         chatOnly,
         timeZone,
         traceContext,
+        queryReceivedAt,
       );
       return this.attachSession(session, subscriber);
     });
@@ -1531,6 +1622,7 @@ export class StreamService implements OnModuleDestroy {
     chatOnly = false,
     timeZone?: string,
     traceContext: ChatClientTraceContext = {},
+    queryReceivedAt?: number,
   ): StreamSession {
     requestId = requestId?.trim() || randomUUID();
     const session: StreamSession = {
@@ -1553,6 +1645,8 @@ export class StreamService implements OnModuleDestroy {
         clientVersion: traceContext.clientVersion,
         clientBuild: traceContext.clientBuild,
         shareId,
+        queryReceivedAt,
+        mode,
       },
       finished: false,
     };
@@ -1698,6 +1792,8 @@ export class StreamService implements OnModuleDestroy {
         clientVersion: session.clientVersion,
         clientBuild: session.clientBuild,
         shareId: session.shareId,
+        queryReceivedAt,
+        mode,
       };
       wizardRequest.query_persisted = true;
       wizardRequest.messages = messages.map((message) => {
@@ -1734,6 +1830,7 @@ export class StreamService implements OnModuleDestroy {
         wizardRequest,
         requestId,
         async (data) => {
+          const chunkReceivedAt = Date.now();
           if (session.finished || session.controller.signal.aborted) return;
           if (await this.isSessionCanceled(session.key)) {
             await this.stopSession(session);
@@ -1750,6 +1847,7 @@ export class StreamService implements OnModuleDestroy {
               ? await this.addNextEventId(session, payload)
               : payload,
             session.handlerContext,
+            chunkReceivedAt,
           );
         },
         session.controller.signal,
@@ -2333,6 +2431,7 @@ export class StreamService implements OnModuleDestroy {
     parentMode: 'latest' | 'explicit' = 'explicit',
     traceContext: ChatClientTraceContext = {},
   ): Promise<Observable<MessageEvent>> {
+    const queryReceivedAt = Date.now();
     try {
       await this.conversationsService.findOneForUserInNamespace(
         requestDto.conversation_id,
@@ -2348,6 +2447,7 @@ export class StreamService implements OnModuleDestroy {
         timeZone,
         parentMode,
         traceContext,
+        queryReceivedAt,
       );
     } catch (e) {
       return this.errorChunkStream(e, {
@@ -2374,6 +2474,7 @@ export class StreamService implements OnModuleDestroy {
     timeZone?: string,
     parentMode: 'latest' | 'explicit' = 'explicit',
     traceContext: ChatClientTraceContext = {},
+    queryReceivedAt?: number,
   ): Promise<Observable<MessageEvent>> {
     for (const tool of requestDto.tools || []) {
       if (tool.name === 'private_search') {
@@ -2395,6 +2496,7 @@ export class StreamService implements OnModuleDestroy {
       timeZone,
       parentMode,
       traceContext,
+      queryReceivedAt,
     );
   }
 
@@ -2406,6 +2508,7 @@ export class StreamService implements OnModuleDestroy {
     timeZone?: string,
     traceContext: ChatClientTraceContext = {},
   ): Promise<Observable<MessageEvent>> {
+    const queryReceivedAt = Date.now();
     try {
       for (const tool of requestDto.tools || []) {
         if (tool.name === 'private_search') {
@@ -2426,6 +2529,7 @@ export class StreamService implements OnModuleDestroy {
         timeZone,
         'explicit',
         traceContext,
+        queryReceivedAt,
       );
     } catch (e) {
       return this.errorChunkStream(e, {
@@ -2449,6 +2553,7 @@ export class StreamService implements OnModuleDestroy {
     mode: 'ask' | 'write' = 'ask',
     parentMode: 'latest' | 'explicit' = 'explicit',
   ): Promise<any> {
+    const queryReceivedAt = Date.now();
     await this.conversationsService.findOneForUserInNamespace(
       body.conversation_id,
       userId,
@@ -2462,6 +2567,8 @@ export class StreamService implements OnModuleDestroy {
       mode,
       undefined,
       parentMode,
+      {},
+      queryReceivedAt,
     );
 
     const chunks: ChatResponse[] = [];

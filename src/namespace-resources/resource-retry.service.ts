@@ -79,6 +79,7 @@ export class ResourceRetryService {
     const staleError = isTaskErrorContent(
       resource.content,
       tasks.filter((task) => PARSE_FUNCTIONS.has(task.function)),
+      this.i18n,
     );
 
     if (retryable.length > 0) {
@@ -163,6 +164,9 @@ export class ResourceRetryService {
       resource.id,
       userId,
       { content: '' },
+      undefined,
+      false,
+      { skipAttribution: true },
     );
   }
 }

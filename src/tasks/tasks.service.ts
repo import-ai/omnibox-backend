@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { context, propagation } from '@opentelemetry/api';
 import { randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
+import { behaviorContext } from 'omniboxd/behavior/behavior-context';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { S3Service } from 'omniboxd/s3/s3.service';
@@ -135,9 +136,34 @@ export class TasksService {
     // it pending forever.
     const unsupported =
       !!data.function && PRO_ONLY_FUNCTIONS.has(data.function) && !this.proUrl;
-    return await repo.save(
+    const behavior = behaviorContext.getStore();
+    const tracked =
+      behavior &&
+      PARSE_FUNCTIONS.has(data.function || '') &&
+      behavior.action_type === 'resource_add' &&
+      behavior.user_id === data.userId;
+    const taskData = this.injectTraceHeaders(data);
+    if (tracked || taskData.payload?.behavior_context) {
+      taskData.payload = {
+        ...taskData.payload,
+        ...(tracked
+          ? {
+              behavior_context: {
+                action_id: behavior.action_id,
+                action_type: behavior.action_type,
+                action_started_at: behavior.action_started_at,
+                origin_platform: behavior.origin_platform,
+                user_id: behavior.user_id,
+              },
+            }
+          : {}),
+        behavior_postprocessed: false,
+        behavior_parse_success: false,
+      };
+    }
+    const task = await repo.save(
       repo.create({
-        ...this.injectTraceHeaders(data),
+        ...taskData,
         priority,
         resourceId: data.resourceId || data.payload?.resource_id,
         ...(unsupported
@@ -152,6 +178,8 @@ export class TasksService {
           : {}),
       }),
     );
+    if (tracked) behavior.task_ids.push(task.id);
+    return task;
   }
 
   async findOldestPendingOrRunningTask(): Promise<Task | null> {
@@ -285,6 +313,25 @@ export class TasksService {
     await this.callTaskHook(task.namespaceId, task.id);
 
     return TaskDto.fromEntity(updatedTask);
+  }
+
+  async checkTaskQuota(
+    taskId: string,
+    request: { task: Record<string, unknown>; quota: Record<string, unknown> },
+  ): Promise<Record<string, unknown>> {
+    if (!this.proUrl) return {};
+    const task = await this.get(taskId);
+    const response = await fetch(
+      `${this.proUrl}/internal/api/v1/namespaces/${task.namespaceId}/tasks/${taskId}/check`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      },
+    );
+    if (!response.ok)
+      throw new Error(`Task quota check failed: ${response.status}`);
+    return response.json();
   }
 
   async callTaskHook(namespaceId: string, taskId: string): Promise<void> {

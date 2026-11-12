@@ -85,6 +85,27 @@ describe('CollectProcessor', () => {
     jest.clearAllMocks();
   });
 
+  it('persists delivered content and generated tags in the delivery transaction', async () => {
+    const tx = { entityManager: {} as any, afterCommitHooks: [] };
+    resourcesService.getResourceOrFail.mockResolvedValue(
+      mockResource as Resource,
+    );
+    tagService.getOrCreateTagsByNames.mockResolvedValue(['tag']);
+    await processor.process(
+      Object.assign(new Task(), {
+        namespaceId: 'test-namespace',
+        userId: 'test-user',
+        payload: { resource_id: 'test-resource-id' },
+        output: { markdown: 'Delivered body', metadata: { tags: ['billing'] } },
+      }),
+      tx,
+    );
+    expect(namespaceResourcesService.update.mock.calls[0][4]?.tx).toBe(tx);
+    expect(tagService.getOrCreateTagsByNames.mock.calls[0][2]).toBe(
+      tx.entityManager,
+    );
+  });
+
   describe('process', () => {
     const createMockTask = (overrides: Partial<Task> = {}): Task => ({
       id: 'test-task-id',
@@ -192,7 +213,10 @@ describe('CollectProcessor', () => {
             parentId: undefined,
             resourceType: undefined,
           },
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({});
       });
@@ -225,7 +249,10 @@ describe('CollectProcessor', () => {
             name: '❌ Test Resource',
             content: message,
           }),
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({});
         expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
@@ -262,7 +289,10 @@ describe('CollectProcessor', () => {
             name: '❌ Test Resource',
             content: message,
           }),
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({});
         expect(resourcesService.getResourceOrFail).toHaveBeenCalledWith(
@@ -292,7 +322,10 @@ describe('CollectProcessor', () => {
           expect.objectContaining({
             name: '❌ Test Resource',
           }),
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
     });
@@ -302,7 +335,7 @@ describe('CollectProcessor', () => {
         const task = createMockTask({
           payload: { resource_id: 'test-resource-id' },
           output: {
-            markdown: '# Test Content',
+            markdown: '# Test Content\n\nA delivered body',
             title: 'Updated Title',
             customAttr: 'custom value',
           },
@@ -326,13 +359,16 @@ describe('CollectProcessor', () => {
           {
             namespaceId: 'test-namespace',
             name: 'Updated Title',
-            content: '# Test Content',
+            content: '# Test Content\n\nA delivered body',
             attrs: {
               url: 'https://example.com',
               customAttr: 'custom value',
             },
           },
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({ resourceId: 'test-resource-id' });
       });
@@ -374,7 +410,10 @@ describe('CollectProcessor', () => {
               url: 'https://updated.com',
             },
           },
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -412,7 +451,10 @@ describe('CollectProcessor', () => {
               newAttr: 'new value',
             },
           },
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -443,7 +485,10 @@ describe('CollectProcessor', () => {
               url: 'https://example.com',
             },
           },
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
       });
 
@@ -475,6 +520,7 @@ describe('CollectProcessor', () => {
         expect(tagService.getOrCreateTagsByNames).toHaveBeenCalledWith(
           'test-namespace',
           ['tag1', 'tag2', 'tag3'],
+          undefined,
         );
         expect(namespaceResourcesService.update).toHaveBeenCalledWith(
           'test-namespace',
@@ -492,7 +538,10 @@ describe('CollectProcessor', () => {
             },
             tag_ids: ['id1', 'id2', 'id3'],
           },
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',
@@ -535,7 +584,10 @@ describe('CollectProcessor', () => {
             },
             tag_ids: undefined,
           },
-          true,
+          expect.objectContaining({
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          }),
         );
         expect(result).toEqual({
           resourceId: 'test-resource-id',
@@ -559,38 +611,12 @@ describe('CollectProcessor', () => {
         expect(namespaceResourcesService.update).not.toHaveBeenCalled();
       });
 
-      it('should handle empty output object', async () => {
-        const task = createMockTask({
-          payload: { resource_id: 'test-resource-id' },
-          output: {},
-        });
-
-        resourcesService.getResourceOrFail.mockResolvedValue(
-          mockResource as Resource,
+      it('rejects output without a deliverable body', async () => {
+        const task = createMockTask({ output: { title: 'No body' } });
+        await expect(processor.process(task)).rejects.toThrow(
+          'Task did not return deliverable content',
         );
-        namespaceResourcesService.update.mockResolvedValue(undefined);
-
-        const result = await processor.process(task);
-
-        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
-          'test-namespace',
-          'test-user',
-          'test-resource-id',
-          {
-            namespaceId: 'test-namespace',
-            name: undefined,
-            content: '',
-            attrs: {
-              url: 'https://example.com',
-            },
-            tag_ids: undefined,
-          },
-          true,
-        );
-        expect(result).toEqual({
-          resourceId: 'test-resource-id',
-          tagIds: undefined,
-        });
+        expect(namespaceResourcesService.update).not.toHaveBeenCalled();
       });
     });
   });

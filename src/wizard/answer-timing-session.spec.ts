@@ -1,3 +1,4 @@
+import { behaviorContext } from 'omniboxd/behavior/behavior-context';
 import {
   Message,
   MessageStatus,
@@ -67,6 +68,7 @@ function fixture() {
     return Promise.resolve(row);
   });
   jest.spyOn(messages, 'indexFinalAssistant').mockResolvedValue(undefined);
+  const behavior = { result: jest.fn(() => Promise.resolve()) };
   const service = new StreamService(
     { get: jest.fn() } as any,
     {} as any,
@@ -79,6 +81,8 @@ function fixture() {
     { t: (key: string) => key } as any,
     { mint: () => '' } as any,
     { onStreamClosed: jest.fn().mockResolvedValue(undefined) } as any,
+    undefined,
+    behavior as any,
   );
   jest.spyOn(service as any, 'startRedisSession').mockResolvedValue(undefined);
   jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
@@ -143,7 +147,7 @@ function fixture() {
     );
     return chunks;
   };
-  return { service, messages, rows, stream, run };
+  return { service, messages, rows, stream, run, behavior };
 }
 
 describe('answer timing execution identity', () => {
@@ -296,4 +300,58 @@ describe('answer timing execution identity', () => {
     expect(rows.get(answer.id)!.attrs!.answer_timing!.status).toBe('stopped');
     expect(rows.get(answer.parentId!)!.attrs!.stopped_runs).toContain(runId);
   });
+});
+
+describe('non-button AI outcome producer', () => {
+  const action = {
+    action_id: 'action',
+    action_type: 'ai_conversation',
+    user_id: 'user',
+    origin_platform: 'ios',
+    action_started_at: '2026-11-10T15:59:00.000Z',
+    task_ids: [],
+  };
+  it('correlates the actual persisted final answer with its original initiation', async () => {
+    const f = fixture();
+    await behaviorContext.run(action, () => f.run('request'));
+    expect(f.behavior.result).toHaveBeenCalledWith(action, 'success');
+    expect([...f.rows.values()].at(-1)?.attrs?.behavior_action_id).toBe(
+      'action',
+    );
+  });
+  it.each(['', ' ', 'tool'])(
+    'does not report an empty or pending-tool answer as success (%p)',
+    async (content) => {
+      const f = fixture();
+      f.stream.mockImplementation(
+        async (_n, _mode, _body, _requestId, emit) => {
+          for (const chunk of [
+            { response_type: 'bos', role: OpenAIMessageRole.ASSISTANT },
+            {
+              response_type: 'delta',
+              message: {
+                content,
+                ...(content === 'tool'
+                  ? {
+                      tool_calls: [
+                        {
+                          id: 'call',
+                          type: 'function',
+                          function: { name: 'tool', arguments: '{}' },
+                        },
+                      ],
+                    }
+                  : {}),
+              },
+            },
+            { response_type: 'eos' },
+            { response_type: 'done' },
+          ])
+            await emit(JSON.stringify(chunk));
+        },
+      );
+      await behaviorContext.run(action, () => f.run('request'));
+      expect(f.behavior.result).not.toHaveBeenCalledWith(action, 'success');
+    },
+  );
 });

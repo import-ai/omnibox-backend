@@ -53,6 +53,7 @@ export class ExtractTagsProcessor extends Processor {
           namespaceId: task.namespaceId,
           tag_ids: tagIds,
         }),
+        { skipAttribution: true },
       );
 
       return { resourceId, tags: tagNames, tagIds };

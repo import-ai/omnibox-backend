@@ -20,6 +20,11 @@ import {
   AgentTokenUsage,
   IAgentStreamHooks,
 } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
+import { BehaviorService } from 'omniboxd/behavior/behavior.service';
+import {
+  type BehaviorContext,
+  behaviorContext,
+} from 'omniboxd/behavior/behavior-context';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
 import {
@@ -76,6 +81,7 @@ type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
 type RedisClient = ReturnType<typeof createClient>;
 
 interface HandlerContext {
+  behavior?: BehaviorContext;
   answerTiming?: AnswerTimingRun;
   timingFinalized?: boolean;
   lastEos?: {
@@ -177,6 +183,7 @@ export class StreamService implements OnModuleDestroy {
     private readonly agentStreamHooks: IAgentStreamHooks,
     @Optional()
     private readonly traceService?: TraceService,
+    @Optional() private readonly behaviorService?: BehaviorService,
   ) {}
 
   async onModuleDestroy() {
@@ -389,6 +396,7 @@ export class StreamService implements OnModuleDestroy {
     context: HandlerContext,
     receivedAt?: number,
   ) => Promise<void> {
+    const behavior = behaviorContext.getStore();
     let firstTokenRecorded = false;
     const handle = async (
       data: string,
@@ -396,6 +404,7 @@ export class StreamService implements OnModuleDestroy {
       receivedAt?: number,
     ): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
+      if (behavior) context.behavior = behavior;
       if (
         chunk.response_type === 'bos' ||
         chunk.response_type === 'delta' ||
@@ -458,6 +467,7 @@ export class StreamService implements OnModuleDestroy {
             parentId: context.parentId,
             attrs: {
               ...chunk.attrs,
+              ...(behavior ? { behavior_action_id: behavior.action_id } : {}),
               ...(context.queryId
                 ? { turn_id: context.queryId, turn_run_id: context.runId }
                 : {}),
@@ -608,6 +618,20 @@ export class StreamService implements OnModuleDestroy {
               : undefined,
           );
         }
+        if (
+          behavior &&
+          behavior.user_id === userId &&
+          !context.failed &&
+          !context.interrupted &&
+          !context.messageId &&
+          last?.message.message.role === OpenAIMessageRole.ASSISTANT &&
+          last.message.message.content?.trim() &&
+          !last.message.message.tool_calls?.length
+        ) {
+          await this.behaviorService
+            ?.result(behavior, 'success')
+            .catch(() => undefined);
+        }
         this.reportFirstContentTokenTrace(context, last, userId);
       } else if (chunk.response_type === 'metrics') {
         // Do nothing, frontend only
@@ -623,6 +647,10 @@ export class StreamService implements OnModuleDestroy {
         }
         await this.messagesService.saveCheckpoint(messageId, chunk);
       } else if (chunk.response_type === 'error') {
+        if (behavior)
+          void this.behaviorService
+            ?.result(behavior, 'failed')
+            .catch(() => undefined);
         const failedAt = new Date();
         context.failed = true;
         this.reportChatErrorTrace(chunk, {
@@ -1842,6 +1870,11 @@ export class StreamService implements OnModuleDestroy {
     chatOnly: boolean,
   ) {
     if (message.message.role === OpenAIMessageRole.SYSTEM) return;
+    // Replayed chunks carry attrs from the stored row; the per-call context is
+    // server-side observability only and must not reach clients. Copy first so
+    // the persisted attrs stay untouched.
+    const attrs = message.attrs ? { ...message.attrs } : undefined;
+    if (attrs) delete attrs.context;
     for (const chunk of [
       {
         response_type: 'bos',
@@ -1851,13 +1884,13 @@ export class StreamService implements OnModuleDestroy {
         parentId: message.parentId || undefined,
         userId: session.userId || undefined,
         namespaceId: session.namespaceId,
-        attrs: message.attrs || undefined,
+        attrs,
       },
       {
         response_type: 'delta',
         id: message.id,
         message: message.message,
-        attrs: message.attrs || undefined,
+        attrs,
       },
       { response_type: 'eos', id: message.id, role: message.message.role },
     ] as ChatResponse[]) {
@@ -2166,6 +2199,10 @@ export class StreamService implements OnModuleDestroy {
             }
           : undefined,
       );
+      if (session.handlerContext.behavior)
+        await this.behaviorService
+          ?.result(session.handlerContext.behavior, 'cancelled')
+          .catch(() => undefined);
       const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
       if (message?.attrs?.answer_timing) {
         await this.sendSessionData(

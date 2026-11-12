@@ -47,6 +47,11 @@ With relevance disabled, the same engine skips judgment calls, not snapshot stat
 The representative-chunk policy is global and deterministic; it does not promise
 that every chunk of a rejected resource will be reconsidered.
 
+The judgment request explicitly maps candidate content, scope and offsets to the
+Wizard wire format. It omits unused timestamps: the display DTO stores Date
+objects, while Wizard expects Unix seconds. Do not serialize the display DTO back
+into a judgment request, including after a cached snapshot is restored.
+
 Before returning or replaying a confirmed page, current permissions and resource
 existence are rechecked. Losing a confirmed resource invalidates the session.
 Its old response must not be replayed, and the client starts a new search explicitly.

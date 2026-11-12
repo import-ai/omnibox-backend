@@ -5,7 +5,7 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import type { SearchSnapshot } from 'omniboxd/search/search-session.types';
 import { WizardAgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
-import { ChunkDto, IndexRecordDto } from 'omniboxd/wizard/dto/index-record.dto';
+import { IndexRecordDto } from 'omniboxd/wizard/dto/index-record.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { SearchResponseDto } from 'omniboxd/wizard/dto/search-response.dto';
 import {
@@ -230,7 +230,17 @@ export class WizardAPIService {
           type: record.type,
           namespace_id: record.namespaceId,
           user_id: record.userId,
-          chunk: instanceToPlain(Object.assign(new ChunkDto(), record.chunk)),
+          // Judgment needs content, scope and offsets, not the display DTO's dates.
+          chunk: record.chunk && {
+            title: record.chunk.title,
+            resource_id: record.chunk.resourceId,
+            text: record.chunk.text,
+            chunk_type: record.chunk.chunkType,
+            parent_id: record.chunk.parentId,
+            chunk_id: record.chunk.chunkId,
+            start_index: record.chunk.startIndex,
+            end_index: record.chunk.endIndex,
+          },
         })),
       },
       {},

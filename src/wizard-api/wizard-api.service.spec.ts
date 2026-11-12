@@ -98,59 +98,69 @@ describe('buildWizardRequestHeaders', () => {
 });
 
 describe('snapshot wire contract', () => {
-  it('consumes the real Python response and serializes cached candidates back to snake_case', async () => {
-    const mock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(wire),
-      } as any)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            decisions: ['kept'],
-            policy_signature: wire.policy_signature,
-          }),
-      } as any);
-    const service = new WizardAPIService(
-      { getBaseUrl: () => Promise.resolve('http://wizard') } as any,
-      { t: (key: string) => key } as any,
-    );
-    try {
-      const snapshot = await service.recallSearchSnapshot(
-        { query: '610', namespace_id: 'n', user_id: 'u' },
-        AbortSignal.timeout(1000),
+  it.each([false, true])(
+    'serializes only judgment inputs (cached=%s)',
+    async (useCache) => {
+      const mock = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(wire),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              decisions: ['kept'],
+              policy_signature: wire.policy_signature,
+            }),
+        } as any);
+      const service = new WizardAPIService(
+        { getBaseUrl: () => Promise.resolve('http://wizard') } as any,
+        { t: (key: string) => key } as any,
       );
-      expect(snapshot.records[0].chunk?.resourceId).toBe('resource-a');
-      const cached = JSON.parse(JSON.stringify(snapshot));
-      const result = await service.judgeSearchCandidates(
-        {
-          query: '610',
+      try {
+        const snapshot = await service.recallSearchSnapshot(
+          { query: '610', namespace_id: 'n', user_id: 'u' },
+          AbortSignal.timeout(1000),
+        );
+        expect(snapshot.records[0].chunk?.resourceId).toBe('resource-a');
+        const cached = useCache
+          ? JSON.parse(JSON.stringify(snapshot))
+          : snapshot;
+        const result = await service.judgeSearchCandidates(
+          {
+            query: '610',
+            namespace_id: 'n',
+            user_id: 'u',
+            recall_depth: 200,
+            policy_signature: snapshot.policySignature,
+            records: cached.records,
+            timeout_ms: 1000,
+          },
+          AbortSignal.timeout(1000),
+        );
+        expect(result.decisions).toEqual(['kept']);
+        const body = JSON.parse(mock.mock.calls[1][1]!.body as string);
+        expect(body.records[0]).toEqual({
+          type: 'chunk',
           namespace_id: 'n',
           user_id: 'u',
-          recall_depth: 200,
-          policy_signature: snapshot.policySignature,
-          records: cached.records,
-          timeout_ms: 1000,
-        },
-        AbortSignal.timeout(1000),
-      );
-      expect(result.decisions).toEqual(['kept']);
-      const body = JSON.parse(mock.mock.calls[1][1]!.body as string);
-      expect(body.records[0]).toMatchObject({
-        namespace_id: 'n',
-        user_id: 'u',
-        chunk: {
-          resource_id: 'resource-a',
-          parent_id: 'root',
-          chunk_id: 'chunk-a',
-          text: 'immutable snippet',
-        },
-      });
-      expect(body.records[0].chunk).not.toHaveProperty('resourceId');
-    } finally {
-      mock.mockRestore();
-    }
-  });
+          chunk: {
+            title: '610 title',
+            resource_id: 'resource-a',
+            chunk_type: 'doc',
+            parent_id: 'root',
+            chunk_id: 'chunk-a',
+            text: 'immutable snippet',
+            start_index: null,
+            end_index: null,
+          },
+        });
+        expect(body.records[0].chunk).not.toHaveProperty('resourceId');
+      } finally {
+        mock.mockRestore();
+      }
+    },
+  );
 });

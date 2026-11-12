@@ -94,7 +94,14 @@ export class BehaviorInterceptor implements NestInterceptor {
                       context.task_ids.length === 0 &&
                       context.changed !== false
                     )
-                      await this.behavior.result(context, 'success');
+                      await this.behavior.result(
+                        context,
+                        request.originalUrl
+                          .split('?')[0]
+                          .endsWith('/resources/batch-folder') && !id
+                          ? 'failed'
+                          : 'success',
+                      );
                   })().catch(() => undefined);
                 }
                 subscriber.next(value);

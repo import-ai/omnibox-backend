@@ -55,6 +55,28 @@ export function buildTaskErrorContent(
     return exceptionError;
   }
 
+  if (
+    exceptionCode === 'FILE_SIZE_LIMIT_EXCEEDED' ||
+    rawDetails?.code === 'FILE_SIZE_LIMIT_EXCEEDED'
+  ) {
+    const limit = Number(rawDetails?.limit_amount);
+    const language = lang ?? task.payload?.user?.options?.language;
+    const resolvedLang =
+      typeof language === 'string' && language.startsWith('zh') ? 'zh' : 'en';
+    const key =
+      Number.isFinite(limit) && limit > 0
+        ? 'fileSizeLimitExceeded'
+        : 'fileSizeLimitExceededUnknown';
+    return (
+      i18n?.t(`task.errors.${key}`, {
+        lang: resolvedLang,
+        args: { limit: (limit / 1024 / 1024).toLocaleString(resolvedLang) },
+      }) ??
+      exceptionError ??
+      'error'
+    );
+  }
+
   if (exceptionType === 'InsufficientQuotaError' && rawDetails) {
     const details = plainToInstance(QuotaExceptionDetailsDto, rawDetails, {
       enableImplicitConversion: true,

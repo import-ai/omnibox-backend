@@ -14,7 +14,7 @@ export class NamespaceUsageDto {
   taskParallelism: number = 1;
 
   @Expose({ name: 'file_upload_size_limit' })
-  fileUploadSizeLimit: number = 20 * 1024 * 1024; // 20MB
+  fileUploadSizeLimit: number = 10 * 1024 * 1024;
 
   @Expose({ name: 'trash_retention_days' })
   trashRetentionDays: number = 7;

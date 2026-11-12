@@ -43,7 +43,9 @@ export class NamespacesQuotaService {
     const data = await response.json();
     // Fields absent from an older backend-pro's response fall back to the
     // NamespaceUsageDto property defaults.
-    return plainToInstance(NamespaceUsageDto, data);
+    return plainToInstance(NamespaceUsageDto, data, {
+      exposeDefaultValues: true,
+    });
   }
 
   async batchGetNamespaceParallelism(

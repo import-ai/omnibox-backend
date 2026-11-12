@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
+import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { OpenResourcesService } from 'omniboxd/namespace-resources/open-resources.service';
 import {
   isReadOnlyResourceType,
@@ -18,6 +20,7 @@ export class OpenSearchService {
     private readonly wizardApiService: WizardAPIService,
     private readonly openResourcesService: OpenResourcesService,
     private readonly resourcesService: ResourcesService,
+    private readonly i18n: I18nService,
   ) {}
 
   async search(
@@ -36,6 +39,16 @@ export class OpenSearchService {
     searchRequest.offset = offset;
     searchRequest.limit = limit;
     const result = await this.wizardApiService.search(searchRequest);
+    // Array clients cannot distinguish an unfinished short page from exhaustion.
+    if (result?.hasMore === true && (result.records?.length ?? 0) < limit) {
+      throw new AppException(
+        this.i18n.t('system.errors.requestFailed', {
+          args: { status: HttpStatus.SERVICE_UNAVAILABLE },
+        }),
+        'SEARCH_PENDING',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
     const resourceIds: string[] = [];
     const seenResourceIds = new Set<string>();
 

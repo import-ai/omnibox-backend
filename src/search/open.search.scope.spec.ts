@@ -33,6 +33,7 @@ describe('Open search combined scope', () => {
     wizard as never,
     openResources,
     resources as never,
+    { t: () => 'retry' } as never,
   );
   beforeEach(() => {
     resources.batchGetParentResources.mockResolvedValue(

@@ -30,6 +30,13 @@ V1 cannot isolate identical searches in separate windows or guarantee continuity
 after implicit-session expiry. The new Web uses V2 for semantic queries and keeps
 numeric-total database-only filter searches compatible.
 
+The Open API `GET /open/api/v1/search` retains its legacy array response. When
+Wizard reports `has_more=true` but fewer records than the requested limit, the
+adapter returns retryable `search_pending` (503), including partially filled
+pages, instead of presenting unfinished evaluation as an exhausted result.
+A full page may still be returned while further work remains. Terminal empty
+results and older Wizard responses without continuation metadata stay compatible.
+
 ## Ordering and judgment
 
 All enabled Weaviate branches must succeed before the snapshot is published. The

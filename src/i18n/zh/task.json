@@ -7,7 +7,7 @@
     "invalidTaskPayload": "无效的任务载荷",
     "retryAlreadyRunning": "该资源仍有任务正在执行中",
     "nothingToRetry": "该资源没有需要重试的失败或已取消任务",
-    "insufficientCredits": "积分不足。本次解析需要 {requested} 积分，当前可用 {remaining} 积分。",
+    "insufficientCredits": "猫粮不足。本次解析需要 {requested} 猫粮，当前可用 {remaining} 猫粮。",
     "fileSizeLimitExceeded": "文件大小超出单次上传上限 {limit} MB，请拆分或压缩文件后重试。",
     "fileSizeLimitExceededUnknown": "文件大小超出单次上传上限，请拆分或压缩文件后重试。"
   }

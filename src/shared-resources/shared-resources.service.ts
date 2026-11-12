@@ -10,6 +10,7 @@ import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
+import { supportsResourceAttribution } from 'omniboxd/resources/resource-contributors';
 import { ResourceContributorsService } from 'omniboxd/resources/resource-contributors.service';
 import {
   ResourceSortBy,
@@ -88,7 +89,7 @@ export class SharedResourcesService {
     const tags = await this.getTagsForResource(share.namespaceId, resource);
     const path = await this.getResourcePath(share, resource, timeZone);
     const dto = SharedResourceDto.fromEntity(resource, tags, path);
-    if (resource.resourceType === ResourceType.DOC) {
+    if (supportsResourceAttribution(resource.resourceType)) {
       const attribution = await this.resourceContributorsService.present(
         share.namespaceId,
         resource.id,

@@ -286,9 +286,6 @@ export class OpenResourcesService {
       userId,
       resourceId,
       updateData,
-      false,
-      undefined,
-      undefined,
       { preserveAttrsOrigin: true },
     );
     return await this.namespaceResourcesService.getResource({

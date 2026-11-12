@@ -1,3 +1,8 @@
+import {
+  isContentResourceType,
+  ResourceType,
+} from './entities/resource.entity';
+
 export function contributorLabel(input: {
   nickname?: string | null;
   username?: string | null;
@@ -78,4 +83,15 @@ export function formerContributorLabel(input: {
       userId: input.userId,
     })
   );
+}
+
+/**
+ * Resource types whose detail view exposes a creator and collaborators.
+ * Folders and feed items are containers or externally authored content, so
+ * they keep the phase-one behavior of showing no attribution.
+ */
+export function supportsResourceAttribution(
+  resourceType: ResourceType,
+): boolean {
+  return isContentResourceType(resourceType);
 }

@@ -2702,4 +2702,93 @@ describe('StreamService persisted error codes', () => {
       });
     });
   });
+
+  describe('replay of a saved message context', () => {
+    const savedMessage = () => ({
+      id: 'message-id',
+      parentId: 'parent-id',
+      conversationId: 'conversation-id',
+      status: MessageStatus.SUCCESS,
+      createdAt: new Date('2026-11-11T08:00:00.000Z'),
+      message: { role: 'assistant', content: 'answer' },
+      attrs: {
+        answer_timing: { started_at: '2026-11-11T08:00:00.000Z' },
+        citations: [{ title: 'citation' }],
+        usage: { prompt_tokens: 10 },
+        compact: { status: 'compacted' },
+        context: {
+          provider: 'agent_pro',
+          call: { chain_id: 'chain-1' },
+          checkpoint: { context_snapshot: { version: 1 } },
+        },
+      },
+    });
+
+    function replayableService() {
+      const service = createService({});
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+      return service;
+    }
+
+    function session() {
+      return {
+        key: 'stream-key',
+        namespaceId: 'namespace-id',
+        userId: 'user-id',
+        finished: false,
+        events: [] as string[],
+        subscribers: [] as unknown[],
+      };
+    }
+
+    it('drops context from replay chunks and leaves the stored attrs alone', async () => {
+      const service = replayableService();
+      const target = session();
+      const saved = savedMessage();
+
+      await (service as any).sendSavedMessage(target, saved, false);
+
+      const chunks = target.events.map((event) => JSON.parse(event));
+      expect(chunks.map((chunk) => chunk.response_type)).toEqual([
+        'bos',
+        'delta',
+        'eos',
+      ]);
+      for (const chunk of chunks.slice(0, 2)) {
+        expect(chunk.attrs).toEqual({
+          answer_timing: saved.attrs.answer_timing,
+          citations: saved.attrs.citations,
+          usage: saved.attrs.usage,
+          compact: saved.attrs.compact,
+        });
+        expect('context' in chunk.attrs).toBe(false);
+      }
+      expect(chunks[2]).not.toHaveProperty('attrs');
+
+      expect(saved.attrs.context).toEqual({
+        provider: 'agent_pro',
+        call: { chain_id: 'chain-1' },
+        checkpoint: { context_snapshot: { version: 1 } },
+      });
+      expect(saved.attrs.citations).toEqual([{ title: 'citation' }]);
+    });
+
+    it('drops context for chat-only replay and keeps the other filters', async () => {
+      const service = replayableService();
+      const target = session();
+
+      await (service as any).sendSavedMessage(target, savedMessage(), true);
+
+      const [bos, delta] = target.events.map((event) => JSON.parse(event));
+      for (const chunk of [bos, delta]) {
+        expect(chunk.attrs).toEqual({
+          answer_timing: { started_at: '2026-11-11T08:00:00.000Z' },
+          usage: { prompt_tokens: 10 },
+          compact: { status: 'compacted' },
+        });
+        expect('context' in chunk.attrs).toBe(false);
+        expect('citations' in chunk.attrs).toBe(false);
+      }
+    });
+  });
 });

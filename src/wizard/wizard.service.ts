@@ -2,6 +2,8 @@ import { buffer } from 'node:stream/consumers';
 
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { trace } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
 import { AttachmentsService } from 'omniboxd/attachments/attachments.service';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
@@ -17,6 +19,7 @@ import { PARSE_FUNCTIONS, TasksService } from 'omniboxd/tasks/tasks.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { Transaction, transaction } from 'omniboxd/utils/transaction-utils';
 import { CompressedCollectRequestDto } from 'omniboxd/wizard/dto/collect-request.dto';
 import { CollectUrlResponseDto } from 'omniboxd/wizard/dto/collect-url-request.dto';
 import {
@@ -31,6 +34,7 @@ import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { ReaderProcessor } from 'omniboxd/wizard/processors/reader.processor';
 import { Image, ProcessedImage } from 'omniboxd/wizard/types/wizard.types';
 import { IsNull } from 'typeorm';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { createGunzip } from 'zlib';
 
 import { TempfileDto } from './dto/tempfile.dto';
@@ -279,6 +283,19 @@ export class WizardService {
       );
       return { taskId: task.id, function: task.function };
     }
+    if (
+      [
+        TaskStatus.FINISHED,
+        TaskStatus.ERROR,
+        TaskStatus.TIMEOUT,
+        TaskStatus.CANCELED,
+        TaskStatus.INSUFFICIENT_QUOTA,
+      ].includes(task.status)
+    ) {
+      if (task.payload?.delivery_pending) await this.deliverTask(task.id);
+      await this.tasksService.callTaskHook(task.namespaceId, task.id);
+      return { taskId: task.id, function: task.function };
+    }
     if (task.status !== TaskStatus.RUNNING) {
       this.logger.warn(
         `Ignoring callback for task ${task.id}; status is ${task.status}, not running`,
@@ -319,6 +336,19 @@ export class WizardService {
       task.status = TaskStatus.ERROR;
     } else {
       task.status = TaskStatus.FINISHED;
+    }
+
+    if (
+      task.status === TaskStatus.FINISHED &&
+      this.processors[task.function] instanceof CollectProcessor &&
+      (typeof task.output?.markdown !== 'string' ||
+        !task.output.markdown.trim())
+    ) {
+      task.status = TaskStatus.ERROR;
+      task.exception = {
+        type: 'EmptyTaskOutput',
+        code: 'NO_DELIVERABLE_CONTENT',
+      };
     }
 
     if (
@@ -363,6 +393,11 @@ export class WizardService {
         exception: task.exception,
         output: task.output,
         status: task.status,
+        payload: {
+          ...task.payload,
+          delivery_pending: task.status === TaskStatus.FINISHED,
+          delivery_next_tasks: nextTasks,
+        } as QueryDeepPartialEntity<Task['payload']>,
       },
     );
     if (!affected) {
@@ -371,7 +406,9 @@ export class WizardService {
       );
       return { taskId: task.id, function: task.function };
     }
-    await this.tasksService.callTaskHook(task.namespaceId, task.id);
+    if (task.status !== TaskStatus.FINISHED) {
+      await this.tasksService.callTaskHook(task.namespaceId, task.id);
+    }
 
     const cost: number = task.endedAt.getTime() - task.startedAt.getTime();
     const wait: number = task.startedAt.getTime() - task.createdAt.getTime();
@@ -382,36 +419,146 @@ export class WizardService {
       return { taskId: task.id, function: task.function, status: 'canceled' };
     }
 
-    const postprocessResult = await this.postprocess(task);
-
-    if (task.status === TaskStatus.FINISHED && nextTasks.length > 0) {
-      await this.dispatchNextTasks(task, nextTasks);
-    }
-
-    if (task.payload?.behavior_context) {
-      await this.wizardTaskService.taskRepository
-        .query(
-          `UPDATE tasks SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object('behavior_postprocessed', true, 'behavior_parse_success', $2::boolean) WHERE id = $1`,
-          [
-            task.id,
-            Boolean(
-              postprocessResult.resourceId &&
-              ((typeof task.output?.markdown === 'string' &&
-                task.output.markdown.trim()) ||
-                (['collect_url', 'web_analysis'].includes(task.function) &&
-                  typeof task.output?.title === 'string' &&
-                  task.output.title.trim())),
-            ),
-          ],
-        )
-        .catch(() => undefined);
-    }
+    const postprocessResult =
+      task.status === TaskStatus.FINISHED
+        ? await this.deliverTask(task.id)
+        : await this.postprocess(task);
     return { taskId: task.id, function: task.function, ...postprocessResult };
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async recoverDeliveries(): Promise<void> {
+    const tasks = await this.wizardTaskService.taskRepository
+      .createQueryBuilder('task')
+      .where("task.payload ->> 'delivery_pending' = 'true'")
+      .andWhere('task.status = :status', { status: TaskStatus.FINISHED })
+      .orderBy('task.endedAt', 'ASC')
+      .take(100)
+      .getMany();
+    for (const task of tasks) {
+      try {
+        await this.deliverTask(task.id);
+      } catch (error) {
+        trace.getActiveSpan()?.recordException(error as Error);
+      }
+    }
+  }
+
+  private async deliverTask(taskId: string): Promise<Record<string, any>> {
+    let result: Record<string, any>;
+    try {
+      result = await transaction(
+        this.wizardTaskService.taskRepository.manager,
+        async (tx) => {
+          const manager = tx.entityManager;
+          const [{ locked }] = await manager.query(
+            'SELECT pg_try_advisory_xact_lock(hashtextextended($1, 3108)) AS locked',
+            [taskId],
+          );
+          if (!locked) return {};
+          const task = await manager
+            .getRepository(Task)
+            .findOneByOrFail({ id: taskId });
+          if (
+            task.status !== TaskStatus.FINISHED ||
+            !task.payload?.delivery_pending
+          )
+            return {};
+          if (task.canceledAt) {
+            task.payload.delivery_pending = false;
+            await manager.save(task);
+            return {};
+          }
+          const output = await this.postprocess(task, tx);
+          await this.dispatchNextTasks(
+            task,
+            task.payload.delivery_next_tasks ?? [],
+            tx,
+          );
+          task.payload = {
+            ...task.payload,
+            credits_delivered: true,
+            delivery_pending: false,
+            ...(task.payload?.behavior_context
+              ? {
+                  behavior_postprocessed: true,
+                  behavior_parse_success: Boolean(
+                    output.resourceId &&
+                    ((typeof task.output?.markdown === 'string' &&
+                      task.output.markdown.trim()) ||
+                      (['collect_url', 'web_analysis'].includes(
+                        task.function,
+                      ) &&
+                        typeof task.output?.title === 'string' &&
+                        task.output.title.trim())),
+                  ),
+                }
+              : {}),
+          };
+          delete task.payload.delivery_next_tasks;
+          await manager.save(task);
+          return output;
+        },
+      );
+    } catch (error) {
+      await this.wizardTaskService.taskRepository.manager.transaction(
+        async (manager) => {
+          await manager.query(
+            'SELECT pg_advisory_xact_lock(hashtextextended($1, 3108))',
+            [taskId],
+          );
+          const task = await manager
+            .getRepository(Task)
+            .findOneByOrFail({ id: taskId });
+          if (
+            task.status !== TaskStatus.FINISHED ||
+            !task.payload?.delivery_pending
+          )
+            return;
+          const attempts = Number(task.payload.delivery_attempts ?? 0) + 1;
+          const status =
+            error instanceof AppException ? error.getStatus() : undefined;
+          const terminal =
+            task.canceledAt ||
+            status === 403 ||
+            status === 404 ||
+            attempts >= 5;
+          task.payload = {
+            ...task.payload,
+            delivery_attempts: attempts,
+            delivery_pending: !terminal,
+          };
+          if (terminal) {
+            task.status = task.canceledAt
+              ? TaskStatus.CANCELED
+              : TaskStatus.ERROR;
+            task.exception = {
+              type: 'DeliveryFailed',
+              code: 'DELIVERY_FAILED',
+            };
+            delete task.payload.delivery_next_tasks;
+          }
+          await manager.save(task);
+        },
+      );
+      const failed =
+        await this.wizardTaskService.taskRepository.findOneByOrFail({
+          id: taskId,
+        });
+      await this.tasksService.callTaskHook(failed.namespaceId, taskId);
+      throw error;
+    }
+    const task = await this.wizardTaskService.taskRepository.findOneByOrFail({
+      id: taskId,
+    });
+    await this.tasksService.callTaskHook(task.namespaceId, taskId);
+    return result;
   }
 
   private async dispatchNextTasks(
     parentTask: Task,
     nextTasks: NextTaskRequestDto[],
+    tx?: Transaction,
   ): Promise<void> {
     for (const nextTask of nextTasks) {
       try {
@@ -423,24 +570,27 @@ export class WizardService {
             html_s3_key: await this.tasksService.uploadHtmlToS3(html),
           };
         }
-        const createdTask = await this.tasksService.emitTask({
-          namespaceId: parentTask.namespaceId,
-          userId: parentTask.userId,
-          priority:
-            nextTask.priority !== undefined
-              ? numberToBigintString(nextTask.priority)
-              : parentTask.priority,
-          function: nextTask.function,
-          input,
-          payload: {
-            ...nextTask.payload,
-            parent_task_id: parentTask.id,
-            ...(PARSE_FUNCTIONS.has(nextTask.function) &&
-            parentTask.payload?.behavior_context
-              ? { behavior_context: parentTask.payload.behavior_context }
-              : {}),
+        const createdTask = await this.tasksService.emitTask(
+          {
+            namespaceId: parentTask.namespaceId,
+            userId: parentTask.userId,
+            priority:
+              nextTask.priority !== undefined
+                ? numberToBigintString(nextTask.priority)
+                : parentTask.priority,
+            function: nextTask.function,
+            input,
+            payload: {
+              ...nextTask.payload,
+              parent_task_id: parentTask.id,
+              ...(PARSE_FUNCTIONS.has(nextTask.function) &&
+              parentTask.payload?.behavior_context
+                ? { behavior_context: parentTask.payload.behavior_context }
+                : {}),
+            },
           },
-        });
+          tx,
+        );
         this.logger.debug({
           parentTaskId: parentTask.id,
           parentTaskFunction: parentTask.function,
@@ -448,22 +598,21 @@ export class WizardService {
           nextTaskFunction: nextTask.function,
         });
       } catch (error) {
-        this.logger.error({
-          parentTaskId: parentTask.id,
-          parentTaskFunction: parentTask.function,
-          nextTaskFunction: nextTask.function,
-          error,
-        });
+        trace.getActiveSpan()?.recordException(error as Error);
+        throw error;
       }
     }
   }
 
-  async postprocess(task: Task): Promise<Record<string, any>> {
+  async postprocess(
+    task: Task,
+    tx?: Transaction,
+  ): Promise<Record<string, any>> {
     let result: Record<string, any> = {};
 
     if (task.function in this.processors) {
       const processor = this.processors[task.function];
-      result = await processor.process(task);
+      result = await processor.process(task, tx);
     }
     return result;
   }

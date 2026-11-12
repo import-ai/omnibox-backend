@@ -391,3 +391,143 @@ describe('NamespaceResourcesService', () => {
     });
   });
 });
+
+describe('NamespaceResourcesService.getResource attribution', () => {
+  const namespaceId = 'namespace-1';
+  const resourceId = 'resource-id';
+  const userId = 'user-1';
+
+  function createService() {
+    const namespaceRepository = { count: jest.fn().mockResolvedValue(1) };
+    const resourcesService = {
+      getResourceOrFail: jest.fn(),
+      getParentResourcesOrFail: jest.fn().mockResolvedValue([
+        {
+          id: 'root-id',
+          name: 'Team space',
+          parentId: null,
+          resourceType: ResourceType.FOLDER,
+        },
+      ]),
+    };
+    const permissionsService = {
+      getCurrentPermission: jest
+        .fn()
+        .mockResolvedValue(ResourcePermission.CAN_EDIT),
+    };
+    const tagService = { getTagsByIds: jest.fn().mockResolvedValue([]) };
+    const resourceCommentQueriesService = {
+      getResourceCommentData: jest.fn().mockResolvedValue({
+        mention_display_names: {},
+        content_hash: 'hash',
+        comment_threads: [],
+      }),
+    };
+    const resourceContributorsService = {
+      present: jest.fn().mockResolvedValue({
+        creator: {
+          label: 'creator',
+          initial: 'C',
+          tone: 'tone-1',
+          interactive: true,
+        },
+        collaborators: [
+          {
+            label: 'editor',
+            initial: 'E',
+            tone: 'tone-2',
+            interactive: true,
+          },
+        ],
+      }),
+    };
+    const service = new NamespaceResourcesService(
+      {} as any,
+      namespaceRepository as any,
+      tagService as any,
+      {} as any,
+      {} as any,
+      permissionsService as any,
+      {} as any,
+      resourceCommentQueriesService as any,
+      {} as any,
+      resourcesService as any,
+      {} as any,
+      { t: jest.fn((key: string) => key) } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      resourceContributorsService as any,
+    );
+    return { service, resourcesService, resourceContributorsService };
+  }
+
+  function resourceFixture(resourceType: ResourceType) {
+    return {
+      id: resourceId,
+      namespaceId,
+      parentId: 'root-id',
+      name: 'Resource',
+      resourceType,
+      content: '',
+      version: 1,
+      userId: 'creator-id',
+      attrs: {},
+      tagIds: [],
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+  }
+
+  it.each([ResourceType.LINK, ResourceType.FILE])(
+    'exposes the creator and collaborators of a %s resource',
+    async (resourceType) => {
+      const { service, resourcesService, resourceContributorsService } =
+        createService();
+      resourcesService.getResourceOrFail.mockResolvedValue(
+        resourceFixture(resourceType),
+      );
+
+      const result = await service.getResource({
+        userId,
+        namespaceId,
+        resourceId,
+      });
+
+      expect(resourceContributorsService.present).toHaveBeenCalledWith(
+        namespaceId,
+        resourceId,
+        true,
+      );
+      expect(result.creator).toEqual(
+        expect.objectContaining({ label: 'creator' }),
+      );
+      expect(result.collaborators).toEqual([
+        expect.objectContaining({ label: 'editor' }),
+      ]);
+    },
+  );
+
+  it.each([ResourceType.FOLDER, ResourceType.RSS_ITEM])(
+    'keeps %s resources without attribution',
+    async (resourceType) => {
+      const { service, resourcesService, resourceContributorsService } =
+        createService();
+      resourcesService.getResourceOrFail.mockResolvedValue(
+        resourceFixture(resourceType),
+      );
+
+      const result = await service.getResource({
+        userId,
+        namespaceId,
+        resourceId,
+      });
+
+      expect(resourceContributorsService.present).not.toHaveBeenCalled();
+      expect(result.creator).toBeNull();
+      expect(result.collaborators).toEqual([]);
+    },
+  );
+});

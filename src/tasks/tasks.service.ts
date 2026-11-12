@@ -287,6 +287,25 @@ export class TasksService {
     return TaskDto.fromEntity(updatedTask);
   }
 
+  async checkTaskQuota(
+    taskId: string,
+    request: { task: Record<string, unknown>; quota: Record<string, unknown> },
+  ): Promise<Record<string, unknown>> {
+    if (!this.proUrl) return {};
+    const task = await this.get(taskId);
+    const response = await fetch(
+      `${this.proUrl}/internal/api/v1/namespaces/${task.namespaceId}/tasks/${taskId}/check`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      },
+    );
+    if (!response.ok)
+      throw new Error(`Task quota check failed: ${response.status}`);
+    return response.json();
+  }
+
   async callTaskHook(namespaceId: string, taskId: string): Promise<void> {
     if (!this.proUrl) {
       return;

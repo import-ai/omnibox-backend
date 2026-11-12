@@ -112,41 +112,12 @@ describe('ReaderProcessor', () => {
     });
 
     describe('markdown processing', () => {
-      it('should process task when output has no markdown', async () => {
-        const task = createMockTask({
-          output: { title: 'Test Document' },
-        });
-
-        resourcesService.getResourceOrFail.mockResolvedValue(
-          mockResource as Resource,
+      it('rejects output without a deliverable body', async () => {
+        const task = createMockTask({ output: { title: 'No body' } });
+        await expect(processor.process(task)).rejects.toThrow(
+          'Task did not return deliverable content',
         );
-        namespaceResourcesService.update.mockResolvedValue(undefined);
-
-        const result = await processor.process(task);
-
-        expect(result).toEqual({
-          resourceId: 'test-resource-id',
-          tagIds: undefined,
-        });
-        expect(resourcesService.getResourceOrFail).toHaveBeenCalled();
-        expect(namespaceResourcesService.update).toHaveBeenCalledWith(
-          'test-namespace',
-          'test-user',
-          'test-resource-id',
-          {
-            namespaceId: 'test-namespace',
-            name: 'Test Document',
-            content: '',
-            attrs: {
-              filename: 'test.pdf',
-            },
-            tag_ids: undefined,
-          },
-          expect.objectContaining({
-            autoRenameOnConflict: true,
-            skipAttribution: true,
-          }),
-        );
+        expect(namespaceResourcesService.update).not.toHaveBeenCalled();
       });
 
       it('should return empty object when output is null', async () => {

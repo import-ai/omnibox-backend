@@ -7,6 +7,7 @@ import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { isEmpty } from 'omniboxd/utils/is-empty';
+import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { prefixFailedResourceName } from 'omniboxd/wizard/processors/failed-resource-name';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
 import { buildTaskErrorContent } from 'omniboxd/wizard/processors/task-error-content';
@@ -22,7 +23,7 @@ export class CollectProcessor extends Processor {
     super();
   }
 
-  async process(task: Task): Promise<Record<string, any>> {
+  async process(task: Task, tx?: Transaction): Promise<Record<string, any>> {
     const resourceId = task.payload?.resource_id || task.payload?.resourceId;
     if (!resourceId) {
       const message = this.i18n.t('wizard.errors.invalidTaskPayload');
@@ -33,7 +34,7 @@ export class CollectProcessor extends Processor {
       );
     }
     if (task.exception && !isEmpty(task.exception)) {
-      const content = buildTaskErrorContent(task);
+      const content = buildTaskErrorContent(task, this.i18n);
       const resource = await this.resourcesService.getResourceOrFail(
         task.namespaceId,
         resourceId,
@@ -51,11 +52,15 @@ export class CollectProcessor extends Processor {
           // The error content renames the resource and may collide.
           autoRenameOnConflict: true,
           skipAttribution: true,
+          tx,
         },
       );
       return {};
     } else if (task.output) {
       const { markdown, title, ...attrs } = task.output || {};
+      if (typeof markdown !== 'string' || !markdown.trim()) {
+        throw new Error('Task did not return deliverable content');
+      }
       delete attrs.images; // Remove images which is only required for task
 
       let tagIds: string[] | undefined = undefined;
@@ -65,6 +70,7 @@ export class CollectProcessor extends Processor {
         tagIds = await this.tagService.getOrCreateTagsByNames(
           task.namespaceId,
           tags,
+          tx?.entityManager,
         );
       }
 
@@ -99,6 +105,7 @@ export class CollectProcessor extends Processor {
           // AI-generated titles may collide with an existing resource.
           autoRenameOnConflict: true,
           skipAttribution: true,
+          tx,
         },
       );
       return { resourceId, tagIds };

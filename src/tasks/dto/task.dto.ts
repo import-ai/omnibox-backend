@@ -15,6 +15,7 @@ class TaskDtoBase {
   canceled_at: string | null;
   resource_id?: string;
   retried_from_task_id: string | null;
+  failure_code?: string;
 
   protected static setValue(obj: TaskDtoBase, task: Task) {
     obj.id = task.id;
@@ -30,6 +31,16 @@ class TaskDtoBase {
     obj.canceled_at = task.canceledAt?.toISOString() || null;
     obj.resource_id = task.resourceId || task.payload?.resource_id;
     obj.retried_from_task_id = task.retriedFromTaskId ?? null;
+    const code = task.exception?.details?.code ?? task.exception?.code;
+    if (
+      [
+        'INSUFFICIENT_CREDITS',
+        'FILE_SIZE_LIMIT_EXCEEDED',
+        'DOC_PARSE_LIMIT_EXCEEDED',
+        'VIDEO_AUDIO_PARSE_LIMIT_EXCEEDED',
+      ].includes(code)
+    )
+      obj.failure_code = code;
   }
 }
 

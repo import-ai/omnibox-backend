@@ -1,5 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
+import { I18nService } from 'nestjs-i18n';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { isEmpty } from 'omniboxd/utils/is-empty';
 
@@ -35,7 +36,11 @@ function formatDuration(seconds?: number): string {
   return `${minutes} 分钟 ${remain} 秒`;
 }
 
-export function buildTaskErrorContent(task: Task): string {
+export function buildTaskErrorContent(
+  task: Task,
+  i18n?: I18nService,
+  lang?: string,
+): string {
   const exceptionType = (task.exception as any)?.type;
   const exceptionCode = (task.exception as any)?.code;
   const exceptionError = (task.exception as any)?.error;
@@ -82,6 +87,22 @@ export function buildTaskErrorContent(task: Task): string {
       return `当前 ${resourceLabel} 的${valueLabel}为 ${requestedStr}，超出单次解析的上限：${limitStr}`;
     }
 
+    if (details.code === 'INSUFFICIENT_CREDITS') {
+      const format = (amount?: number) => {
+        const credits = (amount ?? 0) / 1_000_000;
+        return credits > 0 && credits < 0.01 ? '< 0.01' : credits.toFixed(2);
+      };
+      return (
+        i18n?.t('task.errors.insufficientCredits', {
+          lang,
+          args: {
+            requested: format(details.requestedAmount),
+            remaining: format(details.remainingAmount),
+          },
+        }) ?? 'error'
+      );
+    }
+
     if (details.code === 'INSUFFICIENT_QUOTA') {
       return `当前 ${resourceLabel} 的${valueLabel}为 ${requestedStr}，当前剩余额度为：${remainingStr}`;
     }
@@ -105,7 +126,11 @@ export function buildTaskErrorContent(task: Task): string {
  * resource. Only such content may be discarded on retry: anything else is
  * either real parsed content or a user edit.
  */
-export function isTaskErrorContent(content: string, tasks: Task[]): boolean {
+export function isTaskErrorContent(
+  content: string,
+  tasks: Task[],
+  i18n?: I18nService,
+): boolean {
   const trimmed = content.trim();
   if (!trimmed) {
     return false;
@@ -114,6 +139,8 @@ export function isTaskErrorContent(content: string, tasks: Task[]): boolean {
     (task) =>
       task.exception &&
       !isEmpty(task.exception) &&
-      buildTaskErrorContent(task).trim() === trimmed,
+      [undefined, 'zh', 'en'].some(
+        (lang) => buildTaskErrorContent(task, i18n, lang).trim() === trimmed,
+      ),
   );
 }

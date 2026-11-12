@@ -29,17 +29,32 @@ export interface SearchSnapshot {
   policySignature: string;
 }
 
+// Confirmed hits are stored as snapshot positions plus display metadata. The
+// matched text stays in the snapshot and is rehydrated per response, so a
+// session never holds a second copy of it.
+export type SessionResourceItem = Omit<IndexedResourceDto, 'content'>;
+
+export interface ConfirmedResource {
+  index: number;
+  item: SessionResourceItem;
+}
+
+// Bumped when the persisted session state shape changes; a session written by
+// an older backend is treated as expired instead of being read as this shape.
+export const SESSION_STATE_VERSION = 2;
+
 export interface SessionState {
+  version: number;
   fingerprint: string;
   query: string;
   depth: number;
   snapshot: SearchSnapshot;
   cursor: number;
-  confirmed: IndexedResourceDto[];
+  confirmed: ConfirmedResource[];
   articles: string[];
   decisions: Record<
     number,
-    { status: 'kept' | 'rejected' | 'pending'; item?: IndexedResourceDto }
+    { status: 'kept' | 'rejected' | 'pending'; item?: SessionResourceItem }
   >;
   attempts: Record<number, number>;
   failed?: string;

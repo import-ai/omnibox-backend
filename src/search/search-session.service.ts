@@ -25,8 +25,11 @@ import { DocType } from './doc-type.enum';
 import { IndexedResourceDto } from './dto/indexed-doc.dto';
 import { SearchSessionError, SearchSessionStore } from './search-session.store';
 import {
+  ConfirmedResource,
+  SESSION_STATE_VERSION,
   SessionPage,
   SessionPagination,
+  SessionResourceItem,
   SessionState,
 } from './search-session.types';
 
@@ -82,7 +85,8 @@ export class SearchSessionService {
         id,
         async (cached, save) => {
           let state = cached;
-          span?.setAttribute('search.snapshot_cache_hit', cached !== null);
+          if (state && state.version !== SESSION_STATE_VERSION) state = null;
+          span?.setAttribute('search.snapshot_cache_hit', state !== null);
           if (!state) {
             if (version2 && page.searchId)
               throw new SearchSessionError('SEARCH_SESSION_EXPIRED', 410);
@@ -126,6 +130,7 @@ export class SearchSessionService {
               return true;
             });
             state = {
+              version: SESSION_STATE_VERSION,
               fingerprint,
               query,
               depth: configuredDepth,
@@ -175,8 +180,11 @@ export class SearchSessionService {
             const end =
               replay?.end ??
               Math.min(state.confirmed.length, page.offset + page.limit);
-            const items = state.confirmed.slice(page.offset, end);
-            await this.validateConfirmed(items, userId, namespaceId);
+            const confirmed = state.confirmed.slice(page.offset, end);
+            await this.validateConfirmed(confirmed, userId, namespaceId);
+            const items = confirmed.map((entry) =>
+              this.toResourceItem(state, entry),
+            );
             const status =
               replay?.status ??
               (state.cursor >= state.snapshot.records.length
@@ -340,7 +348,7 @@ export class SearchSessionService {
           const identity = getArticleIdentity(decision.item);
           if (identity === null || !state.articles.includes(identity)) {
             if (identity !== null) state.articles.push(identity);
-            state.confirmed.push(decision.item);
+            state.confirmed.push({ index: state.cursor, item: decision.item });
           }
         }
         delete state.decisions[state.cursor];
@@ -366,7 +374,7 @@ export class SearchSessionService {
     records: IndexRecordDto[],
     userId: string,
     namespaceId: string,
-  ): Promise<Map<string, IndexedResourceDto>> {
+  ): Promise<Map<string, SessionResourceItem>> {
     const ids = records.flatMap((r) => (r.chunk ? [r.chunk.resourceId] : []));
     if (!ids.length) return new Map();
     const metadata = await this.resources.batchGetParentResources(
@@ -378,7 +386,7 @@ export class SearchSessionService {
       namespaceId,
       [...metadata.values()],
     );
-    const items = new Map<string, IndexedResourceDto>();
+    const items = new Map<string, SessionResourceItem>();
     for (const record of records) {
       const chunk = record.chunk!;
       const resource = metadata.get(chunk.resourceId);
@@ -394,7 +402,6 @@ export class SearchSessionService {
         id: record.id || chunk.chunkId,
         resourceId: chunk.resourceId,
         title: chunk.title || this.i18n.t('system.untitled'),
-        content: chunk.text || '',
         attrs: resource.attrs || {},
         resourceType: resource.resourceType || ResourceType.DOC,
         readOnly: isReadOnlyResourceType(
@@ -405,15 +412,26 @@ export class SearchSessionService {
     return items;
   }
 
+  private toResourceItem(
+    state: SessionState,
+    { index, item }: ConfirmedResource,
+  ): IndexedResourceDto {
+    return {
+      ...item,
+      content: state.snapshot.records[index]?.chunk?.text || '',
+    };
+  }
+
   private async validateConfirmed(
-    items: IndexedResourceDto[],
+    items: ConfirmedResource[],
     userId: string,
     namespaceId: string,
   ) {
     if (!items.length) return;
+    const resourceIds = items.map((entry) => entry.item.resourceId);
     const metadata = await this.resources.batchGetParentResources(
       namespaceId,
-      items.map((i) => i.resourceId),
+      resourceIds,
     );
     const permissions = await this.permissions.getCurrentPermissions(
       userId,
@@ -421,12 +439,12 @@ export class SearchSessionService {
       [...metadata.values()],
     );
     if (
-      items.some(
-        (item) =>
-          !metadata.has(item.resourceId) ||
-          !permissions.get(item.resourceId) ||
+      resourceIds.some(
+        (resourceId) =>
+          !metadata.has(resourceId) ||
+          !permissions.get(resourceId) ||
           comparePermission(
-            permissions.get(item.resourceId)!,
+            permissions.get(resourceId)!,
             ResourcePermission.CAN_VIEW,
           ) < 0,
       )

@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import {
@@ -26,11 +27,13 @@ const record = (id: string, chunkId = id): IndexRecordDto => ({
 function fixture(
   records = Array.from({ length: 75 }, (_, i) => record('r' + i)),
   enabled = false,
+  configOverrides: Record<string, string> = {},
 ) {
   const config = new ConfigService({
     ENV: 'test',
     OBB_REDIS_URL: '',
     OBB_SEARCH_RECALL_DEPTH: 200,
+    ...configOverrides,
   });
   const store = new SearchSessionStore(config);
   const hidden = new Set<string>();
@@ -213,6 +216,20 @@ it('rejects expired explicit sessions without silently rebuilding', async () => 
   expect(f.wizard.recallSearchSnapshot).not.toHaveBeenCalled();
 });
 
+it('treats a state written by an older storage format as expired', async () => {
+  const f = fixture([record('A')]);
+  const first = await f.page();
+  const owner = createHash('sha256')
+    .update(JSON.stringify(['u', 'n']))
+    .digest('hex');
+  await f.store.exclusive(owner, first.searchId, (_, save) =>
+    save({ fingerprint: 'legacy', confirmed: [] }),
+  );
+  await expect(f.page(0, first.searchId, 'legacy')).rejects.toMatchObject({
+    code: 'SEARCH_SESSION_EXPIRED',
+  });
+});
+
 it('skips stale unconfirmed resources but invalidates revoked confirmed resources on replay', async () => {
   const f = fixture([record('deleted'), record('A')]);
   f.hidden.add('deleted');
@@ -328,4 +345,38 @@ it('does not invoke a judgment unless its attempt reservation is durable', async
   );
   await expect(f.page()).rejects.toMatchObject({ code: 'SEARCH_UNAVAILABLE' });
   expect(f.wizard.judgeSearchCandidates).not.toHaveBeenCalled();
+});
+
+it('keeps a depth-400 snapshot and its confirmed hits under the durable size bound', async () => {
+  // The measured depth-400 probe is 781 chunks / ~1.45 MB of matched text.
+  // Confirmed hits must reference those chunks rather than copy their text, so
+  // the whole session stays under the pre-existing 2 MiB bound.
+  const text = 'x'.repeat(1_850);
+  const records = Array.from({ length: 781 }, (_, i) => {
+    const item = record('r' + i);
+    item.chunk!.text = text;
+    return item;
+  });
+  const f = fixture(records, false, {
+    OBB_SEARCH_SESSION_MAX_BYTES: String(2 * 1024 * 1024),
+    OBB_SEARCH_RECALL_DEPTH: '400',
+  });
+  let offset = 0;
+  let searchId: string | undefined;
+  let received = 0;
+  for (let request = 0; ; request++) {
+    const page = await f.service.paginate('u', 'n', 'q', null, {
+      offset,
+      limit: 20,
+      paginationVersion: 2,
+      searchId,
+      requestId: `size-${request}`,
+    });
+    expect(page.items[0].content).toBe(text);
+    searchId = page.searchId;
+    received += page.items.length;
+    if (!page.hasMore) break;
+    offset = page.nextOffset;
+  }
+  expect(received).toBe(781);
 });

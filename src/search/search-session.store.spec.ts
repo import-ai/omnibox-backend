@@ -50,13 +50,58 @@ it('fences a retired writer when per-owner capacity replaces its session', async
 
 it('bounds snapshot and replay state size', async () => {
   const store = new SearchSessionStore(
-    new ConfigService({ ENV: 'test', OBB_REDIS_URL: '' }),
+    new ConfigService({
+      ENV: 'test',
+      OBB_REDIS_URL: '',
+      OBB_SEARCH_SESSION_MAX_BYTES: '1024',
+    }),
   );
   await expect(
-    store.exclusive('u', 's', (_, save) =>
-      save({ text: 'x'.repeat(2 * 1024 * 1024) }),
-    ),
+    store.exclusive('u', 's', (_, save) => save({ text: 'x'.repeat(1024) })),
   ).rejects.toMatchObject({ code: 'SEARCH_CAPACITY' });
+});
+
+it('evicts the globally oldest session instead of failing new ones', async () => {
+  const now = jest.spyOn(Date, 'now').mockReturnValue(1000);
+  const store = new SearchSessionStore(
+    new ConfigService({
+      ENV: 'test',
+      OBB_REDIS_URL: '',
+      OBB_SEARCH_SESSION_MAX_SESSIONS: '2',
+    }),
+  );
+  try {
+    await store.exclusive('first', 's', (_, save) => save({ cursor: 1 }));
+    now.mockReturnValue(2000);
+    await store.exclusive('second', 's', (_, save) => save({ cursor: 2 }));
+    now.mockReturnValue(3000);
+    await store.exclusive('third', 's', (_, save) => save({ cursor: 3 }));
+    await store.exclusive('first', 's', (value) => {
+      expect(value).toBeNull();
+      return Promise.resolve();
+    });
+    for (const owner of ['second', 'third'])
+      await store.exclusive(owner, 's', (value) => {
+        expect(value).toEqual({ cursor: expect.any(Number) });
+        return Promise.resolve();
+      });
+  } finally {
+    now.mockRestore();
+    store.onModuleDestroy();
+  }
+});
+
+it('rejects non-positive session bound configuration', () => {
+  expect(
+    () =>
+      new SearchSessionStore(
+        new ConfigService({
+          ENV: 'test',
+          OBB_REDIS_URL: '',
+          OBB_SEARCH_SESSION_MAX_SESSIONS: '0',
+        }),
+      ),
+  ).toThrow('SEARCH_CONFIGURATION_INVALID');
 });
 
 it('requires explicit local memory and never permits production fallback', () => {

@@ -13,15 +13,31 @@ export class SearchSessionError extends Error {
 }
 
 const TTL_MS = 120_000;
-const MAX_BYTES = 2 * 1024 * 1024;
-const MAX_SESSIONS = 100;
-const MAX_USER_SESSIONS = 3;
+const DEFAULT_MAX_BYTES = 4 * 1024 * 1024;
+const DEFAULT_MAX_SESSIONS = 1000;
+const DEFAULT_MAX_USER_SESSIONS = 3;
 const LOCK_MS = 30_000;
+
+const positiveInteger = (
+  config: ConfigService,
+  key: string,
+  fallback: number,
+): number => {
+  const raw = config.get(key);
+  if (raw === undefined || raw === null || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1)
+    throw new SearchSessionError('SEARCH_CONFIGURATION_INVALID');
+  return value;
+};
 
 @Injectable()
 export class SearchSessionStore implements OnModuleDestroy {
   private readonly redis?: Redis;
   private readonly prefix: string;
+  private readonly maxBytes: number;
+  private readonly maxSessions: number;
+  private readonly maxUserSessions: number;
   private readonly memory = new Map<
     string,
     { owner: string; value: string; expires: number }
@@ -30,6 +46,21 @@ export class SearchSessionStore implements OnModuleDestroy {
 
   constructor(config: ConfigService) {
     this.prefix = `${config.get('ENV', 'unknown')}:search-snapshot:`;
+    this.maxBytes = positiveInteger(
+      config,
+      'OBB_SEARCH_SESSION_MAX_BYTES',
+      DEFAULT_MAX_BYTES,
+    );
+    this.maxSessions = positiveInteger(
+      config,
+      'OBB_SEARCH_SESSION_MAX_SESSIONS',
+      DEFAULT_MAX_SESSIONS,
+    );
+    this.maxUserSessions = positiveInteger(
+      config,
+      'OBB_SEARCH_SESSION_MAX_USER_SESSIONS',
+      DEFAULT_MAX_USER_SESSIONS,
+    );
     const url = config.get<string>('OBB_REDIS_URL');
     const nodeEnv = config.get('NODE_ENV', process.env.NODE_ENV);
     const memoryAllowed =
@@ -87,24 +118,36 @@ export class SearchSessionStore implements OnModuleDestroy {
         : this.memory.get(key)?.value;
       const save = async (value: T) => {
         const serialized = JSON.stringify(value);
-        if (Buffer.byteLength(serialized) > MAX_BYTES)
+        if (Buffer.byteLength(serialized) > this.maxBytes)
           throw new SearchSessionError('SEARCH_CAPACITY', 429);
+        const savedAt = Date.now();
         if (this.redis) {
           const result = await this.redis.eval(
             `
+            local prefix = ARGV[8]
+            local function drop(sessionKey)
+              redis.call('DEL', sessionKey, sessionKey .. ':lock')
+              redis.call('ZREM', KEYS[3], sessionKey)
+              local rest = string.sub(sessionKey, string.len(prefix) + 1)
+              local sep = string.find(rest, ':', 1, true)
+              if sep then
+                redis.call('ZREM', prefix .. 'owner:' .. string.sub(rest, 1, sep - 1), sessionKey)
+              end
+            end
             if redis.call('GET', KEYS[2]) ~= ARGV[1] then return -1 end
             redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', ARGV[3])
             redis.call('ZREMRANGEBYSCORE', KEYS[4], '-inf', ARGV[3])
             if not redis.call('GET', KEYS[1]) then
-              if redis.call('ZCARD', KEYS[4]) >= tonumber(ARGV[6]) then
+              while redis.call('ZCARD', KEYS[4]) >= tonumber(ARGV[6]) do
                 local oldest = redis.call('ZRANGE', KEYS[4], 0, 0)[1]
-                if oldest then
-                  redis.call('DEL', oldest, oldest .. ':lock')
-                  redis.call('ZREM', KEYS[3], oldest)
-                  redis.call('ZREM', KEYS[4], oldest)
-                end
+                if not oldest then break end
+                drop(oldest)
               end
-              if redis.call('ZCARD', KEYS[3]) >= tonumber(ARGV[5]) then return -2 end
+              while redis.call('ZCARD', KEYS[3]) >= tonumber(ARGV[5]) do
+                local oldest = redis.call('ZRANGE', KEYS[3], 0, 0)[1]
+                if not oldest then break end
+                drop(oldest)
+              end
             end
             redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[7])
             redis.call('ZADD', KEYS[3], ARGV[4], KEYS[1])
@@ -119,41 +162,27 @@ export class SearchSessionStore implements OnModuleDestroy {
             this.prefix + 'owner:' + owner,
             token,
             serialized,
-            Date.now(),
-            Date.now() + TTL_MS,
-            MAX_SESSIONS,
-            MAX_USER_SESSIONS,
+            savedAt,
+            savedAt + TTL_MS,
+            this.maxSessions,
+            this.maxUserSessions,
             TTL_MS,
+            this.prefix,
           );
           if (result !== 1)
-            throw new SearchSessionError(
-              result === -2 ? 'SEARCH_CAPACITY' : 'SEARCH_SESSION_BUSY',
-              result === -2 ? 429 : 409,
-            );
+            throw new SearchSessionError('SEARCH_SESSION_BUSY', 409);
         } else {
           if (this.locks.get(key) !== token)
             throw new SearchSessionError('SEARCH_SESSION_BUSY', 409);
           if (!this.memory.has(key)) {
-            const owned = [...this.memory.entries()]
-              .filter(([, entry]) => entry.owner === owner)
-              .sort((a, b) => a[1].expires - b[1].expires);
-            if (owned.length >= MAX_USER_SESSIONS) {
-              this.memory.delete(owned[0][0]);
-              this.locks.delete(owned[0][0]);
-            }
-          }
-          if (
-            !this.memory.has(key) &&
-            (this.memory.size >= MAX_SESSIONS ||
-              [...this.memory.values()].filter((e) => e.owner === owner)
-                .length >= MAX_USER_SESSIONS)
-          ) {
-            throw new SearchSessionError('SEARCH_CAPACITY', 429);
+            this.evictOwnerSessions(owner);
+            while (this.memory.size >= this.maxSessions)
+              this.evictOldestSession();
           }
           this.memory.set(key, {
             owner,
             value: serialized,
-            expires: Date.now() + TTL_MS,
+            expires: savedAt + TTL_MS,
           });
         }
       };
@@ -168,5 +197,27 @@ export class SearchSessionStore implements OnModuleDestroy {
         );
       } else if (this.locks.get(key) === token) this.locks.delete(key);
     }
+  }
+
+  private evictSession(key: string) {
+    this.memory.delete(key);
+    this.locks.delete(key);
+  }
+
+  private evictOwnerSessions(owner: string) {
+    for (;;) {
+      const owned = [...this.memory.entries()]
+        .filter(([, entry]) => entry.owner === owner)
+        .sort((a, b) => a[1].expires - b[1].expires);
+      if (owned.length < this.maxUserSessions) return;
+      this.evictSession(owned[0][0]);
+    }
+  }
+
+  private evictOldestSession() {
+    const oldest = [...this.memory.entries()].sort(
+      (a, b) => a[1].expires - b[1].expires,
+    )[0];
+    if (oldest) this.evictSession(oldest[0]);
   }
 }

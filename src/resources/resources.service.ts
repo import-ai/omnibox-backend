@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
+import { behaviorContext } from 'omniboxd/behavior/behavior-context';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { File } from 'omniboxd/files/entities/file.entity';
 import { FilesService } from 'omniboxd/files/files.service';
@@ -856,6 +857,12 @@ export class ResourcesService {
         'RESOURCE_NOT_FOUND',
         HttpStatus.NOT_FOUND,
       );
+    }
+    const behavior = behaviorContext.getStore();
+    if (behavior?.action_type === 'resource_edit') {
+      behavior.changed =
+        (props.name !== undefined && props.name !== oldResource.name) ||
+        (props.content !== undefined && props.content !== oldResource.content);
     }
 
     if (!options?.internal) {

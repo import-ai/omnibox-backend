@@ -90,4 +90,25 @@ describe('Open search combined scope', () => {
       ).map((hit) => hit.resourceId),
     ).toEqual(['mine']);
   });
+  it('returns a short page as a plain array without a pending error', async () => {
+    wizard.search.mockResolvedValue({
+      records: [
+        {
+          id: 'chunk-0',
+          type: IndexRecordType.CHUNK,
+          chunk: { resourceId: 'mine', text: 'mine', title: 'mine' },
+        },
+      ],
+      hasMore: true,
+    });
+    expect(
+      (await service.search(key as never, 'query', { limit: 100 })).map(
+        (hit) => hit.resourceId,
+      ),
+    ).toEqual(['mine']);
+  });
+  it('returns an empty array when nothing matches', async () => {
+    wizard.search.mockResolvedValue({ records: [] });
+    await expect(service.search(key as never, 'query')).resolves.toEqual([]);
+  });
 });

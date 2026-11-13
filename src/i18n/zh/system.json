@@ -1,4 +1,5 @@
 {
+  "untitled": "无标题",
   "errors": {
     "missingWizardBaseUrl": "需要环境变量 OBB_WIZARD_BASE_URL",
     "firstMessageNotSystem": "首条消息不是系统消息",

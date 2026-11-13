@@ -55,6 +55,9 @@ export class SearchController {
       {
         offset: data.offset,
         limit: data.limit,
+        paginationVersion: data.paginationVersion,
+        searchId: data.searchId,
+        requestId: data.requestId,
       },
     );
   }

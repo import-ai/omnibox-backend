@@ -16,6 +16,23 @@ import {
 import { DocType } from '../doc-type.enum';
 
 export class SearchRequestDto {
+  @Expose({ name: 'pagination_version' })
+  @IsInt()
+  @Min(1)
+  @Max(2)
+  @IsOptional()
+  paginationVersion?: number;
+
+  @Expose({ name: 'search_id' })
+  @IsString()
+  @IsOptional()
+  searchId?: string;
+
+  @Expose({ name: 'request_id' })
+  @IsString()
+  @IsOptional()
+  requestId?: string;
+
   @IsString()
   @IsOptional()
   query?: string;

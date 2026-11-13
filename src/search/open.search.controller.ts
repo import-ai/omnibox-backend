@@ -40,11 +40,6 @@ export class OpenSearchController {
     description: 'Resource search results retrieved successfully',
     type: [IndexedResourceDto],
   })
-  @ApiResponse({
-    status: 503,
-    description:
-      'Search evaluation is unfinished; retry the same query and offset',
-  })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async search(

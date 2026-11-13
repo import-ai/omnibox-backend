@@ -346,8 +346,6 @@ describe('SearchController (e2e)', () => {
       return {
         records: result.records,
         recallTruncated: false,
-        relevanceEnabled: false,
-        policySignature: 'test',
       };
     });
 

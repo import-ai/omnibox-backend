@@ -43,8 +43,6 @@ export interface SessionPage {
 export interface SearchSnapshot {
   records: IndexRecordDto[];
   recallTruncated: boolean;
-  relevanceEnabled: boolean;
-  policySignature: string;
 }
 
 // Confirmed hits are stored as snapshot positions plus display metadata. The
@@ -59,7 +57,7 @@ export interface ConfirmedResource {
 
 // Bumped when the persisted session state shape changes; a session written by
 // an older backend is treated as expired instead of being read as this shape.
-export const SESSION_STATE_VERSION = 2;
+export const SESSION_STATE_VERSION = 3;
 
 export interface SessionState {
   version: number;
@@ -70,11 +68,6 @@ export interface SessionState {
   cursor: number;
   confirmed: ConfirmedResource[];
   articles: string[];
-  decisions: Record<
-    number,
-    { status: 'kept' | 'rejected' | 'pending'; item?: SessionResourceItem }
-  >;
-  attempts: Record<number, number>;
   failed?: string;
   requests: Record<
     string,

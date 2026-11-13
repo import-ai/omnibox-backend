@@ -260,11 +260,11 @@ describe('paginateV1', () => {
 
   it('maps engine failures to wire errors', async () => {
     const engine = engineWith(
-      new SearchSessionError('SEARCH_JUDGMENT_FAILED', 503),
+      new SearchSessionError('SEARCH_SESSION_INVALIDATED', 409),
     );
     const error = await rejection(paginateV1(engine, i18n, v1Request()));
-    expect(error.getResponse().code).toBe('search_judgment_failed');
-    expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE);
+    expect(error.getResponse().code).toBe('search_session_invalidated');
+    expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
   });
 });
 

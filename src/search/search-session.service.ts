@@ -32,9 +32,7 @@ import {
 } from './search-session.types';
 
 const REQUEST_BUDGET_MS = 10_000;
-const JUDGE_BUDGET_MS = 3000;
 const MAX_SCANNED = 200;
-const MAX_ATTEMPTS = 3;
 const BATCH_SIZE = 32;
 
 @Injectable()
@@ -75,8 +73,6 @@ export class SearchSessionService {
               ? {
                   records: [],
                   recallTruncated: false,
-                  relevanceEnabled: false,
-                  policySignature: 'empty',
                 }
               : await this.wizard.recallSearchSnapshot(
                   {
@@ -113,8 +109,6 @@ export class SearchSessionService {
             cursor: 0,
             confirmed: [],
             articles: [],
-            decisions: {},
-            attempts: {},
             requests: {},
           };
           await save(state);
@@ -151,7 +145,6 @@ export class SearchSessionService {
               params.namespaceId,
               params.offset + params.limit,
               deadline,
-              save,
             );
           }
           const end =
@@ -208,9 +201,7 @@ export class SearchSessionService {
         } catch (error) {
           if (
             error instanceof SearchSessionError &&
-            ['SEARCH_SESSION_INVALIDATED', 'SEARCH_JUDGMENT_FAILED'].includes(
-              error.code,
-            )
+            error.code === 'SEARCH_SESSION_INVALIDATED'
           )
             state.failed = error.code;
           throw error;
@@ -227,10 +218,8 @@ export class SearchSessionService {
     namespaceId: string,
     wanted: number,
     deadline: number,
-    persist: (value: SessionState) => Promise<void>,
   ) {
     let scanned = 0;
-    const attempted = new Set<number>();
     while (
       state.confirmed.length < wanted &&
       state.cursor < state.snapshot.records.length &&
@@ -243,96 +232,21 @@ export class SearchSessionService {
         state.snapshot.records.length,
         start + MAX_SCANNED - scanned,
       );
-      const indexes = Array.from({ length: end - start }, (_, i) => start + i);
-      const unresolved = indexes.filter(
-        (i) => !state.decisions[i] || state.decisions[i].status === 'pending',
-      );
-      if (unresolved.some((i) => attempted.has(i))) break;
-      const records = unresolved.map((i) => state.snapshot.records[i]);
+      const records = state.snapshot.records.slice(start, end);
       const visible = await this.visibleItems(records, userId, namespaceId);
-      const judgeIndexes: number[] = [];
-      for (let n = 0; n < unresolved.length; n++) {
-        const i = unresolved[n],
-          record = records[n];
+      for (let index = start; index < end; index++) {
+        const record = state.snapshot.records[index];
         const item = visible.get(record.chunk!.resourceId);
-        if (!item) state.decisions[i] = { status: 'rejected' };
-        else if (!state.snapshot.relevanceEnabled)
-          state.decisions[i] = { status: 'kept', item };
-        else judgeIndexes.push(i);
-      }
-      if (judgeIndexes.length) {
-        if (Date.now() >= deadline) break;
-        for (const i of judgeIndexes) {
-          if ((state.attempts[i] || 0) >= MAX_ATTEMPTS)
-            throw new SearchSessionError('SEARCH_JUDGMENT_FAILED');
-          state.attempts[i] = (state.attempts[i] || 0) + 1;
-          attempted.add(i);
+        if (!item) continue;
+        const identity = getArticleIdentity(item);
+        if (identity !== null) {
+          if (state.articles.includes(identity)) continue;
+          state.articles.push(identity);
         }
-        await persist(state);
-        let decisions: string[];
-        try {
-          const result = await this.wizard.judgeSearchCandidates(
-            {
-              query: state.query,
-              namespace_id: namespaceId,
-              user_id: userId,
-              recall_depth: state.depth,
-              policy_signature: state.snapshot.policySignature,
-              records: judgeIndexes.map((i) => state.snapshot.records[i]),
-              timeout_ms: Math.max(
-                1,
-                Math.min(JUDGE_BUDGET_MS, deadline - Date.now()),
-              ),
-            },
-            AbortSignal.timeout(Math.max(1, deadline - Date.now())),
-          );
-          if (result.policy_signature !== state.snapshot.policySignature)
-            throw new SearchSessionError('SEARCH_SESSION_INVALIDATED', 409);
-          if (
-            result.decisions.length !== judgeIndexes.length ||
-            result.decisions.some(
-              (d) => !['kept', 'rejected', 'pending'].includes(d),
-            )
-          )
-            throw new Error('Invalid decisions');
-          decisions = result.decisions;
-        } catch (error) {
-          if (error instanceof SearchSessionError) throw error;
-          decisions = judgeIndexes.map(() => 'pending');
-        }
-        judgeIndexes.forEach((i, n) => {
-          state.decisions[i] = {
-            status: decisions[n] as 'kept' | 'rejected' | 'pending',
-            item: visible.get(state.snapshot.records[i].chunk!.resourceId),
-          };
-        });
+        state.confirmed.push({ index, item });
       }
-      while (state.cursor < end) {
-        const decision = state.decisions[state.cursor];
-        if (!decision || decision.status === 'pending') break;
-        if (decision.status === 'kept' && decision.item) {
-          const identity = getArticleIdentity(decision.item);
-          if (identity === null || !state.articles.includes(identity)) {
-            if (identity !== null) state.articles.push(identity);
-            state.confirmed.push({ index: state.cursor, item: decision.item });
-          }
-        }
-        delete state.decisions[state.cursor];
-        delete state.attempts[state.cursor];
-        state.cursor++;
-      }
+      state.cursor = end;
       scanned += end - start;
-      if (state.cursor === start) {
-        if (
-          judgeIndexes.some(
-            (i) =>
-              state.decisions[i]?.status === 'pending' &&
-              state.attempts[i] >= MAX_ATTEMPTS,
-          )
-        )
-          throw new SearchSessionError('SEARCH_JUDGMENT_FAILED');
-        break;
-      }
     }
   }
 

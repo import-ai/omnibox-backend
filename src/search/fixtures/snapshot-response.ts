@@ -25,6 +25,4 @@ export default {
     },
   ],
   recall_truncated: false,
-  relevance_enabled: true,
-  policy_signature: 'policy-v1',
 };

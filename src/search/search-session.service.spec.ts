@@ -52,7 +52,6 @@ const engineParams = (
 
 function fixture(
   records = Array.from({ length: 75 }, (_, i) => record('r' + i)),
-  enabled = false,
   configOverrides: Record<string, string> = {},
 ) {
   const config = new ConfigService({
@@ -102,15 +101,7 @@ function fixture(
       .mockResolvedValue({
         records,
         recallTruncated: false,
-        relevanceEnabled: enabled,
-        policySignature: 'p',
       }),
-    judgeSearchCandidates: jest.fn((body: { records: IndexRecordDto[] }) =>
-      Promise.resolve({
-        decisions: body.records.map(() => 'kept'),
-        policy_signature: 'p',
-      }),
-    ),
   };
   const i18n = { t: () => 'retry' } as any;
   const service = new SearchSessionService(
@@ -180,45 +171,38 @@ it('reaches resources behind 200 duplicate chunks without replaying recall', asy
   expect(third.total).toBe(51);
   expect(third.hasMore).toBe(false);
   expect(f.wizard.recallSearchSnapshot).toHaveBeenCalledTimes(1);
-  expect(f.wizard.judgeSearchCandidates).not.toHaveBeenCalled();
 });
 
-it('publishes a stable prefix despite out-of-order pending decisions', async () => {
-  const f = fixture([record('A'), record('B'), record('C')], true);
-  f.wizard.judgeSearchCandidates.mockResolvedValueOnce({
-    decisions: ['pending', 'kept', 'kept'],
-    policy_signature: 'p',
-  });
-  const first = await f.page();
-  expect(first).toMatchObject({
+it('confirms every visible candidate without a judgment call', async () => {
+  const f = fixture([record('A'), record('B')]);
+  const page = await f.page();
+  expect(page.items.map((i) => i.resourceId)).toEqual(['A', 'B']);
+  expect((f.wizard as any).judgeSearchCandidates).toBeUndefined();
+});
+
+it('returns a partial empty v2 page when the scan budget finds no visible candidate', async () => {
+  const f = fixture(Array.from({ length: 250 }, (_, i) => record('r' + i)));
+  for (let i = 0; i < 250; i++) f.hidden.add('r' + i);
+  const page = await f.page();
+  expect(page).toMatchObject({
     items: [],
-    nextOffset: 0,
     total: null,
     hasMore: true,
     status: 'partial',
   });
-  const replay = await f.page(0, first.searchId, 'req-0');
-  expect(replay).toEqual(first);
-  expect(f.wizard.judgeSearchCandidates).toHaveBeenCalledTimes(1);
-  const next = await f.page(0, first.searchId, 'retry');
-  expect(next.items.map((i) => i.resourceId)).toEqual(['A', 'B', 'C']);
-  expect(
-    f.wizard.judgeSearchCandidates.mock.calls[1][0].records.map(
-      (r) => r.chunk!.resourceId,
-    ),
-  ).toEqual(['A']);
+  expect(f.wizard.recallSearchSnapshot).toHaveBeenCalledTimes(1);
 });
 
-it('v1 and v2 use the same snapshot engine and v1 never reports pending as empty', async () => {
-  const f = fixture([record('A')], true);
-  f.wizard.judgeSearchCandidates.mockResolvedValueOnce({
-    decisions: ['pending'],
-    policy_signature: 'p',
-  });
+it('v1 reports scan-budget pending and continues on the same offset', async () => {
+  const f = fixture(Array.from({ length: 250 }, (_, i) => record('r' + i)));
+  for (let i = 0; i < 250; i++) f.hidden.add('r' + i);
   await expect(f.v1Page()).rejects.toMatchObject({ code: 'SEARCH_PENDING' });
-  const next = await f.v1Page();
-  expect(next.total).toBe(1);
-  expect(next.items.map((i) => i.resourceId)).toEqual(['A']);
+  await expect(f.v1Page()).resolves.toEqual({
+    items: [],
+    total: 0,
+    offset: 0,
+    limit: 20,
+  });
   expect(f.wizard.recallSearchSnapshot).toHaveBeenCalledTimes(1);
 });
 
@@ -231,23 +215,6 @@ it('returns a numeric continuation lower bound for partial v1 results', async ()
   const next = await f.v1Page(1);
   expect(next.items[0].resourceId).toBe('r240');
   expect(f.wizard.recallSearchSnapshot).toHaveBeenCalledTimes(1);
-});
-
-it('permanently terminates judgment after three pending attempts', async () => {
-  const f = fixture([record('A')], true);
-  f.wizard.judgeSearchCandidates.mockResolvedValue({
-    decisions: ['pending'],
-    policy_signature: 'p',
-  });
-  const first = await f.page();
-  await f.page(0, first.searchId, 'two');
-  await expect(f.page(0, first.searchId, 'three')).rejects.toMatchObject({
-    code: 'SEARCH_JUDGMENT_FAILED',
-  });
-  await expect(f.page(0, first.searchId, 'four')).rejects.toMatchObject({
-    code: 'SEARCH_JUDGMENT_FAILED',
-  });
-  expect(f.wizard.judgeSearchCandidates).toHaveBeenCalledTimes(3);
 });
 
 it('rejects expired explicit sessions without silently rebuilding', async () => {
@@ -270,6 +237,44 @@ it('treats a state written by an older storage format as expired', async () => {
   await expect(f.page(0, first.searchId, 'legacy')).rejects.toMatchObject({
     code: 'SEARCH_SESSION_EXPIRED',
   });
+});
+
+it('treats a version-2 state as missing and rebuilds without decisions', async () => {
+  const f = fixture([record('A')]);
+  const params = engineParams();
+  const legacy = {
+    version: 2,
+    fingerprint: params.fingerprint,
+    query: 'q',
+    depth: 200,
+    snapshot: { records: [record('A')], recallTruncated: false },
+    cursor: 0,
+    confirmed: [],
+    articles: [],
+    requests: {},
+    decisions: {},
+    attempts: {},
+  };
+  let saved: any;
+  jest.spyOn(f.store, 'exclusive').mockImplementation(((
+    _owner: string,
+    _id: string,
+    operation: any,
+  ) =>
+    operation(legacy, (value: any) => {
+      saved = value;
+      return Promise.resolve();
+    })) as any);
+  await expect(
+    f.service.run({ ...params, createIfMissing: false }),
+  ).rejects.toMatchObject({ code: 'SEARCH_SESSION_EXPIRED', status: 410 });
+  expect(f.wizard.recallSearchSnapshot).not.toHaveBeenCalled();
+  const rebuilt = await f.service.run(params);
+  expect(rebuilt.items.map((i) => i.resourceId)).toEqual(['A']);
+  expect(f.wizard.recallSearchSnapshot).toHaveBeenCalledTimes(1);
+  expect(saved).toMatchObject({ version: 3 });
+  expect(saved.decisions).toBeUndefined();
+  expect(saved.attempts).toBeUndefined();
 });
 
 it('skips stale unconfirmed resources but invalidates revoked confirmed resources on replay', async () => {
@@ -316,7 +321,6 @@ it('does not publish a snapshot when initialization fails', async () => {
   const f = fixture();
   f.wizard.recallSearchSnapshot.mockRejectedValue(new Error('branch failed'));
   await expect(f.page()).rejects.toMatchObject({ code: 'SEARCH_UNAVAILABLE' });
-  expect(f.wizard.judgeSearchCandidates).not.toHaveBeenCalled();
 });
 
 it('deduplicates the same article across folders without collapsing other feeds', async () => {
@@ -379,22 +383,6 @@ it('returns a complete v2 envelope for empty filter candidates without widening 
   expect(f.wizard.recallSearchSnapshot).not.toHaveBeenCalled();
 });
 
-it('does not invoke a judgment unless its attempt reservation is durable', async () => {
-  const f = fixture([record('A')], true);
-  const original = f.store.exclusive.bind(f.store);
-  jest.spyOn(f.store, 'exclusive').mockImplementation((owner, id, operation) =>
-    original(owner, id, (state, save) =>
-      operation(state, (value: any) => {
-        if (Object.keys(value.attempts).length)
-          return Promise.reject(new Error('Redis commit unavailable'));
-        return save(value);
-      }),
-    ),
-  );
-  await expect(f.page()).rejects.toMatchObject({ code: 'SEARCH_UNAVAILABLE' });
-  expect(f.wizard.judgeSearchCandidates).not.toHaveBeenCalled();
-});
-
 it('keeps a depth-400 snapshot and its confirmed hits under the durable size bound', async () => {
   // The measured depth-400 probe is 781 chunks / ~1.45 MB of matched text.
   // Confirmed hits must reference those chunks rather than copy their text, so
@@ -405,7 +393,7 @@ it('keeps a depth-400 snapshot and its confirmed hits under the durable size bou
     item.chunk!.text = text;
     return item;
   });
-  const f = fixture(records, false, {
+  const f = fixture(records, {
     OBB_SEARCH_SESSION_MAX_BYTES: String(2 * 1024 * 1024),
     OBB_SEARCH_RECALL_DEPTH: '400',
   });
@@ -491,7 +479,6 @@ it('returns an exhausted empty v1 page as a normal zero result', async () => {
     offset: 0,
     limit: 20,
   });
-  expect(f.wizard.judgeSearchCandidates).not.toHaveBeenCalled();
 });
 
 it('returns a numeric total for a v1 offset past the confirmed list', async () => {

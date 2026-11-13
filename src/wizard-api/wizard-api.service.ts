@@ -5,7 +5,6 @@ import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import type { SearchSnapshot } from 'omniboxd/search/search-session.types';
 import { WizardAgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
-import { IndexRecordDto } from 'omniboxd/wizard/dto/index-record.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { SearchResponseDto } from 'omniboxd/wizard/dto/search-response.dto';
 import {
@@ -168,16 +167,12 @@ export class WizardAPIService {
     return response;
   }
 
-  async search(
-    req: SearchRequestDto,
-    options?: { signal?: AbortSignal },
-  ): Promise<SearchResponseDto> {
+  async search(req: SearchRequestDto): Promise<SearchResponseDto> {
     const resp = await this.request(
       'POST',
       '/internal/api/v1/wizard/search',
       instanceToPlain(req),
       {},
-      options?.signal,
     );
     return plainToInstance(SearchResponseDto, resp);
   }
@@ -195,60 +190,13 @@ export class WizardAPIService {
     );
     if (
       !Array.isArray(response.records) ||
-      typeof response.policy_signature !== 'string' ||
-      typeof response.relevance_enabled !== 'boolean' ||
       typeof response.recall_truncated !== 'boolean'
     ) {
       throw new Error('Invalid search snapshot');
     }
     return {
       records: plainToInstance(SearchResponseDto, response).records,
-      policySignature: response.policy_signature,
-      relevanceEnabled: response.relevance_enabled,
       recallTruncated: response.recall_truncated,
-    };
-  }
-
-  async judgeSearchCandidates(
-    body: {
-      query: string;
-      namespace_id: string;
-      user_id: string;
-      recall_depth: number;
-      policy_signature: string;
-      records: IndexRecordDto[];
-      timeout_ms: number;
-    },
-    signal: AbortSignal,
-  ): Promise<{ decisions: string[]; policy_signature: string }> {
-    const response = await this.request(
-      'POST',
-      '/internal/api/v1/wizard/search/judge',
-      {
-        ...body,
-        records: body.records.map((record) => ({
-          type: record.type,
-          namespace_id: record.namespaceId,
-          user_id: record.userId,
-          // Judgment needs content, scope and offsets, not the display DTO's dates.
-          chunk: record.chunk && {
-            title: record.chunk.title,
-            resource_id: record.chunk.resourceId,
-            text: record.chunk.text,
-            chunk_type: record.chunk.chunkType,
-            parent_id: record.chunk.parentId,
-            chunk_id: record.chunk.chunkId,
-            start_index: record.chunk.startIndex,
-            end_index: record.chunk.endIndex,
-          },
-        })),
-      },
-      {},
-      signal,
-    );
-    return {
-      decisions: response.decisions,
-      policy_signature: response.policy_signature,
     };
   }
 

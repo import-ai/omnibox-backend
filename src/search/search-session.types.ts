@@ -10,6 +10,32 @@ export interface SessionPagination {
   requestId?: string;
 }
 
+export interface SessionParams {
+  owner: string;
+  fingerprint: string;
+  sessionId: string;
+  createIfMissing: boolean;
+  requestId?: string;
+  userId: string;
+  namespaceId: string;
+  query: string;
+  resourceIds: string[] | null;
+  offset: number;
+  limit: number;
+}
+
+export interface SessionResult {
+  items: IndexedResourceDto[];
+  total: number | null;
+  // Advance can overshoot the requested page in batches; the V1 adapter uses
+  // the confirmed count for its numeric total lower bound.
+  confirmedCount: number;
+  nextOffset: number;
+  hasMore: boolean;
+  status: 'partial' | 'complete';
+  recallTruncated: boolean;
+}
+
 export interface SessionPage {
   items: IndexedResourceDto[];
   total: number | null;

@@ -29,7 +29,9 @@ import {
   SESSION_STATE_VERSION,
   SessionPage,
   SessionPagination,
+  SessionParams,
   SessionResourceItem,
+  SessionResult,
   SessionState,
 } from './search-session.types';
 
@@ -61,11 +63,7 @@ export class SearchSessionService {
   ): Promise<SessionPage> {
     const version2 = page.paginationVersion === 2;
     const span = trace.getActiveSpan();
-    span?.setAttributes({
-      'search.pagination_version': version2 ? 2 : 1,
-      'search.offset': page.offset,
-      'search.limit': page.limit,
-    });
+    span?.setAttribute('search.pagination_version', version2 ? 2 : 1);
     const fingerprint = digest([
       userId,
       namespaceId,
@@ -78,181 +76,218 @@ export class SearchSessionService {
     const id = version2
       ? page.searchId || digest([owner, requestId])
       : 'v1-' + fingerprint;
-    const deadline = Date.now() + REQUEST_BUDGET_MS;
     try {
-      return await this.store.exclusive<SessionState, SessionPage>(
+      const result = await this.run({
         owner,
-        id,
-        async (cached, save) => {
-          let state = cached;
-          if (state && state.version !== SESSION_STATE_VERSION) state = null;
-          span?.setAttribute('search.snapshot_cache_hit', state !== null);
-          if (!state) {
-            if (version2 && page.searchId)
-              throw new SearchSessionError('SEARCH_SESSION_EXPIRED', 410);
-            const configuredDepth = Number(
-              this.config.get('OBB_SEARCH_RECALL_DEPTH', 200),
-            );
-            if (![200, 400].includes(configuredDepth))
-              throw new SearchSessionError('SEARCH_CONFIGURATION_INVALID');
-            const snapshot =
-              resourceIds !== null && resourceIds.length === 0
-                ? {
-                    records: [],
-                    recallTruncated: false,
-                    relevanceEnabled: false,
-                    policySignature: 'empty',
-                  }
-                : await this.wizard.recallSearchSnapshot(
-                    {
-                      query,
-                      namespace_id: namespaceId,
-                      user_id: userId,
-                      resource_ids: resourceIds,
-                      recall_depth: configuredDepth,
-                      timeout_ms: Math.max(1, deadline - Date.now() - 250),
-                    },
-                    AbortSignal.timeout(Math.max(1, deadline - Date.now())),
-                  );
-            const seen = new Set<string>();
-            snapshot.records = snapshot.records.filter((r) => {
-              const rid = r.chunk?.resourceId;
-              if (
-                r.type !== IndexRecordType.CHUNK ||
-                !rid ||
-                seen.has(rid) ||
-                r.namespaceId !== namespaceId ||
-                (r.userId && r.userId !== userId) ||
-                (resourceIds !== null && !resourceIds.includes(rid))
-              )
-                return false;
-              seen.add(rid);
-              return true;
-            });
-            state = {
-              version: SESSION_STATE_VERSION,
-              fingerprint,
-              query,
-              depth: configuredDepth,
-              snapshot,
-              cursor: 0,
-              confirmed: [],
-              articles: [],
-              decisions: {},
-              attempts: {},
-              requests: {},
-            };
-            await save(state);
-          }
-          span?.setAttributes({
-            'search.session_id': id,
-            'search.recall_depth': state.depth,
-            'search.snapshot_resource_count': state.snapshot.records.length,
-            'search.recall_truncated': state.snapshot.recallTruncated,
-          });
-          if (state.fingerprint !== fingerprint)
-            throw new SearchSessionError('SEARCH_SESSION_INVALIDATED', 409);
-          if (state.failed)
-            throw new SearchSessionError(
-              state.failed,
-              state.failed === 'SEARCH_SESSION_INVALIDATED' ? 409 : 503,
-            );
-          const replay = state.requests[requestId];
-          if (
-            replay &&
-            (replay.offset !== page.offset || replay.limit !== page.limit)
-          ) {
-            throw new SearchSessionError('SEARCH_REQUEST_CONFLICT', 409);
-          }
-          try {
-            if (!replay) {
-              if (Object.keys(state.requests).length >= 128)
-                throw new SearchSessionError('SEARCH_CAPACITY', 429);
-              await this.advance(
-                state,
-                userId,
-                namespaceId,
-                page.offset + page.limit,
-                deadline,
-                save,
-              );
-            }
-            const end =
-              replay?.end ??
-              Math.min(state.confirmed.length, page.offset + page.limit);
-            const confirmed = state.confirmed.slice(page.offset, end);
-            await this.validateConfirmed(confirmed, userId, namespaceId);
-            const items = confirmed.map((entry) =>
-              this.toResourceItem(state, entry),
-            );
-            const status =
-              replay?.status ??
-              (state.cursor >= state.snapshot.records.length
-                ? 'complete'
-                : 'partial');
-            const hasMore =
-              replay?.hasMore ??
-              (state.cursor < state.snapshot.records.length ||
-                end < state.confirmed.length);
-            const total = replay
-              ? replay.total
-              : status === 'complete'
-                ? state.confirmed.length
-                : null;
-            if (!version2 && !items.length && hasMore)
-              throw new SearchSessionError('SEARCH_PENDING');
-            state.requests[requestId] = {
-              offset: page.offset,
-              limit: page.limit,
-              end,
-              total,
-              status,
-              hasMore,
-            };
-            span?.setAttributes({
-              'search.resource_candidate_cursor': state.cursor,
-              'search.confirmed_count': state.confirmed.length,
-              'search.has_more': hasMore,
-              'search.session_status': status,
-              'search.idempotent_replay': !!replay,
-            });
-            return {
-              items,
-              offset: page.offset,
-              limit: page.limit,
-              searchId: id,
-              nextOffset: Math.max(page.offset, end),
-              hasMore,
-              total: version2
-                ? total
-                : (total ??
-                  Math.max(
-                    state.confirmed.length,
-                    page.offset + items.length + 1,
-                  )),
-              status,
-              recallTruncated: state.snapshot.recallTruncated,
-            };
-          } catch (error) {
-            if (
-              error instanceof SearchSessionError &&
-              ['SEARCH_SESSION_INVALIDATED', 'SEARCH_JUDGMENT_FAILED'].includes(
-                error.code,
-              )
-            )
-              state.failed = error.code;
-            throw error;
-          } finally {
-            await save(state);
-          }
-        },
-      );
+        fingerprint,
+        sessionId: id,
+        createIfMissing: !(version2 && page.searchId),
+        requestId,
+        userId,
+        namespaceId,
+        query,
+        resourceIds,
+        offset: page.offset,
+        limit: page.limit,
+      });
+      if (!version2 && !result.items.length && result.hasMore)
+        throw new SearchSessionError('SEARCH_PENDING');
+      return {
+        items: result.items,
+        offset: page.offset,
+        limit: page.limit,
+        searchId: id,
+        nextOffset: result.nextOffset,
+        hasMore: result.hasMore,
+        total: version2
+          ? result.total
+          : (result.total ??
+            Math.max(
+              result.confirmedCount,
+              page.offset + result.items.length + 1,
+            )),
+        status: result.status,
+        recallTruncated: result.recallTruncated,
+      };
     } catch (error) {
       if (error instanceof AppException) throw error;
       if (error instanceof SearchSessionError)
         this.fail(error.code, error.status);
       this.fail('SEARCH_UNAVAILABLE');
     }
+  }
+
+  async run(params: SessionParams): Promise<SessionResult> {
+    const span = trace.getActiveSpan();
+    span?.setAttributes({
+      'search.offset': params.offset,
+      'search.limit': params.limit,
+    });
+    const deadline = Date.now() + REQUEST_BUDGET_MS;
+    return await this.store.exclusive<SessionState, SessionResult>(
+      params.owner,
+      params.sessionId,
+      async (cached, save) => {
+        let state = cached;
+        if (state && state.version !== SESSION_STATE_VERSION) state = null;
+        span?.setAttribute('search.snapshot_cache_hit', state !== null);
+        if (!state) {
+          if (!params.createIfMissing)
+            throw new SearchSessionError('SEARCH_SESSION_EXPIRED', 410);
+          const configuredDepth = Number(
+            this.config.get('OBB_SEARCH_RECALL_DEPTH', 200),
+          );
+          if (![200, 400].includes(configuredDepth))
+            throw new SearchSessionError('SEARCH_CONFIGURATION_INVALID');
+          const snapshot =
+            params.resourceIds !== null && params.resourceIds.length === 0
+              ? {
+                  records: [],
+                  recallTruncated: false,
+                  relevanceEnabled: false,
+                  policySignature: 'empty',
+                }
+              : await this.wizard.recallSearchSnapshot(
+                  {
+                    query: params.query,
+                    namespace_id: params.namespaceId,
+                    user_id: params.userId,
+                    resource_ids: params.resourceIds,
+                    recall_depth: configuredDepth,
+                    timeout_ms: Math.max(1, deadline - Date.now() - 250),
+                  },
+                  AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+                );
+          const seen = new Set<string>();
+          snapshot.records = snapshot.records.filter((r) => {
+            const rid = r.chunk?.resourceId;
+            if (
+              r.type !== IndexRecordType.CHUNK ||
+              !rid ||
+              seen.has(rid) ||
+              r.namespaceId !== params.namespaceId ||
+              (r.userId && r.userId !== params.userId) ||
+              (params.resourceIds !== null && !params.resourceIds.includes(rid))
+            )
+              return false;
+            seen.add(rid);
+            return true;
+          });
+          state = {
+            version: SESSION_STATE_VERSION,
+            fingerprint: params.fingerprint,
+            query: params.query,
+            depth: configuredDepth,
+            snapshot,
+            cursor: 0,
+            confirmed: [],
+            articles: [],
+            decisions: {},
+            attempts: {},
+            requests: {},
+          };
+          await save(state);
+        }
+        span?.setAttributes({
+          'search.session_id': params.sessionId,
+          'search.recall_depth': state.depth,
+          'search.snapshot_resource_count': state.snapshot.records.length,
+          'search.recall_truncated': state.snapshot.recallTruncated,
+        });
+        if (state.fingerprint !== params.fingerprint)
+          throw new SearchSessionError('SEARCH_SESSION_INVALIDATED', 409);
+        if (state.failed)
+          throw new SearchSessionError(
+            state.failed,
+            state.failed === 'SEARCH_SESSION_INVALIDATED' ? 409 : 503,
+          );
+        const replay = params.requestId
+          ? state.requests[params.requestId]
+          : undefined;
+        if (
+          replay &&
+          (replay.offset !== params.offset || replay.limit !== params.limit)
+        ) {
+          throw new SearchSessionError('SEARCH_REQUEST_CONFLICT', 409);
+        }
+        try {
+          if (!replay) {
+            if (params.requestId && Object.keys(state.requests).length >= 128)
+              throw new SearchSessionError('SEARCH_CAPACITY', 429);
+            await this.advance(
+              state,
+              params.userId,
+              params.namespaceId,
+              params.offset + params.limit,
+              deadline,
+              save,
+            );
+          }
+          const end =
+            replay?.end ??
+            Math.min(state.confirmed.length, params.offset + params.limit);
+          const confirmed = state.confirmed.slice(params.offset, end);
+          await this.validateConfirmed(
+            confirmed,
+            params.userId,
+            params.namespaceId,
+          );
+          const items = confirmed.map((entry) =>
+            this.toResourceItem(state, entry),
+          );
+          const status =
+            replay?.status ??
+            (state.cursor >= state.snapshot.records.length
+              ? 'complete'
+              : 'partial');
+          const hasMore =
+            replay?.hasMore ??
+            (state.cursor < state.snapshot.records.length ||
+              end < state.confirmed.length);
+          const total = replay
+            ? replay.total
+            : status === 'complete'
+              ? state.confirmed.length
+              : null;
+          if (params.requestId)
+            state.requests[params.requestId] = {
+              offset: params.offset,
+              limit: params.limit,
+              end,
+              total,
+              status,
+              hasMore,
+            };
+          span?.setAttributes({
+            'search.resource_candidate_cursor': state.cursor,
+            'search.confirmed_count': state.confirmed.length,
+            'search.has_more': hasMore,
+            'search.session_status': status,
+            'search.idempotent_replay': !!replay,
+          });
+          return {
+            items,
+            total,
+            confirmedCount: state.confirmed.length,
+            nextOffset: Math.max(params.offset, end),
+            hasMore,
+            status,
+            recallTruncated: state.snapshot.recallTruncated,
+          };
+        } catch (error) {
+          if (
+            error instanceof SearchSessionError &&
+            ['SEARCH_SESSION_INVALIDATED', 'SEARCH_JUDGMENT_FAILED'].includes(
+              error.code,
+            )
+          )
+            state.failed = error.code;
+          throw error;
+        } finally {
+          await save(state);
+        }
+      },
+    );
   }
 
   private async advance(

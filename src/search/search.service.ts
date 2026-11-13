@@ -30,6 +30,7 @@ import {
   SearchFilterOptions,
   SearchResourceFilterService,
 } from './search-resource-filter.service';
+import { paginateSearch } from './search-session.adapters';
 import { SearchSessionService } from './search-session.service';
 
 const TASK_PRIORITY = 4;
@@ -200,18 +201,6 @@ export class SearchService {
       namespaceId,
       filterOptions,
     );
-    if (
-      pagination?.paginationVersion !== 2 &&
-      candidateResourceIds &&
-      candidateResourceIds.length <= 0
-    ) {
-      return {
-        items: [],
-        total: 0,
-        offset,
-        limit,
-      };
-    }
 
     const result = await this.searchVisibleResources(
       userId,
@@ -235,15 +224,17 @@ export class SearchService {
     limit: number,
     pagination?: SearchPaginationOptions,
   ): Promise<SearchPaginatedResult> {
-    const result = await this.searchSessions.paginate(
+    return paginateSearch(this.searchSessions, this.i18n, {
       userId,
       namespaceId,
-      normalizedQuery,
-      candidateResourceIds,
-      { ...pagination, offset, limit },
-    );
-    if (pagination?.paginationVersion === 2) return result;
-    return { items: result.items, total: result.total, offset, limit };
+      query: normalizedQuery,
+      resourceIds: candidateResourceIds,
+      offset,
+      limit,
+      paginationVersion: pagination?.paginationVersion,
+      searchId: pagination?.searchId,
+      requestId: pagination?.requestId,
+    });
   }
 
   async searchMessages(

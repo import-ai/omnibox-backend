@@ -334,7 +334,7 @@ describe('SearchService', () => {
       {} as any,
       searchResourceFilterService as any,
       searchCandidateService as any,
-      { paginate: jest.fn() } as any,
+      { run: jest.fn() } as any,
     );
 
     return {

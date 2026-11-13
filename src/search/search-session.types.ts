@@ -2,14 +2,6 @@ import { IndexRecordDto } from 'omniboxd/wizard/dto/index-record.dto';
 
 import { IndexedResourceDto } from './dto/indexed-doc.dto';
 
-export interface SessionPagination {
-  offset: number;
-  limit: number;
-  paginationVersion?: number;
-  searchId?: string;
-  requestId?: string;
-}
-
 export interface SessionParams {
   owner: string;
   fingerprint: string;

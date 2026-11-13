@@ -1,9 +1,7 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { trace } from '@opentelemetry/api';
-import { createHash, randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
-import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import {
   comparePermission,
@@ -27,16 +25,12 @@ import { SearchSessionError, SearchSessionStore } from './search-session.store';
 import {
   ConfirmedResource,
   SESSION_STATE_VERSION,
-  SessionPage,
-  SessionPagination,
   SessionParams,
   SessionResourceItem,
   SessionResult,
   SessionState,
 } from './search-session.types';
 
-const digest = (value: unknown) =>
-  createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const REQUEST_BUDGET_MS = 10_000;
 const JUDGE_BUDGET_MS = 3000;
 const MAX_SCANNED = 200;
@@ -53,69 +47,6 @@ export class SearchSessionService {
     private readonly config: ConfigService,
     private readonly i18n: I18nService,
   ) {}
-
-  async paginate(
-    userId: string,
-    namespaceId: string,
-    query: string,
-    resourceIds: string[] | null,
-    page: SessionPagination,
-  ): Promise<SessionPage> {
-    const version2 = page.paginationVersion === 2;
-    const span = trace.getActiveSpan();
-    span?.setAttribute('search.pagination_version', version2 ? 2 : 1);
-    const fingerprint = digest([
-      userId,
-      namespaceId,
-      query,
-      resourceIds === null ? null : [...resourceIds].sort(),
-    ]);
-    const owner = digest([userId, namespaceId]);
-    if (version2 && !page.requestId) this.fail('SEARCH_REQUEST_REQUIRED', 400);
-    const requestId = version2 ? page.requestId! : randomUUID();
-    const id = version2
-      ? page.searchId || digest([owner, requestId])
-      : 'v1-' + fingerprint;
-    try {
-      const result = await this.run({
-        owner,
-        fingerprint,
-        sessionId: id,
-        createIfMissing: !(version2 && page.searchId),
-        requestId,
-        userId,
-        namespaceId,
-        query,
-        resourceIds,
-        offset: page.offset,
-        limit: page.limit,
-      });
-      if (!version2 && !result.items.length && result.hasMore)
-        throw new SearchSessionError('SEARCH_PENDING');
-      return {
-        items: result.items,
-        offset: page.offset,
-        limit: page.limit,
-        searchId: id,
-        nextOffset: result.nextOffset,
-        hasMore: result.hasMore,
-        total: version2
-          ? result.total
-          : (result.total ??
-            Math.max(
-              result.confirmedCount,
-              page.offset + result.items.length + 1,
-            )),
-        status: result.status,
-        recallTruncated: result.recallTruncated,
-      };
-    } catch (error) {
-      if (error instanceof AppException) throw error;
-      if (error instanceof SearchSessionError)
-        this.fail(error.code, error.status);
-      this.fail('SEARCH_UNAVAILABLE');
-    }
-  }
 
   async run(params: SessionParams): Promise<SessionResult> {
     const span = trace.getActiveSpan();
@@ -486,13 +417,5 @@ export class SearchSessionService {
     ) {
       throw new SearchSessionError('SEARCH_SESSION_INVALIDATED', 409);
     }
-  }
-
-  private fail(code: string, status = 503): never {
-    throw new AppException(
-      this.i18n.t('system.errors.requestFailed', { args: { status } }),
-      code,
-      status as HttpStatus,
-    );
   }
 }

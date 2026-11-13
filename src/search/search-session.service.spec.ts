@@ -7,8 +7,15 @@ import {
   IndexRecordType,
 } from 'omniboxd/wizard/dto/index-record.dto';
 
+import {
+  paginateV1,
+  paginateV2,
+  sessionFingerprint,
+  sessionOwner,
+} from './search-session.adapters';
 import { SearchSessionService } from './search-session.service';
 import { SearchSessionStore } from './search-session.store';
+import { SessionParams } from './search-session.types';
 
 const record = (id: string, chunkId = id): IndexRecordDto => ({
   id: chunkId,
@@ -23,6 +30,25 @@ const record = (id: string, chunkId = id): IndexRecordDto => ({
     chunkType: 'doc',
   } as any,
 });
+
+const engineParams = (
+  overrides: Partial<SessionParams> = {},
+): SessionParams => {
+  const fingerprint = sessionFingerprint('u', 'n', 'q', null);
+  return {
+    owner: sessionOwner('u', 'n'),
+    fingerprint,
+    sessionId: 'v1-' + fingerprint,
+    createIfMissing: true,
+    userId: 'u',
+    namespaceId: 'n',
+    query: 'q',
+    resourceIds: null,
+    offset: 0,
+    limit: 20,
+    ...overrides,
+  };
+};
 
 function fixture(
   records = Array.from({ length: 75 }, (_, i) => record('r' + i)),
@@ -86,13 +112,14 @@ function fixture(
       }),
     ),
   };
+  const i18n = { t: () => 'retry' } as any;
   const service = new SearchSessionService(
     store,
     wizard as any,
     resources as any,
     permissions as any,
     config,
-    { t: () => 'retry' } as any,
+    i18n,
   );
   const page = (
     offset = 0,
@@ -100,14 +127,37 @@ function fixture(
     requestId = 'req-' + offset,
     limit = 20,
   ) =>
-    service.paginate('u', 'n', 'q', null, {
+    paginateV2(service, i18n, {
+      userId: 'u',
+      namespaceId: 'n',
+      query: 'q',
+      resourceIds: null,
       offset,
       limit,
-      paginationVersion: 2,
       searchId,
       requestId,
     });
-  return { service, store, wizard, resources, hidden, attrs, page, config };
+  const v1Page = (offset = 0, resourceIds: string[] | null = null) =>
+    paginateV1(service, i18n, {
+      userId: 'u',
+      namespaceId: 'n',
+      query: 'q',
+      resourceIds,
+      offset,
+      limit: 20,
+    });
+  return {
+    service,
+    store,
+    wizard,
+    resources,
+    hidden,
+    attrs,
+    page,
+    v1Page,
+    i18n,
+    config,
+  };
 }
 
 it('reaches resources behind 200 duplicate chunks without replaying recall', async () => {
@@ -161,13 +211,8 @@ it('v1 and v2 use the same snapshot engine and v1 never reports pending as empty
     decisions: ['pending'],
     policy_signature: 'p',
   });
-  await expect(
-    f.service.paginate('u', 'n', 'q', null, { offset: 0, limit: 20 }),
-  ).rejects.toMatchObject({ code: 'SEARCH_PENDING' });
-  const next = await f.service.paginate('u', 'n', 'q', null, {
-    offset: 0,
-    limit: 20,
-  });
+  await expect(f.v1Page()).rejects.toMatchObject({ code: 'SEARCH_PENDING' });
+  const next = await f.v1Page();
   expect(next.total).toBe(1);
   expect(next.items.map((i) => i.resourceId)).toEqual(['A']);
   expect(f.wizard.recallSearchSnapshot).toHaveBeenCalledTimes(1);
@@ -176,17 +221,10 @@ it('v1 and v2 use the same snapshot engine and v1 never reports pending as empty
 it('returns a numeric continuation lower bound for partial v1 results', async () => {
   const f = fixture(Array.from({ length: 250 }, (_, i) => record('r' + i)));
   for (let i = 1; i < 240; i++) f.hidden.add('r' + i);
-  const first = await f.service.paginate('u', 'n', 'q', null, {
-    offset: 0,
-    limit: 20,
-  });
+  const first = await f.v1Page(0);
   expect(first.items).toHaveLength(1);
-  expect(first.hasMore).toBe(true);
   expect(first.total).toBeGreaterThan(1);
-  const next = await f.service.paginate('u', 'n', 'q', null, {
-    offset: 1,
-    limit: 20,
-  });
+  const next = await f.v1Page(1);
   expect(next.items[0].resourceId).toBe('r240');
   expect(f.wizard.recallSearchSnapshot).toHaveBeenCalledTimes(1);
 });
@@ -245,19 +283,25 @@ it('binds sessions to identity, query and candidate filters', async () => {
   const f = fixture();
   const first = await f.page();
   await expect(
-    f.service.paginate('u', 'n', 'changed', null, {
+    paginateV2(f.service, f.i18n, {
+      userId: 'u',
+      namespaceId: 'n',
+      query: 'changed',
+      resourceIds: null,
       offset: 20,
       limit: 20,
-      paginationVersion: 2,
       searchId: first.searchId,
       requestId: 'x',
     }),
   ).rejects.toMatchObject({ code: 'SEARCH_SESSION_INVALIDATED' });
   await expect(
-    f.service.paginate('other', 'n', 'q', null, {
+    paginateV2(f.service, f.i18n, {
+      userId: 'other',
+      namespaceId: 'n',
+      query: 'q',
+      resourceIds: null,
       offset: 20,
       limit: 20,
-      paginationVersion: 2,
       searchId: first.searchId,
       requestId: 'x',
     }),
@@ -283,10 +327,7 @@ it('deduplicates the same article across folders without collapsing other feeds'
 
 it('preserves literal-free semantic matches and restricts recall to filter candidates', async () => {
   const f = fixture([record('A'), record('B')]);
-  const p = await f.service.paginate('u', 'n', 'unrelated wording', ['B'], {
-    offset: 0,
-    limit: 20,
-  });
+  const p = await f.v1Page(0, ['B']);
   expect(p.items.map((i) => i.resourceId)).toEqual(['B']);
   expect(f.wizard.recallSearchSnapshot.mock.calls[0][0]).toMatchObject({
     resource_ids: ['B'],
@@ -314,10 +355,13 @@ it('serializes concurrent state advancement', async () => {
 
 it('returns a complete v2 envelope for empty filter candidates without widening recall', async () => {
   const f = fixture();
-  const result = await f.service.paginate('u', 'n', 'q', [], {
+  const result = await paginateV2(f.service, f.i18n, {
+    userId: 'u',
+    namespaceId: 'n',
+    query: 'q',
+    resourceIds: [],
     offset: 0,
     limit: 20,
-    paginationVersion: 2,
     requestId: 'empty',
   });
   expect(result).toMatchObject({
@@ -365,13 +409,7 @@ it('keeps a depth-400 snapshot and its confirmed hits under the durable size bou
   let searchId: string | undefined;
   let received = 0;
   for (let request = 0; ; request++) {
-    const page = await f.service.paginate('u', 'n', 'q', null, {
-      offset,
-      limit: 20,
-      paginationVersion: 2,
-      searchId,
-      requestId: `size-${request}`,
-    });
+    const page = await f.page(offset, searchId, `size-${request}`);
     expect(page.items[0].content).toBe(text);
     searchId = page.searchId;
     received += page.items.length;
@@ -379,4 +417,62 @@ it('keeps a depth-400 snapshot and its confirmed hits under the durable size bou
     offset = page.nextOffset;
   }
   expect(received).toBe(781);
+});
+
+it('does not memoize requests without a request id', async () => {
+  const f = fixture([record('A')]);
+  for (let i = 0; i < 150; i++) await f.service.run(engineParams());
+  const params = engineParams();
+  const state = await f.store.exclusive<any, any>(
+    params.owner,
+    params.sessionId,
+    (value) => Promise.resolve(value),
+  );
+  expect(state.requests).toEqual({});
+});
+
+it('replays the same page for a request id and rejects a different page', async () => {
+  const f = fixture(Array.from({ length: 40 }, (_, i) => record('r' + i)));
+  const first = await f.service.run(engineParams({ requestId: 'same' }));
+  const replay = await f.service.run(engineParams({ requestId: 'same' }));
+  expect(replay).toEqual(first);
+  await expect(
+    f.service.run(engineParams({ requestId: 'same', limit: 10 })),
+  ).rejects.toMatchObject({ code: 'SEARCH_REQUEST_CONFLICT', status: 409 });
+});
+
+it('rebuilds implicit sessions but never explicit ones', async () => {
+  const f = fixture([record('A')]);
+  const params = engineParams();
+  await expect(
+    f.service.run({ ...params, createIfMissing: false }),
+  ).rejects.toMatchObject({ code: 'SEARCH_SESSION_EXPIRED', status: 410 });
+  expect(f.wizard.recallSearchSnapshot).not.toHaveBeenCalled();
+  const rebuilt = await f.service.run(params);
+  expect(rebuilt.items.map((i) => i.resourceId)).toEqual(['A']);
+});
+
+it('treats a state written by an older storage format as missing', async () => {
+  const f = fixture([record('A')]);
+  const params = engineParams();
+  await f.store.exclusive<any, any>(params.owner, params.sessionId, (_, save) =>
+    save({ fingerprint: 'legacy', confirmed: [] }),
+  );
+  await expect(
+    f.service.run({ ...params, createIfMissing: false }),
+  ).rejects.toMatchObject({ code: 'SEARCH_SESSION_EXPIRED', status: 410 });
+  const rebuilt = await f.service.run(params);
+  expect(rebuilt.items.map((i) => i.resourceId)).toEqual(['A']);
+});
+
+it('reports advance overshoot through the confirmed count', async () => {
+  const f = fixture();
+  const result = await f.service.run(engineParams());
+  expect(result).toMatchObject({
+    confirmedCount: 32,
+    total: null,
+    status: 'partial',
+    hasMore: true,
+  });
+  expect(result.items).toHaveLength(20);
 });

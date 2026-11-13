@@ -828,6 +828,52 @@ describe('SearchController (e2e)', () => {
     expect(replay.body).toEqual(first.body);
   });
 
+  it('keeps the v1 contract without v2 session fields', async () => {
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/namespaces/${mockNamespaceId}/search`)
+      .set('user', JSON.stringify(mockUser))
+      .send({ query: 'v1-contract', offset: 0, limit: 20 })
+      .expect(HttpStatus.CREATED);
+    expect(response.body).toMatchObject({
+      items: expect.any(Array),
+      total: expect.any(Number),
+      offset: 0,
+      limit: 20,
+    });
+    for (const field of [
+      'search_id',
+      'next_offset',
+      'has_more',
+      'status',
+      'recall_truncated',
+    ]) {
+      expect(response.body).not.toHaveProperty(field);
+    }
+  });
+
+  it('rejects v2 requests without a request id', async () => {
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/namespaces/${mockNamespaceId}/search`)
+      .set('user', JSON.stringify(mockUser))
+      .send({ query: 'v2-missing-request-id', pagination_version: 2 })
+      .expect(HttpStatus.BAD_REQUEST);
+    expect(response.body.code).toBe('search_request_required');
+  });
+
+  it('rejects an unknown v2 search id as expired', async () => {
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/namespaces/${mockNamespaceId}/search`)
+      .set('user', JSON.stringify(mockUser))
+      .send({
+        query: 'v2-unknown-session',
+        pagination_version: 2,
+        request_id: 'unknown-session-request',
+        search_id: 'missing-session',
+      })
+      .expect(HttpStatus.GONE);
+    expect(response.body.code).toBe('search_session_expired');
+  });
+
   describe('Response format validation', () => {
     it('should return properly formatted resource results', async () => {
       const response = await request(app.getHttpServer())

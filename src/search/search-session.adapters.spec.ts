@@ -295,3 +295,46 @@ describe('paginateSearch', () => {
     },
   );
 });
+
+// Literal digests pin the input arrays, their order and JSON serialization:
+// rolling deploys must keep resolving the same durable session ids.
+describe('session identity digests', () => {
+  it('keeps the owner digest stable', () => {
+    expect(sessionOwner('u', 'n')).toBe(
+      '41adb5851dcff46ca8faafa7aaad04923bbf09bb668e79b57edd0a7fda0d5fa2',
+    );
+  });
+
+  it('keeps the unfiltered fingerprint stable and prefixes the v1 session', async () => {
+    const fingerprint =
+      '67b87e71c8c6707c5b2ab34477c3ac51265d0705516f95e7d9ec8dc5e64c6fb5';
+    expect(sessionFingerprint('u', 'n', 'q', null)).toBe(fingerprint);
+    const engine = engineWith(sessionResult());
+    await paginateV1(engine, i18n, v1Request());
+    expect(engine.run.mock.calls[0][0].sessionId).toBe('v1-' + fingerprint);
+  });
+
+  it('sorts filter candidates before hashing', () => {
+    const expected =
+      'e118e503111574325fddf3a348742aaa8224c2919786d2160a9c8bbd376c6cb9';
+    expect(sessionFingerprint('u', 'n', 'q', ['b', 'a'])).toBe(expected);
+    expect(sessionFingerprint('u', 'n', 'q', ['a', 'b'])).toBe(expected);
+  });
+
+  it('distinguishes an empty filter from no filter', () => {
+    expect(sessionFingerprint('u', 'n', 'q', [])).toBe(
+      '8f1e3f411080fcebb2a1c9602b2ba23d2212f9f85adf1008c0fe4806bbff326e',
+    );
+    expect(sessionFingerprint('u', 'n', 'q', [])).not.toBe(
+      sessionFingerprint('u', 'n', 'q', null),
+    );
+  });
+
+  it('derives the v2 session id from the owner and request id', async () => {
+    const engine = engineWith(sessionResult());
+    await paginateV2(engine, i18n, { ...v1Request(), requestId: 'req-1' });
+    expect(engine.run.mock.calls[0][0].sessionId).toBe(
+      '66e16bfb14b708db170600a383c40e0317f8ac25f5a7f57715c0287c4a606381',
+    );
+  });
+});

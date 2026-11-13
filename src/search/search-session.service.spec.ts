@@ -137,14 +137,18 @@ function fixture(
       searchId,
       requestId,
     });
-  const v1Page = (offset = 0, resourceIds: string[] | null = null) =>
+  const v1Page = (
+    offset = 0,
+    resourceIds: string[] | null = null,
+    limit = 20,
+  ) =>
     paginateV1(service, i18n, {
       userId: 'u',
       namespaceId: 'n',
       query: 'q',
       resourceIds,
       offset,
-      limit: 20,
+      limit,
     });
   return {
     service,
@@ -475,4 +479,52 @@ it('reports advance overshoot through the confirmed count', async () => {
     hasMore: true,
   });
   expect(result.items).toHaveLength(20);
+});
+
+it('returns an exhausted empty v1 page as a normal zero result', async () => {
+  const f = fixture([record('A'), record('B')]);
+  f.hidden.add('A');
+  f.hidden.add('B');
+  await expect(f.v1Page()).resolves.toEqual({
+    items: [],
+    total: 0,
+    offset: 0,
+    limit: 20,
+  });
+  expect(f.wizard.judgeSearchCandidates).not.toHaveBeenCalled();
+});
+
+it('returns a numeric total for a v1 offset past the confirmed list', async () => {
+  const f = fixture([record('A')]);
+  await expect(f.v1Page(0)).resolves.toMatchObject({ total: 1 });
+  await expect(f.v1Page(1)).resolves.toEqual({
+    items: [],
+    total: 1,
+    offset: 1,
+    limit: 20,
+  });
+});
+
+it('serves more than 128 v1 pages without a capacity error', async () => {
+  const f = fixture(Array.from({ length: 130 }, (_, i) => record('r' + i)));
+  for (let offset = 0; offset < 130; offset++) {
+    const page = await f.v1Page(offset, null, 1);
+    expect(page.items.map((i) => i.resourceId)).toEqual(['r' + offset]);
+  }
+  const state = await f.store.exclusive<any, any>(
+    sessionOwner('u', 'n'),
+    'v1-' + sessionFingerprint('u', 'n', 'q', null),
+    (value) => Promise.resolve(value),
+  );
+  expect(state.requests).toEqual({});
+});
+
+it('rejects the 129th distinct request id on one v2 session', async () => {
+  const f = fixture([record('A')]);
+  const first = await f.page(0, undefined, 'req-0');
+  for (let i = 1; i < 128; i++) await f.page(0, first.searchId, `req-${i}`);
+  await expect(f.page(0, first.searchId, 'req-128')).rejects.toMatchObject({
+    code: 'SEARCH_CAPACITY',
+    status: 429,
+  });
 });

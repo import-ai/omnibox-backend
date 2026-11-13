@@ -26,13 +26,16 @@ V1 shares the engine and uses an implicit user/namespace/query/filter session. I
 public response remains items/offset/limit/numeric total. An unfinished nonempty
 page has a lower-bound total, never an invented exact count. An unfinished empty
 page returns search_pending (503), not total=0; retrying the same offset resumes
-the session cursor. The current Web retries that answer for the initial page and
-for load-more a bounded number of times (four attempts, 500 ms apart), keeping the
-loading state while it does. If the retry budget is exhausted, it shows a
-still-processing message, never an empty result. Without an explicit session ID,
-V1 cannot isolate identical searches in separate windows or guarantee continuity
-after implicit-session expiry. The new Web uses V2 for semantic queries and keeps
-numeric-total database-only filter searches compatible.
+the session cursor. The current Web sends semantic queries as V2 and does not
+auto-retry an HTTP error. A failed page, including search_pending or
+search_judgment_failed, stops the page load and shows a manual Retry or Restart
+action. Automatic continuation applies only to a successfully returned partial
+page whose items are empty and has_more=true: the Web advances to the next offset
+at most twice, 400 ms apart, before waiting for the user. A completed empty page
+renders the empty result. Without an explicit session ID, V1 cannot isolate
+identical searches in separate windows or guarantee continuity after
+implicit-session expiry. The current Web keeps numeric-total database-only filter
+searches compatible.
 
 The Open API `GET /open/api/v1/search` retains its legacy array response. When
 Wizard reports `has_more=true` but fewer records than the requested limit, the
@@ -130,10 +133,10 @@ must not be described as exactly-once RPC execution or crash-recoverable buildin
 Publish the shared library, pin both Wizards to the same SHA, then roll out Wizard,
 Backend (both protocols) and Web. No database migration. Do not deploy Backend
 before Wizard exposes /internal/api/v1/wizard/search/snapshot and /search/judge.
-Older Web responses stay compatible through the V1 adapter, and the current Web
-retries unfinished (search_pending) pages within its bounded budget instead of
-showing an error or an empty result. Disabling model relevance does not disable
-stable snapshots or thresholds.
+Older Web responses stay compatible through the V1 adapter. The current Web uses
+V2 for semantic queries, does not auto-retry failed pages (manual Retry/Restart),
+and only auto-continues successful empty partial pages (at most twice, 400 ms
+apart). Disabling model relevance does not disable stable snapshots or thresholds.
 
 The shared test environment was paused during implementation and subsequently
 restored by another operation to its existing images. Only a read-only candidate

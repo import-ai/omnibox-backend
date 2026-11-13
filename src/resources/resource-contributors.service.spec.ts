@@ -57,6 +57,25 @@ describe('ResourceContributorsService.recordEdit', () => {
     expect(insert.orIgnore).toHaveBeenCalled();
   });
 
+  it.each([ResourceType.LINK, ResourceType.FILE])(
+    'records a team-space edit on a %s resource',
+    async (resourceType) => {
+      const { service, manager, insert } = createService();
+
+      await service.recordEdit(manager as never, {
+        ...edit,
+        resourceType,
+      });
+
+      expect(insert.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceId: 'doc-1',
+          userId: 'editor',
+        }),
+      );
+    },
+  );
+
   it('does not record the creator, a non-member, a private doc, or a non-edit', async () => {
     const { service, manager, insert } = createService();
 
@@ -72,6 +91,10 @@ describe('ResourceContributorsService.recordEdit', () => {
     await service.recordEdit(manager as never, {
       ...edit,
       resourceType: ResourceType.FOLDER,
+    });
+    await service.recordEdit(manager as never, {
+      ...edit,
+      resourceType: ResourceType.RSS_ITEM,
     });
     await service.recordEdit(manager as never, {
       ...edit,
@@ -96,5 +119,80 @@ describe('ResourceContributorsService.recordEdit', () => {
     });
 
     expect(insert.execute).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ResourceContributorsService.present', () => {
+  function createService(resourceType: ResourceType) {
+    const manager = {
+      query: jest.fn().mockResolvedValue([{ ok: 1 }]),
+    };
+    const service = new ResourceContributorsService(
+      {
+        manager,
+        findOne: jest.fn().mockResolvedValue({
+          id: 'resource-1',
+          namespaceId: 'namespace-1',
+          parentId: 'team-root',
+          resourceType,
+          userId: 'creator',
+        }),
+      } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
+      { find: jest.fn().mockResolvedValue([]) } as never,
+      {
+        find: jest.fn().mockResolvedValue([
+          {
+            namespaceId: 'namespace-1',
+            userId: 'creator',
+            nickname: 'Lizhi',
+          },
+        ]),
+      } as never,
+      {
+        find: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'creator', username: 'lizhi', email: 'lizhi@example.com' },
+          ]),
+      } as never,
+    );
+    return { service, manager };
+  }
+
+  it.each([ResourceType.LINK, ResourceType.FILE])(
+    'returns the creator for a team %s resource',
+    async (resourceType) => {
+      const { service } = createService(resourceType);
+
+      await expect(
+        service.present('namespace-1', 'resource-1', true),
+      ).resolves.toMatchObject({
+        creator: {
+          label: 'Lizhi（lizhi）',
+          interactive: true,
+          user_id: 'creator',
+        },
+        collaborators: [],
+      });
+    },
+  );
+
+  it('returns no people for a private resource', async () => {
+    const { service, manager } = createService(ResourceType.LINK);
+    manager.query.mockResolvedValueOnce([]);
+
+    await expect(
+      service.present('namespace-1', 'resource-1', true),
+    ).resolves.toEqual({ creator: null, collaborators: [] });
+  });
+
+  it('returns no people for a folder', async () => {
+    const { service, manager } = createService(ResourceType.FOLDER);
+
+    await expect(
+      service.present('namespace-1', 'resource-1', true),
+    ).resolves.toEqual({ creator: null, collaborators: [] });
+    expect(manager.query).not.toHaveBeenCalled();
   });
 });

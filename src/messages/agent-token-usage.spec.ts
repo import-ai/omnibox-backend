@@ -46,6 +46,23 @@ describe('agentTokenDeltaOf', () => {
     });
   });
 
+  it('ignores provider-specific cached fields outside prompt_tokens_details', () => {
+    expect(
+      agentTokenDeltaOf({
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 5,
+          prompt_cache_hit_tokens: 80,
+          prompt_cache_miss_tokens: 20,
+        },
+      }),
+    ).toEqual({
+      inputTokenCached: 0,
+      inputTokenUncached: 100,
+      outputToken: 5,
+    });
+  });
+
   it('ignores attrs that carry no usage block', () => {
     expect(agentTokenDeltaOf(undefined)).toBeNull();
     expect(agentTokenDeltaOf(null)).toBeNull();

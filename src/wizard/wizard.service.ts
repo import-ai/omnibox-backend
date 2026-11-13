@@ -15,7 +15,7 @@ import { S3Service } from 'omniboxd/s3/s3.service';
 import { TagService } from 'omniboxd/tag/tag.service';
 import { InternalTaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
-import { TasksService } from 'omniboxd/tasks/tasks.service';
+import { PARSE_FUNCTIONS, TasksService } from 'omniboxd/tasks/tasks.service';
 import { WizardTaskService } from 'omniboxd/tasks/wizard-task.service';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 import { isEmpty } from 'omniboxd/utils/is-empty';
@@ -28,6 +28,7 @@ import {
 } from 'omniboxd/wizard/dto/task-callback.dto';
 import { CollectProcessor } from 'omniboxd/wizard/processors/collect.processor';
 import { CollectUrlProcessor } from 'omniboxd/wizard/processors/collect-url.processor';
+import { hasDeliverableContent } from 'omniboxd/wizard/processors/deliverable-content';
 import { ExtractTagsProcessor } from 'omniboxd/wizard/processors/extract-tags.processor';
 import { GenerateTitleProcessor } from 'omniboxd/wizard/processors/generate-title.processor';
 import { Processor } from 'omniboxd/wizard/processors/processor.abstract';
@@ -341,8 +342,7 @@ export class WizardService {
     if (
       task.status === TaskStatus.FINISHED &&
       this.processors[task.function] instanceof CollectProcessor &&
-      (typeof task.output?.markdown !== 'string' ||
-        !task.output.markdown.trim())
+      !hasDeliverableContent(task)
     ) {
       task.status = TaskStatus.ERROR;
       task.exception = {
@@ -479,6 +479,21 @@ export class WizardService {
             ...task.payload,
             credits_delivered: true,
             delivery_pending: false,
+            ...(task.payload?.behavior_context
+              ? {
+                  behavior_postprocessed: true,
+                  behavior_parse_success: Boolean(
+                    output.resourceId &&
+                    ((typeof task.output?.markdown === 'string' &&
+                      task.output.markdown.trim()) ||
+                      (['collect_url', 'web_analysis'].includes(
+                        task.function,
+                      ) &&
+                        typeof task.output?.title === 'string' &&
+                        task.output.title.trim())),
+                  ),
+                }
+              : {}),
           };
           delete task.payload.delivery_next_tasks;
           await manager.save(task);
@@ -568,6 +583,10 @@ export class WizardService {
             payload: {
               ...nextTask.payload,
               parent_task_id: parentTask.id,
+              ...(PARSE_FUNCTIONS.has(nextTask.function) &&
+              parentTask.payload?.behavior_context
+                ? { behavior_context: parentTask.payload.behavior_context }
+                : {}),
             },
           },
           tx,

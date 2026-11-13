@@ -158,9 +158,6 @@ describe('Open API combined resource scope', () => {
       'user',
       'shared',
       expect.objectContaining({ name: 'Renamed', parentId: undefined }),
-      false,
-      undefined,
-      undefined,
       { preserveAttrsOrigin: true },
     );
     await service.deleteResource('ns', scope, 'user', 'shared');

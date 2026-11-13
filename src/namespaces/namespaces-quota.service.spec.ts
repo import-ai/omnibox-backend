@@ -15,6 +15,44 @@ describe('NamespacesQuotaService', () => {
     jest.restoreAllMocks();
   });
 
+  it('uses the current 10 MB Basic upload limit without a Pro backend', async () => {
+    const service = new NamespacesQuotaService({
+      get: jest.fn().mockReturnValue(undefined),
+    } as unknown as ConfigService);
+    await expect(
+      service.getNamespaceUsage('namespace-id'),
+    ).resolves.toMatchObject({
+      fileUploadSizeLimit: 10 * 1024 * 1024,
+    });
+  });
+
+  it('reads the effective upload limit from the Pro wire response', async () => {
+    const service = createService();
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ file_upload_size_limit: 128 * 1024 * 1024 }),
+    } as Response);
+    await expect(
+      service.getNamespaceUsage('namespace-id'),
+    ).resolves.toMatchObject({
+      fileUploadSizeLimit: 128 * 1024 * 1024,
+    });
+  });
+
+  it('uses the current Basic default for older Pro responses without an upload limit', async () => {
+    const service = createService();
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    } as Response);
+    await expect(
+      service.getNamespaceUsage('namespace-id'),
+    ).resolves.toMatchObject({
+      fileUploadSizeLimit: 10 * 1024 * 1024,
+    });
+  });
+
   it('returns basic when the pro backend is not configured', async () => {
     const service = new NamespacesQuotaService({
       get: jest.fn().mockReturnValue(undefined),

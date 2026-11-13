@@ -42,7 +42,11 @@ export class CollectUrlProcessor extends Processor {
           namespaceId: task.namespaceId,
           name: prefixFailedResourceName(resource.name),
         }),
-        true,
+        {
+          // The error content renames the resource and may collide.
+          autoRenameOnConflict: true,
+          skipAttribution: true,
+        },
       );
       return {};
     } else if (task.output && task.output.title) {
@@ -59,7 +63,11 @@ export class CollectUrlProcessor extends Processor {
             namespaceId: task.namespaceId,
             name: scrapedTitle.trim(),
           }),
-          true, // autoRenameOnConflict for scraped titles
+          {
+            // Scraped titles may collide with an existing resource.
+            autoRenameOnConflict: true,
+            skipAttribution: true,
+          },
         );
 
         return { resourceId, title: scrapedTitle.trim() };

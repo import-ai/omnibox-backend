@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { I18nService } from 'nestjs-i18n';
+import { behaviorContext } from 'omniboxd/behavior/behavior-context';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { File } from 'omniboxd/files/entities/file.entity';
 import { FilesService } from 'omniboxd/files/files.service';
@@ -801,6 +802,12 @@ export class ResourcesService {
       internal?: boolean;
       forceRevision?: boolean;
       historyLimit?: number;
+      /**
+       * Leave the write out of the collaborator record. Background jobs still
+       * change the content they own, but they are not collaboration: only a
+       * person editing the resource should show up as a collaborator.
+       */
+      skipAttribution?: boolean;
     },
   ): Promise<void> {
     if (
@@ -850,6 +857,12 @@ export class ResourcesService {
         'RESOURCE_NOT_FOUND',
         HttpStatus.NOT_FOUND,
       );
+    }
+    const behavior = behaviorContext.getStore();
+    if (behavior?.action_type === 'resource_edit') {
+      behavior.changed =
+        (props.name !== undefined && props.name !== oldResource.name) ||
+        (props.content !== undefined && props.content !== oldResource.content);
     }
 
     if (!options?.internal) {
@@ -1027,17 +1040,19 @@ export class ResourcesService {
       );
     }
 
-    await this.resourceContributorsService.recordEdit(entityManager, {
-      namespaceId,
-      resourceId,
-      resourceType: oldResource.resourceType,
-      creatorUserId: oldResource.userId,
-      actorUserId: userId,
-      parentId: resource.parentId,
-      explicitNameChanged,
-      contentChanged,
-      tagsChanged,
-    });
+    if (!options?.skipAttribution) {
+      await this.resourceContributorsService.recordEdit(entityManager, {
+        namespaceId,
+        resourceId,
+        resourceType: oldResource.resourceType,
+        creatorUserId: oldResource.userId,
+        actorUserId: userId,
+        parentId: resource.parentId,
+        explicitNameChanged,
+        contentChanged,
+        tagsChanged,
+      });
+    }
   }
 
   async createResource(

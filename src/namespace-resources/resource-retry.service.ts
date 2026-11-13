@@ -164,6 +164,9 @@ export class ResourceRetryService {
       resource.id,
       userId,
       { content: '' },
+      undefined,
+      false,
+      { skipAttribution: true },
     );
   }
 }

@@ -82,6 +82,12 @@ const STREAM_START_ID = '0-0';
 type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
 type RedisClient = ReturnType<typeof createClient>;
 
+function isPrivateSearchTool(
+  tool: PrivateSearchToolDto | WebSearchToolDto,
+): tool is PrivateSearchToolDto {
+  return tool.name === 'private_search';
+}
+
 interface HandlerContext {
   behavior?: BehaviorContext;
   answerTiming?: AnswerTimingRun;
@@ -1069,20 +1075,19 @@ export class StreamService implements OnModuleDestroy {
     }
     const expanded: T[] = [];
     for (const tool of tools) {
-      if (tool.name !== 'private_search') {
+      if (!isPrivateSearchTool(tool)) {
         expanded.push(tool);
         continue;
       }
-      const privateSearchTool = tool;
       expanded.push({
-        ...privateSearchTool,
+        ...tool,
         visible_resources:
           await this.visibleResourcesService.getVisibleResources(
             namespaceId,
             userId,
-            privateSearchTool.resources || [],
+            tool.resources || [],
           ),
-      } as T);
+      });
     }
     return expanded;
   }

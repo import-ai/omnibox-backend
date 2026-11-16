@@ -12,6 +12,7 @@ describe('InternalResourcesController visible resources', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
     );
 
     const result = await controller.filterVisibleResources(
@@ -28,5 +29,45 @@ describe('InternalResourcesController visible resources', () => {
       ['keep', 'deny'],
     );
     expect(result).toEqual({ resourceIds: ['keep'] });
+  });
+
+  it('expands the requested resources for the header user', async () => {
+    const expanded = [
+      {
+        id: 'folder-id',
+        name: 'Folder',
+        type: 'folder',
+        child_ids: ['doc-id'],
+      },
+      { id: 'doc-id', name: 'Doc', type: 'resource' },
+    ];
+    const visibleResourcesService = {
+      getVisibleResources: jest.fn().mockResolvedValue(expanded),
+    };
+    const controller = new InternalResourcesController(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      visibleResourcesService as any,
+    );
+    const resources = [
+      { id: 'folder-id', name: 'Folder', type: 'folder' as const },
+    ];
+
+    const result = await controller.expandVisibleResources(
+      'namespace-id',
+      'user-id',
+      { resources },
+    );
+
+    expect(visibleResourcesService.getVisibleResources).toHaveBeenCalledWith(
+      'namespace-id',
+      'user-id',
+      resources,
+    );
+    expect(result).toEqual({ resources: expanded });
   });
 });

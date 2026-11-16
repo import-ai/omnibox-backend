@@ -41,11 +41,11 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
+  toPrivateSearchResource,
+  VisibleResourcesService,
+} from 'omniboxd/namespace-resources/visible-resources.service';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import {
@@ -54,7 +54,6 @@ import {
 } from 'omniboxd/shares/chat-only-payload';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
-import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { TraceService } from 'omniboxd/trace/trace.service';
 import {
   chatErrorCategory,
@@ -63,12 +62,15 @@ import {
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
+  PrivateSearchToolDto,
+  WebSearchToolDto,
   WizardAgentRequestDto,
   WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
 import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { WizardBaseUrlResolution } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
 import { createClient } from 'redis';
 import { Observable, Subscriber } from 'rxjs';
 
@@ -173,10 +175,9 @@ export class StreamService implements OnModuleDestroy {
     private readonly wizardApiService: WizardAPIService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
-    private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly visibleResourcesService: VisibleResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
-    private readonly smartFoldersService: SmartFoldersService,
     private readonly i18n: I18nService,
     private readonly shareAccessTokenService: ShareAccessTokenService,
     @Inject(AGENT_STREAM_HOOKS)
@@ -266,6 +267,23 @@ export class StreamService implements OnModuleDestroy {
     signal?: AbortSignal,
     agentStream?: AgentStream,
   ): Promise<void> {
+    let resolution: WizardBaseUrlResolution | undefined;
+    if (mode === 'ask' && !body.share_id) {
+      resolution = await this.wizardApiService.resolveAgentTarget(
+        namespaceId,
+        body,
+      );
+      // Only Agent 1.1 needs the eager expansion; Agent 2.1 resolves the same
+      // list lazily on its own resource_search call.
+      if (resolution.target !== 'pro') {
+        body.tools =
+          (await this.expandVisibleResources(
+            namespaceId,
+            body.user_id,
+            body.tools,
+          )) ?? body.tools;
+      }
+    }
     const span = trace.getActiveSpan();
     if (span) {
       span.setAttribute(
@@ -280,6 +298,7 @@ export class StreamService implements OnModuleDestroy {
       body,
       requestId,
       signal,
+      resolution,
     );
     if (!response.ok) {
       const message = this.i18n.t('system.errors.wizardRequestFailed');
@@ -1038,147 +1057,34 @@ export class StreamService implements OnModuleDestroy {
     subscriber.error(error);
   }
 
-  private async getUserVisibleResources(
+  private async expandVisibleResources<
+    T extends PrivateSearchToolDto | WebSearchToolDto,
+  >(
     namespaceId: string,
     userId: string,
-    resources: PrivateSearchResourceDto[],
-  ): Promise<PrivateSearchResourceDto[]> {
-    // for private_search, pass the resource with permission
-    if (resources.length === 0) {
-      // Default true keeps old wizard ACL-safe. Set false after wizard
-      // post-filters hits through POST /resources/visible.
-      const expandEmpty =
-        (
-          this.configService.get<string>(
-            'OBB_ASK_EXPAND_EMPTY_VISIBLE_RESOURCES',
-          ) ?? 'true'
-        ).toLowerCase() !== 'false';
-      if (!expandEmpty) {
-        return [];
-      }
-      const allResources =
-        await this.namespaceResourcesService.getAllResourcesByUser(
-          userId,
-          namespaceId,
-        );
-      return allResources.map((r) => this.toPrivateSearchResource(r));
+    tools?: T[],
+  ): Promise<T[] | undefined> {
+    if (!tools?.length) {
+      return tools;
     }
-    const visibleResources: PrivateSearchResourceDto[] =
-      await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(
-        namespaceId,
-        userId,
-        resources,
-      );
-    for (const resource of resources) {
-      if (resource.type === 'folder') {
-        const meta = await this.resourcesService.getResourceMeta(
-          namespaceId,
-          resource.id,
-        );
-        if (meta?.resourceType === ResourceType.SMART_FOLDER) {
-          // Smart folders are virtual — expand via conditions, not parentId
-          const children = await this.smartFoldersService.listChildren(
-            userId,
+    const expanded: T[] = [];
+    for (const tool of tools) {
+      if (tool.name !== 'private_search') {
+        expanded.push(tool);
+        continue;
+      }
+      const privateSearchTool = tool;
+      expanded.push({
+        ...privateSearchTool,
+        visible_resources:
+          await this.visibleResourcesService.getVisibleResources(
             namespaceId,
-            resource.id,
-          );
-          resource.child_ids = children.map((r) => r.id);
-          visibleResources.push(
-            ...children.map((r) => this.toPrivateSearchResource(r)),
-          );
-        } else {
-          const subResources =
-            await this.namespaceResourcesService.getAllSubResourcesByUser(
-              userId,
-              namespaceId,
-              resource.id,
-            );
-          resource.child_ids = subResources.map((r) => r.id);
-          visibleResources.push(
-            ...subResources.map((r) => this.toPrivateSearchResource(r)),
-          );
-        }
-      }
+            userId,
+            privateSearchTool.resources || [],
+          ),
+      } as T);
     }
-    return visibleResources;
-  }
-
-  private toPrivateSearchResource(resource: {
-    id: string;
-    name: string;
-    resourceType: ResourceType;
-  }): PrivateSearchResourceDto {
-    return {
-      id: resource.id,
-      name: resource.name || '',
-      type: this.toPrivateSearchResourceType(resource.resourceType),
-    };
-  }
-
-  private toPrivateSearchResourceType(
-    resourceType: ResourceType,
-  ): PrivateSearchResourceDto['type'] {
-    if (
-      resourceType === ResourceType.FOLDER ||
-      resourceType === ResourceType.SMART_FOLDER ||
-      // An rss folder is a container like any other: attached as chat context
-      // it expands to the articles filed under it.
-      resourceType === ResourceType.RSS_FOLDER
-    ) {
-      return 'folder';
-    }
-    return 'resource';
-  }
-
-  private isPrivateSearchFolder(
-    resource: PrivateSearchResourceDto,
-    actualResource?: Resource,
-  ): boolean {
-    return (
-      resource.type === 'folder' ||
-      actualResource?.resourceType === ResourceType.SMART_FOLDER
-    );
-  }
-
-  private async safeGetResource(
-    namespaceId: string,
-    resourceId: string,
-  ): Promise<Resource | undefined> {
-    try {
-      return await this.resourcesService.getResourceOrFail(
-        namespaceId,
-        resourceId,
-      );
-    } catch {
-      return undefined;
-    }
-  }
-
-  private async getUserVisibleChildResources(
-    namespaceId: string,
-    userId: string,
-    resource: PrivateSearchResourceDto,
-    actualResource?: Resource,
-  ): Promise<
-    Array<{
-      id: string;
-      name: string;
-      resourceType: ResourceType;
-    }>
-  > {
-    if (actualResource?.resourceType === ResourceType.SMART_FOLDER) {
-      return await this.namespaceResourcesService.listChildren(
-        namespaceId,
-        resource.id,
-        userId,
-        {},
-      );
-    }
-    return await this.namespaceResourcesService.getAllSubResourcesByUser(
-      userId,
-      namespaceId,
-      resource.id,
-    );
+    return expanded;
   }
 
   private async getShareVisibleResources(
@@ -1188,7 +1094,7 @@ export class StreamService implements OnModuleDestroy {
     if (reqResources.length === 0) {
       const resources =
         await this.sharedResourcesService.getAllSharedResources(share);
-      return resources.map((r) => this.toPrivateSearchResource(r));
+      return resources.map((r) => toPrivateSearchResource(r));
     }
 
     const visibleResources: PrivateSearchResourceDto[] = [...reqResources];
@@ -1210,7 +1116,7 @@ export class StreamService implements OnModuleDestroy {
               ]);
         reqResource.child_ids = subResources.map((r) => r.id);
         visibleResources.push(
-          ...subResources.map((r) => this.toPrivateSearchResource(r)),
+          ...subResources.map((r) => toPrivateSearchResource(r)),
         );
       }
     }
@@ -2476,13 +2382,21 @@ export class StreamService implements OnModuleDestroy {
     traceContext: ChatClientTraceContext = {},
     queryReceivedAt?: number,
   ): Promise<Observable<MessageEvent>> {
-    for (const tool of requestDto.tools || []) {
-      if (tool.name === 'private_search') {
-        tool.visible_resources = await this.getUserVisibleResources(
+    if (mode === 'write') {
+      requestDto.tools =
+        (await this.expandVisibleResources(
           namespaceId,
           userId,
-          tool.resources || [],
-        );
+          requestDto.tools,
+        )) ?? requestDto.tools;
+    } else {
+      // The core target expands inside stream(); an Agent 2.1 turn gets the
+      // same list lazily from wizard-pro, so a client-supplied one must not
+      // pin the search scope.
+      for (const tool of requestDto.tools || []) {
+        if (tool.name === 'private_search') {
+          delete tool.visible_resources;
+        }
       }
     }
     return await this.createAgentStream(

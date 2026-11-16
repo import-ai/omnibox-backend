@@ -194,7 +194,6 @@ function fixture(script: EmittedChunk[]) {
     {} as any,
     {} as any,
     {} as any,
-    {} as any,
     { t: (key: string) => key } as any,
     { mint: () => '' } as any,
     hooks as any,

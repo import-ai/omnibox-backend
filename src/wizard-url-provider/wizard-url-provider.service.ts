@@ -2,7 +2,10 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import { IWizardUrlProvider } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
+import {
+  IWizardUrlProvider,
+  WizardBaseUrlResolution,
+} from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
 
 @Injectable()
 export class WizardUrlProviderService implements IWizardUrlProvider {
@@ -25,5 +28,9 @@ export class WizardUrlProviderService implements IWizardUrlProvider {
 
   getBaseUrl(): Promise<string> {
     return Promise.resolve(this.baseUrl);
+  }
+
+  async resolveAgentTarget(): Promise<WizardBaseUrlResolution> {
+    return { baseUrl: await this.getBaseUrl(), target: 'core' };
   }
 }

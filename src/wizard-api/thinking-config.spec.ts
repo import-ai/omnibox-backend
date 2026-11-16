@@ -5,6 +5,7 @@ import { IWizardUrlProvider } from 'omniboxd/wizard-url-provider/wizard-url-prov
 it('returns only public selections and supports older Wizard deployments', async () => {
   const provider = {
     getBaseUrl: jest.fn().mockResolvedValue('http://wizard'),
+    resolveAgentTarget: jest.fn(),
   } as IWizardUrlProvider;
   const service = new WizardAPIService(provider, {
     t: () => 'Request failed',
@@ -48,6 +49,7 @@ it('validates full catalogs and reports malformed upstream responses as 502', as
   const service = new WizardAPIService(
     {
       getBaseUrl: () => Promise.resolve('http://wizard'),
+      resolveAgentTarget: jest.fn(),
     } as IWizardUrlProvider,
     { t: () => 'Request failed' } as unknown as I18nService,
   );

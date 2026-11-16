@@ -1,4 +1,5 @@
 {
+  "untitled": "Untitled",
   "errors": {
     "missingWizardBaseUrl": "Environment variable OBB_WIZARD_BASE_URL is required",
     "firstMessageNotSystem": "First message is not system message",

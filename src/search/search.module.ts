@@ -23,11 +23,15 @@ import {
 import { SearchService } from './search.service';
 import { SearchCandidateService } from './search-candidate.service';
 import { SearchResourceFilterService } from './search-resource-filter.service';
+import { SearchSessionService } from './search-session.service';
+import { SearchSessionStore } from './search-session.store';
 
 @Module({
   exports: [SearchService, OpenSearchService],
   providers: [
     SearchService,
+    SearchSessionService,
+    SearchSessionStore,
     MessageIndexMigrationService,
     SearchResourceFilterService,
     SearchCandidateService,

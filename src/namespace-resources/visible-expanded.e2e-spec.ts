@@ -162,6 +162,6 @@ describe('POST /internal/api/v1/namespaces/:namespaceId/resources/visible-expand
       .send({ resources: [] })
       .expect(HttpStatus.UNAUTHORIZED);
 
-    expect(response.body.code).toBe('NOT_AUTHORIZED');
+    expect(response.body.code).toBe('not_authorized');
   });
 });

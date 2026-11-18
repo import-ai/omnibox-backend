@@ -87,7 +87,9 @@ describe('Task-level retry (e2e)', () => {
     await addTask(resourceId, {
       function: 'file_reader',
       input: { resource_id: resourceId, ...input },
-      payload: { resource_id: resourceId },
+      // The old single-kind emitter wrote {resource_id, source} and no
+      // user.options; neither worker needs the missing options.
+      payload: { resource_id: resourceId, source: 'default' },
       status: TaskStatus.ERROR,
       endedAt: new Date(),
       exception: { error: 'legacy failure' },

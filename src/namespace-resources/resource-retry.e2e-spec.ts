@@ -107,7 +107,9 @@ describe('Resource task retry (e2e)', () => {
       {
         function: 'file_reader',
         input: { resource_id: resourceId, ...input },
-        payload: { resource_id: resourceId },
+        // The old single-kind emitter wrote {resource_id, source} and no
+        // user.options; neither worker needs the missing options.
+        payload: { resource_id: resourceId, source: 'default' },
         status: TaskStatus.ERROR,
         exception: { error: 'legacy failure' },
         ...overrides,

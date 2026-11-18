@@ -21,6 +21,7 @@ import { SharedResourcesModule } from 'omniboxd/shared-resources/shared-resource
 import { SharesModule } from 'omniboxd/shares/shares.module';
 
 import { ConversationAttachmentsService } from './conversation-attachments.service';
+import { OpenConversationAttachmentsController } from './open.conversation-attachments.controller';
 
 @Module({
   exports: [AttachmentsService],
@@ -31,6 +32,7 @@ import { ConversationAttachmentsService } from './conversation-attachments.servi
     InternalAttachmentsController,
     InternalConversationAttachmentsController,
     InternalShareAttachmentsController,
+    OpenConversationAttachmentsController,
     ShareAttachmentsController,
   ],
   imports: [

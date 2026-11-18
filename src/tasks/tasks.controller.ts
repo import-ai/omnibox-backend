@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Patch } from '@nestjs/common';
 import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { TasksService } from 'omniboxd/tasks/tasks.service';
 
@@ -20,11 +20,6 @@ export class TasksController {
   @Patch(':id/cancel')
   async cancelTask(@Param('id') id: string) {
     return await this.tasksService.cancelTaskOrFail(id);
-  }
-
-  @Post(':id/rerun')
-  async rerunTask(@Param('id') id: string) {
-    return await this.tasksService.rerunTask(id);
   }
 }
 

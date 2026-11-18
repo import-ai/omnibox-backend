@@ -21,6 +21,7 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { S3Module } from 'omniboxd/s3/s3.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { TaskRetryModule } from 'omniboxd/task-retry/task-retry.module';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 
@@ -52,6 +53,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
     TagModule,
     PermissionsModule,
     S3Module,
+    TaskRetryModule,
     TasksModule,
     ResourceAttachmentsModule,
     ResourceCommentsModule,

@@ -4,6 +4,8 @@
     "taskAlreadyCanceled": "Task is already canceled",
     "cannotCancelFinished": "Cannot cancel a finished task",
     "canOnlyRerunFailedOrCanceled": "Can only rerun failed or canceled tasks",
+    "invalidFileReaderInput": "This retried file task no longer matches its target file and cannot be re-run.",
+    "unsupportedFileExtension": "The file type of this task is not supported.",
     "invalidTaskPayload": "Invalid task payload",
     "retryAlreadyRunning": "A task is already running for this resource",
     "nothingToRetry": "This resource has no failed or canceled task to retry",

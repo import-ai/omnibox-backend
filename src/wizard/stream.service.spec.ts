@@ -2389,6 +2389,82 @@ describe('persisted query receipts', () => {
   });
 });
 
+describe('StreamService composer images', () => {
+  const image = {
+    attachment_id: '6ba7b810-9dad-41d1-80b4-00c04fd430c8',
+    url: '/api/v1/namespaces/client-ns/conversations/client-conversation/attachments/client-attachment',
+    name: 'image.jpg',
+  };
+
+  function serviceWithMessages() {
+    const service = createService({});
+    const create = jest.fn().mockResolvedValue({
+      id: 'query-id',
+      parentId: null,
+      createdAt: new Date('2026-11-16T00:00:00.000Z'),
+      message: { role: 'user', content: 'hello' },
+      attrs: {},
+    });
+    (service as any).messagesService = {
+      create,
+      findOne: jest.fn().mockResolvedValue({ attrs: {} }),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+    };
+    return { service, create };
+  }
+
+  async function run(service: StreamService, body: Record<string, unknown>) {
+    const observable = await (service as any).createAgentStream(
+      'namespace-id',
+      {
+        query: 'hello',
+        conversation_id: 'conversation-id',
+        tools: [],
+        ...body,
+      },
+      'req',
+      'ask',
+      'user-id',
+    );
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({ complete: resolve, error: reject }),
+    );
+  }
+
+  it('stores text and image display parts and forwards the images to the wizard', async () => {
+    const { service, create } = serviceWithMessages();
+    const wizardRequests: Record<string, any>[] = [];
+    jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, request) => {
+      wizardRequests.push(request);
+      return Promise.resolve();
+    });
+
+    await run(service, { images: [image] });
+
+    expect(create.mock.calls[0][3].attrs.composer).toEqual({
+      display_parts: [
+        { type: 'text', text: 'hello' },
+        {
+          type: 'image',
+          attachment_id: image.attachment_id,
+          name: image.name,
+          preview_url: `/api/v1/namespaces/namespace-id/conversations/conversation-id/attachments/${image.attachment_id}`,
+        },
+      ],
+    });
+    expect(wizardRequests[0].images).toEqual([image]);
+  });
+
+  it('does not write a composer without images', async () => {
+    const { service, create } = serviceWithMessages();
+    jest.spyOn(service, 'stream').mockResolvedValue(undefined);
+
+    await run(service, {});
+
+    expect(create.mock.calls[0][3].attrs).not.toHaveProperty('composer');
+  });
+});
+
 describe('StreamService cancellation extensions', () => {
   it.each(['local', 'remote'])(
     'awaits deployment cancellation for a %s stream',

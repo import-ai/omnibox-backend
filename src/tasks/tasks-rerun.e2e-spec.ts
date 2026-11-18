@@ -126,6 +126,13 @@ describe('Task-level retry (e2e)', () => {
         `/api/v1/namespaces/${namespaceId()}/invitations/${invitation.body.id}/accept`,
       )
       .expect(HttpStatus.CREATED);
+    // Only one non-group invitation may exist per namespace. Accepted members
+    // stay in the namespace, so drop the invitation to allow the next invite.
+    await client
+      .delete(
+        `/api/v1/namespaces/${namespaceId()}/invitations/${invitation.body.id}`,
+      )
+      .expect(HttpStatus.OK);
   };
 
   const legacyInput = (overrides: Record<string, any> = {}) => ({

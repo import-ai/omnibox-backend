@@ -67,7 +67,10 @@ import {
   WizardAgentRequestDto,
   WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
-import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
+import {
+  ChatErrorResponse,
+  ChatResponse,
+} from 'omniboxd/wizard/dto/chat-response.dto';
 import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { WizardBaseUrlResolution } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
@@ -86,6 +89,22 @@ function isPrivateSearchTool(
   tool: PrivateSearchToolDto | WebSearchToolDto,
 ): tool is PrivateSearchToolDto {
   return tool.name === 'private_search';
+}
+
+// A failure in stream()'s preflight (target resolution and eager expansion),
+// which happens before the wizard is called. The Open API answers these with
+// the original HTTP status and code instead of an in-stream error.
+const agentPreflightErrors = new WeakSet<Error>();
+
+function markAgentPreflight(error: unknown): unknown {
+  if (error instanceof Error) {
+    agentPreflightErrors.add(error);
+  }
+  return error;
+}
+
+function isAgentPreflight(error: unknown): error is Error {
+  return error instanceof Error && agentPreflightErrors.has(error);
 }
 
 interface HandlerContext {
@@ -275,19 +294,23 @@ export class StreamService implements OnModuleDestroy {
   ): Promise<void> {
     let resolution: WizardBaseUrlResolution | undefined;
     if (mode === 'ask' && !body.share_id) {
-      resolution = await this.wizardApiService.resolveAgentTarget(
-        namespaceId,
-        body,
-      );
-      // Only Agent 1.1 needs the eager expansion; Agent 2.1 resolves the same
-      // list lazily on its own resource_search call.
-      if (resolution.target !== 'pro') {
-        body.tools =
-          (await this.expandVisibleResources(
-            namespaceId,
-            body.user_id,
-            body.tools,
-          )) ?? body.tools;
+      try {
+        resolution = await this.wizardApiService.resolveAgentTarget(
+          namespaceId,
+          body,
+        );
+        // Only Agent 1.1 needs the eager expansion; Agent 2.1 resolves the same
+        // list lazily on its own resource_search call.
+        if (resolution.target !== 'pro') {
+          body.tools =
+            (await this.expandVisibleResources(
+              namespaceId,
+              body.user_id,
+              body.tools,
+            )) ?? body.tools;
+        }
+      } catch (error) {
+        throw markAgentPreflight(error);
       }
     }
     const span = trace.getActiveSpan();
@@ -2023,6 +2046,7 @@ export class StreamService implements OnModuleDestroy {
     }
     // A failed turn can never consume what it started, so release it like a stop.
     await this.requestDeploymentCancellation(session);
+    const chunk = this.errorChunk(error);
     try {
       if (session.handlerContext.queryId) {
         const handler = this.agentHandler(
@@ -2042,37 +2066,30 @@ export class StreamService implements OnModuleDestroy {
             session.handlerContext,
           );
         }
-        await handler(
-          JSON.stringify({
-            response_type: 'error',
-            message: error.message,
-            ...(error instanceof AppException ? { code: error.code } : {}),
-          }),
-          session.handlerContext,
-        );
+        await handler(chunk, session.handlerContext);
       } else {
-        await this.sendSessionData(
-          session,
-          JSON.stringify({
-            response_type: 'error',
-            message: error.message,
-            ...(error instanceof AppException ? { code: error.code } : {}),
-          }),
-        );
+        await this.sendSessionData(session, chunk);
       }
     } catch (persistenceError) {
       this.logger.error({ error: persistenceError });
-      await this.sendSessionData(
-        session,
-        JSON.stringify({
-          response_type: 'error',
-          message: error.message,
-          ...(error instanceof AppException ? { code: error.code } : {}),
-        }),
-      );
+      await this.sendSessionData(session, chunk);
     } finally {
       this.completeSession(session);
     }
+  }
+
+  private errorChunk(error: Error): string {
+    const chunk: ChatErrorResponse = {
+      response_type: 'error',
+      message: error.message,
+      ...(error instanceof AppException ? { code: error.code } : {}),
+    };
+    if (error instanceof AppException && isAgentPreflight(error)) {
+      // The Open API turns a preflight failure back into the HTTP response it
+      // returned before the expansion moved inside the turn.
+      chunk.status = error.getStatus();
+    }
+    return JSON.stringify(chunk);
   }
 
   private async requestDeploymentCancellation(session: StreamSession) {
@@ -2499,6 +2516,31 @@ export class StreamService implements OnModuleDestroy {
           chunks.push(chunk);
         },
         complete: () => {
+          const preflightError = chunks.find(
+            (
+              chunk,
+            ): chunk is ChatErrorResponse & {
+              status: number;
+              code: string;
+            } =>
+              chunk.response_type === 'error' &&
+              typeof chunk.status === 'number' &&
+              typeof chunk.code === 'string',
+          );
+          if (preflightError) {
+            // A preflight failure never reached the wizard, so the Open API
+            // keeps the HTTP status and code it returned before the expansion
+            // moved into the turn. In-stream errors carry no status and keep
+            // the existing chunk merging.
+            reject(
+              new AppException(
+                preflightError.message,
+                preflightError.code,
+                preflightError.status,
+              ),
+            );
+            return;
+          }
           resolve(chunks);
         },
         error: (error: Error) => {

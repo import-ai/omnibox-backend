@@ -485,11 +485,7 @@ describe('StreamService visible resource expansion gating', () => {
     attrs: {},
   });
 
-  async function runStream(
-    mocks: Parameters<typeof createService>[0],
-    body: Record<string, any>,
-    mode: 'ask' | 'write' = 'ask',
-  ) {
+  function gatedService(mocks: Parameters<typeof createService>[0]) {
     const query = asUserMessage('query-id');
     const messagesService = {
       create: jest.fn().mockResolvedValue(query),
@@ -516,6 +512,15 @@ describe('StreamService visible resource expansion gating', () => {
       .mockResolvedValue(undefined);
     jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
     jest.spyOn(service as any, 'isSessionCanceled').mockResolvedValue(false);
+    return { service, messagesService };
+  }
+
+  async function runStream(
+    mocks: Parameters<typeof createService>[0],
+    body: Record<string, any>,
+    mode: 'ask' | 'write' = 'ask',
+  ) {
+    const { service, messagesService } = gatedService(mocks);
 
     const observable = await service.createUserAgentStream(
       'user-id',
@@ -798,6 +803,7 @@ describe('StreamService visible resource expansion gating', () => {
       expect.objectContaining({
         response_type: 'error',
         code: 'INSUFFICIENT_AGENT_CREDITS',
+        status: 403,
       }),
     );
     expect((service as any).agentStreamHooks.onStreamClosed).toHaveBeenCalled();
@@ -827,6 +833,90 @@ describe('StreamService visible resource expansion gating', () => {
       expect.objectContaining({ response_type: 'error' }),
     );
     expect((service as any).agentStreamHooks.onStreamClosed).toHaveBeenCalled();
+  });
+
+  it('rejects the non-streaming open API turn with the preflight error', async () => {
+    const notFound = new AppException(
+      'Resource not found',
+      'RESOURCE_NOT_FOUND',
+      HttpStatus.NOT_FOUND,
+    );
+    const createAgentStream = jest.fn();
+    const { service } = gatedService({
+      wizardApiService: {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard', target: 'core' }),
+        createAgentStream,
+      },
+      visibleResourcesService: {
+        getVisibleResources: jest.fn().mockRejectedValue(notFound),
+      },
+    });
+
+    const error = await service
+      .chat(
+        'user-id',
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'hello',
+          channel: 'open_api',
+          tools: [folderTool],
+        } as any,
+        'request-id',
+      )
+      .then(
+        () => {
+          throw new Error('expected the chat to reject');
+        },
+        (reason: unknown) => reason,
+      );
+
+    expect(error).toBeInstanceOf(AppException);
+    expect((error as AppException).code).toBe('RESOURCE_NOT_FOUND');
+    expect((error as AppException).getStatus()).toBe(HttpStatus.NOT_FOUND);
+    expect(createAgentStream).not.toHaveBeenCalled();
+    expect((service as any).agentStreamHooks.onStreamClosed).toHaveBeenCalled();
+  });
+
+  it('leaves an in-stream wizard error to the chunk merge', async () => {
+    const { service } = gatedService({
+      wizardApiService: {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard', target: 'core' }),
+        createAgentStream: jest
+          .fn()
+          .mockResolvedValue(
+            new Response(
+              'data: {"response_type":"error","message":"wizard failed"}\n\n',
+            ),
+          ),
+      },
+      visibleResourcesService: {
+        getVisibleResources: jest.fn().mockResolvedValue([]),
+      },
+    });
+
+    const chunks = await service.chat(
+      'user-id',
+      'namespace-id',
+      {
+        conversation_id: 'conversation-id',
+        query: 'hello',
+        channel: 'open_api',
+        tools: [folderTool],
+      } as any,
+      'request-id',
+    );
+
+    const error = chunks.find((chunk: any) => chunk.response_type === 'error');
+    expect(error).toMatchObject({
+      response_type: 'error',
+      message: 'wizard failed',
+    });
+    expect(error).not.toHaveProperty('status');
   });
 });
 

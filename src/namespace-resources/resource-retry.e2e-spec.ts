@@ -5,6 +5,7 @@ import {
   Resource,
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
+import { S3Service } from 'omniboxd/s3/s3.service';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import { TestClient } from 'test/test-client';
 import { In, Repository } from 'typeorm';
@@ -14,6 +15,7 @@ describe('Resource task retry (e2e)', () => {
   let viewerClient: TestClient;
   let taskRepo: Repository<Task>;
   let resourceRepo: Repository<Resource>;
+  let putObjectSpy: jest.SpyInstance;
   let uid = 0;
 
   const uniqueName = (base: string) => `${base} ${++uid}`;
@@ -35,7 +37,8 @@ describe('Resource task retry (e2e)', () => {
         attrs: { original_name: filename, filename, mimetype },
       })
       .expect(HttpStatus.CREATED);
-    return response.body;
+    // ResourceDto does not expose fileId; the resource takes the uploaded id.
+    return { ...response.body, file_id: upload.body.id };
   };
 
   const createLinkResource = async (url: string, content = '') => {
@@ -72,8 +75,9 @@ describe('Resource task retry (e2e)', () => {
   const addTask = async (
     resourceId: string,
     overrides: Partial<Task>,
-  ): Promise<Task> =>
-    await taskRepo.save(
+    createdAt?: Date,
+  ): Promise<Task> => {
+    const task = await taskRepo.save(
       taskRepo.create({
         namespaceId: namespaceId(),
         userId: client.user.id,
@@ -85,6 +89,41 @@ describe('Resource task retry (e2e)', () => {
         ...overrides,
       }),
     );
+    if (createdAt) {
+      await taskRepo.update(task.id, { createdAt });
+      task.createdAt = createdAt;
+    }
+    return task;
+  };
+
+  const addLegacyTask = async (
+    resourceId: string,
+    input: Record<string, any>,
+    overrides: Partial<Task> = {},
+    createdAt?: Date,
+  ): Promise<Task> =>
+    await addTask(
+      resourceId,
+      {
+        function: 'file_reader',
+        input: { resource_id: resourceId, ...input },
+        // The old single-kind emitter wrote {resource_id, source} and no
+        // user.options; neither worker needs the missing options.
+        payload: { resource_id: resourceId, source: 'default' },
+        status: TaskStatus.ERROR,
+        exception: { error: 'legacy failure' },
+        ...overrides,
+      },
+      createdAt,
+    );
+
+  const legacyInput = (overrides: Record<string, any> = {}) => ({
+    title: 'Legacy task',
+    original_name: 'legacy.txt',
+    filename: 'legacy.txt',
+    mimetype: 'text/plain',
+    ...overrides,
+  });
 
   /**
    * Creating a resource that already carries content emits the follow-up chain
@@ -110,6 +149,11 @@ describe('Resource task retry (e2e)', () => {
     resourceRepo = client.app.get<Repository<Resource>>(
       getRepositoryToken(Resource),
     );
+    putObjectSpy = jest.spyOn(client.app.get(S3Service), 'putObject');
+  });
+
+  beforeEach(() => {
+    putObjectSpy.mockClear();
   });
 
   afterAll(async () => {
@@ -456,5 +500,486 @@ describe('Resource task retry (e2e)', () => {
     expect(response.body).toHaveLength(1);
     expect(response.body[0].function).toBe('collect_url');
     expect(response.body[0].status).toBe(TaskStatus.PENDING);
+  });
+
+  describe('legacy file_reader retry', () => {
+    const resetTasks = async (resourceId: string) => {
+      await taskRepo.delete({ resourceId });
+    };
+
+    const taskCount = async (resourceId: string) =>
+      await taskRepo.count({ where: { resourceId } });
+
+    const getTask = async (id: string) =>
+      await taskRepo.findOneByOrFail({ id });
+
+    it('retries an old file_reader into its format function without adding file metadata', async () => {
+      const resource = await createFileResource('legacy.txt', 'text/plain');
+      await resetTasks(resource.id);
+      const legacy = await addLegacyTask(resource.id, legacyInput());
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body).toHaveLength(1);
+      const [rerun] = response.body;
+      expect(rerun.function).toBe('file_reader_text');
+      expect(rerun.status).toBe(TaskStatus.PENDING);
+      expect(rerun.input).toEqual(legacy.input);
+      expect(rerun.input).not.toHaveProperty('file_id');
+      expect(rerun.retried_from_task_id).toBe(legacy.id);
+      expect(rerun.resource_id).toBe(resource.id);
+    });
+
+    it('infers an uppercase pro extension', async () => {
+      const resource = await createFileResource('报告.PDF', 'application/pdf');
+      await resetTasks(resource.id);
+      const legacy = await addLegacyTask(
+        resource.id,
+        legacyInput({ original_name: '报告.PDF', filename: '报告.PDF' }),
+      );
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].function).toBe('file_reader_pdf');
+      // No pro wizard in the e2e environment, so the pro-only function fails
+      // up front instead of staying pending.
+      expect(response.body[0].status).toBe(TaskStatus.ERROR);
+      expect(response.body[0].retried_from_task_id).toBe(legacy.id);
+    });
+
+    it('infers an uppercase basic extension', async () => {
+      const resource = await createFileResource(
+        '合同.DOCX',
+        'application/msword',
+      );
+      await resetTasks(resource.id);
+      await addLegacyTask(
+        resource.id,
+        legacyInput({
+          original_name: '合同.DOCX',
+          filename: '合同.DOCX',
+          mimetype: 'application/msword',
+        }),
+      );
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body[0].function).toBe('file_reader_word');
+      expect(response.body[0].status).toBe(TaskStatus.PENDING);
+    });
+
+    it('fills a genuinely missing resource_id', async () => {
+      const resource = await createFileResource('fill.txt', 'text/plain');
+      await resetTasks(resource.id);
+      await addTask(resource.id, {
+        function: 'file_reader',
+        input: {
+          title: 'Legacy task',
+          original_name: 'fill.txt',
+          filename: 'fill.txt',
+          mimetype: 'text/plain',
+        },
+        status: TaskStatus.ERROR,
+        exception: { error: 'boom' },
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body[0].function).toBe('file_reader_text');
+      expect(response.body[0].input.resource_id).toBe(resource.id);
+    });
+
+    it('keeps real content when the legacy retry is not about a placeholder', async () => {
+      const resource = await createFileResource('kept.txt', 'text/plain');
+      await resetTasks(resource.id);
+      await resourceRepo.update(resource.id, {
+        content: 'real parsed markdown',
+      });
+      await addLegacyTask(resource.id, legacyInput());
+
+      await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect((await getResource(resource.id)).content).toBe(
+        'real parsed markdown',
+      );
+    });
+
+    it.each([
+      ['no usable names', {}],
+      [
+        'a name without an extension',
+        { original_name: '合同', filename: null },
+      ],
+      ['an unknown extension', { original_name: 'a.xyz' }],
+      [
+        'an unknown original_name even with a valid filename',
+        { original_name: 'a.xyz', filename: 'legacy.txt' },
+      ],
+    ])('rejects %s as unsupported', async (_label, names) => {
+      const resource = await createFileResource(
+        'unsupported.txt',
+        'text/plain',
+      );
+      await resetTasks(resource.id);
+      await resourceRepo.update(resource.id, { content: 'error' });
+      await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        mimetype: 'text/plain',
+        ...names,
+      });
+      const before = await taskCount(resource.id);
+
+      const response = await retry(resource.id).expect(HttpStatus.BAD_REQUEST);
+
+      expect(response.body.code).toBe('unsupported_file_extension');
+      expect(await taskCount(resource.id)).toBe(before);
+      expect(putObjectSpy).not.toHaveBeenCalled();
+      expect((await getResource(resource.id)).content).toBe('error');
+    });
+
+    it('prepares a valid legacy task first but writes nothing when a later one is unsupported', async () => {
+      const resource = await createFileResource('mixed.txt', 'text/plain');
+      await resetTasks(resource.id);
+      await resourceRepo.update(resource.id, { content: 'error' });
+      // Newest first: the valid task is traversed before the unsupported one.
+      await addLegacyTask(
+        resource.id,
+        {
+          title: 'Legacy task',
+          original_name: 'a.xyz',
+          mimetype: 'text/plain',
+        },
+        {},
+        new Date(Date.now() - 2000),
+      );
+      await addLegacyTask(
+        resource.id,
+        legacyInput(),
+        {},
+        new Date(Date.now() - 1000),
+      );
+      const before = await taskCount(resource.id);
+
+      const response = await retry(resource.id).expect(HttpStatus.BAD_REQUEST);
+
+      expect(response.body.code).toBe('unsupported_file_extension');
+      expect(await taskCount(resource.id)).toBe(before);
+      expect(putObjectSpy).not.toHaveBeenCalled();
+      expect((await getResource(resource.id)).content).toBe('error');
+    });
+
+    it.each([
+      ['another resource', 'other-resource'],
+      ['explicit null', null],
+      ['empty string', ''],
+    ])(
+      'rejects an input.resource_id of %s and writes nothing',
+      async (_label, resourceId) => {
+        const resource = await createFileResource('mismatch.txt', 'text/plain');
+        await resetTasks(resource.id);
+        await resourceRepo.update(resource.id, { content: 'error' });
+        await addLegacyTask(resource.id, {
+          ...legacyInput(),
+          resource_id: resourceId,
+        });
+        const before = await taskCount(resource.id);
+
+        const response = await retry(resource.id).expect(
+          HttpStatus.BAD_REQUEST,
+        );
+
+        expect(response.body.code).toBe('invalid_file_reader_input');
+        expect(await taskCount(resource.id)).toBe(before);
+        expect(putObjectSpy).not.toHaveBeenCalled();
+        expect((await getResource(resource.id)).content).toBe('error');
+      },
+    );
+
+    it('rejects a Word/PDF conflict without evidence', async () => {
+      const resource = await createFileResource('conflict.txt', 'text/plain');
+      await resetTasks(resource.id);
+      await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        original_name: '合同.docx',
+        filename: 'a.pdf',
+        mimetype: 'application/pdf',
+      });
+      const before = await taskCount(resource.id);
+
+      const response = await retry(resource.id).expect(HttpStatus.BAD_REQUEST);
+
+      expect(response.body.code).toBe('invalid_file_reader_input');
+      expect(await taskCount(resource.id)).toBe(before);
+      expect(putObjectSpy).not.toHaveBeenCalled();
+    });
+
+    it('rejects the reverse conflict without evidence', async () => {
+      const resource = await createFileResource('conflict2.txt', 'text/plain');
+      await resetTasks(resource.id);
+      await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        original_name: 'a.pdf',
+        filename: '合同.docx',
+        mimetype: 'application/pdf',
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.BAD_REQUEST);
+
+      expect(response.body.code).toBe('invalid_file_reader_input');
+    });
+
+    it('resolves a Word/PDF conflict from the bound file row', async () => {
+      const resource = await createFileResource(
+        'resolved.pdf',
+        'application/pdf',
+      );
+      await resetTasks(resource.id);
+      await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        original_name: '合同.docx',
+        filename: 'a.pdf',
+        mimetype: 'application/pdf',
+        file_id: resource.file_id,
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body[0].function).toBe('file_reader_pdf');
+      expect(response.body[0].input.original_name).toBe('resolved.pdf');
+      expect(response.body[0].input.filename).toBe('a.pdf');
+      expect(response.body[0].input.file_id).toBe(resource.file_id);
+    });
+
+    it('resolves the reverse conflict from the bound file row', async () => {
+      const resource = await createFileResource(
+        'resolved2.pdf',
+        'application/pdf',
+      );
+      await resetTasks(resource.id);
+      await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        original_name: 'a.pdf',
+        filename: '合同.docx',
+        mimetype: 'application/pdf',
+        fileId: resource.file_id,
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body[0].function).toBe('file_reader_pdf');
+      expect(response.body[0].input.original_name).toBe('a.pdf');
+      expect(response.body[0].input).not.toHaveProperty('filename');
+    });
+
+    it('rejects a repair when the task carries no file-id evidence', async () => {
+      const resource = await createFileResource('noevidence.txt', 'text/plain');
+      await resetTasks(resource.id);
+      const legacy = await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        original_name: 'noevidence.txt',
+        filename: null,
+        mimetype: 'text/plain',
+      });
+      const before = await taskCount(resource.id);
+
+      const response = await retry(resource.id).expect(HttpStatus.BAD_REQUEST);
+
+      expect(response.body.code).toBe('invalid_file_reader_input');
+      expect(await taskCount(resource.id)).toBe(before);
+      expect(putObjectSpy).not.toHaveBeenCalled();
+      expect((await getTask(legacy.id)).input).toEqual(legacy.input);
+    });
+
+    it('drops an invalid filename and keeps the confirmed original_name', async () => {
+      const resource = await createFileResource(
+        '合同.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      );
+      await resetTasks(resource.id);
+      const legacy = await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        original_name: '合同.docx',
+        filename: null,
+        mimetype:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        file_id: resource.file_id,
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body[0].function).toBe('file_reader_word');
+      expect(response.body[0].input.original_name).toBe('合同.docx');
+      expect(response.body[0].input).not.toHaveProperty('filename');
+      expect(response.body[0].input.file_id).toBe(resource.file_id);
+      const reloaded = await getTask(legacy.id);
+      expect(reloaded.input).toEqual(legacy.input);
+      expect(reloaded.status).toBe(TaskStatus.ERROR);
+    });
+
+    it('fills a missing original_name from the file row', async () => {
+      const resource = await createFileResource('notes.txt', 'text/plain');
+      await resetTasks(resource.id);
+      await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        filename: 'notes.txt',
+        mimetype: 'text/plain',
+        file_id: resource.file_id,
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body[0].function).toBe('file_reader_text');
+      expect(response.body[0].input.original_name).toBe('notes.txt');
+    });
+
+    it('fills a missing mimetype from the file row', async () => {
+      const resource = await createFileResource('mime.txt', 'text/plain');
+      await resetTasks(resource.id);
+      await addLegacyTask(resource.id, {
+        title: 'Legacy task',
+        original_name: 'mime.txt',
+        filename: 'mime.txt',
+        file_id: resource.file_id,
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body[0].input.mimetype).toBe('text/plain');
+    });
+
+    it('rejects a missing title even with evidence', async () => {
+      const resource = await createFileResource('notitle.txt', 'text/plain');
+      await resetTasks(resource.id);
+      await addLegacyTask(resource.id, {
+        original_name: 'notitle.txt',
+        filename: null,
+        mimetype: 'text/plain',
+        file_id: resource.file_id,
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.BAD_REQUEST);
+
+      expect(response.body.code).toBe('invalid_file_reader_input');
+    });
+
+    it('converts inline HTML once for a single collect_url task', async () => {
+      const resource = await createLinkResource('https://example.com/inline');
+      await addTask(resource.id, {
+        function: 'collect_url',
+        input: { url: 'https://example.com/inline', html: '<p>hi</p>' },
+        status: TaskStatus.ERROR,
+        exception: { error: 'boom' },
+      });
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].input.html_s3_key).toBeDefined();
+      expect(response.body[0].input).not.toHaveProperty('html');
+      expect(putObjectSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('queues a valid HTML task together with a valid legacy file task', async () => {
+      const resource = await createLinkResource('https://example.com/batch');
+      await addLegacyTask(
+        resource.id,
+        legacyInput(),
+        {},
+        new Date(Date.now() - 2000),
+      );
+      await addTask(
+        resource.id,
+        {
+          function: 'collect_url',
+          input: { url: 'https://example.com/batch', html: '<p>hi</p>' },
+          status: TaskStatus.ERROR,
+          exception: { error: 'boom' },
+        },
+        new Date(Date.now() - 1000),
+      );
+
+      const response = await retry(resource.id).expect(HttpStatus.CREATED);
+
+      const functions = (
+        response.body as { function: string; input: Record<string, any> }[]
+      )
+        .map((task) => task.function)
+        .sort();
+      expect(functions).toEqual(['collect_url', 'file_reader_text']);
+      const collect = (
+        response.body as { function: string; input: Record<string, any> }[]
+      ).find((task) => task.function === 'collect_url');
+      expect(collect?.input.html_s3_key).toBeDefined();
+      expect(collect?.input).not.toHaveProperty('html');
+      expect(putObjectSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes nothing when inline HTML would precede an unsupported old file', async () => {
+      const resource = await createLinkResource('https://example.com/mixed');
+      await resourceRepo.update(resource.id, { content: 'error' });
+      await addLegacyTask(
+        resource.id,
+        {
+          title: 'Legacy task',
+          original_name: 'a.xyz',
+          mimetype: 'text/plain',
+        },
+        {},
+        new Date(Date.now() - 2000),
+      );
+      await addTask(
+        resource.id,
+        {
+          function: 'collect_url',
+          input: { url: 'https://example.com/mixed', html: '<p>hi</p>' },
+          status: TaskStatus.ERROR,
+          exception: { error: 'boom' },
+        },
+        new Date(Date.now() - 1000),
+      );
+      const before = await taskCount(resource.id);
+
+      const response = await retry(resource.id).expect(HttpStatus.BAD_REQUEST);
+
+      expect(response.body.code).toBe('unsupported_file_extension');
+      expect(await taskCount(resource.id)).toBe(before);
+      expect(putObjectSpy).not.toHaveBeenCalled();
+      expect((await getResource(resource.id)).content).toBe('error');
+    });
+
+    it('writes nothing when inline HTML would precede an unconfirmable PDF', async () => {
+      const resource = await createLinkResource('https://example.com/mixed2');
+      await resourceRepo.update(resource.id, { content: 'error' });
+      await addLegacyTask(
+        resource.id,
+        {
+          title: 'Legacy task',
+          original_name: 'a.pdf',
+          filename: null,
+          mimetype: 'application/pdf',
+        },
+        {},
+        new Date(Date.now() - 2000),
+      );
+      await addTask(
+        resource.id,
+        {
+          function: 'collect_url',
+          input: { url: 'https://example.com/mixed2', html: '<p>hi</p>' },
+          status: TaskStatus.ERROR,
+          exception: { error: 'boom' },
+        },
+        new Date(Date.now() - 1000),
+      );
+      const before = await taskCount(resource.id);
+
+      const response = await retry(resource.id).expect(HttpStatus.BAD_REQUEST);
+
+      expect(response.body.code).toBe('invalid_file_reader_input');
+      expect(await taskCount(resource.id)).toBe(before);
+      expect(putObjectSpy).not.toHaveBeenCalled();
+      expect((await getResource(resource.id)).content).toBe('error');
+    });
   });
 });

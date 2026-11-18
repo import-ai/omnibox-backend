@@ -149,6 +149,7 @@ import { SharesModule } from 'omniboxd/shares/shares.module';
 import { SmartFoldersModule } from 'omniboxd/smart-folders/smart-folders.module';
 import { SubscribeMessageModule } from 'omniboxd/subscribe-message/subscribe-message.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { TaskRetryModule } from 'omniboxd/task-retry/task-retry.module';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 import { TelemetryModule } from 'omniboxd/telemetry';
 import { TraceModule } from 'omniboxd/trace/trace.module';
@@ -226,6 +227,7 @@ export class AppModule implements NestModule {
         NamespaceResourcesModule,
         NamespaceTasksModule,
         ResourcesModule,
+        TaskRetryModule,
         TasksModule,
         WizardModule,
         GroupsModule,

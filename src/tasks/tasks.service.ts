@@ -61,6 +61,16 @@ export const RETRYABLE_TASK_STATUSES = [
   TaskStatus.CANCELED,
 ];
 
+/**
+ * A retry that has already decided which function and input the new task will
+ * carry. Preparing a plan is read-only; only applying it writes.
+ */
+export interface RerunPlan {
+  original: Task;
+  function: string;
+  input: Record<string, any>;
+}
+
 @Injectable()
 export class TasksService {
   private readonly proUrl: string | undefined;
@@ -276,6 +286,17 @@ export class TasksService {
     return task;
   }
 
+  async getInNamespace(namespaceId: string, id: string) {
+    const task = await this.taskRepository.findOne({
+      where: { namespaceId, id },
+    });
+    if (!task) {
+      const message = this.i18n.t('task.errors.taskNotFound', { args: { id } });
+      throw new AppException(message, 'TASK_NOT_FOUND', HttpStatus.NOT_FOUND);
+    }
+    return task;
+  }
+
   async delete(id: string) {
     const task = await this.taskRepository.findOne({
       where: { id },
@@ -352,19 +373,14 @@ export class TasksService {
     }
   }
 
-  async rerunTask(id: string): Promise<TaskDto> {
-    const originalTask = await this.get(id);
-
-    if (!RETRYABLE_TASK_STATUSES.includes(originalTask.status)) {
-      const message = this.i18n.t('task.errors.canOnlyRerunFailedOrCanceled');
-      throw new AppException(
-        message,
-        'CAN_ONLY_RERUN_FAILED_OR_CANCELED',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    let input = originalTask.input;
+  /**
+   * Write a prepared retry: convert inline HTML to an S3 object, then emit the
+   * task that supersedes `plan.original`. The plan has already chosen the
+   * function and input, and the original's status was validated while it was
+   * prepared, so nothing is inferred or re-checked here.
+   */
+  async applyRerun(plan: RerunPlan): Promise<TaskDto> {
+    let input = plan.input;
     if (typeof input?.html === 'string') {
       const { html, ...rest } = input;
       const html_s3_key =
@@ -372,15 +388,15 @@ export class TasksService {
       input = { ...rest, html_s3_key };
     }
     const newTask = await this.emitTask({
-      namespaceId: originalTask.namespaceId,
-      userId: originalTask.userId,
-      priority: originalTask.priority,
-      function: originalTask.function,
+      namespaceId: plan.original.namespaceId,
+      userId: plan.original.userId,
+      priority: plan.original.priority,
+      function: plan.function,
       input,
-      payload: originalTask.payload,
+      payload: plan.original.payload,
       // Point at the task this run replaces, so the failure it supersedes can
       // be recognized exactly instead of guessed from timestamps.
-      retriedFromTaskId: originalTask.id,
+      retriedFromTaskId: plan.original.id,
     });
 
     return TaskDto.fromEntity(newTask);

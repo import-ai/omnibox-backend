@@ -8,10 +8,12 @@ import {
   ResourceType,
 } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
+import { TaskRetryService } from 'omniboxd/task-retry/task-retry.service';
 import { TaskDto } from 'omniboxd/tasks/dto/task.dto';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
 import {
   PARSE_FUNCTIONS,
+  RerunPlan,
   RETRYABLE_TASK_STATUSES,
   TasksService,
 } from 'omniboxd/tasks/tasks.service';
@@ -24,6 +26,7 @@ export class ResourceRetryService {
     private readonly permissionsService: PermissionsService,
     private readonly resourcesService: ResourcesService,
     private readonly tasksService: TasksService,
+    private readonly taskRetryService: TaskRetryService,
     private readonly wizardTaskService: WizardTaskService,
     private readonly i18n: I18nService,
   ) {}
@@ -83,6 +86,20 @@ export class ResourceRetryService {
     );
 
     if (retryable.length > 0) {
+      // Prepare the whole batch before writing anything: a single task that
+      // cannot be prepared rejects the retry with the placeholder, S3 and the
+      // task table untouched. Only execution (uploads and emits) can fail
+      // partially, as before.
+      const plans: RerunPlan[] = [];
+      for (const task of retryable) {
+        plans.push(
+          await this.taskRetryService.prepare(task, {
+            namespaceId,
+            userId,
+            resource,
+          }),
+        );
+      }
       const reparsing = retryable.some((task) =>
         PARSE_FUNCTIONS.has(task.function),
       );
@@ -92,8 +109,8 @@ export class ResourceRetryService {
         staleError && reparsing,
       );
       const rerun: TaskDto[] = [];
-      for (const task of retryable) {
-        rerun.push(await this.tasksService.rerunTask(task.id));
+      for (const plan of plans) {
+        rerun.push(await this.tasksService.applyRerun(plan));
       }
       return rerun;
     }

@@ -48,7 +48,6 @@ function fixture() {
     {} as any,
     {} as any,
     {} as any,
-    {} as any,
     { t: (k: string) => k } as any,
     {} as any,
     { onCallCompleted: jest.fn() } as any,

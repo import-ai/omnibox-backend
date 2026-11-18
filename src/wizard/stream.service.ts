@@ -41,11 +41,11 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
-import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import {
-  Resource,
-  ResourceType,
-} from 'omniboxd/resources/entities/resource.entity';
+  toPrivateSearchResource,
+  VisibleResourcesService,
+} from 'omniboxd/namespace-resources/visible-resources.service';
+import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesService } from 'omniboxd/resources/resources.service';
 import { SharedResourcesService } from 'omniboxd/shared-resources/shared-resources.service';
 import {
@@ -54,7 +54,6 @@ import {
 } from 'omniboxd/shares/chat-only-payload';
 import { Share, ShareType } from 'omniboxd/shares/entities/share.entity';
 import { ShareAccessTokenService } from 'omniboxd/shares/share-access-token.service';
-import { SmartFoldersService } from 'omniboxd/smart-folders/smart-folders.service';
 import { TraceService } from 'omniboxd/trace/trace.service';
 import {
   chatErrorCategory,
@@ -63,12 +62,18 @@ import {
 import {
   AgentRequestDto,
   PrivateSearchResourceDto,
+  PrivateSearchToolDto,
+  WebSearchToolDto,
   WizardAgentRequestDto,
   WizardPrivateSearchToolDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
-import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
+import {
+  ChatErrorResponse,
+  ChatResponse,
+} from 'omniboxd/wizard/dto/chat-response.dto';
 import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
+import { WizardBaseUrlResolution } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
 import { createClient } from 'redis';
 import { Observable, Subscriber } from 'rxjs';
 
@@ -79,6 +84,28 @@ const STREAM_START_ID = '0-0';
 
 type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
 type RedisClient = ReturnType<typeof createClient>;
+
+function isPrivateSearchTool(
+  tool: PrivateSearchToolDto | WebSearchToolDto,
+): tool is PrivateSearchToolDto {
+  return tool.name === 'private_search';
+}
+
+// A failure in stream()'s preflight (target resolution and eager expansion),
+// which happens before the wizard is called. The Open API answers these with
+// the original HTTP status and code instead of an in-stream error.
+const agentPreflightErrors = new WeakSet<Error>();
+
+function markAgentPreflight(error: unknown): unknown {
+  if (error instanceof Error) {
+    agentPreflightErrors.add(error);
+  }
+  return error;
+}
+
+function isAgentPreflight(error: unknown): error is Error {
+  return error instanceof Error && agentPreflightErrors.has(error);
+}
 
 interface HandlerContext {
   behavior?: BehaviorContext;
@@ -173,10 +200,9 @@ export class StreamService implements OnModuleDestroy {
     private readonly wizardApiService: WizardAPIService,
     private readonly messagesService: MessagesService,
     private readonly conversationsService: ConversationsService,
-    private readonly namespaceResourcesService: NamespaceResourcesService,
+    private readonly visibleResourcesService: VisibleResourcesService,
     private readonly sharedResourcesService: SharedResourcesService,
     private readonly resourcesService: ResourcesService,
-    private readonly smartFoldersService: SmartFoldersService,
     private readonly i18n: I18nService,
     private readonly shareAccessTokenService: ShareAccessTokenService,
     @Inject(AGENT_STREAM_HOOKS)
@@ -266,6 +292,27 @@ export class StreamService implements OnModuleDestroy {
     signal?: AbortSignal,
     agentStream?: AgentStream,
   ): Promise<void> {
+    let resolution: WizardBaseUrlResolution | undefined;
+    if (mode === 'ask' && !body.share_id) {
+      try {
+        resolution = await this.wizardApiService.resolveAgentTarget(
+          namespaceId,
+          body,
+        );
+        // Only Agent 1.1 needs the eager expansion; Agent 2.1 resolves the same
+        // list lazily on its own resource_search call.
+        if (resolution.target !== 'pro') {
+          body.tools =
+            (await this.expandVisibleResources(
+              namespaceId,
+              body.user_id,
+              body.tools,
+            )) ?? body.tools;
+        }
+      } catch (error) {
+        throw markAgentPreflight(error);
+      }
+    }
     const span = trace.getActiveSpan();
     if (span) {
       span.setAttribute(
@@ -280,6 +327,7 @@ export class StreamService implements OnModuleDestroy {
       body,
       requestId,
       signal,
+      resolution,
     );
     if (!response.ok) {
       const message = this.i18n.t('system.errors.wizardRequestFailed');
@@ -1038,147 +1086,33 @@ export class StreamService implements OnModuleDestroy {
     subscriber.error(error);
   }
 
-  private async getUserVisibleResources(
+  private async expandVisibleResources<
+    T extends PrivateSearchToolDto | WebSearchToolDto,
+  >(
     namespaceId: string,
     userId: string,
-    resources: PrivateSearchResourceDto[],
-  ): Promise<PrivateSearchResourceDto[]> {
-    // for private_search, pass the resource with permission
-    if (resources.length === 0) {
-      // Default true keeps old wizard ACL-safe. Set false after wizard
-      // post-filters hits through POST /resources/visible.
-      const expandEmpty =
-        (
-          this.configService.get<string>(
-            'OBB_ASK_EXPAND_EMPTY_VISIBLE_RESOURCES',
-          ) ?? 'true'
-        ).toLowerCase() !== 'false';
-      if (!expandEmpty) {
-        return [];
-      }
-      const allResources =
-        await this.namespaceResourcesService.getAllResourcesByUser(
-          userId,
-          namespaceId,
-        );
-      return allResources.map((r) => this.toPrivateSearchResource(r));
+    tools?: T[],
+  ): Promise<T[] | undefined> {
+    if (!tools?.length) {
+      return tools;
     }
-    const visibleResources: PrivateSearchResourceDto[] =
-      await this.namespaceResourcesService.permissionFilter<PrivateSearchResourceDto>(
-        namespaceId,
-        userId,
-        resources,
-      );
-    for (const resource of resources) {
-      if (resource.type === 'folder') {
-        const meta = await this.resourcesService.getResourceMeta(
-          namespaceId,
-          resource.id,
-        );
-        if (meta?.resourceType === ResourceType.SMART_FOLDER) {
-          // Smart folders are virtual — expand via conditions, not parentId
-          const children = await this.smartFoldersService.listChildren(
-            userId,
+    const expanded: T[] = [];
+    for (const tool of tools) {
+      if (!isPrivateSearchTool(tool)) {
+        expanded.push(tool);
+        continue;
+      }
+      expanded.push({
+        ...tool,
+        visible_resources:
+          await this.visibleResourcesService.getVisibleResources(
             namespaceId,
-            resource.id,
-          );
-          resource.child_ids = children.map((r) => r.id);
-          visibleResources.push(
-            ...children.map((r) => this.toPrivateSearchResource(r)),
-          );
-        } else {
-          const subResources =
-            await this.namespaceResourcesService.getAllSubResourcesByUser(
-              userId,
-              namespaceId,
-              resource.id,
-            );
-          resource.child_ids = subResources.map((r) => r.id);
-          visibleResources.push(
-            ...subResources.map((r) => this.toPrivateSearchResource(r)),
-          );
-        }
-      }
+            userId,
+            tool.resources || [],
+          ),
+      });
     }
-    return visibleResources;
-  }
-
-  private toPrivateSearchResource(resource: {
-    id: string;
-    name: string;
-    resourceType: ResourceType;
-  }): PrivateSearchResourceDto {
-    return {
-      id: resource.id,
-      name: resource.name || '',
-      type: this.toPrivateSearchResourceType(resource.resourceType),
-    };
-  }
-
-  private toPrivateSearchResourceType(
-    resourceType: ResourceType,
-  ): PrivateSearchResourceDto['type'] {
-    if (
-      resourceType === ResourceType.FOLDER ||
-      resourceType === ResourceType.SMART_FOLDER ||
-      // An rss folder is a container like any other: attached as chat context
-      // it expands to the articles filed under it.
-      resourceType === ResourceType.RSS_FOLDER
-    ) {
-      return 'folder';
-    }
-    return 'resource';
-  }
-
-  private isPrivateSearchFolder(
-    resource: PrivateSearchResourceDto,
-    actualResource?: Resource,
-  ): boolean {
-    return (
-      resource.type === 'folder' ||
-      actualResource?.resourceType === ResourceType.SMART_FOLDER
-    );
-  }
-
-  private async safeGetResource(
-    namespaceId: string,
-    resourceId: string,
-  ): Promise<Resource | undefined> {
-    try {
-      return await this.resourcesService.getResourceOrFail(
-        namespaceId,
-        resourceId,
-      );
-    } catch {
-      return undefined;
-    }
-  }
-
-  private async getUserVisibleChildResources(
-    namespaceId: string,
-    userId: string,
-    resource: PrivateSearchResourceDto,
-    actualResource?: Resource,
-  ): Promise<
-    Array<{
-      id: string;
-      name: string;
-      resourceType: ResourceType;
-    }>
-  > {
-    if (actualResource?.resourceType === ResourceType.SMART_FOLDER) {
-      return await this.namespaceResourcesService.listChildren(
-        namespaceId,
-        resource.id,
-        userId,
-        {},
-      );
-    }
-    return await this.namespaceResourcesService.getAllSubResourcesByUser(
-      userId,
-      namespaceId,
-      resource.id,
-    );
+    return expanded;
   }
 
   private async getShareVisibleResources(
@@ -1188,7 +1122,7 @@ export class StreamService implements OnModuleDestroy {
     if (reqResources.length === 0) {
       const resources =
         await this.sharedResourcesService.getAllSharedResources(share);
-      return resources.map((r) => this.toPrivateSearchResource(r));
+      return resources.map((r) => toPrivateSearchResource(r));
     }
 
     const visibleResources: PrivateSearchResourceDto[] = [...reqResources];
@@ -1210,7 +1144,7 @@ export class StreamService implements OnModuleDestroy {
               ]);
         reqResource.child_ids = subResources.map((r) => r.id);
         visibleResources.push(
-          ...subResources.map((r) => this.toPrivateSearchResource(r)),
+          ...subResources.map((r) => toPrivateSearchResource(r)),
         );
       }
     }
@@ -2112,6 +2046,7 @@ export class StreamService implements OnModuleDestroy {
     }
     // A failed turn can never consume what it started, so release it like a stop.
     await this.requestDeploymentCancellation(session);
+    const chunk = this.errorChunk(error);
     try {
       if (session.handlerContext.queryId) {
         const handler = this.agentHandler(
@@ -2131,37 +2066,30 @@ export class StreamService implements OnModuleDestroy {
             session.handlerContext,
           );
         }
-        await handler(
-          JSON.stringify({
-            response_type: 'error',
-            message: error.message,
-            ...(error instanceof AppException ? { code: error.code } : {}),
-          }),
-          session.handlerContext,
-        );
+        await handler(chunk, session.handlerContext);
       } else {
-        await this.sendSessionData(
-          session,
-          JSON.stringify({
-            response_type: 'error',
-            message: error.message,
-            ...(error instanceof AppException ? { code: error.code } : {}),
-          }),
-        );
+        await this.sendSessionData(session, chunk);
       }
     } catch (persistenceError) {
       this.logger.error({ error: persistenceError });
-      await this.sendSessionData(
-        session,
-        JSON.stringify({
-          response_type: 'error',
-          message: error.message,
-          ...(error instanceof AppException ? { code: error.code } : {}),
-        }),
-      );
+      await this.sendSessionData(session, chunk);
     } finally {
       this.completeSession(session);
     }
+  }
+
+  private errorChunk(error: Error): string {
+    const chunk: ChatErrorResponse = {
+      response_type: 'error',
+      message: error.message,
+      ...(error instanceof AppException ? { code: error.code } : {}),
+    };
+    if (error instanceof AppException && isAgentPreflight(error)) {
+      // The Open API turns a preflight failure back into the HTTP response it
+      // returned before the expansion moved inside the turn.
+      chunk.status = error.getStatus();
+    }
+    return JSON.stringify(chunk);
   }
 
   private async requestDeploymentCancellation(session: StreamSession) {
@@ -2476,13 +2404,21 @@ export class StreamService implements OnModuleDestroy {
     traceContext: ChatClientTraceContext = {},
     queryReceivedAt?: number,
   ): Promise<Observable<MessageEvent>> {
-    for (const tool of requestDto.tools || []) {
-      if (tool.name === 'private_search') {
-        tool.visible_resources = await this.getUserVisibleResources(
+    if (mode === 'write') {
+      requestDto.tools =
+        (await this.expandVisibleResources(
           namespaceId,
           userId,
-          tool.resources || [],
-        );
+          requestDto.tools,
+        )) ?? requestDto.tools;
+    } else {
+      // The core target expands inside stream(); an Agent 2.1 turn gets the
+      // same list lazily from wizard-pro, so a client-supplied one must not
+      // pin the search scope.
+      for (const tool of requestDto.tools || []) {
+        if (tool.name === 'private_search') {
+          delete tool.visible_resources;
+        }
       }
     }
     return await this.createAgentStream(
@@ -2580,6 +2516,31 @@ export class StreamService implements OnModuleDestroy {
           chunks.push(chunk);
         },
         complete: () => {
+          const preflightError = chunks.find(
+            (
+              chunk,
+            ): chunk is ChatErrorResponse & {
+              status: number;
+              code: string;
+            } =>
+              chunk.response_type === 'error' &&
+              typeof chunk.status === 'number' &&
+              typeof chunk.code === 'string',
+          );
+          if (preflightError) {
+            // A preflight failure never reached the wizard, so the Open API
+            // keeps the HTTP status and code it returned before the expansion
+            // moved into the turn. In-stream errors carry no status and keep
+            // the existing chunk merging.
+            reject(
+              new AppException(
+                preflightError.message,
+                preflightError.code,
+                preflightError.status,
+              ),
+            );
+            return;
+          }
           resolve(chunks);
         },
         error: (error: Error) => {

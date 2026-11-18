@@ -77,7 +77,6 @@ function fixture() {
     {} as any,
     {} as any,
     {} as any,
-    {} as any,
     { t: (key: string) => key } as any,
     { mint: () => '' } as any,
     { onStreamClosed: jest.fn().mockResolvedValue(undefined) } as any,

@@ -11,6 +11,7 @@ import { ResourceRetryService } from 'omniboxd/namespace-resources/resource-retr
 import { ResourceSortPreferenceController } from 'omniboxd/namespace-resources/resource-sort-preference.controller';
 import { ResourceSortPreferenceService } from 'omniboxd/namespace-resources/resource-sort-preference.service';
 import { ResourceSortingService } from 'omniboxd/namespace-resources/resource-sorting.service';
+import { VisibleResourcesService } from 'omniboxd/namespace-resources/visible-resources.service';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
@@ -30,6 +31,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
     NamespaceResourcesService,
     OpenResourcesService,
     ResourceSortPreferenceService,
+    VisibleResourcesService,
   ],
   providers: [
     NamespaceResourcesService,
@@ -37,6 +39,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
     ResourceSortPreferenceService,
     ResourceSortingService,
     ResourceRetryService,
+    VisibleResourcesService,
   ],
   controllers: [
     NamespaceResourcesController,

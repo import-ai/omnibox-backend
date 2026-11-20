@@ -7,6 +7,8 @@ import { NamespaceResourcesModule } from 'omniboxd/namespace-resources/namespace
 import { OpenResourcesController } from 'omniboxd/namespace-resources/open.resource.controller';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
 import { OpenSkillController } from 'omniboxd/open-api/open.skill.controller';
+import { OpenResourceCommentsController } from 'omniboxd/resource-comments/open.resource-comments.controller';
+import { ResourceCommentsModule } from 'omniboxd/resource-comments/resource-comments.module';
 import { OpenSearchController } from 'omniboxd/search/open.search.controller';
 import { SearchModule } from 'omniboxd/search/search.module';
 import { OpenTagController } from 'omniboxd/tag/open.tag.controller';
@@ -21,6 +23,7 @@ import { WizardModule } from 'omniboxd/wizard/wizard.module';
     OpenAPIKeyController,
     OpenAttachmentsController,
     OpenResourcesController,
+    OpenResourceCommentsController,
     OpenWizardController,
     OpenTagController,
     OpenSearchController,
@@ -36,6 +39,7 @@ import { WizardModule } from 'omniboxd/wizard/wizard.module';
     NamespacesQuotaModule,
     NamespaceResourcesModule,
     SearchModule,
+    ResourceCommentsModule,
   ],
 })
 export class OpenAPIModule {}

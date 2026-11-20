@@ -40,6 +40,7 @@ export class WizardAPIService {
     try {
       baseUrl ??= await this.wizardUrlProvider.getBaseUrl();
       const response = await fetch(`${baseUrl}/api/v1/wizard/models`, {
+        headers: this.getTraceHeaders(),
         signal: AbortSignal.timeout(5000),
       });
       if (response.status === 404) return {};

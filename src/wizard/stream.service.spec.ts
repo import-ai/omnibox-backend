@@ -588,6 +588,7 @@ describe('StreamService visible resource expansion gating', () => {
       'request-id',
       expect.any(AbortSignal),
       { baseUrl: 'http://wizard', target: 'core' },
+      undefined,
     );
   });
 
@@ -616,6 +617,7 @@ describe('StreamService visible resource expansion gating', () => {
       'request-id',
       expect.any(AbortSignal),
       { baseUrl: 'http://wizard-pro', target: 'pro' },
+      undefined,
     );
   });
 

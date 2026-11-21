@@ -312,3 +312,17 @@ it('stops post-EOS timing when cancellation arrives on another instance without 
   expect(rows[0].attrs?.stopped_runs).toContain('run');
   expect(rows[1].attrs?.answer_timing?.status).toBe('stopped');
 });
+
+it('stops the original run after an intervening steer message', async () => {
+  const attrs = { turn_id: 'q', turn_run_id: 'run' };
+  const { service, rows } = fixture([
+    row('q', null, R.USER),
+    row('a', 'q', R.ASSISTANT, S.SUCCESS, attrs),
+    row('steer', 'a', R.USER, S.SUCCESS, attrs),
+    row('reply', 'steer', R.ASSISTANT, S.STREAMING, attrs),
+  ]);
+  await service.stopRunning('n', 'c', undefined, 'reply');
+  expect(rows[0].attrs?.stopped_runs).toContain('run');
+  expect(rows[2].status).toBe(S.SUCCESS);
+  expect(rows[3].status).toBe(S.STOPPED);
+});

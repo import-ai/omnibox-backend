@@ -154,6 +154,7 @@ export class WizardAPIService {
     requestId: string,
     signal?: AbortSignal,
     resolution?: WizardBaseUrlResolution,
+    steerToken?: string,
   ): Promise<Response> {
     const wizardBaseUrl =
       resolution?.baseUrl ??
@@ -164,6 +165,7 @@ export class WizardAPIService {
       requestId,
     );
 
+    if (steerToken) requestHeaders['X-Steer-Token'] = steerToken;
     const response = await fetch(url, {
       method: 'POST',
       headers: requestHeaders,

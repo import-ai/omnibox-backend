@@ -83,6 +83,23 @@ export class WizardController {
     );
   }
 
+  @Post('conversations/:conversationId/runs/:runId/messages')
+  async steer(
+    @UserId() userId: string,
+    @Param('namespaceId') namespaceId: string,
+    @Param('conversationId') conversationId: string,
+    @Param('runId') runId: string,
+    @Body() body: AgentRequestDto,
+  ) {
+    return this.streamService.submitSteer(
+      namespaceId,
+      conversationId,
+      userId,
+      runId,
+      body,
+    );
+  }
+
   @Post('ask')
   @Sse()
   async ask(

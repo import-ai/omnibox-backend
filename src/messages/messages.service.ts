@@ -602,6 +602,7 @@ export class MessagesService {
               b.id.localeCompare(a.id),
           )[0];
     if (!leaf) return null;
+    const queryId = activeRun?.queryId ?? leaf.attrs?.turn_id;
     const branch: Message[] = [];
     const seen = new Set<string>();
     while (leaf && !seen.has(leaf.id)) {
@@ -609,14 +610,13 @@ export class MessagesService {
       branch.push(leaf);
       if (
         leaf.message.role === OpenAIMessageRole.USER &&
-        !leaf.attrs?.tool_call?.decisions?.length
+        !leaf.attrs?.tool_call?.decisions?.length &&
+        (!queryId || leaf.id === queryId)
       )
         break;
       leaf = leaf.parentId ? byId.get(leaf.parentId) : undefined;
     }
-    const query =
-      byId.get(activeRun?.queryId ?? branch[0].attrs?.turn_id ?? '') ??
-      branch.at(-1);
+    const query = queryId ? byId.get(queryId) : branch.at(-1);
     if (
       !query ||
       !branch.some((m) => m.id === query.id) ||

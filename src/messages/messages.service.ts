@@ -444,7 +444,15 @@ export class MessagesService {
 
     return this.dataSource.transaction(async (manager) => {
       const message = await this.lockStreamMessage(manager, id);
+      const finishingBackgroundTool =
+        message.status === MessageStatus.SUCCESS &&
+        message.message.role === OpenAIMessageRole.TOOL &&
+        !!deltaMessage.tool_call_id &&
+        message.message.tool_call_id === deltaMessage.tool_call_id &&
+        message.attrs?.tool_call?.status === 'running' &&
+        ['success', 'failed'].includes(delta.attrs?.tool_call?.status ?? '');
       if (
+        !finishingBackgroundTool &&
         [
           MessageStatus.SUCCESS,
           MessageStatus.STOPPED,
@@ -470,7 +478,7 @@ export class MessagesService {
         message.message.tool_call_id = deltaMessage.tool_call_id;
       }
       // <<< OpenAI Message
-      message.status = MessageStatus.STREAMING;
+      if (!finishingBackgroundTool) message.status = MessageStatus.STREAMING;
       if (delta.attrs) {
         message.attrs = message.attrs || {};
         Object.assign(message.attrs, delta.attrs);

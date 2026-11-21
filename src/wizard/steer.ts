@@ -22,6 +22,9 @@ return 1`;
 
 // Closing an empty inbox races atomically with the last composer submission.
 export const READ_STEER = `
+if redis.call('HEXISTS', KEYS[1], 'stopped') == 1 then
+  return {'{"stopped":true}'}
+end
 local queue = redis.call('HGET', KEYS[1], 'queue')
 if queue and redis.call('HGET', KEYS[1], 'open') == '1' then
   local run = redis.call('HGET', KEYS[1], 'run')

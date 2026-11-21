@@ -140,6 +140,7 @@ interface HandlerContext {
   };
   runId?: string;
   canSteer?: boolean;
+  stopped?: boolean;
   failed?: boolean;
   interrupted?: boolean;
   queryId?: string;
@@ -179,6 +180,8 @@ interface StreamSession {
   handlerContext: HandlerContext;
   finished: boolean;
   steerToken?: string;
+  steerStopSupported?: boolean;
+  drainUsage?: boolean;
 }
 
 interface ChatClientTraceContext {
@@ -401,6 +404,8 @@ export class StreamService implements OnModuleDestroy {
         )
         .exec();
       session.handlerContext.canSteer = true;
+      session.steerStopSupported =
+        response.headers.get('x-accept-steer-stop') === '1';
     }
     if (agentStream) {
       try {
@@ -519,6 +524,7 @@ export class StreamService implements OnModuleDestroy {
     let firstTokenRecorded = false;
     const runningToolRows = new Map<string, string>();
     const interruptedCalls = new Map<string, string>();
+    let skippedMessageBoundary = false;
     const handle = async (
       data: string,
       context: HandlerContext,
@@ -530,6 +536,7 @@ export class StreamService implements OnModuleDestroy {
         const pendingCall = metadata?.pending_usage_call_id;
         if (
           typeof pendingCall === 'string' &&
+          !skippedMessageBoundary &&
           context.messageId &&
           context.message?.role === OpenAIMessageRole.ASSISTANT
         ) {
@@ -545,10 +552,21 @@ export class StreamService implements OnModuleDestroy {
               chunk.attrs.usage,
             );
             interruptedCalls.delete(settledCall);
-            if (row) this.reportCallCompleted(row, stream);
+            if (row) {
+              this.reportCallCompleted(
+                row,
+                context.stopped && stream
+                  ? { ...stream, settledAfterStop: true }
+                  : stream,
+              );
+            }
           }
           return;
         }
+      }
+      if (context.stopped) {
+        skippedMessageBoundary ||= ['bos', 'eos'].includes(chunk.response_type);
+        return;
       }
       if (behavior) context.behavior = behavior;
       if (
@@ -1904,11 +1922,21 @@ export class StreamService implements OnModuleDestroy {
         requestId,
         async (data) => {
           const chunkReceivedAt = Date.now();
-          if (session.finished || session.controller.signal.aborted) return;
-          if (await this.isSessionCanceled(session.key)) {
+          if (session.controller.signal.aborted) return;
+          if (
+            !session.finished &&
+            !session.handlerContext.stopped &&
+            (await this.isSessionCanceled(session.key))
+          ) {
             await this.stopSession(session);
+          }
+          if (session.handlerContext.stopped) {
+            // The browser stream has stopped. The Wizard can still settle a
+            // model call interrupted by Steer on this upstream connection.
+            if (session.drainUsage) await handler(data, session.handlerContext);
             return;
           }
+          if (session.finished) return;
           const chunk = JSON.parse(data) as ChatResponse & {
             event_id?: string;
           };
@@ -1927,9 +1955,14 @@ export class StreamService implements OnModuleDestroy {
         agentStream,
       );
     })()
-      .then(() => this.completeSession(session))
+      .then(() => {
+        if (!session.handlerContext.stopped) this.completeSession(session);
+      })
       .catch(async (err: Error) => {
-        if (!session.controller.signal.aborted) {
+        if (
+          !session.controller.signal.aborted &&
+          !session.handlerContext.stopped
+        ) {
           await this.errorSession(session, err);
         }
       });
@@ -2249,15 +2282,35 @@ export class StreamService implements OnModuleDestroy {
   }
 
   private async stopSession(session: StreamSession) {
-    if (session.finished || session.controller.signal.aborted) return;
+    if (session.finished || session.handlerContext.stopped) return;
+    session.handlerContext.stopped = true;
     session.handlerContext.failed = true;
-    if (session.userId)
-      await this.agentStreamHooks.onCancellationRequested?.(
-        session.userId,
-        session.conversationId,
-      );
-    session.controller.abort();
+    session.drainUsage = Boolean(session.steerStopSupported);
     try {
+      await this.requestDeploymentCancellation(session);
+      if (
+        session.drainUsage &&
+        this.redisClient?.isOpen &&
+        session.steerToken
+      ) {
+        const inbox = 'wizard:steer:' + session.steerToken;
+        try {
+          const channel =
+            ((await this.redisClient.hGet(inbox, 'queue')) || inbox) + ':wake';
+          await this.redisClient
+            .multi()
+            .hSet(inbox, 'stopped', '1')
+            .hDel(inbox, ['open', 'running'])
+            .publish(channel, 'stop')
+            .exec();
+        } catch (error) {
+          this.logger.error({ error });
+          session.drainUsage = false;
+        }
+      } else {
+        session.drainUsage = false;
+      }
+      if (!session.drainUsage) session.controller.abort();
       await this.markSessionCanceled(session.key);
       const message = await this.messagesService.stopRunning(
         session.namespaceId,

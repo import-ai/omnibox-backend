@@ -2468,6 +2468,46 @@ describe('StreamService composer images', () => {
 });
 
 describe('StreamService cancellation extensions', () => {
+  it('stops the browser stream without aborting negotiated usage settlement', async () => {
+    const service = createService({}) as any;
+    const multi = {
+      hSet: jest.fn().mockReturnThis(),
+      hDel: jest.fn().mockReturnThis(),
+      publish: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    };
+    service.redisClient = {
+      isOpen: true,
+      hGet: jest.fn().mockResolvedValue('submission-queue'),
+      multi: jest.fn().mockReturnValue(multi),
+    };
+    service.messagesService = { stopRunning: jest.fn() };
+    jest.spyOn(service, 'markSessionCanceled').mockResolvedValue(undefined);
+    jest.spyOn(service, 'sendSessionData').mockResolvedValue(undefined);
+    jest.spyOn(service, 'completeSession').mockImplementation(() => undefined);
+    const session = {
+      controller: new AbortController(),
+      steerToken: 'token',
+      steerStopSupported: true,
+      handlerContext: {},
+    };
+
+    await service.stopSession(session);
+
+    expect(multi.hSet).toHaveBeenCalledWith(
+      'wizard:steer:token',
+      'stopped',
+      '1',
+    );
+    expect(multi.publish).toHaveBeenCalledWith('submission-queue:wake', 'stop');
+    expect(session.controller.signal.aborted).toBe(false);
+    expect(service.sendSessionData).toHaveBeenCalledWith(
+      session,
+      JSON.stringify({ response_type: 'stopped' }),
+    );
+    expect(service.completeSession).toHaveBeenCalledWith(session);
+  });
+
   it.each(['local', 'remote'])(
     'awaits deployment cancellation for a %s stream',
     async (location) => {
@@ -2653,63 +2693,96 @@ describe('StreamService agent handler error finalization', () => {
     return { handler, messagesService, send };
   }
 
-  it('bills interrupted usage on the original reply after the next reply starts', async () => {
-    const service = createService({}) as any;
-    const oldRow = {
-      id: 'old-reply',
-      inputTokenCached: 80,
-      inputTokenUncached: 20,
-      outputToken: 30,
-    };
-    const settle = jest.fn().mockResolvedValue(oldRow);
-    service.messagesService = { settleInterruptedUsage: settle };
-    const charge = jest.fn().mockResolvedValue(undefined);
-    service.agentStreamHooks.onCallCompleted = charge;
-    const send = jest.fn();
-    const stream = { streamId: 'run' };
-    const handler = service.agentHandler(
-      'namespace',
-      'conversation',
-      'user',
-      send,
-      false,
-      stream,
-    );
-    const context = {
-      messageId: 'old-reply',
-      message: { role: OpenAIMessageRole.ASSISTANT },
-    };
-    const pending = {
-      response_type: 'delta',
-      message: {},
-      attrs: { context: { pending_usage_call_id: 'interrupted' } },
-    };
-    const settled = {
-      response_type: 'delta',
-      message: {},
-      attrs: {
-        context: { settled_usage_call_id: 'interrupted' },
-        usage: {
-          prompt_tokens: 100,
-          completion_tokens: 30,
-          prompt_tokens_details: { cached_tokens: 80 },
+  it.each(['next reply', 'stop'])(
+    'bills interrupted usage on the original reply once after %s',
+    async (transition) => {
+      const service = createService({}) as any;
+      const oldRow = {
+        id: 'old-reply',
+        inputTokenCached: 80,
+        inputTokenUncached: 20,
+        outputToken: 30,
+      };
+      const settle = jest.fn().mockResolvedValue(oldRow);
+      service.messagesService = { settleInterruptedUsage: settle };
+      const charge = jest.fn().mockResolvedValue(undefined);
+      service.agentStreamHooks.onCallCompleted = charge;
+      const send = jest.fn();
+      const stream = { streamId: 'run' };
+      const handler = service.agentHandler(
+        'namespace',
+        'conversation',
+        'user',
+        send,
+        false,
+        stream,
+      );
+      const context = {
+        messageId: 'old-reply',
+        message: { role: OpenAIMessageRole.ASSISTANT },
+        stopped: false,
+      };
+      const pending = {
+        response_type: 'delta',
+        message: {},
+        attrs: { context: { pending_usage_call_id: 'interrupted' } },
+      };
+      const settled = {
+        response_type: 'delta',
+        message: {},
+        attrs: {
+          context: { settled_usage_call_id: 'interrupted' },
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 30,
+            prompt_tokens_details: { cached_tokens: 80 },
+          },
         },
-      },
-    };
-    await handler(JSON.stringify(pending), context);
-    context.messageId = 'new-reply';
-    await handler(JSON.stringify(settled), context);
-    await handler(JSON.stringify(settled), context);
-    expect(settle).toHaveBeenCalledTimes(1);
-    expect(settle).toHaveBeenCalledWith('old-reply', settled.attrs.usage);
-    expect(charge).toHaveBeenCalledTimes(1);
-    expect(charge).toHaveBeenCalledWith(stream, 'old-reply', {
-      inputTokenCached: 80,
-      inputTokenUncached: 20,
-      outputToken: 30,
-    });
-    expect(send).not.toHaveBeenCalled();
-  });
+      };
+      if (transition === 'stop') context.stopped = true;
+      await handler(JSON.stringify(pending), context);
+      if (transition === 'stop') {
+        await handler(
+          JSON.stringify({ response_type: 'bos', role: 'assistant' }),
+          context,
+        );
+        await handler(
+          JSON.stringify({
+            ...pending,
+            attrs: { context: { pending_usage_call_id: 'untracked' } },
+          }),
+          context,
+        );
+        await handler(
+          JSON.stringify({
+            ...settled,
+            attrs: {
+              ...settled.attrs,
+              context: { settled_usage_call_id: 'untracked' },
+            },
+          }),
+          context,
+        );
+      } else {
+        context.messageId = 'new-reply';
+      }
+      await handler(JSON.stringify(settled), context);
+      await handler(JSON.stringify(settled), context);
+      expect(settle).toHaveBeenCalledTimes(1);
+      expect(settle).toHaveBeenCalledWith('old-reply', settled.attrs.usage);
+      expect(charge).toHaveBeenCalledTimes(1);
+      expect(charge).toHaveBeenCalledWith(
+        context.stopped ? { ...stream, settledAfterStop: true } : stream,
+        'old-reply',
+        {
+          inputTokenCached: 80,
+          inputTokenUncached: 20,
+          outputToken: 30,
+        },
+      );
+      expect(send).not.toHaveBeenCalled();
+    },
+  );
 
   it('marks an open tool message as a failed tool call', async () => {
     const { handler, messagesService, send } = handlerWithMessages();

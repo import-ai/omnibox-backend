@@ -521,6 +521,7 @@ export class StreamService implements OnModuleDestroy {
       if (
         chunk.response_type === 'delta' &&
         chunk.message.content &&
+        !chunk.message.tool_call_id &&
         context.message?.role === OpenAIMessageRole.ASSISTANT &&
         context.roundFirstContentAt === undefined
       ) {
@@ -547,6 +548,7 @@ export class StreamService implements OnModuleDestroy {
           if (id !== context.messageId) {
             await this.messagesService.updateDelta(id, chunk);
             chunk.id = id;
+            delete chunk.attrs?.context;
             await send(JSON.stringify(this.forVisitor(chunk, chatOnly)));
             return;
           }

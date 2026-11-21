@@ -129,6 +129,28 @@ describe('stopped turn persistence', () => {
     await expect(service.stopRunning('n', 'c', undefined)).resolves.toBeNull();
     expect(rows[1].attrs?.turn_status).toBeUndefined();
   });
+  it('accepts the background tool result exactly once after its stream row closes', async () => {
+    const { service, rows } = fixture([
+      row(
+        'tool',
+        null,
+        R.TOOL,
+        S.SUCCESS,
+        { tool_call: { status: 'running' } },
+        'call',
+      ),
+    ]);
+    const delta = {
+      response_type: 'delta' as const,
+      message: { tool_call_id: 'call', content: 'created' },
+      attrs: { tool_call: { status: 'success' as const } },
+    };
+    await service.updateDelta('tool', delta);
+    await service.updateDelta('tool', delta);
+    expect(rows[0].message.content).toBe('created');
+    expect(rows[0].attrs?.tool_call?.status).toBe('success');
+    expect(rows[0].status).toBe(S.SUCCESS);
+  });
   it('keeps stopped messages stopped after late deltas, EOS and checkpoints', async () => {
     const { service, rows } = fixture([
       row('q', null, R.USER),

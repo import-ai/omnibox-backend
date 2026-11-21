@@ -668,15 +668,15 @@ export class MessagesService {
           activeIds.add(message.id);
       const active = scoped.filter((m) => activeIds.has(m.id));
       const terminal = new Set(['success', 'failed', 'rejected', 'stopped']);
-      const pending = active.filter(
-        (m) =>
-          m.id !== query.id &&
-          [
-            MessageStatus.PENDING,
-            MessageStatus.STREAMING,
-            MessageStatus.INTERRUPTED,
-          ].includes(m.status),
-      );
+      const isPending = (m: Message) =>
+        [
+          MessageStatus.PENDING,
+          MessageStatus.STREAMING,
+          MessageStatus.INTERRUPTED,
+        ].includes(m.status) ||
+        (m.message.role === OpenAIMessageRole.TOOL &&
+          m.attrs?.tool_call?.status === 'running');
+      const pending = active.filter((m) => m.id !== query.id && isPending(m));
       const unresolved = active.some((m) =>
         m.message.tool_calls?.some(
           (call) =>
@@ -729,14 +729,7 @@ export class MessagesService {
           where: { id: candidate.id },
           lock: { mode: 'pessimistic_write' },
         });
-        if (
-          ![
-            MessageStatus.PENDING,
-            MessageStatus.STREAMING,
-            MessageStatus.INTERRUPTED,
-          ].includes(message.status)
-        )
-          continue;
+        if (!isPending(message)) continue;
         message.status = MessageStatus.STOPPED;
         if (
           message.message.role === OpenAIMessageRole.TOOL &&

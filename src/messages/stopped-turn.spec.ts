@@ -151,6 +151,27 @@ describe('stopped turn persistence', () => {
     expect(rows[0].attrs?.tool_call?.status).toBe('success');
     expect(rows[0].status).toBe(S.SUCCESS);
   });
+  it('settles usage for an already closed assistant message only once', async () => {
+    const { service, rows } = fixture([row('a', null, R.ASSISTANT)]);
+    const usage = {
+      prompt_tokens: 120,
+      completion_tokens: 20,
+      prompt_tokens_details: { cached_tokens: 100 },
+    };
+    await expect(
+      service.settleInterruptedUsage('a', usage),
+    ).resolves.toMatchObject({
+      inputTokenCached: 100,
+      inputTokenUncached: 20,
+      outputToken: 20,
+      status: S.SUCCESS,
+    });
+    await expect(
+      service.settleInterruptedUsage('a', usage),
+    ).resolves.toBeUndefined();
+    expect(rows[0].outputToken).toBe(20);
+  });
+
   it('keeps stopped messages stopped after late deltas, EOS and checkpoints', async () => {
     const { service, rows } = fixture([
       row('q', null, R.USER),

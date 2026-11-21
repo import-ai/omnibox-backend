@@ -14,6 +14,7 @@ import { CreateMessageDto } from 'omniboxd/messages/dto/create-message.dto';
 import {
   isMessageIndexable,
   Message,
+  MessageAttrs,
   MessageStatus,
   OpenAIMessage,
   OpenAIMessageRole,
@@ -436,6 +437,24 @@ export class MessagesService {
     return repo.findOneOrFail({
       where: { id },
       lock: { mode: 'pessimistic_write' },
+    });
+  }
+
+  async settleInterruptedUsage(id: string, usage: MessageAttrs['usage']) {
+    const tokens = agentTokenDeltaOf({ usage });
+    if (!tokens) return;
+    return this.dataSource.transaction(async (manager) => {
+      const message = await this.lockStreamMessage(manager, id);
+      if (
+        message.message.role !== OpenAIMessageRole.ASSISTANT ||
+        message.attrs?.usage
+      )
+        return;
+      message.attrs = { ...message.attrs, usage };
+      message.inputTokenCached += tokens.inputTokenCached;
+      message.inputTokenUncached += tokens.inputTokenUncached;
+      message.outputToken += tokens.outputToken;
+      return manager.save(message);
     });
   }
 

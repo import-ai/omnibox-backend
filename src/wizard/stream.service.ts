@@ -79,7 +79,14 @@ import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { WizardBaseUrlResolution } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
 import { createClient } from 'redis';
-import { filter, firstValueFrom, map, Observable, Subscriber } from 'rxjs';
+import {
+  filter,
+  firstValueFrom,
+  lastValueFrom,
+  map,
+  Observable,
+  Subscriber,
+} from 'rxjs';
 
 import { ConversationAttachmentsService } from '../attachments/conversation-attachments.service';
 import { NamespaceResourcesService } from '../namespace-resources/namespace-resources.service';
@@ -511,12 +518,38 @@ export class StreamService implements OnModuleDestroy {
     const behavior = behaviorContext.getStore();
     let firstTokenRecorded = false;
     const runningToolRows = new Map<string, string>();
+    const interruptedCalls = new Map<string, string>();
     const handle = async (
       data: string,
       context: HandlerContext,
       receivedAt?: number,
     ): Promise<void> => {
       const chunk: ChatResponse = JSON.parse(data);
+      if (chunk.response_type === 'delta') {
+        const metadata = chunk.attrs?.context;
+        const pendingCall = metadata?.pending_usage_call_id;
+        if (
+          typeof pendingCall === 'string' &&
+          context.messageId &&
+          context.message?.role === OpenAIMessageRole.ASSISTANT
+        ) {
+          interruptedCalls.set(pendingCall, context.messageId);
+          return;
+        }
+        const settledCall = metadata?.settled_usage_call_id;
+        if (typeof settledCall === 'string') {
+          const id = interruptedCalls.get(settledCall);
+          if (id && chunk.attrs?.usage) {
+            const row = await this.messagesService.settleInterruptedUsage(
+              id,
+              chunk.attrs.usage,
+            );
+            interruptedCalls.delete(settledCall);
+            if (row) this.reportCallCompleted(row, stream);
+          }
+          return;
+        }
+      }
       if (behavior) context.behavior = behavior;
       if (
         chunk.response_type === 'bos' ||
@@ -2518,11 +2551,14 @@ export class StreamService implements OnModuleDestroy {
         } catch (error) {
           if (
             error instanceof AppException &&
-            [
-              'PENDING_INTERRUPT',
-              'DECISION_NOT_APPLIED',
-              'CONVERSATION_BUSY',
-            ].includes(error.code)
+            ['PENDING_INTERRUPT', 'DECISION_NOT_APPLIED'].includes(error.code)
+          ) {
+            await this.rejectQueuedApproval(job, error);
+            return;
+          }
+          if (
+            error instanceof AppException &&
+            error.code === 'CONVERSATION_BUSY'
           )
             return;
           if (!(error instanceof HttpException) || error.getStatus() >= 500)
@@ -2539,6 +2575,92 @@ export class StreamService implements OnModuleDestroy {
       this.logger.error({ message: 'Conversation delivery will retry', error });
     } finally {
       this.processingSubmissions.delete(key);
+    }
+  }
+
+  private async rejectQueuedApproval(
+    job: ConversationSubmission,
+    error: AppException,
+  ) {
+    const id = error.data?.message_id;
+    const count = error.data?.interrupt_count;
+    if (typeof id !== 'string' || !Number.isSafeInteger(count) || count < 1)
+      throw error;
+    const { namespaceId, conversationId, userId, timeZone } = job;
+    const approval = await this.messagesService.findOneInConversation(
+      id,
+      conversationId,
+      userId,
+    );
+    const decisions = approval?.attrs?.tool_call?.decisions;
+    if (
+      error.code === 'DECISION_NOT_APPLIED' &&
+      (!decisions?.length ||
+        decisions.some(
+          (decision) =>
+            decision.type !== 'reject' || decision.end_turn !== true,
+        ))
+    )
+      return;
+    // Resume the interrupted turn with its original model settings.
+    const original = approval?.attrs?.turn_id
+      ? await this.messagesService.findOneInConversation(
+          approval.attrs.turn_id,
+          conversationId,
+          userId,
+        )
+      : undefined;
+    const settings = (original?.attrs ?? approval?.attrs) as
+      | Pick<AgentRequestDto, 'edition' | 'level' | 'enable_thinking'>
+      | undefined;
+    try {
+      const stream = await this.openUserAgentStream(
+        userId,
+        namespaceId,
+        {
+          conversation_id: conversationId,
+          parent_message_id: id,
+          query: '',
+          tools: [],
+          edition: settings?.edition,
+          level: settings?.level,
+          enable_thinking: settings?.enable_thinking,
+          channel: job.body.channel,
+          tool_call: {
+            decisions:
+              decisions ??
+              Array.from({ length: count }, () => ({
+                type: 'reject',
+                message:
+                  'The user sent a new message instead of approving this operation. Do not retry it.',
+                end_turn: true,
+              })),
+          },
+        },
+        randomUUID(),
+        'ask',
+        timeZone,
+      );
+      const terminal = await lastValueFrom(
+        stream.pipe(
+          map((event) => JSON.parse(event.data as string) as ChatResponse),
+          filter(
+            (event) =>
+              event.response_type === 'done' || event.response_type === 'error',
+          ),
+        ),
+      );
+      if (terminal.response_type === 'error') throw new Error(terminal.message);
+    } catch (failure) {
+      if (
+        !(
+          failure instanceof AppException &&
+          ['INTERRUPT_ALREADY_DECIDED', 'CONVERSATION_BUSY'].includes(
+            failure.code,
+          )
+        )
+      )
+        throw failure;
     }
   }
 

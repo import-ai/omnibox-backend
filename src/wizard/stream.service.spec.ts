@@ -8,7 +8,7 @@ import {
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
 
 function createService(mocks: {
   configService?: { get: jest.Mock };
@@ -2653,6 +2653,64 @@ describe('StreamService agent handler error finalization', () => {
     return { handler, messagesService, send };
   }
 
+  it('bills interrupted usage on the original reply after the next reply starts', async () => {
+    const service = createService({}) as any;
+    const oldRow = {
+      id: 'old-reply',
+      inputTokenCached: 80,
+      inputTokenUncached: 20,
+      outputToken: 30,
+    };
+    const settle = jest.fn().mockResolvedValue(oldRow);
+    service.messagesService = { settleInterruptedUsage: settle };
+    const charge = jest.fn().mockResolvedValue(undefined);
+    service.agentStreamHooks.onCallCompleted = charge;
+    const send = jest.fn();
+    const stream = { streamId: 'run' };
+    const handler = service.agentHandler(
+      'namespace',
+      'conversation',
+      'user',
+      send,
+      false,
+      stream,
+    );
+    const context = {
+      messageId: 'old-reply',
+      message: { role: OpenAIMessageRole.ASSISTANT },
+    };
+    const pending = {
+      response_type: 'delta',
+      message: {},
+      attrs: { context: { pending_usage_call_id: 'interrupted' } },
+    };
+    const settled = {
+      response_type: 'delta',
+      message: {},
+      attrs: {
+        context: { settled_usage_call_id: 'interrupted' },
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 30,
+          prompt_tokens_details: { cached_tokens: 80 },
+        },
+      },
+    };
+    await handler(JSON.stringify(pending), context);
+    context.messageId = 'new-reply';
+    await handler(JSON.stringify(settled), context);
+    await handler(JSON.stringify(settled), context);
+    expect(settle).toHaveBeenCalledTimes(1);
+    expect(settle).toHaveBeenCalledWith('old-reply', settled.attrs.usage);
+    expect(charge).toHaveBeenCalledTimes(1);
+    expect(charge).toHaveBeenCalledWith(stream, 'old-reply', {
+      inputTokenCached: 80,
+      inputTokenUncached: 20,
+      outputToken: 30,
+    });
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('marks an open tool message as a failed tool call', async () => {
     const { handler, messagesService, send } = handlerWithMessages();
 
@@ -3614,6 +3672,99 @@ describe('conversation submission admission', () => {
       steer,
     };
   }
+  it('rejects an approval raised after enqueue and delivers the original message on retry', async () => {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: {
+        findSubmitted: jest.fn(),
+        findOneInConversation: jest
+          .fn()
+          .mockResolvedValueOnce({ attrs: { turn_id: 'original' } })
+          .mockResolvedValueOnce({ attrs: { edition: 'pro', level: 'low' } }),
+      },
+    });
+    jest
+      .spyOn(service as any, 'getRedisClient')
+      .mockResolvedValue({ get: jest.fn(), exists: jest.fn() });
+    const start = jest
+      .spyOn(service as any, 'openUserAgentStream')
+      .mockRejectedValueOnce(
+        new AppException('Approval pending', 'PENDING_INTERRUPT', 409, {
+          message_id: 'approval',
+          interrupt_count: 2,
+        }),
+      )
+      .mockResolvedValueOnce(
+        of({ data: JSON.stringify({ response_type: 'done' }) }),
+      )
+      .mockResolvedValueOnce(
+        of({
+          data: JSON.stringify({
+            response_type: 'bos',
+            role: 'user',
+            id: 'persisted',
+            attrs: { client_request_id: requestId },
+          }),
+        }),
+      );
+    const queue = {
+      process: jest.fn((_key, deliver) =>
+        deliver({ ...job, checkpointDelivery: true }),
+      ),
+    };
+    await (service as any).processSubmission(queue, 'scope');
+    await expect(queue.process.mock.results[0].value).resolves.toBeUndefined();
+    expect(start.mock.calls[1][2]).toEqual(
+      expect.objectContaining({
+        parent_message_id: 'approval',
+        edition: 'pro',
+        level: 'low',
+        tool_call: {
+          decisions: Array.from({ length: 2 }, () =>
+            expect.objectContaining({ type: 'reject', end_turn: true }),
+          ),
+        },
+      }),
+    );
+    expect(start.mock.calls[1][3]).not.toBe(requestId);
+    await (service as any).processSubmission(queue, 'scope');
+    await expect(queue.process.mock.results[1].value).resolves.toMatchObject({
+      disposition: 'started',
+      client_request_id: requestId,
+    });
+  });
+
+  it.each(['reject', 'approve'])(
+    'only resumes a rejected end-turn decision after an interrupted resume (%s)',
+    async (type) => {
+      const decisions = [{ type, end_turn: true }];
+      const service = createService({
+        messagesService: {
+          findOneInConversation: jest.fn().mockResolvedValue({
+            attrs: { tool_call: { decisions }, edition: 'pro' },
+          }),
+        },
+      });
+      const start = jest
+        .spyOn(service as any, 'openUserAgentStream')
+        .mockResolvedValue(of({ data: '{"response_type":"done"}' }));
+      await (service as any).rejectQueuedApproval(
+        job,
+        new AppException('Decision not applied', 'DECISION_NOT_APPLIED', 409, {
+          message_id: 'decision',
+          interrupt_count: 1,
+        }),
+      );
+      if (type === 'reject') {
+        expect(start.mock.calls[0][2]).toMatchObject({
+          parent_message_id: 'decision',
+          tool_call: { decisions },
+        });
+      } else {
+        expect(start).not.toHaveBeenCalled();
+      }
+    },
+  );
   it('leaves early input queued while a running turn negotiates steer', async () => {
     const { deliver, start } = setup(true);
     await expect(deliver()).resolves.toBeUndefined();

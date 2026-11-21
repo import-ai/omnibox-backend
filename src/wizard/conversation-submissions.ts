@@ -51,9 +51,12 @@ export class ConversationSubmissions {
         if redis.call('HGET', KEYS[2], 'fingerprint') ~= ARGV[7] then return false end
         return redis.call('HGET', KEYS[2], 'receipt')
       end
-      if ARGV[5] ~= '' and redis.call('HGET', KEYS[4], 'open') == '1' then
+      local tail = redis.call('LINDEX', KEYS[1], -1)
+      local ordered = not tail or redis.call('HGET', KEYS[1] .. ':' .. tail, 'inbox') == KEYS[4]
+      if ordered and ARGV[5] ~= '' and redis.call('HGET', KEYS[4], 'open') == '1' then
         local seen = redis.call('HGET', KEYS[4], ARGV[3])
         if seen and seen ~= ARGV[5] then return false end
+        redis.call('HSET', KEYS[2], 'inbox', KEYS[4])
         if not seen then
           redis.call('HSET', KEYS[4], ARGV[3], ARGV[5])
           redis.call('RPUSH', KEYS[5], ARGV[5])

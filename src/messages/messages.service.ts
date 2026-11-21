@@ -497,6 +497,23 @@ export class MessagesService {
   // The newest message no other message replies to. Messages saved in one
   // transaction share a created_at, so recency alone can pick a message that
   // already has a reply.
+  async findSubmitted(
+    userId: string,
+    conversationId: string,
+    requestId: string,
+  ) {
+    return this.messageRepository
+      .createQueryBuilder('message')
+      .where(
+        'message.conversationId = :conversationId AND message.userId = :userId',
+        { conversationId, userId },
+      )
+      .andWhere("message.attrs ->> 'client_request_id' = :requestId", {
+        requestId,
+      })
+      .getOne();
+  }
+
   async findLatest(userId: string, conversationId: string) {
     const messages = await this.messageRepository.find({
       select: { id: true, parentId: true, createdAt: true },

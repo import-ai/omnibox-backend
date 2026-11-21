@@ -36,6 +36,10 @@ export class WizardAPIService {
     private readonly i18n: I18nService,
   ) {}
 
+  get submissionPool() {
+    return this.wizardUrlProvider.submissionPool ?? 'core';
+  }
+
   async getModelsConfig(baseUrl?: string) {
     try {
       baseUrl ??= await this.wizardUrlProvider.getBaseUrl();

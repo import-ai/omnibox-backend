@@ -12,9 +12,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Interval } from '@nestjs/schedule';
 import { trace } from '@opentelemetry/api';
 import { isUUID } from 'class-validator';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { Span } from 'nestjs-otel';
 import {
@@ -78,10 +79,15 @@ import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { WizardBaseUrlResolution } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
 import { createClient } from 'redis';
-import { Observable, Subscriber } from 'rxjs';
+import { filter, firstValueFrom, map, Observable, Subscriber } from 'rxjs';
 
 import { ConversationAttachmentsService } from '../attachments/conversation-attachments.service';
 import { NamespaceResourcesService } from '../namespace-resources/namespace-resources.service';
+import {
+  ConversationSubmission,
+  ConversationSubmissions,
+  SubmissionReceipt,
+} from './conversation-submissions';
 import { APPEND_STEER, prepareSteer, READ_STEER } from './steer';
 
 const STREAM_TTL_SECONDS = 60 * 60;
@@ -366,6 +372,9 @@ export class StreamService implements OnModuleDestroy {
       const inbox = 'wizard:steer:' + session.steerToken;
       await redis
         .multi()
+        .set(`wizard:steer-active:${session.key}`, requestId, {
+          EX: STREAM_TTL_SECONDS,
+        })
         .hSet(inbox, { open: '1', running: '1' })
         .expire(inbox, STREAM_TTL_SECONDS)
         .set(
@@ -1257,24 +1266,24 @@ export class StreamService implements OnModuleDestroy {
       );
     }
 
-    return new Observable<MessageEvent>((subscriber) => {
-      const session = this.startAgentSession(
-        key,
-        namespaceId,
-        requestDto,
-        requestId,
-        mode,
-        userId,
-        shareId,
-        parentId,
-        messages,
-        chatOnly,
-        timeZone,
-        traceContext,
-        queryReceivedAt,
-      );
-      return this.attachSession(session, subscriber);
-    });
+    const session = this.startAgentSession(
+      key,
+      namespaceId,
+      requestDto,
+      requestId,
+      mode,
+      userId,
+      shareId,
+      parentId,
+      messages,
+      chatOnly,
+      timeZone,
+      traceContext,
+      queryReceivedAt,
+    );
+    return new Observable<MessageEvent>((subscriber) =>
+      this.attachSession(session, subscriber),
+    );
   }
 
   private async resolveStreamParent(
@@ -1915,11 +1924,11 @@ export class StreamService implements OnModuleDestroy {
     session: StreamSession,
     subscriber: Subscriber<MessageEvent>,
   ) {
+    for (const data of session.events || []) subscriber.next({ data });
     if (session.finished) {
       subscriber.complete();
       return;
     }
-    for (const data of session.events || []) subscriber.next({ data });
     session.subscribers.add(subscriber);
     return () => {
       session.subscribers.delete(subscriber);
@@ -2366,6 +2375,272 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
+  private submissions?: ConversationSubmissions;
+  private readonly processingSubmissions = new Set<string>();
+
+  private async submissionQueue() {
+    if (this.submissions) return this.submissions;
+    const redis = await this.getRedisClient();
+    if (!redis) return;
+    const upstream =
+      this.configService.get<string>('OBB_WIZARD_BASE_URL') || '';
+    const environment = createHash('sha256')
+      .update(upstream)
+      .digest('hex')
+      .slice(0, 16);
+    this.submissions = new ConversationSubmissions(
+      redis,
+      `wizard:submissions:${this.wizardApiService.submissionPool}:${environment}`,
+    );
+    return this.submissions;
+  }
+
+  async submitConversationMessage(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    body: AgentRequestDto & { expected_run_id?: string },
+    timeZone?: string,
+  ) {
+    await this.conversationsService.findOneForUserInNamespace(
+      conversationId,
+      userId,
+      namespaceId,
+    );
+    const content = await prepareSteer(
+      body,
+      namespaceId,
+      conversationId,
+      userId,
+      this.steerAttachments!,
+      this.steerResources!,
+    );
+    const scope = getStreamKey(namespaceId, conversationId, userId);
+    const redis = await this.getRedisClient();
+    const run =
+      body.expected_run_id ||
+      (await redis?.get('wizard:steer-active:' + scope)) ||
+      undefined;
+    const token =
+      run && (await redis?.get(`wizard:steer-route:${scope}:${run}`));
+    const job: ConversationSubmission = {
+      namespaceId,
+      conversationId,
+      userId,
+      timeZone,
+      body: {
+        ...content,
+        tools: content.tools,
+        conversation_id: conversationId,
+        edition: body.edition,
+        level: body.level,
+        lang: body.lang,
+        enable_thinking: body.enable_thinking,
+        channel: body.channel,
+        parent_message_id: body.parent_message_id,
+        expected_run_id:
+          body.expected_run_id ||
+          (token && (await redis?.hGet('wizard:steer:' + token, 'open')) === '1'
+            ? run
+            : undefined),
+      },
+    };
+    const queue = await this.submissionQueue();
+    if (!queue) return this.deliverConversationMessage(job);
+    const key = queue.key(scope);
+    const receipt = await queue.add(
+      key,
+      job,
+      token
+        ? {
+            inbox: 'wizard:steer:' + token,
+            payload: JSON.stringify(content),
+            ttl: STREAM_TTL_SECONDS,
+          }
+        : undefined,
+    );
+    if (receipt.disposition === 'queued')
+      void this.processSubmission(queue, key);
+    return receipt;
+  }
+
+  async submissionStatus(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    id?: string,
+  ) {
+    await this.conversationsService.findOneForUserInNamespace(
+      conversationId,
+      userId,
+      namespaceId,
+    );
+    const queue = await this.submissionQueue();
+    if (!queue) return [];
+    const key = queue.key(getStreamKey(namespaceId, conversationId, userId));
+    if (!id) return queue.pending(key);
+    if (!isUUID(id)) throw new BadRequestException('Invalid request ID');
+    const receipt = await queue.receipt(key, id);
+    if (!receipt)
+      throw new HttpException('Message receipt expired', HttpStatus.NOT_FOUND);
+    return receipt;
+  }
+
+  @Interval(1500)
+  async drainConversationSubmissions() {
+    const queue = await this.submissionQueue();
+    if (queue)
+      for (const key of await queue.due())
+        void this.processSubmission(queue, key);
+  }
+
+  private async processSubmission(queue: ConversationSubmissions, key: string) {
+    if (this.processingSubmissions.has(key)) return;
+    this.processingSubmissions.add(key);
+    try {
+      await queue.process(key, async (job) => {
+        try {
+          return await this.deliverConversationMessage(job);
+        } catch (error) {
+          if (
+            error instanceof AppException &&
+            [
+              'PENDING_INTERRUPT',
+              'DECISION_NOT_APPLIED',
+              'CONVERSATION_BUSY',
+            ].includes(error.code)
+          )
+            return;
+          if (!(error instanceof HttpException) || error.getStatus() >= 500)
+            throw error;
+          return {
+            disposition: 'failed',
+            client_request_id: job.body.client_request_id!,
+            error: error.message,
+            query: job.body.query,
+          };
+        }
+      });
+    } catch (error) {
+      this.logger.error({ message: 'Conversation delivery will retry', error });
+    } finally {
+      this.processingSubmissions.delete(key);
+    }
+  }
+
+  private async deliverConversationMessage({
+    namespaceId,
+    conversationId,
+    userId,
+    body,
+    timeZone,
+  }: ConversationSubmission): Promise<SubmissionReceipt | undefined> {
+    const runId = body.client_request_id!;
+    await this.conversationsService.findOneForUserInNamespace(
+      conversationId,
+      userId,
+      namespaceId,
+    );
+    const existing = await this.messagesService.findSubmitted(
+      userId,
+      conversationId,
+      runId,
+    );
+    if (existing?.status === MessageStatus.SUCCESS) {
+      if (existing.message.content !== body.query)
+        throw new ConflictException('Request ID conflict');
+      return {
+        id: existing.id,
+        run_id: existing.attrs?.turn_run_id || runId,
+        client_request_id: runId,
+        disposition: existing.attrs?.turn_run_id ? 'steered' : 'started',
+      };
+    }
+    const redis = await this.getRedisClient();
+    const scope = getStreamKey(namespaceId, conversationId, userId);
+    const target =
+      body.expected_run_id ??
+      (await redis?.get('wizard:steer-active:' + scope));
+    if (target) {
+      try {
+        const receipt = await this.submitSteer(
+          namespaceId,
+          conversationId,
+          userId,
+          target,
+          body,
+        );
+        return { ...receipt, client_request_id: runId, disposition: 'steered' };
+      } catch (error) {
+        // Only a definitive refusal before enqueue may be retried as a new turn.
+        if (!(error instanceof AppException && error.code === 'STEER_CLOSED'))
+          throw error;
+      }
+    }
+    // A starting turn can advertise steer after the composer has already submitted.
+    // Recheck at the next dequeue instead of waiting inside the new-turn lock.
+    if (await redis?.exists(this.streamActiveKey(scope))) return;
+    const message = await prepareSteer(
+      body,
+      namespaceId,
+      conversationId,
+      userId,
+      this.steerAttachments!,
+      this.steerResources!,
+    );
+    const stream = await this.openUserAgentStream(
+      userId,
+      namespaceId,
+      {
+        ...message,
+        conversation_id: conversationId,
+        tools: message.tools,
+        edition: body.edition,
+        level: body.level,
+        enable_thinking: body.enable_thinking,
+        channel: body.channel,
+        lang: body.lang,
+        parent_message_id: body.parent_message_id,
+        follow_latest: true,
+      },
+      runId,
+      'ask',
+      timeZone,
+      body.parent_message_id ? 'explicit' : 'latest',
+      { platform: 'web' },
+      Date.now(),
+    );
+    // The session owns generation. A receipt only waits for the persisted user row.
+    const admitted = await firstValueFrom(
+      stream.pipe(
+        map((event) => JSON.parse(event.data as string) as ChatResponse),
+        filter(
+          (chunk) =>
+            chunk.response_type === 'error' ||
+            (chunk.response_type === 'bos' &&
+              chunk.role === OpenAIMessageRole.USER),
+        ),
+      ),
+    );
+    if (admitted.response_type === 'error')
+      throw new AppException(
+        admitted.message,
+        admitted.code || 'MESSAGE_REJECTED',
+        admitted.status || HttpStatus.BAD_REQUEST,
+      );
+    if (
+      admitted.response_type !== 'bos' ||
+      admitted.attrs?.client_request_id !== runId
+    )
+      throw new ConflictException('Unexpected message receipt');
+    return {
+      id: admitted.id,
+      run_id: runId,
+      client_request_id: runId,
+      disposition: 'started',
+    };
+  }
+
   async submitSteer(
     namespaceId: string,
     conversationId: string,
@@ -2382,7 +2657,11 @@ export class StreamService implements OnModuleDestroy {
     const key = getStreamKey(namespaceId, conversationId, userId);
     const token = await redis?.get(`wizard:steer-route:${key}:${runId}`);
     if (!redis || !token)
-      throw new ConflictException('Run is no longer accepting messages');
+      throw new AppException(
+        'Run is no longer accepting messages',
+        'STEER_CLOSED',
+        HttpStatus.CONFLICT,
+      );
     const message = await prepareSteer(
       body,
       namespaceId,
@@ -2400,8 +2679,13 @@ export class StreamService implements OnModuleDestroy {
         String(STREAM_TTL_SECONDS),
       ],
     });
-    if (accepted !== 1)
-      throw new ConflictException('Run or request ID conflict');
+    if (accepted === 0)
+      throw new AppException(
+        'Run is no longer accepting messages',
+        'STEER_CLOSED',
+        HttpStatus.CONFLICT,
+      );
+    if (accepted !== 1) throw new ConflictException('Request ID conflict');
     // An approval pause, stop or stream failure may end the run before delivery.
     // Only acknowledge after its user message has reached conversation history.
     const deadline = Date.now() + 120_000;
@@ -2417,8 +2701,10 @@ export class StreamService implements OnModuleDestroy {
           client_request_id: message.client_request_id,
         };
       if (!running)
-        throw new ConflictException(
+        throw new AppException(
           'Run finished before applying this message',
+          'STEER_CLOSED',
+          HttpStatus.CONFLICT,
         );
       await this.sleep(300);
     }

@@ -3543,3 +3543,95 @@ describe('StreamService first content token trace', () => {
     expect(events()).toHaveLength(0);
   });
 });
+
+describe('server-owned conversation delivery', () => {
+  const service = createService({});
+  it('replays a finished session to a late subscriber', () => {
+    const subscriber = { next: jest.fn(), complete: jest.fn() };
+    (service as any).attachSession(
+      { finished: true, events: ['saved', 'done'] },
+      subscriber,
+    );
+    expect(subscriber.next.mock.calls).toEqual([
+      [{ data: 'saved' }],
+      [{ data: 'done' }],
+    ]);
+    expect(subscriber.complete).toHaveBeenCalledTimes(1);
+  });
+  it('keeps a running session when the last reader closes', () => {
+    const session = {
+      finished: false,
+      events: [],
+      subscribers: new Set(),
+      controller: new AbortController(),
+    };
+    const detach = (service as any).attachSession(session, { next: jest.fn() });
+    detach();
+    expect(session.subscribers.size).toBe(0);
+    expect(session.controller.signal.aborted).toBe(false);
+  });
+});
+
+describe('conversation submission admission', () => {
+  const requestId = '14edee90-e083-48c6-ab81-ceb94c77ae03';
+  const job = {
+    userId: 'u',
+    namespaceId: 'n',
+    conversationId: 'c',
+    body: {
+      query: 'Continue',
+      tools: [],
+      client_request_id: requestId,
+    },
+  };
+  function setup(active: boolean, target?: string) {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: { findSubmitted: jest.fn() },
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      get: jest.fn().mockResolvedValue(target),
+      exists: jest.fn().mockResolvedValue(active ? 1 : 0),
+    });
+    const start = jest
+      .spyOn(service as any, 'openUserAgentStream')
+      .mockResolvedValue(
+        new Observable((subscriber) => {
+          subscriber.next({
+            data: JSON.stringify({
+              response_type: 'bos',
+              role: 'user',
+              id: 'persisted',
+              attrs: { client_request_id: requestId },
+            }),
+          });
+        }),
+      );
+    const steer = jest.spyOn(service, 'submitSteer');
+    return {
+      deliver: () => (service as any).deliverConversationMessage(job),
+      start,
+      steer,
+    };
+  }
+  it('leaves early input queued while a running turn negotiates steer', async () => {
+    const { deliver, start } = setup(true);
+    await expect(deliver()).resolves.toBeUndefined();
+    expect(start).not.toHaveBeenCalled();
+  });
+  it('starts a detached turn with the same request id after definite closure', async () => {
+    const { deliver, steer } = setup(false, 'old');
+    steer.mockRejectedValue(new AppException('closed', 'STEER_CLOSED', 409));
+    await expect(deliver()).resolves.toMatchObject({
+      disposition: 'started',
+      id: 'persisted',
+      run_id: requestId,
+    });
+  });
+  it('does not create a second turn on an ambiguous delivery error', async () => {
+    const { deliver, steer, start } = setup(false, 'old');
+    steer.mockRejectedValue(new Error('network'));
+    await expect(deliver()).rejects.toThrow('network');
+    expect(start).not.toHaveBeenCalled();
+  });
+});

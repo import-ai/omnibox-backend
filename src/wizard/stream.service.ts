@@ -370,12 +370,21 @@ export class StreamService implements OnModuleDestroy {
       response.headers.get('x-accept-steer') === '1'
     ) {
       const inbox = 'wizard:steer:' + session.steerToken;
+      const queue = await this.submissionQueue();
       await redis
         .multi()
         .set(`wizard:steer-active:${session.key}`, requestId, {
           EX: STREAM_TTL_SECONDS,
         })
-        .hSet(inbox, { open: '1', running: '1' })
+        .hSet(inbox, {
+          open: '1',
+          running: '1',
+          run: requestId,
+          ...(queue ? { queue: queue.key(session.key) } : {}),
+          previous_run:
+            body.messages?.findLast((m) => m.attrs?.turn_run_id)?.attrs
+              ?.turn_run_id ?? '',
+        })
         .expire(inbox, STREAM_TTL_SECONDS)
         .set(
           `wizard:steer-route:${session.key}:${requestId}`,
@@ -2416,14 +2425,8 @@ export class StreamService implements OnModuleDestroy {
       this.steerResources!,
     );
     const scope = getStreamKey(namespaceId, conversationId, userId);
-    const redis = await this.getRedisClient();
-    const run =
-      body.expected_run_id ||
-      (await redis?.get('wizard:steer-active:' + scope)) ||
-      undefined;
-    const token =
-      run && (await redis?.get(`wizard:steer-route:${scope}:${run}`));
     const job: ConversationSubmission = {
+      checkpointDelivery: true,
       namespaceId,
       conversationId,
       userId,
@@ -2438,27 +2441,13 @@ export class StreamService implements OnModuleDestroy {
         enable_thinking: body.enable_thinking,
         channel: body.channel,
         parent_message_id: body.parent_message_id,
-        expected_run_id:
-          body.expected_run_id ||
-          (token && (await redis?.hGet('wizard:steer:' + token, 'open')) === '1'
-            ? run
-            : undefined),
+        expected_run_id: body.expected_run_id,
       },
     };
     const queue = await this.submissionQueue();
     if (!queue) return this.deliverConversationMessage(job);
     const key = queue.key(scope);
-    const receipt = await queue.add(
-      key,
-      job,
-      token
-        ? {
-            inbox: 'wizard:steer:' + token,
-            payload: JSON.stringify(content),
-            ttl: STREAM_TTL_SECONDS,
-          }
-        : undefined,
-    );
+    const receipt = await queue.add(key, job, JSON.stringify(content));
     if (receipt.disposition === 'queued')
       void this.processSubmission(queue, key);
     return receipt;
@@ -2534,6 +2523,7 @@ export class StreamService implements OnModuleDestroy {
     userId,
     body,
     timeZone,
+    checkpointDelivery,
   }: ConversationSubmission): Promise<SubmissionReceipt | undefined> {
     const runId = body.client_request_id!;
     await this.conversationsService.findOneForUserInNamespace(
@@ -2561,7 +2551,7 @@ export class StreamService implements OnModuleDestroy {
     const target =
       body.expected_run_id ??
       (await redis?.get('wizard:steer-active:' + scope));
-    if (target) {
+    if (!checkpointDelivery && target) {
       try {
         const receipt = await this.submitSteer(
           namespaceId,
@@ -2726,7 +2716,11 @@ export class StreamService implements OnModuleDestroy {
     const inbox = 'wizard:steer:' + token;
     const rows = (await redis.eval(READ_STEER, {
       keys: [inbox, inbox + ':messages'],
-      arguments: [String(cursor), finish ? '1' : '0'],
+      arguments: [
+        String(cursor),
+        finish ? '1' : '0',
+        String(STREAM_TTL_SECONDS),
+      ],
     })) as string[];
     return rows.map((row) => JSON.parse(row));
   }

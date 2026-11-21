@@ -21,6 +21,30 @@ return 1`;
 
 // Closing an empty inbox races atomically with the last composer submission.
 export const READ_STEER = `
+local queue = redis.call('HGET', KEYS[1], 'queue')
+if queue and redis.call('HGET', KEYS[1], 'open') == '1' then
+  local run = redis.call('HGET', KEYS[1], 'run')
+  local predecessor = redis.call('HGET', queue .. ':' .. run, 'target')
+  local previous = predecessor and redis.call('HGET', KEYS[1], 'previous_run')
+  for _, id in ipairs(redis.call('LRANGE', queue, 0, -1)) do
+    if id ~= run then
+      local record = queue .. ':' .. id
+      local assigned = redis.call('HGET', record, 'inbox')
+      if not assigned then
+        local payload = redis.call('HGET', record, 'payload')
+        local target = redis.call('HGET', record, 'target')
+        if not payload or (target ~= '' and target ~= run and target ~= predecessor and target ~= previous) then break end
+        redis.call('HSET', record, 'inbox', KEYS[1])
+        if redis.call('HSETNX', KEYS[1], id, payload) == 1 then
+          redis.call('RPUSH', KEYS[2], payload)
+          redis.call('EXPIRE', KEYS[2], ARGV[3])
+        end
+      elseif assigned ~= KEYS[1] and redis.call('HEXISTS', assigned, 'saved:' .. id) == 0 then
+        break
+      end
+    end
+  end
+end
 local items = redis.call('LRANGE', KEYS[2], ARGV[1], -1)
 if #items == 0 and ARGV[2] == '1' and redis.call('EXISTS', KEYS[1]) == 1 then
   redis.call('HDEL', KEYS[1], 'open')

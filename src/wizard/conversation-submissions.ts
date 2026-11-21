@@ -11,6 +11,7 @@ export interface ConversationSubmission {
   conversationId: string;
   body: AgentRequestDto & { expected_run_id?: string };
   timeZone?: string;
+  checkpointDelivery?: boolean;
 }
 
 export interface SubmissionReceipt {
@@ -33,11 +34,7 @@ export class ConversationSubmissions {
     return this.schedule + ':' + scope;
   }
 
-  async add(
-    key: string,
-    job: ConversationSubmission,
-    steer?: { inbox: string; payload: string; ttl: number },
-  ) {
+  async add(key: string, job: ConversationSubmission, payload: string) {
     const id = job.body.client_request_id!;
     const receipt: SubmissionReceipt = {
       disposition: 'queued',
@@ -51,37 +48,20 @@ export class ConversationSubmissions {
         if redis.call('HGET', KEYS[2], 'fingerprint') ~= ARGV[7] then return false end
         return redis.call('HGET', KEYS[2], 'receipt')
       end
-      local tail = redis.call('LINDEX', KEYS[1], -1)
-      local ordered = not tail or redis.call('HGET', KEYS[1] .. ':' .. tail, 'inbox') == KEYS[4]
-      if ordered and ARGV[5] ~= '' and redis.call('HGET', KEYS[4], 'open') == '1' then
-        local seen = redis.call('HGET', KEYS[4], ARGV[3])
-        if seen and seen ~= ARGV[5] then return false end
-        redis.call('HSET', KEYS[2], 'inbox', KEYS[4])
-        if not seen then
-          redis.call('HSET', KEYS[4], ARGV[3], ARGV[5])
-          redis.call('RPUSH', KEYS[5], ARGV[5])
-          redis.call('EXPIRE', KEYS[5], ARGV[6])
-        end
-      end
-      redis.call('HSET', KEYS[2], 'input', ARGV[1], 'receipt', ARGV[2], 'fingerprint', ARGV[7])
+      redis.call('HSET', KEYS[2], 'input', ARGV[1], 'receipt', ARGV[2],
+        'payload', ARGV[5], 'target', ARGV[6], 'fingerprint', ARGV[7])
       redis.call('RPUSH', KEYS[1], ARGV[3])
       redis.call('ZADD', KEYS[3], 'NX', ARGV[4], KEYS[1])
       return ARGV[2]`,
       {
-        keys: [
-          key,
-          key + ':' + id,
-          this.schedule,
-          steer?.inbox ?? key,
-          steer ? steer.inbox + ':messages' : key,
-        ],
+        keys: [key, key + ':' + id, this.schedule],
         arguments: [
           JSON.stringify(job),
           JSON.stringify(receipt),
           id,
           String(Date.now()),
-          steer?.payload ?? '',
-          String(steer?.ttl ?? 0),
+          payload,
+          job.body.expected_run_id ?? '',
           JSON.stringify({ ...job.body, expected_run_id: undefined }),
         ],
       },

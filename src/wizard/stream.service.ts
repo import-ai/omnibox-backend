@@ -83,6 +83,7 @@ import { filter, firstValueFrom, map, Observable, Subscriber } from 'rxjs';
 
 import { ConversationAttachmentsService } from '../attachments/conversation-attachments.service';
 import { NamespaceResourcesService } from '../namespace-resources/namespace-resources.service';
+import { coalesceTextDeltas } from './coalesce-text-deltas';
 import {
   ConversationSubmission,
   ConversationSubmissions,
@@ -421,6 +422,7 @@ export class StreamService implements OnModuleDestroy {
 
         buffer += decoder.decode(value, { stream: true });
 
+        const frames: string[] = [];
         while (true) {
           const lineEnd = buffer.indexOf('\n');
           if (lineEnd == -1) break;
@@ -430,8 +432,13 @@ export class StreamService implements OnModuleDestroy {
 
           if (line.startsWith('data:')) {
             const data = line.slice(5).trim();
-            await callback(data);
+            frames.push(data);
           }
+        }
+        for (const frame of session?.steerToken
+          ? coalesceTextDeltas(frames)
+          : frames) {
+          await callback(frame);
         }
       }
     } finally {

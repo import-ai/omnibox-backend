@@ -16,6 +16,7 @@ if previous then return previous == ARGV[2] and 1 or -1 end
 if redis.call('HGET', KEYS[1], 'open') ~= '1' then return 0 end
 redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
 redis.call('RPUSH', KEYS[2], ARGV[2])
+redis.call('PUBLISH', (redis.call('HGET', KEYS[1], 'queue') or KEYS[1]) .. ':wake', ARGV[1])
 redis.call('EXPIRE', KEYS[2], ARGV[3])
 return 1`;
 

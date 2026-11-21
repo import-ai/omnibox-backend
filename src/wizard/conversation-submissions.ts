@@ -51,6 +51,7 @@ export class ConversationSubmissions {
       redis.call('HSET', KEYS[2], 'input', ARGV[1], 'receipt', ARGV[2],
         'payload', ARGV[5], 'target', ARGV[6], 'fingerprint', ARGV[7])
       redis.call('RPUSH', KEYS[1], ARGV[3])
+      redis.call('PUBLISH', KEYS[1] .. ':wake', ARGV[3])
       redis.call('ZADD', KEYS[3], 'NX', ARGV[4], KEYS[1])
       return ARGV[2]`,
       {

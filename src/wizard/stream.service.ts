@@ -503,6 +503,7 @@ export class StreamService implements OnModuleDestroy {
   ) => Promise<void> {
     const behavior = behaviorContext.getStore();
     let firstTokenRecorded = false;
+    const runningToolRows = new Map<string, string>();
     const handle = async (
       data: string,
       context: HandlerContext,
@@ -536,6 +537,21 @@ export class StreamService implements OnModuleDestroy {
         }
       }
 
+      if (chunk.response_type === 'delta' && chunk.message.tool_call_id) {
+        const call = String(chunk.message.tool_call_id);
+        if (chunk.attrs?.tool_call?.status === 'running' && context.messageId) {
+          runningToolRows.set(call, context.messageId);
+        } else if (runningToolRows.has(call)) {
+          const id = runningToolRows.get(call)!;
+          runningToolRows.delete(call);
+          if (id !== context.messageId) {
+            await this.messagesService.updateDelta(id, chunk);
+            chunk.id = id;
+            await send(JSON.stringify(this.forVisitor(chunk, chatOnly)));
+            return;
+          }
+        }
+      }
       if (chunk.response_type === 'query_attrs') {
         if (!context.queryId) throw new Error('Missing persisted query');
         const query = await this.messagesService.findOne(context.queryId);
@@ -2703,7 +2719,12 @@ export class StreamService implements OnModuleDestroy {
     );
   }
 
-  async readSteer(token: string, cursor: number, finish: boolean) {
+  async readSteer(
+    token: string,
+    cursor: number,
+    finish: boolean,
+    wait = false,
+  ) {
     if (
       !isUUID(token) ||
       !Number.isSafeInteger(cursor) ||
@@ -2714,15 +2735,37 @@ export class StreamService implements OnModuleDestroy {
     const redis = await this.getRedisClient();
     if (!redis) throw new ConflictException();
     const inbox = 'wizard:steer:' + token;
-    const rows = (await redis.eval(READ_STEER, {
-      keys: [inbox, inbox + ':messages'],
-      arguments: [
-        String(cursor),
-        finish ? '1' : '0',
-        String(STREAM_TTL_SECONDS),
-      ],
-    })) as string[];
-    return rows.map((row) => JSON.parse(row));
+    const read = async () => {
+      const rows = (await redis.eval(READ_STEER, {
+        keys: [inbox, inbox + ':messages'],
+        arguments: [
+          String(cursor),
+          finish ? '1' : '0',
+          String(STREAM_TTL_SECONDS),
+        ],
+      })) as string[];
+      return rows.map((row) => JSON.parse(row));
+    };
+    if (!wait || finish || !(await redis.hExists(inbox, 'open'))) return read();
+    const subscriber = await this.getRedisSubscriber();
+    if (!subscriber) return read();
+    const channel = ((await redis.hGet(inbox, 'queue')) || inbox) + ':wake';
+    let wake!: () => void;
+    const signal = new Promise<void>((resolve) => {
+      wake = resolve;
+    });
+    await subscriber.subscribe(channel, wake);
+    const timer = setTimeout(wake, 10000);
+    try {
+      // Subscribe before reading so that an arrival between the two cannot be missed.
+      const rows = await read();
+      if (rows.length) return rows;
+      await signal;
+      return await read();
+    } finally {
+      clearTimeout(timer);
+      await subscriber.unsubscribe(channel, wake);
+    }
   }
 
   async cancelUserAgentStream(

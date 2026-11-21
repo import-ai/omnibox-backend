@@ -23,9 +23,9 @@ export class InternalWizardController {
   @Post('steer/read')
   async readSteer(
     @Headers('x-steer-token') token: string,
-    @Body() body: { cursor: number; finish: boolean },
+    @Body() body: { cursor: number; finish: boolean; wait?: boolean },
   ) {
-    return this.streams.readSteer(token, body.cursor, body.finish);
+    return this.streams.readSteer(token, body.cursor, body.finish, body.wait);
   }
 
   @Public()

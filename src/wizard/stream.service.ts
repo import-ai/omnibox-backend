@@ -648,16 +648,25 @@ export class StreamService implements OnModuleDestroy {
               // Mixed-version streams may lack a fingerprint on the BOS frame.
               const token =
                 stream && this.streamSessions.get(stream.streamId)?.steerToken;
-              if (token) {
+              if (token && this.redisClient) {
                 try {
-                  const row = (await this.redisClient?.eval(
-                    commandOptions({ signal: AbortSignal.timeout(1000) }),
-                    READ_STEER_INPUT,
-                    {
-                      keys: ['wizard:steer:' + token],
-                      arguments: [requestId],
-                    },
-                  )) as string | [string, string] | null;
+                  const signal = AbortSignal.timeout(1000);
+                  const timeout = new Promise<null>((resolve) =>
+                    signal.addEventListener('abort', () => resolve(null), {
+                      once: true,
+                    }),
+                  );
+                  const row = (await Promise.race([
+                    timeout,
+                    this.redisClient.eval(
+                      commandOptions({ signal }),
+                      READ_STEER_INPUT,
+                      {
+                        keys: ['wizard:steer:' + token],
+                        arguments: [requestId],
+                      },
+                    ),
+                  ])) as string | [string, string] | null;
                   if (row)
                     fingerprint = decodeSteerItem(row).submission_fingerprint;
                 } catch {

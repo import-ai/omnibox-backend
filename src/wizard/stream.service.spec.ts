@@ -3912,17 +3912,18 @@ describe('conversation submission admission', () => {
   });
 
   it.each([
-    ['the current BOS frame', fingerprint, false, fingerprint],
-    ['a legacy BOS frame', undefined, false, fingerprint],
+    ['the current BOS frame', fingerprint, 'error', fingerprint],
+    ['a legacy BOS frame', undefined, 'ready', fingerprint],
     [
       'a legacy BOS frame during a Redis interruption',
       undefined,
-      true,
+      'error',
       undefined,
     ],
+    ['a legacy BOS frame with no Redis reply', undefined, 'timeout', undefined],
   ])(
     'persists Steer BOS from %s',
-    async (_case, digest, redisFails, expected) => {
+    async (_case, digest, redisState, expected) => {
       const create = jest.fn().mockResolvedValue({
         id: 'steered-message',
         createdAt: new Date(),
@@ -3931,13 +3932,21 @@ describe('conversation submission admission', () => {
       const service = createService({
         messagesService: { create, findOne: jest.fn().mockResolvedValue({}) },
       });
-      const evalCommand = redisFails
-        ? jest.fn().mockRejectedValue(new Error('Redis reconnecting'))
-        : jest
-            .fn()
-            .mockResolvedValue(
-              JSON.stringify({ submission_fingerprint: fingerprint }),
-            );
+      const evalCommand = jest
+        .fn()
+        .mockResolvedValue(
+          JSON.stringify({ submission_fingerprint: fingerprint }),
+        );
+      if (redisState === 'error') {
+        evalCommand.mockRejectedValue(new Error('Redis reconnecting'));
+      }
+      if (redisState === 'timeout') {
+        evalCommand.mockImplementation(
+          ({ signal }: { signal: AbortSignal }) =>
+            // The caller must continue after its own deadline even if Redis never responds.
+            new Promise(() => expect(signal).toBeDefined()),
+        );
+      }
       (service as any).redisClient = { eval: evalCommand };
       (service as any).streamSessions.set('active-stream', {
         steerToken: 'active-token',

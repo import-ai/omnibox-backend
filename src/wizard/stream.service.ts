@@ -78,7 +78,7 @@ import {
 import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { WizardBaseUrlResolution } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
-import { createClient } from 'redis';
+import { commandOptions, createClient } from 'redis';
 import {
   filter,
   firstValueFrom,
@@ -650,10 +650,14 @@ export class StreamService implements OnModuleDestroy {
                 stream && this.streamSessions.get(stream.streamId)?.steerToken;
               if (token) {
                 try {
-                  const row = (await this.redisClient?.eval(READ_STEER_INPUT, {
-                    keys: ['wizard:steer:' + token],
-                    arguments: [requestId],
-                  })) as string | [string, string] | null;
+                  const row = (await this.redisClient?.eval(
+                    commandOptions({ signal: AbortSignal.timeout(1000) }),
+                    READ_STEER_INPUT,
+                    {
+                      keys: ['wizard:steer:' + token],
+                      arguments: [requestId],
+                    },
+                  )) as string | [string, string] | null;
                   if (row)
                     fingerprint = decodeSteerItem(row).submission_fingerprint;
                 } catch {

@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { isUUID } from 'class-validator';
+import { createHash } from 'crypto';
 
 import { ConversationAttachmentsService } from '../attachments/conversation-attachments.service';
 import { NamespaceResourcesService } from '../namespace-resources/namespace-resources.service';
@@ -8,6 +9,35 @@ import {
   PrivateSearchResourceDto,
   WizardAgentRequestDto,
 } from './dto/agent-request.dto';
+
+const STORED_SUBMISSION_INPUT = `
+local function submission_input(inbox, queue, id, payload)
+  if not queue then return false end
+  local record = queue .. ':' .. id
+  if redis.call('HGET', record, 'inbox') == inbox and
+      redis.call('HGET', record, 'payload') == payload then
+    return redis.call('HGET', record, 'fingerprint')
+  end
+  return false
+end`;
+
+export function decodeSteerItem(row: string | [string, string]) {
+  if (typeof row === 'string') return JSON.parse(row);
+  return {
+    ...JSON.parse(row[0]),
+    submission_fingerprint: createHash('sha256').update(row[1]).digest('hex'),
+  };
+}
+
+export const READ_STEER_INPUT = `
+${STORED_SUBMISSION_INPUT}
+local payload = redis.call('HGET', KEYS[1], ARGV[1])
+if not payload then return false end
+local item = cjson.decode(payload)
+if item.submission_fingerprint then return payload end
+local input = submission_input(KEYS[1], redis.call('HGET', KEYS[1], 'queue'), ARGV[1], payload)
+if input then return {payload, input} end
+return payload`;
 
 // Check admission and append in one operation, including across backend replicas.
 export const APPEND_STEER = `
@@ -22,6 +52,7 @@ return 1`;
 
 // Closing an empty inbox races atomically with the last composer submission.
 export const READ_STEER = `
+${STORED_SUBMISSION_INPUT}
 if redis.call('HEXISTS', KEYS[1], 'stopped') == 1 then
   return {'{"stopped":true}'}
 end
@@ -52,6 +83,18 @@ end
 local items = redis.call('LRANGE', KEYS[2], ARGV[1], -1)
 if #items == 0 and ARGV[2] == '1' and redis.call('EXISTS', KEYS[1]) == 1 then
   redis.call('HDEL', KEYS[1], 'open')
+end
+if queue then
+  for index, payload in ipairs(items) do
+    local item = cjson.decode(payload)
+    if not item.submission_fingerprint then
+      local input = submission_input(KEYS[1], queue, item.client_request_id, payload)
+      if input then
+        -- Return the original serialized request separately for legacy payloads.
+        items[index] = {payload, input}
+      end
+    end
+  end
 end
 return items`;
 

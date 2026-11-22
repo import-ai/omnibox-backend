@@ -3911,42 +3911,66 @@ describe('conversation submission admission', () => {
     expect(process).not.toHaveBeenCalled();
   });
 
-  it('persists the admitted fingerprint at steer BOS before any delta', async () => {
-    const create = jest.fn().mockResolvedValue({
-      id: 'steered-message',
-      createdAt: new Date(),
-      message: { role: 'user' },
-    });
-    const service = createService({
-      messagesService: { create, findOne: jest.fn().mockResolvedValue({}) },
-    });
-    const hGet = jest.fn().mockResolvedValue(
-      JSON.stringify({
-        query: request.query,
-        submission_fingerprint: fingerprint,
-      }),
-    );
-    (service as any).redisClient = { hGet };
-    (service as any).streamSessions.set('active-stream', {
-      steerToken: 'active-token',
-    });
-    await service.agentHandler('n', 'c', 'u', jest.fn(), false, {
-      streamId: 'active-stream',
-    } as AgentStream)(
-      JSON.stringify({
-        response_type: 'bos',
-        role: 'user',
-        attrs: { composer: { client_request_id: requestId } },
-      }),
-      { canSteer: true, queryId: 'initial-message', runId: 'active-run' },
-    );
-    expect(hGet).toHaveBeenCalledWith('wizard:steer:active-token', requestId);
-    expect(create.mock.calls[0][3].attrs).toMatchObject({
-      client_request_id: requestId,
-      submission_fingerprint: fingerprint,
-      turn_run_id: 'active-run',
-    });
-  });
+  it.each([
+    ['the current BOS frame', fingerprint, false, fingerprint],
+    ['a legacy BOS frame', undefined, false, fingerprint],
+    [
+      'a legacy BOS frame during a Redis interruption',
+      undefined,
+      true,
+      undefined,
+    ],
+  ])(
+    'persists Steer BOS from %s',
+    async (_case, digest, redisFails, expected) => {
+      const create = jest.fn().mockResolvedValue({
+        id: 'steered-message',
+        createdAt: new Date(),
+        message: { role: 'user' },
+      });
+      const service = createService({
+        messagesService: { create, findOne: jest.fn().mockResolvedValue({}) },
+      });
+      const evalCommand = redisFails
+        ? jest.fn().mockRejectedValue(new Error('Redis reconnecting'))
+        : jest
+            .fn()
+            .mockResolvedValue(
+              JSON.stringify({ submission_fingerprint: fingerprint }),
+            );
+      (service as any).redisClient = { eval: evalCommand };
+      (service as any).streamSessions.set('active-stream', {
+        steerToken: 'active-token',
+      });
+      await service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+        streamId: 'active-stream',
+      } as AgentStream)(
+        JSON.stringify({
+          response_type: 'bos',
+          role: 'user',
+          attrs: {
+            composer: {
+              client_request_id: requestId,
+              submission_fingerprint: digest,
+            },
+          },
+        }),
+        { canSteer: true, queryId: 'initial-message', runId: 'active-run' },
+      );
+      expect(evalCommand).toHaveBeenCalledTimes(digest ? 0 : 1);
+      expect(create.mock.calls[0][3].attrs).toMatchObject({
+        client_request_id: requestId,
+        composer: { client_request_id: requestId },
+        turn_run_id: 'active-run',
+      });
+      expect(create.mock.calls[0][3].attrs.submission_fingerprint).toBe(
+        expected,
+      );
+      expect(create.mock.calls[0][3].attrs.composer).not.toHaveProperty(
+        'submission_fingerprint',
+      );
+    },
+  );
   function setup(active: boolean, target?: string) {
     const service = createService({
       conversationsService: { findOneForUserInNamespace: jest.fn() },

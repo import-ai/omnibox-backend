@@ -97,7 +97,13 @@ import {
   submissionFingerprint,
   SubmissionReceipt,
 } from './conversation-submissions';
-import { APPEND_STEER, prepareSteer, READ_STEER } from './steer';
+import {
+  APPEND_STEER,
+  decodeSteerItem,
+  prepareSteer,
+  READ_STEER,
+  READ_STEER_INPUT,
+} from './steer';
 
 const STREAM_TTL_SECONDS = 60 * 60;
 const STREAM_BLOCK_MS = 15000;
@@ -630,18 +636,30 @@ export class StreamService implements OnModuleDestroy {
         let fingerprint: string | undefined;
         if (context.canSteer && !context.failed) {
           chunk.attrs = { ...chunk.attrs, can_steer: true };
-          const requestId = chunk.attrs.composer?.client_request_id;
+          const composer = chunk.attrs.composer;
+          const requestId = composer?.client_request_id;
           if (chunk.role === OpenAIMessageRole.USER && isUUID(requestId)) {
             chunk.attrs.client_request_id = requestId;
-            const token =
-              stream && this.streamSessions.get(stream.streamId)?.steerToken;
-            if (token) {
-              const payload = await this.redisClient!.hGet(
-                'wizard:steer:' + token,
-                requestId,
-              );
-              if (payload)
-                fingerprint = JSON.parse(payload).submission_fingerprint;
+            const { submission_fingerprint: digest, ...display } = composer!;
+            chunk.attrs.composer = display;
+            if (typeof digest === 'string') {
+              fingerprint = digest;
+            } else {
+              // Mixed-version streams may lack a fingerprint on the BOS frame.
+              const token =
+                stream && this.streamSessions.get(stream.streamId)?.steerToken;
+              if (token) {
+                try {
+                  const row = (await this.redisClient?.eval(READ_STEER_INPUT, {
+                    keys: ['wizard:steer:' + token],
+                    arguments: [requestId],
+                  })) as string | [string, string] | null;
+                  if (row)
+                    fingerprint = decodeSteerItem(row).submission_fingerprint;
+                } catch {
+                  // Let the accepted message stream even if this compatibility lookup fails.
+                }
+              }
             }
           }
         }
@@ -3000,8 +3018,8 @@ export class StreamService implements OnModuleDestroy {
           finish ? '1' : '0',
           String(STREAM_TTL_SECONDS),
         ],
-      })) as string[];
-      return rows.map((row) => JSON.parse(row));
+      })) as Array<string | [string, string]>;
+      return rows.map(decodeSteerItem);
     };
     if (!wait || finish || !(await redis.hExists(inbox, 'open'))) return read();
     const subscriber = await this.getRedisSubscriber();

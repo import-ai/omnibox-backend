@@ -2564,7 +2564,13 @@ export class StreamService implements OnModuleDestroy {
       );
     if (!queue) return this.deliverConversationMessage(job);
     const key = queue.key(scope);
-    const receipt = await queue.add(key, job, JSON.stringify(content));
+    const saved = await this.savedSubmission(
+      userId,
+      conversationId,
+      content.client_request_id!,
+      content.query,
+    );
+    const receipt = await queue.add(key, job, JSON.stringify(content), saved);
     if (receipt.disposition === 'queued')
       void this.processSubmission(queue, key);
     return receipt;
@@ -2735,6 +2741,28 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
+  private async savedSubmission(
+    userId: string,
+    conversationId: string,
+    requestId: string,
+    query: string,
+  ): Promise<SubmissionReceipt | undefined> {
+    const existing = await this.messagesService.findSubmitted(
+      userId,
+      conversationId,
+      requestId,
+    );
+    if (existing?.status !== MessageStatus.SUCCESS) return;
+    if (existing.message.content !== query)
+      throw new ConflictException('Request ID conflict');
+    return {
+      id: existing.id,
+      run_id: existing.attrs?.turn_run_id ?? requestId,
+      client_request_id: requestId,
+      disposition: existing.attrs?.turn_run_id ? 'steered' : 'started',
+    };
+  }
+
   private async deliverConversationMessage({
     namespaceId,
     conversationId,
@@ -2749,21 +2777,13 @@ export class StreamService implements OnModuleDestroy {
       userId,
       namespaceId,
     );
-    const existing = await this.messagesService.findSubmitted(
+    const saved = await this.savedSubmission(
       userId,
       conversationId,
       runId,
+      body.query,
     );
-    if (existing?.status === MessageStatus.SUCCESS) {
-      if (existing.message.content !== body.query)
-        throw new ConflictException('Request ID conflict');
-      return {
-        id: existing.id,
-        run_id: existing.attrs?.turn_run_id || runId,
-        client_request_id: runId,
-        disposition: existing.attrs?.turn_run_id ? 'steered' : 'started',
-      };
-    }
+    if (saved) return saved;
     const redis = await this.getRedisClient();
     const scope = getStreamKey(namespaceId, conversationId, userId);
     const target =

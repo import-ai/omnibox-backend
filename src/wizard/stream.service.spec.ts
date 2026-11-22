@@ -7,6 +7,8 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
+import { ConversationSubmissions } from 'omniboxd/wizard/conversation-submissions';
+import { AgentRequestChannel } from 'omniboxd/wizard/dto/agent-request.dto';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
@@ -3804,6 +3806,55 @@ describe('conversation submission admission', () => {
       client_request_id: requestId,
     },
   };
+  it.each([undefined, 'earlier-run'])(
+    'replays a persisted request after its receipt expires (run %s)',
+    async (originalRun) => {
+      const findSubmitted = jest.fn().mockResolvedValue({
+        id: 'stored-message',
+        status: MessageStatus.SUCCESS,
+        message: { content: job.body.query },
+        attrs: { turn_run_id: originalRun },
+      });
+      const service = createService({
+        conversationsService: { findOneForUserInNamespace: jest.fn() },
+        messagesService: { findSubmitted },
+      });
+      // The queue has no live receipt. Its Lua script receives a DB fallback
+      // and can return it without publishing the request to the active run.
+      const redis = {
+        eval: jest.fn((_script, { arguments: args }) => args[7]),
+      };
+      jest
+        .spyOn(service as any, 'submissionQueue')
+        .mockResolvedValue(
+          new ConversationSubmissions(redis as any, 'submissions'),
+        );
+      const process = jest.spyOn(service as any, 'processSubmission');
+
+      await expect(
+        service.submitConversationMessage(
+          'n',
+          'c',
+          'u',
+          {
+            ...job.body,
+            conversation_id: 'c',
+            channel: AgentRequestChannel.OPEN_API,
+          },
+          undefined,
+          true,
+        ),
+      ).resolves.toEqual({
+        id: 'stored-message',
+        run_id: originalRun ?? requestId,
+        client_request_id: requestId,
+        disposition: originalRun ? 'steered' : 'started',
+      });
+      expect(findSubmitted).toHaveBeenCalledWith('u', 'c', requestId);
+      expect(redis.eval).toHaveBeenCalledTimes(1);
+      expect(process).not.toHaveBeenCalled();
+    },
+  );
   function setup(active: boolean, target?: string) {
     const service = createService({
       conversationsService: { findOneForUserInNamespace: jest.fn() },

@@ -34,7 +34,12 @@ export class ConversationSubmissions {
     return this.schedule + ':' + scope;
   }
 
-  async add(key: string, job: ConversationSubmission, payload: string) {
+  async add(
+    key: string,
+    job: ConversationSubmission,
+    payload: string,
+    saved?: SubmissionReceipt,
+  ) {
     const id = job.body.client_request_id!;
     const receipt: SubmissionReceipt = {
       disposition: 'queued',
@@ -48,6 +53,7 @@ export class ConversationSubmissions {
         if redis.call('HGET', KEYS[2], 'fingerprint') ~= ARGV[7] then return false end
         return redis.call('HGET', KEYS[2], 'receipt')
       end
+      if ARGV[8] ~= '' then return ARGV[8] end
       redis.call('HSET', KEYS[2], 'input', ARGV[1], 'receipt', ARGV[2],
         'payload', ARGV[5], 'target', ARGV[6], 'fingerprint', ARGV[7])
       redis.call('RPUSH', KEYS[1], ARGV[3])
@@ -64,6 +70,7 @@ export class ConversationSubmissions {
           payload,
           job.body.expected_run_id ?? '',
           JSON.stringify({ ...job.body, expected_run_id: undefined }),
+          saved ? JSON.stringify(saved) : '',
         ],
       },
     );

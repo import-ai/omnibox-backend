@@ -141,6 +141,10 @@ export class OpenWizardService {
       if (chunk.response_type === 'metrics') {
         continue;
       }
+      if (chunk.response_type === 'stopped') {
+        if (currentMessage) messages.push(currentMessage);
+        return { messages, conversation_id: conversationId, status: 'stopped' };
+      }
       if (
         chunk.response_type === 'delta' &&
         !currentMessage &&

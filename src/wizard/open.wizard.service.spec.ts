@@ -272,6 +272,52 @@ describe('OpenWizardService', () => {
     );
   });
 
+  it.each(['before the reply', 'during the reply', 'after eos'])(
+    'returns a stopped response when Web cancels a bot ask %s',
+    async (phase) => {
+      conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
+      const answer = [
+        { response_type: 'bos', role: 'assistant', id: 'answer-1' },
+        {
+          response_type: 'delta',
+          id: 'answer-1',
+          message: { content: 'Partial answer' },
+        },
+      ];
+      streamService.chat.mockResolvedValue([
+        ...(phase === 'before the reply' ? [] : answer),
+        ...(phase === 'after eos'
+          ? [{ response_type: 'eos', id: 'answer-1' }]
+          : []),
+        {
+          response_type: 'stopped',
+          id: phase === 'before the reply' ? undefined : 'answer-1',
+        },
+      ]);
+
+      await expect(
+        service.ask('user-1', 'namespace-1', 'request-1', {
+          query: 'hello',
+          tools: [],
+          source_channel: 'qq',
+        }),
+      ).resolves.toMatchObject({
+        conversation_id: 'conversation-new',
+        status: 'stopped',
+        messages:
+          phase === 'before the reply'
+            ? []
+            : [
+                {
+                  id: 'answer-1',
+                  role: 'assistant',
+                  message: { content: 'Partial answer' },
+                },
+              ],
+      });
+    },
+  );
+
   it('ignores metrics while preserving the complete answer', async () => {
     conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
     streamService.chat.mockResolvedValue([

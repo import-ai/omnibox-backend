@@ -7,7 +7,10 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
+import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
+import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { StreamService } from 'omniboxd/wizard/stream.service';
+import { WizardController } from 'omniboxd/wizard/wizard.controller';
 import { Observable, of } from 'rxjs';
 
 function createService(mocks: {
@@ -2621,6 +2624,92 @@ describe('StreamService failed streams', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(hook).not.toHaveBeenCalled();
   });
+});
+
+it('returns a stopped Bot Open API reply when Web cancels the same conversation', async () => {
+  const rows = {
+    user: { id: 'query', role: OpenAIMessageRole.USER, content: 'hello' },
+    assistant: {
+      id: 'answer',
+      role: OpenAIMessageRole.ASSISTANT,
+      content: 'Partial',
+    },
+  };
+  const conversation = { id: 'conv' };
+  const messages = {
+    create: jest.fn().mockImplementation((_ns, _conv, _user, input) => ({
+      id: rows[input.message.role as keyof typeof rows].id,
+      message: input.message,
+      createdAt: new Date(),
+    })),
+    findOne: jest.fn().mockResolvedValue({ attrs: {} }),
+    updateDelta: jest.fn().mockResolvedValue({ message: rows.assistant }),
+    stopRunning: jest.fn().mockResolvedValue(undefined),
+  };
+  const conversations = {
+    findOneForUserInNamespace: jest.fn().mockResolvedValue(conversation),
+  };
+  const service = createService({
+    messagesService: messages,
+    conversationsService: conversations,
+  });
+  jest
+    .spyOn(service as any, 'resolveStreamParent')
+    .mockResolvedValue(undefined);
+  let markPartialSent!: () => void;
+  const partialSent = new Promise<void>((resolve) => {
+    markPartialSent = resolve;
+  });
+  jest
+    .spyOn(service, 'stream')
+    .mockImplementation(async (_ns, _mode, _body, _req, emit, signal) => {
+      await emit(JSON.stringify({ response_type: 'bos', role: 'assistant' }));
+      await emit(
+        JSON.stringify({
+          response_type: 'delta',
+          message: { content: 'Partial' },
+        }),
+      );
+      await new Promise<void>((resolve) => {
+        signal!.addEventListener('abort', () => resolve(), { once: true });
+        markPartialSent();
+      });
+    });
+  const openService = new OpenWizardService(
+    {} as any,
+    service,
+    messages as any,
+    conversations as any,
+    { t: jest.fn() } as any,
+  );
+  const bot = new OpenWizardController({} as any, openService, {} as any);
+  const web = new WizardController({} as any, service, {} as any);
+
+  const reply = bot.ask({ namespaceId: 'ns' } as any, 'user', 'run', {
+    conversation_id: conversation.id,
+    source_channel: 'qq',
+    query: 'hello',
+    tools: [],
+  });
+  await partialSent;
+  await expect(web.cancel('user', 'ns', conversation.id)).resolves.toEqual({
+    success: true,
+  });
+  await expect(reply).resolves.toMatchObject({
+    conversation_id: conversation.id,
+    status: 'stopped',
+    messages: [
+      { id: 'query', role: 'user' },
+      { id: 'answer', role: 'assistant', message: { content: 'Partial' } },
+    ],
+  });
+  expect(messages.stopRunning).toHaveBeenCalledWith(
+    'ns',
+    'conv',
+    'user',
+    'answer',
+    { id: 'run', queryId: 'query' },
+  );
 });
 
 describe('StreamService.chat() never receives the SSE heartbeat', () => {

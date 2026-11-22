@@ -136,7 +136,8 @@ curl -X POST 'https://api.omnibox.pro/v1/wizard/collect/gzip' \\
   })
   @ApiResponse({
     status: 201,
-    description: 'Question answered successfully',
+    description:
+      'Returns the messages. If stopped, status is "stopped" and the messages may include a partial reply.',
   })
   @ApiResponse({ status: 401, description: 'Invalid or missing API key' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })

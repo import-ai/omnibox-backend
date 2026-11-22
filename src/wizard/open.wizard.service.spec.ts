@@ -1,13 +1,26 @@
 import { HttpStatus } from '@nestjs/common';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
+import {
+  MessageStatus,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { AgentRequestChannel } from 'omniboxd/wizard/dto/agent-request.dto';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { EntityNotFoundError } from 'typeorm';
 
 describe('OpenWizardService', () => {
   let service: OpenWizardService;
-  let streamService: { chat: jest.Mock };
-  let messagesService: { findOneForUser: jest.Mock };
+  let streamService: {
+    chat: jest.Mock;
+    submitConversationMessage: jest.Mock;
+    isConversationStreaming: jest.Mock;
+    submissionStatus: jest.Mock;
+  };
+  let messagesService: {
+    findOneForUser: jest.Mock;
+    findAll: jest.Mock;
+    findSubmitted: jest.Mock;
+  };
   let conversationsService: {
     create: jest.Mock;
     findOneForUserInNamespace: jest.Mock;
@@ -16,9 +29,14 @@ describe('OpenWizardService', () => {
   beforeEach(() => {
     streamService = {
       chat: jest.fn().mockResolvedValue([]),
+      submitConversationMessage: jest.fn(),
+      isConversationStreaming: jest.fn().mockResolvedValue(false),
+      submissionStatus: jest.fn(),
     };
     messagesService = {
       findOneForUser: jest.fn(),
+      findAll: jest.fn(),
+      findSubmitted: jest.fn(),
     };
     conversationsService = {
       create: jest.fn(),
@@ -32,6 +50,66 @@ describe('OpenWizardService', () => {
       conversationsService as any,
       { t: jest.fn(() => 'Message not found') } as any,
     );
+  });
+
+  it('submits a Bot message through the durable conversation queue', async () => {
+    const input = {
+      query: 'follow up',
+      tools: [],
+      source_channel: 'qq',
+      client_request_id: 'client',
+    };
+    streamService.submitConversationMessage.mockResolvedValue({
+      disposition: 'queued',
+    });
+    await expect(
+      service.submitBotMessage('u', 'n', 'c', input),
+    ).resolves.toMatchObject({ disposition: 'queued' });
+    expect(streamService.submitConversationMessage).toHaveBeenCalledWith(
+      'n',
+      'c',
+      'u',
+      {
+        ...input,
+        conversation_id: 'c',
+        channel: AgentRequestChannel.OPEN_API,
+      },
+      undefined,
+      true,
+    );
+  });
+
+  it('exposes the final reply only to the last input in a steered run', async () => {
+    const row = (id: string, role: OpenAIMessageRole, parentId?: string) => ({
+      id,
+      parentId,
+      message: { role, content: id },
+      status: MessageStatus.SUCCESS,
+      attrs: id === 'first' ? {} : { turn_run_id: 'first-request' },
+    });
+    const first = row('first', OpenAIMessageRole.USER);
+    const partial = row('partial', OpenAIMessageRole.ASSISTANT, first.id);
+    const next = row('next', OpenAIMessageRole.USER, partial.id);
+    const reply = row('final', OpenAIMessageRole.ASSISTANT, next.id);
+    messagesService.findAll.mockResolvedValue([first, partial, next, reply]);
+    messagesService.findSubmitted
+      .mockResolvedValueOnce(first)
+      .mockResolvedValue(next);
+
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'first-request'),
+    ).resolves.toEqual({ status: 'superseded' });
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'next-request'),
+    ).resolves.toEqual({
+      status: 'complete',
+      reply_id: 'final',
+      content: 'final',
+    });
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'next-request'),
+    ).resolves.toEqual({ status: 'pending' });
   });
 
   it('creates a new conversation when parent_message_id is absent', async () => {

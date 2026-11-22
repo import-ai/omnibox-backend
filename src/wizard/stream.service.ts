@@ -2521,6 +2521,7 @@ export class StreamService implements OnModuleDestroy {
     userId: string,
     body: AgentRequestDto & { expected_run_id?: string },
     timeZone?: string,
+    requireQueue = false,
   ) {
     await this.conversationsService.findOneForUserInNamespace(
       conversationId,
@@ -2556,6 +2557,11 @@ export class StreamService implements OnModuleDestroy {
       },
     };
     const queue = await this.submissionQueue();
+    if (!queue && requireQueue)
+      throw new HttpException(
+        'Message queue unavailable',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
     if (!queue) return this.deliverConversationMessage(job);
     const key = queue.key(scope);
     const receipt = await queue.add(key, job, JSON.stringify(content));
@@ -2592,6 +2598,18 @@ export class StreamService implements OnModuleDestroy {
     if (queue)
       for (const key of await queue.due())
         void this.processSubmission(queue, key);
+  }
+
+  async isConversationStreaming(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+  ) {
+    const key = getStreamKey(namespaceId, conversationId, userId);
+    return (
+      this.streamSessions.has(key) ||
+      !!(await (await this.getRedisClient())?.exists(this.streamActiveKey(key)))
+    );
   }
 
   private async processSubmission(queue: ConversationSubmissions, key: string) {

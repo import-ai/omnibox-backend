@@ -1,14 +1,27 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { isUUID } from 'class-validator';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { ConversationsService } from 'omniboxd/conversations/conversations.service';
+import {
+  MessageStatus,
+  OpenAIMessageRole,
+} from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
 import {
   AgentRequestChannel,
   AgentRequestDto,
 } from 'omniboxd/wizard/dto/agent-request.dto';
 import { ChatResponse } from 'omniboxd/wizard/dto/chat-response.dto';
-import { OpenAgentRequestDto } from 'omniboxd/wizard/dto/open-agent-request.dto';
+import {
+  OpenAgentRequestDto,
+  OpenConversationMessageDto,
+} from 'omniboxd/wizard/dto/open-agent-request.dto';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { WizardService } from 'omniboxd/wizard/wizard.service';
 import { EntityNotFoundError } from 'typeorm';
@@ -25,6 +38,160 @@ export class OpenWizardService {
 
   protected translate(key: string): string {
     return this.i18n.t(key);
+  }
+
+  async createBotConversation(
+    userId: string,
+    namespaceId: string,
+    parentId?: string,
+  ) {
+    if (parentId !== undefined && !isUUID(parentId))
+      throw new BadRequestException('Invalid parent message ID');
+    const { conversationId } = await this.resolveConversation(
+      userId,
+      namespaceId,
+      undefined,
+      parentId,
+    );
+    return { conversation_id: conversationId };
+  }
+
+  submitBotMessage(
+    userId: string,
+    namespaceId: string,
+    conversationId: string,
+    data: OpenConversationMessageDto,
+  ) {
+    const {
+      query,
+      tools,
+      images,
+      lang,
+      enable_thinking,
+      client_request_id,
+      source_channel,
+    } = data;
+    return this.streamService.submitConversationMessage(
+      namespaceId,
+      conversationId,
+      userId,
+      {
+        conversation_id: conversationId,
+        channel: AgentRequestChannel.OPEN_API,
+        query,
+        tools,
+        images,
+        lang,
+        enable_thinking,
+        client_request_id,
+        source_channel,
+      },
+      undefined,
+      true,
+    );
+  }
+
+  async botMessageResult(
+    userId: string,
+    namespaceId: string,
+    conversationId: string,
+    requestId: string,
+  ) {
+    await this.conversationsService.findOneForUserInNamespace(
+      conversationId,
+      userId,
+      namespaceId,
+    );
+    const input = await this.messagesService.findSubmitted(
+      userId,
+      conversationId,
+      requestId,
+    );
+    if (!input || input.status !== MessageStatus.SUCCESS) {
+      const receipt = await this.streamService.submissionStatus(
+        namespaceId,
+        conversationId,
+        userId,
+        requestId,
+      );
+      if (!receipt || Array.isArray(receipt))
+        throw new NotFoundException('Message not found');
+      return {
+        status: receipt.disposition === 'failed' ? 'failed' : 'pending',
+      };
+    }
+    if (
+      await this.streamService.isConversationStreaming(
+        namespaceId,
+        conversationId,
+        userId,
+      )
+    )
+      return { status: 'pending' };
+
+    const rows = await this.messagesService.findAll(userId, conversationId);
+    const parentOf = new Map(rows.map((row) => [row.id, row.parentId]));
+    const follows = (id: string, ancestor: string) => {
+      for (
+        let parent = parentOf.get(id);
+        parent;
+        parent = parentOf.get(parent)
+      ) {
+        if (parent === ancestor) return true;
+      }
+      return false;
+    };
+    const runId = input.attrs?.turn_run_id ?? requestId;
+    const runRows = rows.filter((row) => row.attrs?.turn_run_id === runId);
+    if (
+      runRows.some(
+        (row) =>
+          row.message.role === OpenAIMessageRole.USER &&
+          follows(row.id, input.id),
+      )
+    )
+      return { status: 'superseded' };
+    if (rows.some((row) => row.attrs?.stopped_runs?.includes(runId)))
+      return { status: 'stopped' };
+
+    let answer = runRows.findLast(
+      (row) =>
+        row.message.role === OpenAIMessageRole.ASSISTANT &&
+        follows(row.id, input.id),
+    );
+    // An approval opens another run. Follow its decision branch, never a later question.
+    while (answer?.attrs?.tool_call?.interrupts?.length) {
+      const decision = rows.findLast(
+        (row) =>
+          row.parentId === answer!.id &&
+          row.attrs?.tool_call?.decisions?.length,
+      );
+      if (!decision)
+        return {
+          status: 'approval',
+          reply_id: answer.id,
+          interrupts: answer.attrs.tool_call.interrupts,
+        };
+      if (decision.attrs?.tool_call?.decisions?.some((item) => item.end_turn))
+        return { status: 'superseded' };
+      answer = rows.findLast(
+        (row) =>
+          row.attrs?.turn_id === decision.id &&
+          row.message.role === OpenAIMessageRole.ASSISTANT,
+      );
+    }
+    if (answer?.status === MessageStatus.STOPPED) return { status: 'stopped' };
+    if (
+      answer?.status !== MessageStatus.SUCCESS ||
+      !answer.message.content ||
+      answer.message.tool_calls?.length
+    )
+      return { status: 'failed' };
+    return {
+      status: 'complete',
+      reply_id: answer.id,
+      content: answer.message.content,
+    };
   }
 
   async ask(

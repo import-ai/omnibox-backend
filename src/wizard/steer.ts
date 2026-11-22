@@ -132,6 +132,7 @@ export async function prepareSteer(
   return {
     client_request_id: body.client_request_id,
     query: body.query,
+    ...(body.source_channel ? { source_channel: body.source_channel } : {}),
     images,
     tools,
     current_resource_id: body.current_resource_id,

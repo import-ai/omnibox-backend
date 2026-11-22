@@ -107,6 +107,7 @@ export class OpenWizardService {
       conversationId,
       requestId,
     );
+    if (input?.status === MessageStatus.STOPPED) return { status: 'stopped' };
     if (!input || input.status !== MessageStatus.SUCCESS) {
       const receipt = await this.streamService.submissionStatus(
         namespaceId,

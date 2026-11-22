@@ -7,7 +7,10 @@ import {
 } from 'omniboxd/messages/entities/message.entity';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
-import { ConversationSubmissions } from 'omniboxd/wizard/conversation-submissions';
+import {
+  ConversationSubmissions,
+  submissionFingerprint,
+} from 'omniboxd/wizard/conversation-submissions';
 import { AgentRequestChannel } from 'omniboxd/wizard/dto/agent-request.dto';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
@@ -3806,44 +3809,58 @@ describe('conversation submission admission', () => {
       client_request_id: requestId,
     },
   };
+  const request = {
+    ...job.body,
+    conversation_id: 'c',
+    channel: AgentRequestChannel.OPEN_API,
+  };
+  const fingerprint = submissionFingerprint({
+    client_request_id: requestId,
+    query: request.query,
+    images: [],
+    tools: [],
+    conversation_id: 'c',
+    channel: request.channel,
+  });
+
+  function expiredReceipt(existing: Record<string, unknown>) {
+    const findSubmitted = jest.fn().mockResolvedValue(existing);
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: { findSubmitted },
+    });
+    const redis = {
+      eval: jest.fn((_script, { arguments: args }) =>
+        args[7] === 'false' ? null : args[7],
+      ),
+    };
+    jest
+      .spyOn(service as any, 'submissionQueue')
+      .mockResolvedValue(
+        new ConversationSubmissions(redis as any, 'submissions'),
+      );
+    return {
+      service,
+      findSubmitted,
+      process: jest.spyOn(service as any, 'processSubmission'),
+      redis,
+    };
+  }
+
   it.each([undefined, 'earlier-run'])(
     'replays a persisted request after its receipt expires (run %s)',
     async (originalRun) => {
-      const findSubmitted = jest.fn().mockResolvedValue({
+      const { service, findSubmitted, process, redis } = expiredReceipt({
         id: 'stored-message',
         status: MessageStatus.SUCCESS,
         message: { content: job.body.query },
-        attrs: { turn_run_id: originalRun },
+        attrs: {
+          turn_run_id: originalRun,
+          submission_fingerprint: fingerprint,
+        },
       });
-      const service = createService({
-        conversationsService: { findOneForUserInNamespace: jest.fn() },
-        messagesService: { findSubmitted },
-      });
-      // The queue has no live receipt. Its Lua script receives a DB fallback
-      // and can return it without publishing the request to the active run.
-      const redis = {
-        eval: jest.fn((_script, { arguments: args }) => args[7]),
-      };
-      jest
-        .spyOn(service as any, 'submissionQueue')
-        .mockResolvedValue(
-          new ConversationSubmissions(redis as any, 'submissions'),
-        );
-      const process = jest.spyOn(service as any, 'processSubmission');
-
       await expect(
-        service.submitConversationMessage(
-          'n',
-          'c',
-          'u',
-          {
-            ...job.body,
-            conversation_id: 'c',
-            channel: AgentRequestChannel.OPEN_API,
-          },
-          undefined,
-          true,
-        ),
+        service.submitConversationMessage('n', 'c', 'u', request),
       ).resolves.toEqual({
         id: 'stored-message',
         run_id: originalRun ?? requestId,
@@ -3855,6 +3872,81 @@ describe('conversation submission admission', () => {
       expect(process).not.toHaveBeenCalled();
     },
   );
+
+  it('never queues a stopped steer after its receipt expires, even without a persisted delta', async () => {
+    const { service, process } = expiredReceipt({
+      id: 'stopped-message',
+      status: MessageStatus.STOPPED,
+      message: { role: 'user' },
+      attrs: {
+        turn_run_id: 'stopped-run',
+        submission_fingerprint: fingerprint,
+      },
+    });
+    await expect(
+      service.submitConversationMessage('n', 'c', 'u', request),
+    ).resolves.toEqual({
+      id: 'stopped-message',
+      run_id: 'stopped-run',
+      client_request_id: requestId,
+      disposition: 'failed',
+      error: 'Message was stopped',
+    });
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it('rejects changed tools under the same ID and text after the receipt expires', async () => {
+    const { service, process } = expiredReceipt({
+      id: 'stored-message',
+      status: MessageStatus.SUCCESS,
+      message: { role: 'user', content: request.query },
+      attrs: { submission_fingerprint: fingerprint },
+    });
+    await expect(
+      service.submitConversationMessage('n', 'c', 'u', {
+        ...request,
+        tools: [{ name: 'web_search' }],
+      }),
+    ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  it('persists the admitted fingerprint at steer BOS before any delta', async () => {
+    const create = jest.fn().mockResolvedValue({
+      id: 'steered-message',
+      createdAt: new Date(),
+      message: { role: 'user' },
+    });
+    const service = createService({
+      messagesService: { create, findOne: jest.fn().mockResolvedValue({}) },
+    });
+    const hGet = jest.fn().mockResolvedValue(
+      JSON.stringify({
+        query: request.query,
+        submission_fingerprint: fingerprint,
+      }),
+    );
+    (service as any).redisClient = { hGet };
+    (service as any).streamSessions.set('active-stream', {
+      steerToken: 'active-token',
+    });
+    await service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+      streamId: 'active-stream',
+    } as AgentStream)(
+      JSON.stringify({
+        response_type: 'bos',
+        role: 'user',
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      { canSteer: true, queryId: 'initial-message', runId: 'active-run' },
+    );
+    expect(hGet).toHaveBeenCalledWith('wizard:steer:active-token', requestId);
+    expect(create.mock.calls[0][3].attrs).toMatchObject({
+      client_request_id: requestId,
+      submission_fingerprint: fingerprint,
+      turn_run_id: 'active-run',
+    });
+  });
   function setup(active: boolean, target?: string) {
     const service = createService({
       conversationsService: { findOneForUserInNamespace: jest.fn() },

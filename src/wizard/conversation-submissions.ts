@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import type { createClient } from 'redis';
 
 import type { AgentRequestDto } from './dto/agent-request.dto';
@@ -23,6 +23,14 @@ export interface SubmissionReceipt {
   query?: string;
 }
 
+function submissionInput(body: ConversationSubmission['body']) {
+  return JSON.stringify({ ...body, expected_run_id: undefined });
+}
+
+export function submissionFingerprint(body: ConversationSubmission['body']) {
+  return createHash('sha256').update(submissionInput(body)).digest('hex');
+}
+
 // The sorted set schedules conversations. Each list keeps their accepted inputs in order.
 export class ConversationSubmissions {
   constructor(
@@ -38,7 +46,7 @@ export class ConversationSubmissions {
     key: string,
     job: ConversationSubmission,
     payload: string,
-    saved?: SubmissionReceipt,
+    saved?: SubmissionReceipt | false,
   ) {
     const id = job.body.client_request_id!;
     const receipt: SubmissionReceipt = {
@@ -53,6 +61,7 @@ export class ConversationSubmissions {
         if redis.call('HGET', KEYS[2], 'fingerprint') ~= ARGV[7] then return false end
         return redis.call('HGET', KEYS[2], 'receipt')
       end
+      if ARGV[8] == 'false' then return false end
       if ARGV[8] ~= '' then return ARGV[8] end
       redis.call('HSET', KEYS[2], 'input', ARGV[1], 'receipt', ARGV[2],
         'payload', ARGV[5], 'target', ARGV[6], 'fingerprint', ARGV[7])
@@ -69,8 +78,8 @@ export class ConversationSubmissions {
           String(Date.now()),
           payload,
           job.body.expected_run_id ?? '',
-          JSON.stringify({ ...job.body, expected_run_id: undefined }),
-          saved ? JSON.stringify(saved) : '',
+          submissionInput(job.body),
+          saved === undefined ? '' : JSON.stringify(saved),
         ],
       },
     );

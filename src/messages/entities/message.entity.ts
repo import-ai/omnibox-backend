@@ -57,6 +57,7 @@ export interface MessageAttrs {
   stopped_runs?: string[];
   turn_status?: 'stopped';
   client_request_id?: string;
+  submission_fingerprint?: string;
   citations?: Record<string, any>[];
   error_message?: string;
   error_code?: string;

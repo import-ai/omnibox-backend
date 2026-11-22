@@ -112,6 +112,16 @@ describe('OpenWizardService', () => {
     ).resolves.toEqual({ status: 'pending' });
   });
 
+  it('returns stopped for a persisted input even after its receipt expires', async () => {
+    messagesService.findSubmitted.mockResolvedValue({
+      status: MessageStatus.STOPPED,
+    });
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'stopped-request'),
+    ).resolves.toEqual({ status: 'stopped' });
+    expect(streamService.submissionStatus).not.toHaveBeenCalled();
+  });
+
   it('creates a new conversation when parent_message_id is absent', async () => {
     conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
 

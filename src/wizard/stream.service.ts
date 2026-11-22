@@ -94,6 +94,7 @@ import { coalesceTextDeltas } from './coalesce-text-deltas';
 import {
   ConversationSubmission,
   ConversationSubmissions,
+  submissionFingerprint,
   SubmissionReceipt,
 } from './conversation-submissions';
 import { APPEND_STEER, prepareSteer, READ_STEER } from './steer';
@@ -626,11 +627,22 @@ export class StreamService implements OnModuleDestroy {
         return;
       }
       if (chunk.response_type === 'bos') {
+        let fingerprint: string | undefined;
         if (context.canSteer && !context.failed) {
           chunk.attrs = { ...chunk.attrs, can_steer: true };
           const requestId = chunk.attrs.composer?.client_request_id;
           if (chunk.role === OpenAIMessageRole.USER && isUUID(requestId)) {
             chunk.attrs.client_request_id = requestId;
+            const token =
+              stream && this.streamSessions.get(stream.streamId)?.steerToken;
+            if (token) {
+              const payload = await this.redisClient!.hGet(
+                'wizard:steer:' + token,
+                requestId,
+              );
+              if (payload)
+                fingerprint = JSON.parse(payload).submission_fingerprint;
+            }
           }
         }
         context.lastEos = undefined;
@@ -655,6 +667,7 @@ export class StreamService implements OnModuleDestroy {
             parentId: context.parentId,
             attrs: {
               ...chunk.attrs,
+              ...(fingerprint ? { submission_fingerprint: fingerprint } : {}),
               ...(behavior ? { behavior_action_id: behavior.action_id } : {}),
               ...(context.queryId
                 ? { turn_id: context.queryId, turn_run_id: context.runId }
@@ -1320,6 +1333,7 @@ export class StreamService implements OnModuleDestroy {
     parentMode: 'latest' | 'explicit' = 'explicit',
     traceContext: ChatClientTraceContext = {},
     queryReceivedAt?: number,
+    fingerprint?: string,
   ): Promise<Observable<MessageEvent>> {
     const parentId = await this.resolveStreamParent(
       namespaceId,
@@ -1365,6 +1379,7 @@ export class StreamService implements OnModuleDestroy {
       timeZone,
       traceContext,
       queryReceivedAt,
+      fingerprint,
     );
     return new Observable<MessageEvent>((subscriber) =>
       this.attachSession(session, subscriber),
@@ -1714,6 +1729,7 @@ export class StreamService implements OnModuleDestroy {
     timeZone?: string,
     traceContext: ChatClientTraceContext = {},
     queryReceivedAt?: number,
+    fingerprint?: string,
   ): StreamSession {
     requestId = requestId?.trim() || randomUUID();
     const session: StreamSession = {
@@ -1826,6 +1842,7 @@ export class StreamService implements OnModuleDestroy {
             status: MessageStatus.SUCCESS,
             attrs: {
               ...attrs,
+              ...(fingerprint ? { submission_fingerprint: fingerprint } : {}),
               user_context: {
                 lang: requestDto.lang || '简体中文',
                 ...(requestDto.source_channel
@@ -2562,15 +2579,19 @@ export class StreamService implements OnModuleDestroy {
         'Message queue unavailable',
         HttpStatus.SERVICE_UNAVAILABLE,
       );
-    if (!queue) return this.deliverConversationMessage(job);
+    const fingerprint = submissionFingerprint(job.body);
+    const saved = await this.savedSubmission(job, fingerprint, true);
+    if (!queue) {
+      if (saved === false) throw new ConflictException('Request ID conflict');
+      return saved ?? this.deliverConversationMessage(job);
+    }
     const key = queue.key(scope);
-    const saved = await this.savedSubmission(
-      userId,
-      conversationId,
-      content.client_request_id!,
-      content.query,
+    const receipt = await queue.add(
+      key,
+      job,
+      JSON.stringify({ ...content, submission_fingerprint: fingerprint }),
+      saved,
     );
-    const receipt = await queue.add(key, job, JSON.stringify(content), saved);
     if (receipt.disposition === 'queued')
       void this.processSubmission(queue, key);
     return receipt;
@@ -2742,47 +2763,54 @@ export class StreamService implements OnModuleDestroy {
   }
 
   private async savedSubmission(
-    userId: string,
-    conversationId: string,
-    requestId: string,
-    query: string,
-  ): Promise<SubmissionReceipt | undefined> {
+    { userId, conversationId, body }: ConversationSubmission,
+    fingerprint: string,
+    requireFingerprint = false,
+  ): Promise<SubmissionReceipt | false | undefined> {
+    const requestId = body.client_request_id!;
     const existing = await this.messagesService.findSubmitted(
       userId,
       conversationId,
       requestId,
     );
-    if (existing?.status !== MessageStatus.SUCCESS) return;
-    if (existing.message.content !== query)
-      throw new ConflictException('Request ID conflict');
+    const stopped = existing?.status === MessageStatus.STOPPED;
+    if (!existing || (!stopped && existing.status !== MessageStatus.SUCCESS))
+      return;
+    const stored = existing.attrs?.submission_fingerprint;
+    // An expired legacy receipt cannot prove that the original inputs match.
+    if (stored ? stored !== fingerprint : requireFingerprint) return false;
+    if (!stored && !stopped && existing.message.content !== body.query)
+      return false;
     return {
       id: existing.id,
       run_id: existing.attrs?.turn_run_id ?? requestId,
       client_request_id: requestId,
-      disposition: existing.attrs?.turn_run_id ? 'steered' : 'started',
+      ...(stopped
+        ? { disposition: 'failed', error: 'Message was stopped' }
+        : { disposition: existing.attrs?.turn_run_id ? 'steered' : 'started' }),
     };
   }
 
-  private async deliverConversationMessage({
-    namespaceId,
-    conversationId,
-    userId,
-    body,
-    timeZone,
-    checkpointDelivery,
-  }: ConversationSubmission): Promise<SubmissionReceipt | undefined> {
+  private async deliverConversationMessage(
+    job: ConversationSubmission,
+  ): Promise<SubmissionReceipt | undefined> {
+    const {
+      namespaceId,
+      conversationId,
+      userId,
+      body,
+      timeZone,
+      checkpointDelivery,
+    } = job;
     const runId = body.client_request_id!;
     await this.conversationsService.findOneForUserInNamespace(
       conversationId,
       userId,
       namespaceId,
     );
-    const saved = await this.savedSubmission(
-      userId,
-      conversationId,
-      runId,
-      body.query,
-    );
+    const fingerprint = submissionFingerprint(body);
+    const saved = await this.savedSubmission(job, fingerprint);
+    if (saved === false) throw new ConflictException('Request ID conflict');
     if (saved) return saved;
     const redis = await this.getRedisClient();
     const scope = getStreamKey(namespaceId, conversationId, userId);
@@ -2797,6 +2825,7 @@ export class StreamService implements OnModuleDestroy {
           userId,
           target,
           body,
+          fingerprint,
         );
         return { ...receipt, client_request_id: runId, disposition: 'steered' };
       } catch (error) {
@@ -2837,6 +2866,7 @@ export class StreamService implements OnModuleDestroy {
       body.parent_message_id ? 'explicit' : 'latest',
       { platform: 'web' },
       Date.now(),
+      fingerprint,
     );
     // The session owns generation. A receipt only waits for the persisted user row.
     const admitted = await firstValueFrom(
@@ -2875,6 +2905,7 @@ export class StreamService implements OnModuleDestroy {
     userId: string,
     runId: string,
     body: AgentRequestDto,
+    fingerprint?: string,
   ) {
     await this.conversationsService.findOneForUserInNamespace(
       conversationId,
@@ -2903,7 +2934,11 @@ export class StreamService implements OnModuleDestroy {
       keys: [inbox, inbox + ':messages'],
       arguments: [
         message.client_request_id!,
-        JSON.stringify(message),
+        JSON.stringify(
+          fingerprint
+            ? { ...message, submission_fingerprint: fingerprint }
+            : message,
+        ),
         String(STREAM_TTL_SECONDS),
       ],
     });
@@ -3095,6 +3130,7 @@ export class StreamService implements OnModuleDestroy {
     parentMode: 'latest' | 'explicit' = 'explicit',
     traceContext: ChatClientTraceContext = {},
     queryReceivedAt?: number,
+    fingerprint?: string,
   ): Promise<Observable<MessageEvent>> {
     if (mode === 'write') {
       requestDto.tools =
@@ -3125,6 +3161,7 @@ export class StreamService implements OnModuleDestroy {
       parentMode,
       traceContext,
       queryReceivedAt,
+      fingerprint,
     );
   }
 

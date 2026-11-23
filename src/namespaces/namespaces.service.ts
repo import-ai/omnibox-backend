@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { context, propagation } from '@opentelemetry/api';
 import { I18nContext, I18nService } from 'nestjs-i18n';
 import { APIKey } from 'omniboxd/api-key/api-key.entity';
 import { Applications } from 'omniboxd/applications/applications.entity';
@@ -279,6 +280,8 @@ export class NamespacesService {
     if (this.proUrl && !skipHook) {
       // Captured here because the hook runs after commit, possibly outside the request's async context.
       const { installationId } = getClientContext();
+      const traceHeaders: Record<string, string> = {};
+      propagation.inject(context.active(), traceHeaders);
       const creationHookContext = {
         user_id: ownerId,
         installation_id: installationId,
@@ -287,7 +290,7 @@ export class NamespacesService {
         const url = `${this.proUrl}/internal/api/v1/pro-namespaces/${namespace.id}/creation-hook`;
         const response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { ...traceHeaders, 'Content-Type': 'application/json' },
           body: JSON.stringify(creationHookContext),
         });
         if (!response.ok) {

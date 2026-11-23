@@ -1145,6 +1145,7 @@ describe('StreamService parent resolution', () => {
     const messagesService = {
       findOneInConversation: jest.fn().mockResolvedValue(interruptMessage),
       hasChildren: jest.fn().mockResolvedValue(false),
+      update: jest.fn(),
     };
     const service = lockedServiceWith(messagesService);
 
@@ -1161,6 +1162,7 @@ describe('StreamService parent resolution', () => {
       'interrupt-id',
       'conversation-id',
     );
+    expect(messagesService.update).not.toHaveBeenCalled();
   });
 
   it('refuses to decide an interrupt that already has a reply', async () => {
@@ -1281,9 +1283,11 @@ describe('StreamService parent resolution', () => {
     });
 
     it('refuses to resume a decision that already has a tool result', async () => {
+      const update = jest.fn();
       const service = serviceWithMessages({
         findOneInConversation: jest.fn().mockResolvedValue(decision),
         findChildren: jest.fn().mockResolvedValue([toolResult]),
+        update,
       });
 
       const error = await resolve(service, decisionsUnder('decision-d')).catch(
@@ -1294,12 +1298,24 @@ describe('StreamService parent resolution', () => {
         code: 'interrupt_already_decided',
         message_id: 'decision-d',
       });
+      expect(update).not.toHaveBeenCalled();
     });
 
     it('resumes again a decision whose resume only left a failed reply', async () => {
+      const stored = {
+        ...decision,
+        attrs: {
+          tool_call: {
+            decisions: [{ type: 'reject' }, { type: 'reject' }],
+          },
+        },
+      };
       const service = serviceWithMessages({
-        findOneInConversation: jest.fn().mockResolvedValue(decision),
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
         findChildren: jest.fn().mockResolvedValue([failedReply]),
+        update: jest.fn((_id, _namespaceId, _conversationId, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+        ),
       });
 
       await expect(
@@ -1361,9 +1377,11 @@ describe('StreamService parent resolution', () => {
     ] as const)(
       'refuses a question (%s parent %j) under a decision that was not applied',
       async (mode, body, lookups) => {
+        const update = jest.fn();
         const service = serviceWithMessages({
           findOneInConversation: jest.fn().mockResolvedValue(decision),
           findChildren: jest.fn().mockResolvedValue([failedReply]),
+          update,
           ...lookups,
         });
 
@@ -1376,6 +1394,7 @@ describe('StreamService parent resolution', () => {
           message_id: 'decision-d',
           interrupt_count: 2,
         });
+        expect(update).not.toHaveBeenCalled();
       },
     );
 
@@ -1400,6 +1419,204 @@ describe('StreamService parent resolution', () => {
       });
 
       await expect(resolve(service, {}, 'latest')).resolves.toBe('failed-f');
+    });
+
+    const rejectDecisions = [
+      {
+        type: 'reject',
+        message: '用户没有批准这个操作，而是发送了新的消息，请不要重试该操作。',
+        end_turn: true,
+      },
+      {
+        type: 'reject',
+        message: '用户没有批准这个操作，而是发送了新的消息，请不要重试该操作。',
+        end_turn: true,
+      },
+    ];
+
+    function storedDecision(decisions: object[]) {
+      return {
+        id: 'decision-d',
+        parentId: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'user', content: '' },
+        attrs: {
+          composer: { content: '' },
+          context: { edition: 'pro' },
+          tool_call: { decisions },
+        },
+      };
+    }
+
+    it('overwrites the stored decisions of a decision that was not applied', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
+    });
+
+    it('does not write a decision whose stored decisions match the request', async () => {
+      const stored = storedDecision(rejectDecisions);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('overwrites an unapplied decision resolved as the latest message', async () => {
+      const stored = storedDecision([{ type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = serviceWithMessages({
+        findLatest: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(
+          service,
+          { tool_call: { decisions: [{ type: 'reject', end_turn: true }] } },
+          'latest',
+        ),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: [{ type: 'reject', end_turn: true }] },
+          },
+        },
+        false,
+      );
+    });
+
+    it('keeps the in-memory parent in sync with the saved attrs', async () => {
+      const stored = storedDecision([{ type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({
+            ...stored,
+            attrs: { ...dto.attrs, saved_marker: true },
+          }),
+      );
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+
+      expect(stored.attrs).toEqual({
+        composer: { content: '' },
+        context: { edition: 'pro' },
+        tool_call: { decisions: rejectDecisions },
+        saved_marker: true,
+      });
+    });
+
+    it('overwrites an unapplied decision in a share stream', async () => {
+      const stored = {
+        ...storedDecision([{ type: 'approve' }]),
+        parentId: null,
+      };
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const messagesService = {
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([stored]),
+        update,
+      };
+      const service = createService({ messagesService });
+      jest
+        .spyOn(service, 'acquireConversationLock')
+        .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
+      jest
+        .spyOn(service as any, 'claimStreamActive')
+        .mockResolvedValue(undefined);
+
+      await service.createShareAgentStream(
+        {
+          id: 'share-id',
+          namespaceId: 'namespace-id',
+          shareType: ShareType.ALL,
+        } as any,
+        {
+          conversation_id: 'conversation-id',
+          parent_message_id: 'decision-d',
+          query: 'hello',
+          tools: [],
+          tool_call: { decisions: rejectDecisions },
+        } as any,
+        'request-id',
+        'ask',
+      );
+
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
     });
   });
 

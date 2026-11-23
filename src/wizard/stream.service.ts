@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import {
   HttpException,
   HttpStatus,
@@ -1276,6 +1278,12 @@ export class StreamService implements OnModuleDestroy {
       );
       if (requestDto.tool_call?.decisions?.length) {
         await this.assertDecisionUnapplied(parent, requestDto.conversation_id);
+        await this.overwriteDecisionDecisions(
+          namespaceId,
+          requestDto.conversation_id,
+          parent,
+          requestDto.tool_call.decisions,
+        );
       } else {
         await this.assertDecisionApplied(
           parent,
@@ -1422,6 +1430,41 @@ export class StreamService implements OnModuleDestroy {
       HttpStatus.CONFLICT,
       { message_id: parent.id },
     );
+  }
+
+  // A decision accepted but not applied yet takes the decisions of the
+  // request that resumes it: the client may reject a call another client
+  // approved, and the stored decisions would otherwise run again (an
+  // approval could execute its tool). Later requests win while D is
+  // unapplied; applied decisions are refused before this runs.
+  private async overwriteDecisionDecisions(
+    namespaceId: string,
+    conversationId: string,
+    parent: Message | null | undefined,
+    decisions: Record<string, any>[],
+  ): Promise<void> {
+    const currentAttrs = parent?.attrs;
+    const currentToolCall = currentAttrs?.tool_call;
+    if (
+      !parent ||
+      parent.message.role !== OpenAIMessageRole.USER ||
+      !currentAttrs ||
+      !currentToolCall?.decisions?.length
+    )
+      return;
+    if (isDeepStrictEqual(currentToolCall.decisions, decisions)) return;
+    const attrs = {
+      ...currentAttrs,
+      tool_call: { ...currentToolCall, decisions },
+    };
+    const saved = await this.messagesService.update(
+      parent.id,
+      namespaceId,
+      conversationId,
+      { attrs },
+      false,
+    );
+    parent.attrs = saved?.attrs ?? attrs;
   }
 
   // A new question may not continue from a decision that was accepted but

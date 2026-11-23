@@ -84,6 +84,7 @@ describe('NamespacesQuotaService', () => {
     );
     expect(fetch).toHaveBeenCalledWith(
       'https://pro.example.com/internal/api/v1/pro-namespaces?namespace_ids=namespace-id',
+      { headers: {} },
     );
   });
 

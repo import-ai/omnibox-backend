@@ -1452,6 +1452,16 @@ export class StreamService implements OnModuleDestroy {
       !currentToolCall?.decisions?.length
     )
       return;
+    // A wrong count would make the stored decisions unusable for every later
+    // resume, so refuse it instead of writing it.
+    if (currentToolCall.decisions.length !== decisions.length) {
+      throw new AppException(
+        this.i18n.t('system.errors.invalidDecisions'),
+        'INVALID_DECISIONS',
+        HttpStatus.BAD_REQUEST,
+        { message_id: parent.id },
+      );
+    }
     if (isDeepStrictEqual(currentToolCall.decisions, decisions)) return;
     const attrs = {
       ...currentAttrs,

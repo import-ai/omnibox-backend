@@ -1306,7 +1306,7 @@ describe('StreamService parent resolution', () => {
         ...decision,
         attrs: {
           tool_call: {
-            decisions: [{ type: 'reject' }, { type: 'reject' }],
+            decisions: [{ type: 'reject' }],
           },
         },
       };
@@ -1482,6 +1482,33 @@ describe('StreamService parent resolution', () => {
       );
     });
 
+    it('refuses a decision whose stored decision count does not match the request', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: [{ type: 'reject', end_turn: true }] },
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'INVALID_DECISIONS' });
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(error.getResponse()).toMatchObject({
+        code: 'invalid_decisions',
+        message_id: 'decision-d',
+      });
+      expect(update).not.toHaveBeenCalled();
+      expect(stored.attrs.tool_call.decisions).toEqual([
+        { type: 'approve' },
+        { type: 'approve' },
+      ]);
+    });
+
     it('does not write a decision whose stored decisions match the request', async () => {
       const stored = storedDecision(rejectDecisions);
       const update = jest.fn();
@@ -1537,7 +1564,7 @@ describe('StreamService parent resolution', () => {
     });
 
     it('keeps the in-memory parent in sync with the saved attrs', async () => {
-      const stored = storedDecision([{ type: 'approve' }]);
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
       const update = jest.fn(
         (_id: string, _namespaceId: string, _conversationId: string, dto) =>
           Promise.resolve({
@@ -1566,7 +1593,7 @@ describe('StreamService parent resolution', () => {
 
     it('overwrites an unapplied decision in a share stream', async () => {
       const stored = {
-        ...storedDecision([{ type: 'approve' }]),
+        ...storedDecision([{ type: 'approve' }, { type: 'approve' }]),
         parentId: null,
       };
       const update = jest.fn(

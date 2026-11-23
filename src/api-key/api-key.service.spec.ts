@@ -1,8 +1,12 @@
 /* eslint-disable @typescript-eslint/unbound-method */
+import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { propagation } from '@opentelemetry/api';
 import { instanceToPlain } from 'class-transformer';
 import { I18nService } from 'nestjs-i18n';
+import { WECHAT_OA_APP_ID } from 'omniboxd/applications/app.constants';
 import { Applications } from 'omniboxd/applications/applications.entity';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { CurrentInfoService } from 'omniboxd/namespaces/current-info.service';
@@ -26,6 +30,9 @@ describe('APIKeyService', () => {
   let permissionsService: jest.Mocked<PermissionsService>;
   let namespacesService: jest.Mocked<NamespacesService>;
   let currentInfoService: jest.Mocked<CurrentInfoService>;
+  let configService: { get: jest.Mock };
+  const fetchMock = jest.fn();
+  const originalFetch = global.fetch;
 
   const mockApiKey = {
     id: 'test-api-key-id',
@@ -46,6 +53,9 @@ describe('APIKeyService', () => {
   };
 
   beforeEach(async () => {
+    fetchMock.mockReset();
+    global.fetch = fetchMock;
+
     const mockRepository = {
       create: jest.fn(),
       save: jest.fn(),
@@ -57,6 +67,7 @@ describe('APIKeyService', () => {
     };
 
     const mockApplicationsRepository = {
+      find: jest.fn(),
       softDelete: jest.fn(),
     };
 
@@ -99,6 +110,8 @@ describe('APIKeyService', () => {
       getCurrentInfo: jest.fn(),
     };
 
+    configService = { get: jest.fn(() => '') };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         APIKeyService,
@@ -126,6 +139,10 @@ describe('APIKeyService', () => {
           provide: I18nService,
           useValue: mockI18nService,
         },
+        {
+          provide: ConfigService,
+          useValue: configService,
+        },
       ],
     }).compile();
 
@@ -135,6 +152,11 @@ describe('APIKeyService', () => {
     permissionsService = module.get(PermissionsService);
     namespacesService = module.get(NamespacesService);
     currentInfoService = module.get(CurrentInfoService);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
   });
 
   it('should be defined', () => {
@@ -654,10 +676,25 @@ describe('APIKeyService', () => {
   });
 
   describe('delete', () => {
+    const flushFetch = () => new Promise((resolve) => setImmediate(resolve));
+    const wechatOaApplication = (
+      openid: unknown,
+      apiKeyId = 'test-api-key-id',
+    ) =>
+      ({
+        id: `app-${String(openid)}`,
+        namespaceId: 'test-namespace-id',
+        userId: 'test-user-id',
+        appId: WECHAT_OA_APP_ID,
+        apiKeyId,
+        attrs: { primary_key: openid },
+      }) as unknown as Applications;
+
     it('should delete API key and cascade delete related applications', async () => {
       const apiKeyId = 'test-api-key-id';
 
       // Mock successful soft delete operations
+      applicationsRepository.find.mockResolvedValue([]);
       applicationsRepository.softDelete.mockResolvedValue({
         affected: 2,
       } as any);
@@ -672,12 +709,14 @@ describe('APIKeyService', () => {
 
       // Verify API key was deleted after
       expect(apiKeyRepository.softDelete).toHaveBeenCalledWith(apiKeyId);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
 
     it('should delete API key and handle when no related applications exist', async () => {
       const apiKeyId = 'test-api-key-id';
 
       // Mock soft delete operations (0 applications affected, 1 API key affected)
+      applicationsRepository.find.mockResolvedValue([]);
       applicationsRepository.softDelete.mockResolvedValue({
         affected: 0,
       } as any);
@@ -692,6 +731,170 @@ describe('APIKeyService', () => {
 
       // Verify API key was deleted
       expect(apiKeyRepository.softDelete).toHaveBeenCalledWith(apiKeyId);
+    });
+
+    it('notifies the official account bound to the deleted key', async () => {
+      const traceparent =
+        '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01';
+      jest
+        .spyOn(propagation, 'inject')
+        .mockImplementation((_context, carrier) => {
+          Object.assign(carrier as Record<string, string>, { traceparent });
+        });
+      applicationsRepository.find.mockResolvedValue([
+        wechatOaApplication('openid-1'),
+      ]);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+      configService.get.mockReturnValue('http://bot.local//');
+      fetchMock.mockResolvedValue({ ok: true } as Response);
+
+      await service.delete('test-api-key-id');
+      await flushFetch();
+
+      expect(applicationsRepository.find).toHaveBeenCalledWith({
+        where: {
+          apiKeyId: 'test-api-key-id',
+          appId: WECHAT_OA_APP_ID,
+        },
+        withDeleted: true,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://bot.local/api/v1/wechat_oa/unbound',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            traceparent,
+          },
+          body: JSON.stringify({
+            openid: 'openid-1',
+            api_key_id: 'test-api-key-id',
+          }),
+        }),
+      );
+    });
+
+    it('notifies each openid once and skips rows without one', async () => {
+      applicationsRepository.find.mockResolvedValue([
+        wechatOaApplication('openid-1'),
+        wechatOaApplication('openid-1'),
+        wechatOaApplication('openid-2'),
+        wechatOaApplication(''),
+        wechatOaApplication(null),
+      ]);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+      configService.get.mockReturnValue('http://bot.local');
+      fetchMock.mockResolvedValue({ ok: true } as Response);
+
+      await service.delete('test-api-key-id');
+      await flushFetch();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const bodies = fetchMock.mock.calls.map(([, init]) =>
+        JSON.parse(init.body as string),
+      );
+      expect(bodies).toEqual([
+        { openid: 'openid-1', api_key_id: 'test-api-key-id' },
+        { openid: 'openid-2', api_key_id: 'test-api-key-id' },
+      ]);
+    });
+
+    it('does not notify for other applications', async () => {
+      applicationsRepository.find.mockResolvedValue([
+        { ...wechatOaApplication('openid-1'), appId: 'qq_bot' },
+      ]);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+      configService.get.mockReturnValue('http://bot.local');
+
+      await service.delete('test-api-key-id');
+      await flushFetch();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('does not notify when notifications are turned off', async () => {
+      applicationsRepository.find.mockResolvedValue([
+        wechatOaApplication('openid-1'),
+      ]);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+      configService.get.mockReturnValue('http://bot.local');
+
+      await service.delete('test-api-key-id', {
+        notifyBoundApplications: false,
+      });
+      await flushFetch();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each(['', undefined])(
+      'does not notify without OBBOT_BASE_URL (%p)',
+      async (baseUrl) => {
+        applicationsRepository.find.mockResolvedValue([
+          wechatOaApplication('openid-1'),
+        ]);
+        apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+        configService.get.mockReturnValue(baseUrl);
+
+        await expect(
+          service.delete('test-api-key-id'),
+        ).resolves.toBeUndefined();
+        await flushFetch();
+
+        expect(fetchMock).not.toHaveBeenCalled();
+      },
+    );
+
+    it('logs a warning but deletes when the notification is rejected', async () => {
+      const warn = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      applicationsRepository.find.mockResolvedValue([
+        wechatOaApplication('openid-1'),
+      ]);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+      configService.get.mockReturnValue('http://bot.local');
+      fetchMock.mockResolvedValue({ ok: false, status: 503 } as Response);
+
+      await expect(service.delete('test-api-key-id')).resolves.toBeUndefined();
+      await flushFetch();
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('HTTP 503'));
+    });
+
+    it('logs a warning but deletes when the notification throws', async () => {
+      const warn = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      applicationsRepository.find.mockResolvedValue([
+        wechatOaApplication('openid-1'),
+      ]);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+      configService.get.mockReturnValue('http://bot.local');
+      fetchMock.mockRejectedValue(new Error('ECONNREFUSED'));
+
+      await expect(service.delete('test-api-key-id')).resolves.toBeUndefined();
+      await flushFetch();
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('ECONNREFUSED'),
+      );
+    });
+
+    it('does not notify when the key does not exist', async () => {
+      applicationsRepository.find.mockResolvedValue([
+        wechatOaApplication('openid-1'),
+      ]);
+      apiKeyRepository.softDelete.mockResolvedValue({ affected: 0 } as any);
+      configService.get.mockReturnValue('http://bot.local');
+
+      await expect(service.delete('test-api-key-id')).rejects.toMatchObject({
+        code: 'API_KEY_NOT_FOUND',
+      });
+      await flushFetch();
+
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

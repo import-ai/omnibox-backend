@@ -7,6 +7,7 @@ import { BaseApp } from 'omniboxd/applications/apps/base-app';
 import { BotBase } from 'omniboxd/applications/apps/bot-base';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { getActiveTraceHeaders } from 'omniboxd/tracing/trace-headers';
 import { Repository } from 'typeorm';
 
 @Injectable()
@@ -48,6 +49,7 @@ export class WechatClaw extends BotBase {
         {
           method: 'POST',
           headers: {
+            ...getActiveTraceHeaders(),
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({

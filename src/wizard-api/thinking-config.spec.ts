@@ -53,6 +53,10 @@ it('validates full catalogs and reports malformed upstream responses as 502', as
     } as IWizardUrlProvider,
     { t: () => 'Request failed' } as unknown as I18nService,
   );
+  const traceHeaders = {
+    traceparent: '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+  };
+  jest.spyOn(service, 'getTraceHeaders').mockReturnValue(traceHeaders);
   const fetchMock = jest.spyOn(global, 'fetch');
   const basic = ['low', 'high'].map((level) => ({ edition: 'basic', level }));
   const pro = ['low', 'high', 'max'].map((level) => ({
@@ -69,7 +73,7 @@ it('validates full catalogs and reports malformed upstream responses as 502', as
     expect(await service.getModelsConfig('http://wizard-pro')).toEqual(catalog);
     expect(fetchMock).toHaveBeenLastCalledWith(
       'http://wizard-pro/api/v1/wizard/models',
-      expect.any(Object),
+      expect.objectContaining({ headers: traceHeaders }),
     );
     for (const invalid of [
       null,

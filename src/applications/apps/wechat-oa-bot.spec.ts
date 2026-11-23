@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { propagation } from '@opentelemetry/api';
 import { I18nService } from 'nestjs-i18n';
 import { APIKeyService } from 'omniboxd/api-key/api-key.service';
 import { Applications } from 'omniboxd/applications/applications.entity';
@@ -67,11 +68,20 @@ describe('WechatOaBot', () => {
     global.fetch = fetchMock;
   });
 
+  afterEach(() => jest.restoreAllMocks());
+
   afterAll(() => {
     global.fetch = originalFetch;
   });
 
   it('stores the parametric QR code returned by the bot', async () => {
+    const traceparent =
+      '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01';
+    jest
+      .spyOn(propagation, 'inject')
+      .mockImplementation((_context, carrier) => {
+        Object.assign(carrier as Record<string, string>, { traceparent });
+      });
     fetchMock.mockResolvedValue(
       jsonResponse({
         qrcode_content: 'http://weixin.qq.com/q/abc',
@@ -90,6 +100,7 @@ describe('WechatOaBot', () => {
       'http://bot.local/api/v1/wechat_oa/binding-qrcode',
       expect.objectContaining({
         method: 'POST',
+        headers: { 'Content-Type': 'application/json', traceparent },
         body: JSON.stringify({ key: attrs.key }),
       }),
     );

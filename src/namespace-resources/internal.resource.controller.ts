@@ -17,9 +17,13 @@ import { HeaderUserId } from 'omniboxd/decorators/header-user-id.decorator';
 import { FilesService } from 'omniboxd/files/files.service';
 import { CreateResourceDto } from 'omniboxd/namespace-resources/dto/create-resource.dto';
 import { UpdateResourceDto } from 'omniboxd/namespace-resources/dto/update-resource.dto';
-import { VisibleResourcesRequestDto } from 'omniboxd/namespace-resources/dto/visible-resources.dto';
+import {
+  ExpandVisibleResourcesRequestDto,
+  VisibleResourcesRequestDto,
+} from 'omniboxd/namespace-resources/dto/visible-resources.dto';
 import { NamespaceResourcesService } from 'omniboxd/namespace-resources/namespace-resources.service';
 import { ResourceRetryService } from 'omniboxd/namespace-resources/resource-retry.service';
+import { VisibleResourcesService } from 'omniboxd/namespace-resources/visible-resources.service';
 import { CheckNamespaceReadonly } from 'omniboxd/namespaces/decorators/check-storage-quota.decorator';
 import { PermissionsService } from 'omniboxd/permissions/permissions.service';
 import { ResourcePermission } from 'omniboxd/permissions/resource-permission.enum';
@@ -36,6 +40,7 @@ export class InternalResourcesController {
     private readonly filesService: FilesService,
     private readonly permissionsService: PermissionsService,
     private readonly resourceRetryService: ResourceRetryService,
+    private readonly visibleResourcesService: VisibleResourcesService,
   ) {}
 
   @Public()
@@ -104,6 +109,23 @@ export class InternalResourcesController {
       resourceIds,
     );
     return { resourceIds: visibleIds };
+  }
+
+  @Public()
+  @Post('namespaces/:namespaceId/resources/visible-expanded')
+  @HttpCode(HttpStatus.OK)
+  async expandVisibleResources(
+    @Param('namespaceId') namespaceId: string,
+    @HeaderUserId() userId: string,
+    @Body() requestDto: ExpandVisibleResourcesRequestDto,
+  ) {
+    return {
+      resources: await this.visibleResourcesService.getVisibleResources(
+        namespaceId,
+        userId,
+        requestDto.resources,
+      ),
+    };
   }
 
   @Public()

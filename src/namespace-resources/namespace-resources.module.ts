@@ -11,6 +11,7 @@ import { ResourceRetryService } from 'omniboxd/namespace-resources/resource-retr
 import { ResourceSortPreferenceController } from 'omniboxd/namespace-resources/resource-sort-preference.controller';
 import { ResourceSortPreferenceService } from 'omniboxd/namespace-resources/resource-sort-preference.service';
 import { ResourceSortingService } from 'omniboxd/namespace-resources/resource-sorting.service';
+import { VisibleResourcesService } from 'omniboxd/namespace-resources/visible-resources.service';
 import { Namespace } from 'omniboxd/namespaces/entities/namespace.entity';
 import { NamespaceMember } from 'omniboxd/namespaces/entities/namespace-member.entity';
 import { NamespacesQuotaModule } from 'omniboxd/namespaces/namespaces-quota.module';
@@ -21,6 +22,7 @@ import { Resource } from 'omniboxd/resources/entities/resource.entity';
 import { ResourcesModule } from 'omniboxd/resources/resources.module';
 import { S3Module } from 'omniboxd/s3/s3.module';
 import { TagModule } from 'omniboxd/tag/tag.module';
+import { TaskRetryModule } from 'omniboxd/task-retry/task-retry.module';
 import { Task } from 'omniboxd/tasks/tasks.entity';
 import { TasksModule } from 'omniboxd/tasks/tasks.module';
 
@@ -29,6 +31,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
     NamespaceResourcesService,
     OpenResourcesService,
     ResourceSortPreferenceService,
+    VisibleResourcesService,
   ],
   providers: [
     NamespaceResourcesService,
@@ -36,6 +39,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
     ResourceSortPreferenceService,
     ResourceSortingService,
     ResourceRetryService,
+    VisibleResourcesService,
   ],
   controllers: [
     NamespaceResourcesController,
@@ -52,6 +56,7 @@ import { TasksModule } from 'omniboxd/tasks/tasks.module';
     TagModule,
     PermissionsModule,
     S3Module,
+    TaskRetryModule,
     TasksModule,
     ResourceAttachmentsModule,
     ResourceCommentsModule,

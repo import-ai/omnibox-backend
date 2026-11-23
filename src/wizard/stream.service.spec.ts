@@ -6,30 +6,34 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
+import { ShareType } from 'omniboxd/shares/entities/share.entity';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { Observable } from 'rxjs';
 
 function createService(mocks: {
   configService?: { get: jest.Mock };
+  wizardApiService?: Record<string, jest.Mock>;
   messagesService?: Record<string, jest.Mock>;
   conversationsService?: Record<string, jest.Mock>;
-  namespaceResourcesService?: Record<string, jest.Mock>;
+  visibleResourcesService?: Record<string, jest.Mock>;
   sharedResourcesService?: Record<string, jest.Mock>;
   resourcesService?: Record<string, jest.Mock>;
-  smartFoldersService?: Record<string, jest.Mock>;
   traceService?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
-    {} as any,
+    (mocks.wizardApiService ?? {
+      resolveAgentTarget: jest
+        .fn()
+        .mockResolvedValue({ baseUrl: 'http://wizard', target: 'core' }),
+    }) as any,
     (mocks.messagesService ?? {
       indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
     }) as any,
     mocks.conversationsService as any,
-    mocks.namespaceResourcesService as any,
+    mocks.visibleResourcesService as any,
     mocks.sharedResourcesService as any,
     mocks.resourcesService as any,
-    mocks.smartFoldersService as any,
     { t: jest.fn((key: string) => key) } as any,
     { mint: jest.fn(() => 'share-access-token') } as any,
     {
@@ -366,135 +370,6 @@ describe('StreamService agent handler', () => {
 });
 
 describe('StreamService private_search visible resources', () => {
-  it('expands empty private_search resources when the flag is unset', async () => {
-    const namespaceResourcesService = {
-      getAllResourcesByUser: jest.fn().mockResolvedValue([
-        {
-          id: 'smart-folder-id',
-          name: 'Smart folder',
-          resourceType: ResourceType.SMART_FOLDER,
-        },
-      ]),
-      permissionFilter: jest.fn(),
-    };
-    const service = createService({
-      namespaceResourcesService,
-      resourcesService: {},
-    });
-
-    const result = await (service as any).getUserVisibleResources(
-      'namespace-id',
-      'user-id',
-      [],
-    );
-
-    expect(result).toEqual([
-      {
-        id: 'smart-folder-id',
-        name: 'Smart folder',
-        type: 'folder',
-      },
-    ]);
-    expect(
-      namespaceResourcesService.getAllResourcesByUser,
-    ).toHaveBeenCalledWith('user-id', 'namespace-id');
-    expect(namespaceResourcesService.permissionFilter).not.toHaveBeenCalled();
-  });
-
-  it('does not scan the namespace when expanding empty resources is disabled', async () => {
-    const namespaceResourcesService = {
-      getAllResourcesByUser: jest.fn(),
-      permissionFilter: jest.fn(),
-    };
-    const service = createService({
-      configService: {
-        get: jest.fn((key: string) =>
-          key === 'OBB_ASK_EXPAND_EMPTY_VISIBLE_RESOURCES'
-            ? 'false'
-            : undefined,
-        ),
-      },
-      namespaceResourcesService,
-      resourcesService: {},
-    });
-
-    const result = await (service as any).getUserVisibleResources(
-      'namespace-id',
-      'user-id',
-      [],
-    );
-
-    expect(result).toEqual([]);
-    expect(
-      namespaceResourcesService.getAllResourcesByUser,
-    ).not.toHaveBeenCalled();
-    expect(namespaceResourcesService.permissionFilter).not.toHaveBeenCalled();
-  });
-
-  it('expands selected smart folders through the virtual smart-folder children list', async () => {
-    const namespaceResourcesService = {
-      permissionFilter: jest.fn((_namespaceId, _userId, resources) => [
-        ...resources,
-      ]),
-      getAllSubResourcesByUser: jest.fn(),
-    };
-    const resourcesService = {
-      getResourceMeta: jest.fn().mockResolvedValue({
-        id: 'smart-folder-id',
-        name: 'Smart folder',
-        resourceType: ResourceType.SMART_FOLDER,
-      }),
-    };
-    const smartFoldersService = {
-      listChildren: jest.fn().mockResolvedValue([
-        {
-          id: 'matched-doc-id',
-          name: 'Matched doc',
-          resourceType: ResourceType.DOC,
-        },
-      ]),
-    };
-    const service = createService({
-      namespaceResourcesService,
-      resourcesService,
-      smartFoldersService,
-    });
-
-    const result = await (service as any).getUserVisibleResources(
-      'namespace-id',
-      'user-id',
-      [
-        {
-          id: 'smart-folder-id',
-          name: 'Smart folder',
-          type: 'folder',
-        },
-      ],
-    );
-
-    expect(smartFoldersService.listChildren).toHaveBeenCalledWith(
-      'user-id',
-      'namespace-id',
-      'smart-folder-id',
-    );
-    expect(
-      namespaceResourcesService.getAllSubResourcesByUser,
-    ).not.toHaveBeenCalled();
-    expect(result).toEqual([
-      {
-        id: 'smart-folder-id',
-        name: 'Smart folder',
-        type: 'folder',
-        child_ids: ['matched-doc-id'],
-      },
-      {
-        id: 'matched-doc-id',
-        name: 'Matched doc',
-        type: 'resource',
-      },
-    ]);
-  });
-
   it('treats shared smart folders as folders when all shared resources are exposed', async () => {
     const sharedResourcesService = {
       getAllSharedResources: jest.fn().mockResolvedValue([
@@ -593,6 +468,455 @@ describe('StreamService private_search visible resources', () => {
         type: 'resource',
       },
     ]);
+  });
+});
+
+describe('StreamService visible resource expansion gating', () => {
+  const folderTool = {
+    name: 'private_search',
+    resources: [{ id: 'folder-id', name: 'Folder', type: 'folder' }],
+  };
+
+  const asUserMessage = (id: string) => ({
+    id,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    parentId: null,
+    message: { role: OpenAIMessageRole.USER, content: 'hello' },
+    attrs: {},
+  });
+
+  function gatedService(mocks: Parameters<typeof createService>[0]) {
+    const query = asUserMessage('query-id');
+    const messagesService = {
+      create: jest.fn().mockResolvedValue(query),
+      findOne: jest.fn().mockResolvedValue(query),
+      findAll: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue(query),
+      updateDelta: jest.fn().mockResolvedValue({ message: {} }),
+      setAnswerTiming: jest.fn().mockResolvedValue(undefined),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+      ...mocks.messagesService,
+    };
+    const service = createService({
+      ...mocks,
+      messagesService,
+      conversationsService: {
+        findOneForUserInNamespace: jest.fn().mockResolvedValue({}),
+      },
+    });
+    jest
+      .spyOn(service as any, 'resolveStreamParent')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'startRedisSession')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    jest.spyOn(service as any, 'isSessionCanceled').mockResolvedValue(false);
+    return { service, messagesService };
+  }
+
+  async function runStream(
+    mocks: Parameters<typeof createService>[0],
+    body: Record<string, any>,
+    mode: 'ask' | 'write' = 'ask',
+  ) {
+    const { service, messagesService } = gatedService(mocks);
+
+    const observable = await service.createUserAgentStream(
+      'user-id',
+      'namespace-id',
+      {
+        conversation_id: 'conversation-id',
+        query: 'hello',
+        tools: [],
+        ...body,
+      } as any,
+      'request-id',
+      mode,
+    );
+    const chunks: any[] = [];
+    await new Promise<void>((resolve) =>
+      observable.subscribe({
+        next: (event) => chunks.push(JSON.parse(event.data as string)),
+        complete: resolve,
+        error: resolve,
+      }),
+    );
+    return { service, chunks, messagesService };
+  }
+
+  function wizardResponse() {
+    return new Response('data: {"response_type":"done"}\n\n');
+  }
+
+  it('expands server-side for a core ask and passes it to the wizard', async () => {
+    const resolveAgentTarget = jest.fn().mockResolvedValue({
+      baseUrl: 'http://wizard',
+      target: 'core',
+    });
+    const createAgentStream = jest.fn().mockResolvedValue(wizardResponse());
+    const getVisibleResources = jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'expanded-id', name: 'Expanded', type: 'resource' },
+      ]);
+    await runStream(
+      {
+        wizardApiService: { resolveAgentTarget, createAgentStream },
+        visibleResourcesService: { getVisibleResources },
+      },
+      { tools: [folderTool] },
+    );
+
+    expect(getVisibleResources).toHaveBeenCalledWith(
+      'namespace-id',
+      'user-id',
+      folderTool.resources,
+    );
+    expect(createAgentStream).toHaveBeenCalledWith(
+      'namespace-id',
+      'ask',
+      expect.objectContaining({
+        tools: [
+          expect.objectContaining({
+            visible_resources: [
+              { id: 'expanded-id', name: 'Expanded', type: 'resource' },
+            ],
+          }),
+        ],
+      }),
+      'request-id',
+      expect.any(AbortSignal),
+      { baseUrl: 'http://wizard', target: 'core' },
+    );
+  });
+
+  it('leaves an Agent 2.1 ask to the lazy resolver', async () => {
+    const resolveAgentTarget = jest.fn().mockResolvedValue({
+      baseUrl: 'http://wizard-pro',
+      target: 'pro',
+    });
+    const createAgentStream = jest.fn().mockResolvedValue(wizardResponse());
+    const getVisibleResources = jest.fn();
+    await runStream(
+      {
+        wizardApiService: { resolveAgentTarget, createAgentStream },
+        visibleResourcesService: { getVisibleResources },
+      },
+      { tools: [folderTool] },
+    );
+
+    expect(getVisibleResources).not.toHaveBeenCalled();
+    const body = createAgentStream.mock.calls[0][2];
+    expect(body.tools[0]).not.toHaveProperty('visible_resources');
+    expect(createAgentStream).toHaveBeenCalledWith(
+      'namespace-id',
+      'ask',
+      expect.anything(),
+      'request-id',
+      expect.any(AbortSignal),
+      { baseUrl: 'http://wizard-pro', target: 'pro' },
+    );
+  });
+
+  it('replaces a client-supplied list with the server expansion for a core ask', async () => {
+    const clientResources = [
+      { id: 'client-id', name: 'Client', type: 'resource' },
+    ];
+    const createAgentStream = jest.fn().mockResolvedValue(wizardResponse());
+    const getVisibleResources = jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'server-id', name: 'Server', type: 'resource' },
+      ]);
+    await runStream(
+      {
+        wizardApiService: {
+          resolveAgentTarget: jest
+            .fn()
+            .mockResolvedValue({ baseUrl: 'http://wizard', target: 'core' }),
+          createAgentStream,
+        },
+        visibleResourcesService: { getVisibleResources },
+      },
+      {
+        tools: [{ ...folderTool, visible_resources: clientResources }],
+      },
+    );
+
+    const body = createAgentStream.mock.calls[0][2];
+    expect(body.tools[0].visible_resources).toEqual([
+      { id: 'server-id', name: 'Server', type: 'resource' },
+    ]);
+  });
+
+  it('strips a client-supplied list from an Agent 2.1 ask', async () => {
+    const createAgentStream = jest.fn().mockResolvedValue(wizardResponse());
+    const getVisibleResources = jest.fn();
+    await runStream(
+      {
+        wizardApiService: {
+          resolveAgentTarget: jest
+            .fn()
+            .mockResolvedValue({ baseUrl: 'http://wizard-pro', target: 'pro' }),
+          createAgentStream,
+        },
+        visibleResourcesService: { getVisibleResources },
+      },
+      {
+        tools: [
+          {
+            ...folderTool,
+            visible_resources: [
+              { id: 'client-id', name: 'Client', type: 'resource' },
+            ],
+          },
+        ],
+      },
+    );
+
+    expect(getVisibleResources).not.toHaveBeenCalled();
+    const body = createAgentStream.mock.calls[0][2];
+    expect(body.tools[0]).not.toHaveProperty('visible_resources');
+  });
+
+  it('expands a write turn in openUserAgentStream without resolving a target', async () => {
+    const resolveAgentTarget = jest.fn();
+    const createAgentStream = jest.fn().mockResolvedValue(wizardResponse());
+    const getVisibleResources = jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'expanded-id', name: 'Expanded', type: 'resource' },
+      ]);
+    await runStream(
+      {
+        wizardApiService: { resolveAgentTarget, createAgentStream },
+        visibleResourcesService: { getVisibleResources },
+      },
+      { tools: [folderTool] },
+      'write',
+    );
+
+    expect(resolveAgentTarget).not.toHaveBeenCalled();
+    expect(getVisibleResources).toHaveBeenCalledWith(
+      'namespace-id',
+      'user-id',
+      folderTool.resources,
+    );
+    const body = createAgentStream.mock.calls[0][2];
+    expect(body.tools[0].visible_resources).toEqual([
+      { id: 'expanded-id', name: 'Expanded', type: 'resource' },
+    ]);
+    expect(createAgentStream.mock.calls[0][5]).toBeUndefined();
+  });
+
+  it('does not expand a share turn a second time', async () => {
+    const resolveAgentTarget = jest.fn();
+    const createAgentStream = jest.fn().mockResolvedValue(wizardResponse());
+    const getVisibleResources = jest.fn();
+    const sharedResourcesService = {
+      getAndValidateResource: jest.fn().mockResolvedValue({
+        id: 'folder-id',
+        resourceType: ResourceType.SMART_FOLDER,
+      }),
+      getSharedResourceChildren: jest.fn().mockResolvedValue([]),
+    };
+    const shareTool = {
+      name: 'private_search',
+      resources: [{ id: 'folder-id', name: 'Folder', type: 'folder' }],
+    };
+    const service = createService({
+      wizardApiService: { resolveAgentTarget, createAgentStream },
+      visibleResourcesService: { getVisibleResources },
+      sharedResourcesService,
+      messagesService: {
+        create: jest.fn().mockResolvedValue(asUserMessage('query-id')),
+        findOne: jest.fn().mockResolvedValue(asUserMessage('query-id')),
+        findAll: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue(asUserMessage('query-id')),
+        updateDelta: jest.fn().mockResolvedValue({ message: {} }),
+        setAnswerTiming: jest.fn().mockResolvedValue(undefined),
+        indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+      },
+    });
+    jest
+      .spyOn(service as any, 'resolveStreamParent')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'startRedisSession')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    jest.spyOn(service as any, 'isSessionCanceled').mockResolvedValue(false);
+
+    const observable = await service.createShareAgentStream(
+      {
+        id: 'share-id',
+        namespaceId: 'namespace-id',
+        shareType: ShareType.ALL,
+      } as any,
+      {
+        conversation_id: 'conversation-id',
+        query: 'hello',
+        tools: [shareTool],
+      } as any,
+      'request-id',
+      'ask',
+    );
+    await new Promise<void>((resolve) =>
+      observable.subscribe({ complete: resolve, error: resolve }),
+    );
+
+    expect(resolveAgentTarget).not.toHaveBeenCalled();
+    expect(getVisibleResources).not.toHaveBeenCalled();
+    expect(sharedResourcesService.getSharedResourceChildren).toHaveBeenCalled();
+    expect(createAgentStream.mock.calls[0][2].tools).toEqual([
+      {
+        name: 'private_search',
+        namespace_id: 'namespace-id',
+        resources: [
+          { id: 'folder-id', name: 'Folder', type: 'folder', child_ids: [] },
+        ],
+        visible_resources: [
+          { id: 'folder-id', name: 'Folder', type: 'folder', child_ids: [] },
+        ],
+      },
+    ]);
+  });
+
+  it('releases the turn when resolving the target fails', async () => {
+    const resolveAgentTarget = jest
+      .fn()
+      .mockRejectedValue(
+        new AppException('no credits', 'INSUFFICIENT_AGENT_CREDITS', 403),
+      );
+    const createAgentStream = jest.fn();
+    const { service, chunks } = await runStream(
+      {
+        wizardApiService: { resolveAgentTarget, createAgentStream },
+        visibleResourcesService: { getVisibleResources: jest.fn() },
+      },
+      { tools: [folderTool] },
+    );
+
+    expect(createAgentStream).not.toHaveBeenCalled();
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        response_type: 'error',
+        code: 'INSUFFICIENT_AGENT_CREDITS',
+        status: 403,
+      }),
+    );
+    expect((service as any).agentStreamHooks.onStreamClosed).toHaveBeenCalled();
+  });
+
+  it('releases the turn when the server-side expansion fails', async () => {
+    const createAgentStream = jest.fn();
+    const { service, chunks } = await runStream(
+      {
+        wizardApiService: {
+          resolveAgentTarget: jest
+            .fn()
+            .mockResolvedValue({ baseUrl: 'http://wizard', target: 'core' }),
+          createAgentStream,
+        },
+        visibleResourcesService: {
+          getVisibleResources: jest
+            .fn()
+            .mockRejectedValue(new Error('database down')),
+        },
+      },
+      { tools: [folderTool] },
+    );
+
+    expect(createAgentStream).not.toHaveBeenCalled();
+    expect(chunks).toContainEqual(
+      expect.objectContaining({ response_type: 'error' }),
+    );
+    expect((service as any).agentStreamHooks.onStreamClosed).toHaveBeenCalled();
+  });
+
+  it('rejects the non-streaming open API turn with the preflight error', async () => {
+    const notFound = new AppException(
+      'Resource not found',
+      'RESOURCE_NOT_FOUND',
+      HttpStatus.NOT_FOUND,
+    );
+    const createAgentStream = jest.fn();
+    const { service } = gatedService({
+      wizardApiService: {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard', target: 'core' }),
+        createAgentStream,
+      },
+      visibleResourcesService: {
+        getVisibleResources: jest.fn().mockRejectedValue(notFound),
+      },
+    });
+
+    const error = await service
+      .chat(
+        'user-id',
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'hello',
+          channel: 'open_api',
+          tools: [folderTool],
+        } as any,
+        'request-id',
+      )
+      .then(
+        () => {
+          throw new Error('expected the chat to reject');
+        },
+        (reason: unknown) => reason,
+      );
+
+    expect(error).toBeInstanceOf(AppException);
+    expect((error as AppException).code).toBe('RESOURCE_NOT_FOUND');
+    expect((error as AppException).getStatus()).toBe(HttpStatus.NOT_FOUND);
+    expect(createAgentStream).not.toHaveBeenCalled();
+    expect((service as any).agentStreamHooks.onStreamClosed).toHaveBeenCalled();
+  });
+
+  it('leaves an in-stream wizard error to the chunk merge', async () => {
+    const { service } = gatedService({
+      wizardApiService: {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard', target: 'core' }),
+        createAgentStream: jest
+          .fn()
+          .mockResolvedValue(
+            new Response(
+              'data: {"response_type":"error","message":"wizard failed"}\n\n',
+            ),
+          ),
+      },
+      visibleResourcesService: {
+        getVisibleResources: jest.fn().mockResolvedValue([]),
+      },
+    });
+
+    const chunks = await service.chat(
+      'user-id',
+      'namespace-id',
+      {
+        conversation_id: 'conversation-id',
+        query: 'hello',
+        channel: 'open_api',
+        tools: [folderTool],
+      } as any,
+      'request-id',
+    );
+
+    const error = chunks.find((chunk: any) => chunk.response_type === 'error');
+    expect(error).toMatchObject({
+      response_type: 'error',
+      message: 'wizard failed',
+    });
+    expect(error).not.toHaveProperty('status');
   });
 });
 
@@ -1636,7 +1960,6 @@ describe('StreamService agent stream hooks', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       { mint: jest.fn(() => 'share-access-token') } as any,
       hooks as any,
     );
@@ -1790,8 +2113,12 @@ describe('trusted upstream billing metadata', () => {
     });
     const service = new StreamService(
       { get: jest.fn() } as never,
-      { createAgentStream: jest.fn().mockResolvedValue(response) } as never,
-      {} as never,
+      {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard', target: 'pro' }),
+        createAgentStream: jest.fn().mockResolvedValue(response),
+      } as never,
       {} as never,
       {} as never,
       {} as never,
@@ -1829,8 +2156,12 @@ describe('trusted upstream billing metadata', () => {
     const failure = new Error('invalid pricing');
     const service = new StreamService(
       { get: jest.fn() } as never,
-      { createAgentStream: jest.fn().mockResolvedValue(response) } as never,
-      {} as never,
+      {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard', target: 'pro' }),
+        createAgentStream: jest.fn().mockResolvedValue(response),
+      } as never,
       {} as never,
       {} as never,
       {} as never,
@@ -2055,6 +2386,82 @@ describe('persisted query receipts', () => {
       lang: '简体中文',
       channel: 'qq',
     });
+  });
+});
+
+describe('StreamService composer images', () => {
+  const image = {
+    attachment_id: '6ba7b810-9dad-41d1-80b4-00c04fd430c8',
+    url: '/api/v1/namespaces/client-ns/conversations/client-conversation/attachments/client-attachment',
+    name: 'image.jpg',
+  };
+
+  function serviceWithMessages() {
+    const service = createService({});
+    const create = jest.fn().mockResolvedValue({
+      id: 'query-id',
+      parentId: null,
+      createdAt: new Date('2026-11-16T00:00:00.000Z'),
+      message: { role: 'user', content: 'hello' },
+      attrs: {},
+    });
+    (service as any).messagesService = {
+      create,
+      findOne: jest.fn().mockResolvedValue({ attrs: {} }),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+    };
+    return { service, create };
+  }
+
+  async function run(service: StreamService, body: Record<string, unknown>) {
+    const observable = await (service as any).createAgentStream(
+      'namespace-id',
+      {
+        query: 'hello',
+        conversation_id: 'conversation-id',
+        tools: [],
+        ...body,
+      },
+      'req',
+      'ask',
+      'user-id',
+    );
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({ complete: resolve, error: reject }),
+    );
+  }
+
+  it('stores text and image display parts and forwards the images to the wizard', async () => {
+    const { service, create } = serviceWithMessages();
+    const wizardRequests: Record<string, any>[] = [];
+    jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, request) => {
+      wizardRequests.push(request);
+      return Promise.resolve();
+    });
+
+    await run(service, { images: [image] });
+
+    expect(create.mock.calls[0][3].attrs.composer).toEqual({
+      display_parts: [
+        { type: 'text', text: 'hello' },
+        {
+          type: 'image',
+          attachment_id: image.attachment_id,
+          name: image.name,
+          preview_url: `/api/v1/namespaces/namespace-id/conversations/conversation-id/attachments/${image.attachment_id}`,
+        },
+      ],
+    });
+    expect(wizardRequests[0].images).toEqual([image]);
+  });
+
+  it('does not write a composer without images', async () => {
+    const { service, create } = serviceWithMessages();
+    jest.spyOn(service, 'stream').mockResolvedValue(undefined);
+
+    await run(service, {});
+
+    expect(create.mock.calls[0][3].attrs).not.toHaveProperty('composer');
   });
 });
 

@@ -32,7 +32,6 @@ describe('Memory completion and retry boundaries', () => {
         {} as any,
         {} as any,
         {} as any,
-        {} as any,
         hooks as any,
       );
       const handler = service.agentHandler(

@@ -15,6 +15,7 @@ import {
 import {
   IWizardUrlProvider,
   WIZARD_URL_PROVIDER,
+  WizardBaseUrlResolution,
 } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
 
 export function buildWizardRequestHeaders(
@@ -140,17 +141,24 @@ export class WizardAPIService {
     return traceHeaders;
   }
 
+  async resolveAgentTarget(
+    namespaceId: string,
+    body: WizardAgentRequestDto,
+  ): Promise<WizardBaseUrlResolution> {
+    return await this.wizardUrlProvider.resolveAgentTarget(namespaceId, body);
+  }
+
   async createAgentStream(
     namespaceId: string,
     mode: 'ask' | 'write',
     body: WizardAgentRequestDto,
     requestId: string,
     signal?: AbortSignal,
+    resolution?: WizardBaseUrlResolution,
   ): Promise<Response> {
-    const wizardBaseUrl = await this.wizardUrlProvider.getBaseUrl(
-      namespaceId,
-      body,
-    );
+    const wizardBaseUrl =
+      resolution?.baseUrl ??
+      (await this.wizardUrlProvider.getBaseUrl(namespaceId, body));
     const url = `${wizardBaseUrl}/api/v1/wizard/${mode}`;
     const requestHeaders = buildWizardRequestHeaders(
       this.getTraceHeaders(),

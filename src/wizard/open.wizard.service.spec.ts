@@ -119,6 +119,32 @@ describe('OpenWizardService', () => {
     );
   });
 
+  it('forwards composer images to the agent request', async () => {
+    conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
+    const images = [
+      {
+        attachment_id: '6ba7b810-9dad-41d1-80b4-00c04fd430c8',
+        url: '/api/v1/namespaces/ns/conversations/c/attachments/a',
+        name: 'image.jpg',
+      },
+    ];
+
+    await service.ask('user-1', 'namespace-1', 'request-1', {
+      query: 'hello',
+      tools: [],
+      images,
+    });
+
+    expect(streamService.chat).toHaveBeenCalledWith(
+      'user-1',
+      'namespace-1',
+      expect.objectContaining({ images }),
+      'request-1',
+      'ask',
+      'explicit',
+    );
+  });
+
   it('ignores follow_latest from the public API', async () => {
     messagesService.findOneForUser.mockResolvedValue({
       id: 'message-1',

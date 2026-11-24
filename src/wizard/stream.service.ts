@@ -1205,6 +1205,7 @@ export class StreamService implements OnModuleDestroy {
       }
 
       return new Observable<MessageEvent>((subscriber) => {
+        const started: { session?: StreamSession } = {};
         try {
           const session = this.startAgentSession(
             key,
@@ -1220,9 +1221,18 @@ export class StreamService implements OnModuleDestroy {
             timeZone,
             traceContext,
             queryReceivedAt,
+            reservation,
+            started,
           );
           return this.attachSession(session, subscriber);
         } catch (error) {
+          // A synchronous failure after registration must not wedge the
+          // conversation with a never-finished session.
+          if (
+            started.session &&
+            this.streamSessions.get(key) === started.session
+          )
+            this.streamSessions.delete(key);
           this.releaseStreamReservation(reservation.key);
           reservation.key = undefined;
           throw error;
@@ -1369,34 +1379,58 @@ export class StreamService implements OnModuleDestroy {
         requestDto.conversation_id,
         Boolean(requestDto.tool_call?.decisions?.length),
       );
-      if (requestDto.tool_call?.decisions?.length) {
-        await this.assertDecisionUnapplied(parent, requestDto.conversation_id);
-        this.assertConversationNotBusy(
+      let decisionReservationKey: string | undefined;
+      try {
+        if (requestDto.tool_call?.decisions?.length) {
+          await this.assertDecisionUnapplied(
+            parent,
+            requestDto.conversation_id,
+          );
+          if (release) {
+            this.assertConversationNotBusy(
+              namespaceId,
+              requestDto.conversation_id,
+              userId,
+              shareId,
+            );
+          } else {
+            // No lock (no Redis or a failed connect) with parentMode
+            // 'latest': the decision write needs the same reservation as the
+            // no-lock explicit branch.
+            decisionReservationKey = this.reserveConversationStream(
+              namespaceId,
+              requestDto.conversation_id,
+              userId,
+              shareId,
+            );
+            if (reservation) reservation.key = decisionReservationKey;
+          }
+          await this.overwriteDecisionDecisions(
+            namespaceId,
+            requestDto.conversation_id,
+            parent,
+            requestDto.tool_call.decisions,
+          );
+        } else {
+          await this.assertDecisionApplied(
+            parent,
+            requestDto.conversation_id,
+            userId,
+          );
+        }
+        await this.claimStreamActive(
           namespaceId,
           requestDto.conversation_id,
           userId,
           shareId,
         );
-        await this.overwriteDecisionDecisions(
-          namespaceId,
-          requestDto.conversation_id,
-          parent,
-          requestDto.tool_call.decisions,
-        );
-      } else {
-        await this.assertDecisionApplied(
-          parent,
-          requestDto.conversation_id,
-          userId,
-        );
+        return parent?.id;
+      } catch (error) {
+        this.releaseStreamReservation(decisionReservationKey);
+        if (reservation && reservation.key === decisionReservationKey)
+          reservation.key = undefined;
+        throw error;
       }
-      await this.claimStreamActive(
-        namespaceId,
-        requestDto.conversation_id,
-        userId,
-        shareId,
-      );
-      return parent?.id;
     } finally {
       await release?.();
     }
@@ -1763,6 +1797,8 @@ export class StreamService implements OnModuleDestroy {
     timeZone?: string,
     traceContext: ChatClientTraceContext = {},
     queryReceivedAt?: number,
+    reservation?: { key?: string },
+    started?: { session?: StreamSession },
   ): StreamSession {
     requestId = requestId?.trim() || randomUUID();
     const session: StreamSession = {
@@ -1791,8 +1827,13 @@ export class StreamService implements OnModuleDestroy {
       finished: false,
     };
     this.streamSessions.set(key, session);
-    // The no-lock decision write reserved this key; the session now owns it.
-    this.pendingStreamReservations.delete(key);
+    if (started) started.session = session;
+    // Only the request that reserved the key hands its reservation over; a
+    // concurrent same-key request must not clear it.
+    if (reservation?.key === key) {
+      this.pendingStreamReservations.delete(key);
+      reservation.key = undefined;
+    }
 
     const agentStream = agentStreamOf(session);
     const handler = this.agentHandler(

@@ -1551,8 +1551,12 @@ describe('StreamService parent resolution', () => {
       );
     });
 
-    it('keeps the no-lock early return for a question without decisions', async () => {
-      const findOneInConversation = jest.fn();
+    it('runs the question guards without a conversation lock and does not write', async () => {
+      const findOneInConversation = jest.fn().mockResolvedValue({
+        id: 'answer-1',
+        message: { role: 'assistant' },
+        attrs: {},
+      });
       const update = jest.fn();
       const service = unlockedServiceWith({ findOneInConversation, update });
 
@@ -1560,8 +1564,90 @@ describe('StreamService parent resolution', () => {
         resolve(service, { parent_message_id: 'answer-1', query: 'hello' }),
       ).resolves.toBe('answer-1');
 
-      expect(findOneInConversation).not.toHaveBeenCalled();
+      expect(findOneInConversation).toHaveBeenCalledWith(
+        'answer-1',
+        'conversation-id',
+        'user-id',
+      );
       expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses text under an unapplied decision without a conversation lock', async () => {
+      const create = jest.fn();
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest
+          .fn()
+          .mockResolvedValue(storedDecision(rejectDecisions)),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create,
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses text under a failed empty reply of an unapplied decision', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn((id: string) =>
+          Promise.resolve(id === 'failed-f' ? failedReply : decision),
+        ),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'failed-f',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+    });
+
+    it('refuses text under a pending interrupt without a conversation lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(interruptMessage),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'interrupt-id',
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'pending_interrupt',
+        message_id: 'interrupt-id',
+      });
+    });
+
+    it('rejects a question whose parent cannot be loaded without a lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'missing',
+        query: 'hello',
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
     });
 
     it('refuses a decided resume without a conversation lock and does not write', async () => {
@@ -2635,6 +2721,7 @@ describe('persisted query receipts', () => {
     const create = jest.fn();
     (service as any).messagesService = {
       findAll: jest.fn().mockResolvedValue([query]),
+      findOneInConversation: jest.fn().mockResolvedValue(query),
       create,
     };
     jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {

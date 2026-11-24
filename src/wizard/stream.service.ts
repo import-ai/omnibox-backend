@@ -1241,38 +1241,51 @@ export class StreamService implements OnModuleDestroy {
               )
             : null;
       if (!release && parentMode === 'explicit') {
-        // Without a conversation lock this path used to skip every check.
-        // Decisions still need the resume checks and the stored-value
-        // overwrite, or the request's rejection never reaches the wizard.
-        if (requestDto.tool_call?.decisions?.length) {
-          const decisionParent = requestDto.parent_message_id
-            ? await this.messagesService.findOneInConversation(
-                requestDto.parent_message_id,
-                requestDto.conversation_id,
-                userId,
-              )
-            : null;
-          if (!decisionParent) {
-            throw new AppException(
-              this.i18n.t('system.errors.parentConversationMismatch'),
-              'PARENT_CONVERSATION_MISMATCH',
-              HttpStatus.BAD_REQUEST,
-            );
-          }
+        // Without a conversation lock this path used to skip every check. Run
+        // the same guards the locked path runs: a text under an unapplied
+        // decision or a pending interrupt would otherwise be reused as the
+        // query and the new text dropped. Decisions additionally overwrite
+        // the stored values, or the request's rejection never reaches wizard.
+        const decisions = requestDto.tool_call?.decisions;
+        const explicitParent = requestDto.parent_message_id
+          ? await this.messagesService.findOneInConversation(
+              requestDto.parent_message_id,
+              requestDto.conversation_id,
+              userId,
+            )
+          : null;
+        if (requestDto.parent_message_id && !explicitParent) {
+          throw new AppException(
+            this.i18n.t('system.errors.parentConversationMismatch'),
+            'PARENT_CONVERSATION_MISMATCH',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        this.assertNoPendingInterrupt(
+          explicitParent,
+          Boolean(decisions?.length),
+        );
+        if (decisions?.length) {
           await this.assertInterruptOpen(
-            decisionParent,
+            explicitParent,
             requestDto.conversation_id,
             true,
           );
           await this.assertDecisionUnapplied(
-            decisionParent,
+            explicitParent,
             requestDto.conversation_id,
           );
           await this.overwriteDecisionDecisions(
             namespaceId,
             requestDto.conversation_id,
-            decisionParent,
-            requestDto.tool_call.decisions,
+            explicitParent,
+            decisions,
+          );
+        } else {
+          await this.assertDecisionApplied(
+            explicitParent,
+            requestDto.conversation_id,
+            userId,
           );
         }
         await this.claimStreamActive(

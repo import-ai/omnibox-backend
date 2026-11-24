@@ -3,7 +3,6 @@ import { context, propagation } from '@opentelemetry/api';
 import { instanceToPlain, plainToInstance } from 'class-transformer';
 import { I18nService } from 'nestjs-i18n';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
-import type { SearchSnapshot } from 'omniboxd/search/search-session.types';
 import { WizardAgentRequestDto } from 'omniboxd/wizard/dto/agent-request.dto';
 import { SearchRequestDto } from 'omniboxd/wizard/dto/search-request.dto';
 import { SearchResponseDto } from 'omniboxd/wizard/dto/search-response.dto';
@@ -183,29 +182,6 @@ export class WizardAPIService {
       {},
     );
     return plainToInstance(SearchResponseDto, resp);
-  }
-
-  async recallSearchSnapshot(
-    body: Record<string, unknown>,
-    signal: AbortSignal,
-  ): Promise<SearchSnapshot> {
-    const response = await this.request(
-      'POST',
-      '/internal/api/v1/wizard/search/snapshot',
-      body,
-      {},
-      signal,
-    );
-    if (
-      !Array.isArray(response.records) ||
-      typeof response.recall_truncated !== 'boolean'
-    ) {
-      throw new Error('Invalid search snapshot');
-    }
-    return {
-      records: plainToInstance(SearchResponseDto, response).records,
-      recallTruncated: response.recall_truncated,
-    };
   }
 
   async createTitle(

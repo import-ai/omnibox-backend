@@ -1509,6 +1509,97 @@ describe('StreamService parent resolution', () => {
       ]);
     });
 
+    function unlockedServiceWith(messagesService: Record<string, jest.Mock>) {
+      const service = createService({ messagesService });
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+      return service;
+    }
+
+    it('applies the request decisions without a conversation lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledWith(
+        'decision-d',
+        'namespace-id',
+        'conversation-id',
+        {
+          attrs: {
+            composer: { content: '' },
+            context: { edition: 'pro' },
+            tool_call: { decisions: rejectDecisions },
+          },
+        },
+        false,
+      );
+    });
+
+    it('keeps the no-lock early return for a question without decisions', async () => {
+      const findOneInConversation = jest.fn();
+      const update = jest.fn();
+      const service = unlockedServiceWith({ findOneInConversation, update });
+
+      await expect(
+        resolve(service, { parent_message_id: 'answer-1', query: 'hello' }),
+      ).resolves.toBe('answer-1');
+
+      expect(findOneInConversation).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a decided resume without a conversation lock and does not write', async () => {
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest
+          .fn()
+          .mockResolvedValue(storedDecision(rejectDecisions)),
+        findChildren: jest.fn().mockResolvedValue([toolResult]),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'interrupt_already_decided',
+        message_id: 'decision-d',
+      });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a decision whose parent cannot be loaded without a lock', async () => {
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'missing',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    });
+
     it('does not write a decision whose stored decisions match the request', async () => {
       const stored = storedDecision(rejectDecisions);
       const update = jest.fn();
@@ -2595,6 +2686,7 @@ describe('persisted query receipts', () => {
     (service as any).messagesService = {
       create,
       findOne: jest.fn(),
+      findOneInConversation: jest.fn().mockResolvedValue(interrupt),
       findAll: jest.fn().mockResolvedValue([interrupt]),
     };
     jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {

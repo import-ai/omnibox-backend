@@ -1241,6 +1241,35 @@ export class StreamService implements OnModuleDestroy {
               )
             : null;
       if (!release && parentMode === 'explicit') {
+        // Without a conversation lock this path used to skip every check.
+        // Decisions still need the resume checks and the stored-value
+        // overwrite, or the request's rejection never reaches the wizard.
+        if (requestDto.tool_call?.decisions?.length) {
+          const decisionParent = requestDto.parent_message_id
+            ? await this.messagesService.findOneInConversation(
+                requestDto.parent_message_id,
+                requestDto.conversation_id,
+                userId,
+              )
+            : null;
+          if (!decisionParent) {
+            throw new AppException(
+              this.i18n.t('system.errors.parentConversationMismatch'),
+              'PARENT_CONVERSATION_MISMATCH',
+              HttpStatus.BAD_REQUEST,
+            );
+          }
+          await this.assertDecisionUnapplied(
+            decisionParent,
+            requestDto.conversation_id,
+          );
+          await this.overwriteDecisionDecisions(
+            namespaceId,
+            requestDto.conversation_id,
+            decisionParent,
+            requestDto.tool_call.decisions,
+          );
+        }
         await this.claimStreamActive(
           namespaceId,
           requestDto.conversation_id,

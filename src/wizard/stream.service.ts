@@ -1259,6 +1259,11 @@ export class StreamService implements OnModuleDestroy {
               HttpStatus.BAD_REQUEST,
             );
           }
+          await this.assertInterruptOpen(
+            decisionParent,
+            requestDto.conversation_id,
+            true,
+          );
           await this.assertDecisionUnapplied(
             decisionParent,
             requestDto.conversation_id,

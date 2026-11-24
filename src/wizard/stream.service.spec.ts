@@ -1080,6 +1080,7 @@ describe('StreamService parent resolution', () => {
         message: { role: 'assistant' },
         attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
       }),
+      hasChildren: jest.fn().mockResolvedValue(false),
     };
     const service = serviceWith(messagesService);
 
@@ -1581,6 +1582,32 @@ describe('StreamService parent resolution', () => {
       expect(error.getResponse()).toMatchObject({
         code: 'interrupt_already_decided',
         message_id: 'decision-d',
+      });
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a decided interrupt without a conversation lock and does not write', async () => {
+      const interrupt = {
+        id: 'interrupt-id',
+        conversationId: 'conversation-id',
+        message: { role: 'assistant' },
+        attrs: { tool_call: { interrupts: [{ id: 'call-1' }] } },
+      };
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(interrupt),
+        hasChildren: jest.fn().mockResolvedValue(true),
+        update,
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'interrupt-id',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'interrupt_already_decided',
+        message_id: 'interrupt-id',
       });
       expect(update).not.toHaveBeenCalled();
     });
@@ -2687,6 +2714,7 @@ describe('persisted query receipts', () => {
       create,
       findOne: jest.fn(),
       findOneInConversation: jest.fn().mockResolvedValue(interrupt),
+      hasChildren: jest.fn().mockResolvedValue(false),
       findAll: jest.fn().mockResolvedValue([interrupt]),
     };
     jest.spyOn(service, 'stream').mockImplementation((_ns, _mode, body) => {

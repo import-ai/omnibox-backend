@@ -41,6 +41,7 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { publicMessageAttrs } from 'omniboxd/messages/public-message-attrs';
 import {
   toPrivateSearchResource,
   VisibleResourcesService,
@@ -572,7 +573,7 @@ export class StreamService implements OnModuleDestroy {
           return;
         }
         chunk.id = context.messageId;
-        delete chunk.attrs?.context;
+        if (chunk.attrs) chunk.attrs = publicMessageAttrs(chunk.attrs);
         context.message = message.message;
       } else if (chunk.response_type === 'eos') {
         const endedAt = new Date();
@@ -1807,8 +1808,7 @@ export class StreamService implements OnModuleDestroy {
     // Replayed chunks carry attrs from the stored row; the per-call context is
     // server-side observability only and must not reach clients. Copy first so
     // the persisted attrs stay untouched.
-    const attrs = message.attrs ? { ...message.attrs } : undefined;
-    if (attrs) delete attrs.context;
+    const attrs = message.attrs ? publicMessageAttrs(message.attrs) : undefined;
     for (const chunk of [
       {
         response_type: 'bos',

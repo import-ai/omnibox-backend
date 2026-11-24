@@ -2651,6 +2651,31 @@ describe('StreamService agent handler error finalization', () => {
     return { handler, messagesService, send };
   }
 
+  it('publishes the answer phase but not private context on live deltas', async () => {
+    const { handler, send } = handlerWithMessages();
+
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: {},
+        attrs: {
+          context: { answer_phase: 'process', checkpoint: 'private' },
+        },
+      }),
+      {
+        messageId: 'message-id',
+        message: { role: OpenAIMessageRole.ASSISTANT },
+      },
+    );
+
+    expect(JSON.parse(send.mock.calls[0][0])).toEqual({
+      response_type: 'delta',
+      id: 'message-id',
+      message: {},
+      attrs: { answer_phase: 'process' },
+    });
+  });
+
   it('marks an open tool message as a failed tool call', async () => {
     const { handler, messagesService, send } = handlerWithMessages();
 
@@ -3126,6 +3151,7 @@ describe('StreamService persisted error codes', () => {
         compact: { status: 'compacted' },
         context: {
           provider: 'agent_pro',
+          answer_phase: 'answer',
           call: { chain_id: 'chain-1' },
           checkpoint: { context_snapshot: { version: 1 } },
         },
@@ -3164,6 +3190,7 @@ describe('StreamService persisted error codes', () => {
       ]);
       for (const chunk of chunks.slice(0, 2)) {
         expect(chunk.attrs).toEqual({
+          answer_phase: 'answer',
           answer_timing: saved.attrs.answer_timing,
           citations: saved.attrs.citations,
           usage: saved.attrs.usage,
@@ -3174,6 +3201,7 @@ describe('StreamService persisted error codes', () => {
       expect(chunks[2]).not.toHaveProperty('attrs');
 
       expect(saved.attrs.context).toEqual({
+        answer_phase: 'answer',
         provider: 'agent_pro',
         call: { chain_id: 'chain-1' },
         checkpoint: { context_snapshot: { version: 1 } },
@@ -3190,6 +3218,7 @@ describe('StreamService persisted error codes', () => {
       const [bos, delta] = target.events.map((event) => JSON.parse(event));
       for (const chunk of [bos, delta]) {
         expect(chunk.attrs).toEqual({
+          answer_phase: 'answer',
           answer_timing: { started_at: '2026-11-11T08:00:00.000Z' },
           usage: { prompt_tokens: 10 },
           compact: { status: 'compacted' },

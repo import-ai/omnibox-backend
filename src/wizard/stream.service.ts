@@ -1907,6 +1907,19 @@ export class StreamService implements OnModuleDestroy {
       },
       finished: false,
     };
+    // The caller checked before its last await; a same-key request can
+    // reserve or register in between. Check and register atomically here, or
+    // two subscriptions can both pass the caller's check and start.
+    if (
+      this.streamSessions.has(key) ||
+      this.hasForeignStreamReservation(key, reservation)
+    ) {
+      throw new AppException(
+        this.i18n.t('system.errors.conversationBusy'),
+        'CONVERSATION_BUSY',
+        HttpStatus.CONFLICT,
+      );
+    }
     this.streamSessions.set(key, session);
     if (started) started.session = session;
     // Only the request that owns the reservation token hands it over; a
@@ -2338,7 +2351,8 @@ export class StreamService implements OnModuleDestroy {
       }
     }
     session.subscribers.clear();
-    this.streamSessions.delete(session.key);
+    if (this.streamSessions.get(session.key) === session)
+      this.streamSessions.delete(session.key);
     void this.cleanupRedisSession(session.key).catch((error) =>
       this.logger.error({ error }),
     );

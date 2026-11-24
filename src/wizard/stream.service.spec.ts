@@ -2130,6 +2130,187 @@ describe('StreamService parent resolution', () => {
       expect(update).toHaveBeenCalledTimes(1);
     });
 
+    it('refuses a prepared text start once a decision resume holds the reservation', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const interrupt = {
+        id: 'interrupt-id',
+        parentId: null,
+        message: { role: 'assistant', content: 'ask' },
+        attrs: {},
+      };
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const update = jest.fn(
+        (
+          _id: string,
+          _namespaceId: string,
+          _conversationId: string,
+          dto: { attrs: object },
+        ) => Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const wizardStream = jest.fn<Promise<Response>, unknown[]>(
+        () => new Promise<Response>(() => {}),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn((id: string) =>
+          Promise.resolve(id === 'decision-d' ? stored : raw),
+        ),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockResolvedValue([raw, interrupt, stored]),
+        update,
+        create: jest.fn().mockResolvedValue({
+          id: 'question-1',
+          parentId: 'answer-1',
+          status: 'success',
+          message: { role: 'user', content: 'text' },
+          attrs: {},
+          createdAt: new Date(),
+        }),
+      });
+      jest
+        .spyOn(service as any, 'agentHandler')
+        .mockReturnValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).wizardApiService = {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard-pro', target: 'pro' }),
+        createAgentStream: wizardStream,
+      };
+
+      // Both requests pass the preparation check; neither has subscribed yet.
+      const text = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'text',
+          parent_message_id: 'answer-1',
+          tools: [],
+          channel: 'mobile',
+        },
+        'request-text',
+        'ask',
+        'user-id',
+      );
+      const decision = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: '',
+          parent_message_id: 'decision-d',
+          tools: [],
+          channel: 'mobile',
+          tool_call: { decisions: rejectDecisions },
+        },
+        'request-decision',
+        'ask',
+        'user-id',
+      );
+      expect((service as any).pendingStreamReservations.has(key)).toBe(true);
+
+      const failures: unknown[] = [];
+      text.subscribe({ error: (error: unknown) => failures.push(error) });
+      expect(failures).toHaveLength(1);
+      expect((failures[0] as AppException).getResponse()).toMatchObject({
+        code: 'conversation_busy',
+      });
+      expect((service as any).streamSessions.size).toBe(0);
+      expect((service as any).pendingStreamReservations.has(key)).toBe(true);
+
+      decision.subscribe({});
+      expect((service as any).streamSessions.has(key)).toBe(true);
+      expect((service as any).pendingStreamReservations.has(key)).toBe(false);
+      expect(update).toHaveBeenCalledTimes(1);
+
+      await new Promise((done) => setImmediate(done));
+      expect(wizardStream).toHaveBeenCalledTimes(1);
+      expect(wizardStream.mock.calls[0][2]).toMatchObject({
+        tool_call: { decisions: rejectDecisions },
+      });
+    });
+
+    it('registers only the first of two prepared text starts', async () => {
+      const key = 'user:user-id:namespace-id:conversation-id';
+      const raw = {
+        id: 'answer-1',
+        parentId: null,
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const wizardStream = jest.fn<Promise<Response>, unknown[]>(
+        () => new Promise<Response>(() => {}),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findAll: jest.fn().mockResolvedValue([raw]),
+        create: jest.fn().mockImplementation((...args: unknown[]) => {
+          const body = args[3] as { message: { content: string } };
+          return Promise.resolve({
+            id: `question-${body.message.content}`,
+            parentId: 'answer-1',
+            status: 'success',
+            message: { role: 'user', content: body.message.content },
+            attrs: {},
+            createdAt: new Date(),
+          });
+        }),
+      });
+      jest
+        .spyOn(service as any, 'agentHandler')
+        .mockReturnValue(jest.fn().mockResolvedValue(undefined));
+      (service as any).wizardApiService = {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard-pro', target: 'pro' }),
+        createAgentStream: wizardStream,
+      };
+
+      const first = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'one',
+          parent_message_id: 'answer-1',
+          tools: [],
+          channel: 'mobile',
+        },
+        'request-1',
+        'ask',
+        'user-id',
+      );
+      const second = await (service as any).createAgentStream(
+        'namespace-id',
+        {
+          conversation_id: 'conversation-id',
+          query: 'two',
+          parent_message_id: 'answer-1',
+          tools: [],
+          channel: 'mobile',
+        },
+        'request-2',
+        'ask',
+        'user-id',
+      );
+
+      const failures: unknown[] = [];
+      first.subscribe({ error: (error: unknown) => failures.push(error) });
+      second.subscribe({ error: (error: unknown) => failures.push(error) });
+      expect(failures).toHaveLength(1);
+      expect((failures[0] as AppException).getResponse()).toMatchObject({
+        code: 'conversation_busy',
+      });
+      expect((service as any).streamSessions.has(key)).toBe(true);
+      expect((service as any).streamSessions.size).toBe(1);
+
+      await new Promise((done) => setImmediate(done));
+      expect(wizardStream).toHaveBeenCalledTimes(1);
+      expect(wizardStream.mock.calls[0][2]).toMatchObject({ query: 'one' });
+    });
+
     it('does not release a newer reservation with a stale owner token', async () => {
       const key = 'user:user-id:namespace-id:conversation-id';
       const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);

@@ -164,6 +164,8 @@ interface StreamSession {
 interface StreamReservation {
   key?: string;
   token?: string;
+  /** This request actually set the Redis active key and may release it. */
+  claimed?: boolean;
 }
 
 interface ChatClientTraceContext {
@@ -1181,20 +1183,29 @@ export class StreamService implements OnModuleDestroy {
     queryReceivedAt?: number,
   ): Promise<Observable<MessageEvent>> {
     const reservation: StreamReservation = {};
-    const parentId = await this.resolveStreamParent(
-      namespaceId,
-      requestDto,
-      userId,
-      shareId,
-      parentMode,
-      reservation,
-    );
     const key = getStreamKey(
       namespaceId,
       requestDto.conversation_id,
       userId,
       shareId,
     );
+    let parentId: string | undefined;
+    try {
+      parentId = await this.resolveStreamParent(
+        namespaceId,
+        requestDto,
+        userId,
+        shareId,
+        parentMode,
+        reservation,
+      );
+    } catch (error) {
+      // The parent resolution claimed the Redis active key before failing
+      // (including a rejection from the lock-release finally).
+      this.releaseStreamReservation(reservation);
+      this.releaseClaimedStreamState(key, Boolean(reservation.claimed));
+      throw error;
+    }
     try {
       let messages: Message[] = [];
       if (parentId) {
@@ -1246,7 +1257,7 @@ export class StreamService implements OnModuleDestroy {
           )
             this.streamSessions.delete(key);
           this.releaseStreamReservation(reservation);
-          this.releaseClaimedStreamState(key);
+          this.releaseClaimedStreamState(key, Boolean(reservation.claimed));
           throw error;
         }
       });
@@ -1254,14 +1265,17 @@ export class StreamService implements OnModuleDestroy {
       // The request never reached a session (history read, busy, teardown
       // before subscribe): do not leave the conversation reserved or active.
       this.releaseStreamReservation(reservation);
-      this.releaseClaimedStreamState(key);
+      this.releaseClaimedStreamState(key, Boolean(reservation.claimed));
       throw error;
     }
   }
 
   // resolveStreamParent claimed the Redis active key; a refusal before the
-  // session takes over must clear it, or later asks wait for its TTL.
-  private releaseClaimedStreamState(key: string) {
+  // session takes over must clear it, or later asks wait for its TTL. Only a
+  // request that actually set the key may delete it: a no-op claim during a
+  // Redis outage must not remove another request's claim after recovery.
+  private releaseClaimedStreamState(key: string, claimed: boolean) {
+    if (!claimed) return;
     void this.cleanupRedisSession(key).catch((error) =>
       this.logger.error({ error }),
     );
@@ -1361,12 +1375,13 @@ export class StreamService implements OnModuleDestroy {
               userId,
             );
           }
-          await this.claimStreamActive(
+          const claimed = await this.claimStreamActive(
             namespaceId,
             requestDto.conversation_id,
             userId,
             shareId,
           );
+          if (reservation) reservation.claimed = claimed;
           return parent?.id;
         } catch (error) {
           this.releaseStreamReservation(decisionReservation);
@@ -1414,6 +1429,22 @@ export class StreamService implements OnModuleDestroy {
               userId,
               shareId,
             );
+            // A no-lock request may still hold an in-process reservation for
+            // this conversation (e.g. Redis just recovered): do not write
+            // under it only to be refused at the post-check.
+            const reservedKey = getStreamKey(
+              namespaceId,
+              requestDto.conversation_id,
+              userId,
+              shareId,
+            );
+            if (this.hasForeignStreamReservation(reservedKey, reservation)) {
+              throw new AppException(
+                this.i18n.t('system.errors.conversationBusy'),
+                'CONVERSATION_BUSY',
+                HttpStatus.CONFLICT,
+              );
+            }
           } else {
             // No lock (no Redis or a failed connect) with parentMode
             // 'latest': the decision write needs the same reservation as the
@@ -1442,12 +1473,13 @@ export class StreamService implements OnModuleDestroy {
             userId,
           );
         }
-        await this.claimStreamActive(
+        const claimed = await this.claimStreamActive(
           namespaceId,
           requestDto.conversation_id,
           userId,
           shareId,
         );
+        if (reservation) reservation.claimed = claimed;
         return parent?.id;
       } catch (error) {
         this.releaseStreamReservation(decisionReservation);
@@ -1700,7 +1732,17 @@ export class StreamService implements OnModuleDestroy {
     reservation?: StreamReservation,
   ): boolean {
     const pending = this.pendingStreamReservations.get(key);
-    return Boolean(pending && pending.token !== reservation?.token);
+    if (!pending) return false;
+    if (
+      Date.now() - pending.reservedAt >
+      StreamService.STREAM_RESERVATION_TTL_MS
+    ) {
+      // Never-subscribed reservations must not block text or locked starts
+      // forever.
+      this.pendingStreamReservations.delete(key);
+      return false;
+    }
+    return pending.token !== reservation?.token;
   }
 
   // A new question may not continue from a decision that was accepted but
@@ -2160,9 +2202,9 @@ export class StreamService implements OnModuleDestroy {
     conversationId: string,
     userId: string,
     shareId: string,
-  ) {
+  ): Promise<boolean> {
     const client = await this.getRedisClient();
-    if (!client) return;
+    if (!client) return false;
     const key = getStreamKey(namespaceId, conversationId, userId, shareId);
     await client.del([
       this.streamEventsKey(key),
@@ -2172,6 +2214,7 @@ export class StreamService implements OnModuleDestroy {
     await client.set(this.streamActiveKey(key), '1', {
       EX: STREAM_TTL_SECONDS,
     });
+    return true;
   }
 
   private async startRedisSession(session: StreamSession) {

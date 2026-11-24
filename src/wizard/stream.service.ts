@@ -1247,43 +1247,46 @@ export class StreamService implements OnModuleDestroy {
         // query and the new text dropped. Decisions additionally overwrite
         // the stored values, or the request's rejection never reaches wizard.
         const decisions = requestDto.tool_call?.decisions;
-        const explicitParent = requestDto.parent_message_id
+        let parent = requestDto.parent_message_id
           ? await this.messagesService.findOneInConversation(
               requestDto.parent_message_id,
               requestDto.conversation_id,
               userId,
             )
           : null;
-        if (requestDto.parent_message_id && !explicitParent) {
+        if (requestDto.parent_message_id && !parent) {
           throw new AppException(
             this.i18n.t('system.errors.parentConversationMismatch'),
             'PARENT_CONVERSATION_MISMATCH',
             HttpStatus.BAD_REQUEST,
           );
         }
-        this.assertNoPendingInterrupt(
-          explicitParent,
-          Boolean(decisions?.length),
-        );
+        // The explicit parent may be stale: follow the newest message below
+        // it like the locked path, so the guards run on the message the
+        // question really continues from. Decisions keep the raw parent.
+        if (parent && requestDto.follow_latest && !decisions?.length) {
+          parent = await this.followLatest(parent, requestDto, userId);
+        }
+        this.assertNoPendingInterrupt(parent, Boolean(decisions?.length));
         if (decisions?.length) {
           await this.assertInterruptOpen(
-            explicitParent,
+            parent,
             requestDto.conversation_id,
             true,
           );
           await this.assertDecisionUnapplied(
-            explicitParent,
+            parent,
             requestDto.conversation_id,
           );
           await this.overwriteDecisionDecisions(
             namespaceId,
             requestDto.conversation_id,
-            explicitParent,
+            parent,
             decisions,
           );
         } else {
           await this.assertDecisionApplied(
-            explicitParent,
+            parent,
             requestDto.conversation_id,
             userId,
           );
@@ -1294,7 +1297,7 @@ export class StreamService implements OnModuleDestroy {
           userId,
           shareId,
         );
-        return requestDto.parent_message_id;
+        return parent?.id;
       }
       if (
         parentMode === 'explicit' &&

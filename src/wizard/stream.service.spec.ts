@@ -1650,6 +1650,107 @@ describe('StreamService parent resolution', () => {
       expect(error).toMatchObject({ code: 'PARENT_CONVERSATION_MISMATCH' });
     });
 
+    it('follows the newest message below a stale parent without a lock', async () => {
+      const raw = { id: 'question-1', message: { role: 'user' }, attrs: {} };
+      const leaf = {
+        id: 'answer-2',
+        message: { role: 'assistant', content: '' },
+        status: 'streaming',
+        attrs: {},
+      };
+      const create = jest.fn();
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(leaf),
+        create,
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'question-1',
+          follow_latest: true,
+          query: 'more text',
+        }),
+      ).resolves.toBe('answer-2');
+
+      expect(create).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('keeps the raw parent when nothing sits below it without a lock', async () => {
+      const raw = {
+        id: 'answer-1',
+        message: { role: 'assistant', content: 'hi' },
+        attrs: {},
+      };
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+        update: jest.fn(),
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'answer-1',
+          follow_latest: true,
+          query: 'more text',
+        }),
+      ).resolves.toBe('answer-1');
+    });
+
+    it('refuses a followed leaf that is an unapplied decision without a lock', async () => {
+      const raw = { id: 'answer-1', message: { role: 'assistant' }, attrs: {} };
+      const create = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(raw),
+        findLeafBelow: jest.fn().mockResolvedValue(decision),
+        findChildren: jest.fn().mockResolvedValue([]),
+        create,
+        update: jest.fn(),
+      });
+
+      const error = await resolve(service, {
+        parent_message_id: 'answer-1',
+        follow_latest: true,
+        query: 'more text',
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({
+        code: 'decision_not_applied',
+        message_id: 'decision-d',
+      });
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('ignores follow_latest for a decision resume without a lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const findLeafBelow = jest.fn();
+      const update = jest.fn(
+        (_id: string, _namespaceId: string, _conversationId: string, dto) =>
+          Promise.resolve({ ...stored, attrs: dto.attrs }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findLeafBelow,
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          follow_latest: true,
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+
+      expect(findLeafBelow).not.toHaveBeenCalled();
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
     it('refuses a decided resume without a conversation lock and does not write', async () => {
       const update = jest.fn();
       const service = unlockedServiceWith({

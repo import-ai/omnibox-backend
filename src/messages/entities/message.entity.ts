@@ -50,6 +50,7 @@ export interface OpenAIMessage {
 export interface MessageAttrs {
   behavior_action_id?: string;
   answer_timing?: AnswerTiming;
+  answer_phase?: 'process' | 'answer';
   turn_id?: string;
   turn_run_id?: string;
   stopped_run_id?: string;

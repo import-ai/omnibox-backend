@@ -98,7 +98,11 @@ describe('ConversationsService', () => {
       ...message('attempt', OpenAIMessageRole.ASSISTANT, 'Editing memory'),
       createdAt: new Date(),
       attrs: {
-        context: { memory_write_attempt: true, checkpoint: 'private-state' },
+        context: {
+          answer_phase: 'process',
+          memory_write_attempt: true,
+          checkpoint: 'private-state',
+        },
       },
     };
     messagesService.findAll.mockResolvedValue([row]);
@@ -107,7 +111,9 @@ describe('ConversationsService', () => {
       conversation.id,
       'u',
     );
-    expect(publicDetail.mapping.attempt.attrs?.context).toBeUndefined();
+    expect(publicDetail.mapping.attempt.attrs).toEqual({
+      answer_phase: 'process',
+    });
     expect(row.attrs.context.checkpoint).toBe('private-state');
     expect(row.attrs.context.memory_write_attempt).toBe(true);
   });

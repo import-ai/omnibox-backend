@@ -15,6 +15,7 @@ import {
   OpenAIMessageRole,
 } from 'omniboxd/messages/entities/message.entity';
 import { MessagesService } from 'omniboxd/messages/messages.service';
+import { publicMessageAttrs } from 'omniboxd/messages/public-message-attrs';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
 import {
   attrsForVisitor,
@@ -269,8 +270,7 @@ export class ConversationsService {
       if (msg.message.role === OpenAIMessageRole.SYSTEM) {
         continue;
       }
-      const attrs = { ...msg.attrs };
-      delete attrs.context;
+      const attrs = publicMessageAttrs(msg.attrs ?? {});
       // Citations and tool-call args name the shared resources; a chat-only
       // share keeps them for the assistant and withholds them from the
       // visitor's history.

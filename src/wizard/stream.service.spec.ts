@@ -1778,6 +1778,131 @@ describe('StreamService parent resolution', () => {
       ]);
     });
 
+    it('reserves the stream while a no-lock decision write is in flight', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      let releaseUpdate!: () => void;
+      const update = jest.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseUpdate = () =>
+              resolve({
+                ...stored,
+                attrs: {
+                  ...stored.attrs,
+                  tool_call: { decisions: rejectDecisions },
+                },
+              });
+          }),
+      );
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      const first = resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      });
+      await new Promise((done) => setImmediate(done));
+      expect(update).toHaveBeenCalledTimes(1);
+
+      const second = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(second.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).toHaveBeenCalledTimes(1);
+
+      releaseUpdate();
+      await expect(first).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the reservation when the no-lock decision write fails', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('db down'))
+        .mockResolvedValue({
+          ...stored,
+          attrs: { ...stored.attrs, tool_call: { decisions: rejectDecisions } },
+        });
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).rejects.toThrow('db down');
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores an expired stream reservation', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn().mockResolvedValue({
+        ...stored,
+        attrs: { ...stored.attrs, tool_call: { decisions: rejectDecisions } },
+      });
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).pendingStreamReservations.set(
+        'user:user-id:namespace-id:conversation-id',
+        Date.now() - 120_000,
+      );
+
+      await expect(
+        resolve(service, {
+          parent_message_id: 'decision-d',
+          tool_call: { decisions: rejectDecisions },
+        }),
+      ).resolves.toBe('decision-d');
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases the reservation when the stream cannot be created', async () => {
+      const stored = storedDecision(rejectDecisions);
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        findAll: jest.fn().mockRejectedValue(new Error('db down')),
+        update: jest.fn(),
+      });
+
+      await expect(
+        (service as any).createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: '',
+            parent_message_id: 'decision-d',
+            tools: [],
+            channel: 'mobile',
+            tool_call: { decisions: rejectDecisions },
+          },
+          'request-id',
+          'ask',
+          'user-id',
+        ),
+      ).rejects.toThrow('db down');
+      expect((service as any).pendingStreamReservations.size).toBe(0);
+    });
+
     it('refuses a decision resume while the conversation is streaming under the lock', async () => {
       const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
       const update = jest.fn();
@@ -2987,6 +3112,7 @@ describe('persisted query receipts', () => {
       lang: '简体中文',
       channel: 'qq',
     });
+    expect((service as any).pendingStreamReservations.size).toBe(0);
   });
 });
 

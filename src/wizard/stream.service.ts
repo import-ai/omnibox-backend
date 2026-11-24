@@ -1278,6 +1278,12 @@ export class StreamService implements OnModuleDestroy {
             parent,
             requestDto.conversation_id,
           );
+          this.assertConversationNotBusy(
+            namespaceId,
+            requestDto.conversation_id,
+            userId,
+            shareId,
+          );
           await this.overwriteDecisionDecisions(
             namespaceId,
             requestDto.conversation_id,
@@ -1328,6 +1334,12 @@ export class StreamService implements OnModuleDestroy {
       );
       if (requestDto.tool_call?.decisions?.length) {
         await this.assertDecisionUnapplied(parent, requestDto.conversation_id);
+        this.assertConversationNotBusy(
+          namespaceId,
+          requestDto.conversation_id,
+          userId,
+          shareId,
+        );
         await this.overwriteDecisionDecisions(
           namespaceId,
           requestDto.conversation_id,
@@ -1525,6 +1537,26 @@ export class StreamService implements OnModuleDestroy {
       false,
     );
     parent.attrs = saved?.attrs ?? attrs;
+  }
+
+  // The in-memory session check in createAgentStream runs after the parent
+  // guards; a decision resume writes the stored decisions before reaching it.
+  // Refuse a busy conversation before that write, so a stale session cannot
+  // leave the stored decisions changed for a request that was refused.
+  private assertConversationNotBusy(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    shareId: string,
+  ) {
+    const key = getStreamKey(namespaceId, conversationId, userId, shareId);
+    if (this.streamSessions.has(key)) {
+      throw new AppException(
+        this.i18n.t('system.errors.conversationBusy'),
+        'CONVERSATION_BUSY',
+        HttpStatus.CONFLICT,
+      );
+    }
   }
 
   // A new question may not continue from a decision that was accepted but

@@ -1751,6 +1751,55 @@ describe('StreamService parent resolution', () => {
       expect(update).toHaveBeenCalledTimes(1);
     });
 
+    it('refuses a decision resume while the conversation is streaming without a lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = unlockedServiceWith({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).streamSessions.set(
+        'user:user-id:namespace-id:conversation-id',
+        { finished: false },
+      );
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+      expect(update).not.toHaveBeenCalled();
+      expect(stored.attrs.tool_call.decisions).toEqual([
+        { type: 'approve' },
+        { type: 'approve' },
+      ]);
+    });
+
+    it('refuses a decision resume while the conversation is streaming under the lock', async () => {
+      const stored = storedDecision([{ type: 'approve' }, { type: 'approve' }]);
+      const update = jest.fn();
+      const service = serviceWithMessages({
+        findOneInConversation: jest.fn().mockResolvedValue(stored),
+        findChildren: jest.fn().mockResolvedValue([]),
+        update,
+      });
+      (service as any).streamSessions.set(
+        'user:user-id:namespace-id:conversation-id',
+        { finished: false },
+      );
+
+      const error = await resolve(service, {
+        parent_message_id: 'decision-d',
+        tool_call: { decisions: rejectDecisions },
+      }).catch((e: unknown) => e);
+
+      expect(error.getResponse()).toMatchObject({ code: 'conversation_busy' });
+      expect(update).not.toHaveBeenCalled();
+    });
+
     it('refuses a decided resume without a conversation lock and does not write', async () => {
       const update = jest.fn();
       const service = unlockedServiceWith({

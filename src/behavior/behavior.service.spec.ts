@@ -5,6 +5,7 @@ import type { Repository } from 'typeorm';
 
 import { BehaviorService } from './behavior.service';
 import type { BehaviorAction } from './behavior-action.entity';
+import type { BehaviorContext } from './behavior-context';
 
 it('retries durable outcomes with stable IDs and original initiation, without an API/business retry', async () => {
   const row = {
@@ -130,10 +131,26 @@ describe('conversation action terminal outcomes', () => {
       ),
       query: jest.fn(),
     };
+    const insert = {
+      values: jest.fn().mockReturnThis(),
+      orIgnore: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({}),
+    };
+    (actions as Record<string, unknown>).createQueryBuilder = () => ({
+      insert: () => insert,
+    });
+    const config = {
+      get: (key: string) =>
+        key === 'OBB_TRACE_TOPIC'
+          ? 'topic'
+          : key === 'OBB_NON_BUTTON_TRACKING_ENABLED'
+            ? 'true'
+            : undefined,
+    };
     const service = new BehaviorService(
       actions as unknown as Repository<BehaviorAction>,
       {} as TraceService,
-      {} as ConfigService,
+      config as unknown as ConfigService,
       {} as Repository<Task>,
     );
     jest.spyOn(service, 'deliver').mockResolvedValue();
@@ -180,6 +197,59 @@ describe('conversation action terminal outcomes', () => {
       'success',
     );
     expect(pending.action.status).toBe('success');
+  });
+
+  it('reopens a failed action only when the same frozen action retries', async () => {
+    const retried = serviceWithAction({
+      id: 'action',
+      userId: 'user',
+      actionType: 'ai_conversation',
+      status: 'failed',
+    });
+    const context: BehaviorContext = {
+      action_id: 'action',
+      action_type: 'ai_conversation',
+      action_started_at: new Date(1).toISOString(),
+      origin_platform: 'ios',
+      user_id: 'user',
+      task_ids: [],
+    };
+    expect(await retried.service.begin(context)).toBe(true);
+    expect(context.reopened).toBe(true);
+    await retried.service.result(context as any, 'success');
+    expect(retried.action.status).toBe('success');
+
+    // A synthesized/stale context (no reopened flag, as the paused-ancestor
+    // collector builds) cannot flip a settled failed action.
+    const stale = serviceWithAction({
+      id: 'action',
+      userId: 'user',
+      actionType: 'ai_conversation',
+      status: 'failed',
+    });
+    await stale.service.result(
+      { action_id: 'action', user_id: 'user' } as any,
+      'success',
+    );
+    expect(stale.action.status).toBe('failed');
+
+    // Cancelled/stopped stay terminal even for a reopened retry context.
+    const cancelled = serviceWithAction({
+      id: 'action',
+      userId: 'user',
+      actionType: 'ai_conversation',
+      status: 'cancelled',
+    });
+    await cancelled.service.result(
+      {
+        action_id: 'action',
+        user_id: 'user',
+        action_type: 'ai_conversation',
+        reopened: true,
+      } as any,
+      'success',
+    );
+    expect(cancelled.action.status).toBe('cancelled');
   });
 
   it('does not let reconcileAnswers upgrade a settled conversation action', async () => {

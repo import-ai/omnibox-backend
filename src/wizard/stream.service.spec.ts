@@ -21,6 +21,7 @@ import {
   collectPausedResumeBehaviors,
   StreamService,
 } from 'omniboxd/wizard/stream.service';
+import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardController } from 'omniboxd/wizard/wizard.controller';
 import { Observable, of } from 'rxjs';
 
@@ -34,6 +35,7 @@ function createService(mocks: {
   resourcesService?: Record<string, jest.Mock>;
   traceService?: Record<string, jest.Mock>;
   behaviorService?: Record<string, jest.Mock>;
+  agentStreamHooks?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
@@ -51,10 +53,10 @@ function createService(mocks: {
     mocks.resourcesService as any,
     { t: jest.fn((key: string) => key) } as any,
     { mint: jest.fn(() => 'share-access-token') } as any,
-    {
+    (mocks.agentStreamHooks ?? {
       onCallCompleted: jest.fn().mockResolvedValue(undefined),
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
-    } as any,
+    }) as any,
     mocks.traceService as any,
     mocks.behaviorService as any,
   );
@@ -4197,16 +4199,19 @@ describe('paused resume behavior collection', () => {
     role: OpenAIMessageRole,
     attrs: Record<string, unknown>,
   ) => ({ id, message: { role }, attrs }) as any;
-  it('collects only the resumed run paused action and skips steered/settled rows', () => {
+  it('collects every paused initiating action across chained pauses', () => {
     const rows = [
-      row('interrupt', OpenAIMessageRole.ASSISTANT, {
-        behavior_action_id: 'run-action',
-        turn_run_id: 'run-2',
+      row('pause-1', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'action-a',
+        turn_run_id: 'run-1',
         answer_timing: { status: 'paused' },
       }),
-      row('stale-pause', OpenAIMessageRole.ASSISTANT, {
-        behavior_action_id: 'old-action',
-        turn_run_id: 'run-1',
+      row('decision-1', OpenAIMessageRole.USER, {
+        turn_run_id: undefined,
+      }),
+      row('pause-2', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'action-d1',
+        turn_run_id: 'run-2',
         answer_timing: { status: 'paused' },
       }),
       row('steered-pause', OpenAIMessageRole.ASSISTANT, {
@@ -4231,25 +4236,26 @@ describe('paused resume behavior collection', () => {
       }),
     ];
     expect(
-      collectPausedResumeBehaviors(
-        rows,
-        'user',
-        'interrupt',
-        'current-action',
-      ).map((behavior) => behavior.action_id),
-    ).toEqual(['run-action']);
+      collectPausedResumeBehaviors(rows, 'user', 'current-action').map(
+        (behavior) => behavior.action_id,
+      ),
+    ).toEqual(['action-a', 'action-d1']);
   });
 
-  it('returns nothing without a resumed interrupt row', () => {
+  it('collects a pause under a decision user row that has no turn_run_id', () => {
     const rows = [
-      row('paused', OpenAIMessageRole.ASSISTANT, {
+      row('pause', OpenAIMessageRole.ASSISTANT, {
         behavior_action_id: 'action',
         turn_run_id: 'run',
         answer_timing: { status: 'paused' },
       }),
+      row('decision', OpenAIMessageRole.USER, {}),
     ];
-    expect(collectPausedResumeBehaviors(rows, 'user')).toEqual([]);
-    expect(collectPausedResumeBehaviors(rows, 'user', 'missing')).toEqual([]);
+    expect(
+      collectPausedResumeBehaviors(rows, 'user').map(
+        (behavior) => behavior.action_id,
+      ),
+    ).toEqual(['action']);
   });
 });
 
@@ -4856,16 +4862,41 @@ describe('queue behavior attribution', () => {
     );
     expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'failed');
   });
-  it('finalizes the initial turn row as stopped when the run stops', async () => {
-    const { service, finalizeAnswerTiming } = handlerService();
+  it('finalizes the initial turn row before the stop stamps stopped_runs', async () => {
+    const { service, update, finalizeAnswerTiming } = handlerService();
     const context: Record<string, unknown> = {
-      behavior: runBehavior,
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
       answerTiming: answerTiming(),
-      initialTurnRowId: 'assistant-1',
     };
-    (service as any).messagesService.stopRunning = jest
-      .fn()
-      .mockResolvedValue(null);
+    const handler = handlerOf(service);
+    update.mockResolvedValueOnce({
+      id: 'assistant-1',
+      message: { role: 'assistant', content: '' },
+      attrs: { behavior_action_id: runBehavior.action_id },
+    } as any);
+    // Real order: the initial assistant row is eos-closed, then the steer
+    // user frame arrives, then the save-driven stop.
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      context,
+    );
+    const stopRunning = jest.fn().mockResolvedValue(null);
+    (service as any).messagesService.stopRunning = stopRunning;
     jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
     const session = {
       key: 'k',
@@ -4883,6 +4914,11 @@ describe('queue behavior attribution', () => {
     expect(finalizeAnswerTiming).toHaveBeenCalledWith(
       'assistant-1',
       expect.objectContaining({ status: 'stopped' }),
+    );
+    // The finalizer must run before stopRunning records stopped_runs; the
+    // closed-row finalizer refuses a stopped run.
+    expect(finalizeAnswerTiming.mock.invocationCallOrder[0]).toBeLessThan(
+      stopRunning.mock.invocationCallOrder[0],
     );
   });
   it('settles the initiating action when a decision resume completes', async () => {
@@ -5346,5 +5382,197 @@ describe('pending save gate', () => {
       'wizard:steer:' + session.steerToken,
       expect.objectContaining({ save_gate: saveGateKey('user:u:n:c') }),
     );
+  });
+});
+
+describe('save preemption stop helper', () => {
+  const sessionFor = (key: string, interrupted = false) => ({
+    key,
+    namespaceId: 'n',
+    conversationId: 'c',
+    userId: 'u',
+    shareId: '',
+    subscribers: new Set(),
+    events: [],
+    controller: new AbortController(),
+    handlerContext: { interrupted },
+    finished: false,
+  });
+  const key = getStreamKey('n', 'c', 'u');
+
+  it('does not stop an idle conversation', async () => {
+    const service = createService({});
+    const streaming = jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValue(false);
+    const stop = jest.spyOn(service as any, 'stopSession');
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toEqual({ attempted: false, applied: false, confirmed: true });
+    expect(stop).not.toHaveBeenCalled();
+    expect(streaming).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies and confirms a stop of a local session', async () => {
+    const service = createService({});
+    (service as any).streamSessions.set(key, sessionFor(key));
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    const row = { id: 'stopped-row' };
+    const stop = jest
+      .spyOn(service as any, 'stopSession')
+      .mockResolvedValue(row);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toEqual({ attempted: true, applied: true, confirmed: true });
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a completed run as a no-op stop', async () => {
+    const service = createService({});
+    (service as any).streamSessions.set(key, sessionFor(key));
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    jest.spyOn(service as any, 'stopSession').mockResolvedValue(null);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+  });
+
+  it('skips a locally pausing run', async () => {
+    const service = createService({});
+    (service as any).streamSessions.set(key, sessionFor(key, true));
+    jest.spyOn(service, 'isConversationStreaming').mockResolvedValue(true);
+    const stop = jest.spyOn(service as any, 'stopSession');
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toMatchObject({ attempted: false, pausing: true });
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it('applies the essential remote steps when the deployment hook rejects', async () => {
+    const onCancellationRequested = jest
+      .fn()
+      .mockRejectedValue(new Error('local runtime down'));
+    const stopRunning = jest.fn().mockResolvedValue({ id: 'stopped-row' });
+    const service = createService({
+      agentStreamHooks: {
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+        onCancellationRequested,
+      },
+      messagesService: {
+        findLatest: jest.fn().mockResolvedValue(null),
+        stopRunning,
+      },
+    });
+    const client = {
+      set: jest.fn(),
+      publish: jest.fn().mockResolvedValue(1),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toEqual({ attempted: true, applied: true, confirmed: true });
+    expect(onCancellationRequested).toHaveBeenCalledTimes(1);
+    expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
+    expect(client.publish).toHaveBeenCalledWith(
+      `wizard:stream:${key}:control`,
+      'cancel',
+    );
+  });
+
+  it('does not stop a remotely pausing run', async () => {
+    const service = createService({
+      messagesService: {
+        findLatest: jest.fn().mockResolvedValue({
+          id: 'interrupt',
+          attrs: { tool_call: { interrupts: [{}] } },
+        }),
+        stopRunning: jest.fn(),
+      },
+    });
+    jest.spyOn(service, 'isConversationStreaming').mockResolvedValue(true);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toMatchObject({ attempted: false, pausing: true });
+  });
+
+  it('leaves the scope unconfirmed when it stays open past the sub-bound', async () => {
+    const service = createService({});
+    (service as any).streamSessions.set(key, sessionFor(key));
+    jest.spyOn(service, 'isConversationStreaming').mockResolvedValue(true);
+    jest
+      .spyOn(service as any, 'stopSession')
+      .mockResolvedValue({ id: 'stopped-row' });
+    jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 0),
+    ).resolves.toEqual({ attempted: true, applied: true, confirmed: false });
+  });
+
+  it('treats an unreadable stream state as no attempt', async () => {
+    const service = createService({});
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockRejectedValue(new Error('redis down'));
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
+    ).resolves.toEqual({ attempted: false, applied: false, confirmed: false });
+  });
+});
+
+describe('conversation lock active-stream bypass', () => {
+  function clientWith(activeKeyExists: boolean, gatePending = false) {
+    return {
+      exists: jest.fn().mockResolvedValue(activeKeyExists ? 1 : 0),
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn((_script: string, options: { keys: string[] }) => {
+        if (options.keys[0].startsWith('wizard:save-gate:'))
+          return Promise.resolve(gatePending ? 1 : 0);
+        return Promise.resolve(0);
+      }),
+      del: jest.fn(),
+    };
+  }
+
+  it('takes the lock while an active stream exists when asked to ignore it', async () => {
+    const service = createService({});
+    const client = clientWith(true);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    const release = await service.acquireConversationLock('n', 'c', 'u', '', {
+      ignoreSaveGate: true,
+      ignoreActiveStream: true,
+    });
+    expect(release).not.toBeNull();
+    expect(client.set).toHaveBeenCalled();
+    await release?.();
+  });
+
+  it('still waits on the save gate when only the active stream is ignored', async () => {
+    const service = createService({});
+    const client = clientWith(false, true);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+    await expect(
+      service.acquireConversationLock(
+        'n',
+        'c',
+        'u',
+        '',
+        {
+          ignoreActiveStream: true,
+        },
+        Date.now() - 1,
+      ),
+    ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
   });
 });

@@ -151,18 +151,13 @@ function isAgentPreflight(error: unknown): error is Error {
 export function collectPausedResumeBehaviors(
   messages: Message[],
   userId: string,
-  parentMessageId?: string,
   excludeActionId?: string,
 ): BehaviorContext[] {
-  // Scope to the run the decision resumes: its interrupt row names the run.
-  // A paused row from an earlier, already-settled pause must not be settled
-  // again by a later decision.
-  const parent = parentMessageId
-    ? messages.find((message) => message.id === parentMessageId)
-    : undefined;
-  const runId = parent?.attrs?.turn_run_id;
-  if (!runId) return [];
-  // Steered actions have their own settlement path and must not be touched.
+  // Collect every paused initiating action in the chain the decision resumes,
+  // including earlier pauses of a multi-pause flow. The terminal-transition
+  // rule in BehaviorService.result is what prevents a re-submitted settled
+  // action from being flipped; only an explicit retry of a failed action may
+  // correct it. Steered actions settle through their own path.
   const steeredActions = new Set<string>();
   for (const message of messages) {
     if (message.message.role !== OpenAIMessageRole.USER) continue;
@@ -176,7 +171,6 @@ export function collectPausedResumeBehaviors(
     if (message.message.role === OpenAIMessageRole.USER) continue;
     const id = message.attrs?.behavior_action_id;
     if (typeof id !== 'string' || !id || id === excludeActionId) continue;
-    if (message.attrs?.turn_run_id !== runId) continue;
     if (message.attrs?.answer_timing?.status !== 'paused') continue;
     if (steeredActions.has(id)) continue;
     if (seen.has(id)) continue;
@@ -2027,7 +2021,7 @@ export class StreamService implements OnModuleDestroy {
     conversationId: string,
     userId: string,
     shareId: string,
-    options: { ignoreSaveGate?: boolean } = {},
+    options: { ignoreSaveGate?: boolean; ignoreActiveStream?: boolean } = {},
     deadline: number = Date.now() + 290_000,
   ): Promise<(() => Promise<void>) | null> {
     const client = await this.getRedisClient();
@@ -2042,7 +2036,7 @@ export class StreamService implements OnModuleDestroy {
     );
     const activeKey = this.streamActiveKey(streamKey);
     const waiting = async () =>
-      (await client.exists(activeKey)) ||
+      (!options.ignoreActiveStream && (await client.exists(activeKey))) ||
       (!options.ignoreSaveGate &&
         (await this.savePendingFor(
           client,
@@ -2072,7 +2066,7 @@ export class StreamService implements OnModuleDestroy {
       }
       await this.sleep(250);
     }
-    if (await client.exists(activeKey)) {
+    if (!options.ignoreActiveStream && (await client.exists(activeKey))) {
       await client.eval(
         "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
         { keys: [lockKey], arguments: [token] },
@@ -2337,7 +2331,6 @@ export class StreamService implements OnModuleDestroy {
         ? collectPausedResumeBehaviors(
             messages,
             userId,
-            requestDto.parent_message_id,
             behaviorContext.getStore()?.action_id,
           )
         : [];
@@ -2749,11 +2742,12 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
-  private async stopSession(session: StreamSession) {
-    if (session.finished || session.handlerContext.stopped) return;
+  private async stopSession(session: StreamSession): Promise<Message | null> {
+    if (session.finished || session.handlerContext.stopped) return null;
     session.handlerContext.stopped = true;
     session.handlerContext.failed = true;
     session.drainUsage = Boolean(session.steerStopSupported);
+    let stopped: Message | null = null;
     try {
       await this.requestDeploymentCancellation(session);
       if (
@@ -2780,6 +2774,10 @@ export class StreamService implements OnModuleDestroy {
       }
       if (!session.drainUsage) session.controller.abort();
       await this.markSessionCanceled(session.key);
+      // Finalize the superseded initial row before stopRunning stamps
+      // stopped_runs on the turn (the closed-row finalizer refuses a stopped
+      // run).
+      await this.finalizeInitialTurnRow(session.handlerContext, 'cancelled');
       const message = await this.messagesService.stopRunning(
         session.namespaceId,
         session.conversationId,
@@ -2792,12 +2790,12 @@ export class StreamService implements OnModuleDestroy {
             }
           : undefined,
       );
+      stopped = message;
       if (session.handlerContext.behavior)
         await this.behaviorService
           ?.result(session.handlerContext.behavior, 'cancelled')
           .catch(() => undefined);
       await this.settleSteeredBehaviors(session.handlerContext, 'cancelled');
-      await this.finalizeInitialTurnRow(session.handlerContext, 'cancelled');
       await this.completeResumeBehaviors(session.handlerContext, 'cancelled');
       const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
       if (message?.attrs?.answer_timing) {
@@ -2821,6 +2819,7 @@ export class StreamService implements OnModuleDestroy {
     } finally {
       this.completeSession(session);
     }
+    return stopped;
   }
 
   private async markSessionCanceled(key: string) {
@@ -3561,6 +3560,131 @@ export class StreamService implements OnModuleDestroy {
     if (client) {
       await client.publish(this.streamControlChannel(key), 'cancel');
     }
+  }
+
+  /**
+   * Reliable stop path for the save preemption. Unlike cancelAgentStream, a
+   * rejecting deployment-cancellation hook cannot skip the essential local
+   * stop/mark/remote-stop steps. Returns whether a stopped row was written and
+   * whether the run was just pausing at an approval (not a stop target).
+   */
+  private async cancelAgentStreamReliable(
+    key: string,
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+  ): Promise<{ applied: boolean; pausing: boolean }> {
+    const session = this.streamSessions.get(key);
+    if (session) {
+      if (session.handlerContext.interrupted)
+        return { applied: false, pausing: true };
+      // stopSession already swallows the deployment hook and marks the
+      // session canceled; calling either again would duplicate work.
+      const stopped = await this.stopSession(session);
+      return { applied: Boolean(stopped), pausing: false };
+    }
+    // A run writing its interrupt row while closing is treated as pausing;
+    // rewriting the paused turn is outside the save's stop target.
+    const latest = await this.messagesService.findLatest(
+      userId,
+      conversationId,
+    );
+    if (latest?.attrs?.tool_call?.interrupts?.length)
+      return { applied: false, pausing: true };
+    if (userId) {
+      try {
+        await this.agentStreamHooks.onCancellationRequested?.(
+          userId,
+          conversationId,
+        );
+      } catch (error) {
+        this.logger.error({ error });
+      }
+    }
+    await this.markSessionCanceled(key);
+    const stopped = await this.messagesService.stopRunning(
+      namespaceId,
+      conversationId,
+      userId,
+    );
+    const client = await this.getRedisClient();
+    if (client) {
+      await client.publish(this.streamControlChannel(key), 'cancel');
+    }
+    return { applied: Boolean(stopped), pausing: false };
+  }
+
+  /**
+   * Stop the owner's streaming run and wait, bounded, for its stream scope to
+   * close. `applied` means a stopped row was written (not merely that the
+   * scope closed); `confirmed` means the scope is gone. A run that is just
+   * pausing at an approval is skipped.
+   */
+  async stopUserAgentStreamAndWait(
+    userId: string,
+    namespaceId: string,
+    conversationId: string,
+    timeoutMs = 10_000,
+  ): Promise<{
+    attempted: boolean;
+    applied: boolean;
+    confirmed: boolean;
+    pausing?: boolean;
+  }> {
+    const key = getStreamKey(namespaceId, conversationId, userId);
+    try {
+      if (
+        !(await this.isConversationStreaming(
+          namespaceId,
+          conversationId,
+          userId,
+        ))
+      )
+        return { attempted: false, applied: false, confirmed: true };
+    } catch (error) {
+      this.logger.error({ error });
+      return { attempted: false, applied: false, confirmed: false };
+    }
+    let applied = false;
+    try {
+      const stop = await this.cancelAgentStreamReliable(
+        key,
+        namespaceId,
+        conversationId,
+        userId,
+      );
+      if (stop.pausing)
+        return {
+          attempted: false,
+          applied: false,
+          confirmed: false,
+          pausing: true,
+        };
+      applied = stop.applied;
+    } catch (error) {
+      this.logger.error({ error });
+    }
+    const deadline = Date.now() + timeoutMs;
+    let confirmed = false;
+    while (Date.now() <= deadline) {
+      try {
+        if (
+          !(await this.isConversationStreaming(
+            namespaceId,
+            conversationId,
+            userId,
+          ))
+        ) {
+          confirmed = true;
+          break;
+        }
+      } catch (error) {
+        this.logger.error({ error });
+        break;
+      }
+      await this.sleep(100);
+    }
+    return { attempted: true, applied, confirmed };
   }
 
   async createUserAgentStream(

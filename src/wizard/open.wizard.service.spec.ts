@@ -211,6 +211,61 @@ describe('OpenWizardService', () => {
     expect(streamService.submissionStatus).not.toHaveBeenCalled();
   });
 
+  it('returns stopped for a turn whose run carries a stopped_runs stamp', async () => {
+    const input = {
+      id: 'stopped-turn-input',
+      parentId: undefined,
+      message: { role: OpenAIMessageRole.USER, content: 'question' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const stoppedAnswer = {
+      id: 'stopped-turn-answer',
+      parentId: 'stopped-turn-input',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: '' },
+      status: MessageStatus.FAILED,
+      attrs: { turn_run_id: 'run', stopped_runs: ['run'] },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([input, stoppedAnswer]);
+    // The stamp is this run's terminal outcome, so a later run still
+    // streaming does not turn it back into pending.
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'stopped' });
+    expect(streamService.isConversationStreaming).not.toHaveBeenCalled();
+  });
+
+  it('keeps a superseded turn superseded even when its run was stopped', async () => {
+    const input = {
+      id: 'superseded-input',
+      parentId: undefined,
+      message: { role: OpenAIMessageRole.USER, content: 'question' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const stoppedAnswer = {
+      id: 'superseded-answer',
+      parentId: 'superseded-input',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: '' },
+      status: MessageStatus.STOPPED,
+      attrs: { turn_run_id: 'run', stopped_runs: ['run'] },
+    };
+    const next = {
+      id: 'next-question',
+      parentId: 'superseded-answer',
+      message: { role: OpenAIMessageRole.USER, content: 'next' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([input, stoppedAnswer, next]);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'superseded' });
+  });
+
   it('creates a new conversation when parent_message_id is absent', async () => {
     conversationsService.create.mockResolvedValue({ id: 'conversation-new' });
 

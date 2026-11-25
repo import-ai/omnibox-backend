@@ -116,6 +116,9 @@ const STREAM_TTL_SECONDS = 60 * 60;
 const STREAM_BLOCK_MS = 15000;
 const STREAM_MAXLEN = 10000;
 const STREAM_START_ID = '0-0';
+// How long the save stop waits for a just-registered session to persist its
+// query row (and run identity) before evaluating what to stop.
+const STOP_ADMISSION_WAIT_MS = 5_000;
 
 type RedisStreamReadResult = Array<[string, Array<[string, string[]]>]> | null;
 type RedisClient = ReturnType<typeof createClient>;
@@ -2536,7 +2539,7 @@ export class StreamService implements OnModuleDestroy {
       const subscriber = await this.getRedisSubscriber();
       if (!subscriber) return;
       await subscriber.subscribe(this.streamControlChannel(session.key), () => {
-        void this.stopSession(session).catch((error) =>
+        void this.stopSessionAfterAdmission(session).catch((error) =>
           this.logger.error({ error }),
         );
       });
@@ -2742,8 +2745,55 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Whether the run's requested turn already produced its final answer (eos
+   * processed with content and no tool calls, no row open) and no queued steer
+   * can open another turn. Such a run is only waiting for done and session
+   * bookkeeping; stopping it would discard the completed answer.
+   */
+  private hasClosedTerminalAnswer(context: HandlerContext): boolean {
+    if (context.messageId || context.failed || context.interrupted)
+      return false;
+    if (context.steeredQueue?.length || context.pendingSteered?.size)
+      return false;
+    const last = context.lastEos?.message;
+    return Boolean(
+      last &&
+      last.message.role === OpenAIMessageRole.ASSISTANT &&
+      last.message.content?.trim() &&
+      !last.message.tool_calls?.length,
+    );
+  }
+
+  private async waitForAdmission(session: StreamSession, maxWaitMs: number) {
+    const deadline = Date.now() + maxWaitMs;
+    while (
+      !session.finished &&
+      !session.handlerContext.queryId &&
+      Date.now() < deadline
+    )
+      await this.sleep(50);
+  }
+
+  /**
+   * A control-channel stop (the save preemption or a Stop relayed from another
+   * replica) waits for a just-registered admission to persist its query row,
+   * so the stop carries the run identity instead of aborting the run without
+   * a stop stamp.
+   */
+  private async stopSessionAfterAdmission(
+    session: StreamSession,
+  ): Promise<Message | null> {
+    await this.waitForAdmission(session, STOP_ADMISSION_WAIT_MS);
+    return this.stopSession(session);
+  }
+
   private async stopSession(session: StreamSession): Promise<Message | null> {
     if (session.finished || session.handlerContext.stopped) return null;
+    // The run's final answer already closed (eos processed, no row open, no
+    // steer pending); only done/completeSession remain. Stamping the run
+    // stopped here would discard a completed answer.
+    if (this.hasClosedTerminalAnswer(session.handlerContext)) return null;
     session.handlerContext.stopped = true;
     session.handlerContext.failed = true;
     session.drainUsage = Boolean(session.steerStopSupported);
@@ -3578,6 +3628,10 @@ export class StreamService implements OnModuleDestroy {
     if (session) {
       if (session.handlerContext.interrupted)
         return { applied: false, pausing: true };
+      // A session registered by an admission still persisting its query row
+      // has no run identity yet; stopping it there would abort the run without
+      // a stop stamp and the bot would report a generic failure.
+      await this.waitForAdmission(session, STOP_ADMISSION_WAIT_MS);
       // stopSession already swallows the deployment hook and marks the
       // session canceled; calling either again would duplicate work.
       const stopped = await this.stopSession(session);
@@ -3601,6 +3655,14 @@ export class StreamService implements OnModuleDestroy {
         this.logger.error({ error });
       }
     }
+    // The run can persist its interrupt while the hook runs; stopping after
+    // that would rewrite the paused turn and lose the approval prompt.
+    const current = await this.messagesService.findLatest(
+      userId,
+      conversationId,
+    );
+    if (current?.attrs?.tool_call?.interrupts?.length)
+      return { applied: false, pausing: true };
     await this.markSessionCanceled(key);
     const stopped = await this.messagesService.stopRunning(
       namespaceId,

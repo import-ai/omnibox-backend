@@ -7,6 +7,7 @@ import { Applications } from 'omniboxd/applications/applications.entity';
 import { BotBase } from 'omniboxd/applications/apps/bot-base';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesService } from 'omniboxd/namespaces/namespaces.service';
+import { getActiveTraceHeaders } from 'omniboxd/tracing/trace-headers';
 import { Repository } from 'typeorm';
 
 const QRCODE_URL_PREFIXES = [
@@ -84,7 +85,10 @@ export class WechatOaBot extends BotBase {
         {
           signal: AbortSignal.timeout(5000),
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            ...getActiveTraceHeaders(),
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({ key: attrs.key }),
         },
       );

@@ -1,7 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { context, propagation } from '@opentelemetry/api';
 import { randomUUID } from 'crypto';
 import { I18nService } from 'nestjs-i18n';
 import { behaviorContext } from 'omniboxd/behavior/behavior-context';
@@ -9,6 +8,7 @@ import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import { NamespacesQuotaService } from 'omniboxd/namespaces/namespaces-quota.service';
 import { S3Service } from 'omniboxd/s3/s3.service';
 import { Task, TaskStatus } from 'omniboxd/tasks/tasks.entity';
+import { getActiveTraceHeaders } from 'omniboxd/tracing/trace-headers';
 import { numberToBigintString } from 'omniboxd/utils/bigint-utils';
 import { Transaction } from 'omniboxd/utils/transaction-utils';
 import { In, IsNull, Repository } from 'typeorm';
@@ -111,8 +111,7 @@ export class TasksService {
   }
 
   injectTraceHeaders(task: Partial<Task>) {
-    const traceHeaders: Record<string, string> = {};
-    propagation.inject(context.active(), traceHeaders);
+    const traceHeaders = getActiveTraceHeaders();
     task.payload = { ...(task.payload || {}), trace_headers: traceHeaders };
     return task;
   }
@@ -231,8 +230,13 @@ export class TasksService {
       },
       { canceledAt: new Date(), status: TaskStatus.CANCELED },
     );
-    for (const task of tasksToCancel) {
-      tx.afterCommitHooks.push(() => this.callTaskHook(namespaceId, task.id));
+    if (tasksToCancel.length > 0) {
+      const traceHeaders = getActiveTraceHeaders();
+      for (const task of tasksToCancel) {
+        tx.afterCommitHooks.push(() =>
+          this.callTaskHook(namespaceId, task.id, traceHeaders),
+        );
+      }
     }
   }
 
@@ -346,7 +350,10 @@ export class TasksService {
       `${this.proUrl}/internal/api/v1/namespaces/${task.namespaceId}/tasks/${taskId}/check`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...getActiveTraceHeaders(),
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(request),
       },
     );
@@ -355,13 +362,18 @@ export class TasksService {
     return response.json();
   }
 
-  async callTaskHook(namespaceId: string, taskId: string): Promise<void> {
+  async callTaskHook(
+    namespaceId: string,
+    taskId: string,
+    traceHeaders = getActiveTraceHeaders(),
+  ): Promise<void> {
     if (!this.proUrl) {
       return;
     }
     const url = `${this.proUrl}/internal/api/v1/namespaces/${namespaceId}/tasks/${taskId}/hook`;
     const response = await fetch(url, {
       method: 'POST',
+      headers: traceHeaders,
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));

@@ -9,6 +9,7 @@ import {
 import { ResourceType } from 'omniboxd/resources/entities/resource.entity';
 import { ShareType } from 'omniboxd/shares/entities/share.entity';
 import {
+  type ConversationSubmission,
   ConversationSubmissions,
   submissionFingerprint,
 } from 'omniboxd/wizard/conversation-submissions';
@@ -3897,6 +3898,59 @@ describe('conversation submission admission', () => {
       error: 'Message was stopped',
     });
     expect(process).not.toHaveBeenCalled();
+  });
+
+  it('serializes the behavior context and client platform into the queued job', async () => {
+    const behavior = {
+      action_id: '11111111-1111-4111-8111-111111111111',
+      action_type: 'ai_conversation',
+      action_started_at: new Date().toISOString(),
+      origin_platform: 'ios',
+      user_id: 'u',
+      task_ids: [],
+    };
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: {
+        findSubmitted: jest.fn().mockResolvedValue(undefined),
+      },
+    });
+    const add = jest.fn(() =>
+      Promise.resolve({
+        disposition: 'queued',
+        client_request_id: requestId,
+        query: request.query,
+      }),
+    );
+    jest
+      .spyOn(service as any, 'submissionQueue')
+      .mockResolvedValue({ key: () => 'scope', add });
+    const process = jest
+      .spyOn(service as any, 'processSubmission')
+      .mockImplementation(() => undefined);
+    await behaviorContext.run(behavior, () =>
+      service.submitConversationMessage(
+        'n',
+        'c',
+        'u',
+        request,
+        undefined,
+        false,
+        'ios',
+      ),
+    );
+    expect(process).toHaveBeenCalled();
+    const [key, job, payload] = add.mock.calls[0] as unknown as [
+      string,
+      ConversationSubmission,
+      string,
+    ];
+    expect(key).toBe('scope');
+    expect(job.behavior).toEqual(behavior);
+    expect(job.platform).toBe('ios');
+    const parsed = JSON.parse(payload) as Record<string, unknown>;
+    expect(parsed.behavior).toEqual(behavior);
+    expect(typeof parsed.submission_fingerprint).toBe('string');
   });
 
   it('rejects changed tools under the same ID and text after the receipt expires', async () => {

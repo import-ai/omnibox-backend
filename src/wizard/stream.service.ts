@@ -2841,7 +2841,11 @@ export class StreamService implements OnModuleDestroy {
     const receipt = await queue.add(
       key,
       job,
-      JSON.stringify({ ...content, submission_fingerprint: fingerprint }),
+      JSON.stringify({
+        ...content,
+        submission_fingerprint: fingerprint,
+        ...(behavior ? { behavior } : {}),
+      }),
       saved,
     );
     if (receipt.disposition === 'queued')

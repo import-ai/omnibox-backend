@@ -107,9 +107,76 @@ describe('OpenWizardService', () => {
       content: 'final',
     });
     streamService.isConversationStreaming.mockResolvedValue(true);
+    // A later turn streaming must not hide this input's own final answer.
     await expect(
       service.botMessageResult('u', 'n', 'c', 'next-request'),
+    ).resolves.toEqual({
+      status: 'complete',
+      reply_id: 'final',
+      content: 'final',
+    });
+  });
+
+  it('keeps the requested turn pending while its own answer is still streaming', async () => {
+    const input = {
+      id: 'input',
+      parentId: undefined,
+      message: { role: OpenAIMessageRole.USER, content: 'question' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const answer = {
+      id: 'answer',
+      parentId: 'input',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: 'partial' },
+      status: MessageStatus.STREAMING,
+      attrs: { turn_run_id: 'run' },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([input, answer]);
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
     ).resolves.toEqual({ status: 'pending' });
+
+    streamService.isConversationStreaming.mockResolvedValue(false);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'failed' });
+  });
+
+  it('completes a later steer whose own answer is terminal while the run streams', async () => {
+    const input = {
+      id: 'steer-b',
+      parentId: 'answer-a',
+      message: { role: OpenAIMessageRole.USER, content: 'second steer' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const firstAnswer = {
+      id: 'answer-a',
+      parentId: 'input-a',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: 'first' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    const answerB = {
+      id: 'answer-b',
+      parentId: 'steer-b',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: 'second' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'run' },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([firstAnswer, input, answerB]);
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'steer-b'),
+    ).resolves.toEqual({
+      status: 'complete',
+      reply_id: 'answer-b',
+      content: 'second',
+    });
   });
 
   it('returns stopped for a persisted input even after its receipt expires', async () => {

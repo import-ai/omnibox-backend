@@ -121,14 +121,6 @@ export class OpenWizardService {
         status: receipt.disposition === 'failed' ? 'failed' : 'pending',
       };
     }
-    if (
-      await this.streamService.isConversationStreaming(
-        namespaceId,
-        conversationId,
-        userId,
-      )
-    )
-      return { status: 'pending' };
 
     const rows = await this.messagesService.findAll(userId, conversationId);
     const parentOf = new Map(rows.map((row) => [row.id, row.parentId]));
@@ -182,6 +174,29 @@ export class OpenWizardService {
       );
     }
     if (answer?.status === MessageStatus.STOPPED) return { status: 'stopped' };
+    // The requested turn's own final answer wins even while a later turn (or
+    // another steer) keeps the conversation streaming.
+    if (
+      answer?.status === MessageStatus.SUCCESS &&
+      answer.message.content &&
+      !answer.message.tool_calls?.length
+    )
+      return {
+        status: 'complete',
+        reply_id: answer.id,
+        content: answer.message.content,
+      };
+    // A terminal failure of the requested turn is its outcome, not pending.
+    if (answer?.status === MessageStatus.FAILED) return { status: 'failed' };
+    // Only a non-terminal or absent answer waits for the conversation to idle.
+    if (
+      await this.streamService.isConversationStreaming(
+        namespaceId,
+        conversationId,
+        userId,
+      )
+    )
+      return { status: 'pending' };
     if (
       answer?.status !== MessageStatus.SUCCESS ||
       !answer.message.content ||

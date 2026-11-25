@@ -4273,6 +4273,13 @@ describe('queue behavior attribution', () => {
         attrs: { answer_timing: timing },
       }),
     );
+    const finalizeAnswerTiming = jest.fn((id: string, timing: unknown) =>
+      Promise.resolve({
+        id,
+        message: { role: 'assistant' },
+        attrs: { answer_timing: timing },
+      }),
+    );
     const behaviorService = {
       result: jest.fn(() => Promise.resolve(undefined)),
     };
@@ -4282,6 +4289,7 @@ describe('queue behavior attribution', () => {
         update,
         updateDelta,
         setAnswerTiming,
+        finalizeAnswerTiming,
         findOne: jest.fn().mockResolvedValue({}),
         indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
       },
@@ -4307,6 +4315,7 @@ describe('queue behavior attribution', () => {
       update,
       updateDelta,
       setAnswerTiming,
+      finalizeAnswerTiming,
       behaviorService,
     };
   }
@@ -4471,9 +4480,73 @@ describe('queue behavior attribution', () => {
       'success',
     );
   });
-  it('fails a tool-call steered turn when the run errors', async () => {
-    const { service, update, setAnswerTiming, behaviorService } =
+  it('attributes two direct steers delivered in one batch to their own turns', async () => {
+    const { service, create, setAnswerTiming, behaviorService } =
       handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    for (const id of [requestId, secondRequestId]) {
+      await handler(
+        JSON.stringify({
+          response_type: 'bos',
+          role: OpenAIMessageRole.USER,
+          attrs: { composer: { client_request_id: id } },
+        }),
+        context,
+      );
+    }
+    for (const answer of ['first answer', 'second answer']) {
+      await handler(
+        JSON.stringify({
+          response_type: 'bos',
+          role: OpenAIMessageRole.ASSISTANT,
+        }),
+        context,
+      );
+      await handler(
+        JSON.stringify({
+          response_type: 'delta',
+          message: { content: answer },
+        }),
+        context,
+      );
+      await handler(JSON.stringify({ response_type: 'eos' }), context);
+    }
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+
+    const rows = create.mock.calls.map((call) => call[3].attrs);
+    expect(rows.map((attrs) => attrs.behavior_action_id)).toEqual([
+      steeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+      steeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+    ]);
+    expect(
+      setAnswerTiming.mock.calls.map((call) => call[0]).slice(0, 2),
+    ).toEqual(['assistant-3', 'assistant-4']);
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      secondSteeredBehavior,
+      'success',
+    );
+  });
+  it('fails a tool-call steered turn when the run errors', async () => {
+    const {
+      service,
+      update,
+      setAnswerTiming,
+      finalizeAnswerTiming,
+      behaviorService,
+    } = handlerService();
     update.mockResolvedValueOnce({
       id: 'assistant-2',
       message: {
@@ -4504,13 +4577,19 @@ describe('queue behavior attribution', () => {
       steeredBehavior,
       'success',
     );
-    expect(setAnswerTiming).toHaveBeenCalledWith(
+    // The closed SUCCESS row takes the failed timing through the closed-row
+    // finalizer, not setAnswerTiming (which requires a FAILED row).
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'failed' }),
+    );
+    expect(setAnswerTiming).not.toHaveBeenCalledWith(
       'assistant-2',
       expect.objectContaining({ status: 'failed' }),
     );
   });
   it('cancels a steered behavior when the run stops', async () => {
-    const { service, setAnswerTiming, behaviorService } = handlerService();
+    const { service, finalizeAnswerTiming, behaviorService } = handlerService();
     const context: Record<string, unknown> = {
       behavior: runBehavior,
       answerTiming: answerTiming(),
@@ -4542,7 +4621,7 @@ describe('queue behavior attribution', () => {
       steeredBehavior,
       'cancelled',
     );
-    expect(setAnswerTiming).toHaveBeenCalledWith(
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
       'assistant-9',
       expect.objectContaining({ status: 'stopped' }),
     );

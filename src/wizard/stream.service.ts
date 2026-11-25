@@ -144,8 +144,10 @@ function isAgentPreflight(error: unknown): error is Error {
 
 interface HandlerContext {
   behavior?: BehaviorContext;
-  /** The steered send whose turn is currently streaming, if any. */
-  steeredBehavior?: BehaviorContext;
+  /** Steered sends of this run that still need an assistant turn. */
+  steeredQueue?: BehaviorContext[];
+  /** The steered send owning the assistant rows currently open. */
+  assistantSteeredBehavior?: BehaviorContext;
   /** Steered behaviors seen in this run that are not completed yet. */
   pendingSteered?: Map<
     string,
@@ -694,7 +696,13 @@ export class StreamService implements OnModuleDestroy {
               }
             }
             if (rowSteeredBehavior) {
-              context.steeredBehavior = rowSteeredBehavior;
+              // Keep one entry per steered send in arrival order. A batch of
+              // direct steers can deliver several user frames before the
+              // assistant rows; the first open turn consumes the first one.
+              context.steeredQueue = [
+                ...(context.steeredQueue ?? []),
+                rowSteeredBehavior,
+              ];
               if (!context.pendingSteered) context.pendingSteered = new Map();
               context.pendingSteered.set(rowSteeredBehavior.action_id, {
                 behavior: rowSteeredBehavior,
@@ -713,12 +721,16 @@ export class StreamService implements OnModuleDestroy {
           context.toolCalls = undefined;
           context.answeredToolCallIds = new Set();
         }
+        const rowSteeredTurn =
+          chunk.role === OpenAIMessageRole.ASSISTANT
+            ? (context.assistantSteeredBehavior ?? context.steeredQueue?.[0])
+            : undefined;
+        if (rowSteeredTurn) context.assistantSteeredBehavior = rowSteeredTurn;
         const rowBehavior =
           chunk.role === OpenAIMessageRole.USER
             ? rowSteeredBehavior
-            : chunk.role === OpenAIMessageRole.ASSISTANT &&
-                context.steeredBehavior
-              ? context.steeredBehavior
+            : chunk.role === OpenAIMessageRole.ASSISTANT && rowSteeredTurn
+              ? rowSteeredTurn
               : behavior;
         const message: Message = await this.messagesService.create(
           namespaceId,
@@ -744,10 +756,10 @@ export class StreamService implements OnModuleDestroy {
         );
         if (
           chunk.role === OpenAIMessageRole.ASSISTANT &&
-          context.steeredBehavior
+          context.assistantSteeredBehavior
         ) {
           const pending = context.pendingSteered?.get(
-            context.steeredBehavior.action_id,
+            context.assistantSteeredBehavior.action_id,
           );
           if (pending) pending.lastAssistantRowId = message.id;
         }
@@ -848,13 +860,16 @@ export class StreamService implements OnModuleDestroy {
         // the steered action there instead of waiting for the run's last row,
         // so a later run outcome cannot report it twice.
         if (
-          context.steeredBehavior &&
+          context.assistantSteeredBehavior &&
           message.message.role === OpenAIMessageRole.ASSISTANT &&
           message.message.content?.trim() &&
           !message.message.tool_calls?.length
         ) {
-          const steered = context.steeredBehavior;
-          context.steeredBehavior = undefined;
+          const steered = context.assistantSteeredBehavior;
+          context.assistantSteeredBehavior = undefined;
+          context.steeredQueue = context.steeredQueue?.filter(
+            (behavior) => behavior.action_id !== steered.action_id,
+          );
           context.pendingSteered?.delete(steered.action_id);
           if (context.answerTiming) {
             const saved = await this.messagesService
@@ -1138,7 +1153,8 @@ export class StreamService implements OnModuleDestroy {
     const pending = context.pendingSteered;
     if (!pending?.size) return;
     context.pendingSteered = undefined;
-    context.steeredBehavior = undefined;
+    context.steeredQueue = undefined;
+    context.assistantSteeredBehavior = undefined;
     for (const { behavior, lastAssistantRowId } of pending.values()) {
       if (lastAssistantRowId && context.answerTiming) {
         const timing =
@@ -1153,8 +1169,11 @@ export class StreamService implements OnModuleDestroy {
                 context.answerTiming.value,
                 status === 'cancelled' ? 'stopped' : 'failed',
               );
+        // The steered turn's assistant row was already closed as SUCCESS by
+        // its eos; the closed-row finalizer is what persists the failed or
+        // stopped outcome used by the answer reconciler.
         await this.messagesService
-          .setAnswerTiming(lastAssistantRowId, timing)
+          .finalizeAnswerTiming(lastAssistantRowId, timing)
           .catch(() => undefined);
       }
       await this.behaviorService

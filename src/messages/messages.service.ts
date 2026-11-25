@@ -422,6 +422,35 @@ export class MessagesService {
     });
   }
 
+  /**
+   * Terminal timing for a steered turn whose assistant row was already closed
+   * (its eos set SUCCESS before the run failed/stopped). The row status no
+   * longer describes the turn outcome, so only identity, the stopped-run
+   * guard and the running-timing precondition apply.
+   */
+  async finalizeAnswerTiming(
+    id: string,
+    timing: AnswerTiming,
+  ): Promise<Message | null> {
+    return this.dataSource.transaction(async (manager) => {
+      const message = await this.lockStreamMessage(manager, id);
+      if (
+        message.attrs?.turn_run_id !== timing.run_id ||
+        message.attrs?.answer_timing?.answer_id !== timing.answer_id
+      )
+        return null;
+      if (message.attrs.turn_id) {
+        const turn = await manager
+          .getRepository(Message)
+          .findOneByOrFail({ id: message.attrs.turn_id });
+        if (turn.attrs?.stopped_runs?.includes(timing.run_id)) return null;
+      }
+      if (message.attrs.answer_timing?.status !== 'running') return message;
+      message.attrs = { ...message.attrs, answer_timing: timing };
+      return manager.save(message);
+    });
+  }
+
   private async lockStreamMessage(
     manager: EntityManager,
     id: string,

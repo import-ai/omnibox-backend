@@ -302,6 +302,57 @@ describe('answer timing persistence under the turn lock', () => {
       expect(repo.save).not.toHaveBeenCalled();
     },
   );
+
+  it.each(['failed', 'stopped'] as const)(
+    'persists %s timing on a steered row already closed as SUCCESS',
+    async (status) => {
+      const { service, repo, rows } = fixture(rowsForTiming());
+      const terminal = {
+        version: 1 as const,
+        answer_id: 'answer',
+        run_id: 'run',
+        status,
+        started_at: new Date(1).toISOString(),
+        completed_at: new Date(2001).toISOString(),
+      };
+      const saved = await service.finalizeAnswerTiming('answer', terminal);
+      expect(saved?.attrs?.answer_timing?.status).toBe(status);
+      expect(rows[1].status).toBe(S.SUCCESS);
+      expect(repo.save).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not finalize a closed row for another run, answer or after a terminal timing', async () => {
+    const wrongRun = fixture(rowsForTiming());
+    expect(
+      await wrongRun.service.finalizeAnswerTiming('answer', {
+        ...timing,
+        status: 'failed',
+        run_id: 'other',
+      }),
+    ).toBeNull();
+    expect(wrongRun.repo.save).not.toHaveBeenCalled();
+
+    const wrongAnswer = fixture(rowsForTiming());
+    expect(
+      await wrongAnswer.service.finalizeAnswerTiming('answer', {
+        ...timing,
+        status: 'failed',
+        answer_id: 'other',
+      }),
+    ).toBeNull();
+    expect(wrongAnswer.repo.save).not.toHaveBeenCalled();
+
+    const finished = fixture(rowsForTiming());
+    finished.rows[1].attrs!.answer_timing = { ...timing, status: 'complete' };
+    expect(
+      await finished.service.finalizeAnswerTiming('answer', {
+        ...timing,
+        status: 'failed',
+      }),
+    ).toMatchObject({ id: 'answer' });
+    expect(finished.repo.save).not.toHaveBeenCalled();
+  });
 });
 
 describe('unified cross-client timing outcomes', () => {

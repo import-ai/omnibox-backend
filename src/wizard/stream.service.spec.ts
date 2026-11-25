@@ -2188,6 +2188,58 @@ describe('trusted upstream billing metadata', () => {
 });
 
 describe('persisted query receipts', () => {
+  it('accepts and completes turns before the response is subscribed', async () => {
+    const service = createService({});
+    const saved = {
+      id: 'query-id',
+      createdAt: new Date(),
+      parentId: null,
+      message: { role: 'user', content: 'hello' },
+    };
+    const create = jest.fn().mockResolvedValue(saved);
+    (service as any).messagesService = {
+      create,
+      findOne: jest.fn().mockResolvedValue(saved),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+    };
+    const stream = jest
+      .spyOn(service, 'stream')
+      .mockImplementation(async (_ns, _mode, body, _req, callback) => {
+        expect(body.approval_mode).toBe('auto_approve');
+        expect(body.query_persisted).toBe(true);
+        await callback(JSON.stringify({ response_type: 'done' }));
+      });
+
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      {
+        query: 'hello',
+        conversation_id: 'conv',
+        tools: [],
+        channel: 'web',
+        approval_mode: 'auto_approve',
+      },
+      'req',
+      'ask',
+      'user',
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect((service as any).streamSessions.size).toBe(0);
+
+    const events: string[] = [];
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({
+        next: (event: { data: string }) =>
+          events.push(JSON.parse(event.data).response_type),
+        complete: resolve,
+        error: reject,
+      }),
+    );
+    expect(events).toEqual(['bos', 'delta', 'eos', 'done']);
+  });
+
   it('sends a complete user receipt before contacting Wizard and persists enrichment on that same row', async () => {
     const service = createService({});
     const saved = {

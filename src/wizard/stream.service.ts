@@ -60,6 +60,7 @@ import {
   chatErrorGroup,
 } from 'omniboxd/wizard/chat-error-trace';
 import {
+  AgentRequestChannel,
   AgentRequestDto,
   PrivateSearchResourceDto,
   PrivateSearchToolDto,
@@ -1194,24 +1195,24 @@ export class StreamService implements OnModuleDestroy {
       );
     }
 
-    return new Observable<MessageEvent>((subscriber) => {
-      const session = this.startAgentSession(
-        key,
-        namespaceId,
-        requestDto,
-        requestId,
-        mode,
-        userId,
-        shareId,
-        parentId,
-        messages,
-        chatOnly,
-        timeZone,
-        traceContext,
-        queryReceivedAt,
-      );
-      return this.attachSession(session, subscriber);
-    });
+    const session = this.startAgentSession(
+      key,
+      namespaceId,
+      requestDto,
+      requestId,
+      mode,
+      userId,
+      shareId,
+      parentId,
+      messages,
+      chatOnly,
+      timeZone,
+      traceContext,
+      queryReceivedAt,
+    );
+    return new Observable<MessageEvent>((subscriber) =>
+      this.attachSession(session, subscriber),
+    );
   }
 
   private async resolveStreamParent(
@@ -1617,6 +1618,12 @@ export class StreamService implements OnModuleDestroy {
       edition: requestDto.edition,
       level: requestDto.level,
       lang: requestDto.lang,
+      approval_mode:
+        !shareId &&
+        (requestDto.channel === AgentRequestChannel.WEB ||
+          requestDto.channel === AgentRequestChannel.MOBILE)
+          ? requestDto.approval_mode
+          : undefined,
       tool_call: requestDto.tool_call,
       channel: requestDto.channel,
       images: requestDto.images,
@@ -1852,11 +1859,11 @@ export class StreamService implements OnModuleDestroy {
     session: StreamSession,
     subscriber: Subscriber<MessageEvent>,
   ) {
+    for (const data of session.events || []) subscriber.next({ data });
     if (session.finished) {
       subscriber.complete();
       return;
     }
-    for (const data of session.events || []) subscriber.next({ data });
     session.subscribers.add(subscriber);
     return () => {
       session.subscribers.delete(subscriber);

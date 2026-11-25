@@ -97,3 +97,129 @@ it('waits for parse post-processing and allows a successful retry to supersede i
     'failed',
   );
 });
+
+describe('conversation action terminal outcomes', () => {
+  function serviceWithAction(action: {
+    id: string;
+    userId: string;
+    actionType: string;
+    status: string;
+    resultAt?: Date | null;
+    emittedAt?: Date | null;
+  }) {
+    const actions = {
+      findOneBy: jest.fn(() =>
+        Promise.resolve({ ...action, startedAt: new Date(1) }),
+      ),
+      update: jest.fn(
+        (
+          criteria: { id?: string; userId?: string; status?: unknown },
+          patch: Record<string, unknown>,
+        ) => {
+          if (
+            criteria.id === action.id &&
+            criteria.userId === action.userId &&
+            (criteria.status === undefined ||
+              (typeof criteria.status === 'string' &&
+                action.status === criteria.status))
+          ) {
+            Object.assign(action, patch);
+          }
+          return Promise.resolve({});
+        },
+      ),
+      query: jest.fn(),
+    };
+    const service = new BehaviorService(
+      actions as unknown as Repository<BehaviorAction>,
+      {} as TraceService,
+      {} as ConfigService,
+      {} as Repository<Task>,
+    );
+    jest.spyOn(service, 'deliver').mockResolvedValue();
+    return { service, actions, action };
+  }
+
+  it('accepts an outcome only while the conversation action is pending', async () => {
+    const settled = serviceWithAction({
+      id: 'action',
+      userId: 'user',
+      actionType: 'ai_conversation',
+      status: 'failed',
+    });
+    await settled.service.result(
+      { action_id: 'action', user_id: 'user' } as any,
+      'success',
+    );
+    expect(settled.actions.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'pending' }),
+      expect.objectContaining({ status: 'success' }),
+    );
+    expect(settled.action.status).toBe('failed');
+
+    const success = serviceWithAction({
+      id: 'action',
+      userId: 'user',
+      actionType: 'ai_conversation',
+      status: 'success',
+    });
+    await success.service.result(
+      { action_id: 'action', user_id: 'user' } as any,
+      'cancelled',
+    );
+    expect(success.action.status).toBe('success');
+
+    const pending = serviceWithAction({
+      id: 'action',
+      userId: 'user',
+      actionType: 'ai_conversation',
+      status: 'pending',
+    });
+    await pending.service.result(
+      { action_id: 'action', user_id: 'user' } as any,
+      'success',
+    );
+    expect(pending.action.status).toBe('success');
+  });
+
+  it('does not let reconcileAnswers upgrade a settled conversation action', async () => {
+    const failed = serviceWithAction({
+      id: 'action',
+      userId: 'user',
+      actionType: 'ai_conversation',
+      status: 'failed',
+    });
+    failed.actions.query.mockResolvedValue([
+      {
+        id: 'action',
+        user_id: 'user',
+        status: 'complete',
+        completed_at: '2026-11-25T13:00:00.000Z',
+      },
+    ]);
+    await failed.service.reconcileAnswers();
+    expect(failed.action.status).toBe('failed');
+    expect(failed.actions.update).toHaveBeenCalledTimes(1);
+    expect(failed.actions.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'pending' }),
+      expect.objectContaining({ status: 'success' }),
+    );
+
+    const pending = serviceWithAction({
+      id: 'action',
+      userId: 'user',
+      actionType: 'ai_conversation',
+      status: 'pending',
+    });
+    pending.actions.query.mockResolvedValue([
+      {
+        id: 'action',
+        user_id: 'user',
+        status: 'complete',
+        completed_at: '2026-11-25T13:00:00.000Z',
+      },
+    ]);
+    await pending.service.reconcileAnswers();
+    expect(pending.action.status).toBe('success');
+  });
+});

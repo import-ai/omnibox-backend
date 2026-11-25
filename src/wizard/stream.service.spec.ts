@@ -4192,39 +4192,64 @@ describe('conversation submission admission', () => {
 });
 
 describe('paused resume behavior collection', () => {
-  const row = (role: OpenAIMessageRole, attrs: Record<string, unknown>) =>
-    ({ id: 'row', message: { role }, attrs }) as any;
-  it('collects each paused initiating action once and skips users and the current action', () => {
+  const row = (
+    id: string,
+    role: OpenAIMessageRole,
+    attrs: Record<string, unknown>,
+  ) => ({ id, message: { role }, attrs }) as any;
+  it('collects only the resumed run paused action and skips steered/settled rows', () => {
     const rows = [
-      row(OpenAIMessageRole.USER, {
-        behavior_action_id: 'user-action',
+      row('interrupt', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'run-action',
+        turn_run_id: 'run-2',
         answer_timing: { status: 'paused' },
       }),
-      row(OpenAIMessageRole.ASSISTANT, {
-        behavior_action_id: 'paused-action',
+      row('stale-pause', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'old-action',
+        turn_run_id: 'run-1',
         answer_timing: { status: 'paused' },
       }),
-      row(OpenAIMessageRole.TOOL, {
-        behavior_action_id: 'paused-action',
+      row('steered-pause', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'steered-action',
+        turn_run_id: 'run-2',
         answer_timing: { status: 'paused' },
       }),
-      row(OpenAIMessageRole.ASSISTANT, {
+      row('steered-user', OpenAIMessageRole.USER, {
+        behavior_action_id: 'steered-action',
+        client_request_id: 'steer-request',
+        turn_run_id: 'run-2',
+      }),
+      row('completed', OpenAIMessageRole.ASSISTANT, {
         behavior_action_id: 'completed-action',
+        turn_run_id: 'run-2',
         answer_timing: { status: 'complete' },
       }),
-      row(OpenAIMessageRole.ASSISTANT, {
+      row('current', OpenAIMessageRole.ASSISTANT, {
         behavior_action_id: 'current-action',
-        answer_timing: { status: 'paused' },
-      }),
-      row(OpenAIMessageRole.ASSISTANT, {
+        turn_run_id: 'run-2',
         answer_timing: { status: 'paused' },
       }),
     ];
     expect(
-      collectPausedResumeBehaviors(rows, 'user', 'current-action').map(
-        (behavior) => behavior.action_id,
-      ),
-    ).toEqual(['paused-action']);
+      collectPausedResumeBehaviors(
+        rows,
+        'user',
+        'interrupt',
+        'current-action',
+      ).map((behavior) => behavior.action_id),
+    ).toEqual(['run-action']);
+  });
+
+  it('returns nothing without a resumed interrupt row', () => {
+    const rows = [
+      row('paused', OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'action',
+        turn_run_id: 'run',
+        answer_timing: { status: 'paused' },
+      }),
+    ];
+    expect(collectPausedResumeBehaviors(rows, 'user')).toEqual([]);
+    expect(collectPausedResumeBehaviors(rows, 'user', 'missing')).toEqual([]);
   });
 });
 
@@ -4712,10 +4737,11 @@ describe('queue behavior attribution', () => {
       expect.objectContaining({ status: 'failed' }),
     );
   });
-  it('finalizes the initial turn assistant row when the first steer arrives', async () => {
+  it('finalizes the initial turn row at the run outcome after an eos-first steer', async () => {
     const {
       service,
       create,
+      update,
       setAnswerTiming,
       finalizeAnswerTiming,
       behaviorService,
@@ -4728,7 +4754,13 @@ describe('queue behavior attribution', () => {
       answerTiming: answerTiming(),
     };
     const handler = handlerOf(service);
-    // The initial turn's model call is armed and has produced no content.
+    // The armed initial turn's assistant row is closed by its eos BEFORE the
+    // steer user row arrives; the timer must remember that closed row.
+    update.mockResolvedValueOnce({
+      id: 'assistant-1',
+      message: { role: 'assistant', content: '' },
+      attrs: { behavior_action_id: runBehavior.action_id },
+    } as any);
     await handler(
       JSON.stringify({
         response_type: 'bos',
@@ -4736,6 +4768,7 @@ describe('queue behavior attribution', () => {
       }),
       context,
     );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
     await handler(
       JSON.stringify({
         response_type: 'bos',
@@ -4756,13 +4789,14 @@ describe('queue behavior attribution', () => {
       context,
     );
     await handler(JSON.stringify({ response_type: 'eos' }), context);
+    // Nothing finalized the initial row before the run outcome.
+    expect(finalizeAnswerTiming).not.toHaveBeenCalled();
     await handler(JSON.stringify({ response_type: 'done' }), context);
 
     expect(finalizeAnswerTiming).toHaveBeenCalledWith(
       'assistant-1',
       expect.objectContaining({ status: 'complete' }),
     );
-    // The steered turn keeps its own row and action.
     expect(
       create.mock.calls.map((call) => call[3].attrs.behavior_action_id),
     ).toEqual([
@@ -4778,8 +4812,78 @@ describe('queue behavior attribution', () => {
       steeredBehavior,
       'success',
     );
-    // The run-level action still completes on the final answer.
     expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
+  });
+  it('finalizes the initial turn row as failed when the run errors after a steer', async () => {
+    const { service, update, finalizeAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    update.mockResolvedValueOnce({
+      id: 'assistant-1',
+      message: { role: 'assistant', content: '' },
+      attrs: { behavior_action_id: runBehavior.action_id },
+    } as any);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'failed' }),
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'failed');
+  });
+  it('finalizes the initial turn row as stopped when the run stops', async () => {
+    const { service, finalizeAnswerTiming } = handlerService();
+    const context: Record<string, unknown> = {
+      behavior: runBehavior,
+      answerTiming: answerTiming(),
+      initialTurnRowId: 'assistant-1',
+    };
+    (service as any).messagesService.stopRunning = jest
+      .fn()
+      .mockResolvedValue(null);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const session = {
+      key: 'k',
+      namespaceId: 'n',
+      conversationId: 'c',
+      userId: 'u',
+      shareId: '',
+      subscribers: new Set(),
+      events: [],
+      controller: new AbortController(),
+      handlerContext: context,
+      finished: false,
+    };
+    await (service as any).stopSession(session);
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'stopped' }),
+    );
   });
   it('settles the initiating action when a decision resume completes', async () => {
     const { service, behaviorService } = handlerService();

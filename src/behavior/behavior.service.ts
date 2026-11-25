@@ -63,11 +63,25 @@ export class BehaviorService {
     status: 'success' | 'failed' | 'cancelled',
     at = new Date(),
   ) {
+    const row = await this.actions.findOneBy({
+      id: context.action_id,
+      userId: context.user_id,
+    });
+    if (!row) return;
+    // Conversation actions settle once. Their terminal answer timing can be
+    // visible to reconcileAnswers before the run ends and a later outcome must
+    // not flip a settled action, so only a pending action accepts an outcome.
+    const acceptedStatus =
+      row.actionType === 'ai_conversation'
+        ? 'pending'
+        : status === 'success'
+          ? Not('success')
+          : 'pending';
     await this.actions.update(
       {
         id: context.action_id,
         userId: context.user_id,
-        status: status === 'success' ? Not('success') : 'pending',
+        status: acceptedStatus,
       },
       { status, resultAt: at, emittedAt: null },
     );

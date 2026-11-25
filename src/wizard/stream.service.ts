@@ -151,15 +151,34 @@ function isAgentPreflight(error: unknown): error is Error {
 export function collectPausedResumeBehaviors(
   messages: Message[],
   userId: string,
+  parentMessageId?: string,
   excludeActionId?: string,
 ): BehaviorContext[] {
+  // Scope to the run the decision resumes: its interrupt row names the run.
+  // A paused row from an earlier, already-settled pause must not be settled
+  // again by a later decision.
+  const parent = parentMessageId
+    ? messages.find((message) => message.id === parentMessageId)
+    : undefined;
+  const runId = parent?.attrs?.turn_run_id;
+  if (!runId) return [];
+  // Steered actions have their own settlement path and must not be touched.
+  const steeredActions = new Set<string>();
+  for (const message of messages) {
+    if (message.message.role !== OpenAIMessageRole.USER) continue;
+    const id = message.attrs?.behavior_action_id;
+    if (typeof id === 'string' && id && message.attrs?.client_request_id)
+      steeredActions.add(id);
+  }
   const seen = new Set<string>();
   const behaviors: BehaviorContext[] = [];
   for (const message of messages) {
     if (message.message.role === OpenAIMessageRole.USER) continue;
     const id = message.attrs?.behavior_action_id;
     if (typeof id !== 'string' || !id || id === excludeActionId) continue;
+    if (message.attrs?.turn_run_id !== runId) continue;
     if (message.attrs?.answer_timing?.status !== 'paused') continue;
+    if (steeredActions.has(id)) continue;
     if (seen.has(id)) continue;
     seen.add(id);
     behaviors.push({
@@ -189,6 +208,9 @@ interface HandlerContext {
   >;
   /** Initiating behaviors of the interrupted runs this decision turn resumes. */
   resumeBehaviors?: BehaviorContext[];
+  /** The initial turn's last assistant row, finalized at the run outcome. */
+  initialTurnRowId?: string;
+  initialTurnCaptured?: boolean;
   answerTiming?: AnswerTimingRun;
   timingFinalized?: boolean;
   lastEos?: {
@@ -737,7 +759,7 @@ export class StreamService implements OnModuleDestroy {
               // assistant row keeps its own action/timing and the new steer
               // owns the next assistant turn.
               await this.closeOpenSteeredTurn(context, userId);
-              await this.finalizeOpenInitialTurn(context);
+              this.captureInitialTurnRow(context);
               // Keep one entry per steered send in arrival order. A batch of
               // direct steers can deliver several user frames before the
               // assistant rows; the first open turn consumes the first one.
@@ -1037,8 +1059,10 @@ export class StreamService implements OnModuleDestroy {
         // A clean run (including a decision resume) settles the initiating
         // actions of the interrupted runs it continued. Another pause leaves
         // them for the next decision.
-        if (!context.failed && !context.interrupted)
+        if (!context.failed && !context.interrupted) {
+          await this.finalizeInitialTurnRow(context, 'success');
           await this.completeResumeBehaviors(context, 'success');
+        }
         this.reportFirstContentTokenTrace(context, last, userId);
       } else if (chunk.response_type === 'metrics') {
         // Do nothing, frontend only
@@ -1061,6 +1085,7 @@ export class StreamService implements OnModuleDestroy {
         const failedAt = new Date();
         context.failed = true;
         await this.settleSteeredBehaviors(context, 'failed');
+        await this.finalizeInitialTurnRow(context, 'failed');
         await this.completeResumeBehaviors(context, 'failed');
         this.reportChatErrorTrace(chunk, {
           userId,
@@ -1193,22 +1218,53 @@ export class StreamService implements OnModuleDestroy {
   }
 
   /**
-   * The initial (non-steered) turn is superseded by the first steer while its
-   * assistant row is still open. Finalize that row's timing so it does not
-   * stay `running` forever.
+   * Remember the initial (non-steered) turn's last assistant row when the
+   * first steer supersedes it. Its timing is finalized only at the run's
+   * terminal outcome, so the run-level action is never completed early.
    */
-  private async finalizeOpenInitialTurn(context: HandlerContext) {
-    if (!context.messageId || !context.answerTiming) return;
+  private captureInitialTurnRow(context: HandlerContext) {
+    if (context.initialTurnCaptured) return;
+    context.initialTurnCaptured = true;
+    const openRow = context.messageId;
+    const lastEos = openRow ? undefined : context.lastEos;
+    const rowId = openRow ?? lastEos?.message.id;
+    const role = openRow
+      ? context.message?.role
+      : lastEos?.message.message.role;
+    // A tool row or a user row is not the initial answer; never attribute it.
+    if (!rowId || role !== OpenAIMessageRole.ASSISTANT) return;
+    // The closed row must belong to the run-level action, not a steer.
+    if (
+      lastEos &&
+      context.behavior &&
+      lastEos.message.attrs?.behavior_action_id !== context.behavior.action_id
+    )
+      return;
+    context.initialTurnRowId = rowId;
+  }
+
+  /** Finalize the captured initial-turn row with the run's terminal outcome. */
+  private async finalizeInitialTurnRow(
+    context: HandlerContext,
+    status: 'success' | 'failed' | 'cancelled',
+  ) {
+    const rowId = context.initialTurnRowId;
+    context.initialTurnRowId = undefined;
+    if (!rowId || !context.answerTiming) return;
+    const timing =
+      status === 'success'
+        ? finishAnswerTiming(
+            context.answerTiming,
+            'complete',
+            new Date(),
+            performance.now(),
+          )
+        : endAnswerTiming(
+            context.answerTiming.value,
+            status === 'cancelled' ? 'stopped' : 'failed',
+          );
     await this.messagesService
-      .finalizeAnswerTiming(
-        context.messageId,
-        finishAnswerTiming(
-          context.answerTiming,
-          'complete',
-          new Date(),
-          performance.now(),
-        ),
-      )
+      .finalizeAnswerTiming(rowId, timing)
       .catch(() => undefined);
   }
 
@@ -2281,6 +2337,7 @@ export class StreamService implements OnModuleDestroy {
         ? collectPausedResumeBehaviors(
             messages,
             userId,
+            requestDto.parent_message_id,
             behaviorContext.getStore()?.action_id,
           )
         : [];
@@ -2740,6 +2797,7 @@ export class StreamService implements OnModuleDestroy {
           ?.result(session.handlerContext.behavior, 'cancelled')
           .catch(() => undefined);
       await this.settleSteeredBehaviors(session.handlerContext, 'cancelled');
+      await this.finalizeInitialTurnRow(session.handlerContext, 'cancelled');
       await this.completeResumeBehaviors(session.handlerContext, 'cancelled');
       const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
       if (message?.attrs?.answer_timing) {

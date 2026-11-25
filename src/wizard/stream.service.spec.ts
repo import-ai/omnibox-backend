@@ -5516,6 +5516,7 @@ describe('save preemption stop helper', () => {
     });
     const answer = {
       id: 'answer-row',
+      status: MessageStatus.SUCCESS,
       message: { role: 'assistant', content: 'final answer' },
     };
     const session = {
@@ -5531,12 +5532,15 @@ describe('save preemption stop helper', () => {
     (service as any).streamSessions.set(key, session);
     const stopRunning = jest.fn();
     (service as any).messagesService = { stopRunning };
-    jest
+    const mark = jest
       .spyOn(service as any, 'markSessionCanceled')
       .mockResolvedValue(undefined);
     jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
-    jest.spyOn(service as any, 'sendSessionData').mockResolvedValue(undefined);
-    jest
+    const send = jest
+      .spyOn(service as any, 'sendSessionData')
+      .mockResolvedValue(undefined);
+    const finalize = jest.spyOn(service as any, 'finalizeInitialTurnRow');
+    const complete = jest
       .spyOn(service as any, 'completeSession')
       .mockImplementation(() => undefined);
     jest
@@ -5547,9 +5551,14 @@ describe('save preemption stop helper', () => {
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
     ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
-    // No stopped_runs stamp and no abort: the completed answer is delivered.
+    // No stopped_runs stamp and no abort: the completed answer is delivered,
+    // and none of the stop's side effects run.
     expect(stopRunning).not.toHaveBeenCalled();
     expect(onCancellationRequested).not.toHaveBeenCalled();
+    expect(mark).not.toHaveBeenCalled();
+    expect(finalize).not.toHaveBeenCalled();
+    expect(complete).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
     expect(session.controller.signal.aborted).toBe(false);
     expect((session.handlerContext as any).stopped).toBeUndefined();
   });
@@ -5558,6 +5567,7 @@ describe('save preemption stop helper', () => {
     const service = createService({});
     const answer = {
       id: 'answer-row',
+      status: MessageStatus.SUCCESS,
       message: { role: 'assistant', content: 'final answer' },
     };
     const session = {
@@ -5629,19 +5639,30 @@ describe('save preemption stop helper', () => {
   });
 
   it('re-checks pausing after the deployment hook before a remote stop', async () => {
+    const order: string[] = [];
     const findLatest = jest
       .fn()
-      .mockResolvedValueOnce({ id: 'answer', attrs: {} })
-      .mockResolvedValueOnce({
-        id: 'interrupt',
-        attrs: { tool_call: { interrupts: [{}] } },
+      .mockImplementationOnce(() => {
+        order.push('latest');
+        return Promise.resolve({ id: 'answer', attrs: {} });
+      })
+      .mockImplementationOnce(() => {
+        order.push('latest-after-hook');
+        return Promise.resolve({
+          id: 'interrupt',
+          attrs: { tool_call: { interrupts: [{}] } },
+        });
       });
+    const onCancellationRequested = jest.fn(() => {
+      order.push('hook');
+      return Promise.resolve();
+    });
     const stopRunning = jest.fn();
     const service = createService({
       agentStreamHooks: {
         onCallCompleted: jest.fn(),
         onStreamClosed: jest.fn(),
-        onCancellationRequested: jest.fn(),
+        onCancellationRequested,
       },
       messagesService: { findLatest, stopRunning },
     });
@@ -5653,7 +5674,7 @@ describe('save preemption stop helper', () => {
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
     ).resolves.toMatchObject({ attempted: false, pausing: true });
-    expect(findLatest).toHaveBeenCalledTimes(2);
+    expect(order).toEqual(['latest', 'hook', 'latest-after-hook']);
     expect(stopRunning).not.toHaveBeenCalled();
     expect(mark).not.toHaveBeenCalled();
   });
@@ -5719,6 +5740,205 @@ describe('save preemption stop helper', () => {
     await expect(
       service.stopUserAgentStreamAndWait('u', 'n', 'c', 100),
     ).resolves.toMatchObject({ attempted: false, pausing: true });
+  });
+
+  const completedRemoteAnswer = (overrides: Record<string, unknown> = {}) => ({
+    id: 'answer',
+    status: MessageStatus.SUCCESS,
+    message: { role: 'assistant', content: 'final answer' },
+    attrs: { turn_run_id: 'run-1', answer_timing: { status: 'running' } },
+    ...overrides,
+  });
+
+  const remoteClient = (overrides: Record<string, jest.Mock> = {}) => ({
+    get: jest.fn((redisKey: string) => {
+      if (redisKey === `wizard:steer-active:${key}`)
+        return Promise.resolve('run-1');
+      if (redisKey === `wizard:steer-route:${key}:run-1`)
+        return Promise.resolve('token-1');
+      return Promise.resolve(null);
+    }),
+    lRange: jest.fn().mockResolvedValue([]),
+    hGet: jest.fn().mockResolvedValue(null),
+    set: jest.fn(),
+    publish: jest.fn(),
+    ...overrides,
+  });
+
+  it('does not stop a completed remote run whose done is still pending', async () => {
+    const onCancellationRequested = jest.fn();
+    const findLatest = jest.fn().mockResolvedValue(completedRemoteAnswer());
+    const stopRunning = jest.fn();
+    const service = createService({
+      agentStreamHooks: {
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+        onCancellationRequested,
+      },
+      messagesService: { findLatest, stopRunning },
+    });
+    const client = remoteClient();
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    const mark = jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+    // The latest row is the active run's closed answer; the owning replica
+    // finishes it, so nothing is marked, stamped or published.
+    expect(onCancellationRequested).toHaveBeenCalledTimes(1);
+    expect(stopRunning).not.toHaveBeenCalled();
+    expect(mark).not.toHaveBeenCalled();
+    expect(client.set).not.toHaveBeenCalled();
+    expect(client.publish).not.toHaveBeenCalled();
+  });
+
+  it('does not stop when every visible steer item is already persisted', async () => {
+    const findLatest = jest.fn().mockResolvedValue(completedRemoteAnswer());
+    const stopRunning = jest.fn();
+    const service = createService({
+      messagesService: { findLatest, stopRunning },
+    });
+    const client = remoteClient({
+      lRange: jest
+        .fn()
+        .mockResolvedValue([JSON.stringify({ client_request_id: 'steer-1' })]),
+      hGet: jest.fn().mockResolvedValue('user-row-1'),
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+    expect(stopRunning).not.toHaveBeenCalled();
+    expect(client.publish).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'a tool-call answer',
+      { message: { role: 'assistant', content: 'x', tool_calls: [{}] } },
+    ],
+    ['a streaming row', { status: MessageStatus.STREAMING }],
+    [
+      'an answer whose done already ran',
+      {
+        attrs: {
+          turn_run_id: 'run-1',
+          answer_timing: { status: 'complete' },
+        },
+      },
+    ],
+  ])('stops a remote run whose latest row is %s', async (_label, overrides) => {
+    const findLatest = jest
+      .fn()
+      .mockResolvedValue(completedRemoteAnswer(overrides));
+    const stopRunning = jest.fn().mockResolvedValue(null);
+    const service = createService({
+      messagesService: { findLatest, stopRunning },
+    });
+    const client = remoteClient();
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toEqual({
+      attempted: true,
+      applied: false,
+      confirmed: true,
+    });
+    expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
+    expect(client.publish).toHaveBeenCalledWith(
+      `wizard:stream:${key}:control`,
+      'cancel',
+    );
+  });
+
+  it('stops a completed remote run while a steer item is not yet persisted', async () => {
+    const findLatest = jest.fn().mockResolvedValue(completedRemoteAnswer());
+    const stopRunning = jest.fn().mockResolvedValue(null);
+    const service = createService({
+      messagesService: { findLatest, stopRunning },
+    });
+    const client = remoteClient({
+      lRange: jest
+        .fn()
+        .mockResolvedValue([JSON.stringify({ client_request_id: 'steer-1' })]),
+      hGet: jest.fn().mockResolvedValue(null),
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+
+    await expect(
+      service.stopUserAgentStreamAndWait('u', 'n', 'c', 500),
+    ).resolves.toEqual({ attempted: true, applied: false, confirmed: true });
+    expect(stopRunning).toHaveBeenCalledWith('n', 'c', 'u');
+    expect(client.publish).toHaveBeenCalledWith(
+      `wizard:stream:${key}:control`,
+      'cancel',
+    );
+  });
+
+  it('waits for admission on a control-channel stop', async () => {
+    const service = createService({});
+    const session = {
+      ...sessionFor(key),
+      handlerContext: {},
+    };
+    (service as any).streamSessions.set(key, session);
+    let callback!: () => void;
+    const subscriber = {
+      subscribe: jest.fn((_channel: string, cb: () => void) => {
+        callback = cb;
+        return Promise.resolve(1);
+      }),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      set: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn(),
+    });
+    jest
+      .spyOn(service as any, 'getRedisSubscriber')
+      .mockResolvedValue(subscriber);
+    const wait = jest
+      .spyOn(service as any, 'waitForAdmission')
+      .mockImplementation((target: any) => {
+        target.handlerContext.queryId = 'query-1';
+        return Promise.resolve();
+      });
+    const stop = jest
+      .spyOn(service as any, 'stopSession')
+      .mockResolvedValue({ id: 'stopped-row' });
+
+    await (service as any).startRedisSession(session);
+    callback();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(wait).toHaveBeenCalledWith(session, 5_000);
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the scope unconfirmed when it stays open past the sub-bound', async () => {

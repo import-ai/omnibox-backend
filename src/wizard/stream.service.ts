@@ -2745,6 +2745,16 @@ export class StreamService implements OnModuleDestroy {
     }
   }
 
+  /** A row that closes a turn with a deliverable answer. */
+  private isClosedTerminalAnswerRow(row: Message): boolean {
+    return Boolean(
+      row.status === MessageStatus.SUCCESS &&
+      row.message.role === OpenAIMessageRole.ASSISTANT &&
+      row.message.content?.trim() &&
+      !row.message.tool_calls?.length,
+    );
+  }
+
   /**
    * Whether the run's requested turn already produced its final answer (eos
    * processed with content and no tool calls, no row open) and no queued steer
@@ -2757,12 +2767,52 @@ export class StreamService implements OnModuleDestroy {
     if (context.steeredQueue?.length || context.pendingSteered?.size)
       return false;
     const last = context.lastEos?.message;
-    return Boolean(
-      last &&
-      last.message.role === OpenAIMessageRole.ASSISTANT &&
-      last.message.content?.trim() &&
-      !last.message.tool_calls?.length,
-    );
+    return Boolean(last && this.isClosedTerminalAnswerRow(last));
+  }
+
+  /**
+   * Persisted-state equivalent of the completed-answer no-op for a stop that
+   * reaches a replica without the owning session. The latest row must be the
+   * active run's closed answer with its done still pending, and every visible
+   * steer item must already be persisted; the owning replica then only needs
+   * its done to finish.
+   */
+  private async isRemoteRunAlreadyComplete(
+    key: string,
+    latest: Message | null,
+  ): Promise<boolean> {
+    if (
+      !latest ||
+      !this.isClosedTerminalAnswerRow(latest) ||
+      latest.attrs?.answer_timing?.status !== 'running'
+    )
+      return false;
+    const runId = latest.attrs?.turn_run_id;
+    if (!runId) return false;
+    const client = await this.getRedisClient();
+    if (!client) return false;
+    // A newer run in admission owns the scope; do not mistake the previous
+    // turn's answer for this run's completion.
+    const activeRunId = await client.get(`wizard:steer-active:${key}`);
+    if (activeRunId && activeRunId !== runId) return false;
+    const token = await client.get(`wizard:steer-route:${key}:${runId}`);
+    if (!token) return true;
+    const inbox = 'wizard:steer:' + token;
+    for (const item of await client.lRange(inbox + ':messages', 0, -1)) {
+      let clientRequestId: unknown;
+      try {
+        clientRequestId = JSON.parse(item)?.client_request_id;
+      } catch {
+        return false;
+      }
+      if (
+        typeof clientRequestId !== 'string' ||
+        !clientRequestId ||
+        !(await client.hGet(inbox, 'saved:' + clientRequestId))
+      )
+        return false;
+    }
+    return true;
   }
 
   private async waitForAdmission(session: StreamSession, maxWaitMs: number) {
@@ -3663,6 +3713,10 @@ export class StreamService implements OnModuleDestroy {
     );
     if (current?.attrs?.tool_call?.interrupts?.length)
       return { applied: false, pausing: true };
+    // A completed answer waiting for its done must still be delivered; do
+    // not mark the run canceled or stamp it stopped.
+    if (await this.isRemoteRunAlreadyComplete(key, current))
+      return { applied: false, pausing: false };
     await this.markSessionCanceled(key);
     const stopped = await this.messagesService.stopRunning(
       namespaceId,

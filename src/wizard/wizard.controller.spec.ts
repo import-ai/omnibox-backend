@@ -176,3 +176,37 @@ describe('SharedWizardController SSE heartbeat', () => {
     );
   });
 });
+
+describe('WizardController conversation submission', () => {
+  it('passes the client platform to the queue so a mobile run is traced as mobile', () => {
+    const submitConversationMessage = jest.fn();
+    const controller = new WizardController(
+      {} as any,
+      { submitConversationMessage } as unknown as StreamService,
+      {} as any,
+    );
+    const body = {
+      query: 'hello',
+      conversation_id: 'conv',
+      client_request_id: '14edee90-e083-48c6-ab81-ceb94c77ae03',
+      tools: [],
+    };
+    void controller.submitMessage(
+      'user',
+      'ns',
+      'conv',
+      body as any,
+      'Asia/Shanghai',
+      'ios',
+    );
+    expect(submitConversationMessage).toHaveBeenCalledWith(
+      'ns',
+      'conv',
+      'user',
+      body,
+      'Asia/Shanghai',
+      false,
+      'ios',
+    );
+  });
+});

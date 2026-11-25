@@ -113,3 +113,19 @@ it('correlates manual URL collection without counting internal or automatic inge
   f.req.originalUrl = '/internal/api/v1/namespaces/ns/wizard/collect/url';
   expect(readBehaviorContext(f.req)).toBeUndefined();
 });
+
+it('classifies the conversation submission queue as an ai conversation', async () => {
+  const f = fixture();
+  f.req.originalUrl =
+    '/api/v1/namespaces/ns/wizard/conversations/conversation/messages';
+  f.req.body = { query: 'hello', client_request_id: 'request' };
+  const context = readBehaviorContext(f.req);
+  expect(context?.action_type).toBe('ai_conversation');
+  const handle = jest.fn(() => of({ disposition: 'queued' }));
+  await firstValueFrom(f.interceptor.intercept(f.execution, { handle }));
+  expect(f.behavior.begin).toHaveBeenCalledWith(
+    expect.objectContaining({ action_type: 'ai_conversation' }),
+  );
+  // The stream completion, not the queued HTTP response, finishes the action.
+  expect(f.behavior.result).not.toHaveBeenCalled();
+});

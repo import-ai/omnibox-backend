@@ -144,6 +144,13 @@ function isAgentPreflight(error: unknown): error is Error {
 
 interface HandlerContext {
   behavior?: BehaviorContext;
+  /** The steered send whose turn is currently streaming, if any. */
+  steeredBehavior?: BehaviorContext;
+  /** Steered behaviors seen in this run that are not completed yet. */
+  pendingSteered?: Map<
+    string,
+    { behavior: BehaviorContext; lastAssistantRowId?: string }
+  >;
   answerTiming?: AnswerTimingRun;
   timingFinalized?: boolean;
   lastEos?: {
@@ -642,6 +649,7 @@ export class StreamService implements OnModuleDestroy {
       }
       if (chunk.response_type === 'bos') {
         let fingerprint: string | undefined;
+        let rowSteeredBehavior: BehaviorContext | undefined;
         if (context.canSteer && !context.failed) {
           chunk.attrs = { ...chunk.attrs, can_steer: true };
           const composer = chunk.attrs.composer;
@@ -652,35 +660,45 @@ export class StreamService implements OnModuleDestroy {
             chunk.attrs.composer = display;
             if (typeof digest === 'string') {
               fingerprint = digest;
-            } else {
-              // Mixed-version streams may lack a fingerprint on the BOS frame.
-              const token =
-                stream && this.streamSessions.get(stream.streamId)?.steerToken;
-              if (token && this.redisClient) {
-                try {
-                  const signal = AbortSignal.timeout(1000);
-                  const timeout = new Promise<null>((resolve) =>
-                    signal.addEventListener('abort', () => resolve(null), {
-                      once: true,
-                    }),
-                  );
-                  const row = (await Promise.race([
-                    timeout,
-                    this.redisClient.eval(
-                      commandOptions({ signal }),
-                      READ_STEER_INPUT,
-                      {
-                        keys: ['wizard:steer:' + token],
-                        arguments: [requestId],
-                      },
-                    ),
-                  ])) as string | [string, string] | null;
-                  if (row)
-                    fingerprint = decodeSteerItem(row).submission_fingerprint;
-                } catch {
-                  // Let the accepted message stream even if this compatibility lookup fails.
+            }
+            // Attribution is independent of the fingerprint lookup: every
+            // steered send carries its own behavior action in the inbox.
+            const token =
+              stream && this.streamSessions.get(stream.streamId)?.steerToken;
+            if (token && this.redisClient) {
+              try {
+                const signal = AbortSignal.timeout(1000);
+                const timeout = new Promise<null>((resolve) =>
+                  signal.addEventListener('abort', () => resolve(null), {
+                    once: true,
+                  }),
+                );
+                const row = (await Promise.race([
+                  timeout,
+                  this.redisClient.eval(
+                    commandOptions({ signal }),
+                    READ_STEER_INPUT,
+                    {
+                      keys: ['wizard:steer:' + token],
+                      arguments: [requestId],
+                    },
+                  ),
+                ])) as string | [string, string] | null;
+                if (row) {
+                  const item = decodeSteerItem(row);
+                  if (!fingerprint) fingerprint = item.submission_fingerprint;
+                  if (item.behavior) rowSteeredBehavior = item.behavior;
                 }
+              } catch {
+                // Let the accepted message stream even if this lookup fails.
               }
+            }
+            if (rowSteeredBehavior) {
+              context.steeredBehavior = rowSteeredBehavior;
+              if (!context.pendingSteered) context.pendingSteered = new Map();
+              context.pendingSteered.set(rowSteeredBehavior.action_id, {
+                behavior: rowSteeredBehavior,
+              });
             }
           }
         }
@@ -695,6 +713,13 @@ export class StreamService implements OnModuleDestroy {
           context.toolCalls = undefined;
           context.answeredToolCallIds = new Set();
         }
+        const rowBehavior =
+          chunk.role === OpenAIMessageRole.USER
+            ? rowSteeredBehavior
+            : chunk.role === OpenAIMessageRole.ASSISTANT &&
+                context.steeredBehavior
+              ? context.steeredBehavior
+              : behavior;
         const message: Message = await this.messagesService.create(
           namespaceId,
           conversationId,
@@ -707,7 +732,9 @@ export class StreamService implements OnModuleDestroy {
             attrs: {
               ...chunk.attrs,
               ...(fingerprint ? { submission_fingerprint: fingerprint } : {}),
-              ...(behavior ? { behavior_action_id: behavior.action_id } : {}),
+              ...(rowBehavior
+                ? { behavior_action_id: rowBehavior.action_id }
+                : {}),
               ...(context.queryId
                 ? { turn_id: context.queryId, turn_run_id: context.runId }
                 : {}),
@@ -715,6 +742,15 @@ export class StreamService implements OnModuleDestroy {
           },
           false,
         );
+        if (
+          chunk.role === OpenAIMessageRole.ASSISTANT &&
+          context.steeredBehavior
+        ) {
+          const pending = context.pendingSteered?.get(
+            context.steeredBehavior.action_id,
+          );
+          if (pending) pending.lastAssistantRowId = message.id;
+        }
         if (context.runId)
           chunk.attrs = {
             ...chunk.attrs,
@@ -808,6 +844,51 @@ export class StreamService implements OnModuleDestroy {
           firstContentAt: context.roundFirstContentAt,
         };
         this.reportCallCompleted(message, stream);
+        // A steered turn ends with its closing/final assistant row. Complete
+        // the steered action there instead of waiting for the run's last row,
+        // so a later run outcome cannot report it twice.
+        if (
+          context.steeredBehavior &&
+          message.message.role === OpenAIMessageRole.ASSISTANT &&
+          message.message.content?.trim() &&
+          !message.message.tool_calls?.length
+        ) {
+          const steered = context.steeredBehavior;
+          context.steeredBehavior = undefined;
+          context.pendingSteered?.delete(steered.action_id);
+          if (context.answerTiming) {
+            const saved = await this.messagesService
+              .setAnswerTiming(
+                message.id,
+                finishAnswerTiming(
+                  context.answerTiming,
+                  'complete',
+                  endedAt,
+                  monotonic,
+                ),
+              )
+              .catch(() => undefined);
+            if (saved?.attrs?.answer_timing) {
+              await send(
+                JSON.stringify(
+                  this.forVisitor(
+                    {
+                      response_type: 'delta',
+                      id: saved.id,
+                      message: {},
+                      attrs: { answer_timing: saved.attrs.answer_timing },
+                    },
+                    chatOnly,
+                  ),
+                ),
+              );
+            }
+          }
+          if (steered.user_id === userId)
+            await this.behaviorService
+              ?.result(steered, 'success')
+              .catch(() => undefined);
+        }
         context.message = message.message;
         context.parentId = message.id;
         context.messageId = undefined;
@@ -889,6 +970,10 @@ export class StreamService implements OnModuleDestroy {
             ?.result(behavior, 'success')
             .catch(() => undefined);
         }
+        await this.settleSteeredBehaviors(
+          context,
+          context.failed || context.interrupted ? 'failed' : 'success',
+        );
         this.reportFirstContentTokenTrace(context, last, userId);
       } else if (chunk.response_type === 'metrics') {
         // Do nothing, frontend only
@@ -910,6 +995,7 @@ export class StreamService implements OnModuleDestroy {
             .catch(() => undefined);
         const failedAt = new Date();
         context.failed = true;
+        await this.settleSteeredBehaviors(context, 'failed');
         this.reportChatErrorTrace(chunk, {
           userId,
           namespaceId,
@@ -1038,6 +1124,43 @@ export class StreamService implements OnModuleDestroy {
       }
     };
     return handle;
+  }
+
+  /**
+   * Complete every steered behavior that did not reach its closing assistant
+   * row. The row's answer timing is made terminal in the same step so the
+   * answer reconciler can match the action.
+   */
+  private async settleSteeredBehaviors(
+    context: HandlerContext,
+    status: 'success' | 'failed' | 'cancelled',
+  ) {
+    const pending = context.pendingSteered;
+    if (!pending?.size) return;
+    context.pendingSteered = undefined;
+    context.steeredBehavior = undefined;
+    for (const { behavior, lastAssistantRowId } of pending.values()) {
+      if (lastAssistantRowId && context.answerTiming) {
+        const timing =
+          status === 'success'
+            ? finishAnswerTiming(
+                context.answerTiming,
+                'complete',
+                new Date(),
+                performance.now(),
+              )
+            : endAnswerTiming(
+                context.answerTiming.value,
+                status === 'cancelled' ? 'stopped' : 'failed',
+              );
+        await this.messagesService
+          .setAnswerTiming(lastAssistantRowId, timing)
+          .catch(() => undefined);
+      }
+      await this.behaviorService
+        ?.result(behavior, status)
+        .catch(() => undefined);
+    }
   }
 
   findOneOrFail(messages: Message[], messageId: string): Message {
@@ -2465,6 +2588,7 @@ export class StreamService implements OnModuleDestroy {
         await this.behaviorService
           ?.result(session.handlerContext.behavior, 'cancelled')
           .catch(() => undefined);
+      await this.settleSteeredBehaviors(session.handlerContext, 'cancelled');
       const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
       if (message?.attrs?.answer_timing) {
         await this.sendSessionData(
@@ -2659,6 +2783,7 @@ export class StreamService implements OnModuleDestroy {
     body: AgentRequestDto & { expected_run_id?: string },
     timeZone?: string,
     requireQueue = false,
+    clientPlatform?: string,
   ) {
     await this.conversationsService.findOneForUserInNamespace(
       conversationId,
@@ -2674,12 +2799,19 @@ export class StreamService implements OnModuleDestroy {
       this.steerResources!,
     );
     const scope = getStreamKey(namespaceId, conversationId, userId);
+    const behavior = behaviorContext.getStore();
+    const platform =
+      clientPlatform && ['web', 'ios', 'android'].includes(clientPlatform)
+        ? clientPlatform
+        : undefined;
     const job: ConversationSubmission = {
       checkpointDelivery: true,
       namespaceId,
       conversationId,
       userId,
       timeZone,
+      ...(behavior ? { behavior } : {}),
+      ...(platform ? { platform } : {}),
       body: {
         ...content,
         tools: content.tools,
@@ -2764,8 +2896,13 @@ export class StreamService implements OnModuleDestroy {
     this.processingSubmissions.add(key);
     try {
       await queue.process(key, async (job) => {
+        const deliver = () => this.deliverConversationMessage(job);
         try {
-          return await this.deliverConversationMessage(job);
+          // The deferred delivery runs outside the POST's request chain; the
+          // job's behavior context keeps the action and the stream correlated.
+          return job.behavior
+            ? await behaviorContext.run(job.behavior, deliver)
+            : await deliver();
         } catch (error) {
           if (
             error instanceof AppException &&
@@ -2781,6 +2918,10 @@ export class StreamService implements OnModuleDestroy {
             return;
           if (!(error instanceof HttpException) || error.getStatus() >= 500)
             throw error;
+          if (job.behavior)
+            await this.behaviorService
+              ?.result(job.behavior, 'failed')
+              .catch(() => undefined);
           return {
             disposition: 'failed',
             client_request_id: job.body.client_request_id!,
@@ -2953,6 +3094,7 @@ export class StreamService implements OnModuleDestroy {
           target,
           body,
           fingerprint,
+          job.behavior,
         );
         return { ...receipt, client_request_id: runId, disposition: 'steered' };
       } catch (error) {
@@ -2991,7 +3133,7 @@ export class StreamService implements OnModuleDestroy {
       'ask',
       timeZone,
       body.parent_message_id ? 'explicit' : 'latest',
-      { platform: 'web' },
+      { platform: job.platform ?? 'web' },
       Date.now(),
       fingerprint,
     );
@@ -3033,6 +3175,7 @@ export class StreamService implements OnModuleDestroy {
     runId: string,
     body: AgentRequestDto,
     fingerprint?: string,
+    behavior?: BehaviorContext,
   ) {
     await this.conversationsService.findOneForUserInNamespace(
       conversationId,
@@ -3061,11 +3204,11 @@ export class StreamService implements OnModuleDestroy {
       keys: [inbox, inbox + ':messages'],
       arguments: [
         message.client_request_id!,
-        JSON.stringify(
-          fingerprint
-            ? { ...message, submission_fingerprint: fingerprint }
-            : message,
-        ),
+        JSON.stringify({
+          ...message,
+          ...(fingerprint ? { submission_fingerprint: fingerprint } : {}),
+          ...(behavior ? { behavior } : {}),
+        }),
         String(STREAM_TTL_SECONDS),
       ],
     });

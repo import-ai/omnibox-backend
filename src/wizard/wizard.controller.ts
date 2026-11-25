@@ -109,6 +109,7 @@ export class WizardController {
     @Param('conversationId') conversationId: string,
     @Body() body: AgentRequestDto & { expected_run_id?: string },
     @Headers('x-timezone') timeZone?: string,
+    @Headers('x-client-platform') clientPlatform?: string,
   ) {
     return this.streamService.submitConversationMessage(
       namespaceId,
@@ -116,6 +117,8 @@ export class WizardController {
       userId,
       body,
       timeZone,
+      false,
+      clientPlatform,
     );
   }
 

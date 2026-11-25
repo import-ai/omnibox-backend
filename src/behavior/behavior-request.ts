@@ -38,7 +38,13 @@ export function behaviorRequestKind(
     ['name', 'content'].some((key) => key in data)
   )
     return 'resource_edit';
-  if (verb === 'POST' && /\/wizard\/(ask|chat)$/.test(path))
+  if (
+    verb === 'POST' &&
+    (/\/wizard\/(ask|chat)$/.test(path) ||
+      /^\/namespaces\/[^/]+\/wizard\/conversations\/[^/]+\/messages$/.test(
+        path,
+      ))
+  )
     return 'ai_conversation';
   if (
     verb === 'POST' &&

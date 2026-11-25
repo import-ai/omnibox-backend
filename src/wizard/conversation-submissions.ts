@@ -2,6 +2,7 @@ import { ConflictException } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import type { createClient } from 'redis';
 
+import type { BehaviorContext } from '../behavior/behavior-context';
 import type { AgentRequestDto } from './dto/agent-request.dto';
 
 type Redis = ReturnType<typeof createClient>;
@@ -12,6 +13,8 @@ export interface ConversationSubmission {
   body: AgentRequestDto & { expected_run_id?: string };
   timeZone?: string;
   checkpointDelivery?: boolean;
+  behavior?: BehaviorContext;
+  platform?: string;
 }
 
 export interface SubmissionReceipt {

@@ -1,5 +1,6 @@
-import { HttpStatus, MessageEvent } from '@nestjs/common';
+import { HttpException, HttpStatus, MessageEvent } from '@nestjs/common';
 import { AgentStream } from 'omniboxd/agent-stream-hooks/agent-stream-hooks.interface';
+import { behaviorContext } from 'omniboxd/behavior/behavior-context';
 import { AppException } from 'omniboxd/common/exceptions/app.exception';
 import {
   MessageStatus,
@@ -28,6 +29,7 @@ function createService(mocks: {
   sharedResourcesService?: Record<string, jest.Mock>;
   resourcesService?: Record<string, jest.Mock>;
   traceService?: Record<string, jest.Mock>;
+  behaviorService?: Record<string, jest.Mock>;
 }) {
   return new StreamService(
     (mocks.configService ?? { get: jest.fn() }) as any,
@@ -50,6 +52,7 @@ function createService(mocks: {
       onStreamClosed: jest.fn().mockResolvedValue(undefined),
     } as any,
     mocks.traceService as any,
+    mocks.behaviorService as any,
   );
 }
 
@@ -3967,7 +3970,8 @@ describe('conversation submission admission', () => {
         }),
         { canSteer: true, queryId: 'initial-message', runId: 'active-run' },
       );
-      expect(evalCommand).toHaveBeenCalledTimes(digest ? 0 : 1);
+      // The inbox is read for every steered row to attribute its behavior.
+      expect(evalCommand).toHaveBeenCalledTimes(1);
       expect(create.mock.calls[0][3].attrs).toMatchObject({
         client_request_id: requestId,
         composer: { client_request_id: requestId },
@@ -4007,7 +4011,8 @@ describe('conversation submission admission', () => {
       );
     const steer = jest.spyOn(service, 'submitSteer');
     return {
-      deliver: () => (service as any).deliverConversationMessage(job),
+      deliver: (input: typeof job = job) =>
+        (service as any).deliverConversationMessage(input),
       start,
       steer,
     };
@@ -4126,6 +4131,419 @@ describe('conversation submission admission', () => {
     steer.mockRejectedValue(new Error('network'));
     await expect(deliver()).rejects.toThrow('network');
     expect(start).not.toHaveBeenCalled();
+  });
+});
+
+describe('queue behavior attribution', () => {
+  const runBehavior = {
+    action_id: '11111111-1111-4111-8111-111111111111',
+    action_type: 'ai_conversation',
+    action_started_at: new Date().toISOString(),
+    origin_platform: 'ios',
+    user_id: 'u',
+    task_ids: [],
+  };
+  const steeredBehavior = {
+    action_id: '22222222-2222-4222-8222-222222222222',
+    action_type: 'ai_conversation',
+    action_started_at: new Date().toISOString(),
+    origin_platform: 'ios',
+    user_id: 'u',
+    task_ids: [],
+  };
+  const secondSteeredBehavior = {
+    ...steeredBehavior,
+    action_id: '33333333-3333-4333-8333-333333333333',
+  };
+  const requestId = '14edee90-e083-48c6-ab81-ceb94c77ae03';
+  const secondRequestId = '24edee90-e083-48c6-ab81-ceb94c77ae04';
+  const job = {
+    userId: 'u',
+    namespaceId: 'n',
+    conversationId: 'c',
+    behavior: runBehavior,
+    platform: 'ios',
+    body: {
+      query: 'Continue',
+      tools: [],
+      client_request_id: requestId,
+    },
+  };
+  function answerTiming() {
+    return {
+      value: {
+        version: 1 as const,
+        answer_id: 'answer',
+        run_id: 'run',
+        status: 'running' as const,
+        started_at: new Date().toISOString(),
+      },
+      previousDurationMs: 0,
+      startedAtMonotonic: performance.now(),
+    };
+  }
+  function handlerService() {
+    let created = 0;
+    const create = jest.fn(
+      (
+        _namespaceId: string,
+        _conversationId: string,
+        _userId: string,
+        input: any,
+      ) =>
+        Promise.resolve({
+          id: `${input.message.role}-${++created}`,
+          parentId: input.parentId,
+          createdAt: new Date(),
+          message: { role: input.message.role },
+        }),
+    );
+    const update = jest.fn((id: string): any =>
+      Promise.resolve({
+        id,
+        message: { role: 'assistant', content: 'answer' },
+        attrs: {},
+      }),
+    );
+    const updateDelta = jest.fn((id: string) =>
+      Promise.resolve({
+        id,
+        message: { role: 'assistant' },
+        attrs: {},
+      }),
+    );
+    const setAnswerTiming = jest.fn((id: string, timing: unknown) =>
+      Promise.resolve({
+        id,
+        message: { role: 'assistant' },
+        attrs: { answer_timing: timing },
+      }),
+    );
+    const behaviorService = {
+      result: jest.fn(() => Promise.resolve(undefined)),
+    };
+    const service = createService({
+      messagesService: {
+        create,
+        update,
+        updateDelta,
+        setAnswerTiming,
+        findOne: jest.fn().mockResolvedValue({}),
+        indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+      },
+      behaviorService,
+    });
+    (service as any).streamSessions.set('active-stream', {
+      steerToken: 'active-token',
+    });
+    (service as any).redisClient = {
+      eval: jest.fn((_options, _script, params) => {
+        const id = params.arguments[0];
+        return JSON.stringify({
+          submission_fingerprint: 'fingerprint',
+          behavior:
+            id === secondRequestId ? secondSteeredBehavior : steeredBehavior,
+        });
+      }),
+      hSet: jest.fn(),
+    };
+    return {
+      service,
+      create,
+      update,
+      updateDelta,
+      setAnswerTiming,
+      behaviorService,
+    };
+  }
+  function handlerOf(service: StreamService) {
+    return behaviorContext.run(runBehavior, () =>
+      service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+  }
+  async function steer(
+    handler: (data: string, context: any) => Promise<void>,
+    context: Record<string, unknown>,
+    id: string,
+    answer = 'answer',
+  ) {
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: id } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: { content: answer },
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+  }
+  it('re-enters the queued behavior context for deferred delivery', async () => {
+    const service = createService({});
+    const seen: unknown[] = [];
+    jest
+      .spyOn(service as any, 'deliverConversationMessage')
+      .mockImplementation(() => {
+        seen.push(behaviorContext.getStore());
+        return Promise.resolve({
+          disposition: 'started',
+          client_request_id: requestId,
+        });
+      });
+    const queue = {
+      process: jest.fn((_key: string, deliver: (input: unknown) => unknown) =>
+        deliver(job),
+      ),
+    };
+    await (service as any).processSubmission(queue, 'scope');
+    expect(seen).toEqual([runBehavior]);
+    await (service as any).processSubmission(
+      {
+        process: jest.fn((_key: string, deliver) =>
+          deliver({ ...job, behavior: undefined }),
+        ),
+      },
+      'scope',
+    );
+    expect(seen).toEqual([runBehavior, undefined]);
+  });
+  it('stamps the queue-started assistant row and completes the run behavior', async () => {
+    const { service, create, behaviorService } = handlerService();
+    const context: Record<string, unknown> = {
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'delta',
+        message: { content: 'answer' },
+      }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+    expect(create.mock.calls[0][3].attrs.behavior_action_id).toBe(
+      runBehavior.action_id,
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
+  });
+  it('attributes a steered deferred delivery to the steered action', async () => {
+    const { service, create, setAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    await steer(handler, context, requestId);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+    const rows = create.mock.calls.map((call) => call[3].attrs);
+    expect(rows[0].behavior_action_id).toBe(steeredBehavior.action_id);
+    expect(rows[1].behavior_action_id).toBe(steeredBehavior.action_id);
+    expect(rows[0].client_request_id).toBe(requestId);
+    expect(setAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
+  });
+  it('completes both steered actions in a two-steer run', async () => {
+    const { service, create, setAnswerTiming, behaviorService } =
+      handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    await steer(handler, context, requestId);
+    await steer(handler, context, secondRequestId);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+    const rows = create.mock.calls.map((call) => call[3].attrs);
+    expect(rows.map((attrs) => attrs.behavior_action_id)).toEqual([
+      steeredBehavior.action_id,
+      steeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+    ]);
+    expect(
+      setAnswerTiming.mock.calls.slice(0, 2).map((call) => call[0]),
+    ).toEqual(['assistant-2', 'assistant-4']);
+    expect(
+      setAnswerTiming.mock.calls
+        .slice(0, 2)
+        .map((call) => (call[1] as { status: string }).status),
+    ).toEqual(['complete', 'complete']);
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      secondSteeredBehavior,
+      'success',
+    );
+  });
+  it('fails a tool-call steered turn when the run errors', async () => {
+    const { service, update, setAnswerTiming, behaviorService } =
+      handlerService();
+    update.mockResolvedValueOnce({
+      id: 'assistant-2',
+      message: {
+        role: 'assistant',
+        content: 'partial',
+        tool_calls: [{ id: 'tool' }],
+      },
+      attrs: {},
+    } as any);
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    await steer(handler, context, requestId);
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'failed',
+    );
+    expect(behaviorService.result).not.toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(setAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'failed' }),
+    );
+  });
+  it('cancels a steered behavior when the run stops', async () => {
+    const { service, setAnswerTiming, behaviorService } = handlerService();
+    const context: Record<string, unknown> = {
+      behavior: runBehavior,
+      answerTiming: answerTiming(),
+      pendingSteered: new Map([
+        [
+          steeredBehavior.action_id,
+          { behavior: steeredBehavior, lastAssistantRowId: 'assistant-9' },
+        ],
+      ]),
+    };
+    (service as any).messagesService.stopRunning = jest
+      .fn()
+      .mockResolvedValue(null);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const session = {
+      key: 'k',
+      namespaceId: 'n',
+      conversationId: 'c',
+      userId: 'u',
+      shareId: '',
+      subscribers: new Set(),
+      events: [],
+      controller: new AbortController(),
+      handlerContext: context,
+      finished: false,
+    };
+    await (service as any).stopSession(session);
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'cancelled',
+    );
+    expect(setAnswerTiming).toHaveBeenCalledWith(
+      'assistant-9',
+      expect.objectContaining({ status: 'stopped' }),
+    );
+  });
+  it('completes the queued behavior when delivery cannot start a turn', async () => {
+    const behaviorService = {
+      result: jest.fn(() => Promise.resolve(undefined)),
+    };
+    const service = createService({ behaviorService });
+    jest
+      .spyOn(service as any, 'deliverConversationMessage')
+      .mockRejectedValue(new HttpException('bad request', 400));
+    const queue = {
+      process: jest.fn((_key: string, deliver: (input: unknown) => unknown) =>
+        deliver(job),
+      ),
+    };
+    await (service as any).processSubmission(queue, 'scope');
+    await expect(queue.process.mock.results[0].value).resolves.toMatchObject({
+      disposition: 'failed',
+      client_request_id: requestId,
+    });
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'failed');
+  });
+  it.each([
+    ['ios', 'ios'],
+    ['android', 'android'],
+    [undefined, 'web'],
+  ])('traces a queue-started run as %s', async (platform, expected) => {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: { findSubmitted: jest.fn() },
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      get: jest.fn().mockResolvedValue(undefined),
+      exists: jest.fn().mockResolvedValue(0),
+      eval: jest.fn().mockResolvedValue(0),
+    });
+    const start = jest
+      .spyOn(service as any, 'openUserAgentStream')
+      .mockResolvedValue(
+        of({
+          data: JSON.stringify({
+            response_type: 'bos',
+            role: OpenAIMessageRole.USER,
+            id: 'persisted',
+            attrs: { client_request_id: requestId },
+          }),
+        }),
+      );
+    await (service as any).deliverConversationMessage({
+      ...job,
+      platform,
+    });
+    expect(start.mock.calls[0][7]).toEqual({ platform: expected });
   });
 });
 

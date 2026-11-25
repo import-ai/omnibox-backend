@@ -142,6 +142,38 @@ function isAgentPreflight(error: unknown): error is Error {
   return error instanceof Error && agentPreflightErrors.has(error);
 }
 
+/**
+ * Actions of interrupted runs that a decision turn resumes. The interrupted
+ * run's last row was finalized as `paused`, so its behavior id only appears
+ * on that row; completing those actions at the resumed run's outcome keeps a
+ * send paused for approval from staying pending forever.
+ */
+export function collectPausedResumeBehaviors(
+  messages: Message[],
+  userId: string,
+  excludeActionId?: string,
+): BehaviorContext[] {
+  const seen = new Set<string>();
+  const behaviors: BehaviorContext[] = [];
+  for (const message of messages) {
+    if (message.message.role === OpenAIMessageRole.USER) continue;
+    const id = message.attrs?.behavior_action_id;
+    if (typeof id !== 'string' || !id || id === excludeActionId) continue;
+    if (message.attrs?.answer_timing?.status !== 'paused') continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    behaviors.push({
+      action_id: id,
+      action_type: 'ai_conversation',
+      action_started_at: '',
+      origin_platform: '',
+      user_id: userId,
+      task_ids: [],
+    });
+  }
+  return behaviors;
+}
+
 interface HandlerContext {
   behavior?: BehaviorContext;
   /** Steered sends of this run that still need an assistant turn. */
@@ -155,6 +187,8 @@ interface HandlerContext {
     string,
     { behavior: BehaviorContext; lastAssistantRowId?: string }
   >;
+  /** Initiating behaviors of the interrupted runs this decision turn resumes. */
+  resumeBehaviors?: BehaviorContext[];
   answerTiming?: AnswerTimingRun;
   timingFinalized?: boolean;
   lastEos?: {
@@ -703,6 +737,7 @@ export class StreamService implements OnModuleDestroy {
               // assistant row keeps its own action/timing and the new steer
               // owns the next assistant turn.
               await this.closeOpenSteeredTurn(context, userId);
+              await this.finalizeOpenInitialTurn(context);
               // Keep one entry per steered send in arrival order. A batch of
               // direct steers can deliver several user frames before the
               // assistant rows; the first open turn consumes the first one.
@@ -999,6 +1034,11 @@ export class StreamService implements OnModuleDestroy {
           context,
           context.failed || context.interrupted ? 'failed' : 'success',
         );
+        // A clean run (including a decision resume) settles the initiating
+        // actions of the interrupted runs it continued. Another pause leaves
+        // them for the next decision.
+        if (!context.failed && !context.interrupted)
+          await this.completeResumeBehaviors(context, 'success');
         this.reportFirstContentTokenTrace(context, last, userId);
       } else if (chunk.response_type === 'metrics') {
         // Do nothing, frontend only
@@ -1021,6 +1061,7 @@ export class StreamService implements OnModuleDestroy {
         const failedAt = new Date();
         context.failed = true;
         await this.settleSteeredBehaviors(context, 'failed');
+        await this.completeResumeBehaviors(context, 'failed');
         this.reportChatErrorTrace(chunk, {
           userId,
           namespaceId,
@@ -1149,6 +1190,44 @@ export class StreamService implements OnModuleDestroy {
       }
     };
     return handle;
+  }
+
+  /**
+   * The initial (non-steered) turn is superseded by the first steer while its
+   * assistant row is still open. Finalize that row's timing so it does not
+   * stay `running` forever.
+   */
+  private async finalizeOpenInitialTurn(context: HandlerContext) {
+    if (!context.messageId || !context.answerTiming) return;
+    await this.messagesService
+      .finalizeAnswerTiming(
+        context.messageId,
+        finishAnswerTiming(
+          context.answerTiming,
+          'complete',
+          new Date(),
+          performance.now(),
+        ),
+      )
+      .catch(() => undefined);
+  }
+
+  /**
+   * Settle the initiating actions of the interrupted runs this decision turn
+   * resumes. Runs that pause again leave them for the next decision.
+   */
+  private async completeResumeBehaviors(
+    context: HandlerContext,
+    status: 'success' | 'failed' | 'cancelled',
+  ) {
+    const behaviors = context.resumeBehaviors;
+    if (!behaviors?.length) return;
+    context.resumeBehaviors = undefined;
+    for (const behavior of behaviors) {
+      await this.behaviorService
+        ?.result(behavior, status)
+        .catch(() => undefined);
+    }
   }
 
   /**
@@ -2198,6 +2277,13 @@ export class StreamService implements OnModuleDestroy {
           }
         }
       }
+      const resumeBehaviors = requestDto.tool_call?.decisions?.length
+        ? collectPausedResumeBehaviors(
+            messages,
+            userId,
+            behaviorContext.getStore()?.action_id,
+          )
+        : [];
       session.handlerContext = {
         parentId: query.id,
         queryId: query.id,
@@ -2209,6 +2295,7 @@ export class StreamService implements OnModuleDestroy {
         shareId: session.shareId,
         queryReceivedAt,
         mode,
+        ...(resumeBehaviors.length ? { resumeBehaviors } : {}),
       };
       wizardRequest.query_persisted = true;
       wizardRequest.messages = messages.map((message) => {
@@ -2653,6 +2740,7 @@ export class StreamService implements OnModuleDestroy {
           ?.result(session.handlerContext.behavior, 'cancelled')
           .catch(() => undefined);
       await this.settleSteeredBehaviors(session.handlerContext, 'cancelled');
+      await this.completeResumeBehaviors(session.handlerContext, 'cancelled');
       const stoppedMessageId = session.handlerContext.messageId ?? message?.id;
       if (message?.attrs?.answer_timing) {
         await this.sendSessionData(

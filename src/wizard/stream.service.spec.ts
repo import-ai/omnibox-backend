@@ -17,7 +17,10 @@ import { AgentRequestChannel } from 'omniboxd/wizard/dto/agent-request.dto';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
 import { IS_SAVE_PENDING, saveGateKey } from 'omniboxd/wizard/save-gate';
-import { StreamService } from 'omniboxd/wizard/stream.service';
+import {
+  collectPausedResumeBehaviors,
+  StreamService,
+} from 'omniboxd/wizard/stream.service';
 import { WizardController } from 'omniboxd/wizard/wizard.controller';
 import { Observable, of } from 'rxjs';
 
@@ -4188,6 +4191,43 @@ describe('conversation submission admission', () => {
   });
 });
 
+describe('paused resume behavior collection', () => {
+  const row = (role: OpenAIMessageRole, attrs: Record<string, unknown>) =>
+    ({ id: 'row', message: { role }, attrs }) as any;
+  it('collects each paused initiating action once and skips users and the current action', () => {
+    const rows = [
+      row(OpenAIMessageRole.USER, {
+        behavior_action_id: 'user-action',
+        answer_timing: { status: 'paused' },
+      }),
+      row(OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'paused-action',
+        answer_timing: { status: 'paused' },
+      }),
+      row(OpenAIMessageRole.TOOL, {
+        behavior_action_id: 'paused-action',
+        answer_timing: { status: 'paused' },
+      }),
+      row(OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'completed-action',
+        answer_timing: { status: 'complete' },
+      }),
+      row(OpenAIMessageRole.ASSISTANT, {
+        behavior_action_id: 'current-action',
+        answer_timing: { status: 'paused' },
+      }),
+      row(OpenAIMessageRole.ASSISTANT, {
+        answer_timing: { status: 'paused' },
+      }),
+    ];
+    expect(
+      collectPausedResumeBehaviors(rows, 'user', 'current-action').map(
+        (behavior) => behavior.action_id,
+      ),
+    ).toEqual(['paused-action']);
+  });
+});
+
 describe('queue behavior attribution', () => {
   const runBehavior = {
     action_id: '11111111-1111-4111-8111-111111111111',
@@ -4281,7 +4321,10 @@ describe('queue behavior attribution', () => {
       }),
     );
     const behaviorService = {
-      result: jest.fn(() => Promise.resolve(undefined)),
+      result: jest.fn((...args: unknown[]) => {
+        void args;
+        return Promise.resolve(undefined);
+      }),
     };
     const service = createService({
       messagesService: {
@@ -4669,6 +4712,198 @@ describe('queue behavior attribution', () => {
       expect.objectContaining({ status: 'failed' }),
     );
   });
+  it('finalizes the initial turn assistant row when the first steer arrives', async () => {
+    const {
+      service,
+      create,
+      setAnswerTiming,
+      finalizeAnswerTiming,
+      behaviorService,
+    } = handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    // The initial turn's model call is armed and has produced no content.
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'delta', message: { content: '地球' } }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    // The steered turn keeps its own row and action.
+    expect(
+      create.mock.calls.map((call) => call[3].attrs.behavior_action_id),
+    ).toEqual([
+      runBehavior.action_id,
+      steeredBehavior.action_id,
+      steeredBehavior.action_id,
+    ]);
+    expect(setAnswerTiming).toHaveBeenCalledWith(
+      'assistant-3',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    // The run-level action still completes on the final answer.
+    expect(behaviorService.result).toHaveBeenCalledWith(runBehavior, 'success');
+  });
+  it('settles the initiating action when a decision resume completes', async () => {
+    const { service, behaviorService } = handlerService();
+    const decisionBehavior = {
+      ...runBehavior,
+      action_id: '44444444-4444-4444-8444-444444444444',
+    };
+    const initiatingBehavior = {
+      ...runBehavior,
+      action_id: '55555555-5555-4555-8555-555555555555',
+    };
+    const handler = behaviorContext.run(decisionBehavior, () =>
+      service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+    const context: Record<string, unknown> = {
+      queryId: 'decision',
+      runId: 'run-2',
+      parentId: 'approval',
+      answerTiming: answerTiming(),
+      resumeBehaviors: [initiatingBehavior],
+    };
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'delta', message: { content: 'done' } }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      initiatingBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      decisionBehavior,
+      'success',
+    );
+    expect(
+      behaviorService.result.mock.calls.filter(
+        (call) =>
+          (call[0] as { action_id?: string }).action_id ===
+          decisionBehavior.action_id,
+      ),
+    ).toHaveLength(1);
+  });
+  it('settles the initiating action as failed when the decision resume errors', async () => {
+    const { service, behaviorService } = handlerService();
+    const decisionBehavior = {
+      ...runBehavior,
+      action_id: '44444444-4444-4444-8444-444444444444',
+    };
+    const initiatingBehavior = {
+      ...runBehavior,
+      action_id: '55555555-5555-4555-8555-555555555555',
+    };
+    const handler = behaviorContext.run(decisionBehavior, () =>
+      service.agentHandler('n', 'c', 'u', jest.fn(), false, {
+        streamId: 'active-stream',
+      } as AgentStream),
+    );
+    const context: Record<string, unknown> = {
+      queryId: 'decision',
+      runId: 'run-2',
+      parentId: 'approval',
+      answerTiming: answerTiming(),
+      resumeBehaviors: [initiatingBehavior],
+    };
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'error', message: 'boom' }),
+      context,
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      initiatingBehavior,
+      'failed',
+    );
+  });
+  it('settles the initiating action as cancelled when the decision run stops', async () => {
+    const { service, behaviorService } = handlerService();
+    const initiatingBehavior = {
+      ...runBehavior,
+      action_id: '55555555-5555-4555-8555-555555555555',
+    };
+    const context: Record<string, unknown> = {
+      behavior: runBehavior,
+      answerTiming: answerTiming(),
+      resumeBehaviors: [initiatingBehavior],
+    };
+    (service as any).messagesService.stopRunning = jest
+      .fn()
+      .mockResolvedValue(null);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const session = {
+      key: 'k',
+      namespaceId: 'n',
+      conversationId: 'c',
+      userId: 'u',
+      shareId: '',
+      subscribers: new Set(),
+      events: [],
+      controller: new AbortController(),
+      handlerContext: context,
+      finished: false,
+    };
+    await (service as any).stopSession(session);
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      initiatingBehavior,
+      'cancelled',
+    );
+  });
   it('cancels a steered behavior when the run stops', async () => {
     const { service, finalizeAnswerTiming, behaviorService } = handlerService();
     const context: Record<string, unknown> = {
@@ -4709,7 +4944,10 @@ describe('queue behavior attribution', () => {
   });
   it('completes the queued behavior when delivery cannot start a turn', async () => {
     const behaviorService = {
-      result: jest.fn(() => Promise.resolve(undefined)),
+      result: jest.fn((...args: unknown[]) => {
+        void args;
+        return Promise.resolve(undefined);
+      }),
     };
     const service = createService({ behaviorService });
     jest

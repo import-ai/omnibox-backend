@@ -5430,6 +5430,63 @@ describe('save preemption stop helper', () => {
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
+  it('runs a slow deployment hook once for a local session stop', async () => {
+    let finish!: () => void;
+    const onCancellationRequested = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const service = createService({
+      agentStreamHooks: {
+        onCallCompleted: jest.fn(),
+        onStreamClosed: jest.fn(),
+        onCancellationRequested,
+      },
+    });
+    const session = {
+      ...sessionFor(key),
+      steerStopSupported: false,
+    };
+    (service as any).streamSessions.set(key, session);
+    (service as any).messagesService = {
+      stopRunning: jest
+        .fn()
+        .mockResolvedValue({ id: 'stopped-row', attrs: {} }),
+    };
+    jest
+      .spyOn(service, 'isConversationStreaming')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValue(false);
+    jest
+      .spyOn(service as any, 'markSessionCanceled')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    jest.spyOn(service as any, 'sendSessionData').mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'completeSession')
+      .mockImplementation(() => undefined);
+
+    const stopping = service.stopUserAgentStreamAndWait('u', 'n', 'c', 500);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(onCancellationRequested).toHaveBeenCalledTimes(1);
+    expect(onCancellationRequested).toHaveBeenCalledWith('u', 'c');
+    finish();
+
+    await expect(stopping).resolves.toEqual({
+      attempted: true,
+      applied: true,
+      confirmed: true,
+    });
+    // The helper leaves the hook to stopSession; it must not call it again.
+    expect(onCancellationRequested).toHaveBeenCalledTimes(1);
+    expect((service as any).messagesService.stopRunning).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(session.controller.signal.aborted).toBe(true);
+  });
+
   it('treats a completed run as a no-op stop', async () => {
     const service = createService({});
     (service as any).streamSessions.set(key, sessionFor(key));

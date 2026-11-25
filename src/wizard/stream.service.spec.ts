@@ -4539,6 +4539,87 @@ describe('queue behavior attribution', () => {
       'success',
     );
   });
+  it('closes an interrupted steer before attributing the next steer', async () => {
+    const {
+      service,
+      create,
+      setAnswerTiming,
+      finalizeAnswerTiming,
+      behaviorService,
+    } = handlerService();
+    const context: Record<string, unknown> = {
+      canSteer: true,
+      queryId: 'initial',
+      runId: 'run',
+      parentId: 'initial',
+      answerTiming: answerTiming(),
+    };
+    const handler = handlerOf(service);
+    // steer1's model call is armed but has produced no content when steer2
+    // arrives.
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: requestId } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.USER,
+        attrs: { composer: { client_request_id: secondRequestId } },
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({
+        response_type: 'bos',
+        role: OpenAIMessageRole.ASSISTANT,
+      }),
+      context,
+    );
+    await handler(
+      JSON.stringify({ response_type: 'delta', message: { content: '火星' } }),
+      context,
+    );
+    await handler(JSON.stringify({ response_type: 'eos' }), context);
+    await handler(JSON.stringify({ response_type: 'done' }), context);
+
+    const rows = create.mock.calls.map((call) => call[3].attrs);
+    expect(rows.map((attrs) => attrs.behavior_action_id)).toEqual([
+      steeredBehavior.action_id,
+      steeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+      secondSteeredBehavior.action_id,
+    ]);
+    // The interrupted empty turn is finalized on its own row; the second
+    // steer's answer row is finalized when it closes.
+    expect(finalizeAnswerTiming).toHaveBeenCalledWith(
+      'assistant-2',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(setAnswerTiming).toHaveBeenCalledWith(
+      'assistant-4',
+      expect.objectContaining({ status: 'complete' }),
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      steeredBehavior,
+      'success',
+    );
+    expect(behaviorService.result).toHaveBeenCalledWith(
+      secondSteeredBehavior,
+      'success',
+    );
+  });
   it('fails a tool-call steered turn when the run errors', async () => {
     const {
       service,

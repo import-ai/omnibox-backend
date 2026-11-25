@@ -148,6 +148,8 @@ interface HandlerContext {
   steeredQueue?: BehaviorContext[];
   /** The steered send owning the assistant rows currently open. */
   assistantSteeredBehavior?: BehaviorContext;
+  /** The latest assistant row of the currently open steered turn. */
+  assistantSteeredRowId?: string;
   /** Steered behaviors seen in this run that are not completed yet. */
   pendingSteered?: Map<
     string,
@@ -696,6 +698,11 @@ export class StreamService implements OnModuleDestroy {
               }
             }
             if (rowSteeredBehavior) {
+              // A newer steer interrupts the open turn even when it has not
+              // produced content yet. Close and settle it first so its empty
+              // assistant row keeps its own action/timing and the new steer
+              // owns the next assistant turn.
+              await this.closeOpenSteeredTurn(context, userId);
               // Keep one entry per steered send in arrival order. A batch of
               // direct steers can deliver several user frames before the
               // assistant rows; the first open turn consumes the first one.
@@ -762,6 +769,7 @@ export class StreamService implements OnModuleDestroy {
             context.assistantSteeredBehavior.action_id,
           );
           if (pending) pending.lastAssistantRowId = message.id;
+          context.assistantSteeredRowId = message.id;
         }
         if (context.runId)
           chunk.attrs = {
@@ -862,11 +870,13 @@ export class StreamService implements OnModuleDestroy {
         if (
           context.assistantSteeredBehavior &&
           message.message.role === OpenAIMessageRole.ASSISTANT &&
+          message.id === context.assistantSteeredRowId &&
           message.message.content?.trim() &&
           !message.message.tool_calls?.length
         ) {
           const steered = context.assistantSteeredBehavior;
           context.assistantSteeredBehavior = undefined;
+          context.assistantSteeredRowId = undefined;
           context.steeredQueue = context.steeredQueue?.filter(
             (behavior) => behavior.action_id !== steered.action_id,
           );
@@ -1142,6 +1152,40 @@ export class StreamService implements OnModuleDestroy {
   }
 
   /**
+   * Close the steered turn that is still open when a newer steer arrives.
+   * Its latest assistant row keeps its own action id and receives a terminal
+   * timing, and the action completes even if the turn produced no content.
+   */
+  private async closeOpenSteeredTurn(context: HandlerContext, userId: string) {
+    const open = context.assistantSteeredBehavior;
+    if (!open) return;
+    const pending = context.pendingSteered?.get(open.action_id);
+    context.assistantSteeredBehavior = undefined;
+    context.assistantSteeredRowId = undefined;
+    context.steeredQueue = context.steeredQueue?.filter(
+      (behavior) => behavior.action_id !== open.action_id,
+    );
+    context.pendingSteered?.delete(open.action_id);
+    if (pending?.lastAssistantRowId && context.answerTiming) {
+      await this.messagesService
+        .finalizeAnswerTiming(
+          pending.lastAssistantRowId,
+          finishAnswerTiming(
+            context.answerTiming,
+            'complete',
+            new Date(),
+            performance.now(),
+          ),
+        )
+        .catch(() => undefined);
+    }
+    if (open.user_id === userId)
+      await this.behaviorService
+        ?.result(open, 'success')
+        .catch(() => undefined);
+  }
+
+  /**
    * Complete every steered behavior that did not reach its closing assistant
    * row. The row's answer timing is made terminal in the same step so the
    * answer reconciler can match the action.
@@ -1155,6 +1199,7 @@ export class StreamService implements OnModuleDestroy {
     context.pendingSteered = undefined;
     context.steeredQueue = undefined;
     context.assistantSteeredBehavior = undefined;
+    context.assistantSteeredRowId = undefined;
     for (const { behavior, lastAssistantRowId } of pending.values()) {
       if (lastAssistantRowId && context.answerTiming) {
         const timing =

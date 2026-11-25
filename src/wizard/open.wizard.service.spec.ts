@@ -179,6 +179,28 @@ describe('OpenWizardService', () => {
     });
   });
 
+  it('returns failed for the requested turn while a later turn streams', async () => {
+    const input = {
+      id: 'failed-input',
+      parentId: undefined,
+      message: { role: OpenAIMessageRole.USER, content: 'question' },
+      status: MessageStatus.SUCCESS,
+      attrs: { turn_run_id: 'failed-run' },
+    };
+    const answer = {
+      id: 'failed-answer',
+      parentId: 'failed-input',
+      message: { role: OpenAIMessageRole.ASSISTANT, content: '' },
+      status: MessageStatus.FAILED,
+      attrs: { turn_run_id: 'failed-run' },
+    };
+    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findAll.mockResolvedValue([input, answer]);
+    streamService.isConversationStreaming.mockResolvedValue(true);
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'failed-run'),
+    ).resolves.toEqual({ status: 'failed' });
+  });
   it('returns stopped for a persisted input even after its receipt expires', async () => {
     messagesService.findSubmitted.mockResolvedValue({
       status: MessageStatus.STOPPED,

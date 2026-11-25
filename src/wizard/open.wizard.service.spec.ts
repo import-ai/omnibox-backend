@@ -259,11 +259,18 @@ describe('OpenWizardService', () => {
       status: MessageStatus.SUCCESS,
       attrs: { turn_run_id: 'run' },
     };
-    messagesService.findSubmitted.mockResolvedValue(input);
+    messagesService.findSubmitted
+      .mockResolvedValueOnce(input)
+      .mockResolvedValue(next);
     messagesService.findAll.mockResolvedValue([input, stoppedAnswer, next]);
     await expect(
       service.botMessageResult('u', 'n', 'c', 'run'),
     ).resolves.toEqual({ status: 'superseded' });
+    // The folded steer's own input is stopped: the original ask is
+    // superseded, the steered ask is not.
+    await expect(
+      service.botMessageResult('u', 'n', 'c', 'run'),
+    ).resolves.toEqual({ status: 'stopped' });
   });
 
   it('creates a new conversation when parent_message_id is absent', async () => {

@@ -14,6 +14,7 @@ import {
 import { AgentRequestChannel } from 'omniboxd/wizard/dto/agent-request.dto';
 import { OpenWizardController } from 'omniboxd/wizard/open.wizard.controller';
 import { OpenWizardService } from 'omniboxd/wizard/open.wizard.service';
+import { IS_SAVE_PENDING, saveGateKey } from 'omniboxd/wizard/save-gate';
 import { StreamService } from 'omniboxd/wizard/stream.service';
 import { WizardController } from 'omniboxd/wizard/wizard.controller';
 import { Observable, of } from 'rxjs';
@@ -3988,6 +3989,7 @@ describe('conversation submission admission', () => {
     jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
       get: jest.fn().mockResolvedValue(target),
       exists: jest.fn().mockResolvedValue(active ? 1 : 0),
+      eval: jest.fn().mockResolvedValue(0),
     });
     const start = jest
       .spyOn(service as any, 'openUserAgentStream')
@@ -4021,9 +4023,11 @@ describe('conversation submission admission', () => {
           .mockResolvedValueOnce({ attrs: { edition: 'pro', level: 'low' } }),
       },
     });
-    jest
-      .spyOn(service as any, 'getRedisClient')
-      .mockResolvedValue({ get: jest.fn(), exists: jest.fn() });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      get: jest.fn(),
+      exists: jest.fn(),
+      eval: jest.fn(),
+    });
     const start = jest
       .spyOn(service as any, 'openUserAgentStream')
       .mockRejectedValueOnce(
@@ -4122,5 +4126,251 @@ describe('conversation submission admission', () => {
     steer.mockRejectedValue(new Error('network'));
     await expect(deliver()).rejects.toThrow('network');
     expect(start).not.toHaveBeenCalled();
+  });
+});
+
+describe('pending save gate', () => {
+  function gateService() {
+    const service = createService({});
+    const client = {
+      exists: jest.fn().mockResolvedValue(0),
+      set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn().mockResolvedValue(0),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    const sleep = jest
+      .spyOn(service as any, 'sleep')
+      .mockResolvedValue(undefined);
+    return { service, client, sleep };
+  }
+
+  it('waits out a pending save before taking the conversation lock', async () => {
+    const { service, client, sleep } = gateService();
+    let checks = 0;
+    client.eval.mockImplementation((script: string) => {
+      if (script !== IS_SAVE_PENDING) return Promise.resolve(1);
+      checks += 1;
+      return Promise.resolve(checks <= 2 ? 1 : 0);
+    });
+
+    const release = await service.acquireConversationLock('n', 'c', 'u', '');
+
+    expect(checks).toBe(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(client.eval).toHaveBeenCalledWith(
+      IS_SAVE_PENDING,
+      expect.objectContaining({
+        keys: [saveGateKey('user:u:n:c')],
+        arguments: [expect.any(String)],
+      }),
+    );
+    expect(client.set).toHaveBeenCalledWith(
+      'wizard:lock:conversation:n:c',
+      expect.any(String),
+      { NX: true, EX: 30 },
+    );
+    await release?.();
+  });
+
+  it('takes the lock without checking the gate when asked to ignore it', async () => {
+    const { service, client } = gateService();
+
+    const release = await service.acquireConversationLock('n', 'c', 'u', '', {
+      ignoreSaveGate: true,
+    });
+
+    expect(client.eval).not.toHaveBeenCalledWith(
+      IS_SAVE_PENDING,
+      expect.anything(),
+    );
+    expect(client.set).toHaveBeenCalledTimes(1);
+    await release?.();
+  });
+
+  it.each([
+    ['a decision turn', '', { tool_call: { decisions: [{ type: 'reject' }] } }],
+    ['a share stream', 'share-1', {}],
+    ['a normal ask', '', {}],
+  ])('passes the gate bypass for %s', async (label, shareId, extra) => {
+    const found = jest.fn().mockResolvedValue(null);
+    const service = createService({
+      messagesService: { findLatest: found },
+    });
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(null);
+    const claim = jest
+      .spyOn(service as any, 'claimStreamActive')
+      .mockResolvedValue(undefined);
+    const acquire = jest
+      .spyOn(service, 'acquireConversationLock')
+      .mockResolvedValue(null);
+
+    await (service as any).resolveStreamParent(
+      'n',
+      { conversation_id: 'c', query: 'q', tools: [], ...extra },
+      'u',
+      shareId,
+      'latest',
+    );
+
+    const expected =
+      Boolean(shareId) || Boolean((extra as { tool_call?: unknown }).tool_call);
+    expect(acquire).toHaveBeenCalledWith('n', 'c', 'u', shareId, {
+      ignoreSaveGate: expected,
+    });
+    expect(claim).toHaveBeenCalled();
+  });
+
+  it('keeps a queued ask undelivered while a save is pending', async () => {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: {
+        findSubmitted: jest.fn(),
+        findOneInConversation: jest.fn(),
+      },
+    });
+    const client = {
+      get: jest.fn().mockResolvedValue(undefined),
+      exists: jest.fn().mockResolvedValue(0),
+      eval: jest.fn().mockResolvedValue(1),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+    const start = jest.spyOn(service as any, 'openUserAgentStream');
+    const steer = jest.spyOn(service, 'submitSteer');
+
+    await expect(
+      (service as any).deliverConversationMessage({
+        userId: 'u',
+        namespaceId: 'n',
+        conversationId: 'c',
+        body: {
+          query: 'Continue',
+          tools: [],
+          client_request_id: '14edee90-e083-48c6-ab81-ceb94c77ae03',
+        },
+      }),
+    ).resolves.toBeUndefined();
+    expect(start).not.toHaveBeenCalled();
+    expect(steer).not.toHaveBeenCalled();
+  });
+
+  it('replays a finished submission before checking the save gate', async () => {
+    const service = createService({
+      conversationsService: { findOneForUserInNamespace: jest.fn() },
+      messagesService: {
+        findSubmitted: jest.fn().mockResolvedValue({
+          id: 'stored-message',
+          status: MessageStatus.SUCCESS,
+          message: { content: 'Continue' },
+          attrs: { turn_run_id: 'run-1' },
+        }),
+      },
+    });
+    const evalMock = jest.fn();
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      get: jest.fn(),
+      exists: jest.fn(),
+      eval: evalMock,
+    });
+
+    await expect(
+      (service as any).deliverConversationMessage({
+        userId: 'u',
+        namespaceId: 'n',
+        conversationId: 'c',
+        body: {
+          query: 'Continue',
+          tools: [],
+          client_request_id: '14edee90-e083-48c6-ab81-ceb94c77ae03',
+        },
+      }),
+    ).resolves.toMatchObject({ disposition: 'steered', id: 'stored-message' });
+    expect(evalMock).not.toHaveBeenCalled();
+  });
+
+  it('shares one admission deadline across a recursive re-claim', async () => {
+    jest.useFakeTimers();
+    try {
+      const service = createService({});
+      const start = Date.now();
+      let activeChecks = 0;
+      const client = {
+        exists: jest.fn(() => {
+          activeChecks += 1;
+          if (activeChecks <= 4) return Promise.resolve(1);
+          if (activeChecks === 5) return Promise.resolve(0);
+          return Promise.resolve(1);
+        }),
+        set: jest.fn().mockResolvedValue('OK'),
+        eval: jest.fn().mockResolvedValue(0),
+      };
+      jest.spyOn(service as any, 'getRedisClient').mockResolvedValue(client);
+      jest.spyOn(service as any, 'sleep').mockImplementation(() => {
+        jest.advanceTimersByTime(250);
+        return Promise.resolve();
+      });
+
+      await expect(
+        service.acquireConversationLock('n', 'c', 'u', ''),
+      ).rejects.toMatchObject({ code: 'CONVERSATION_BUSY' });
+
+      // A fresh 290s window per recursion would nearly double the wait.
+      expect(Date.now() - start).toBeLessThanOrEqual(290_500);
+      expect(activeChecks).toBeGreaterThan(4);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('stores the gate key in the steer inbox of a pro run', async () => {
+    const service = createService({
+      wizardApiService: {
+        resolveAgentTarget: jest
+          .fn()
+          .mockResolvedValue({ baseUrl: 'http://wizard', target: 'pro' }),
+        createAgentStream: jest.fn().mockResolvedValue({
+          ok: true,
+          headers: new Headers({ 'x-accept-steer': '1' }),
+          body: null,
+        }),
+      },
+    });
+    const multi = {
+      set: jest.fn().mockReturnThis(),
+      hSet: jest.fn().mockReturnThis(),
+      expire: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    };
+    jest.spyOn(service as any, 'getRedisClient').mockResolvedValue({
+      multi: jest.fn().mockReturnValue(multi),
+    });
+    jest.spyOn(service as any, 'submissionQueue').mockResolvedValue(null);
+    const session: {
+      key: string;
+      shareId: string;
+      handlerContext: any;
+      steerToken?: string;
+    } = {
+      key: 'user:u:n:c',
+      shareId: '',
+      handlerContext: {},
+    };
+    (service as any).streamSessions.set('stream-1', session);
+
+    await expect(
+      service.stream(
+        'n',
+        'ask',
+        { user_id: 'u', messages: [] } as any,
+        'request-1',
+        jest.fn(),
+        undefined,
+        { streamId: 'stream-1' } as AgentStream,
+      ),
+    ).rejects.toMatchObject({ code: 'RESPONSE_BODY_NOT_READABLE' });
+
+    expect(multi.hSet).toHaveBeenCalledWith(
+      'wizard:steer:' + session.steerToken,
+      expect.objectContaining({ save_gate: saveGateKey('user:u:n:c') }),
+    );
   });
 });

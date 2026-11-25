@@ -75,6 +75,13 @@ import {
   ChatErrorResponse,
   ChatResponse,
 } from 'omniboxd/wizard/dto/chat-response.dto';
+import {
+  BEGIN_PENDING_SAVE,
+  END_PENDING_SAVE,
+  IS_SAVE_PENDING,
+  SAVE_GATE_SAFETY_TTL_SECONDS,
+  saveGateKey,
+} from 'omniboxd/wizard/save-gate';
 import { getStreamKey } from 'omniboxd/wizard/stream-key';
 import { WizardAPIService } from 'omniboxd/wizard-api/wizard-api.service';
 import { WizardBaseUrlResolution } from 'omniboxd/wizard-url-provider/wizard-url-provider.interface';
@@ -399,6 +406,7 @@ export class StreamService implements OnModuleDestroy {
           running: '1',
           run: requestId,
           ...(queue ? { queue: queue.key(session.key) } : {}),
+          save_gate: saveGateKey(session.key),
           previous_run:
             body.messages?.findLast((m) => m.attrs?.turn_run_id)?.attrs
               ?.turn_run_id ?? '',
@@ -1429,6 +1437,12 @@ export class StreamService implements OnModuleDestroy {
       requestDto.conversation_id,
       userId,
       shareId,
+      {
+        // The gate belongs to the owner's user scope; a decision is not a new
+        // ask and must start so a pending save's own approval recovery can run.
+        ignoreSaveGate:
+          Boolean(shareId) || Boolean(requestDto.tool_call?.decisions?.length),
+      },
     );
     try {
       let parent =
@@ -1691,6 +1705,8 @@ export class StreamService implements OnModuleDestroy {
     conversationId: string,
     userId: string,
     shareId: string,
+    options: { ignoreSaveGate?: boolean } = {},
+    deadline: number = Date.now() + 290_000,
   ): Promise<(() => Promise<void>) | null> {
     const client = await this.getRedisClient();
     if (!client) {
@@ -1703,8 +1719,16 @@ export class StreamService implements OnModuleDestroy {
       shareId,
     );
     const activeKey = this.streamActiveKey(streamKey);
-    const deadline = Date.now() + 290_000;
-    while (await client.exists(activeKey)) {
+    const waiting = async () =>
+      (await client.exists(activeKey)) ||
+      (!options.ignoreSaveGate &&
+        (await this.savePendingFor(
+          client,
+          namespaceId,
+          conversationId,
+          userId,
+        )));
+    while (await waiting()) {
       if (Date.now() > deadline) {
         throw new AppException(
           this.i18n.t('system.errors.conversationBusy'),
@@ -1731,11 +1755,14 @@ export class StreamService implements OnModuleDestroy {
         "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
         { keys: [lockKey], arguments: [token] },
       );
+      // Share the original deadline so one admission attempt stays bounded.
       return this.acquireConversationLock(
         namespaceId,
         conversationId,
         userId,
         shareId,
+        options,
+        deadline,
       );
     }
     return async () => {
@@ -1744,6 +1771,68 @@ export class StreamService implements OnModuleDestroy {
         { keys: [lockKey], arguments: [token] },
       );
     };
+  }
+
+  saveGateKey(scope: string): string {
+    return saveGateKey(scope);
+  }
+
+  async beginPendingSave(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    token: string,
+    ttlMs: number,
+  ): Promise<void> {
+    const client = await this.getRedisClient();
+    if (!client) return;
+    const now = Date.now();
+    await client.eval(BEGIN_PENDING_SAVE, {
+      keys: [saveGateKey(getStreamKey(namespaceId, conversationId, userId))],
+      arguments: [
+        token,
+        String(now),
+        String(now + ttlMs),
+        String(SAVE_GATE_SAFETY_TTL_SECONDS),
+      ],
+    });
+  }
+
+  async endPendingSave(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+    token: string,
+  ): Promise<void> {
+    const client = await this.getRedisClient();
+    if (!client) return;
+    await client.eval(END_PENDING_SAVE, {
+      keys: [saveGateKey(getStreamKey(namespaceId, conversationId, userId))],
+      arguments: [token],
+    });
+  }
+
+  async isSavePending(
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const client = await this.getRedisClient();
+    if (!client) return false;
+    return this.savePendingFor(client, namespaceId, conversationId, userId);
+  }
+
+  private async savePendingFor(
+    client: RedisClient,
+    namespaceId: string,
+    conversationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const pending = await client.eval(IS_SAVE_PENDING, {
+      keys: [saveGateKey(getStreamKey(namespaceId, conversationId, userId))],
+      arguments: [String(Date.now())],
+    });
+    return Number(pending) === 1;
   }
 
   private startAgentSession(
@@ -2845,6 +2934,13 @@ export class StreamService implements OnModuleDestroy {
     if (saved) return saved;
     const redis = await this.getRedisClient();
     const scope = getStreamKey(namespaceId, conversationId, userId);
+    // A pending save must be recorded before this ask is delivered; the item
+    // stays queued and its receipt is retried instead of waiting in the lock.
+    if (
+      redis &&
+      (await this.savePendingFor(redis, namespaceId, conversationId, userId))
+    )
+      return;
     const target =
       body.expected_run_id ??
       (await redis?.get('wizard:steer-active:' + scope));
@@ -3024,12 +3120,15 @@ export class StreamService implements OnModuleDestroy {
     if (!redis) throw new ConflictException();
     const inbox = 'wizard:steer:' + token;
     const read = async () => {
+      const gate =
+        (await redis.hGet(inbox, 'save_gate')) || inbox + ':save-gate';
       const rows = (await redis.eval(READ_STEER, {
-        keys: [inbox, inbox + ':messages'],
+        keys: [inbox, inbox + ':messages', gate],
         arguments: [
           String(cursor),
           finish ? '1' : '0',
           String(STREAM_TTL_SECONDS),
+          String(Date.now()),
         ],
       })) as Array<string | [string, string]>;
       return rows.map(decodeSteerItem);

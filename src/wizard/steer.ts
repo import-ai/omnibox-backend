@@ -51,13 +51,23 @@ redis.call('EXPIRE', KEYS[2], ARGV[3])
 return 1`;
 
 // Closing an empty inbox races atomically with the last composer submission.
+// While a save is pending, queued inputs are left unassigned so a later ask is
+// not folded into the running turn; items already in the inbox still return.
 export const READ_STEER = `
 ${STORED_SUBMISSION_INPUT}
 if redis.call('HEXISTS', KEYS[1], 'stopped') == 1 then
   return {'{"stopped":true}'}
 end
+local gate = false
+for _, token in ipairs(redis.call('HKEYS', KEYS[3])) do
+  local expires = tonumber(redis.call('HGET', KEYS[3], token))
+  if expires and expires > tonumber(ARGV[4]) then
+    gate = true
+    break
+  end
+end
 local queue = redis.call('HGET', KEYS[1], 'queue')
-if queue and redis.call('HGET', KEYS[1], 'open') == '1' then
+if not gate and queue and redis.call('HGET', KEYS[1], 'open') == '1' then
   local run = redis.call('HGET', KEYS[1], 'run')
   local predecessor = redis.call('HGET', queue .. ':' .. run, 'target')
   local previous = predecessor and redis.call('HGET', KEYS[1], 'previous_run')

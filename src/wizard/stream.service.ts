@@ -66,6 +66,7 @@ import {
   chatErrorGroup,
 } from 'omniboxd/wizard/chat-error-trace';
 import {
+  AgentRequestChannel,
   AgentRequestDto,
   PrivateSearchResourceDto,
   PrivateSearchToolDto,
@@ -1754,44 +1755,39 @@ export class StreamService implements OnModuleDestroy {
         );
       }
 
-      return new Observable<MessageEvent>((subscriber) => {
-        const started: { session?: StreamSession } = {};
-        try {
-          const session = this.startAgentSession(
-            key,
-            namespaceId,
-            requestDto,
-            requestId,
-            mode,
-            userId,
-            shareId,
-            parentId,
-            messages,
-            chatOnly,
-            timeZone,
-            traceContext,
-            queryReceivedAt,
-            fingerprint,
-            reservation,
-            started,
-          );
-          return this.attachSession(session, subscriber);
-        } catch (error) {
-          // A synchronous failure after registration must not wedge the
-          // conversation with a never-finished session or an active key.
-          if (
-            started.session &&
-            this.streamSessions.get(key) === started.session
-          )
-            this.streamSessions.delete(key);
-          this.releaseStreamReservation(reservation);
-          this.releaseClaimedStreamState(key, Boolean(reservation.claimed));
-          throw error;
-        }
-      });
+      const started: { session?: StreamSession } = {};
+      try {
+        const session = this.startAgentSession(
+          key,
+          namespaceId,
+          requestDto,
+          requestId,
+          mode,
+          userId,
+          shareId,
+          parentId,
+          messages,
+          chatOnly,
+          timeZone,
+          traceContext,
+          queryReceivedAt,
+          fingerprint,
+          reservation,
+          started,
+        );
+        return new Observable<MessageEvent>((subscriber) =>
+          this.attachSession(session, subscriber),
+        );
+      } catch (error) {
+        // A synchronous failure after registration must not wedge the
+        // conversation with a never-finished session or an active key.
+        if (started.session && this.streamSessions.get(key) === started.session)
+          this.streamSessions.delete(key);
+        throw error;
+      }
     } catch (error) {
-      // The request never reached a session (history read, busy, teardown
-      // before subscribe): do not leave the conversation reserved or active.
+      // The request never reached a session (history read, busy, or
+      // synchronous start failure): do not leave the conversation reserved or active.
       this.releaseStreamReservation(reservation);
       this.releaseClaimedStreamState(key, Boolean(reservation.claimed));
       throw error;
@@ -2570,6 +2566,12 @@ export class StreamService implements OnModuleDestroy {
       edition: requestDto.edition,
       level: requestDto.level,
       lang: requestDto.lang,
+      approval_mode:
+        !shareId &&
+        (requestDto.channel === AgentRequestChannel.WEB ||
+          requestDto.channel === AgentRequestChannel.MOBILE)
+          ? requestDto.approval_mode
+          : undefined,
       tool_call: requestDto.tool_call,
       channel: requestDto.channel,
       images: requestDto.images,
@@ -3477,6 +3479,7 @@ export class StreamService implements OnModuleDestroy {
         lang: body.lang,
         enable_thinking: body.enable_thinking,
         channel: body.channel,
+        approval_mode: body.approval_mode,
         parent_message_id: body.parent_message_id,
         expected_run_id: body.expected_run_id,
       },
@@ -3785,6 +3788,7 @@ export class StreamService implements OnModuleDestroy {
         level: body.level,
         enable_thinking: body.enable_thinking,
         channel: body.channel,
+        approval_mode: body.approval_mode,
         lang: body.lang,
         parent_message_id: body.parent_message_id,
         follow_latest: true,

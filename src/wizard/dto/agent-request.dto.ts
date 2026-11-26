@@ -43,6 +43,7 @@ export interface BaseAgentRequestDto {
   edition?: 'basic' | 'pro';
   level?: string;
   lang?: '简体中文' | 'English';
+  approval_mode?: 'manual' | 'auto_approve' | 'auto_reject';
   tool_call?: {
     decisions?: Record<string, any>[];
   };

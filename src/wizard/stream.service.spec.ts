@@ -1946,30 +1946,22 @@ describe('StreamService parent resolution', () => {
         update: jest.fn(),
       });
 
-      const observable = await (service as any).createAgentStream(
-        'namespace-id',
-        {
-          conversation_id: 'conversation-id',
-          query: '',
-          parent_message_id: 'decision-d',
-          tools: { broken: true },
-          channel: 'mobile',
-          tool_call: { decisions: rejectDecisions },
-        },
-        'request-id',
-        'ask',
-        'user-id',
-      );
-      let error: unknown;
-      await new Promise<void>((resolve) => {
-        observable.subscribe({
-          complete: resolve,
-          error: (failure: unknown) => {
-            error = failure;
-            resolve();
+      const error = await (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: '',
+            parent_message_id: 'decision-d',
+            tools: { broken: true },
+            channel: 'mobile',
+            tool_call: { decisions: rejectDecisions },
           },
-        });
-      });
+          'request-id',
+          'ask',
+          'user-id',
+        )
+        .catch((failure: unknown) => failure);
 
       expect(error).toBeInstanceOf(TypeError);
       expect((service as any).streamSessions.size).toBe(0);
@@ -1998,30 +1990,22 @@ describe('StreamService parent resolution', () => {
         .mockResolvedValue(jest.fn().mockResolvedValue(undefined));
       (service as any).redisClient = { isOpen: true, del, set };
 
-      const observable = await (service as any).createAgentStream(
-        'namespace-id',
-        {
-          conversation_id: 'conversation-id',
-          query: '',
-          parent_message_id: 'decision-d',
-          tools: { broken: true },
-          channel: 'mobile',
-          tool_call: { decisions: rejectDecisions },
-        },
-        'request-id',
-        'ask',
-        'user-id',
-      );
-      let error: unknown;
-      await new Promise<void>((resolve) => {
-        observable.subscribe({
-          complete: resolve,
-          error: (failure: unknown) => {
-            error = failure;
-            resolve();
+      const error = await (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: '',
+            parent_message_id: 'decision-d',
+            tools: { broken: true },
+            channel: 'mobile',
+            tool_call: { decisions: rejectDecisions },
           },
-        });
-      });
+          'request-id',
+          'ask',
+          'user-id',
+        )
+        .catch((failure: unknown) => failure);
       await new Promise((done) => setImmediate(done));
 
       expect(error).toBeInstanceOf(TypeError);
@@ -2202,20 +2186,6 @@ describe('StreamService parent resolution', () => {
         createAgentStream: wizardStream,
       };
 
-      // Both requests pass the preparation check; neither has subscribed yet.
-      const text = await (service as any).createAgentStream(
-        'namespace-id',
-        {
-          conversation_id: 'conversation-id',
-          query: 'text',
-          parent_message_id: 'answer-1',
-          tools: [],
-          channel: 'mobile',
-        },
-        'request-text',
-        'ask',
-        'user-id',
-      );
       const decision = await (service as any).createAgentStream(
         'namespace-id',
         {
@@ -2230,17 +2200,24 @@ describe('StreamService parent resolution', () => {
         'ask',
         'user-id',
       );
-      expect((service as any).pendingStreamReservations.has(key)).toBe(true);
-
-      const failures: unknown[] = [];
-      text.subscribe({ error: (error: unknown) => failures.push(error) });
-      expect(failures).toHaveLength(1);
-      expect((failures[0] as AppException).getResponse()).toMatchObject({
+      const failure = await (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'text',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-text',
+          'ask',
+          'user-id',
+        )
+        .catch((error: unknown) => error);
+      expect((failure as AppException).getResponse()).toMatchObject({
         code: 'conversation_busy',
       });
-      expect((service as any).streamSessions.size).toBe(0);
-      expect((service as any).pendingStreamReservations.has(key)).toBe(true);
-
       decision.subscribe({});
       expect((service as any).streamSessions.has(key)).toBe(true);
       expect((service as any).pendingStreamReservations.has(key)).toBe(false);
@@ -2302,25 +2279,23 @@ describe('StreamService parent resolution', () => {
         'ask',
         'user-id',
       );
-      const second = await (service as any).createAgentStream(
-        'namespace-id',
-        {
-          conversation_id: 'conversation-id',
-          query: 'two',
-          parent_message_id: 'answer-1',
-          tools: [],
-          channel: 'mobile',
-        },
-        'request-2',
-        'ask',
-        'user-id',
-      );
-
-      const failures: unknown[] = [];
-      first.subscribe({ error: (error: unknown) => failures.push(error) });
-      second.subscribe({ error: (error: unknown) => failures.push(error) });
-      expect(failures).toHaveLength(1);
-      expect((failures[0] as AppException).getResponse()).toMatchObject({
+      const failure = await (service as any)
+        .createAgentStream(
+          'namespace-id',
+          {
+            conversation_id: 'conversation-id',
+            query: 'two',
+            parent_message_id: 'answer-1',
+            tools: [],
+            channel: 'mobile',
+          },
+          'request-2',
+          'ask',
+          'user-id',
+        )
+        .catch((error: unknown) => error);
+      first.subscribe({});
+      expect((failure as AppException).getResponse()).toMatchObject({
         code: 'conversation_busy',
       });
       expect((service as any).streamSessions.has(key)).toBe(true);
@@ -3582,6 +3557,58 @@ describe('trusted upstream billing metadata', () => {
 });
 
 describe('persisted query receipts', () => {
+  it('accepts and completes turns before the response is subscribed', async () => {
+    const service = createService({});
+    const saved = {
+      id: 'query-id',
+      createdAt: new Date(),
+      parentId: null,
+      message: { role: 'user', content: 'hello' },
+    };
+    const create = jest.fn().mockResolvedValue(saved);
+    (service as any).messagesService = {
+      create,
+      findOne: jest.fn().mockResolvedValue(saved),
+      indexFinalAssistant: jest.fn().mockResolvedValue(undefined),
+    };
+    const stream = jest
+      .spyOn(service, 'stream')
+      .mockImplementation(async (_ns, _mode, body, _req, callback) => {
+        expect(body.approval_mode).toBe('auto_approve');
+        expect(body.query_persisted).toBe(true);
+        await callback(JSON.stringify({ response_type: 'done' }));
+      });
+
+    const observable = await (service as any).createAgentStream(
+      'ns',
+      {
+        query: 'hello',
+        conversation_id: 'conv',
+        tools: [],
+        channel: 'web',
+        approval_mode: 'auto_approve',
+      },
+      'req',
+      'ask',
+      'user',
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(stream).toHaveBeenCalledTimes(1);
+    expect((service as any).streamSessions.size).toBe(0);
+
+    const events: string[] = [];
+    await new Promise<void>((resolve, reject) =>
+      observable.subscribe({
+        next: (event: { data: string }) =>
+          events.push(JSON.parse(event.data).response_type),
+        complete: resolve,
+        error: reject,
+      }),
+    );
+    expect(events).toEqual(['bos', 'delta', 'eos', 'done']);
+  });
+
   it('sends a complete user receipt before contacting Wizard and persists enrichment on that same row', async () => {
     const service = createService({});
     const saved = {
@@ -5316,7 +5343,7 @@ describe('conversation submission admission', () => {
         'n',
         'c',
         'u',
-        request,
+        { ...request, approval_mode: 'auto_approve' },
         undefined,
         false,
         'ios',
@@ -5331,6 +5358,7 @@ describe('conversation submission admission', () => {
     expect(key).toBe('scope');
     expect(job.behavior).toEqual(behavior);
     expect(job.platform).toBe('ios');
+    expect(job.body.approval_mode).toBe('auto_approve');
     const parsed = JSON.parse(payload) as Record<string, unknown>;
     expect(parsed.behavior).toEqual(behavior);
     expect(typeof parsed.submission_fingerprint).toBe('string');
